@@ -23,7 +23,9 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestMerger;
@@ -53,7 +55,6 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -64,6 +65,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
   private final Map<StoragePath, HoodieAvroFileReader> reusableFileReaders;
+  private final boolean isMultiFormat;
 
   /**
    * Constructs an instance of the reader context that will read data into Avro records.
@@ -96,23 +98,21 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt,
       Map<StoragePath, HoodieAvroFileReader> reusableFileReaders) {
-    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, reusableFileReaders, tableConfig.getPayloadClass(), false);
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, reusableFileReaders, tableConfig.getPayloadClass());
   }
 
   /**
    * Constructs an instance of the reader context for writer workflows
    *
-   * @param storageConfiguration   the storage configuration to use for reading files
-   * @param tableConfig            the configuration of the Hudi table being read
-   * @param payloadClassName       the payload class for the writer
-   * @param requiresPayloadRecords indicates whether the caller expects payloads as the data in any HoodieRecord returned by this context
+   * @param storageConfiguration the storage configuration to use for reading files
+   * @param tableConfig          the configuration of the Hudi table being read
+   * @param payloadClassName     the payload class for the writer
    */
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig,
-      String payloadClassName,
-      boolean requiresPayloadRecords) {
-    this(storageConfiguration, tableConfig, Option.empty(), Option.empty(), Collections.emptyMap(), payloadClassName, requiresPayloadRecords);
+      String payloadClassName) {
+    this(storageConfiguration, tableConfig, Option.empty(), Option.empty(), Collections.emptyMap(), payloadClassName);
   }
 
   private HoodieAvroReaderContext(
@@ -121,10 +121,10 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt,
       Map<StoragePath, HoodieAvroFileReader> reusableFileReaders,
-      String payloadClassName,
-      boolean requiresPayloadRecords) {
-    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, new AvroRecordContext(tableConfig, payloadClassName, requiresPayloadRecords));
+      String payloadClassName) {
+    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, new AvroRecordContext(tableConfig, payloadClassName));
     this.reusableFileReaders = reusableFileReaders;
+    this.isMultiFormat = tableConfig.isMultipleBaseFileFormatsEnabled();
   }
 
   @Override
@@ -136,15 +136,27 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Schema requiredSchema,
       HoodieStorage storage) throws IOException {
     HoodieAvroFileReader reader;
+    boolean isLogFile = FSUtils.isLogFile(filePath);
+    Schema fileOutputSchema;
+    Map<String, String> renamedColumns;
+    if (isLogFile) {
+      fileOutputSchema = requiredSchema;
+      renamedColumns = Collections.emptyMap();
+    } else {
+      Pair<Schema, Map<String, String>> requiredSchemaForFileAndRenamedColumns = getSchemaHandler().getRequiredSchemaForFileAndRenamedColumns(filePath);
+      fileOutputSchema = requiredSchemaForFileAndRenamedColumns.getLeft();
+      renamedColumns = requiredSchemaForFileAndRenamedColumns.getRight();
+    }
     if (reusableFileReaders.containsKey(filePath)) {
       reader = reusableFileReaders.get(filePath);
     } else {
+      HoodieFileFormat fileFormat = isMultiFormat && !isLogFile ? HoodieFileFormat.fromFileExtension(filePath.getFileExtension()) : baseFileFormat;
       reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
           .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
-              filePath, baseFileFormat, Option.empty());
+              filePath, fileFormat, Option.empty());
     }
     if (keyFilterOpt.isEmpty()) {
-      return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
+      return reader.getIndexedRecordIterator(dataSchema, fileOutputSchema, renamedColumns);
     }
     if (reader.supportKeyPredicate()) {
       List<String> keys = reader.extractKeys(keyFilterOpt);
@@ -158,7 +170,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
         return reader.getIndexedRecordsByKeyPrefixIterator(keyPrefixes, requiredSchema);
       }
     }
-    return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
+    return reader.getIndexedRecordIterator(dataSchema, fileOutputSchema, renamedColumns);
   }
 
   @Override
@@ -180,16 +192,6 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public IndexedRecord seal(IndexedRecord record) {
-    return record;
-  }
-
-  @Override
-  public IndexedRecord toBinaryRow(Schema avroSchema, IndexedRecord record) {
-    return record;
-  }
-
-  @Override
   public SizeEstimator<BufferedRecord<IndexedRecord>> getRecordSizeEstimator() {
     return new AvroRecordSizeEstimator(getSchemaHandler().getRequiredSchema());
   }
@@ -206,11 +208,6 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
                                                                Schema dataRequiredSchema,
                                                                List<Pair<String, Object>> partitionFieldAndValues) {
     return new BootstrapIterator(skeletonFileIterator, skeletonRequiredSchema, dataFileIterator, dataRequiredSchema, partitionFieldAndValues);
-  }
-
-  @Override
-  public UnaryOperator<IndexedRecord> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    return record -> HoodieAvroUtils.rewriteRecordWithNewSchema(record, to, renamedColumns);
   }
 
   /**

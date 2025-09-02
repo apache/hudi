@@ -43,8 +43,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
-import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;

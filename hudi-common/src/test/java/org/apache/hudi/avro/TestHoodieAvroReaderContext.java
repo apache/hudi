@@ -206,6 +206,17 @@ class TestHoodieAvroReaderContext {
   }
 
   @Test
+  void testConstructEngineRecordWithFieldValues() {
+    HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
+    Schema schema = getSkeletonSchema();
+    Object[] fieldVals = new Object[]{"String1", "String2", 1};
+    IndexedRecord row = readerContext.getRecordContext().constructEngineRecord(schema, fieldVals);
+    assertEquals(fieldVals[0], row.get(0));
+    assertEquals(fieldVals[1], row.get(1));
+    assertEquals(fieldVals[2], row.get(2));
+  }
+
+  @Test
   void testConstructEngineRecordWithNoUpdate() {
     HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
     Schema schema = getSkeletonSchema();

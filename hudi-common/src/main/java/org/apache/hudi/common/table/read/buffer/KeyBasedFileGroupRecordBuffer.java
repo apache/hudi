@@ -58,11 +58,11 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   public KeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                        HoodieTableMetaClient hoodieTableMetaClient,
                                        RecordMergeMode recordMergeMode,
-                                       PartialUpdateMode partialUpdateMode,
+                                       Option<PartialUpdateMode> partialUpdateModeOpt,
                                        TypedProperties props,
                                        List<String> orderingFieldNames,
                                        UpdateProcessor<T> updateProcessor) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldNames, updateProcessor);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
   }
 
   @Override
@@ -84,10 +84,10 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
           true,
           recordMerger,
           orderingFieldNames,
-          payloadClass,
           readerSchema,
+          payloadClasses,
           props,
-          partialUpdateMode);
+          partialUpdateModeOpt);
     }
 
     Schema schema = AvroSchemaCache.intern(recordsIteratorSchemaPair.getRight());
@@ -108,7 +108,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     BufferedRecord<T> existingRecord = records.get(recordKey);
     totalLogRecords++;
     bufferedRecordMerger.deltaMerge(record, existingRecord).ifPresent(bufferedRecord ->
-        records.put(recordKey, bufferedRecord.toBinary(readerContext)));
+        records.put(recordKey, bufferedRecord.toBinary(readerContext.getRecordContext())));
   }
 
   @Override
@@ -125,10 +125,8 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     BufferedRecord<T> existingRecord = records.get(recordIdentifier);
     totalLogRecords++;
     Option<DeleteRecord> recordOpt = bufferedRecordMerger.deltaMerge(deleteRecord, existingRecord);
-    recordOpt.ifPresent(deleteRec -> {
-      Comparable orderingValue = getOrderingValue(readerContext, deleteRec);
-      records.put(recordIdentifier, BufferedRecords.fromDeleteRecord(deleteRec, orderingValue));
-    });
+    recordOpt.ifPresent(deleteRec ->
+        records.put(recordIdentifier, BufferedRecords.fromDeleteRecord(deleteRec, readerContext.getRecordContext())));
   }
 
   @Override
@@ -155,5 +153,9 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
     // Handle records solely from log files.
     return hasNextLogRecord();
+  }
+
+  public boolean isPartialMergingEnabled() {
+    return enablePartialMerging;
   }
 }

@@ -22,7 +22,6 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.UpdateProcessor;
@@ -65,7 +64,8 @@ class TestReusableKeyBasedRecordBuffer {
     preMergedLogRecords.put("3", new BufferedRecord<>("3", 10, new TestRecord("3", 3), 0, null));
     preMergedLogRecords.put("4", new BufferedRecord<>("4", 10, new TestRecord("4", 4), 0, null));
     HoodieReadStats readStats = new HoodieReadStats();
-    UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, false, Option.empty());
+    when(mockReaderContext.getPayloadClasses(any())).thenReturn(Option.empty());
+    UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, false, Option.empty(), new TypedProperties());
 
     // Filter excludes key "4", so it should not be returned. It also includes key "5" which is not in the base file or log file.
     Predicate keyFilter = Predicates.in(null, Arrays.asList(Literal.from("1"), Literal.from("2"), Literal.from("3"), Literal.from("5")));
@@ -85,11 +85,11 @@ class TestReusableKeyBasedRecordBuffer {
       // otherwise return an older value
       return 1;
     });
-    when(mockReaderContext.toBinaryRow(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
-    when(mockReaderContext.seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(mockReaderContext.getRecordContext().toBinaryRow(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
+    when(mockReaderContext.getRecordContext().seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
     ReusableKeyBasedRecordBuffer<TestRecord> buffer = new ReusableKeyBasedRecordBuffer<>(mockReaderContext, metaClient,
-        RecordMergeMode.EVENT_TIME_ORDERING, PartialUpdateMode.NONE, new TypedProperties(), Collections.singletonList("value"), updateProcessor, preMergedLogRecords);
+        RecordMergeMode.EVENT_TIME_ORDERING, Option.empty(), new TypedProperties(), Collections.singletonList("value"), updateProcessor, preMergedLogRecords);
 
     List<TestRecord> baseFileRecords = Arrays.asList(new TestRecord("1", 10), new TestRecord("3", 30));
     buffer.setBaseFileIterator(ClosableIterator.wrap(baseFileRecords.iterator()));

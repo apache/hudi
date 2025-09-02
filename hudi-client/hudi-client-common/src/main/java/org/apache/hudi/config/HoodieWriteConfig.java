@@ -73,7 +73,6 @@ import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieConcatHandle;
-import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -170,6 +169,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Determine what level of persistence is used to cache write RDDs. "
           + "Refer to org.apache.spark.storage.StorageLevel for different values");
 
+  @Deprecated
   public static final ConfigProperty<String> PRECOMBINE_FIELD_NAME = ConfigProperty
       .key("hoodie.datasource.write.precombine.field")
       .noDefaultValue()
@@ -858,7 +858,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> MERGE_HANDLE_CLASS_NAME = ConfigProperty
       .key("hoodie.write.merge.handle.class")
-      .defaultValue(HoodieWriteMergeHandle.class.getName())
+      .defaultValue(FileGroupReaderBasedMergeHandle.class.getName())
       .markAdvanced()
       .sinceVersion("1.1.0")
       .withDocumentation("The merge handle class that implements interface{@link HoodieMergeHandle} to merge the records "
@@ -1408,6 +1408,7 @@ public class HoodieWriteConfig extends HoodieConfig {
         HoodieTableConfig.TYPE, HoodieTableConfig.TYPE.defaultValue().name()).toUpperCase());
   }
 
+  @Deprecated
   public List<String> getPreCombineFields() {
     return Option.ofNullable(getString(PRECOMBINE_FIELD_NAME))
         .map(preCombine -> Arrays.asList(preCombine.split(",")))
@@ -1844,6 +1845,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isRollbackPendingClustering() {
     return getBoolean(HoodieClusteringConfig.ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT);
+  }
+
+  public boolean isBinaryCopySchemaEvolutionEnabled() {
+    return getBooleanOrDefault(HoodieClusteringConfig.FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE);
   }
 
   public int getInlineClusterMaxCommits() {
@@ -3018,6 +3023,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    @Deprecated
     public Builder withPreCombineField(String preCombineField) {
       writeConfig.setValue(PRECOMBINE_FIELD_NAME, preCombineField);
       return this;
@@ -3674,5 +3680,13 @@ public class HoodieWriteConfig extends HoodieConfig {
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);
       }
     }
+  }
+
+  public boolean isFileGroupReaderBasedMergeHandle() {
+    return isFileGroupReaderBasedMergeHandle(props);
+  }
+
+  public static boolean isFileGroupReaderBasedMergeHandle(TypedProperties props) {
+    return ReflectionUtils.isSubClass(ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME, true), FileGroupReaderBasedMergeHandle.class);
   }
 }

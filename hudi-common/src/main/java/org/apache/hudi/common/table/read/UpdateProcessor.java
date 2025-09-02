@@ -18,9 +18,22 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+
+import java.io.IOException;
+import java.util.Properties;
 
 /**
  * Interface used within the {@link HoodieFileGroupReader<T>} for processing updates to records in Merge-on-Read tables.
@@ -39,8 +52,16 @@ public interface UpdateProcessor<T> {
   BufferedRecord<T> processUpdate(String recordKey, BufferedRecord<T> previousRecord, BufferedRecord<T> mergedRecord, boolean isDelete);
 
   static <T> UpdateProcessor<T> create(HoodieReadStats readStats, HoodieReaderContext<T> readerContext,
-                                       boolean emitDeletes, Option<BaseFileUpdateCallback<T>> updateCallback) {
-    UpdateProcessor<T> handler = new StandardUpdateProcessor<>(readStats, readerContext, emitDeletes);
+                                       boolean emitDeletes, Option<BaseFileUpdateCallback<T>> updateCallback,
+                                       TypedProperties properties) {
+    UpdateProcessor<T> handler;
+    Option<String> payloadClass = readerContext.getPayloadClasses(properties).map(Pair::getRight);
+    boolean hasNonMetadataPayload = payloadClass.map(className -> !className.equals(HoodieMetadataPayload.class.getName())).orElse(false);
+    if (readerContext.getMergeMode() == RecordMergeMode.CUSTOM && hasNonMetadataPayload) {
+      handler = new PayloadUpdateProcessor<>(readStats, readerContext, emitDeletes, properties, payloadClass.get());
+    } else {
+      handler = new StandardUpdateProcessor<>(readStats, readerContext, emitDeletes);
+    }
     if (updateCallback.isPresent()) {
       return new CallbackProcessor<>(updateCallback.get(), handler);
     }
@@ -80,17 +101,56 @@ public interface UpdateProcessor<T> {
         }
         return null;
       } else {
-        T prevRow = previousRecord != null ? previousRecord.getRecord() : null;
-        T mergedRow = mergedRecord.getRecord();
-        if (prevRow != null && prevRow != mergedRow) {
-          mergedRecord.setHoodieOperation(HoodieOperation.UPDATE_AFTER);
-          readStats.incrementNumUpdates();
-        } else if (prevRow == null) {
-          mergedRecord.setHoodieOperation(HoodieOperation.INSERT);
-          readStats.incrementNumInserts();
-        }
-        return mergedRecord.seal(readerContext);
+        return handleNonDeletes(previousRecord, mergedRecord);
       }
+    }
+
+    protected BufferedRecord<T> handleNonDeletes(BufferedRecord<T> previousRecord, BufferedRecord<T> mergedRecord) {
+      T prevRow = previousRecord != null ? previousRecord.getRecord() : null;
+      T mergedRow = mergedRecord.getRecord();
+      if (prevRow != null && prevRow != mergedRow) {
+        mergedRecord.setHoodieOperation(HoodieOperation.UPDATE_AFTER);
+        readStats.incrementNumUpdates();
+      } else if (prevRow == null) {
+        mergedRecord.setHoodieOperation(HoodieOperation.INSERT);
+        readStats.incrementNumInserts();
+      }
+      return mergedRecord.seal(readerContext.getRecordContext());
+    }
+  }
+
+  class PayloadUpdateProcessor<T> extends StandardUpdateProcessor<T> {
+    private final String payloadClass;
+    private final Properties properties;
+
+    public PayloadUpdateProcessor(HoodieReadStats readStats, HoodieReaderContext<T> readerContext, boolean emitDeletes,
+                                  Properties properties, String payloadClass) {
+      super(readStats, readerContext, emitDeletes);
+      this.payloadClass = payloadClass;
+      this.properties = properties;
+    }
+
+    @Override
+    protected BufferedRecord<T> handleNonDeletes(BufferedRecord<T> previousRecord, BufferedRecord<T> mergedRecord) {
+      if (previousRecord == null) {
+        // special case for payloads when there is no previous record
+        Schema recordSchema = readerContext.getRecordContext().decodeAvroSchema(mergedRecord.getSchemaId());
+        GenericRecord record = readerContext.getRecordContext().convertToAvroRecord(mergedRecord.getRecord(), recordSchema);
+        HoodieAvroRecord hoodieRecord = new HoodieAvroRecord<>(null, HoodieRecordUtils.loadPayload(payloadClass, record, mergedRecord.getOrderingValue()));
+        try {
+          if (hoodieRecord.shouldIgnore(recordSchema, properties)) {
+            return null;
+          } else {
+            Schema readerSchema = readerContext.getSchemaHandler().getRequestedSchema();
+            // If the record schema is different from the reader schema, rewrite the record using the payload methods to ensure consistency with legacy writer paths
+            hoodieRecord.rewriteRecordWithNewSchema(recordSchema, properties, readerSchema).toIndexedRecord(readerSchema, properties)
+                .ifPresent(rewrittenRecord -> mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(rewrittenRecord.getData())));
+          }
+        } catch (IOException e) {
+          throw new HoodieIOException("Error processing record with payload class: " + payloadClass, e);
+        }
+      }
+      return super.handleNonDeletes(previousRecord, mergedRecord);
     }
   }
 
@@ -102,7 +162,7 @@ public interface UpdateProcessor<T> {
     private final BaseFileUpdateCallback<T> callback;
     private final UpdateProcessor<T> delegate;
 
-    public CallbackProcessor(BaseFileUpdateCallback callback, UpdateProcessor<T> delegate) {
+    public CallbackProcessor(BaseFileUpdateCallback<T> callback, UpdateProcessor<T> delegate) {
       this.callback = callback;
       this.delegate = delegate;
     }
@@ -112,11 +172,11 @@ public interface UpdateProcessor<T> {
       BufferedRecord<T> result = delegate.processUpdate(recordKey, previousRecord, mergedRecord, isDelete);
 
       if (isDelete) {
-        callback.onDelete(recordKey, previousRecord == null ? null : previousRecord.getRecord());
-      } else if (HoodieOperation.isUpdateAfter(result.getHoodieOperation())) {
-        callback.onUpdate(recordKey, previousRecord.getRecord(), mergedRecord.getRecord());
-      } else if (HoodieOperation.isInsert(result.getHoodieOperation())) {
-        callback.onInsert(recordKey, mergedRecord.getRecord());
+        callback.onDelete(recordKey, previousRecord, mergedRecord.getHoodieOperation());
+      } else if (result != null && HoodieOperation.isUpdateAfter(result.getHoodieOperation())) {
+        callback.onUpdate(recordKey, previousRecord, mergedRecord);
+      } else if (result != null && HoodieOperation.isInsert(result.getHoodieOperation())) {
+        callback.onInsert(recordKey, mergedRecord);
       }
       return result;
     }

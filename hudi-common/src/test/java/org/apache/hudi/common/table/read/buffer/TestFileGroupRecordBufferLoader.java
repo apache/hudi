@@ -63,13 +63,15 @@ public class TestFileGroupRecordBufferLoader extends BaseTestFileGroupRecordBuff
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.NINE);
-    when(tableConfig.getPreCombineFieldsStr()).thenReturn(Option.empty());
+    when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
+    when(tableConfig.getOrderingFieldsStr()).thenReturn(Option.empty());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
     readerContext.initRecordMerger(new TypedProperties());
     FileGroupReaderSchemaHandler<IndexedRecord> fileGroupReaderSchemaHandler = mock(FileGroupReaderSchemaHandler.class);
     when(fileGroupReaderSchemaHandler.getRequiredSchema()).thenReturn(SCHEMA);
+    when(fileGroupReaderSchemaHandler.getRequestedSchema()).thenReturn(SCHEMA);
     when(fileGroupReaderSchemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
     DeleteContext deleteContext = mock(DeleteContext.class);
     when(deleteContext.getCustomDeleteMarkerKeyValue()).thenReturn(Option.empty());

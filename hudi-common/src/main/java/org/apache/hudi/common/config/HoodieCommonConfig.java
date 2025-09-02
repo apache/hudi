@@ -38,6 +38,8 @@ import static org.apache.hudi.common.util.ConfigUtils.enumNames;
     description = "The following set of configurations are common across Hudi.")
 public class HoodieCommonConfig extends HoodieConfig {
 
+  public static final String META_SYNC_BASE_PATH_KEY = "hoodie.datasource.meta.sync.base.path";
+
   public static final ConfigProperty<String> BASE_PATH = ConfigProperty
       .key("hoodie.base.path")
       .noDefaultValue()

@@ -77,10 +77,6 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
     this.orderingValue = orderingValue;
   }
 
-  public HoodieFlinkRecord(HoodieKey key, RowData rowData) {
-    super(key, rowData);
-  }
-
   @Override
   public HoodieRecord<RowData> newInstance() {
     return new HoodieFlinkRecord(key, operation, orderingValue, data);
@@ -94,14 +90,6 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   @Override
   public HoodieRecord<RowData> newInstance(HoodieKey key) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
-  }
-
-  @Override
-  public HoodieOperation getOperation() {
-    if (this.operation == null) {
-      this.operation = HoodieOperation.fromValue(data.getRowKind().toByteValue());
-    }
-    return this.operation;
   }
 
   @Override

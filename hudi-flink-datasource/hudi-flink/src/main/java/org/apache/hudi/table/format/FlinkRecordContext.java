@@ -35,16 +35,22 @@ import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.RecordKeyToRowDataConverter;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
 import org.apache.hudi.util.RowDataUtils;
+import org.apache.hudi.util.RowProjection;
+import org.apache.hudi.util.SchemaEvolvingRowDataProjection;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.binary.BinaryRowData;
+import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 
 public class FlinkRecordContext extends RecordContext<RowData> {
 
@@ -123,6 +129,11 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
+  public RowData constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
+    return GenericRowData.of(fieldValues);
+  }
+
+  @Override
   public RowData mergeWithEngineRecord(Schema schema,
                                        Map<Integer, Object> updateValues,
                                        BufferedRecord<RowData> baseRecord) {
@@ -154,6 +165,42 @@ public class FlinkRecordContext extends RecordContext<RowData> {
       Comparable finalOrderingVal = (Comparable) context.getValAsJava(record, false);
       return finalOrderingVal;
     });
+  }
+
+  @Override
+  public RowData seal(RowData rowData) {
+    if (rowData instanceof BinaryRowData) {
+      return ((BinaryRowData) rowData).copy();
+    }
+    return rowData;
+  }
+
+  @Override
+  public RowData toBinaryRow(Schema avroSchema, RowData record) {
+    if (record instanceof BinaryRowData) {
+      return record;
+    }
+    RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(avroSchema);
+    return rowDataSerializer.toBinaryRow(record);
+  }
+
+  /**
+   * Creates a function that will reorder records of schema "from" to schema of "to".
+   * It's possible there exist fields in `to` schema, but not in `from` schema because of schema
+   * evolution.
+   *
+   * @param from           the schema of records to be passed into UnaryOperator
+   * @param to             the schema of records produced by UnaryOperator
+   * @param renamedColumns map of renamed columns where the key is the new name from the query and
+   *                       the value is the old name that exists in the file
+   * @return a function that takes in a record and returns the record with reordered columns
+   */
+  @Override
+  public UnaryOperator<RowData> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
+    RowType fromType = (RowType) RowDataAvroQueryContexts.fromAvroSchema(from).getRowType().getLogicalType();
+    RowType toType =  (RowType) RowDataAvroQueryContexts.fromAvroSchema(to).getRowType().getLogicalType();
+    RowProjection rowProjection = SchemaEvolvingRowDataProjection.instance(fromType, toType, renamedColumns);
+    return rowProjection::project;
   }
 
   public void setRecordKeyRowConverter(RecordKeyToRowDataConverter recordKeyRowConverter) {

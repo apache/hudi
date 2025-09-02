@@ -112,7 +112,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
   void readWithStreamingRecordBufferLoaderAndEventTimeOrdering() throws IOException {
     HoodieReadStats readStats = new HoodieReadStats();
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "ts");
+    properties.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), "ts");
     properties.setProperty(DELETE_KEY, "counter");
     properties.setProperty(DELETE_MARKER, "3");
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
@@ -123,8 +123,8 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
     readerContext.setHasLogFiles(false);
     readerContext.setHasBootstrapBaseFile(false);
-    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(), tableConfig,
-        properties);
+    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(),
+        properties, mock(HoodieTableMetaClient.class));
     readerContext.setSchemaHandler(schemaHandler);
     readerContext.initRecordMerger(properties);
     List<HoodieRecord> inputRecords =
@@ -133,7 +133,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
     when(mockMetaClient.getTableConfig()).thenReturn(tableConfig);
     when(tableConfig.getPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
-    when(tableConfig.getPartialUpdateMode()).thenReturn(PartialUpdateMode.NONE);
+    when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
 
     FileGroupRecordBufferLoader recordBufferLoader = FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader();
     InputSplit inputSplit = mock(InputSplit.class);
@@ -195,15 +195,16 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     });
     when(mockReaderContext.getRecordContext().getRecordKey(any(), any())).thenAnswer(invocation -> ((TestRecord) invocation.getArgument(0)).getRecordKey());
     when(mockReaderContext.getRecordContext().getOrderingValue(any(), any(), anyList())).thenReturn(0);
-    when(mockReaderContext.toBinaryRow(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
-    when(mockReaderContext.seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(mockReaderContext.getRecordContext().toBinaryRow(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
+    when(mockReaderContext.getRecordContext().seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
     RecordMergeMode recordMergeMode = RecordMergeMode.COMMIT_TIME_ORDERING;
-    PartialUpdateMode partialUpdateMode = PartialUpdateMode.NONE;
+    Option<PartialUpdateMode> partialUpdateModeOpt = Option.empty();
     TypedProperties props = new TypedProperties();
-    UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, false, Option.empty());
+    when(mockReaderContext.getPayloadClasses(any())).thenReturn(Option.empty());
+    UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, false, Option.empty(), props);
     return new SortedKeyBasedFileGroupRecordBuffer<>(
-        mockReaderContext, mockMetaClient, recordMergeMode, partialUpdateMode, props, Collections.emptyList(), updateProcessor);
+        mockReaderContext, mockMetaClient, recordMergeMode, partialUpdateModeOpt, props, Collections.emptyList(), updateProcessor);
   }
 
   private static <T> List<T> getActualRecordsForSortedKeyBased(SortedKeyBasedFileGroupRecordBuffer<T> fileGroupRecordBuffer) throws IOException {

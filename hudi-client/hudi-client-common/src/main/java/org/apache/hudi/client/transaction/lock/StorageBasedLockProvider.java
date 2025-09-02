@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.transaction.lock;
 
+import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
 import org.apache.hudi.client.transaction.lock.models.HeartbeatManager;
 import org.apache.hudi.client.transaction.lock.models.LockGetResult;
 import org.apache.hudi.client.transaction.lock.models.LockProviderHeartbeatManager;
@@ -95,6 +96,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   private final String lockFilePath;
   private final HeartbeatManager heartbeatManager;
   private final transient Thread shutdownThread;
+  private final Option<HoodieLockMetrics> hoodieLockMetrics;
 
   @GuardedBy("this")
   private StorageLockFile currentLockObj = null;
@@ -123,7 +125,27 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
             lockConfiguration.getConfig(),
             LockProviderHeartbeatManager::new,
             getStorageLockClientClassName(),
-            LOGGER);
+            LOGGER,
+        null);
+  }
+
+  /**
+   * Constructor for StorageBasedLockProvider with HoodieLockMetrics support.
+   * This constructor allows lock providers to access metrics for fine-grained metrics collection.
+   * 
+   * @param lockConfiguration The lock configuration, should be transformable into
+   *                          StorageBasedLockConfig
+   * @param conf              Storage config, ignored.
+   * @param metrics           HoodieLockMetrics instance for metrics collection
+   */
+  public StorageBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf, final HoodieLockMetrics metrics) {
+    this(
+            UUID.randomUUID().toString(),
+            lockConfiguration.getConfig(),
+            LockProviderHeartbeatManager::new,
+            getStorageLockClientClassName(),
+            LOGGER,
+            metrics);
   }
 
   private static Functions.Function3<String, String, TypedProperties, StorageLockClient> getStorageLockClientClassName() {
@@ -154,7 +176,8 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       TypedProperties properties,
       Functions.Function3<String, Long, Supplier<Boolean>, HeartbeatManager> heartbeatManagerLoader,
       Functions.Function3<String, String, TypedProperties, StorageLockClient> storageLockClientLoader,
-      Logger logger) {
+      Logger logger,
+      HoodieLockMetrics hoodieLockMetrics) {
     StorageBasedLockConfig config = new StorageBasedLockConfig.Builder().fromProperties(properties).build();
     long heartbeatPollSeconds = config.getHeartbeatPollSeconds();
     this.lockValiditySecs = config.getValiditySeconds();
@@ -169,6 +192,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     this.storageLockClient = storageLockClientLoader.apply(ownerId, lockFilePath, properties);
     this.ownerId = ownerId;
     this.logger = logger;
+    this.hoodieLockMetrics = Option.ofNullable(hoodieLockMetrics);
     shutdownThread = new Thread(() -> shutdown(true));
     Runtime.getRuntime().addShutdownHook(shutdownThread);
     logger.info("Instantiated new storage-based lock provider, owner: {}, lockfilePath: {}", ownerId, lockFilePath);
@@ -199,6 +223,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         Thread.sleep(Long.parseLong(DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS));
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
+        hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockInterruptedMetric);
         throw new HoodieLockException(generateLockStateMessage(LockState.FAILED_TO_ACQUIRE), e);
       }
     }
@@ -252,7 +277,15 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   }
 
   private synchronized boolean isLockStillValid(StorageLockFile lock) {
-    return !lock.isExpired() && !isCurrentTimeCertainlyOlderThanDistributedTime(lock.getValidUntilMs());
+    if (lock.isExpired()) {
+      return false;
+    } else if (isCurrentTimeCertainlyOlderThanDistributedTime(lock.getValidUntilMs())) {
+      hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockDanglingMetric);
+      logWarnLockState(ACQUIRING, "Found a dangling expired lock with owner " + lock.getOwner());
+      return false;
+    }
+
+    return true;
   }
 
   /**
@@ -274,12 +307,14 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       logger.error("Detected broken invariant: there is an active heartbeat without a lock being held.");
       // Breach of object invariant - we should never have an active heartbeat without
       // holding a lock.
+      hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockProviderFatalErrorMetric);
       throw new HoodieLockException(generateLockStateMessage(FAILED_TO_ACQUIRE));
     }
 
     Pair<LockGetResult, Option<StorageLockFile>> latestLock = this.storageLockClient.readCurrentLockFile();
     if (latestLock.getLeft() == LockGetResult.UNKNOWN_ERROR) {
       logInfoLockState(FAILED_TO_ACQUIRE, "Failed to get the latest lock status");
+      hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockStateUnknownMetric);
       // We were not able to determine whether a lock was present.
       return false;
     }
@@ -299,9 +334,12 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     if (lockUpdateStatus.getLeft() != LockUpsertResult.SUCCESS) {
       // failed to acquire the lock, indicates concurrent contention
       logInfoLockState(FAILED_TO_ACQUIRE);
+      hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockAcquirePreconditionFailureMetric);
       return false;
     }
     this.setLock(lockUpdateStatus.getRight().get());
+    hoodieLockMetrics.ifPresent(metrics -> metrics.updateLockExpirationDeadlineMetric(
+        (int) (lockUpdateStatus.getRight().get().getValidUntilMs() - getCurrentEpochMs())));
 
     // There is a remote chance that
     // - after lock is acquired but before heartbeat starts the lock is expired.
@@ -315,6 +353,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       // startHeartbeatForThread returns false,
       // we are confident no heartbeat thread is running.
       logErrorLockState(RELEASING, "We were unable to start the heartbeat!");
+      hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockProviderFatalErrorMetric);
       tryExpireCurrentLock(false);
       return false;
     }
@@ -378,6 +417,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     // Then expire the current lock.
     believesNoLongerHoldsLock &= tryExpireCurrentLock(false);
     if (!believesNoLongerHoldsLock) {
+      hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockReleaseFailureMetric);
       throw new HoodieLockException(generateLockStateMessage(FAILED_TO_RELEASE));
     }
   }
@@ -385,12 +425,14 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   private void assertHeartbeatManagerExists() {
     if (heartbeatManager == null) {
       // broken function precondition.
+      hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockProviderFatalErrorMetric);
       throw new HoodieLockException("Unexpected null heartbeatManager");
     }
   }
 
   private void assertUnclosed() {
     if (this.isClosed) {
+      hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockProviderFatalErrorMetric);
       throw new HoodieLockException("Lock provider already closed");
     }
   }
@@ -417,6 +459,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       case UNKNOWN_ERROR:
         // Here we do not know the state of the lock.
         logErrorLockState(FAILED_TO_RELEASE, "Lock state is unknown.");
+        hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockStateUnknownMetric);
         return false;
       case SUCCESS:
         logInfoLockState(RELEASED);
@@ -424,11 +467,12 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         return true;
       case ACQUIRED_BY_OTHERS:
         // As we are confident no lock is held by itself, clean up the cached lock object.
-        // However, this is an edge case, so warn.
-        logWarnLockState(RELEASED, "lock should not have been acquired by others.");
+        logErrorLockState(RELEASED, "lock should not have been acquired by others.");
         setLock(null);
+        hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockAcquiredByOthersErrorMetric);
         return true;
       default:
+        hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockReleaseFailureMetric);
         throw new HoodieLockException("Unexpected lock update result: " + result.getLeft());
     }
   }
@@ -467,6 +511,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       switch (currentLock.getLeft()) {
         case ACQUIRED_BY_OTHERS:
           logger.error("Owner {}: Unable to renew lock as it is acquired by others.", ownerId);
+          hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockAcquiredByOthersErrorMetric);
           // No need to extend lock lease anymore.
           return false;
         case UNKNOWN_ERROR:
@@ -474,11 +519,14 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           // normally.
           // If the next heartbeat run identifies our lock has expired we will error out.
           logger.warn("Owner {}: Unable to renew lock due to unknown error, could be transient.", ownerId);
+          hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockStateUnknownMetric);
           // Let heartbeat retry later.
           return true;
         case SUCCESS:
           // Only positive outcome
           this.setLock(currentLock.getRight().get());
+          hoodieLockMetrics.ifPresent(metrics -> metrics.updateLockExpirationDeadlineMetric(
+              (int) (oldExpirationMs - getCurrentEpochMs())));
           logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}.",
               ownerId, oldExpirationMs - getCurrentEpochMs(), lockFilePath);
           // Let heartbeat continue to renew lock lease again later.
@@ -488,6 +536,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       }
     } catch (Exception e) {
       logger.error("Owner {}: Exception occurred while renewing lock", ownerId, e);
+      hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockProviderFatalErrorMetric);
       return false;
     }
   }

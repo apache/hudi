@@ -43,7 +43,7 @@ class TestPartitionPushDownWhenListingPaths extends HoodieSparkSqlTestBase {
                  | tblproperties (
                  |  primaryKey ='id',
                  |  type = '$tableType',
-                 |  preCombineField = 'ts',
+                 |  orderingFields = 'ts',
                  |  hoodie.datasource.write.hive_style_partitioning = 'true',
                  |  hoodie.datasource.write.partitionpath.urlencode = 'true'
                  | )

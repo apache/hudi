@@ -87,8 +87,8 @@ import java.util.stream.Stream;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.sanitizeName;
-import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
-import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -886,10 +886,10 @@ public class TestHoodieAvroUtils {
 
   @Test
   public void testCreateNamePrefix() {
-    assertNull(HoodieAvroUtils.createNamePredix(true, new ArrayDeque<>(Collections.singletonList("field1"))));
-    assertEquals("field1", HoodieAvroUtils.createNamePredix(false, new ArrayDeque<>(Collections.singletonList("field1"))));
-    assertNull(HoodieAvroUtils.createNamePredix(false, new ArrayDeque<>()));
-    assertEquals("parent.child", HoodieAvroUtils.createNamePredix(false, new ArrayDeque<>(Arrays.asList("child", "parent"))));
+    assertNull(HoodieAvroUtils.createNamePrefix(true, new ArrayDeque<>(Collections.singletonList("field1"))));
+    assertEquals("field1", HoodieAvroUtils.createNamePrefix(false, new ArrayDeque<>(Collections.singletonList("field1"))));
+    assertNull(HoodieAvroUtils.createNamePrefix(false, new ArrayDeque<>()));
+    assertEquals("parent.child", HoodieAvroUtils.createNamePrefix(false, new ArrayDeque<>(Arrays.asList("child", "parent"))));
   }
 
   @ParameterizedTest
@@ -1130,5 +1130,54 @@ public class TestHoodieAvroUtils {
     Schema projectedSchema = HoodieAvroUtils.projectSchema(SCHEMA_WITH_NESTED_FIELD_LARGE, projectedFields);
     assertEquals(expectedSchema, projectedSchema);
     assertTrue(AvroSchemaUtils.isSchemaCompatible(projectedSchema, expectedSchema, false));
+  }
+
+  private static Stream<Arguments> recordNeedsRewriteForExtendedAvroTypePromotion() {
+    Schema decimal1 = LogicalTypes.decimal(12, 2).addToSchema(Schema.create(Schema.Type.BYTES));
+    Schema decimal2 = LogicalTypes.decimal(10, 2).addToSchema(Schema.create(Schema.Type.BYTES));
+    Schema dateSchema = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
+    Schema doubleSchema = Schema.create(Schema.Type.DOUBLE);
+    Schema intSchema = Schema.create(Schema.Type.INT);
+    Schema longSchema = Schema.create(Schema.Type.LONG);
+    Schema floatSchema = Schema.create(Schema.Type.FLOAT);
+    Schema stringSchema = Schema.create(Schema.Type.STRING);
+
+    Schema recordSchema1 = Schema.createRecord("record1", null, "com.example", false,
+        Arrays.asList(new Schema.Field("decimalField", decimal1, null, null),
+            new Schema.Field("doubleField", doubleSchema, null, null)));
+
+    Schema recordSchema2 = Schema.createRecord("record2", null, "com.example2", false,
+        Arrays.asList(new Schema.Field("decimalField", decimal1, null, null),
+            new Schema.Field("doubleField", doubleSchema, null, null)));
+
+    return Stream.of(
+        Arguments.of(intSchema, longSchema, false),
+        Arguments.of(intSchema, floatSchema, false),
+        Arguments.of(longSchema, intSchema, true),
+        Arguments.of(longSchema, floatSchema, false),
+        Arguments.of(decimal1, decimal2, true),
+        Arguments.of(doubleSchema, decimal1, true),
+        Arguments.of(decimal1, doubleSchema, true),
+        Arguments.of(intSchema, stringSchema, true),
+        Arguments.of(longSchema, doubleSchema, false),
+        Arguments.of(intSchema, doubleSchema, false),
+        Arguments.of(longSchema, stringSchema, true),
+        Arguments.of(floatSchema, stringSchema, true),
+        Arguments.of(doubleSchema, stringSchema, true),
+        Arguments.of(decimal1, stringSchema, true),
+        Arguments.of(stringSchema, decimal2, true),
+        Arguments.of(stringSchema, intSchema, true),
+        Arguments.of(floatSchema, doubleSchema, true),
+        Arguments.of(doubleSchema, floatSchema, true),
+        Arguments.of(recordSchema1, recordSchema2, false),
+        Arguments.of(dateSchema, stringSchema, true)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource
+  void recordNeedsRewriteForExtendedAvroTypePromotion(Schema writerSchema, Schema readerSchema, boolean expected) {
+    boolean result = HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(writerSchema, readerSchema);
+    assertEquals(expected, result);
   }
 }

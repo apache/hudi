@@ -92,7 +92,7 @@ class HoodieCDCRDD(
 
   private val props = HoodieFileIndex.getConfigProperties(spark, Map.empty, metaClient.getTableConfig)
 
-  protected val payloadProps: Properties = metaClient.getTableConfig.getPreCombineFieldsStr
+  protected val payloadProps: Properties = metaClient.getTableConfig.getOrderingFieldsStr
     .map[TypedProperties](JFunction.toJavaFunction(preCombineFields =>
       HoodiePayloadConfig.newBuilder
         .withPayloadOrderingFields(preCombineFields)
@@ -138,7 +138,7 @@ class HoodieCDCRDD(
       keyFields.head
     }
 
-    private lazy val preCombineFields: List[String] = metaClient.getTableConfig.getPreCombineFields.asScala.toList
+    private lazy val orderingFields: List[String] = metaClient.getTableConfig.getOrderingFields.asScala.toList
 
     private lazy val tableState = {
       val metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -148,7 +148,7 @@ class HoodieCDCRDD(
         basePath.toUri.toString,
         Some(split.changes.last.getInstant),
         recordKeyField,
-        preCombineFields,
+        orderingFields,
         usesVirtualKeys = !populateMetaFields,
         metaClient.getTableConfig.getPayloadClass,
         metadataConfig,
@@ -238,7 +238,7 @@ class HoodieCDCRDD(
      */
     private var afterImageRecords: mutable.Map[String, InternalRow] = mutable.Map.empty
 
-    private var internalRowToJsonStringConverter = new InternalRowToJsonStringConverter(originTableSchema)
+    private var internalRowToJsonStringConverter = new InternalRowToJsonStringConverter(originTableSchema.structTypeSchema)
 
     private def needLoadNextFile: Boolean = {
       !recordIter.hasNext &&

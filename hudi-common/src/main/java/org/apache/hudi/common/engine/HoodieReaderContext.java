@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.IteratorMode;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
@@ -51,13 +52,15 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
+import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForPreV9Table;
 
 /**
  * An abstract reader context class for {@code HoodieFileGroupReader} to use, containing APIs for
@@ -190,6 +193,10 @@ public abstract class HoodieReaderContext<T> {
     return storageConfiguration;
   }
 
+  public TypedProperties getMergeProps(TypedProperties props) {
+    return ConfigUtils.getMergeProps(props, this.tableConfig.getProps());
+  }
+
   public Option<Predicate> getKeyFilterOpt() {
     return keyFilterOpt;
   }
@@ -267,20 +274,31 @@ public abstract class HoodieReaderContext<T> {
    * @param isIngestion indicates if the context is used in ingestion path.
    */
   private void initRecordMerger(TypedProperties properties, boolean isIngestion) {
-    Option<String> providedPayloadClass = HoodieRecordPayload.getPayloadClassNameIfPresent(properties);
+    if (recordMerger != null && mergeMode != null) {
+      // already initialized
+      return;
+    }
+    Option<String> writerPayloadClass = HoodieRecordPayload.getWriterPayloadOverride(properties);
     RecordMergeMode recordMergeMode = tableConfig.getRecordMergeMode();
     String mergeStrategyId = tableConfig.getRecordMergeStrategyId();
     HoodieTableVersion tableVersion = tableConfig.getTableVersion();
     // If the provided payload class differs from the table's payload class, we need to infer the correct merging behavior.
-    if (isIngestion && providedPayloadClass.map(className -> !className.equals(tableConfig.getPayloadClass())).orElse(false)) {
-      Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(null, providedPayloadClass.get(), null,
-          tableConfig.getPreCombineFieldsStr().orElse(null), tableVersion);
-      recordMergeMode = triple.getLeft();
-      mergeStrategyId = triple.getRight();
-    } else if (!tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-      Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(
+    if (isIngestion && writerPayloadClass.map(className -> !className.equals(tableConfig.getPayloadClass())).orElse(false)) {
+      if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
+        Map<String, String> mergeProperties = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+            null, writerPayloadClass.get(), null, tableConfig.getOrderingFieldsStr().orElse(null), tableVersion);
+        recordMergeMode = RecordMergeMode.valueOf(mergeProperties.get(RECORD_MERGE_MODE.key()));
+        mergeStrategyId = mergeProperties.get(RECORD_MERGE_STRATEGY_ID.key());
+      } else {
+        Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferMergingConfigsForWrites(
+            null, writerPayloadClass.get(), null, tableConfig.getOrderingFieldsStr().orElse(null), tableVersion);
+        recordMergeMode = triple.getLeft();
+        mergeStrategyId = triple.getRight();
+      }
+    } else if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+      Triple<RecordMergeMode, String, String> triple = inferMergingConfigsForPreV9Table(
           recordMergeMode, tableConfig.getPayloadClass(),
-          mergeStrategyId, tableConfig.getPreCombineFieldsStr().orElse(null), tableVersion);
+          mergeStrategyId, tableConfig.getOrderingFieldsStr().orElse(null), tableVersion);
       recordMergeMode = triple.getLeft();
       mergeStrategyId = triple.getRight();
     }
@@ -322,24 +340,6 @@ public abstract class HoodieReaderContext<T> {
   }
 
   /**
-   * Seals the engine-specific record to make sure the data referenced in memory do not change.
-   *
-   * @param record The record.
-   * @return The record containing the same data that do not change in memory over time.
-   */
-  public abstract T seal(T record);
-
-  /**
-   * Converts engine specific row into binary format.
-   *
-   * @param avroSchema The avro schema of the row
-   * @param record     The engine row
-   *
-   * @return row in binary format
-   */
-  public abstract T toBinaryRow(Schema avroSchema, T record);
-
-  /**
    * Merge the skeleton file and data file iterators into a single iterator that will produce rows that contain all columns from the
    * skeleton file iterator, followed by all columns in the data file iterator
    *
@@ -356,19 +356,13 @@ public abstract class HoodieReaderContext<T> {
                                                             Schema dataRequiredSchema,
                                                             List<Pair<String, Object>> requiredPartitionFieldAndValues);
 
-  /**
-   * Creates a function that will reorder records of schema "from" to schema of "to"
-   * all fields in "to" must be in "from", but not all fields in "from" must be in "to"
-   *
-   * @param from           the schema of records to be passed into UnaryOperator
-   * @param to             the schema of records produced by UnaryOperator
-   * @param renamedColumns map of renamed columns where the key is the new name from the query and
-   *                       the value is the old name that exists in the file
-   * @return a function that takes in a record and returns the record with reordered columns
-   */
-  public abstract UnaryOperator<T> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns);
-
-  public final UnaryOperator<T> projectRecord(Schema from, Schema to) {
-    return projectRecord(from, to, Collections.emptyMap());
+  public Option<Pair<String, String>> getPayloadClasses(TypedProperties props) {
+    return getRecordMerger().map(merger -> {
+      if (merger.getMergingStrategy().equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
+        String incomingPayloadClass = HoodieRecordPayload.getWriterPayloadOverride(props).orElseGet(tableConfig::getPayloadClass);
+        return Pair.of(tableConfig.getPayloadClass(), incomingPayloadClass);
+      }
+      return null;
+    });
   }
 }

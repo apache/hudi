@@ -93,7 +93,9 @@ import scala.Tuple2;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.SIMPLE_RECORD_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createSimpleRecord;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
@@ -151,7 +153,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
 
     config = getConfigBuilder()
         .withProperties(keyGenProps)
-        .withSchema(RawTripTestPayload.JSON_DATA_SCHEMA_STR)
+        .withSchema(SIMPLE_RECORD_SCHEMA.toString())
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .withPayloadClass(RawTripTestPayload.class.getName())
             .withPayloadOrderingFields("number").build())
@@ -182,9 +184,9 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
       properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
       properties.put("hoodie.datasource.write.keygenerator.class", RawTripTestPayloadKeyGenerator.class.getName());
       properties.put("hoodie.datasource.write.partitionpath.field", "time");
-      properties.put("hoodie.datasource.write.precombine.field", "number");
+      properties.put(HoodieTableConfig.ORDERING_FIELDS.key(), "number");
       properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "time");
-      properties.put(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "number");
+      properties.put(HoodieTableConfig.ORDERING_FIELDS.key(), "number");
     }
     return properties;
   }
@@ -194,40 +196,12 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     cleanupResources();
   }
 
-  private static List<HoodieRecord> getInserts() throws IOException {
-    String recordStr1 = "{\"_row_key\":\"001\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":1}";
-    String recordStr2 = "{\"_row_key\":\"002\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":2}";
-    String recordStr3 = "{\"_row_key\":\"003\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":3}";
-    String recordStr4 = "{\"_row_key\":\"004\",\"time\":\"2017-01-31T00:00:04.000Z\",\"number\":4}";
+  private static List<HoodieRecord> getInserts() {
     return Arrays.asList(
-        new RawTripTestPayload(recordStr1).toHoodieRecord(),
-        new RawTripTestPayload(recordStr2).toHoodieRecord(),
-        new RawTripTestPayload(recordStr3).toHoodieRecord(),
-        new RawTripTestPayload(recordStr4).toHoodieRecord());
-  }
-
-  private static List<HoodieRecord> getInsertsBatch2() throws IOException {
-    String recordStr1 = "{\"_row_key\":\"005\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":5}";
-    String recordStr2 = "{\"_row_key\":\"006\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":6}";
-    String recordStr3 = "{\"_row_key\":\"007\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":7}";
-    String recordStr4 = "{\"_row_key\":\"008\",\"time\":\"2017-01-31T00:00:04.000Z\",\"number\":8}";
-    return Arrays.asList(
-        new RawTripTestPayload(recordStr1).toHoodieRecord(),
-        new RawTripTestPayload(recordStr2).toHoodieRecord(),
-        new RawTripTestPayload(recordStr3).toHoodieRecord(),
-        new RawTripTestPayload(recordStr4).toHoodieRecord());
-  }
-
-  private static List<HoodieRecord> getUpdates() throws IOException {
-    String recordStr1 = "{\"_row_key\":\"001\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":5}";
-    String recordStr2 = "{\"_row_key\":\"002\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":6}";
-    String recordStr3 = "{\"_row_key\":\"003\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":7}";
-    String recordStr4 = "{\"_row_key\":\"004\",\"time\":\"2017-01-31T00:00:04.000Z\",\"number\":8}";
-    return new ArrayList<>(Arrays.asList(
-        new RawTripTestPayload(recordStr1).toHoodieRecord(),
-        new RawTripTestPayload(recordStr2).toHoodieRecord(),
-        new RawTripTestPayload(recordStr3).toHoodieRecord(),
-        new RawTripTestPayload(recordStr4).toHoodieRecord()));
+        createSimpleRecord("001", "2016-01-31T00:00:01.000Z", 1),
+        createSimpleRecord("002", "2016-01-31T00:00:02.000Z", 2),
+        createSimpleRecord("003", "2016-01-31T00:00:03.000Z", 3),
+        createSimpleRecord("004", "2016-01-31T00:00:04.000Z", 4));
   }
 
   @ParameterizedTest
@@ -423,15 +397,11 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     String rowKey1 = UUID.randomUUID().toString();
     String rowKey2 = UUID.randomUUID().toString();
     String rowKey3 = UUID.randomUUID().toString();
-    String recordStr1 = "{\"_row_key\":\"" + rowKey1 + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"" + rowKey2 + "\",\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-    String recordStr3 = "{\"_row_key\":\"" + rowKey3 + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+    HoodieRecord record1 = createSimpleRecord(rowKey1, "2016-01-31T03:16:41.415Z", 12);
+    HoodieRecord record2 = createSimpleRecord(rowKey2, "2016-01-31T03:20:41.415Z", 100);
+    HoodieRecord record3 = createSimpleRecord(rowKey3, "2016-01-31T03:16:41.415Z", 15);
     // place same row key under a different partition.
-    String recordStr4 = "{\"_row_key\":\"" + rowKey1 + "\",\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
-    HoodieRecord record1 = new RawTripTestPayload(recordStr1).toHoodieRecord();
-    HoodieRecord record2 = new RawTripTestPayload(recordStr2).toHoodieRecord();
-    HoodieRecord record3 = new RawTripTestPayload(recordStr3).toHoodieRecord();
-    HoodieRecord record4 = new RawTripTestPayload(recordStr4).toHoodieRecord();
+    HoodieRecord record4 = createSimpleRecord(rowKey1, "2015-01-31T03:16:41.415Z", 32);
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
     String newCommitTime = writeClient.startCommit();
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -446,7 +416,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     }
 
     // We create three parquet files, each having one record (two different partitions)
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, addMetadataFields(RawTripTestPayload.JSON_DATA_SCHEMA), metadataWriter);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, addMetadataFields(SIMPLE_RECORD_SCHEMA), metadataWriter);
     final String fileId1 = "fileID1";
     final String fileId2 = "fileID2";
     final String fileId3 = "fileID3";

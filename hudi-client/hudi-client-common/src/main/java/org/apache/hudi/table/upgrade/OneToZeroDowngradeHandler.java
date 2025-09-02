@@ -18,19 +18,15 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -39,7 +35,7 @@ import java.util.stream.Collectors;
 public class OneToZeroDowngradeHandler implements DowngradeHandler {
 
   @Override
-  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(
+  public UpgradeDowngrade.TableConfigChangeSet downgrade(
       HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
       SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
@@ -51,6 +47,6 @@ public class OneToZeroDowngradeHandler implements DowngradeHandler {
       WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, inflightInstant.requestedTime());
       writeMarkers.quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     }
-    return Pair.of(Collections.emptyMap(), Collections.emptyList());
+    return new UpgradeDowngrade.TableConfigChangeSet();
   }
 }

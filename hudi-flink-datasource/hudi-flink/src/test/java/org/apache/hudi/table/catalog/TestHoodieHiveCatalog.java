@@ -76,7 +76,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
-import static org.apache.hudi.configuration.FlinkOptions.PRECOMBINE_FIELD;
+import static org.apache.hudi.configuration.FlinkOptions.ORDERING_FIELDS;
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.RECORDKEY_FIELD_NAME;
 import static org.apache.hudi.table.catalog.HoodieCatalogTestUtils.createStorageConf;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -208,7 +208,7 @@ public class TestHoodieHiveCatalog {
     assertEquals("hudi", table1.getOptions().get(CONNECTOR.key()));
     assertEquals(tableType.toString(), table1.getOptions().get(FlinkOptions.TABLE_TYPE.key()));
     assertEquals("uuid", table1.getOptions().get(FlinkOptions.RECORD_KEY_FIELD.key()));
-    assertNull(table1.getOptions().get(PRECOMBINE_FIELD.key()), "preCombine key is not declared");
+    assertNull(table1.getOptions().get(ORDERING_FIELDS.key()), "preCombine key is not declared");
     String tableSchema = table1.getUnresolvedSchema().getColumns().stream()
         .map(Schema.UnresolvedColumn::toString)
         .collect(Collectors.joining(","));
@@ -322,7 +322,7 @@ public class TestHoodieHiveCatalog {
   }
 
   @Test
-  void testCreateTableWithoutPreCombineKey() throws TableAlreadyExistException, DatabaseNotExistException, IOException, TableNotExistException {
+  void testCreateTableWithoutOrderingFields() throws TableAlreadyExistException, DatabaseNotExistException, IOException, TableNotExistException {
     String db = "default";
     hoodieCatalog = HoodieCatalogTestUtils.createHiveCatalog();
     hoodieCatalog.open();
@@ -331,12 +331,12 @@ public class TestHoodieHiveCatalog {
     options.put(FactoryUtil.CONNECTOR.key(), "hudi");
 
     TypedProperties props = createTableAndReturnTableProperties(options, new ObjectPath(db, "tmptb1"));
-    assertFalse(props.containsKey("hoodie.table.precombine.field"));
+    assertFalse(props.containsKey(HoodieTableConfig.ORDERING_FIELDS.key()));
 
-    options.put(PRECOMBINE_FIELD.key(), "ts_3");
+    options.put(ORDERING_FIELDS.key(), "ts_3");
     props = createTableAndReturnTableProperties(options, new ObjectPath(db, "tmptb2"));
-    assertTrue(props.containsKey("hoodie.table.precombine.field"));
-    assertEquals("ts_3", props.get("hoodie.table.precombine.field"));
+    assertTrue(props.containsKey(HoodieTableConfig.ORDERING_FIELDS.key()));
+    assertEquals("ts_3", props.get(HoodieTableConfig.ORDERING_FIELDS.key()));
   }
 
   private TypedProperties createTableAndReturnTableProperties(Map<String, String> options, ObjectPath tablePath)

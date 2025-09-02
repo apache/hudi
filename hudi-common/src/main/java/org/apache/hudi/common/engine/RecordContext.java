@@ -20,6 +20,7 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.function.SerializableBiFunction;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -39,13 +40,16 @@ import org.apache.avro.generic.IndexedRecord;
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.BiFunction;
+import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
+import static org.apache.hudi.common.util.OrderingValues.isCommitTimeOrderingValue;
 
 /**
  * Record context provides the APIs for record related operations. Record context is associated with
@@ -134,6 +138,17 @@ public abstract class RecordContext<T> implements Serializable {
   }
 
   /**
+   * Constructs a {@link HoodieRecord} that will be used as the record written out to storage.
+   * This allows customization of the record construction logic for each engine for any required optimizations.
+   * The implementation defaults to calling {@link #constructHoodieRecord(BufferedRecord)}.
+   * @param bufferedRecord the {@link BufferedRecord} object to transform
+   * @return a new instance of {@link HoodieRecord} that will be written out to storage
+   */
+  public HoodieRecord<T> constructFinalHoodieRecord(BufferedRecord<T> bufferedRecord) {
+    return constructHoodieRecord(bufferedRecord, partitionPath);
+  }
+
+  /**
    * Constructs a new Engine based record based on a given schema, base record and update values.
    *
    * @param schema           The schema of the new record.
@@ -144,6 +159,15 @@ public abstract class RecordContext<T> implements Serializable {
   public abstract T mergeWithEngineRecord(Schema schema,
                                           Map<Integer, Object> updateValues,
                                           BufferedRecord<T> baseRecord);
+
+  /**
+   * Construct a new Engine record with given record schema and all field values.
+   *
+   * @param recordSchema the schema of the record
+   * @param fieldValues  the values of all fields
+   * @return A new instance of Engine record.
+   */
+  public abstract T constructEngineRecord(Schema recordSchema, Object[] fieldValues);
 
   public JavaTypeConverter getTypeConverter() {
     return typeConverter;
@@ -201,7 +225,7 @@ public abstract class RecordContext<T> implements Serializable {
    */
   public final Comparable convertOrderingValueToEngineType(Comparable value) {
     return value instanceof ArrayComparable
-        ? ((ArrayComparable) value).apply(comparable -> convertValueToEngineType(comparable))
+        ? ((ArrayComparable) value).apply(this::convertValueToEngineType)
         : convertValueToEngineType(value);
   }
 
@@ -275,6 +299,40 @@ public abstract class RecordContext<T> implements Serializable {
   }
 
   /**
+   * Seals the engine-specific record to make sure the data referenced in memory do not change.
+   *
+   * @param record The record.
+   * @return The record containing the same data that do not change in memory over time.
+   */
+  public abstract T seal(T record);
+
+  /**
+   * Converts engine specific row into binary format.
+   *
+   * @param avroSchema The avro schema of the row
+   * @param record     The engine row
+   *
+   * @return row in binary format
+   */
+  public abstract T toBinaryRow(Schema avroSchema, T record);
+
+  /**
+   * Creates a function that will reorder records of schema "from" to schema of "to"
+   * all fields in "to" must be in "from", but not all fields in "from" must be in "to"
+   *
+   * @param from           the schema of records to be passed into UnaryOperator
+   * @param to             the schema of records produced by UnaryOperator
+   * @param renamedColumns map of renamed columns where the key is the new name from the query and
+   *                       the value is the old name that exists in the file
+   * @return a function that takes in a record and returns the record with reordered columns
+   */
+  public abstract UnaryOperator<T> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns);
+
+  public final UnaryOperator<T> projectRecord(Schema from, Schema to) {
+    return projectRecord(from, to, Collections.emptyMap());
+  }
+
+  /**
    * Gets the ordering value in particular type.
    *
    * @param record             An option of record.
@@ -294,6 +352,20 @@ public abstract class RecordContext<T> implements Serializable {
       // API getDefaultOrderingValue is only used inside Comparables constructor
       return value != null ? convertValueToEngineType((Comparable) value) : OrderingValues.getDefault();
     });
+  }
+
+  /**
+   * Gets the ordering value from given delete record.
+   *
+   * @param deleteRecord The delete record
+   *
+   * @return The ordering value.
+   */
+  public Comparable getOrderingValue(DeleteRecord deleteRecord) {
+    Comparable orderingValue = deleteRecord.getOrderingValue();
+    return isCommitTimeOrderingValue(orderingValue)
+        ? OrderingValues.getDefault()
+        : convertOrderingValueToEngineType(orderingValue);
   }
 
   /**

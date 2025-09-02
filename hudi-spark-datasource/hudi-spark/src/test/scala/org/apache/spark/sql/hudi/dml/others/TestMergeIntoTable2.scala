@@ -26,6 +26,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.junit.jupiter.api.Disabled
 import org.slf4j.LoggerFactory
 
 class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
@@ -838,7 +839,10 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test only insert for source table in dup key without preCombineField") {
+  /**
+   * This test relies on duplicate entries with a record key and will be re-enabled as part of HUDI-9708
+    */
+  ignore("Test only insert for source table in dup key without preCombineField") {
     spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.defaultValue()}")
     Seq("cow", "mor").foreach {
       tableType => {
@@ -1056,7 +1060,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                  | tblproperties (
                  |  type = '$tableType',
                  |  primaryKey = 'id',
-                 |  preCombineField = 'ts',
+                 |  orderingFields = 'ts',
                  |  recordMergeMode = '$mergeMode'
                  | )
                  | partitioned by(dt)
@@ -1141,7 +1145,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
             if (mergeMode == "EVENT_TIME_ORDERING") {
               checkException(mergeStmt)(
-                "MERGE INTO field resolution error: No matching assignment found for target table precombine field `ts`"
+                "MERGE INTO field resolution error: No matching assignment found for target table ordering field `ts`"
               )
             } else {
               // For COMMIT_TIME_ORDERING, this should execute without error

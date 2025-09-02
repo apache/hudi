@@ -53,7 +53,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.model.HoodieRecord.HoodieRecordType.AVRO;
-import static org.apache.hudi.common.table.HoodieTableConfig.PRECOMBINE_FIELDS;
+import static org.apache.hudi.common.table.HoodieTableConfig.ORDERING_FIELDS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.DELETE;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.INSERT;
@@ -68,7 +68,7 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
     Properties metaProps = super.getMetaProps();
     metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name());
     metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), CustomAvroMerger.KEEP_CERTAIN_TIMESTAMP_VALUE_ONLY);
-    metaProps.setProperty(PRECOMBINE_FIELDS.key(), "timestamp");
+    metaProps.setProperty(ORDERING_FIELDS.key(), "timestamp");
     return metaProps;
   }
 
@@ -239,7 +239,6 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
   public static class CustomAvroMerger implements HoodieRecordMerger {
     public static final String KEEP_CERTAIN_TIMESTAMP_VALUE_ONLY =
         "KEEP_CERTAIN_TIMESTAMP_VALUE_ONLY";
-    public static final String TIMESTAMP = "timestamp";
     private String[] orderingFields;
 
     @Override
@@ -274,18 +273,6 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
         }
       }
       return Option.empty();
-    }
-
-    @Override
-    public boolean shouldFlush(
-        HoodieRecord record,
-        Schema schema,
-        TypedProperties props
-    ) {
-      long timestamp = (long) ((HoodieAvroIndexedRecord) record)
-          .getData()
-          .get(schema.getField(TIMESTAMP).pos());
-      return timestamp % 3 == 0L;
     }
 
     @Override

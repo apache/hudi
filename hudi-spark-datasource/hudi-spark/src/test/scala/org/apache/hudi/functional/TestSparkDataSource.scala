@@ -23,8 +23,9 @@ import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWr
 import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.CommonOptionUtils.getWriterReaderOpts
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -55,7 +56,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     "hoodie.bulkinsert.shuffle.parallelism" -> s"$parallelism",
     "hoodie.delete.shuffle.parallelism" -> s"$parallelism",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
@@ -312,7 +313,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     var (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
     writeOpts = writeOpts ++ Map("hoodie.write.table.version" -> tableVersion.toString,
       "hoodie.datasource.write.table.type" -> tableType.name(),
-      "hoodie.datasource.write.precombine.field" -> "ts",
+      HoodieTableConfig.ORDERING_FIELDS.key() -> "ts",
       "hoodie.write.record.merge.mode" -> mergeMode.name(),
       "hoodie.index.type" -> indexType.name(),
       "hoodie.metadata.record.index.enable" -> "true",

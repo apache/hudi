@@ -22,7 +22,6 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -41,18 +40,16 @@ import static org.apache.hudi.common.table.read.ParquetRowIndexBasedSchemaHandle
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class TestParquetRowIndexBasedSchemaHandler extends SchemaHandlerTestBase {
 
   @Test
   public void testCowBootstrapWithPositionMerge() {
-    HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, true, false, true, false, null);
     Schema requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "_hoodie_record_key", "rider");
-    FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, hoodieTableConfig, true);
+    FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, true);
     assertTrue(readerContext.getNeedsBootstrapMerge());
     //meta cols must go first in the required schema
     Schema expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider");
@@ -61,14 +58,14 @@ public class TestParquetRowIndexBasedSchemaHandler extends SchemaHandlerTestBase
     assertEquals(Arrays.asList(getField("_hoodie_record_key"), getPositionalMergeField()), bootstrapFields.getLeft());
     assertEquals(Arrays.asList(getField("begin_lat"), getField("tip_history"), getField("rider"), getPositionalMergeField()), bootstrapFields.getRight());
 
-    schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, DATA_COLS_ONLY_SCHEMA, hoodieTableConfig, true);
+    schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, DATA_COLS_ONLY_SCHEMA, true);
     assertFalse(readerContext.getNeedsBootstrapMerge());
     assertEquals(DATA_COLS_ONLY_SCHEMA, schemaHandler.getRequiredSchema());
     bootstrapFields = schemaHandler.getBootstrapRequiredFields();
     assertTrue(bootstrapFields.getLeft().isEmpty());
     assertEquals(Arrays.asList(getField("begin_lat"), getField("tip_history"), getField("rider")), bootstrapFields.getRight());
 
-    schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, META_COLS_ONLY_SCHEMA, hoodieTableConfig, true);
+    schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, META_COLS_ONLY_SCHEMA, true);
     assertFalse(readerContext.getNeedsBootstrapMerge());
     assertEquals(META_COLS_ONLY_SCHEMA, schemaHandler.getRequiredSchema());
     bootstrapFields = schemaHandler.getBootstrapRequiredFields();
@@ -103,9 +100,9 @@ public class TestParquetRowIndexBasedSchemaHandler extends SchemaHandlerTestBase
   }
 
   @Override
-  FileGroupReaderSchemaHandler createSchemaHandler(HoodieReaderContext<String> readerContext, Schema dataSchema, Schema requestedSchema, HoodieTableConfig hoodieTableConfig,
+  FileGroupReaderSchemaHandler createSchemaHandler(HoodieReaderContext<String> readerContext, Schema dataSchema, Schema requestedSchema,
                                                    boolean supportsParquetRowIndex) {
     return new ParquetRowIndexBasedSchemaHandler(readerContext, dataSchema, requestedSchema,
-        Option.empty(), hoodieTableConfig, new TypedProperties());
+        Option.empty(), new TypedProperties(), metaClient);
   }
 }

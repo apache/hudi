@@ -20,6 +20,7 @@ import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -54,8 +55,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
-import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_ENABLED;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
@@ -372,7 +373,7 @@ public class HoodieJavaStreamingApp {
         .option(DataSourceWriteOptions.TABLE_TYPE().key(), tableType)
         .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
-        .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
+        .option(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp")
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "true")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")

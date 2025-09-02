@@ -66,6 +66,15 @@ class TestFlinkRowDataReaderContext {
   }
 
   @Test
+  void testConstructEngineRecordWithFieldValues() {
+    Object[] fieldVals = new Object[] {1, StringData.fromString("Alice"), true};
+    RowData row = readerContext.getRecordContext().constructEngineRecord(AVRO_SCHEMA, fieldVals);
+    assertEquals(fieldVals[0], row.getInt(0));
+    assertEquals(fieldVals[1], row.getString(1));
+    assertEquals(fieldVals[2], row.getBoolean(2));
+  }
+
+  @Test
   void testConstructEngineRecordWithNoUpdates() {
     RowData base = createBaseRow(1, "Alice", true);
     BufferedRecord<RowData> record = new BufferedRecord<>("anyKey", 1, base, 1, null);

@@ -101,6 +101,7 @@ public class LockManager implements Serializable, AutoCloseable {
     } catch (HoodieException e) {
       LOG.error(String.format("Exception encountered when updating lock metrics: %s", e));
     }
+    metrics.updateLockReleaseSuccessMetric();
     close();
   }
 
@@ -108,9 +109,20 @@ public class LockManager implements Serializable, AutoCloseable {
     // Perform lazy initialization of lock provider only if needed
     if (lockProvider == null) {
       LOG.info("LockProvider " + writeConfig.getLockProviderClass());
-      lockProvider = (LockProvider) ReflectionUtils.loadClass(writeConfig.getLockProviderClass(),
-          new Class<?>[] {LockConfiguration.class, StorageConfiguration.class},
-          lockConfiguration, storageConf);
+      
+      // Try to load lock provider with HoodieLockMetrics constructor first
+      Class<?>[] metricsConstructorTypes = {LockConfiguration.class, StorageConfiguration.class, HoodieLockMetrics.class};
+      if (ReflectionUtils.hasConstructor(writeConfig.getLockProviderClass(), metricsConstructorTypes)) {
+        lockProvider = (LockProvider) ReflectionUtils.loadClass(writeConfig.getLockProviderClass(),
+            metricsConstructorTypes, lockConfiguration, storageConf, metrics);
+        LOG.debug("Successfully loaded LockProvider with HoodieLockMetrics support");
+      } else {
+        LOG.debug("LockProvider does not support HoodieLockMetrics constructor, falling back to standard constructor");
+        // Fallback to original constructor without metrics
+        lockProvider = (LockProvider) ReflectionUtils.loadClass(writeConfig.getLockProviderClass(),
+                new Class<?>[] {LockConfiguration.class, StorageConfiguration.class},
+                lockConfiguration, storageConf);
+      }
     }
     return lockProvider;
   }

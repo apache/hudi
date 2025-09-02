@@ -40,7 +40,7 @@ import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_REA
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
-import org.apache.hudi.common.util.{CommitUtils, Option => HOption, StringUtils}
+import org.apache.hudi.common.util.{CommitUtils, ConfigUtils, Option => HOption, StringUtils}
 import org.apache.hudi.common.util.ConfigUtils.getAllConfigKeys
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
@@ -310,7 +310,7 @@ class HoodieSparkSqlWriterInternal {
           .setArchiveLogFolder(archiveLogFolder)
           // we can't fetch preCombine field from hoodieConfig object, since it falls back to "ts" as default value,
           // but we are interested in what user has set, hence fetching from optParams.
-          .setPreCombineFields(optParams.getOrElse(PRECOMBINE_FIELD.key(), null))
+          .setOrderingFields(ConfigUtils.getOrderingFieldsStrDuringWrite(optParams.asJava))
           .setPartitionFields(partitionColumnsForKeyGenerator)
           .setPopulateMetaFields(populateMetaFields)
           .setRecordKeyFields(hoodieConfig.getString(RECORDKEY_FIELD))
@@ -517,7 +517,7 @@ class HoodieSparkSqlWriterInternal {
             val hoodieRecords = Try(HoodieCreateRecordUtils.createHoodieRecordRdd(
               HoodieCreateRecordUtils.createHoodieRecordRddArgs(df, writeConfig, parameters, avroRecordName,
                 avroRecordNamespace, writerSchema, processedDataSchema, operation, instantTime, preppedSparkSqlWrites,
-                preppedSparkSqlMergeInto, preppedWriteOperation))) match {
+                preppedSparkSqlMergeInto, preppedWriteOperation, tableConfig.getOrderingFields))) match {
               case Success(recs) => recs
               case Failure(e) => throw new HoodieRecordCreationException("Failed to create Hoodie Spark Record", e)
             }
@@ -772,7 +772,7 @@ class HoodieSparkSqlWriterInternal {
           .setPayloadClassName(payloadClass)
           .setRecordMergeMode(RecordMergeMode.getValue(hoodieConfig.getString(HoodieWriteConfig.RECORD_MERGE_MODE)))
           .setRecordMergeStrategyId(recordMergerStrategy)
-          .setPreCombineFields(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD, null))
+          .setOrderingFields(ConfigUtils.getOrderingFieldsStrDuringWrite(hoodieConfig.getProps))
           .setBootstrapIndexClass(bootstrapIndexClass)
           .setBaseFileFormat(baseFileFormat)
           .setBootstrapBasePath(bootstrapBasePath)
@@ -1098,8 +1098,9 @@ class HoodieSparkSqlWriterInternal {
       mergedParams(HoodieTableConfig.KEY_GENERATOR_TYPE.key) = KeyGeneratorType.fromClassName(mergedParams(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key)).name
     }
     // use preCombineField to fill in PAYLOAD_ORDERING_FIELD_PROP_KEY
-    if (mergedParams.contains(PRECOMBINE_FIELD.key())) {
-      mergedParams.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, mergedParams(PRECOMBINE_FIELD.key()))
+    val orderingFieldsStr = ConfigUtils.getOrderingFieldsStrDuringWrite(mergedParams.asJava)
+    if (!StringUtils.isNullOrEmpty(orderingFieldsStr)) {
+      mergedParams.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingFieldsStr)
     }
     if (mergedParams.get(OPERATION.key()).get == INSERT_OPERATION_OPT_VAL && mergedParams.contains(DataSourceWriteOptions.INSERT_DUP_POLICY.key())
       && mergedParams.get(DataSourceWriteOptions.INSERT_DUP_POLICY.key()).get != FAIL_INSERT_DUP_POLICY) {
@@ -1125,14 +1126,15 @@ class HoodieSparkSqlWriterInternal {
       HoodieTableVersion.fromVersionCode(
         SparkConfigUtils.getStringWithAltKeys(mergedParams, WRITE_TABLE_VERSION).toInt)
     }
+    // Handle merge properties.
     if (!mergedParams.contains(DataSourceWriteOptions.RECORD_MERGE_MODE.key())
       || !mergedParams.contains(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key())
       || !mergedParams.contains(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key())) {
-      val inferredMergeConfigs = HoodieTableConfig.inferCorrectMergingBehavior(
+      val inferredMergeConfigs = HoodieTableConfig.inferMergingConfigsForWrites(
         RecordMergeMode.getValue(mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), null)),
         mergedParams.getOrElse(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), ""),
         mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), ""),
-        optParams.getOrElse(PRECOMBINE_FIELD.key(), null),
+        ConfigUtils.getOrderingFieldsStrDuringWrite(optParams.asJava),
         tableVersion)
       mergedParams.put(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), inferredMergeConfigs.getLeft.name())
       mergedParams.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), inferredMergeConfigs.getLeft.name())

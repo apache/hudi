@@ -25,6 +25,7 @@ import org.apache.hudi.async.HoodieAsyncService;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieCommonConfig;
@@ -45,6 +46,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -55,6 +57,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
@@ -780,6 +783,25 @@ public class HoodieMetadataTableValidator implements Serializable {
           misMatch.set(false);
         }
       }
+      if (!additionalFromFS.isEmpty()) {
+        // check for all additional partitions from FS is they are empty ones.
+        List<String> emptyPartitions = additionalFromFS.stream().filter(partition -> {
+          try {
+            StoragePath partitionPath = new StoragePath(basePath, partition);
+            return metaClient.getStorage().listFiles(partitionPath).stream()
+                .noneMatch(fileStatus -> fileStatus.isFile() && !fileStatus.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX));
+          } catch (IOException ex) {
+            throw new HoodieIOException("Error listing partition " + partition, ex);
+          }
+        }).collect(Collectors.toList());
+        additionalFromFS.removeAll(emptyPartitions);
+        if (additionalFromFS.isEmpty()) {
+          LOG.warn("All out of sync partitions turned out to be empty {}", emptyPartitions);
+          misMatch.set(false);
+        } else {
+          misMatch.set(true);
+        }
+      }
       if (misMatch.get()) {
         String message = "Compare Partitions Failed! " + " Additional "
             + additionalFromFS.size() + " partitions from FS, but missing from MDT : \""
@@ -1452,12 +1474,10 @@ public class HoodieMetadataTableValidator implements Serializable {
     if (fileSliceListFromMetadataTable.size() != fileSliceListFromFS.size()) {
       errorDetails = String.format(
           "Number of file slices based on the file system does not match that based on the "
-              + "metadata table. File system-based listing (%s file slices): %s; "
-              + "MDT-based listing (%s file slices): %s.",
+              + "metadata table. File system-based listing: %d & MDT-based listing: %d. %s",
           fileSliceListFromFS.size(),
-          toStringWithThreshold(fileSliceListFromFS, cfg.logDetailMaxLength),
           fileSliceListFromMetadataTable.size(),
-          toStringWithThreshold(fileSliceListFromMetadataTable, cfg.logDetailMaxLength));
+          computeDiffSummary(fileSliceListFromMetadataTable, fileSliceListFromFS, metaClient, cfg.logDetailMaxLength));
       mismatch = true;
     } else if (!fileSliceListFromMetadataTable.equals(fileSliceListFromFS)) {
       // In-memory cache for the set of committed files of commits of interest
@@ -1505,6 +1525,56 @@ public class HoodieMetadataTableValidator implements Serializable {
     } else {
       LOG.info("Validation of {} succeeded for partition {} for table: {}", label, partitionPath, cfg.basePath);
     }
+  }
+
+  static String computeDiffSummary(List<FileSlice> fileSliceListFromMetadataTable, List<FileSlice> fileSliceListFromFS,
+                                    HoodieTableMetaClient metaClient, int logDetailMaxLength) {
+    Set<HoodieFileGroupId> fileGroupIdsFromFS = fileSliceListFromFS.stream()
+        .map(FileSlice::getFileGroupId).collect(Collectors.toSet());
+    Set<HoodieFileGroupId> fileGroupIdsFromMetadataTable = fileSliceListFromMetadataTable.stream()
+        .map(FileSlice::getFileGroupId).collect(Collectors.toSet());
+    List<FileSlice> fileSlicesInFileSystemOnly = fileSliceListFromFS.stream()
+        .filter(fileSlice -> !fileGroupIdsFromMetadataTable.contains(fileSlice.getFileGroupId()))
+        .collect(Collectors.toList());
+    List<FileSlice> fileSlicesInMetadataTableOnly = fileSliceListFromMetadataTable.stream()
+        .filter(fileSlice -> !fileGroupIdsFromFS.contains(fileSlice.getFileGroupId()))
+        .collect(Collectors.toList());
+    if (!fileSlicesInFileSystemOnly.isEmpty()) {
+      HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+      Set<String> activeInstantTimes = activeTimeline.getInstantsAsStream().map(HoodieInstant::requestedTime).collect(Collectors.toSet());
+      // find if the files in the file system belong to missing commits
+      Set<String> nonActiveInstantTimes = fileSlicesInFileSystemOnly.stream().map(FileSlice::getBaseInstantTime).filter(instant -> !activeInstantTimes.contains(instant)).collect(Collectors.toSet());
+      if (!nonActiveInstantTimes.isEmpty()) {
+        String maxInstant = nonActiveInstantTimes.stream().max(Comparator.naturalOrder()).orElse(null);
+        String minInstant = nonActiveInstantTimes.stream().min(Comparator.naturalOrder()).orElse(null);
+        Set<String> archivedInstants = metaClient.getArchivedTimeline()
+            .findInstantsInRange(minInstant, maxInstant)
+            .getInstantsAsStream()
+            .map(HoodieInstant::requestedTime)
+            .collect(Collectors.toSet());
+        // truncate start instant since range is not
+        Set<String> missingCommits = nonActiveInstantTimes.stream().filter(instant -> !archivedInstants.contains(instant)).collect(Collectors.toSet());
+        if (!missingCommits.isEmpty()) {
+          LOG.warn("File slices in file system belong to missing commits: {}", String.join(",", missingCommits));
+          activeTimeline.getRollbackTimeline().getInstantsAsStream().forEach(instant -> {
+            HoodieInstant requestedInstant =  metaClient.getInstantGenerator().getRollbackRequestedInstant(instant);
+            try {
+              HoodieRollbackPlan rollbackPlan = activeTimeline.readInstantContent(requestedInstant, HoodieRollbackPlan.class);
+              if (missingCommits.contains(rollbackPlan.getInstantToRollback().getCommitTime())) {
+                LOG.warn("Missing commit ({}) is part of rollback plan: {}", rollbackPlan.getInstantToRollback().getCommitTime(), rollbackPlan);
+              }
+            } catch (IOException ex) {
+              LOG.warn("Failed to deserialize rollback plan for instant: {}", requestedInstant, ex);
+            }
+          });
+        }
+      }
+    }
+    return "File Slices in file system only: ["
+        + toStringWithThreshold(fileSlicesInFileSystemOnly, logDetailMaxLength)
+        + "]; File Slices in metadata table only: ["
+        + toStringWithThreshold(fileSlicesInMetadataTableOnly, logDetailMaxLength)
+        + "]";
   }
 
   private boolean assertBaseFilesEquality(FileSlice fileSlice1, FileSlice fileSlice2) {
@@ -1764,7 +1834,7 @@ public class HoodieMetadataTableValidator implements Serializable {
             .withMetadataIndexBloomFilter(enableMetadataTable)
             .withMetadataIndexColumnStats(enableMetadataTable)
             .withEnableRecordIndex(enableMetadataTable)
-            .build();
+                 .build();
         props.put(FileSystemViewStorageConfig.VIEW_TYPE.key(), viewStorageType);
         FileSystemViewStorageConfig viewConf = FileSystemViewStorageConfig.newBuilder().fromProperties(props).build();
         ValidationUtils.checkArgument(viewConf.getStorageType().name().equals(viewStorageType), "View storage type not reflected");

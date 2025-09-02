@@ -35,7 +35,7 @@ class TestLazyPartitionPathFetching extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  primaryKey ='id',
            |  type = 'cow',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
            | PARTITIONED BY (date_par)
        """.stripMargin)
@@ -71,7 +71,7 @@ class TestLazyPartitionPathFetching extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  primaryKey ='id',
            |  type = 'cow',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
            | PARTITIONED BY (grass_date)
          """.stripMargin)
@@ -102,7 +102,7 @@ class TestLazyPartitionPathFetching extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  primaryKey ='id',
            |  type = 'cow',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
            | PARTITIONED BY (country, date_par)
          """.stripMargin)
