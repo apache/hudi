@@ -225,10 +225,10 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
           final String bloomFilterType = bloomFilterMetadata.get().getType();
           final BloomFilter bloomFilter = BloomFilterFactory.fromString(
               StandardCharsets.UTF_8.decode(bloomFilterByteBuffer).toString(), bloomFilterType);
-          partitionFileToBloomFilterMap.put(fileToKeyMap.get(entry.getKey()), bloomFilter);
+          partitionFileToBloomFilterMap.put(fileToKeyMap.get(entry.getKey().orElse(null)), bloomFilter);
         }
       } else {
-        LOG.error("Meta index bloom filter missing for: {}", fileToKeyMap.get(entry.getKey()));
+        LOG.error("Meta index bloom filter missing for: {}", fileToKeyMap.get(entry.getKey().orElse(null)));
       }
     }
     return partitionFileToBloomFilterMap;
