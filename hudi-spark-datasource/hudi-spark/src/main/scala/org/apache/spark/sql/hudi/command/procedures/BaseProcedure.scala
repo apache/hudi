@@ -25,7 +25,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.HoodieIndex.IndexType
 
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
@@ -117,6 +117,24 @@ abstract class BaseProcedure extends Procedure {
       (names(0), names(1))
     } else {
       throw new HoodieException(s"Table name: $tableName is not valid")
+    }
+  }
+
+  protected def validateFilter(filter: String, schema: StructType): Unit = {
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.validateFilterExpression(filter, schema, sparkSession) match {
+        case Left(errorMessage) =>
+          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
+        case Right(_) => // Validation passed, continue
+      }
+    }
+  }
+
+  protected def applyFilter(results: Seq[Row], filter: String, schema: StructType): Seq[Row] = {
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.evaluateFilter(results, filter, schema, sparkSession)
+    } else {
+      results
     }
   }
 }

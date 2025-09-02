@@ -306,7 +306,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    */
   public ClosableIterator<HoodieRecord<T>> getClosableHoodieRecordIterator() throws IOException {
     return new CloseableMappingIterator<>(getBufferedRecordIterator(IteratorMode.HOODIE_RECORD),
-        bufferedRecord -> readerContext.getRecordContext().constructHoodieRecord(bufferedRecord));
+        bufferedRecord -> readerContext.getRecordContext().constructFinalHoodieRecord(bufferedRecord));
   }
 
   /**

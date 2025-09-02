@@ -23,12 +23,11 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
@@ -42,10 +41,12 @@ import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.ErrorEvent;
 import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -171,12 +172,12 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     assertEquals(Option.empty(),
         kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
     // Send  1000 non-null messages to Kafka
-    List<RawTripTestPayload> insertRecords = DATA_GENERATOR.generateInserts("000", 1000)
+    List<IndexedRecord> insertRecords = DATA_GENERATOR.generateInsertsAsPerSchema("000", 1000, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)
         .stream()
-        .map(hr -> (RawTripTestPayload) hr.getData()).collect(Collectors.toList());
+        .map(hr -> (IndexedRecord) hr.getData()).collect(Collectors.toList());
     sendMessagesToKafkaWithJsonSchemaSerializer(topic, 2, insertRecords);
     // send 200 null messages to Kafka
-    List<RawTripTestPayload> nullInsertedRecords = Arrays.asList(new RawTripTestPayload[200]);
+    List<IndexedRecord> nullInsertedRecords = Arrays.asList(new IndexedRecord[200]);
     sendMessagesToKafkaWithJsonSchemaSerializer(topic, 2, nullInsertedRecords);
     InputBatch<JavaRDD<GenericRecord>> fetch1 =
         kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
@@ -436,7 +437,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     return new BaseErrorTableWriter<ErrorEvent<String>>(new HoodieDeltaStreamer.Config(),
         spark(), props, new HoodieSparkEngineContext(jsc()), fs()) {
       @Override
-      public JavaRDD<WriteStatus> upsert(String errorTableInstantTime, String baseTableInstantTime, Option<String> commitedInstantTime) {
+      public JavaRDD<WriteStatus> upsert(String baseTableInstantTime, Option<String> commitedInstantTime) {
         return null;
       }
 
@@ -445,15 +446,15 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
         return false;
       }
 
-      List<JavaRDD<HoodieAvroRecord>> errorEvents = new LinkedList();
+      List<JavaRDD<HoodieRecord>> errorEvents = new LinkedList();
 
       @Override
       public void addErrorEvents(JavaRDD errorEvent) {
-        errorEvents.add(errorEvent.map(r -> new HoodieAvroRecord<>(new HoodieKey(), null)));
+        errorEvents.add(errorEvent.map(r -> new HoodieAvroIndexedRecord(new HoodieKey(), null)));
       }
 
       @Override
-      public Option<JavaRDD<HoodieAvroRecord>> getErrorEvents(String baseTableInstantTime, Option commitedInstantTime) {
+      public Option<JavaRDD<HoodieRecord>> getErrorEvents(String baseTableInstantTime, Option commitedInstantTime) {
         return Option.of(errorEvents.stream().reduce((rdd1, rdd2) -> rdd1.union(rdd2)).get());
       }
 
@@ -511,14 +512,17 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
   }
 
   private void sendMessagesToKafkaWithJsonSchemaSerializer(String topic, int numPartitions,
-                                                           List<RawTripTestPayload> insertRecords) {
+                                                           List<IndexedRecord> insertRecords) {
     Properties config = getProducerPropertiesForJsonKafkaSchemaSerializer();
-    try (Producer<String, RawTripTestPayload> producer = new KafkaProducer<>(config)) {
+    try (Producer<String, JsonNode> producer = new KafkaProducer<>(config)) {
       for (int i = 0; i < insertRecords.size(); i++) {
         // use consistent keys to get even spread over partitions for test expectations
+        IndexedRecord record = insertRecords.get(i);
         producer.send(new ProducerRecord<>(topic, Integer.toString(i % numPartitions),
-            insertRecords.get(i)));
+            record == null ? null : OBJECT_MAPPER.readTree(record.toString())));
       }
+    } catch (IOException e) {
+      throw new RuntimeException("Failed to send messages to Kafka topic: " + topic, e);
     }
   }
 

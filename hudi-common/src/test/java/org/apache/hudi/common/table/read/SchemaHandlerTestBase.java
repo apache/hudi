@@ -353,6 +353,11 @@ public abstract class SchemaHandlerTestBase {
         }
 
         @Override
+        public String constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
+          return "";
+        }
+
+        @Override
         public String seal(String record) {
           return "";
         }

@@ -138,6 +138,17 @@ public abstract class RecordContext<T> implements Serializable {
   }
 
   /**
+   * Constructs a {@link HoodieRecord} that will be used as the record written out to storage.
+   * This allows customization of the record construction logic for each engine for any required optimizations.
+   * The implementation defaults to calling {@link #constructHoodieRecord(BufferedRecord)}.
+   * @param bufferedRecord the {@link BufferedRecord} object to transform
+   * @return a new instance of {@link HoodieRecord} that will be written out to storage
+   */
+  public HoodieRecord<T> constructFinalHoodieRecord(BufferedRecord<T> bufferedRecord) {
+    return constructHoodieRecord(bufferedRecord, partitionPath);
+  }
+
+  /**
    * Constructs a new Engine based record based on a given schema, base record and update values.
    *
    * @param schema           The schema of the new record.
@@ -148,6 +159,15 @@ public abstract class RecordContext<T> implements Serializable {
   public abstract T mergeWithEngineRecord(Schema schema,
                                           Map<Integer, Object> updateValues,
                                           BufferedRecord<T> baseRecord);
+
+  /**
+   * Construct a new Engine record with given record schema and all field values.
+   *
+   * @param recordSchema the schema of the record
+   * @param fieldValues  the values of all fields
+   * @return A new instance of Engine record.
+   */
+  public abstract T constructEngineRecord(Schema recordSchema, Object[] fieldValues);
 
   public JavaTypeConverter getTypeConverter() {
     return typeConverter;
