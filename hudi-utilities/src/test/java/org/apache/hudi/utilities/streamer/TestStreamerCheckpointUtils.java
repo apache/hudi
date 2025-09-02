@@ -328,7 +328,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "2");
 
     Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointToResumeFrom(
-        Option.empty(), streamerConfig, props, metaClient);
+        Option.empty(), streamerConfig, context(), props, metaClient);
     assertTrue(checkpoint.get() instanceof StreamerCheckpointV1);
     assertEquals("test-cp", checkpoint.get().getCheckpointKey());
   }
@@ -339,7 +339,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "1");
 
     Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointToResumeFrom(
-        Option.empty(), streamerConfig, props, metaClient);
+        Option.empty(), streamerConfig, context(), props, metaClient);
     assertTrue(checkpoint.get() instanceof StreamerCheckpointV1);
     assertEquals("test-cp", checkpoint.get().getCheckpointKey());
   }
@@ -348,7 +348,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
   public void testEmptyTimelineAndNullCheckpoint() throws IOException {
     streamerConfig.checkpoint = null;
     Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointToResumeFrom(
-        Option.empty(), streamerConfig, props, metaClient);
+        Option.empty(), streamerConfig, context(), props, metaClient);
     assertTrue(checkpoint.isEmpty());
   }
 
@@ -362,7 +362,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     streamerConfig.checkpoint = "config-cp";
 
     Option<Checkpoint> checkpoint = StreamerCheckpointUtils.resolveCheckpointToResumeFrom(
-        Option.of(metaClient.getActiveTimeline()), streamerConfig, props, metaClient);
+        Option.of(metaClient.getActiveTimeline()), streamerConfig, context(), props, metaClient);
     assertEquals("config-cp", checkpoint.get().getCheckpointKey());
   }
 
@@ -386,7 +386,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
 
     // Should not throw exception
-    StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, props);
+    StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, context(), props);
   }
 
   @Test
@@ -409,13 +409,13 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
     // Should throw exception due to checkpoint override during upgrade
     assertThrows(HoodieUpgradeDowngradeException.class, () -> {
-      StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, props);
+      StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, context(), props);
     });
 
     // If not a hoodie incremental source, checkpoint override is allowed during upgrade.
     streamerConfig.sourceClassName = "org.apache.hudi.utilities.sources.NotAHoodieIncrSource";
     streamerConfig.checkpoint = "test-cp";
-    StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, props);
+    StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, context(), props);
   }
 
   @Test
@@ -439,7 +439,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
 
     // Should throw exception due to ignore checkpoint override during upgrade
     assertThrows(HoodieUpgradeDowngradeException.class, () -> {
-      StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, props);
+      StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, context(), props);
     });
   }
 
@@ -462,7 +462,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "6");
 
     // Should pass since versions match
-    StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, props);
+    StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, context(), props);
   }
 
   @Test
@@ -483,6 +483,6 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
 
     // Should pass since versions match
-    StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, props);
+    StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, context(), props);
   }
 }

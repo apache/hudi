@@ -83,12 +83,9 @@ public class UpgradeDowngrade {
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
   }
 
-  public static boolean needsUpgradeOrDowngrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieTableVersion toWriteVersion) {
+  public static boolean needsDowngrade(HoodieTableMetaClient metaClient,
+                                       HoodieTableVersion toWriteVersion) {
     HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
-    return needsUpgrade(metaClient, config, toWriteVersion) || needsDowngrade(fromTableVersion, toWriteVersion);
-  }
-
-  public static boolean needsDowngrade(HoodieTableVersion fromTableVersion, HoodieTableVersion toWriteVersion) {
     if (toWriteVersion.lesserThan(HoodieTableVersion.SIX)) {
       throw new HoodieUpgradeDowngradeException(
           String.format("Hudi 1.x release only supports table version greater than "
@@ -99,43 +96,49 @@ public class UpgradeDowngrade {
     return toWriteVersion.lesserThan(fromTableVersion);
   }
 
-  public static boolean needsUpgrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieTableVersion toWriteVersion) {
+  public static boolean needsUpgrade(HoodieTableMetaClient metaClient,
+                                     HoodieWriteConfig config,
+                                     HoodieTableVersion toVersion) {
     HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
-    if (fromTableVersion.greaterThan(toWriteVersion)) {
-      LOG.warn("Table version {} is greater than write version {}. No upgrade needed", fromTableVersion, toWriteVersion);
-      return false;
+    boolean shouldUpgrade = true;
+    if (fromTableVersion.greaterThanOrEquals(toVersion)) {
+      LOG.warn("Table version {} is greater than write version {}. No upgrade needed",
+          fromTableVersion, toVersion);
+      shouldUpgrade = false;
+    } else {
+      if (fromTableVersion.lesserThan(HoodieTableVersion.SIX)) {
+        throw new HoodieUpgradeDowngradeException(
+            String.format("Hudi 1.x release only supports table version greater than "
+                    + "version 6 or above. Please upgrade table from version %s to %s "
+                    + "using a Hudi release prior to 1.0.0",
+                fromTableVersion.versionCode(), HoodieTableVersion.SIX.versionCode()));
+      }
+      if (!config.autoUpgrade()) {
+        shouldUpgrade = false;
+      }
     }
-    if (fromTableVersion.equals(toWriteVersion)) {
-      // table version is same as write version, no upgrade needed
-      return false;
+    if (!shouldUpgrade && fromTableVersion != toVersion) {
+      if (!config.autoUpgrade()) {
+        LOG.warn("Table version {} does not match write version {} and skip upgrade. "
+                + "Setting hoodie.write.table.version={} to match 'hoodie.table.version'",
+            fromTableVersion, toVersion, fromTableVersion);
+        config.setWriteVersion(fromTableVersion);
+      } else {
+        throw new HoodieUpgradeDowngradeException(String.format(
+            "Table version %s is different from write version %s. Since we cannot do upgrade "
+                + "in this case, we need to make table version and write version equal.",
+            fromTableVersion, toVersion));
+      }
     }
-    if (fromTableVersion.lesserThan(HoodieTableVersion.SIX)) {
-      throw new HoodieUpgradeDowngradeException(
-          String.format("Hudi 1.x release only supports table version greater than "
-                  + "version 6 or above. Please upgrade table from version %s to %s "
-                  + "using a Hudi release prior to 1.0.0",
-              fromTableVersion.versionCode(), HoodieTableVersion.SIX.versionCode()));
-    }
-    if (!config.autoUpgrade()) {
-      // if autoUpgrade is disabled and table version is greater than or equal to SIX,
-      // then we must ensure the write version is set to the table version.
-      // and skip the upgrade
-      config.setWriteVersion(fromTableVersion);
-      LOG.warn("hoodie.write.auto.upgrade was disabled. Table version {} does not match write version {}. "
-                      + "Setting hoodie.write.table.version={} to match hoodie.table.version, and skipping upgrade",
-              fromTableVersion.versionCode(), toWriteVersion.versionCode(), fromTableVersion.versionCode());
-      return false;
-    }
-    // if we have passed all the checks, then this is valid to upgrade
-    return true;
+    return shouldUpgrade;
   }
 
-  public boolean needsUpgradeOrDowngrade(HoodieTableVersion toWriteVersion) {
-    return needsUpgradeOrDowngrade(metaClient, config, toWriteVersion);
+  public boolean needsUpgrade(HoodieTableVersion toVersion) {
+    return needsUpgrade(metaClient, config, toVersion);
   }
 
-  public boolean needsUpgrade(HoodieTableVersion toWriteVersion) {
-    return needsUpgrade(metaClient, config, toWriteVersion);
+  public boolean needsDowngrade(HoodieTableVersion toVersion) {
+    return needsDowngrade(metaClient, toVersion);
   }
 
   /**
@@ -181,7 +184,8 @@ public class UpgradeDowngrade {
     // Determine if we are upgrading or downgrading
     boolean isUpgrade = fromVersion.versionCode() < toVersion.versionCode();
 
-    if (!needsUpgradeOrDowngrade(toVersion)) {
+    // If decides not to execute, abort the upgrade/downgrade operation.
+    if (!needsDowngrade(toVersion) && !needsUpgrade(toVersion)) {
       return;
     }
 
@@ -207,7 +211,6 @@ public class UpgradeDowngrade {
             + "the metadata table so that the upgrade and downgrade can continue for the data table.", e);
       }
     }
-
 
     // Perform the actual upgrade/downgrade; this has to be idempotent, for now.
     LOG.info("Attempting to move table from version " + fromVersion + " to " + toVersion);
@@ -284,8 +287,8 @@ public class UpgradeDowngrade {
   }
 
   protected UpgradeDowngrade.TableConfigChangeSet upgrade(HoodieTableVersion fromVersion,
-                                                                            HoodieTableVersion toVersion,
-                                                                            String instantTime) {
+                                                          HoodieTableVersion toVersion,
+                                                          String instantTime) {
     if (fromVersion == HoodieTableVersion.ZERO && toVersion == HoodieTableVersion.ONE) {
       return new ZeroToOneUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else if (fromVersion == HoodieTableVersion.ONE && toVersion == HoodieTableVersion.TWO) {
@@ -309,7 +312,9 @@ public class UpgradeDowngrade {
     }
   }
 
-  protected TableConfigChangeSet downgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {
+  private UpgradeDowngrade.TableConfigChangeSet downgrade(HoodieTableVersion fromVersion,
+                                                          HoodieTableVersion toVersion,
+                                                          String instantTime) {
     if (fromVersion == HoodieTableVersion.ONE && toVersion == HoodieTableVersion.ZERO) {
       return new OneToZeroDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else if (fromVersion == HoodieTableVersion.TWO && toVersion == HoodieTableVersion.ONE) {

@@ -261,7 +261,7 @@ public class ITTestHoodieFlinkCompactor {
       // Mark instant as compaction inflight
       metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
 
-      conf.set(FlinkOptions.WRITE_TABLE_VERSION, upgrade ? HoodieTableVersion.EIGHT.versionCode() : HoodieTableVersion.SIX.versionCode());
+      conf.set(FlinkOptions.WRITE_TABLE_VERSION, upgrade ? HoodieTableVersion.current().versionCode() : HoodieTableVersion.SIX.versionCode());
       env.addSource(new CompactionPlanSourceFunction(Collections.singletonList(Pair.of(compactionInstantTime, compactionPlan)), conf))
           .name("compaction_source")
           .uid("uid_compaction_source")
