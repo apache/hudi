@@ -77,7 +77,7 @@ public class HoodieDataUtils {
    * @param <V> type of the value
    * @return a List containing the de-duplicated key-value pairs
    */
-  public static <K, V> List<Pair<Option<K>, V>> dedupeAndCollectAsList(HoodiePairData<K, V> pairData) {
+  public static <K, V> List<Pair<K, V>> dedupeAndCollectAsList(HoodiePairData<K, V> pairData) {
     // Map each pair to (Option<Pair.key>, V) to handle null keys uniformly
     // If there are multiple entries sharing the same key, use the incoming one
     return pairData.mapToPair(pair ->
@@ -86,6 +86,7 @@ public class HoodieDataUtils {
                 pair.getValue()
             ))
         .reduceByKey((existing, incoming) -> incoming, pairData.deduceNumPartitions())
+        .mapToPair(pair -> Pair.of(pair.getKey().orElse(null), pair.getValue()))
         .collectAsList();
   }
 

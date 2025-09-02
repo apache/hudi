@@ -178,7 +178,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   protected Option<HoodieMetadataPayload> readFilesIndexRecords(String key, String partitionName) {
-    HoodiePairData<String, HoodieMetadataPayload> recordsData = readIndexPayloadWithKeys(
+    HoodiePairData<String, HoodieMetadataPayload> recordsData = readIndexRecordsWithKeys(
         HoodieListData.eager(Collections.singletonList(new FilesIndexRawKey(key))), partitionName);
     try {
       List<HoodieMetadataPayload> records = recordsData.values().collectAsList();
@@ -347,7 +347,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return dataCleanupManager.ensureDataCleanupOnException(v -> {
       // TODO [HUDI-9544]: Metric does not work for rdd based API due to lazy evaluation.
       HoodieData<RecordIndexRawKey> rawKeys = recordKeys.map(RecordIndexRawKey::new);
-      return readIndexPayloadWithKeys(rawKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), dataTablePartition)
+      return readIndexRecordsWithKeys(rawKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), dataTablePartition)
           .mapToPair((Pair<String, HoodieMetadataPayload> p) -> Pair.of(p.getLeft(), p.getRight().getRecordGlobalLocation()));
     });
   }
@@ -420,13 +420,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  public HoodiePairData<String, HoodieMetadataPayload> readIndexPayloadWithKeys(
+  public HoodiePairData<String, HoodieMetadataPayload> readIndexRecordsWithKeys(
       HoodieData<? extends RawKey> rawKeys, String partitionName) {
-    return readIndexPayloadWithKeys(rawKeys, partitionName, Option.empty());
+    return readIndexRecordsWithKeys(rawKeys, partitionName, Option.empty());
   }
 
   @Override
-  public HoodiePairData<String, HoodieMetadataPayload> readIndexPayloadWithKeys(
+  public HoodiePairData<String, HoodieMetadataPayload> readIndexRecordsWithKeys(
       HoodieData<? extends RawKey> rawKeys, String partitionName, Option<String> dataTablePartition) {
     return readIndexRecords(rawKeys, partitionName, dataTablePartition)
         .mapToPair(record -> Pair.of(record.getRecordKey(), record.getData()));
@@ -435,7 +435,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   public HoodieData<String> readSecondaryIndexDataTableRecordKeysV2(HoodieData<String> secondaryKeys, String partitionName) {
     return dataCleanupManager.ensureDataCleanupOnException(v -> {
       HoodieData<SecondaryIndexPrefixRawKey> rawKeys = secondaryKeys.map(SecondaryIndexPrefixRawKey::new);
-      return readIndexPayloadWithKeys(rawKeys, partitionName, Option.empty())
+      return readIndexRecordsWithKeys(rawKeys, partitionName, Option.empty())
             .map(hoodieRecord -> SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(hoodieRecord.getLeft()));
     });
   }

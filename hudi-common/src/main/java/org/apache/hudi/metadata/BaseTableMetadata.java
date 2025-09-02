@@ -200,8 +200,8 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     });
 
     HoodiePairData<String, HoodieMetadataPayload> recordsData =
-        readIndexPayloadWithKeys(HoodieListData.eager(bloomFilterKeys), metadataPartitionName);
-    List<Pair<Option<String>, HoodieMetadataPayload>> hoodieRecords;
+        readIndexRecordsWithKeys(HoodieListData.eager(bloomFilterKeys), metadataPartitionName);
+    List<Pair<String, HoodieMetadataPayload>> hoodieRecords;
     try {
       hoodieRecords = HoodieDataUtils.dedupeAndCollectAsList(recordsData);
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR, timer.endTimer()));
@@ -211,12 +211,12 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     }
 
     Map<Pair<String, String>, BloomFilter> partitionFileToBloomFilterMap = new HashMap<>(hoodieRecords.size());
-    for (final Pair<Option<String>, HoodieMetadataPayload> entry : hoodieRecords) {
+    for (final Pair<String, HoodieMetadataPayload> entry : hoodieRecords) {
       final Option<HoodieMetadataBloomFilter> bloomFilterMetadata =
           entry.getValue().getBloomFilterMetadata();
       if (bloomFilterMetadata.isPresent()) {
         if (!bloomFilterMetadata.get().getIsDeleted()) {
-          ValidationUtils.checkState(fileToKeyMap.containsKey(entry.getKey().orElse(null)));
+          ValidationUtils.checkState(fileToKeyMap.containsKey(entry.getKey()));
           // NOTE: We have to duplicate the [[ByteBuffer]] object here since:
           //        - Reading out [[ByteBuffer]] mutates its state
           //        - [[BloomFilterMetadata]] could be re-used, and hence have to stay immutable
@@ -225,10 +225,10 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
           final String bloomFilterType = bloomFilterMetadata.get().getType();
           final BloomFilter bloomFilter = BloomFilterFactory.fromString(
               StandardCharsets.UTF_8.decode(bloomFilterByteBuffer).toString(), bloomFilterType);
-          partitionFileToBloomFilterMap.put(fileToKeyMap.get(entry.getKey().orElse(null)), bloomFilter);
+          partitionFileToBloomFilterMap.put(fileToKeyMap.get(entry.getKey()), bloomFilter);
         }
       } else {
-        LOG.error("Meta index bloom filter missing for: {}", fileToKeyMap.get(entry.getKey().orElse(null)));
+        LOG.error("Meta index bloom filter missing for: {}", fileToKeyMap.get(entry.getKey()));
       }
     }
     return partitionFileToBloomFilterMap;
@@ -325,9 +325,9 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         .map(FilesIndexRawKey::new)
         .collect(Collectors.toList());
     HoodiePairData<String, HoodieMetadataPayload> recordsData =
-        readIndexPayloadWithKeys(HoodieListData.eager(filesKeys),
+        readIndexRecordsWithKeys(HoodieListData.eager(filesKeys),
             MetadataPartitionType.FILES.getPartitionPath());
-    List<Pair<Option<String>, HoodieMetadataPayload>> partitionIdRecordPairs;
+    List<Pair<String, HoodieMetadataPayload>> partitionIdRecordPairs;
     try {
       partitionIdRecordPairs = HoodieDataUtils.dedupeAndCollectAsList(recordsData);
     } finally {
@@ -339,7 +339,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     Map<String, List<StoragePathInfo>> partitionPathToFilesMap =
         partitionIdRecordPairs.stream()
             .map(e -> {
-              final String partitionId = e.getKey().orElse(null);
+              final String partitionId = e.getKey();
               StoragePath partitionPath = partitionIdToPathMap.get(partitionId);
 
               HoodieMetadataPayload metadataPayload = e.getValue();
@@ -391,9 +391,9 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
       List<ColumnStatsIndexRawKey> rawKeys, Map<String, Pair<String, String>> columnStatKeyToFileNameMap) {
     HoodieTimer timer = HoodieTimer.start();
     HoodiePairData<String, HoodieMetadataPayload> recordsData =
-        readIndexPayloadWithKeys(
+        readIndexRecordsWithKeys(
             HoodieListData.eager(rawKeys), MetadataPartitionType.COLUMN_STATS.getPartitionPath());
-    List<Pair<Option<String>, HoodieMetadataPayload>> hoodieRecords;
+    List<Pair<String, HoodieMetadataPayload>> hoodieRecords;
     try {
       hoodieRecords = HoodieDataUtils.dedupeAndCollectAsList(recordsData);
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_COLUMN_STATS_METADATA_STR, timer.endTimer()));
@@ -401,12 +401,12 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
       recordsData.unpersistWithDependencies();
     }
     Map<Pair<String, String>, List<HoodieMetadataColumnStats>> fileToColumnStatMap = new HashMap<>();
-    for (final Pair<Option<String>, HoodieMetadataPayload> entry : hoodieRecords) {
+    for (final Pair<String, HoodieMetadataPayload> entry : hoodieRecords) {
       final Option<HoodieMetadataColumnStats> columnStatMetadata =
           entry.getValue().getColumnStatMetadata();
       if (columnStatMetadata.isPresent() && !columnStatMetadata.get().getIsDeleted()) {
-        ValidationUtils.checkState(columnStatKeyToFileNameMap.containsKey(entry.getKey().orElse(null)));
-        final Pair<String, String> partitionFileNamePair = columnStatKeyToFileNameMap.get(entry.getKey().orElse(null));
+        ValidationUtils.checkState(columnStatKeyToFileNameMap.containsKey(entry.getKey()));
+        final Pair<String, String> partitionFileNamePair = columnStatKeyToFileNameMap.get(entry.getKey());
         fileToColumnStatMap.computeIfAbsent(partitionFileNamePair, k -> new ArrayList<>()).add(columnStatMetadata.get());
       } else {
         LOG.error("Meta index column stats missing for {}", entry.getKey());
@@ -446,7 +446,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @param partitionName The partition name where the records are stored
    * @return A collection of pairs (key -> record)
    */
-  public abstract HoodiePairData<String, HoodieMetadataPayload> readIndexPayloadWithKeys(
+  public abstract HoodiePairData<String, HoodieMetadataPayload> readIndexRecordsWithKeys(
           HoodieData<? extends RawKey> rawKeys, String partitionName);
 
   /**
@@ -457,7 +457,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @param dataTablePartition The data table partition to look up from
    * @return A collection of pairs (key -> record)
    */
-  protected abstract HoodiePairData<String, HoodieMetadataPayload> readIndexPayloadWithKeys(HoodieData<? extends RawKey> rawKeys,
+  protected abstract HoodiePairData<String, HoodieMetadataPayload> readIndexRecordsWithKeys(HoodieData<? extends RawKey> rawKeys,
                                                                                             String partitionName,
                                                                                             Option<String> dataTablePartition);
 

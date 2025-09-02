@@ -198,9 +198,9 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
       HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData =
           hoodieTable.getMetadataTable().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup));
       try {
-        List<Pair<Option<String>, HoodieRecordGlobalLocation>> recordIndexInfo = HoodieDataUtils.dedupeAndCollectAsList(recordIndexData);
+        List<Pair<String, HoodieRecordGlobalLocation>> recordIndexInfo = HoodieDataUtils.dedupeAndCollectAsList(recordIndexData);
         return recordIndexInfo.stream()
-            .map(e -> new Tuple2<>(e.getKey().orElse(null), e.getValue())).iterator();
+            .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
       } finally {
         // Clean up the RDD to avoid memory leaks
         recordIndexData.unpersistWithDependencies();

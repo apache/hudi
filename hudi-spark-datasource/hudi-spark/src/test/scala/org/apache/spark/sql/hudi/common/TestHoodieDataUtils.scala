@@ -110,7 +110,7 @@ class TestHoodieDataUtils extends HoodieSparkSqlTestBase {
       (null, "nullValue2")
     )
 
-    val resultAsScala = result.asScala.map(p => (p.getKey.orElse(null), p.getValue)).toSet
+    val resultAsScala = result.asScala.map(p => (p.getKey, p.getValue)).toSet
     val expectedAsSet = expected.toSet
 
     assert(resultAsScala == expectedAsSet,
