@@ -20,6 +20,7 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
@@ -527,7 +528,6 @@ public class HoodieIndexUtils {
     // define the buffered record merger.
     TypedProperties properties = readerContext.getMergeProps(updatedConfig.getProps());
     RecordContext<R> incomingRecordContext = readerContext.getRecordContext();
-    readerContext.initRecordMergerForIngestion(config.getProps());
     // Create a reader context for the existing records. In the case of merge-into commands, the incoming records
     // can be using an expression payload so here we rely on the table's configured payload class if it is required.
     ReaderContextFactory<R> readerContextFactoryForExistingRecords = (ReaderContextFactory<R>) hoodieTable.getContext()
@@ -603,8 +603,10 @@ public class HoodieIndexUtils {
     ReaderContextFactory<R> readerContextFactory = (ReaderContextFactory<R>) table.getContext()
         .getReaderContextFactoryForWrite(table.getMetaClient(), config.getRecordMerger().getRecordType(), config.getProps());
     HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
-    TypedProperties properties = readerContext.getMergeProps(table.getConfig().getProps());
-    SerializableSchema writerSchema = new SerializableSchema(table.getConfig().getWriteSchema());
+    readerContext.initRecordMergerForIngestion(config.getProps());
+    TypedProperties properties = readerContext.getMergeProps(config.getProps());
+    SerializableSchema writerSchema = new SerializableSchema(config.getWriteSchema());
+    boolean isCommitTimeOrdered = readerContext.getMergeMode() == RecordMergeMode.COMMIT_TIME_ORDERING;
 
     // Pair of incoming record and the global location if meant for merged lookup in later stage
     HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations
@@ -616,7 +618,8 @@ public class HoodieIndexUtils {
             HoodieRecordGlobalLocation currentLoc = currentLocOpt.get();
             boolean shouldDoMergedLookUpThenTag = mayContainDuplicateLookup
                 || !Objects.equals(incomingRecord.getPartitionPath(), currentLoc.getPartitionPath())
-                || incomingRecord.isDelete(writerSchema.get(), properties);
+                // if the ordering is not simply based on commit time and the incoming record is a delete, the value needs to be compared to the existing value before deleting the key from the index
+                || (!isCommitTimeOrdered && incomingRecord.isDelete(writerSchema.get(), properties));
             if (shouldUpdatePartitionPath && shouldDoMergedLookUpThenTag) {
               // the pair's right side is a non-empty Option, which indicates that a merged lookup will be performed
               // at a later stage.

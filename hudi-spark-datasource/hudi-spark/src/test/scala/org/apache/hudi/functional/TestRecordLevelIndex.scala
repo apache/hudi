@@ -47,7 +47,6 @@ import org.junit.jupiter.params.provider.Arguments.arguments
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.Executors
-import java.util.stream.Collectors
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{Await, ExecutionContext, Future}
