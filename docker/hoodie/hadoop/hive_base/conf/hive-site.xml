@@ -14,5 +14,49 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
---><configuration>
+-->
+<configuration>
+    <property>
+        <name>hive.metastore.event.db.notification.api.auth</name>
+        <value>false</value>
+    </property>
+    <property>
+  	<name>javax.jdo.option.ConnectionURL</name>
+  	<value>jdbc:postgresql://hive-metastore-postgresql:5432/metastore</value>
+    </property>
+
+    <property>
+  	<name>javax.jdo.option.ConnectionDriverName</name>
+  	<value>org.postgresql.Driver</value>
+    </property>
+
+    <property>
+  	<name>javax.jdo.option.ConnectionUserName</name>
+  	<value>hive</value>
+    </property>
+
+    <property>
+  	<name>javax.jdo.option.ConnectionPassword</name>
+  	<value>hive</value>
+    </property>
+    <property>
+  	<name>hive.server2.webui.enable</name>
+  	<value>true</value>
+    </property>
+    <property>
+  	<name>hive.server2.webui.port</name>
+  	<value>10002</value>
+    </property>
+    <property>
+  	<name>hive.querylog.location</name>
+  	<value>/var/log/hive/querylogs</value>
+    </property>
+    <property>
+  	<name>hive.querylog.enable.plan.progress</name>
+  	<value>true</value>
+    </property>
+    <property>
+  	<name>hive.server2.logging.operation.enabled</name>
+  	<value>true</value>
+    </property>
 </configuration>
