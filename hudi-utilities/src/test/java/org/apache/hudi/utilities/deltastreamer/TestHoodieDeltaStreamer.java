@@ -1862,14 +1862,14 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(metaClient.getTableConfig().getPayloadClass(), DefaultHoodieRecordPayload.class.getName());
 
     //now create one more deltaStreamer instance and update payload class
-    cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
+    HoodieDeltaStreamer.Config updatedConfig = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
         Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
         true, true, DummyAvroPayload.class.getName(), "MERGE_ON_READ");
-    new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf());
-
-    // NOTE: Payload class cannot be updated.
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    assertEquals(metaClient.getTableConfig().getPayloadClass(), DefaultHoodieRecordPayload.class.getName());
+    Exception e = assertThrows(HoodieException.class, () -> {
+        new HoodieDeltaStreamer(updatedConfig, jsc, fs, hiveServer.getHiveConf());
+    }, "Should error out when payload class is switched");
+    assertTrue(e.getMessage().contains("Config conflict(key"));
+    assertTrue(e.getMessage().contains(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
   }
 
   @Test
