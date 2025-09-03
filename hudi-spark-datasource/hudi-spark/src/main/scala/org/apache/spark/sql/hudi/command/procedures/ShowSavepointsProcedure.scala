@@ -187,9 +187,9 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder with L
               val partitionMetadata = partitionEntry.getValue
               partitionMetadata.getSavepointDataFile.asScala.foreach { dataFile =>
                 val row = Row(
-                  savepointInstant.requestedTime(),
+                  savepointInstant.requestedTime,
                   savepointInstant.getCompletionTime,
-                  savepointInstant.getState.name(),
+                  savepointInstant.getState.name,
                   savepointInstant.getAction,
                   timelineType,
                   savepointMetadata.getSavepointedBy,
@@ -204,9 +204,9 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder with L
             }
           } else {
             val row = Row(
-              savepointInstant.requestedTime(),
+              savepointInstant.requestedTime,
               savepointInstant.getCompletionTime,
-              savepointInstant.getState.name(),
+              savepointInstant.getState.name,
               savepointInstant.getAction,
               timelineType,
               savepointMetadata.getSavepointedBy,
@@ -223,9 +223,9 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder with L
           case Failure(e) =>
             log.warn(s"Failed to read savepoint metadata for instant ${savepointInstant.requestedTime()}", e)
             val row = Row(
-              savepointInstant.requestedTime(),
+              savepointInstant.requestedTime,
               savepointInstant.getCompletionTime,
-              savepointInstant.getState.name(),
+              savepointInstant.getState.name,
               savepointInstant.getAction,
               timelineType,
               null,

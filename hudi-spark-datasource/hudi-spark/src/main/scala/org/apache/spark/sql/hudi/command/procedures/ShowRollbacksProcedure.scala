@@ -199,9 +199,9 @@ class ShowRollbacksProcedure extends BaseProcedure with ProcedureBuilder with Lo
             val partitionMetadata = partitionEntry.getValue
             partitionMetadata.getSuccessDeleteFiles.asScala.foreach { deletedFile =>
               val row = Row(
-                rollbackInstant.requestedTime(),
+                rollbackInstant.requestedTime,
                 rollbackInstant.getCompletionTime,
-                rollbackInstant.getState.name(),
+                rollbackInstant.getState.name,
                 rollbackInstant.getAction,
                 timelineType,
                 rollbackMetadata.getStartRollbackTime,
@@ -219,9 +219,9 @@ class ShowRollbacksProcedure extends BaseProcedure with ProcedureBuilder with Lo
 
             partitionMetadata.getFailedDeleteFiles.asScala.foreach { deletedFile =>
               val row = Row(
-                rollbackInstant.requestedTime(),
+                rollbackInstant.requestedTime,
                 rollbackInstant.getCompletionTime,
-                rollbackInstant.getState.name(),
+                rollbackInstant.getState.name,
                 rollbackInstant.getAction,
                 timelineType,
                 rollbackMetadata.getStartRollbackTime,
@@ -239,9 +239,9 @@ class ShowRollbacksProcedure extends BaseProcedure with ProcedureBuilder with Lo
           }
           if (rollbackMetadata.getPartitionMetadata.isEmpty) {
             val row = Row(
-              rollbackInstant.requestedTime(),
+              rollbackInstant.requestedTime,
               rollbackInstant.getCompletionTime,
-              rollbackInstant.getState.name(),
+              rollbackInstant.getState.name,
               rollbackInstant.getAction,
               timelineType,
               rollbackMetadata.getStartRollbackTime,
@@ -268,9 +268,9 @@ class ShowRollbacksProcedure extends BaseProcedure with ProcedureBuilder with Lo
           val planStats = extractRollbackPlanStats(rollbackPlan)
           planStats.involvedPartitions.foreach { partitionPath =>
             val row = Row(
-              rollbackInstant.requestedTime(),
+              rollbackInstant.requestedTime,
               "", // state_transition_time - not available in pending
-              rollbackInstant.getState.name(),
+              rollbackInstant.getState.name,
               rollbackInstant.getAction,
               timelineType,
               "", // start_rollback_time - not available in pending
@@ -298,14 +298,14 @@ class ShowRollbacksProcedure extends BaseProcedure with ProcedureBuilder with Lo
 
   private def createErrorRowForCompleted(instant: HoodieInstant, timelineType: String): Row = {
     Row(
-      instant.requestedTime(), instant.getCompletionTime, instant.getState.name(), instant.getAction,
+      instant.requestedTime, instant.getCompletionTime, instant.getState.name, instant.getAction,
       timelineType, null, null, null, null, null, null, null, null, null
     )
   }
 
   private def createErrorRowForPending(instant: HoodieInstant, timelineType: String): Row = {
     Row(
-      instant.requestedTime(), null, instant.getState.name(), instant.getAction,
+      instant.requestedTime, null, instant.getState.name, instant.getAction,
       timelineType, null, null, null, null, null, null, null, null, null
     )
   }

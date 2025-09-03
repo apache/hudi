@@ -250,17 +250,17 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
             val partitionMetadata = partitionMetadataEntry.getValue
 
             val row = Row(
-              cleanInstant.requestedTime(),
+              cleanInstant.requestedTime,
               cleanInstant.getCompletionTime,
-              cleanInstant.getState.name(),
+              cleanInstant.getState.name,
               cleanInstant.getAction,
               timelineType,
               cleanMetadata.getStartCleanTime,
               partitionPath,
               partitionMetadata.getPolicy,
-              partitionMetadata.getDeletePathPatterns.size(),
-              partitionMetadata.getSuccessDeleteFiles.size(),
-              partitionMetadata.getFailedDeleteFiles.size(),
+              partitionMetadata.getDeletePathPatterns.size,
+              partitionMetadata.getSuccessDeleteFiles.size,
+              partitionMetadata.getFailedDeleteFiles.size,
               partitionMetadata.getIsPartitionDeleted,
               cleanMetadata.getTimeTakenInMillis,
               cleanMetadata.getTotalFilesDeleted,
@@ -274,9 +274,9 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
           }
           if (cleanMetadata.getPartitionMetadata.isEmpty) {
             val row = Row(
-              cleanInstant.requestedTime(),
+              cleanInstant.requestedTime,
               cleanInstant.getCompletionTime,
-              cleanInstant.getState.name(),
+              cleanInstant.getState.name,
               cleanInstant.getAction,
               timelineType,
               cleanMetadata.getStartCleanTime,
@@ -320,9 +320,9 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
               .getOrElse(0)
 
             val row = Row(
-              cleanInstant.requestedTime(),
+              cleanInstant.requestedTime,
               null,
-              cleanInstant.getState.name(),
+              cleanInstant.getState.name,
               cleanInstant.getAction,
               timelineType,
               null, // start_clean_time - not available in pending

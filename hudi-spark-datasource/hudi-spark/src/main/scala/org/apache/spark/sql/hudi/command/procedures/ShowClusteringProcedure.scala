@@ -209,9 +209,9 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
             val inputGroupSize = planStats.map(_.totalInputGroups).getOrElse(writeStats.size)
 
             val row = Row(
-              clusteringInstant.requestedTime(),
+              clusteringInstant.requestedTime,
               clusteringInstant.getCompletionTime,
-              clusteringInstant.getState.name(),
+              clusteringInstant.getState.name,
               clusteringInstant.getAction,
               timelineType,
               inputGroupSize,
@@ -229,9 +229,9 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
             val inputGroupSize = planStats.map(_.totalInputGroups).map(Integer.valueOf).orNull
 
             val row = Row(
-              clusteringInstant.requestedTime(),
+              clusteringInstant.requestedTime,
               clusteringInstant.getCompletionTime,
-              clusteringInstant.getState.name(),
+              clusteringInstant.getState.name,
               clusteringInstant.getAction,
               timelineType,
               inputGroupSize,
@@ -258,9 +258,9 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
             stats.involvedPartitions.foreach { partitionPath =>
               val partitionStat = stats.partitionStats.get(partitionPath)
               val row = Row(
-                clusteringInstant.requestedTime(),
+                clusteringInstant.requestedTime,
                 null, // state_transition_time - not available for pending
-                clusteringInstant.getState.name(),
+                clusteringInstant.getState.name,
                 clusteringInstant.getAction,
                 timelineType,
                 stats.totalInputGroups, // input_group_size - total across all partitions

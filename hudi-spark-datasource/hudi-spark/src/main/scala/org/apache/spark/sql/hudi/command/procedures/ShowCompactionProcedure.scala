@@ -202,9 +202,9 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
 
             writeStats.foreach { writeStat =>
               val row = Row(
-                compactionInstant.requestedTime(),
+                compactionInstant.requestedTime,
                 compactionInstant.getCompletionTime,
-                compactionInstant.getState.name(),
+                compactionInstant.getState.name,
                 compactionInstant.getAction,
                 timelineType,
                 operationSize,
@@ -229,9 +229,9 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
             val totalWriteBytes = compactionMetadata.fetchTotalBytesWritten
 
             val row = Row(
-              compactionInstant.requestedTime(),
+              compactionInstant.requestedTime,
               compactionInstant.getCompletionTime,
-              compactionInstant.getState.name(),
+              compactionInstant.getState.name,
               compactionInstant.getAction,
               timelineType,
               operationSize,
@@ -258,9 +258,9 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
             val partitionOps = operations.filter(_.getPartitionPath == partitionPath)
             val partitionDeltaFiles = partitionOps.map(_.getDeltaFilePaths.size()).sum
             val row = Row(
-              compactionInstant.requestedTime(),
+              compactionInstant.requestedTime,
               null,
-              compactionInstant.getState.name(),
+              compactionInstant.getState.name,
               compactionInstant.getAction,
               timelineType,
               partitionOps.size,
@@ -299,14 +299,14 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
 
   private def createErrorRowForCompletedWithPartition(instant: HoodieInstant, timelineType: String): Row = {
     Row(
-      instant.requestedTime(), instant.getCompletionTime, instant.getState.name(), instant.getAction,
+      instant.requestedTime, instant.getCompletionTime, instant.getState.name, instant.getAction,
       timelineType, null, null, null, null, null, null
     )
   }
 
   private def createErrorRowForPendingWithPartition(instant: HoodieInstant, timelineType: String): Row = {
     Row(
-      instant.requestedTime(), null, instant.getState.name(), instant.getAction,
+      instant.requestedTime, null, instant.getState.name, instant.getAction,
       timelineType, null, null, null, null, null, null
     )
   }

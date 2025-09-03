@@ -227,9 +227,9 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
                 val avgRecordSize = if (numWrites > 0) totalBytesWritten / numWrites else 0L
 
                 allRows += Row(
-                  commitInstant.requestedTime(),
+                  commitInstant.requestedTime,
                   commitInstant.getCompletionTime,
-                  commitInstant.getState.name(),
+                  commitInstant.getState.name,
                   commitInstant.getAction,
                   timelineType,
                   partitionPath,
@@ -343,9 +343,9 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
               val avgRecordSize = if (totalRecordsWritten > 0) totalBytesWritten / totalRecordsWritten else 0L
 
               allRows += Row(
-                commitInstant.requestedTime(),
+                commitInstant.requestedTime,
                 commitInstant.getCompletionTime,
-                commitInstant.getState.name(),
+                commitInstant.getState.name,
                 commitInstant.getAction,
                 timelineType,
                 null, // partitionPath
@@ -382,9 +382,9 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
         val commitStats = extractCommitPlanStats(commitInstant, metaClient)
         commitStats.involvedPartitions.foreach { partitionPath =>
           allRows += Row(
-            commitInstant.requestedTime(),
+            commitInstant.requestedTime,
             null, // state_transition_time
-            commitInstant.getState.name(),
+            commitInstant.getState.name,
             commitInstant.getAction,
             timelineType,
             partitionPath,
@@ -467,9 +467,9 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
 
   private def createErrorRow(instant: HoodieInstant): Row = {
     Row(
-      instant.requestedTime(),
+      instant.requestedTime,
       instant.getCompletionTime,
-      instant.getState.name(),
+      instant.getState.name,
       instant.getAction,
       null, // partitionPath
       null, // fileId
