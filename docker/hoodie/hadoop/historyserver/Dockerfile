@@ -15,9 +15,16 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG HADOOP_VERSION=2.8.4 
+ARG HADOOP_VERSION=3.3.4 
 ARG HADOOP_HISTORY_PORT=8188
 FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
+
+# Copy the native .so to a directory in LD_LIBRARY_PATH
+COPY libleveldbjni.so /usr/lib/
+
+# Set environment variables for native lib
+ENV LD_LIBRARY_PATH="/usr/lib"
+ENV JAVA_LIBRARY_PATH="/usr/lib"
 
 ENV HADOOP_HISTORY_PORT ${HADOOP_HISTORY_PORT}
 

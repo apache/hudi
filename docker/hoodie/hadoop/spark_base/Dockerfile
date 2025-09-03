@@ -15,9 +15,9 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG HADOOP_VERSION=2.8.4
-ARG HIVE_VERSION=2.3.3
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}
+ARG HADOOP_VERSION=3.3.4
+ARG HIVE_VERSION=3.1.3
+FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}:latest
 
 ENV ENABLE_INIT_DAEMON true
 ENV INIT_DAEMON_BASE_URI http://identifier/init-daemon
@@ -47,6 +47,26 @@ RUN apt-get update \
     && ln -sf $(which python3) /usr/bin/python \
     && rm -rf /var/lib/apt/lists/*
 
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    wget build-essential libncursesw5-dev \
+    libssl-dev libgdbm-dev libreadline-dev libbz2-dev \
+    libsqlite3-dev libffi-dev zlib1g-dev \
+    && cd /usr/src \
+    && wget https://www.python.org/ftp/python/3.8.18/Python-3.8.18.tgz \
+    && tar xzf Python-3.8.18.tgz \
+    && cd Python-3.8.18 \
+    && ./configure --enable-optimizations \
+    && make -j"$(nproc)" \
+    && make altinstall \
+    && ln -sf /usr/local/bin/python3.8 /usr/bin/python \
+    && ln -sf /usr/local/bin/python3.8 /usr/bin/python3 \
+    && curl -sS https://bootstrap.pypa.io/pip/3.8/get-pip.py | python \
+    && pip install --upgrade pip \
+    && cd / && rm -rf /usr/src/Python-3.8.18* \
+    && rm -rf /var/lib/apt/lists/*
+
+
 #Give permission to execute scripts
 RUN chmod +x /wait-for-step.sh && chmod +x /execute-step.sh && chmod +x /finish-step.sh
 
@@ -66,5 +86,7 @@ ENV SPARK_BLOCKMGR_PORT 5003
 EXPOSE $SPARK_DRIVER_PORT $SPARK_UI_PORT $SPARK_BLOCKMGR_PORT
 
 # Without this spark-shell fails - Download if it is not already there in $SPARK_INSTALL
-RUN wget -nc -q -O "${SPARK_INSTALL}/jars/jersey-bundle-1.19.4.jar" "https://repo1.maven.org/maven2/com/sun/jersey/jersey-bundle/1.19.4/jersey-bundle-1.19.4.jar"
+RUN wget -nc -q -O "${SPARK_INSTALL}/jars/jersey-bundle-1.19.4.jar" "https://repo1.maven.org/maven2/com/sun/jersey/jersey-bundle/1.19.4/jersey-bundle-1.19.4.jar" && \
+    wget -O "${SPARK_INSTALL}/jars/hadoop-aws-3.3.4.jar" https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar && \
+    wget -O "${SPARK_INSTALL}/jars/aws-java-sdk-bundle-1.12.734.jar" https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.734/aws-java-sdk-bundle-1.12.734.jar
 
