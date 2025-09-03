@@ -92,7 +92,7 @@
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>com.esotericsoftware:minlog</include>
                   <include>org.objenesis:objenesis</include>
-		  <include>com.github.ben-manes.caffeine:caffeine</include>
+		              <include>com.github.ben-manes.caffeine:caffeine</include>
                 </includes>
               </artifactSet>
               <relocations combine.children="append">

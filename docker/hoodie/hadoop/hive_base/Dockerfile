@@ -40,7 +40,6 @@ RUN echo "Hive URL is :${HIVE_URL}" && wget ${HIVE_URL} -O hive.tar.gz && \
 #hive-site.xml should be copied to $SPARK_HOME/conf folder
 
 #Custom configuration goes here
-ADD conf/hive-site.xml $HADOOP_CONF_DIR
 ADD conf/hive-site.xml $HIVE_HOME/conf
 ADD conf/beeline-log4j2.properties $HIVE_HOME/conf
 ADD conf/hive-env.sh $HIVE_HOME/conf
