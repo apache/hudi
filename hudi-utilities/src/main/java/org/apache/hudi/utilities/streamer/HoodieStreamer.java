@@ -747,6 +747,7 @@ public class HoodieStreamer implements Serializable {
             cfg.baseFileFormat = "PARQUET"; // default for backward compatibility
           }
           Map<String, String> propsToValidate = new HashMap<>();
+          properties.get().setProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), cfg.payloadClassName);
           properties.get().forEach((k, v) -> propsToValidate.put(k.toString(), v.toString()));
           HoodieWriterUtils.validateTableConfig(this.sparkSession, org.apache.hudi.HoodieConversionUtils.mapAsScalaImmutableMap(propsToValidate), meta.getTableConfig());
         } catch (HoodieIOException e) {
