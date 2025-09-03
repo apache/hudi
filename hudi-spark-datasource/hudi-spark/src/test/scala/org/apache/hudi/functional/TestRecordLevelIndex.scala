@@ -298,7 +298,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     inputRecords.addAll(dataGen.generateUniqueDeleteRecords(instantTime, 1, 1L))
     inputRecords.addAll(dataGen.generateUniqueDeleteRecordsWithUpdatedPartition(instantTime, 1, 1L))
     val deleteBatch = recordsToStrings(inputRecords).asScala
-    val deleteDf = spark.read.json(spark.sparkContext.parallelize(deleteBatch, 1))
+    val deleteDf = spark.read.json(spark.sparkContext.parallelize(deleteBatch.toSeq, 1))
     deleteDf.cache()
     val recordKeyToDelete1 = deleteDf.collectAsList().get(0).getAs("_row_key").asInstanceOf[String]
     val recordKeyToDelete2 = deleteDf.collectAsList().get(1).getAs("_row_key").asInstanceOf[String]
@@ -309,7 +309,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     val prevDf = mergedDfList.last
     mergedDfList = mergedDfList :+ prevDf.filter(row => row.getAs("_row_key").asInstanceOf[String] != recordKeyToDelete1 &&
       row.getAs("_row_key").asInstanceOf[String] != recordKeyToDelete2)
-    validateDataAndRecordIndices(hudiOpts, spark.read.json(spark.sparkContext.parallelize(recordsToStrings(deletedRecords).asScala, 1)))
+    validateDataAndRecordIndices(hudiOpts, spark.read.json(spark.sparkContext.parallelize(recordsToStrings(deletedRecords).asScala.toSeq, 1)))
     deleteDf.unpersist()
   }
 
