@@ -39,6 +39,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -607,6 +608,7 @@ public class HoodieIndexUtils {
     TypedProperties properties = readerContext.getMergeProps(config.getProps());
     SerializableSchema writerSchema = new SerializableSchema(config.getWriteSchema());
     boolean isCommitTimeOrdered = readerContext.getMergeMode() == RecordMergeMode.COMMIT_TIME_ORDERING;
+    boolean isMoRTable = table.getMetaClient().getTableConfig().getTableType() == HoodieTableType.MERGE_ON_READ;
 
     // Pair of incoming record and the global location if meant for merged lookup in later stage
     HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations
@@ -620,7 +622,7 @@ public class HoodieIndexUtils {
                 || !Objects.equals(incomingRecord.getPartitionPath(), currentLoc.getPartitionPath())
                 // if the ordering is not simply based on commit time and the incoming record is a delete, the value needs to be compared to the existing value before deleting the key from the index
                 || (!isCommitTimeOrdered && incomingRecord.isDelete(writerSchema.get(), properties));
-            if (shouldUpdatePartitionPath && shouldDoMergedLookUpThenTag) {
+            if ((shouldUpdatePartitionPath || isMoRTable) && shouldDoMergedLookUpThenTag) {
               // the pair's right side is a non-empty Option, which indicates that a merged lookup will be performed
               // at a later stage.
               return Pair.of(incomingRecord, currentLocOpt);
@@ -636,7 +638,7 @@ public class HoodieIndexUtils {
             return Pair.of(incomingRecord, Option.empty());
           }
         });
-    return shouldUpdatePartitionPath
+    return shouldUpdatePartitionPath || isMoRTable
         ? mergeForPartitionUpdatesIfNeeded(incomingRecordsAndLocations, config, table, readerContext, writerSchema)
         : incomingRecordsAndLocations.map(Pair::getLeft);
   }

@@ -128,6 +128,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       .save(basePath)
     val deletedDf3 = calculateMergedDf(latestBatchDf3, operation, true)
     deletedDf3.cache()
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     validateDataAndRecordIndices(hudiOpts, deletedDf3)
     deletedDf2.unpersist()
     deletedDf3.unpersist()
@@ -296,8 +297,9 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     val deletedRecords = dataGen.generateUniqueDeleteRecords(instantTime, 1)
     deletedRecords.addAll(dataGen.generateUniqueDeleteRecordsWithUpdatedPartition(instantTime, 1))
     val inputRecords = new util.ArrayList[HoodieRecord[_]](deletedRecords)
-    inputRecords.addAll(dataGen.generateUniqueDeleteRecords(instantTime, 1, 1L))
-    inputRecords.addAll(dataGen.generateUniqueDeleteRecordsWithUpdatedPartition(instantTime, 1, 1L))
+    val lowerOrderingValue = 1L
+    inputRecords.addAll(dataGen.generateUniqueDeleteRecords(instantTime, 1, lowerOrderingValue))
+    inputRecords.addAll(dataGen.generateUniqueDeleteRecordsWithUpdatedPartition(instantTime, 1, lowerOrderingValue))
     val deleteBatch = recordsToStrings(inputRecords).asScala
     val deleteDf = spark.read.json(spark.sparkContext.parallelize(deleteBatch.toSeq, 1))
     deleteDf.cache()

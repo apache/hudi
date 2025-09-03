@@ -26,9 +26,9 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieRecordGlobalLocation, HoodieTableType}
+import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordGlobalLocation, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator
+import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeGenerator}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
@@ -43,8 +43,9 @@ import org.apache.spark.sql.functions.lit
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource, ValueSource}
+import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource, ValueSource}
 
+import java.util
 import java.util.stream.Collectors
 
 import scala.collection.JavaConverters
@@ -99,6 +100,8 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
 
     val newDeletes =  dataGen.generateUpdates("004", 1)
     val updates =  dataGen.generateUniqueUpdates("002", 3)
+    val lowerOrderingValue = 1L
+    updates.addAll(dataGen.generateUniqueDeleteRecords("002", 2, lowerOrderingValue))
     val nextBatch = recordsToStrings(updates).asScala.toSeq
     val nextBatchDf = spark.read.json(spark.sparkContext.parallelize(nextBatch, 1))
     val updateDf = nextBatchDf.withColumn("data_partition_path", lit("partition1"))
@@ -443,6 +446,38 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
   def readRecordIndex(metadata: HoodieBackedTableMetadata, recordKeys: java.util.List[String], dataTablePartition: HOption[String]): Map[String, HoodieRecordGlobalLocation] = {
     metadata.readRecordIndexLocationsWithKeys(HoodieListData.eager(recordKeys), dataTablePartition)
       .collectAsList().asScala.map(p => p.getKey -> p.getValue).toMap
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testRLIForDeletesWithHoodieIsDeletedColumn(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name()) +
+      (HoodieIndexConfig.INDEX_TYPE.key -> "RECORD_INDEX") +
+      (HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE.key -> "false")
+    val insertDf = doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    insertDf.cache()
+
+    val instantTime = InProcessTimeGenerator.createNewInstantTime()
+    // Issue four deletes, one with the original partition, one with an updated partition,
+    // and two with an older ordering value that should be ignored
+    val deletedRecords = dataGen.generateUniqueDeleteRecords(instantTime, 1)
+    val inputRecords = new util.ArrayList[HoodieRecord[_]](deletedRecords)
+    val lowerOrderingValue = 1L
+    inputRecords.addAll(dataGen.generateUniqueDeleteRecords(instantTime, 1, lowerOrderingValue))
+    val deleteBatch = recordsToStrings(inputRecords).asScala
+    val deleteDf = spark.read.json(spark.sparkContext.parallelize(deleteBatch.toSeq, 1))
+    deleteDf.cache()
+    val recordKeyToDelete = deleteDf.collectAsList().get(0).getAs("_row_key").asInstanceOf[String]
+    deleteDf.write.format("org.apache.hudi")
+      .options(hudiOpts)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val prevDf = mergedDfList.last
+    mergedDfList = mergedDfList :+ prevDf.filter(row => row.getAs("_row_key").asInstanceOf[String] != recordKeyToDelete)
+    validateDataAndRecordIndices(hudiOpts, spark.read.json(spark.sparkContext.parallelize(recordsToStrings(deletedRecords).asScala.toSeq, 1)))
+    deleteDf.unpersist()
   }
 }
 
