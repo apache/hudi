@@ -122,14 +122,15 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     val latestBatch3 = recordsToStrings(dataGen2.generateUniqueUpdates(instantTime3, 2)).asScala.toSeq
     val latestBatchDf3 = spark.read.json(spark.sparkContext.parallelize(latestBatch3, 1))
     latestBatchDf3.cache()
-    latestBatchDf.write.format("org.apache.hudi")
+    latestBatchDf3.write.format("org.apache.hudi")
       .options(hudiOpts2)
       .mode(SaveMode.Append)
       .save(basePath)
-    val deletedDf3 = calculateMergedDf(latestBatchDf, operation, true)
+    val deletedDf3 = calculateMergedDf(latestBatchDf3, operation, true)
     deletedDf3.cache()
-    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     validateDataAndRecordIndices(hudiOpts, deletedDf3)
+    deletedDf2.unpersist()
+    deletedDf3.unpersist()
   }
 
   private def getNewInstantTime(): String = {

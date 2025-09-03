@@ -1033,6 +1033,10 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return generateUniqueUpdatesStream(instantTime, n, TRIP_EXAMPLE_SCHEMA).collect(Collectors.toList());
   }
 
+  public List<HoodieRecord> generateUniqueUpdates(String instantTime, Integer n, long timestamp) {
+    return generateUniqueUpdatesStream(instantTime, n, TRIP_EXAMPLE_SCHEMA, timestamp).collect(Collectors.toList());
+  }
+
   public List<HoodieRecord> generateUniqueUpdates(String instantTime, Integer n, String schemaStr) {
     return generateUniqueUpdatesStream(instantTime, n, schemaStr).collect(Collectors.toList());
   }
@@ -1063,6 +1067,11 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
    * @return stream of hoodie record updates
    */
   public Stream<HoodieRecord> generateUniqueUpdatesStream(String instantTime, Integer n, String schemaStr) {
+    long timestamp = System.currentTimeMillis();
+    return generateUniqueUpdatesStream(instantTime, n, schemaStr, timestamp);
+  }
+
+  public Stream<HoodieRecord> generateUniqueUpdatesStream(String instantTime, Integer n, String schemaStr, long timestamp) {
     final Set<KeyPartition> used = new HashSet<>();
     int numExistingKeys = numKeysBySchema.getOrDefault(schemaStr, 0);
     Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(schemaStr);
@@ -1070,7 +1079,6 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       throw new IllegalArgumentException("Requested unique updates is greater than number of available keys");
     }
 
-    long timestamp = System.currentTimeMillis();
     return IntStream.range(0, n).boxed().map(i -> {
       int index = numExistingKeys == 1 ? 0 : rand.nextInt(numExistingKeys - 1);
       KeyPartition kp = existingKeys.get(index);

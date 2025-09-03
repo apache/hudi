@@ -214,6 +214,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // Initial commit. rider column gets value of rider-002
       List<HoodieRecord> initialRecords = dataGen.generateInserts("002", 100);
+      long initialTs = (long) ((GenericRecord) initialRecords.get(0).getData()).get("timestamp");
       commitToTable(initialRecords, INSERT.value(), true, writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), true, 0, recordMergeMode,
@@ -222,7 +223,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       // The updates have rider values as rider-001 and the existing records have rider values as rider-002
       // timestamp is 0 for all records so will not be considered
       // All updates in this batch will be ignored as rider values are smaller and timestamp value is same
-      List<HoodieRecord> updates = dataGen.generateUniqueUpdates("001", 5);
+      List<HoodieRecord> updates = dataGen.generateUniqueUpdates("001", 5, initialTs);
       List<HoodieRecord> allRecords = initialRecords;
       List<HoodieRecord> unmergedRecords = CollectionUtils.combine(updates, allRecords);
       commitToTable(updates, UPSERT.value(), false, writeConfigs);
@@ -233,7 +234,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       // The updates have rider values as rider-003 and the existing records have rider values as rider-002
       // timestamp is 0 for all records so will not be considered
       // All updates in this batch will reflect in the final records
-      List<HoodieRecord> updates2 = dataGen.generateUniqueUpdates("003", 10);
+      List<HoodieRecord> updates2 = dataGen.generateUniqueUpdates("003", 10, initialTs);
       List<HoodieRecord> finalRecords = mergeRecordLists(updates2, allRecords);
       commitToTable(updates2, UPSERT.value(), false, writeConfigs);
       validateOutputFromFileGroupReader(
@@ -579,7 +580,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   public void testSpillableMapUsage(ExternalSpillableMap.DiskMapType diskMapType) throws Exception {
     Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(RecordMergeMode.COMMIT_TIME_ORDERING, true));
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
-      commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), true, writeConfigs);
+      List<HoodieRecord> recordList = dataGen.generateInserts("001", 100);
+      long timestamp = (long) ((GenericRecord) recordList.get(0).getData()).get("timestamp");
+      commitToTable(recordList, INSERT.value(), true, writeConfigs);
       String baseMapPath = Files.createTempDirectory(null).toString();
       HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(getStorageConf(), getBasePath());
       Schema avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
@@ -616,8 +619,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             assertEquals(keyBased.getRecordKey(), recordKey);
             assertEquals(positionBased.getRecordKey(), recordKey);
             assertEquals(avroSchema, readerContext.getRecordContext().getSchemaFromBufferRecord(keyBased));
-            // generate field value is hardcoded as 0 for ordering field: timestamp, see HoodieTestDataGenerator#generateRandomValue
-            assertEquals(readerContext.getRecordContext().convertValueToEngineType(0L), positionBased.getOrderingValue());
+            assertEquals(readerContext.getRecordContext().convertValueToEngineType(timestamp), positionBased.getOrderingValue());
           }
         }
       }
