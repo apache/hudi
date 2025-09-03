@@ -24,14 +24,23 @@ import org.apache.hudi.hive.HiveSyncConfig;
 
 import org.apache.hadoop.conf.Configuration;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import software.amazon.awssdk.services.glue.GlueAsyncClient;
+import software.amazon.awssdk.services.sts.StsClient;
+import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
+import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
 
 import java.util.Properties;
 
+import static org.mockito.Mockito.when;
+
 class MockAwsGlueCatalogSyncTool extends AwsGlueCatalogSyncTool {
+  private static final String CATALOG_ID = "DEFAULT_AWS_ACCOUNT_ID";
 
   @Mock
   private GlueAsyncClient mockAwsGlue;
+
+  private static StsClient mockSts = Mockito.mock(StsClient.class);
 
   public MockAwsGlueCatalogSyncTool(Properties props, Configuration hadoopConf) {
     super(props, hadoopConf, Option.empty());
@@ -39,6 +48,7 @@ class MockAwsGlueCatalogSyncTool extends AwsGlueCatalogSyncTool {
 
   @Override
   protected void initSyncClient(HiveSyncConfig hiveSyncConfig, HoodieTableMetaClient metaClient) {
-    syncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, hiveSyncConfig, metaClient);
+    when(mockSts.getCallerIdentity(GetCallerIdentityRequest.builder().build())).thenReturn(GetCallerIdentityResponse.builder().account(CATALOG_ID).build());
+    syncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, mockSts, hiveSyncConfig, metaClient);
   }
 }

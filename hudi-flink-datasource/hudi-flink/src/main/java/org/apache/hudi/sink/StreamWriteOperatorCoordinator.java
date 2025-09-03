@@ -668,6 +668,14 @@ public class StreamWriteOperatorCoordinator
     this.executor = executor;
   }
 
+  @VisibleForTesting
+  public void setInstantRequestExecutor(NonThrownExecutor executor) throws Exception {
+    if (this.instantRequestExecutor != null) {
+      this.instantRequestExecutor.close();
+    }
+    this.instantRequestExecutor = executor;
+  }
+
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------

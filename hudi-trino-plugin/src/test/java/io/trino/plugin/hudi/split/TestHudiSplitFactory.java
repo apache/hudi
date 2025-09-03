@@ -15,6 +15,7 @@ package io.trino.plugin.hudi.split;
 
 import com.google.common.collect.ImmutableList;
 import io.airlift.units.DataSize;
+import io.trino.filesystem.cache.DefaultCachingHostAddressProvider;
 import io.trino.plugin.hive.HivePartitionKey;
 import io.trino.plugin.hudi.HudiSplit;
 import io.trino.plugin.hudi.HudiTableHandle;
@@ -151,7 +152,8 @@ public class TestHudiSplitFactory
         FileSlice fileSlice = createFileSlice(baseFileSize, logFileSize);
 
         List<HudiSplit> splits = HudiSplitFactory.createHudiSplits(
-                tableHandle, PARTITION_KEYS, fileSlice, COMMIT_TIME, weightProvider, targetSplitSize);
+                tableHandle, PARTITION_KEYS, fileSlice, COMMIT_TIME, weightProvider, targetSplitSize,
+            new DefaultCachingHostAddressProvider());
 
         assertThat(splits).hasSize(expectedSplitInfo.size());
 
@@ -174,13 +176,15 @@ public class TestHudiSplitFactory
     private static HudiTableHandle createTableHandle()
     {
         return new HudiTableHandle(
-            "test_schema",
-            "test_table",
-            "/test/path",
-            HoodieTableType.MERGE_ON_READ,
-            ImmutableList.of(),
-            TupleDomain.all(),
-            TupleDomain.all());
+                "test_schema",
+                "test_table",
+                "/test/path",
+                HoodieTableType.MERGE_ON_READ,
+                ImmutableList.of(),
+                TupleDomain.all(),
+                TupleDomain.all(),
+                "",
+                "101");
     }
 
     private static FileSlice createFileSlice(DataSize baseFileSize, Option<DataSize> logFileSize)

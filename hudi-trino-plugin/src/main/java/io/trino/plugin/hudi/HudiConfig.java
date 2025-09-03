@@ -40,7 +40,7 @@ public class HudiConfig
     private List<String> columnsToHide = ImmutableList.of();
     private boolean tableStatisticsEnabled = true;
     private int tableStatisticsExecutorParallelism = 4;
-    private boolean metadataEnabled;
+    private boolean metadataEnabled = true;
     private boolean shouldUseParquetColumnNames = true;
     private boolean shouldUseParquetColumnIndex;
     private boolean sizeBasedSplitWeightsEnabled = true;
@@ -48,13 +48,14 @@ public class HudiConfig
     private double minimumAssignedSplitWeight = 0.05;
     private DataSize targetSplitSize = DataSize.of(128, MEGABYTE);
     private int maxSplitsPerSecond = Integer.MAX_VALUE;
-    private int maxOutstandingSplits = 1000;
-    private int splitLoaderParallelism = 4;
+    private int maxOutstandingSplits = 10000;
+    private int splitLoaderParallelism = 10;
     private int splitGeneratorParallelism = 4;
     private long perTransactionMetastoreCacheMaximumSize = 2000;
     private boolean queryPartitionFilterRequired;
     private boolean ignoreAbsentPartitions;
     private Duration dynamicFilteringWaitTimeout = new Duration(1, SECONDS);
+    private boolean resolveColumnNameCasingEnabled = true;
 
     // Internal configuration for debugging and testing
     private boolean isRecordLevelIndexEnabled = true;
@@ -64,6 +65,8 @@ public class HudiConfig
     private Duration columnStatsWaitTimeout = new Duration(1, SECONDS);
     private Duration recordIndexWaitTimeout = new Duration(2, SECONDS);
     private Duration secondaryIndexWaitTimeout = new Duration(2, SECONDS);
+    private boolean metadataCacheEnabled = true;
+    private boolean metadataPartitionListingEnabled = true;
 
     public List<String> getColumnsToHide()
     {
@@ -406,5 +409,44 @@ public class HudiConfig
     public Duration getSecondaryIndexWaitTimeout()
     {
         return secondaryIndexWaitTimeout;
+    }
+
+    public boolean isMetadataCacheEnabled()
+    {
+        return metadataCacheEnabled;
+    }
+
+    @Config("hudi.metadata.cache.enabled")
+    @ConfigDescription("Enables in-memory caching of Hudi metadata files on coordinator if fs.cache.enabled is set to false")
+    public HudiConfig setMetadataCacheEnabled(boolean metadataCacheEnabled)
+    {
+        this.metadataCacheEnabled = metadataCacheEnabled;
+        return this;
+    }
+
+    public boolean isMetadataPartitionListingEnabled()
+    {
+        return metadataPartitionListingEnabled;
+    }
+
+    @Config("hudi.metadata.partition-listing.enabled")
+    @ConfigDescription("Enables listing table partitions through the metadata table.")
+    public HudiConfig setMetadataPartitionListingEnabled(boolean metadataPartitionListingEnabled)
+    {
+        this.metadataPartitionListingEnabled = metadataPartitionListingEnabled;
+        return this;
+    }
+
+    public boolean isResolveColumnNameCasingEnabled()
+    {
+        return resolveColumnNameCasingEnabled;
+    }
+
+    @Config("hudi.table.resolve-column-name-casing.enabled")
+    @ConfigDescription("Reconcile column names between the catalog schema and the Hudi table to handle case differences")
+    public HudiConfig setResolveColumnNameCasingEnabled(boolean resolveColumnNameCasingEnabled)
+    {
+        this.resolveColumnNameCasingEnabled = resolveColumnNameCasingEnabled;
+        return this;
     }
 }

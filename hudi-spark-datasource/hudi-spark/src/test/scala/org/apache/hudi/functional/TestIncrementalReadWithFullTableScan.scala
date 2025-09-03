@@ -163,14 +163,23 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
       endTs: String,
       batchNum: Int,
       fallBackFullTableScan: Boolean): Unit = {
+
+  val fallbackKeys = Seq(
+    DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key(),
+    DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key()
+  )
+
+  fallbackKeys.foreach { key =>
     val hoodieIncViewDF = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key(), startTs)
       .option(DataSourceReadOptions.END_COMMIT.key(), endTs)
-      .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key(), fallBackFullTableScan)
+      .option(key, fallBackFullTableScan.toString)
       .load(basePath)
-    assertEquals(perBatchSize * batchNum, hoodieIncViewDF.count())
+
+    assertEquals(perBatchSize * batchNum, hoodieIncViewDF.count(), s"with fallback‐key=$key")
   }
+}
 
   private def shouldThrowSparkExceptionIfFallbackIsFalse(fn: () => Unit): Unit = {
     val msg = "Should fail with Path does not exist"

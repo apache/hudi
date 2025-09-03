@@ -19,7 +19,6 @@
 package org.apache.hudi.source;
 
 import org.apache.hudi.adapter.RichSourceFunctionAdapter;
-import org.apache.hudi.adapter.SourceFunctionAdapter;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -33,6 +32,7 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.base.StringSerializer;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
@@ -46,9 +46,12 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
+import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * This is the single (non-parallel) monitoring task which takes a {@link MergeOnReadInputSplit}
@@ -89,6 +92,8 @@ public class StreamReadMonitoringFunction
    */
   private final boolean cdcEnabled;
 
+  private final int splitsLimit;
+
   private transient Object checkpointLock;
 
   private volatile boolean isRunning = true;
@@ -97,7 +102,16 @@ public class StreamReadMonitoringFunction
 
   private String issuedOffset;
 
+  /**
+   * the size of inputSplits
+   */
+  private int totalSplits = -1;
+
+  private transient List<MergeOnReadInputSplit> remainingSplits = new ArrayList<>();
+
   private transient ListState<String> instantState;
+
+  private transient ListState<SplitState> inputSplitsState;
 
   private final Configuration conf;
 
@@ -117,6 +131,7 @@ public class StreamReadMonitoringFunction
     this.path = path;
     this.interval = conf.get(FlinkOptions.READ_STREAMING_CHECK_INTERVAL);
     this.cdcEnabled = conf.get(FlinkOptions.CDC_ENABLED);
+    this.splitsLimit = conf.get(FlinkOptions.READ_SPLITS_LIMIT);
     this.incrementalInputSplits = IncrementalInputSplits.builder()
         .conf(conf)
         .path(path)
@@ -131,6 +146,7 @@ public class StreamReadMonitoringFunction
 
   @Override
   public void initializeState(FunctionInitializationContext context) throws Exception {
+    this.remainingSplits = new ArrayList<>();
 
     ValidationUtils.checkState(this.instantState == null,
         "The " + getClass().getSimpleName() + " has already been initialized.");
@@ -143,6 +159,11 @@ public class StreamReadMonitoringFunction
             StringSerializer.INSTANCE
         )
     );
+
+    this.inputSplitsState = context.getOperatorStateStore().getListState(
+        new ListStateDescriptor<>(
+            "file-monitoring-splits",
+            TypeInformation.of(SplitState.class)));
 
     if (context.isRestored()) {
       LOG.info("Restoring state for the class {} with table {} and base path {}.",
@@ -178,11 +199,17 @@ public class StreamReadMonitoringFunction
               getClass().getSimpleName(), issuedInstant, issuedOffset, conf.get(FlinkOptions.TABLE_NAME), path);
         }
       }
+      Iterator<SplitState> inputSplitsIterable = inputSplitsState.get().iterator();
+      if (inputSplitsIterable.hasNext()) {
+        SplitState splitState = inputSplitsIterable.next();
+        remainingSplits.addAll(splitState.getRemainingSplits());
+        this.totalSplits = splitState.getTotalSplitState();
+      }
     }
   }
 
   @Override
-  public void run(SourceFunctionAdapter.SourceContext<MergeOnReadInputSplit> context) throws Exception {
+  public void run(SourceContext<MergeOnReadInputSplit> context) throws Exception {
     checkpointLock = context.getCheckpointLock();
     while (isRunning) {
       synchronized (checkpointLock) {
@@ -207,14 +234,16 @@ public class StreamReadMonitoringFunction
   }
 
   @VisibleForTesting
-  public void monitorDirAndForwardSplits(SourceFunctionAdapter.SourceContext<MergeOnReadInputSplit> context) {
+  public void monitorDirAndForwardSplits(SourceContext<MergeOnReadInputSplit> context) {
     HoodieTableMetaClient metaClient = getOrCreateMetaClient();
     if (metaClient == null) {
       // table does not exist
       return;
     }
-    IncrementalInputSplits.Result result =
-        incrementalInputSplits.inputSplits(metaClient, this.issuedOffset, this.cdcEnabled);
+
+    IncrementalInputSplits.Result result = remainingSplits.isEmpty()
+        ? incrementalInputSplits.inputSplits(metaClient, this.issuedOffset, this.cdcEnabled)
+        : IncrementalInputSplits.Result.instance(remainingSplits, issuedInstant, issuedOffset);
 
     if (result.isEmpty() && StringUtils.isNullOrEmpty(result.getEndInstant())) {
       // no new instants, returns early
@@ -222,19 +251,28 @@ public class StreamReadMonitoringFunction
       return;
     }
 
-    for (MergeOnReadInputSplit split : result.getInputSplits()) {
-      context.collect(split);
+    List<MergeOnReadInputSplit> inputSplits = result.getInputSplits();
+    int endIndex = Math.min(splitsLimit, inputSplits.size());
+    for (int index = 0; index < endIndex; index++) {
+      context.collect(inputSplits.get(index));
+    }
+    remainingSplits = inputSplits.stream().skip(endIndex).collect(Collectors.toList());
+    if (totalSplits < 0 || !result.getEndInstant().equals(issuedInstant)) {
+      totalSplits = inputSplits.size();
     }
 
     // update the issues instant time
     this.issuedInstant = result.getEndInstant();
     this.issuedOffset = result.getOffset();
+    int sentSplits = totalSplits - remainingSplits.size();
+    double sentPercentage = totalSplits == 0 ? 0 : (1 - remainingSplits.size() / (double) totalSplits) * 100;
     LOG.info("\n"
             + "------------------------------------------------------------\n"
             + "---------- table: {}\n"
             + "---------- consumed to instant: {}\n"
+            + "---------- sent {} inputsplits out of {}, percentage is {}%\n"
             + "------------------------------------------------------------",
-        conf.get(FlinkOptions.TABLE_NAME), this.issuedInstant);
+        conf.get(FlinkOptions.TABLE_NAME), this.issuedInstant, sentSplits, totalSplits, sentPercentage);
     if (result.isEmpty()) {
       LOG.warn("No new files to read for current run.");
     }
@@ -280,6 +318,9 @@ public class StreamReadMonitoringFunction
     if (this.issuedOffset != null) {
       this.instantState.add(this.issuedOffset);
     }
+    SplitState splitState = new SplitState(this.totalSplits, this.remainingSplits);
+    inputSplitsState.clear();
+    inputSplitsState.add(splitState);
   }
 
   private void registerMetrics() {
@@ -290,6 +331,24 @@ public class StreamReadMonitoringFunction
 
   public String getIssuedOffset() {
     return issuedOffset;
+  }
+
+  private static class SplitState implements Serializable {
+    private final int totalSplitState;
+    private final List<MergeOnReadInputSplit> remainingSplitState;
+
+    public SplitState(final int totalSplits, final List<MergeOnReadInputSplit> remainingSplits) {
+      this.totalSplitState = Math.max(totalSplits, 0);
+      this.remainingSplitState = remainingSplits;
+    }
+
+    public List<MergeOnReadInputSplit> getRemainingSplits() {
+      return remainingSplitState;
+    }
+
+    public int getTotalSplitState() {
+      return totalSplitState;
+    }
   }
 
 }

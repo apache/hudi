@@ -28,6 +28,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 
+import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -371,7 +372,16 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   protected Schema getSchemaFromHeader() {
     String schemaStr = getLogBlockHeader().get(HeaderMetadataType.SCHEMA);
-    SCHEMA_MAP.computeIfAbsent(schemaStr, (schemaString) -> new Schema.Parser().parse(schemaString));
+    SCHEMA_MAP.computeIfAbsent(schemaStr,
+        (schemaString) -> {
+          try {
+            return new Schema.Parser().parse(schemaStr);
+          } catch (AvroTypeException e) {
+            // Archived commits from earlier hudi versions fail the schema check
+            // So we retry in this one specific instance.
+            return new Schema.Parser().setValidateDefaults(false).parse(schemaStr);
+          }
+        });
     return SCHEMA_MAP.get(schemaStr);
   }
 

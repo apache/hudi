@@ -46,6 +46,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
+import static org.apache.hudi.common.config.HoodieCommonConfig.META_SYNC_BASE_PATH_KEY;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.table.HoodieTableConfig.BASE_FILE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
@@ -67,7 +68,7 @@ public class HoodieSyncConfig extends HoodieConfig {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSyncConfig.class);
 
   public static final ConfigProperty<String> META_SYNC_BASE_PATH = ConfigProperty
-      .key("hoodie.datasource.meta.sync.base.path")
+      .key(META_SYNC_BASE_PATH_KEY)
       .defaultValue("")
       .markAdvanced()
       .withDocumentation("Base path of the hoodie table to sync");
