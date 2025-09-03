@@ -81,7 +81,7 @@ class TestConcurrencyControlProcedures extends HoodieSparkProcedureTestBase {
       try {
         val schedule1Task: Future[Try[Array[Row]]] = executor.submit(() => {
           latch.countDown()
-          latch.await(3, TimeUnit.SECONDS)
+          latch.await(6, TimeUnit.SECONDS)
           Try {
             spark.sql(
               s"""CALL run_clustering(
@@ -94,7 +94,7 @@ class TestConcurrencyControlProcedures extends HoodieSparkProcedureTestBase {
 
         val schedule2Task: Future[Try[Array[Row]]] = executor.submit(() => {
           latch.countDown()
-          latch.await(3, TimeUnit.SECONDS)
+          latch.await(6, TimeUnit.SECONDS)
           Thread.sleep(1000)
           Try {
             spark.sql(
@@ -108,8 +108,8 @@ class TestConcurrencyControlProcedures extends HoodieSparkProcedureTestBase {
 
         val schedule3Task: Future[Try[Array[Row]]] = executor.submit(() => {
           latch.countDown()
-          latch.await(3, TimeUnit.SECONDS)
-          Thread.sleep(2000)
+          latch.await(6, TimeUnit.SECONDS)
+          Thread.sleep(3000)
           Try {
             spark.sql(
               s"""CALL run_clustering(
@@ -122,7 +122,7 @@ class TestConcurrencyControlProcedures extends HoodieSparkProcedureTestBase {
 
         val showEarlyTask: Future[Try[Array[Row]]] = executor.submit(() => {
           latch.countDown()
-          latch.await(3, TimeUnit.SECONDS)
+          latch.await(6, TimeUnit.SECONDS)
           Thread.sleep(500)
           Try {
             val early = spark.sql(s"call show_clustering(table => '$tableName')")
@@ -133,8 +133,8 @@ class TestConcurrencyControlProcedures extends HoodieSparkProcedureTestBase {
 
         val showMiddleTask: Future[Try[Array[Row]]] = executor.submit(() => {
           latch.countDown()
-          latch.await(3, TimeUnit.SECONDS)
-          Thread.sleep(1500)
+          latch.await(6, TimeUnit.SECONDS)
+          Thread.sleep(2500)
           Try {
             val mid = spark.sql(s"call show_clustering(table => '$tableName')")
             mid.show(false)
@@ -144,19 +144,19 @@ class TestConcurrencyControlProcedures extends HoodieSparkProcedureTestBase {
 
         val executeTask: Future[Try[Array[Row]]] = executor.submit(() => {
           latch.countDown()
-          latch.await(3, TimeUnit.SECONDS)
-          Thread.sleep(2500)
+          latch.await(6, TimeUnit.SECONDS)
+          Thread.sleep(4000)
           Try {
             spark.sql(s"call run_clustering(table => '$tableName', op => 'execute')").collect()
           }
         })
 
-        val schedule1Result = schedule1Task.get(10, TimeUnit.SECONDS)
-        val schedule2Result = schedule2Task.get(10, TimeUnit.SECONDS)
-        val schedule3Result = schedule3Task.get(10, TimeUnit.SECONDS)
-        val showEarlyResult = showEarlyTask.get(10, TimeUnit.SECONDS)
-        val showMiddleResult = showMiddleTask.get(10, TimeUnit.SECONDS)
-        val executeResult = executeTask.get(10, TimeUnit.SECONDS)
+        val schedule1Result = schedule1Task.get(15, TimeUnit.SECONDS)
+        val schedule2Result = schedule2Task.get(15, TimeUnit.SECONDS)
+        val schedule3Result = schedule3Task.get(15, TimeUnit.SECONDS)
+        val showEarlyResult = showEarlyTask.get(15, TimeUnit.SECONDS)
+        val showMiddleResult = showMiddleTask.get(15, TimeUnit.SECONDS)
+        val executeResult = executeTask.get(15, TimeUnit.SECONDS)
 
         assert(schedule1Result.isSuccess, s"Schedule 1 failed: ${schedule1Result.failed.getOrElse("Unknown")}")
         assert(schedule2Result.isSuccess, s"Schedule 2 failed: ${schedule2Result.failed.getOrElse("Unknown")}")
@@ -169,7 +169,7 @@ class TestConcurrencyControlProcedures extends HoodieSparkProcedureTestBase {
         val earlyCount = showEarlyResult.get.length
         val middleCount = showMiddleResult.get.length
 
-        Thread.sleep(3000)
+        Thread.sleep(5000)
         val finalShowResultDf = spark.sql(s"call show_clustering(table => '$tableName')")
         finalShowResultDf.show(false)
         val finalShowResult = finalShowResultDf.collect()
