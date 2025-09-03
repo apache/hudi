@@ -2132,6 +2132,158 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(count, 0)
   }
 
+  @Test
+  def testIncrementalQueryWithTableVersion6(): Unit = {
+    val (baseWriteOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
+    val writeOpts = baseWriteOpts ++ Map(
+      HoodieTableConfig.VERSION.key() -> "6",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> "6",
+      HoodieMetadataConfig.ENABLE.key -> "false"
+    )
+
+    // Create Hudi table with version 6 - First commit (t1)
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 1)).asScala.toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    val t1CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    
+    println(s"=== After First Commit (t1) - Time: $t1CompletionTime ===")
+    val snapshotAfterT1 = spark.read.format("hudi").options(readOpts).load(basePath)
+    println(s"Total records after t1: ${snapshotAfterT1.count()}")
+    snapshotAfterT1.select("_row_key", "_hoodie_commit_time", "partition", "rider").show()
+
+    // Verify table version is 6
+    val metaClient = HoodieTableMetaClient.builder.setConf(storageConf).setBasePath(basePath).build
+    assertEquals(HoodieTableVersion.fromVersionCode(6), metaClient.getTableConfig.getTableVersion)
+    println(s"Table version verified: ${metaClient.getTableConfig.getTableVersion}")
+
+    // Second commit (t2) - Insert 1 new record
+    val records2 = recordsToStrings(dataGen.generateInserts("002", 1)).asScala.toList
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val t2CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    
+    println(s"\n=== After Second Commit (t2) - Time: $t2CompletionTime ===")
+    val snapshotAfterT2 = spark.read.format("hudi").options(readOpts).load(basePath)
+    println(s"Total records after t2: ${snapshotAfterT2.count()}")
+    snapshotAfterT2.select("_row_key", "_hoodie_commit_time", "partition", "rider").show()
+
+    // Third commit (t3) - Insert 1 more record
+    val records3 = recordsToStrings(dataGen.generateInserts("003", 1)).asScala.toList
+    val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
+    inputDF3.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val t3CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    
+    println(s"\n=== After Third Commit (t3) - Time: $t3CompletionTime ===")
+    val snapshotAfterT3 = spark.read.format("hudi").options(readOpts).load(basePath)
+    println(s"Total records after t3: ${snapshotAfterT3.count()}")
+    snapshotAfterT3.select("_row_key", "_hoodie_commit_time", "partition", "rider").show()
+
+    // Test incremental query between t1 and t2
+    println(s"\n=== Incremental Query between t1 ($t1CompletionTime) and t2 ($t2CompletionTime) ===")
+    val incrementalQueryRes = spark.read.format("hudi")
+      .options(readOpts)
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.START_COMMIT.key, t1CompletionTime)
+      .option(DataSourceReadOptions.END_COMMIT.key, t2CompletionTime)
+      .load(basePath)
+
+    println(s"Incremental query result count: ${incrementalQueryRes.count()}")
+    println("Incremental query data (should only show t2 records):")
+    incrementalQueryRes.select("_row_key", "_hoodie_commit_time", "partition", "rider").show()
+
+    // Assert that the query only shows data from t2 (1 record)
+    assertEquals(1, incrementalQueryRes.count())
+  }
+
+  @Test
+  def testIncrementalQueryWithTableVersion8(): Unit = {
+    val (baseWriteOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
+    val writeOpts = baseWriteOpts ++ Map(
+      HoodieTableConfig.VERSION.key() -> "8",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> "8",
+      HoodieMetadataConfig.ENABLE.key -> "false"
+    )
+
+    // Create Hudi table with version 8 - First commit (t1)
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 1)).asScala.toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    val t1CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    
+    println(s"=== After First Commit (t1) - Time: $t1CompletionTime ===")
+    val snapshotAfterT1 = spark.read.format("hudi").options(readOpts).load(basePath)
+    println(s"Total records after t1: ${snapshotAfterT1.count()}")
+    snapshotAfterT1.select("_row_key", "_hoodie_commit_time", "partition", "rider").show()
+
+    // Verify table version is 8
+    val metaClient = HoodieTableMetaClient.builder.setConf(storageConf).setBasePath(basePath).build
+    assertEquals(HoodieTableVersion.fromVersionCode(8), metaClient.getTableConfig.getTableVersion)
+    println(s"Table version verified: ${metaClient.getTableConfig.getTableVersion}")
+
+    // Second commit (t2) - Insert 1 new record
+    val records2 = recordsToStrings(dataGen.generateInserts("002", 1)).asScala.toList
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val t2CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    
+    println(s"\n=== After Second Commit (t2) - Time: $t2CompletionTime ===")
+    val snapshotAfterT2 = spark.read.format("hudi").options(readOpts).load(basePath)
+    println(s"Total records after t2: ${snapshotAfterT2.count()}")
+    snapshotAfterT2.select("_row_key", "_hoodie_commit_time", "partition", "rider").show()
+
+    // Third commit (t3) - Insert 1 more record
+    val records3 = recordsToStrings(dataGen.generateInserts("003", 1)).asScala.toList
+    val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
+    inputDF3.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val t3CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    
+    println(s"\n=== After Third Commit (t3) - Time: $t3CompletionTime ===")
+    val snapshotAfterT3 = spark.read.format("hudi").options(readOpts).load(basePath)
+    println(s"Total records after t3: ${snapshotAfterT3.count()}")
+    snapshotAfterT3.select("_row_key", "_hoodie_commit_time", "partition", "rider").show()
+
+    // Test incremental query between t1 and t2
+    println(s"\n=== Incremental Query between t1 ($t1CompletionTime) and t2 ($t2CompletionTime) ===")
+    val incrementalQueryRes = spark.read.format("hudi")
+      .options(readOpts)
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.START_COMMIT.key, t1CompletionTime)
+      .option(DataSourceReadOptions.END_COMMIT.key, t2CompletionTime)
+      .load(basePath)
+
+    println(s"Incremental query result count: ${incrementalQueryRes.count()}")
+    println("Incremental query data (should only show t2 records):")
+    incrementalQueryRes.select("_row_key", "_hoodie_commit_time", "partition", "rider").show()
+
+    // Assert that the query only shows data from t2 (1 record)
+    assertEquals(1, incrementalQueryRes.count())
+  }
+
 }
 
 object TestCOWDataSource {
