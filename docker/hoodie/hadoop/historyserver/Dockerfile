@@ -19,8 +19,16 @@ ARG HADOOP_VERSION=3.3.4
 ARG HADOOP_HISTORY_PORT=8188
 FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
 
-# Copy the native .so to a directory in LD_LIBRARY_PATH
-COPY libleveldbjni.so /usr/lib/
+# Install unzip and wget
+RUN apt-get update && \
+    apt-get install -y unzip wget && \
+    apt-get clean
+
+# Download the JAR and extract the native library
+RUN wget https://repo1.maven.org/maven2/org/openlabtesting/leveldbjni/leveldbjni-linux64-aarch64/1.8/leveldbjni-linux64-aarch64-1.8.jar && \
+    unzip leveldbjni-linux64-aarch64-1.8.jar 'META-INF/native/linux64/aarch64/libleveldbjni.so' && \
+    cp META-INF/native/linux64/aarch64/libleveldbjni.so /usr/lib/ && \
+    rm -rf leveldbjni-linux64-aarch64-1.8.jar META-INF
 
 # Set environment variables for native lib
 ENV LD_LIBRARY_PATH="/usr/lib"
