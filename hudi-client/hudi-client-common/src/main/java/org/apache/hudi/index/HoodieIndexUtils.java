@@ -38,7 +38,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -507,8 +506,7 @@ public class HoodieIndexUtils {
    */
   public static <R> HoodieData<HoodieRecord<R>> mergeForPartitionUpdatesIfNeeded(
       HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations,
-      HoodieWriteConfig config,
-      HoodieTable hoodieTable) {
+      HoodieWriteConfig config, HoodieTable hoodieTable, HoodieReaderContext<R> readerContext, SerializableSchema writerSchema) {
     boolean isExpressionPayload = config.getPayloadClass().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload");
     Pair<HoodieWriteConfig, BaseKeyGenerator> keyGeneratorWriteConfigOpt =
         getKeygenAndUpdatedWriteConfig(config, hoodieTable.getMetaClient().getTableConfig(), isExpressionPayload);
@@ -527,9 +525,6 @@ public class HoodieIndexUtils {
         .map(p -> Pair.of(p.getRight().get().getPartitionPath(), p.getRight().get().getFileId()))
         .distinct(updatedConfig.getGlobalIndexReconcileParallelism());
     // define the buffered record merger.
-    ReaderContextFactory<R> readerContextFactory = (ReaderContextFactory<R>) hoodieTable.getContext()
-        .getReaderContextFactoryForWrite(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType(), config.getProps());
-    HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
     TypedProperties properties = readerContext.getMergeProps(updatedConfig.getProps());
     RecordContext<R> incomingRecordContext = readerContext.getRecordContext();
     readerContext.initRecordMergerForIngestion(config.getProps());
@@ -539,7 +534,6 @@ public class HoodieIndexUtils {
         .getReaderContextFactoryForWrite(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType(), hoodieTable.getMetaClient().getTableConfig().getProps());
     RecordContext<R> existingRecordContext = readerContextFactoryForExistingRecords.getContext().getRecordContext();
     // merged existing records with current locations being set
-    SerializableSchema writerSchema = new SerializableSchema(hoodieTable.getConfig().getWriteSchema());
     SerializableSchema writerSchemaWithMetaFields = new SerializableSchema(HoodieAvroUtils.addMetadataFields(writerSchema.get(), updatedConfig.allowOperationMetadataField()));
     AvroSchemaCache.intern(writerSchema.get());
     AvroSchemaCache.intern(writerSchemaWithMetaFields.get());
@@ -570,10 +564,7 @@ public class HoodieIndexUtils {
           }
           HoodieRecord<R> existing = existingOpt.get();
           Schema writeSchema = writerSchema.get();
-          if (incoming.isDelete(writeSchema, properties)) {
-            // incoming is a delete: force tag the incoming to the old partition
-            return Collections.singletonList(tagRecord(incoming.newInstance(existing.getKey()), existing.getCurrentLocation())).iterator();
-          }
+
           Option<HoodieRecord<R>> mergedOpt = mergeIncomingWithExistingRecord(
               incoming, existing, writeSchema, writerSchemaWithMetaFields.get(), updatedConfig,
               recordMerger, keyGenerator, incomingRecordContext, existingRecordContext, orderingFieldsArray, properties, isExpressionPayload);
@@ -606,10 +597,14 @@ public class HoodieIndexUtils {
       boolean shouldUpdatePartitionPath,
       HoodieWriteConfig config,
       HoodieTable table) {
-    final HoodieRecordMerger merger = config.getRecordMerger();
-
     HoodiePairData<String, HoodieRecord<R>> keyAndIncomingRecords =
         incomingRecords.mapToPair(record -> Pair.of(record.getRecordKey(), record));
+
+    ReaderContextFactory<R> readerContextFactory = (ReaderContextFactory<R>) table.getContext()
+        .getReaderContextFactoryForWrite(table.getMetaClient(), config.getRecordMerger().getRecordType(), config.getProps());
+    HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
+    TypedProperties properties = readerContext.getMergeProps(table.getConfig().getProps());
+    SerializableSchema writerSchema = new SerializableSchema(table.getConfig().getWriteSchema());
 
     // Pair of incoming record and the global location if meant for merged lookup in later stage
     HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations
@@ -620,7 +615,8 @@ public class HoodieIndexUtils {
           if (currentLocOpt.isPresent()) {
             HoodieRecordGlobalLocation currentLoc = currentLocOpt.get();
             boolean shouldDoMergedLookUpThenTag = mayContainDuplicateLookup
-                || !Objects.equals(incomingRecord.getPartitionPath(), currentLoc.getPartitionPath());
+                || !Objects.equals(incomingRecord.getPartitionPath(), currentLoc.getPartitionPath())
+                || incomingRecord.isDelete(writerSchema.get(), properties);
             if (shouldUpdatePartitionPath && shouldDoMergedLookUpThenTag) {
               // the pair's right side is a non-empty Option, which indicates that a merged lookup will be performed
               // at a later stage.
@@ -638,7 +634,7 @@ public class HoodieIndexUtils {
           }
         });
     return shouldUpdatePartitionPath
-        ? mergeForPartitionUpdatesIfNeeded(incomingRecordsAndLocations, config, table)
+        ? mergeForPartitionUpdatesIfNeeded(incomingRecordsAndLocations, config, table, readerContext, writerSchema)
         : incomingRecordsAndLocations.map(Pair::getLeft);
   }
 

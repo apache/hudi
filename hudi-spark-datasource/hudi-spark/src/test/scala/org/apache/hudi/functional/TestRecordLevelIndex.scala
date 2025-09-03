@@ -291,11 +291,15 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     insertDf.cache()
 
     val instantTime = getNewInstantTime
-    // Issue two deletes, one with the original partition and one with an updated partition
-    val recordsToDelete = dataGen.generateUniqueDeleteRecords(instantTime, 1)
-    recordsToDelete.addAll(dataGen.generateUniqueDeleteRecordsWithUpdatedPartition(instantTime, 1))
-    val deleteBatch = recordsToStrings(recordsToDelete).asScala
-    val deleteDf = spark.read.json(spark.sparkContext.parallelize(deleteBatch.toSeq, 1))
+    // Issue four deletes, one with the original partition, one with an updated partition,
+    // and two with an older ordering value that should be ignored
+    val deletedRecords = dataGen.generateUniqueDeleteRecords(instantTime, 1)
+    deletedRecords.addAll(dataGen.generateUniqueDeleteRecordsWithUpdatedPartition(instantTime, 1))
+    val inputRecords = new util.ArrayList[HoodieRecord[_]](deletedRecords)
+    inputRecords.addAll(dataGen.generateUniqueDeleteRecords(instantTime, 1, 1L))
+    inputRecords.addAll(dataGen.generateUniqueDeleteRecordsWithUpdatedPartition(instantTime, 1, 1L))
+    val deleteBatch = recordsToStrings(inputRecords).asScala
+    val deleteDf = spark.read.json(spark.sparkContext.parallelize(deleteBatch, 1))
     deleteDf.cache()
     val recordKeyToDelete1 = deleteDf.collectAsList().get(0).getAs("_row_key").asInstanceOf[String]
     val recordKeyToDelete2 = deleteDf.collectAsList().get(1).getAs("_row_key").asInstanceOf[String]
@@ -306,7 +310,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     val prevDf = mergedDfList.last
     mergedDfList = mergedDfList :+ prevDf.filter(row => row.getAs("_row_key").asInstanceOf[String] != recordKeyToDelete1 &&
       row.getAs("_row_key").asInstanceOf[String] != recordKeyToDelete2)
-    validateDataAndRecordIndices(hudiOpts, deleteDf)
+    validateDataAndRecordIndices(hudiOpts, spark.read.json(spark.sparkContext.parallelize(recordsToStrings(deletedRecords).asScala, 1)))
     deleteDf.unpersist()
   }
 
