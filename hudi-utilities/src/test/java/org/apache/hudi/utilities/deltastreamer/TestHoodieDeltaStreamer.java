@@ -1888,7 +1888,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testMergeModeUpdate() throws Exception {
-    String dataSetBasePath = basePath + "/test_dataset_mor_payload_class_update";
+    String dataSetBasePath = basePath + "/test_dataset_mor_merge_mode_update";
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
         Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
         true, false, null, "MERGE_ON_READ");
@@ -1908,6 +1908,32 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }, "Should error out when merge mode is switched");
     assertTrue(e.getMessage().contains("Config conflict(key"));
     assertTrue(e.getMessage().contains(HoodieTableConfig.RECORD_MERGE_MODE.key()));
+  }
+
+  @Test
+  public void testMergeStrategyIdUpdate() throws Exception {
+    String dataSetBasePath = basePath + "/test_dataset_mor_merge_strategy_id_update";
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
+        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
+        true, false, null, "MERGE_ON_READ");
+    cfg.recordMergeMode = RecordMergeMode.CUSTOM;
+    cfg.recordMergeStrategyId = "strategy_id_1";
+    new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
+    assertRecordCount(1000, dataSetBasePath, sqlContext);
+    HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, dataSetBasePath, false);
+    assertEquals(metaClient.getTableConfig().getPayloadClass(), DefaultHoodieRecordPayload.class.getName());
+
+    //now create one more deltaStreamer instance and update payload class
+    HoodieDeltaStreamer.Config updatedConfig = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
+        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
+        true, false, null, "MERGE_ON_READ");
+    updatedConfig.recordMergeMode = RecordMergeMode.CUSTOM;
+    updatedConfig.recordMergeStrategyId = "strategy_id_2";
+    Exception e = assertThrows(HoodieException.class, () -> {
+      new HoodieDeltaStreamer(updatedConfig, jsc, fs, hiveServer.getHiveConf());
+    }, "Should error out when merge strategy id is switched");
+    assertTrue(e.getMessage().contains("Config conflict(key"));
+    assertTrue(e.getMessage().contains(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key()));
   }
 
   @Test
