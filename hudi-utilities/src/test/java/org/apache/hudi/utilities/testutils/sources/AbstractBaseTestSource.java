@@ -137,15 +137,15 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     if (!reachedMax && numUpdates >= 50) {
       LOG.info("After adjustments => NumInserts={}, NumUpdates={}, NumDeletes=50, maxUniqueRecords={}", numInserts, (numUpdates - 50), maxUniqueKeys);
       // if we generate update followed by deletes -> some keys in update batch might be picked up for deletes. Hence generating delete batch followed by updates
-      deleteStream = dataGenerator.generateUniqueDeleteRecords(instantTime, 50).stream().map(AbstractBaseTestSource::toGenericRecord);
-      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates - 50, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+      deleteStream = dataGenerator.generateUniqueDeleteRecords(instantTime, 50, 0L).stream().map(AbstractBaseTestSource::toGenericRecord);
+      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates - 50, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, 0L)
           .map(AbstractBaseTestSource::toGenericRecord);
     } else {
       LOG.info("After adjustments => NumInserts={}, NumUpdates={}, maxUniqueRecords={}", numInserts, numUpdates, maxUniqueKeys);
-      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, 0L)
           .map(AbstractBaseTestSource::toGenericRecord);
     }
-    Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(instantTime, numInserts, false, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+    Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(instantTime, numInserts, false, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, 0L)
         .map(AbstractBaseTestSource::toGenericRecord);
     if (Boolean.valueOf(props.getOrDefault("hoodie.test.source.generate.inserts", "false").toString())) {
       return insertStream;

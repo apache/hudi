@@ -785,7 +785,11 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   }
 
   public List<HoodieRecord> generateInsertsAsPerSchema(String commitTime, Integer n, String schemaStr) {
-    return generateInsertsStream(commitTime, n, false, schemaStr).collect(Collectors.toList());
+    return generateInsertsStream(commitTime, n, false, schemaStr, System.currentTimeMillis()).collect(Collectors.toList());
+  }
+
+  public List<HoodieRecord> generateInsertsAsPerSchema(String commitTime, Integer n, String schemaStr, long timestamp) {
+    return generateInsertsStream(commitTime, n, false, schemaStr, timestamp).collect(Collectors.toList());
   }
 
   /**
@@ -797,7 +801,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   }
 
   public List<HoodieRecord> generateInsertsNestedExample(String instantTime, Integer n) {
-    return generateInsertsStream(instantTime, n, false, TRIP_NESTED_EXAMPLE_SCHEMA).collect(Collectors.toList());
+    return generateInsertsStream(instantTime, n, false, TRIP_NESTED_EXAMPLE_SCHEMA, System.currentTimeMillis()).collect(Collectors.toList());
   }
 
   /**
@@ -810,32 +814,35 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
    * @return  List of {@link HoodieRecord}s
    */
   public List<HoodieRecord> generateInserts(String instantTime, Integer n, boolean isFlattened) {
-    return generateInsertsStream(instantTime, n, isFlattened, isFlattened ? TRIP_FLATTENED_SCHEMA : TRIP_EXAMPLE_SCHEMA).collect(Collectors.toList());
+    return generateInsertsStream(instantTime, n, isFlattened, isFlattened ? TRIP_FLATTENED_SCHEMA : TRIP_EXAMPLE_SCHEMA, System.currentTimeMillis()).collect(Collectors.toList());
   }
 
   /**
    * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
    */
-  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr) {
-    return generateInsertsStream(commitTime, n, isFlattened, schemaStr, false);
+  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr, long timestamp) {
+    return generateInsertsStream(commitTime, n, isFlattened, schemaStr, false, timestamp);
   }
 
   public List<HoodieRecord> generateInsertsContainsAllPartitions(String instantTime, Integer n) {
     if (n < partitionPaths.length) {
       throw new HoodieIOException("n must greater then partitionPaths length");
     }
-    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, true).collect(Collectors.toList());
+    long timestamp = System.currentTimeMillis();
+    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, true, timestamp).collect(Collectors.toList());
   }
 
   public List<HoodieRecord> generateInsertsForPartitionPerSchema(String instantTime, Integer n, String partition, String schemaStr) {
-    return generateInsertsStream(instantTime,  n, false, schemaStr, false, () -> partition, () -> genPseudoRandomUUID(rand).toString()).collect(Collectors.toList());
+    long timestamp = System.currentTimeMillis();
+    return generateInsertsStream(instantTime,  n, false, schemaStr, false, () -> partition, () -> genPseudoRandomUUID(rand).toString(), timestamp).collect(Collectors.toList());
   }
 
   public List<HoodieRecord> generateInsertsForPartition(String instantTime, Integer n, String partition) {
-    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, false, () -> partition, () -> genPseudoRandomUUID(rand).toString()).collect(Collectors.toList());
+    long timestamp = System.currentTimeMillis();
+    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, false, () -> partition, () -> genPseudoRandomUUID(rand).toString(), timestamp).collect(Collectors.toList());
   }
 
-  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions) {
+  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions, long timestamp) {
     AtomicInteger partitionIndex = new AtomicInteger(0);
     return generateInsertsStream(commitTime, n, isFlattened, schemaStr, containsAllPartitions,
         () -> {
@@ -844,16 +851,16 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
           partitionIndex.set((partitionIndex.get() + 1) % partitionPaths.length);
           return partitionToUse;
         },
-        () -> genPseudoRandomUUID(rand).toString());
+        () -> genPseudoRandomUUID(rand).toString(),
+        timestamp);
   }
 
   /**
    * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
    */
   public Stream<HoodieRecord> generateInsertsStream(String instantTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions,
-                                                    Supplier<String> partitionPathSupplier, Supplier<String> recordKeySupplier) {
+                                                    Supplier<String> partitionPathSupplier, Supplier<String> recordKeySupplier, long timestamp) {
     int currSize = getNumExistingKeys(schemaStr);
-    long timestamp = System.currentTimeMillis();
     return IntStream.range(0, n).boxed().map(i -> {
       String partitionPath = partitionPathSupplier.get();
       if (containsAllPartitions && i < partitionPaths.length) {
