@@ -160,6 +160,8 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
     }
   }
 
+  override def shouldIncludeLogFiles(): Boolean = fullTableScan
+
   private def filterFileSlices(fileSlices: Seq[FileSlice], pathGlobPattern: String): Seq[FileSlice] = {
     val filteredFileSlices = if (!StringUtils.isNullOrEmpty(pathGlobPattern)) {
       val globMatcher = new GlobPattern("*" + pathGlobPattern)
