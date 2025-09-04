@@ -630,7 +630,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     Map<String, String> configMapping = new HashMap<>();
     configMapping.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), KEY_FIELD_NAME);
     configMapping.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), PARTITION_FIELD_NAME);
-    configMapping.put(HoodieTableConfig.ORDERING_FIELDS.key(), ORDERING_FIELD_NAME);
+    configMapping.put(HoodieTableConfig.ORDERING_FIELDS.key(), recordMergeMode != RecordMergeMode.COMMIT_TIME_ORDERING ? ORDERING_FIELD_NAME: "");
     configMapping.put("hoodie.payload.ordering.field", ORDERING_FIELD_NAME);
     configMapping.put(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "hoodie_test");
     configMapping.put("hoodie.insert.shuffle.parallelism", "4");

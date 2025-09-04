@@ -589,7 +589,8 @@ public class HoodieIndexUtils {
             deleteRecord.setIgnoreIndexUpdate(true);
             return Arrays.asList(tagRecord(deleteRecord, existing.getCurrentLocation()), merged).iterator();
           } else {
-            return Collections.singletonList(merged).iterator();
+            // merged record has a different partition path but shouldUpdatePartitionPath is false, treat as an update to the existing location
+            return Collections.singletonList(merged.newInstance(existing.getKey())).iterator();
           }
         });
     return taggedUpdatingRecords.union(taggedNewRecords);
