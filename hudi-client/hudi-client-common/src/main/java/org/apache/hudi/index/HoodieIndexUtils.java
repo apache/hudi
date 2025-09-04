@@ -39,6 +39,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -614,6 +615,9 @@ public class HoodieIndexUtils {
     TypedProperties properties = readerContext.getMergeProps(config.getProps());
     SerializableSchema writerSchema = new SerializableSchema(config.getWriteSchema());
     boolean isCommitTimeOrdered = readerContext.getMergeMode() == RecordMergeMode.COMMIT_TIME_ORDERING;
+    // if the index is not updating the partition of the record, and the table is COW, then we do not need to do merging at
+    // this phase since the writer path will merge when rewriting the files as part of the upsert operation.
+    boolean requiresMergingWithOlderRecordVersion = shouldUpdatePartitionPath || table.getMetaClient().getTableConfig().getTableType() == HoodieTableType.MERGE_ON_READ;
 
     // Pair of incoming record and the global location if meant for merged lookup in later stage
     HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations
@@ -626,7 +630,7 @@ public class HoodieIndexUtils {
             boolean shouldDoMergedLookUpThenTag = mayContainDuplicateLookup // handle event time ordering updates
                 || shouldUpdatePartitionPath && !Objects.equals(incomingRecord.getPartitionPath(), currentLoc.getPartitionPath())  // handle partition updates
                 || (!isCommitTimeOrdered && incomingRecord.isDelete(writerSchema.get(), properties)); // handle event time ordering deletes
-            if (shouldDoMergedLookUpThenTag) {
+            if (requiresMergingWithOlderRecordVersion && shouldDoMergedLookUpThenTag) {
               // the pair's right side is a non-empty Option, which indicates that a merged lookup will be performed
               // at a later stage.
               return Pair.of(incomingRecord, currentLocOpt);
@@ -642,7 +646,7 @@ public class HoodieIndexUtils {
             return Pair.of(incomingRecord, Option.empty());
           }
         });
-    return shouldUpdatePartitionPath || mayContainDuplicateLookup
+    return requiresMergingWithOlderRecordVersion
         ? mergeForPartitionUpdatesAndDeletionsIfNeeded(incomingRecordsAndLocations, shouldUpdatePartitionPath, config, table, readerContext, writerSchema)
         : incomingRecordsAndLocations.map(Pair::getLeft);
   }

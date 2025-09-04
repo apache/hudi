@@ -460,8 +460,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
     insertDf.cache()
 
     val instantTime = InProcessTimeGenerator.createNewInstantTime()
-    // Issue four deletes, one with the original partition, one with an updated partition,
-    // and two with an older ordering value that should be ignored
+    // Issue two deletes, where one has an older ordering value that should be ignored
     val deletedRecords = dataGen.generateUniqueDeleteRecords(instantTime, 1)
     val inputRecords = new util.ArrayList[HoodieRecord[_]](deletedRecords)
     val lowerOrderingValue = 1L
