@@ -52,6 +52,7 @@ import java.util.Map;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.index.HoodieIndexUtils.tagGlobalLocationBackToRecords;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
@@ -95,9 +96,10 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
 
     HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocations = lookupRecords(records, context, hoodieTable, fileGroupSize);
 
+    boolean mayContainDuplicateLookup = hoodieTable.getMetaClient().getTableType() == MERGE_ON_READ;
     // Tag the incoming records, as inserts or updates, by joining with existing record keys
     HoodieData<HoodieRecord<R>> taggedRecords = tagGlobalLocationBackToRecords(records, keyAndExistingLocations,
-        false, shouldUpdatePartitionPath(hoodieTable), config, hoodieTable);
+        mayContainDuplicateLookup, shouldUpdatePartitionPath(hoodieTable), config, hoodieTable);
 
     if (config.getRecordIndexUseCaching()) {
       records.unpersist();

@@ -506,9 +506,12 @@ public class HoodieIndexUtils {
   /**
    * Merge tagged incoming records with existing records in case of partition path updated.
    */
-  public static <R> HoodieData<HoodieRecord<R>> mergeForPartitionUpdatesIfNeeded(
-      HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations,
-      HoodieWriteConfig config, HoodieTable hoodieTable, HoodieReaderContext<R> readerContext, SerializableSchema writerSchema) {
+  public static <R> HoodieData<HoodieRecord<R>> mergeForPartitionUpdatesIfNeeded(HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations,
+                                                                                 boolean shouldUpdatePartitionPath,
+                                                                                 HoodieWriteConfig config,
+                                                                                 HoodieTable hoodieTable,
+                                                                                 HoodieReaderContext<R> readerContext,
+                                                                                 SerializableSchema writerSchema) {
     boolean isExpressionPayload = config.getPayloadClass().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload");
     Pair<HoodieWriteConfig, BaseKeyGenerator> keyGeneratorWriteConfigOpt =
         getKeygenAndUpdatedWriteConfig(config, hoodieTable.getMetaClient().getTableConfig(), isExpressionPayload);
@@ -581,11 +584,13 @@ public class HoodieIndexUtils {
           if (Objects.equals(merged.getPartitionPath(), existing.getPartitionPath())) {
             // merged record has the same partition: route the merged result to the current location as an update
             return Collections.singletonList(tagRecord(merged, existing.getCurrentLocation())).iterator();
-          } else {
+          } else if (shouldUpdatePartitionPath) {
             // merged record has a different partition: issue a delete to the old partition and insert the merged record to the new partition
             HoodieRecord<R> deleteRecord = createDeleteRecord(updatedConfig, existing.getKey());
             deleteRecord.setIgnoreIndexUpdate(true);
             return Arrays.asList(tagRecord(deleteRecord, existing.getCurrentLocation()), merged).iterator();
+          } else {
+            return Collections.singletonList(merged).iterator();
           }
         });
     return taggedUpdatingRecords.union(taggedNewRecords);
@@ -608,7 +613,6 @@ public class HoodieIndexUtils {
     TypedProperties properties = readerContext.getMergeProps(config.getProps());
     SerializableSchema writerSchema = new SerializableSchema(config.getWriteSchema());
     boolean isCommitTimeOrdered = readerContext.getMergeMode() == RecordMergeMode.COMMIT_TIME_ORDERING;
-    boolean isMoRTable = table.getMetaClient().getTableConfig().getTableType() == HoodieTableType.MERGE_ON_READ;
 
     // Pair of incoming record and the global location if meant for merged lookup in later stage
     HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations
@@ -618,11 +622,10 @@ public class HoodieIndexUtils {
           Option<HoodieRecordGlobalLocation> currentLocOpt = Option.ofNullable(v.getRight().orElse(null));
           if (currentLocOpt.isPresent()) {
             HoodieRecordGlobalLocation currentLoc = currentLocOpt.get();
-            boolean shouldDoMergedLookUpThenTag = mayContainDuplicateLookup
-                || !Objects.equals(incomingRecord.getPartitionPath(), currentLoc.getPartitionPath())
-                // if the ordering is not simply based on commit time and the incoming record is a delete, the value needs to be compared to the existing value before deleting the key from the index
-                || (!isCommitTimeOrdered && incomingRecord.isDelete(writerSchema.get(), properties));
-            if ((shouldUpdatePartitionPath || isMoRTable) && shouldDoMergedLookUpThenTag) {
+            boolean shouldDoMergedLookUpThenTag = mayContainDuplicateLookup                           // handle event time ordering updates
+                || !Objects.equals(incomingRecord.getPartitionPath(), currentLoc.getPartitionPath())  // handle partition updates
+                || (!isCommitTimeOrdered && incomingRecord.isDelete(writerSchema.get(), properties)); // handle event time ordering deletes
+            if (shouldDoMergedLookUpThenTag) {
               // the pair's right side is a non-empty Option, which indicates that a merged lookup will be performed
               // at a later stage.
               return Pair.of(incomingRecord, currentLocOpt);
@@ -638,8 +641,8 @@ public class HoodieIndexUtils {
             return Pair.of(incomingRecord, Option.empty());
           }
         });
-    return shouldUpdatePartitionPath || isMoRTable
-        ? mergeForPartitionUpdatesIfNeeded(incomingRecordsAndLocations, config, table, readerContext, writerSchema)
+    return shouldUpdatePartitionPath || mayContainDuplicateLookup
+        ? mergeForPartitionUpdatesIfNeeded(incomingRecordsAndLocations, shouldUpdatePartitionPath, config, table, readerContext, writerSchema)
         : incomingRecordsAndLocations.map(Pair::getLeft);
   }
 
