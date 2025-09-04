@@ -524,8 +524,10 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       // Action taken for corner case 2 is just a best effort mitigation. At least it
       // prevents further data corruption by
       // letting someone else acquire the lock.
+      long acquisitionTimestamp = getCurrentEpochMs();
+      long lockExpirationMs = acquisitionTimestamp + TimeUnit.SECONDS.toMillis(lockValiditySecs);
       Pair<LockUpsertResult, Option<StorageLockFile>> currentLock = this.storageLockClient.tryUpsertLockFile(
-          new StorageLockData(false, getCurrentEpochMs() + TimeUnit.SECONDS.toMillis(lockValiditySecs), ownerId),
+          new StorageLockData(false, lockExpirationMs, ownerId),
           Option.of(getLock()));
       switch (currentLock.getLeft()) {
         case ACQUIRED_BY_OTHERS:
@@ -548,7 +550,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
               (int) (oldExpirationMs - getCurrentEpochMs())));
           logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}.",
               ownerId, oldExpirationMs - getCurrentEpochMs(), lockFilePath);
-          updateAuditOperation(System.currentTimeMillis());
+          updateAuditOperation(acquisitionTimestamp);
           // Let heartbeat continue to renew lock lease again later.
           return true;
         default:
