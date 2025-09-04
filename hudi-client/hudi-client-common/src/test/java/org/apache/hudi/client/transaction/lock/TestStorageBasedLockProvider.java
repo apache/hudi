@@ -57,6 +57,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.refEq;
 import static org.mockito.Mockito.atLeastOnce;
@@ -66,6 +68,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -747,6 +750,109 @@ class TestStorageBasedLockProvider {
     }
   }
 
+  @Test
+  void testAuditServiceIntegrationWhenConfigNotPresent() {
+    // Test that lock provider works correctly when audit config is not present
+    TypedProperties props = new TypedProperties();
+    props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
+    props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
+    props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-audit-test");
+    
+    // Mock client that returns empty for audit config
+    StorageLockClient auditMockClient = mock(StorageLockClient.class);
+    when(auditMockClient.readSmallJsonConfig(anyString(), eq(true)))
+        .thenReturn(Option.empty());
+    when(auditMockClient.readCurrentLockFile())
+        .thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
+    
+    StorageBasedLockProvider auditLockProvider = new StorageBasedLockProvider(
+        ownerId,
+        props,
+        (a,b,c) -> mockHeartbeatManager,
+        (a,b,c) -> auditMockClient,
+        mockLogger,
+        null);
+    
+    // Verify audit config was checked
+    verify(auditMockClient, times(1)).readSmallJsonConfig(
+        contains(".locks/audit_enabled.json"), eq(true));
+    
+    // Lock provider should work normally even without audit
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile lockFile = new StorageLockFile(data, "v1");
+    when(auditMockClient.tryUpsertLockFile(any(), eq(Option.empty())))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(lockFile)));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+    
+    assertTrue(auditLockProvider.tryLock());
+    auditLockProvider.close();
+  }
+  
+  @Test
+  void testAuditServiceIntegrationWhenConfigDisabled() {
+    // Test that lock provider works correctly when audit is explicitly disabled
+    TypedProperties props = new TypedProperties();
+    props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
+    props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
+    props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-audit-disabled");
+    
+    // Mock client that returns disabled config
+    StorageLockClient auditMockClient = mock(StorageLockClient.class);
+    String disabledConfig = "{\"STORAGE_LP_AUDIT_SERVICE_ENABLED\": false}";
+    when(auditMockClient.readSmallJsonConfig(anyString(), eq(true)))
+        .thenReturn(Option.of(disabledConfig));
+    when(auditMockClient.readCurrentLockFile())
+        .thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
+    
+    StorageBasedLockProvider auditLockProvider = new StorageBasedLockProvider(
+        ownerId,
+        props,
+        (a,b,c) -> mockHeartbeatManager,
+        (a,b,c) -> auditMockClient,
+        mockLogger,
+        null);
+    
+    // Verify audit config was checked
+    verify(auditMockClient, times(1)).readSmallJsonConfig(
+        contains(".locks/audit_enabled.json"), eq(true));
+    
+    auditLockProvider.close();
+  }
+  
+  @Test
+  void testAuditServiceIntegrationWhenConfigEnabled() {
+    // Test that lock provider works correctly when audit is enabled
+    TypedProperties props = new TypedProperties();
+    props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
+    props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
+    props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-audit-enabled");
+    
+    // Mock client that returns enabled config
+    StorageLockClient auditMockClient = mock(StorageLockClient.class);
+    String enabledConfig = "{\"STORAGE_LP_AUDIT_SERVICE_ENABLED\": true}";
+    when(auditMockClient.readSmallJsonConfig(anyString(), eq(true)))
+        .thenReturn(Option.of(enabledConfig));
+    when(auditMockClient.readCurrentLockFile())
+        .thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
+    
+    StorageBasedLockProvider auditLockProvider = new StorageBasedLockProvider(
+        ownerId,
+        props,
+        (a,b,c) -> mockHeartbeatManager,
+        (a,b,c) -> auditMockClient,
+        mockLogger,
+        null);
+    
+    // Verify audit config was checked
+    verify(auditMockClient, times(1)).readSmallJsonConfig(
+        contains(".locks/audit_enabled.json"), eq(true));
+    
+    // Note: Actual audit service implementation would be instantiated here
+    // Currently returns empty since no concrete implementation yet
+    
+    auditLockProvider.close();
+  }
+  
   public static class StubStorageLockClient implements StorageLockClient {
     public StubStorageLockClient(String ownerId, String lockFileUri, Properties props) {
       assertTrue(lockFileUri.endsWith("table_lock.json"));
@@ -762,6 +868,12 @@ class TestStorageBasedLockProvider {
     @Override
     public Pair<LockGetResult, Option<StorageLockFile>> readCurrentLockFile() {
       return null;
+    }
+
+    @Override
+    public Option<String> readSmallJsonConfig(String filePath, boolean checkExistsFirst) {
+      // Stub implementation for testing
+      return Option.empty();
     }
 
     @Override

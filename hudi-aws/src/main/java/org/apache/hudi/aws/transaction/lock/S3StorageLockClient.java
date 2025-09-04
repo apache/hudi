@@ -46,6 +46,7 @@ import software.amazon.awssdk.services.s3.model.GetBucketLocationRequest;
 import software.amazon.awssdk.services.s3.model.GetBucketLocationResponse;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 import software.amazon.awssdk.services.s3.model.S3Exception;
@@ -59,6 +60,7 @@ import java.net.URISyntaxException;
 import java.time.Duration;
 import java.util.Properties;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.hudi.config.StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS;
 
 /**
@@ -265,6 +267,52 @@ public class S3StorageLockClient implements StorageLockClient {
                     b -> b.apiCallTimeout(Duration.ofSeconds(timeoutSecs)))
             .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props))
             .region(region).build();
+  }
+
+  @Override
+  public Option<String> readSmallJsonConfig(String filePath, boolean checkExistsFirst) {
+    try {
+      // Parse the file path to get bucket and key
+      URI uri = new URI(filePath);
+      String bucket = uri.getHost();
+      String key = uri.getPath().replaceFirst("/", "");
+      
+      if (checkExistsFirst) {
+        // First check if the file exists (lightweight HEAD request)
+        try {
+          s3Client.headObject(HeadObjectRequest.builder()
+              .bucket(bucket)
+              .key(key)
+              .build());
+        } catch (S3Exception e) {
+          if (e.statusCode() == NOT_FOUND_ERROR_CODE) {
+            // File doesn't exist - this is the common case for optional configs
+            logger.debug("JSON config file not found: {}", filePath);
+            return Option.empty();
+          }
+          throw e; // Re-throw other errors
+        }
+      }
+      
+      // Read the file (either after existence check or directly)
+      byte[] bytes = s3Client.getObjectAsBytes(
+          GetObjectRequest.builder()
+              .bucket(bucket)
+              .key(key)
+              .build()).asByteArray();
+      
+      return Option.of(new String(bytes, UTF_8));
+    } catch (S3Exception e) {
+      if (e.statusCode() == NOT_FOUND_ERROR_CODE) {
+        logger.debug("JSON config file not found: {}", filePath);
+        return Option.empty();
+      }
+      logger.warn("Error reading JSON config file: {}", filePath, e);
+      return Option.empty();
+    } catch (Exception e) {
+      logger.warn("Error reading JSON config file: {}", filePath, e);
+      return Option.empty();
+    }
   }
 
   @Override

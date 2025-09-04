@@ -47,4 +47,16 @@ public interface StorageLockClient extends AutoCloseable {
    * @return The lock retrieve result and the current lock file if successfully retrieved.
    * */
   Pair<LockGetResult, Option<StorageLockFile>> readCurrentLockFile();
+  
+  /**
+   * Reads a small JSON configuration file from the specified path.
+   * This method is intended for reading small configuration files (e.g., audit config, feature flags)
+   * and loads the entire file into memory. Do not use for large files.
+   * 
+   * @param filePath The path to the small JSON config file to read
+   * @param checkExistsFirst If true, performs a lightweight existence check before attempting to read.
+   *                         Recommended when the file is unlikely to exist (e.g., optional configs).
+   * @return An Option containing the JSON content as a string if successful, Option.empty() otherwise
+   */
+  Option<String> readSmallJsonConfig(String filePath, boolean checkExistsFirst);
 }

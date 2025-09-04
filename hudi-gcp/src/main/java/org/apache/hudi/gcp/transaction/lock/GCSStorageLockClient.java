@@ -226,6 +226,47 @@ public class GCSStorageLockClient implements StorageLockClient {
   }
 
   @Override
+  public Option<String> readSmallJsonConfig(String filePath, boolean checkExistsFirst) {
+    try {
+      // Parse the file path to get bucket and object path
+      URI uri = new URI(filePath);
+      String bucket = uri.getAuthority();
+      String objectPath = uri.getPath().replaceFirst("/", "");
+      
+      BlobId blobId = BlobId.of(bucket, objectPath);
+      
+      if (checkExistsFirst) {
+        // First check if the file exists (lightweight metadata check)
+        Blob blob = gcsClient.get(blobId);
+        
+        if (blob == null || !blob.exists()) {
+          // File doesn't exist - this is the common case for optional configs
+          logger.debug("JSON config file not found: {}", filePath);
+          return Option.empty();
+        }
+        
+        // File exists, read its content
+        byte[] content = blob.getContent();
+        return Option.of(new String(content, java.nio.charset.StandardCharsets.UTF_8));
+      } else {
+        // Direct read without existence check
+        byte[] content = gcsClient.readAllBytes(blobId);
+        return Option.of(new String(content, java.nio.charset.StandardCharsets.UTF_8));
+      }
+    } catch (StorageException e) {
+      if (e.getCode() == NOT_FOUND_ERROR_CODE) {
+        logger.debug("JSON config file not found: {}", filePath);
+      } else {
+        logger.warn("Error reading JSON config file: {}", filePath, e);
+      }
+      return Option.empty();
+    } catch (Exception e) {
+      logger.warn("Error reading JSON config file: {}", filePath, e);
+      return Option.empty();
+    }
+  }
+
+  @Override
   public void close() throws Exception {
     this.gcsClient.close();
   }
