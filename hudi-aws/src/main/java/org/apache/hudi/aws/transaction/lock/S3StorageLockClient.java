@@ -60,7 +60,6 @@ import java.net.URISyntaxException;
 import java.time.Duration;
 import java.util.Properties;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.hudi.config.StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS;
 
 /**
