@@ -268,6 +268,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .defaultValue((RecordMergeMode) null,
           "COMMIT_TIME_ORDERING if ordering field is not set; EVENT_TIME_ORDERING if ordering field is set")
       .sinceVersion("1.0.0")
+      .withAlternatives("hoodie.write.record.merge.mode")
       .withDocumentation(RecordMergeMode.class);
 
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
@@ -281,6 +282,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.table.legacy.payload.class")
       .noDefaultValue()
       .sinceVersion("1.1.0")
+      .withAlternatives("hoodie.datasource.write.payload.class")
       .withDocumentation("Payload class to indicate the payload class that is used to create the table and is not used anymore.");
 
   // This is the default payload class used by Hudi 0.x releases (table version 6 and below)
@@ -289,7 +291,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> RECORD_MERGE_STRATEGY_ID = ConfigProperty
       .key("hoodie.record.merge.strategy.id")
       .noDefaultValue()
-      .withAlternatives("hoodie.compaction.record.merger.strategy")
+      .withAlternatives("hoodie.compaction.record.merger.strategy", "hoodie.write.record.merge.strategy.id")
       .sinceVersion("0.13.0")
       .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in `"
           + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "` which has the same merger strategy id");

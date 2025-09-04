@@ -261,7 +261,7 @@ object HoodieWriterUtils {
           }
           val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, keyInTableConfig)
           if (null != existingValue && !resolver(existingValue, value)) {
-            diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(keyInTableConfig)}\n")
+            diffConfigs.append(s"$key:\t$value\t${existingValue}\n")
           }
         }
       }
