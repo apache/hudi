@@ -19,17 +19,21 @@
 package org.apache.hudi.client.transaction.lock.audit;
 
 /**
- * Generic audit service interface for tracking operation lifecycles.
- * Provides a single method for recording all types of audit operations.
+ * Enumeration of audit operation states for different operations.
  */
-public interface AuditService extends AutoCloseable {
+public enum AuditOperationState {
+  /**
+   * Operation started.
+   */
+  START,
   
   /**
-   * Records an audit operation with the given state and timestamp.
-   * 
-   * @param state The type of operation (START, RENEW, END)
-   * @param timestamp When the operation occurred
-   * @throws Exception if the operation cannot be recorded
+   * Operation renewal/heartbeat.
    */
-  void recordOperation(AuditOperationState state, long timestamp) throws Exception;
+  RENEW,
+  
+  /**
+   * Operation end.
+   */
+  END
 }

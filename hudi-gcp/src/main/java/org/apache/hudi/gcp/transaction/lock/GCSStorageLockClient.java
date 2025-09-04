@@ -51,6 +51,8 @@ import java.net.URISyntaxException;
 import java.nio.channels.Channels;
 import java.util.Properties;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 /**
  * A GCS-based implementation of a distributed lock provider using conditional writes
  * with generationMatch, plus local concurrency safety, heartbeat/renew, and pruning old locks.
@@ -247,11 +249,11 @@ public class GCSStorageLockClient implements StorageLockClient {
         
         // File exists, read its content
         byte[] content = blob.getContent();
-        return Option.of(new String(content, java.nio.charset.StandardCharsets.UTF_8));
+        return Option.of(new String(content, UTF_8));
       } else {
         // Direct read without existence check
         byte[] content = gcsClient.readAllBytes(blobId);
-        return Option.of(new String(content, java.nio.charset.StandardCharsets.UTF_8));
+        return Option.of(new String(content, UTF_8));
       }
     } catch (StorageException e) {
       if (e.getCode() == NOT_FOUND_ERROR_CODE) {

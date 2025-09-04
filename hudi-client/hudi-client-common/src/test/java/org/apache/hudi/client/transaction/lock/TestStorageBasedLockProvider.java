@@ -798,7 +798,7 @@ class TestStorageBasedLockProvider {
     
     // Mock client that returns disabled config
     StorageLockClient auditMockClient = mock(StorageLockClient.class);
-    String disabledConfig = "{\"STORAGE_LP_AUDIT_SERVICE_ENABLED\": false}";
+    String disabledConfig = "{\"STORAGE_LOCK_AUDIT_SERVICE_ENABLED\": false}";
     when(auditMockClient.readObject(anyString(), eq(true)))
         .thenReturn(Option.of(disabledConfig));
     when(auditMockClient.readCurrentLockFile())
@@ -829,7 +829,7 @@ class TestStorageBasedLockProvider {
     
     // Mock client that returns enabled config
     StorageLockClient auditMockClient = mock(StorageLockClient.class);
-    String enabledConfig = "{\"STORAGE_LP_AUDIT_SERVICE_ENABLED\": true}";
+    String enabledConfig = "{\"STORAGE_LOCK_AUDIT_SERVICE_ENABLED\": true}";
     when(auditMockClient.readObject(anyString(), eq(true)))
         .thenReturn(Option.of(enabledConfig));
     when(auditMockClient.readCurrentLockFile())

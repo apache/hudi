@@ -295,13 +295,13 @@ public class S3StorageLockClient implements StorageLockClient {
       }
       
       // Read the file (either after existence check or directly)
-      byte[] bytes = s3Client.getObjectAsBytes(
+      String content = s3Client.getObjectAsBytes(
           GetObjectRequest.builder()
               .bucket(bucket)
               .key(key)
-              .build()).asByteArray();
+              .build()).asUtf8String();
       
-      return Option.of(new String(bytes, UTF_8));
+      return Option.of(content);
     } catch (S3Exception e) {
       if (e.statusCode() == NOT_FOUND_ERROR_CODE) {
         logger.debug("JSON config file not found: {}", filePath);

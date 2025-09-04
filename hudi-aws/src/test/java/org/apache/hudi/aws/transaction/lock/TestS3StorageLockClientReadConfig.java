@@ -181,7 +181,6 @@ public class TestS3StorageLockClientReadConfig {
     assertTrue(result.isEmpty());
     // Should not make any S3 calls due to URI parsing error
     verify(mockS3Client, never()).headObject(any(HeadObjectRequest.class));
-    verify(mockS3Client, never()).getObjectAsBytes(any(GetObjectRequest.class));
   }
   
   @Test

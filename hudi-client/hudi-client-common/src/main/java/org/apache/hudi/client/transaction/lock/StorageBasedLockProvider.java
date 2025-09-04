@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.transaction.lock;
 
+import org.apache.hudi.client.transaction.lock.audit.AuditOperationState;
 import org.apache.hudi.client.transaction.lock.audit.AuditService;
 import org.apache.hudi.client.transaction.lock.audit.AuditServiceFactory;
 import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
@@ -99,7 +100,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   private final HeartbeatManager heartbeatManager;
   private final transient Thread shutdownThread;
   private final Option<HoodieLockMetrics> hoodieLockMetrics;
-  private final Option<AuditService> storageLpAuditService;
+  private final Option<AuditService> auditService;
 
   @GuardedBy("this")
   private StorageLockFile currentLockObj = null;
@@ -196,7 +197,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     this.ownerId = ownerId;
     this.logger = logger;
     this.hoodieLockMetrics = Option.ofNullable(hoodieLockMetrics);
-    this.storageLpAuditService = AuditServiceFactory.createLockProviderAuditService(properties, ownerId, config.getHudiTableBasePath(), storageLockClient);
+    this.auditService = AuditServiceFactory.createLockProviderAuditService(properties, ownerId, config.getHudiTableBasePath(), storageLockClient);
     shutdownThread = new Thread(() -> shutdown(true));
     Runtime.getRuntime().addShutdownHook(shutdownThread);
     logger.info("Instantiated new storage-based lock provider, owner: {}, lockfilePath: {}", ownerId, lockFilePath);
@@ -272,7 +273,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       logger.error("Owner {}: Heartbeat manager failed to close.", ownerId, e);
     }
     try {
-      this.storageLpAuditService.ifPresent(auditService -> {
+      this.auditService.ifPresent(auditService -> {
         try {
           auditService.close();
         } catch (Exception e) {
@@ -376,7 +377,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     }
 
     logInfoLockState(ACQUIRED);
-    startAuditOperation(acquisitionTimestamp);
+    recordAuditOperation(AuditOperationState.START, acquisitionTimestamp);
     return true;
   }
 
@@ -481,7 +482,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         return false;
       case SUCCESS:
         logInfoLockState(RELEASED);
-        endAuditOperation(System.currentTimeMillis(), RELEASED.toString());
+        recordAuditOperation(AuditOperationState.END, System.currentTimeMillis());
         setLock(null);
         return true;
       case ACQUIRED_BY_OTHERS:
@@ -550,7 +551,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
               (int) (oldExpirationMs - getCurrentEpochMs())));
           logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}.",
               ownerId, oldExpirationMs - getCurrentEpochMs(), lockFilePath);
-          updateAuditOperation(acquisitionTimestamp);
+          recordAuditOperation(AuditOperationState.RENEW, acquisitionTimestamp);
           // Let heartbeat continue to renew lock lease again later.
           return true;
         default:
@@ -614,42 +615,15 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   }
 
   /**
-   * Helper method to start audit operation when lock is acquired.
+   * Helper method to record audit operations.
    */
-  private void startAuditOperation(long timestamp) {
-    storageLpAuditService.ifPresent(auditService -> {
+  private void recordAuditOperation(AuditOperationState state, long timestamp) {
+    auditService.ifPresent(service -> {
       try {
-        String sessionId = UUID.randomUUID().toString();
-        auditService.startOperation(sessionId, timestamp);
+        service.recordOperation(state, timestamp);
       } catch (Exception e) {
         // Log but don't fail the lock operation due to recording failures
-        logger.warn("Owner {}: Failed to start audit operation: {}", ownerId, e.getMessage());
-      }
-    });
-  }
-
-  /**
-   * Helper method to update audit operation for renewals.
-   */
-  private void updateAuditOperation(long timestamp) {
-    storageLpAuditService.ifPresent(auditService -> {
-      try {
-        auditService.updateOperation(timestamp);
-      } catch (Exception e) {
-        logger.warn("Owner {}: Failed to update audit operation: {}", ownerId, e.getMessage());
-      }
-    });
-  }
-
-  /**
-   * Helper method to end audit operation.
-   */
-  private void endAuditOperation(long timestamp, String finalState) {
-    storageLpAuditService.ifPresent(auditService -> {
-      try {
-        auditService.endOperation(timestamp, finalState);
-      } catch (Exception e) {
-        logger.warn("Owner {}: Failed to end audit operation: {}", ownerId, e.getMessage());
+        logger.warn("Owner {}: Failed to record audit operation {}: {}", ownerId, state, e.getMessage());
       }
     });
   }
