@@ -196,7 +196,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     this.ownerId = ownerId;
     this.logger = logger;
     this.hoodieLockMetrics = Option.ofNullable(hoodieLockMetrics);
-    this.storageLpAuditService = AuditServiceFactory.createStorageLPAuditService(properties, ownerId, config.getHudiTableBasePath(), storageLockClient);
+    this.storageLpAuditService = AuditServiceFactory.createLockProviderAuditService(properties, ownerId, config.getHudiTableBasePath(), storageLockClient);
     shutdownThread = new Thread(() -> shutdown(true));
     Runtime.getRuntime().addShutdownHook(shutdownThread);
     logger.info("Instantiated new storage-based lock provider, owner: {}, lockfilePath: {}", ownerId, lockFilePath);

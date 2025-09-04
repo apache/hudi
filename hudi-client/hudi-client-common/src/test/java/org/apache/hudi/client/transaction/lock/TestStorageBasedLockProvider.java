@@ -760,7 +760,7 @@ class TestStorageBasedLockProvider {
     
     // Mock client that returns empty for audit config
     StorageLockClient auditMockClient = mock(StorageLockClient.class);
-    when(auditMockClient.readSmallJsonConfig(anyString(), eq(true)))
+    when(auditMockClient.readObject(anyString(), eq(true)))
         .thenReturn(Option.empty());
     when(auditMockClient.readCurrentLockFile())
         .thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
@@ -774,7 +774,7 @@ class TestStorageBasedLockProvider {
         null);
     
     // Verify audit config was checked
-    verify(auditMockClient, times(1)).readSmallJsonConfig(
+    verify(auditMockClient, times(1)).readObject(
         contains(".locks/audit_enabled.json"), eq(true));
     
     // Lock provider should work normally even without audit
@@ -799,7 +799,7 @@ class TestStorageBasedLockProvider {
     // Mock client that returns disabled config
     StorageLockClient auditMockClient = mock(StorageLockClient.class);
     String disabledConfig = "{\"STORAGE_LP_AUDIT_SERVICE_ENABLED\": false}";
-    when(auditMockClient.readSmallJsonConfig(anyString(), eq(true)))
+    when(auditMockClient.readObject(anyString(), eq(true)))
         .thenReturn(Option.of(disabledConfig));
     when(auditMockClient.readCurrentLockFile())
         .thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
@@ -813,7 +813,7 @@ class TestStorageBasedLockProvider {
         null);
     
     // Verify audit config was checked
-    verify(auditMockClient, times(1)).readSmallJsonConfig(
+    verify(auditMockClient, times(1)).readObject(
         contains(".locks/audit_enabled.json"), eq(true));
     
     auditLockProvider.close();
@@ -830,7 +830,7 @@ class TestStorageBasedLockProvider {
     // Mock client that returns enabled config
     StorageLockClient auditMockClient = mock(StorageLockClient.class);
     String enabledConfig = "{\"STORAGE_LP_AUDIT_SERVICE_ENABLED\": true}";
-    when(auditMockClient.readSmallJsonConfig(anyString(), eq(true)))
+    when(auditMockClient.readObject(anyString(), eq(true)))
         .thenReturn(Option.of(enabledConfig));
     when(auditMockClient.readCurrentLockFile())
         .thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
@@ -844,7 +844,7 @@ class TestStorageBasedLockProvider {
         null);
     
     // Verify audit config was checked
-    verify(auditMockClient, times(1)).readSmallJsonConfig(
+    verify(auditMockClient, times(1)).readObject(
         contains(".locks/audit_enabled.json"), eq(true));
     
     // Note: Actual audit service implementation would be instantiated here
@@ -871,7 +871,7 @@ class TestStorageBasedLockProvider {
     }
 
     @Override
-    public Option<String> readSmallJsonConfig(String filePath, boolean checkExistsFirst) {
+    public Option<String> readObject(String filePath, boolean checkExistsFirst) {
       // Stub implementation for testing
       return Option.empty();
     }

@@ -44,7 +44,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Tests for S3StorageLockClient.readSmallJsonConfig method
+ * Tests for S3StorageLockClient.readObject method
  */
 public class TestS3StorageLockClientReadConfig {
   
@@ -78,7 +78,7 @@ public class TestS3StorageLockClientReadConfig {
     when(mockS3Client.headObject(any(HeadObjectRequest.class)))
         .thenThrow(notFoundException);
     
-    Option<String> result = lockClient.readSmallJsonConfig(configPath, true);
+    Option<String> result = lockClient.readObject(configPath, true);
     
     assertTrue(result.isEmpty());
     // Should only call HEAD, not GET
@@ -103,7 +103,7 @@ public class TestS3StorageLockClientReadConfig {
     when(mockS3Client.getObjectAsBytes(any(GetObjectRequest.class)))
         .thenReturn(responseBytes);
     
-    Option<String> result = lockClient.readSmallJsonConfig(configPath, true);
+    Option<String> result = lockClient.readObject(configPath, true);
     
     assertTrue(result.isPresent());
     assertEquals(expectedContent, result.get());
@@ -124,7 +124,7 @@ public class TestS3StorageLockClientReadConfig {
     when(mockS3Client.getObjectAsBytes(any(GetObjectRequest.class)))
         .thenThrow(notFoundException);
     
-    Option<String> result = lockClient.readSmallJsonConfig(configPath, false);
+    Option<String> result = lockClient.readObject(configPath, false);
     
     assertTrue(result.isEmpty());
     // Should not call HEAD, only GET
@@ -144,7 +144,7 @@ public class TestS3StorageLockClientReadConfig {
     when(mockS3Client.getObjectAsBytes(any(GetObjectRequest.class)))
         .thenReturn(responseBytes);
     
-    Option<String> result = lockClient.readSmallJsonConfig(configPath, false);
+    Option<String> result = lockClient.readObject(configPath, false);
     
     assertTrue(result.isPresent());
     assertEquals(expectedContent, result.get());
@@ -165,7 +165,7 @@ public class TestS3StorageLockClientReadConfig {
     when(mockS3Client.headObject(any(HeadObjectRequest.class)))
         .thenThrow(serverError);
     
-    Option<String> result = lockClient.readSmallJsonConfig(configPath, true);
+    Option<String> result = lockClient.readObject(configPath, true);
     
     assertTrue(result.isEmpty());
     verify(mockS3Client, times(1)).headObject(any(HeadObjectRequest.class));
@@ -176,7 +176,7 @@ public class TestS3StorageLockClientReadConfig {
   void testReadConfigWithInvalidUri() {
     String invalidPath = "not-a-valid-uri";
     
-    Option<String> result = lockClient.readSmallJsonConfig(invalidPath, false);
+    Option<String> result = lockClient.readObject(invalidPath, false);
     
     assertTrue(result.isEmpty());
     // Should not make any S3 calls due to URI parsing error
@@ -196,7 +196,7 @@ public class TestS3StorageLockClientReadConfig {
     when(mockS3Client.getObjectAsBytes(any(GetObjectRequest.class)))
         .thenThrow(rateLimitException);
     
-    Option<String> result = lockClient.readSmallJsonConfig(configPath, false);
+    Option<String> result = lockClient.readObject(configPath, false);
     
     assertTrue(result.isEmpty());
     verify(mockS3Client, times(1)).getObjectAsBytes(any(GetObjectRequest.class));

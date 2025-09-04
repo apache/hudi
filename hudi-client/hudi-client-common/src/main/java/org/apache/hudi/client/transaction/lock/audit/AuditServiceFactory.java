@@ -38,11 +38,11 @@ public class AuditServiceFactory {
   
   private static final Logger LOG = LoggerFactory.getLogger(AuditServiceFactory.class);
   private static final String AUDIT_CONFIG_FILE_NAME = "audit_enabled.json";
-  private static final String STORAGE_LP_AUDIT_SERVICE_ENABLED_FIELD = "STORAGE_LP_AUDIT_SERVICE_ENABLED";
+  private static final String STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD = "STORAGE_LOCK_AUDIT_SERVICE_ENABLED";
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   
   /**
-   * Creates a StorageLPAuditService instance by checking the audit configuration file.
+   * Creates a lock provider audit service instance by checking the audit configuration file.
    * 
    * @param properties Configuration properties  
    * @param ownerId The owner ID for the lock provider
@@ -50,13 +50,13 @@ public class AuditServiceFactory {
    * @param storageLockClient The storage lock client to use for reading configuration
    * @return An Option containing the audit service if enabled, Option.empty() otherwise
    */
-  public static Option<AuditService> createStorageLPAuditService(
+  public static Option<AuditService> createLockProviderAuditService(
       TypedProperties properties, String ownerId, String basePath, StorageLockClient storageLockClient) {
-    return createStorageLPAuditService(properties, ownerId, basePath, storageLockClient, true);
+    return createLockProviderAuditService(properties, ownerId, basePath, storageLockClient, true);
   }
   
   /**
-   * Creates a StorageLPAuditService instance with optional configuration checking.
+   * Creates a lock provider audit service instance with optional configuration checking.
    * 
    * @param properties Configuration properties
    * @param ownerId The owner ID for the lock provider  
@@ -65,7 +65,7 @@ public class AuditServiceFactory {
    * @param checkAuditEnabled Whether to check the audit configuration file
    * @return An Option containing the audit service if enabled, Option.empty() otherwise
    */
-  public static Option<AuditService> createStorageLPAuditService(
+  public static Option<AuditService> createLockProviderAuditService(
       TypedProperties properties,
       String ownerId,
       String basePath,
@@ -100,14 +100,14 @@ public class AuditServiceFactory {
       
       LOG.debug("Checking for audit configuration at: {}", auditConfigPath);
       
-      // Use the readSmallJsonConfig method to read the config file
+      // Use the readObject method to read the config file
       // Pass true for checkExistsFirst since audit config is rarely present (99% miss rate)
-      Option<String> jsonContent = storageLockClient.readSmallJsonConfig(auditConfigPath, true);
+      Option<String> jsonContent = storageLockClient.readObject(auditConfigPath, true);
       
       if (jsonContent.isPresent()) {
         LOG.debug("Audit configuration file found, parsing content");
         JsonNode rootNode = OBJECT_MAPPER.readTree(jsonContent.get());
-        JsonNode enabledNode = rootNode.get(STORAGE_LP_AUDIT_SERVICE_ENABLED_FIELD);
+        JsonNode enabledNode = rootNode.get(STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD);
         
         boolean isEnabled = enabledNode != null && enabledNode.asBoolean(false);
         

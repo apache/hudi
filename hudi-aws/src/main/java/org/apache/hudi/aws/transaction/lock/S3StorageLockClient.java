@@ -270,7 +270,7 @@ public class S3StorageLockClient implements StorageLockClient {
   }
 
   @Override
-  public Option<String> readSmallJsonConfig(String filePath, boolean checkExistsFirst) {
+  public Option<String> readObject(String filePath, boolean checkExistsFirst) {
     try {
       // Parse the file path to get bucket and key
       URI uri = new URI(filePath);

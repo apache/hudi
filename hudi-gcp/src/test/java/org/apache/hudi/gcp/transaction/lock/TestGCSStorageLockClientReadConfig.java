@@ -41,7 +41,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Tests for GCSStorageLockClient.readSmallJsonConfig method
+ * Tests for GCSStorageLockClient.readObject method
  */
 public class TestGCSStorageLockClientReadConfig {
   
@@ -73,7 +73,7 @@ public class TestGCSStorageLockClientReadConfig {
     when(mockGcsClient.get(any(BlobId.class)))
         .thenReturn(null);
     
-    Option<String> result = lockClient.readSmallJsonConfig(configPath, true);
+    Option<String> result = lockClient.readObject(configPath, true);
     
     assertTrue(result.isEmpty());
     // Should only call get() for existence check, not readAllBytes
@@ -90,7 +90,7 @@ public class TestGCSStorageLockClientReadConfig {
         .thenReturn(mockBlob);
     when(mockBlob.exists()).thenReturn(false);
     
-    Option<String> result = lockClient.readSmallJsonConfig(configPath, true);
+    Option<String> result = lockClient.readObject(configPath, true);
     
     assertTrue(result.isEmpty());
     // Should only check existence, not read content
@@ -111,7 +111,7 @@ public class TestGCSStorageLockClientReadConfig {
     when(mockBlob.getContent())
         .thenReturn(expectedContent.getBytes(StandardCharsets.UTF_8));
     
-    Option<String> result = lockClient.readSmallJsonConfig(configPath, true);
+    Option<String> result = lockClient.readObject(configPath, true);
     
     assertTrue(result.isPresent());
     assertEquals(expectedContent, result.get());
@@ -130,7 +130,7 @@ public class TestGCSStorageLockClientReadConfig {
     when(mockGcsClient.readAllBytes(any(BlobId.class)))
         .thenThrow(notFoundException);
     
-    Option<String> result = lockClient.readSmallJsonConfig(configPath, false);
+    Option<String> result = lockClient.readObject(configPath, false);
     
     assertTrue(result.isEmpty());
     // Should not call get(), only readAllBytes
@@ -147,7 +147,7 @@ public class TestGCSStorageLockClientReadConfig {
     when(mockGcsClient.readAllBytes(any(BlobId.class)))
         .thenReturn(expectedContent.getBytes(StandardCharsets.UTF_8));
     
-    Option<String> result = lockClient.readSmallJsonConfig(configPath, false);
+    Option<String> result = lockClient.readObject(configPath, false);
     
     assertTrue(result.isPresent());
     assertEquals(expectedContent, result.get());
@@ -165,7 +165,7 @@ public class TestGCSStorageLockClientReadConfig {
     when(mockGcsClient.get(any(BlobId.class)))
         .thenThrow(serverError);
     
-    Option<String> result = lockClient.readSmallJsonConfig(configPath, true);
+    Option<String> result = lockClient.readObject(configPath, true);
     
     assertTrue(result.isEmpty());
     verify(mockGcsClient, times(1)).get(any(BlobId.class));
@@ -176,7 +176,7 @@ public class TestGCSStorageLockClientReadConfig {
   void testReadConfigWithInvalidUri() {
     String invalidPath = "not-a-valid-uri";
     
-    Option<String> result = lockClient.readSmallJsonConfig(invalidPath, false);
+    Option<String> result = lockClient.readObject(invalidPath, false);
     
     assertTrue(result.isEmpty());
     // Should not make any GCS calls due to URI parsing error
@@ -193,7 +193,7 @@ public class TestGCSStorageLockClientReadConfig {
     when(mockGcsClient.readAllBytes(any(BlobId.class)))
         .thenThrow(rateLimitException);
     
-    Option<String> result = lockClient.readSmallJsonConfig(configPath, false);
+    Option<String> result = lockClient.readObject(configPath, false);
     
     assertTrue(result.isEmpty());
     verify(mockGcsClient, times(1)).readAllBytes(any(BlobId.class));
