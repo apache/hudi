@@ -621,8 +621,8 @@ public class HoodieIndexUtils {
           Option<HoodieRecordGlobalLocation> currentLocOpt = Option.ofNullable(v.getRight().orElse(null));
           if (currentLocOpt.isPresent()) {
             HoodieRecordGlobalLocation currentLoc = currentLocOpt.get();
-            boolean shouldDoMergedLookUpThenTag = mayContainDuplicateLookup                           // handle event time ordering updates
-                || !Objects.equals(incomingRecord.getPartitionPath(), currentLoc.getPartitionPath())  // handle partition updates
+            boolean shouldDoMergedLookUpThenTag = mayContainDuplicateLookup // handle event time ordering updates
+                || shouldUpdatePartitionPath && !Objects.equals(incomingRecord.getPartitionPath(), currentLoc.getPartitionPath())  // handle partition updates
                 || (!isCommitTimeOrdered && incomingRecord.isDelete(writerSchema.get(), properties)); // handle event time ordering deletes
             if (shouldDoMergedLookUpThenTag) {
               // the pair's right side is a non-empty Option, which indicates that a merged lookup will be performed
