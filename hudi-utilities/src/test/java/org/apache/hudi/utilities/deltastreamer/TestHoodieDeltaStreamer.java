@@ -1866,7 +1866,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
         true, true, DummyAvroPayload.class.getName(), "MERGE_ON_READ");
     Exception e = assertThrows(HoodieException.class, () -> {
-        new HoodieDeltaStreamer(updatedConfig, jsc, fs, hiveServer.getHiveConf());
+      new HoodieDeltaStreamer(updatedConfig, jsc, fs, hiveServer.getHiveConf());
     }, "Should error out when payload class is switched");
     assertTrue(e.getMessage().contains("Config conflict(key"));
     assertTrue(e.getMessage().contains(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
@@ -1886,7 +1886,30 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(metaClient.getTableConfig().getPayloadClass(), DefaultHoodieRecordPayload.class.getName());
   }
 
-  @Disabled("To be fixed with HUDI-9714")
+  @Test
+  public void testMergeModeUpdate() throws Exception {
+    String dataSetBasePath = basePath + "/test_dataset_mor_payload_class_update";
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
+        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
+        true, false, null, "MERGE_ON_READ");
+    new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
+    assertRecordCount(1000, dataSetBasePath, sqlContext);
+    HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, dataSetBasePath, false);
+    assertEquals(metaClient.getTableConfig().getPayloadClass(), DefaultHoodieRecordPayload.class.getName());
+
+    //now create one more deltaStreamer instance and update payload class
+    HoodieDeltaStreamer.Config updatedConfig = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
+        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
+        true, false, null, "MERGE_ON_READ");
+    updatedConfig.recordMergeMode = RecordMergeMode.CUSTOM;
+    updatedConfig.recordMergeStrategyId = HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
+    Exception e = assertThrows(HoodieException.class, () -> {
+      new HoodieDeltaStreamer(updatedConfig, jsc, fs, hiveServer.getHiveConf());
+    }, "Should error out when merge mode is switched");
+    assertTrue(e.getMessage().contains("Config conflict(key"));
+    assertTrue(e.getMessage().contains(HoodieTableConfig.RECORD_MERGE_MODE.key()));
+  }
+
   @Test
   public void testPayloadClassUpdateWithCOWTable() throws Exception {
     String dataSetBasePath = basePath + "/test_dataset_cow";
@@ -1908,19 +1931,15 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertTrue(props.containsKey(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key()));
 
     //now create one more deltaStreamer instance and update payload class
-    cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
+    HoodieDeltaStreamer.Config updatedConfig = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
         Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
         true, true, DummyAvroPayload.class.getName(), null);
-    new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf());
 
-    props = new Properties();
-    fs = HadoopFSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration());
-    try (InputStream inputStream = fs.open(new Path(metaPath))) {
-      props.load(inputStream);
-    }
-
-    //now using payload
-    assertEquals(DummyAvroPayload.class.getName(), props.get(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
+    Exception e = assertThrows(HoodieException.class, () -> {
+      new HoodieDeltaStreamer(updatedConfig, jsc, fs, hiveServer.getHiveConf());
+    }, "Should error out when payload class is switched");
+    assertTrue(e.getMessage().contains("Config conflict(key"));
+    assertTrue(e.getMessage().contains(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
   }
 
   private static Stream<Arguments> getArgumentsForFilterDupesWithPrecombineTest() {

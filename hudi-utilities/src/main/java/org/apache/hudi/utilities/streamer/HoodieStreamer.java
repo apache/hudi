@@ -163,6 +163,9 @@ public class HoodieStreamer implements Serializable {
     cfg.recordMergeMode = mergingConfigs.getLeft();
     cfg.payloadClassName = mergingConfigs.getMiddle();
     cfg.recordMergeStrategyId = mergingConfigs.getRight();
+    this.properties.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), cfg.recordMergeMode.name());
+    this.properties.put(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), cfg.payloadClassName);
+    this.properties.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), cfg.recordMergeStrategyId);
     if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
       InitialCheckPointProvider checkPointProvider =
           UtilHelpers.createInitialCheckpointProvider(cfg.initialCheckpointProvider, this.properties);
@@ -747,7 +750,6 @@ public class HoodieStreamer implements Serializable {
             cfg.baseFileFormat = "PARQUET"; // default for backward compatibility
           }
           Map<String, String> propsToValidate = new HashMap<>();
-          properties.get().setProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), cfg.payloadClassName);
           properties.get().forEach((k, v) -> propsToValidate.put(k.toString(), v.toString()));
           HoodieWriterUtils.validateTableConfig(this.sparkSession, org.apache.hudi.HoodieConversionUtils.mapAsScalaImmutableMap(propsToValidate), meta.getTableConfig());
         } catch (HoodieIOException e) {
