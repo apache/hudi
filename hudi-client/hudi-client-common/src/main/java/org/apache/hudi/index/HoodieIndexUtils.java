@@ -505,12 +505,13 @@ public class HoodieIndexUtils {
   /**
    * Merge tagged incoming records with existing records in case of partition path updated.
    */
-  public static <R> HoodieData<HoodieRecord<R>> mergeForPartitionUpdatesIfNeeded(HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations,
-                                                                                 boolean shouldUpdatePartitionPath,
-                                                                                 HoodieWriteConfig config,
-                                                                                 HoodieTable hoodieTable,
-                                                                                 HoodieReaderContext<R> readerContext,
-                                                                                 SerializableSchema writerSchema) {
+  public static <R> HoodieData<HoodieRecord<R>> mergeForPartitionUpdatesAndDeletionsIfNeeded(HoodieData<Pair<HoodieRecord<R>,
+                                                                                             Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations,
+                                                                                             boolean shouldUpdatePartitionPath,
+                                                                                             HoodieWriteConfig config,
+                                                                                             HoodieTable hoodieTable,
+                                                                                             HoodieReaderContext<R> readerContext,
+                                                                                             SerializableSchema writerSchema) {
     boolean isExpressionPayload = config.getPayloadClass().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload");
     Pair<HoodieWriteConfig, BaseKeyGenerator> keyGeneratorWriteConfigOpt =
         getKeygenAndUpdatedWriteConfig(config, hoodieTable.getMetaClient().getTableConfig(), isExpressionPayload);
@@ -642,7 +643,7 @@ public class HoodieIndexUtils {
           }
         });
     return shouldUpdatePartitionPath || mayContainDuplicateLookup
-        ? mergeForPartitionUpdatesIfNeeded(incomingRecordsAndLocations, shouldUpdatePartitionPath, config, table, readerContext, writerSchema)
+        ? mergeForPartitionUpdatesAndDeletionsIfNeeded(incomingRecordsAndLocations, shouldUpdatePartitionPath, config, table, readerContext, writerSchema)
         : incomingRecordsAndLocations.map(Pair::getLeft);
   }
 
