@@ -1633,7 +1633,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .save(basePath)
 
     metaClient = createMetaClient(spark, basePath)
-    // assertEquals(metaClient.getTableConfig.getRecordMergeStrategyId, mergerStrategyName)
+    assertEquals(metaClient.getTableConfig.getPayloadClass, classOf[OverwriteWithLatestAvroPayload].getName)
     val e = intercept[HoodieException] {
       inputDf.write.format("hudi")
         .options(writeOpts)
@@ -1662,7 +1662,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = createMetaClient(spark, basePath)
-    assertEquals(metaClient.getTableConfig.getRecordMergeStrategyId, mergerStrategyName)
+    assertEquals(metaClient.getTableConfig.getRecordMergeMode, RecordMergeMode.CUSTOM)
     val e = intercept[HoodieException] {
       inputDf.write.format("hudi")
         .options(writeOpts)
