@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
 
@@ -77,6 +78,20 @@ public class HoodieFileReaderFactory {
     }
   }
 
+  public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, StoragePathInfo pathInfo, HoodieFileFormat format,
+                                        Option<Schema> schemaOption) throws IOException {
+    switch (format) {
+      case PARQUET:
+        return newParquetFileReader(pathInfo.getPath());
+      case HFILE:
+        return newHFileFileReader(hoodieConfig, pathInfo, schemaOption);
+      case ORC:
+        return newOrcFileReader(pathInfo.getPath());
+      default:
+        throw new UnsupportedOperationException(format + " format not supported yet.");
+    }
+  }
+
   public HoodieFileReader getContentReader(HoodieConfig hoodieConfig, StoragePath path, HoodieFileFormat format,
                                            HoodieStorage storage, byte[] content,
                                            Option<Schema> schemaOption) throws IOException {
@@ -93,6 +108,11 @@ public class HoodieFileReaderFactory {
   }
 
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig, StoragePath path,
+                                                Option<Schema> schemaOption) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig, StoragePathInfo pathInfo,
                                                 Option<Schema> schemaOption) throws IOException {
     throw new UnsupportedOperationException();
   }
