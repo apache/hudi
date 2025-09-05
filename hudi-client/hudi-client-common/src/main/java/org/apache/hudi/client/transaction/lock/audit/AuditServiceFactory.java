@@ -19,7 +19,6 @@
 package org.apache.hudi.client.transaction.lock.audit;
 
 import org.apache.hudi.client.transaction.lock.StorageLockClient;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 
@@ -44,35 +43,17 @@ public class AuditServiceFactory {
   /**
    * Creates a lock provider audit service instance by checking the audit configuration file.
    * 
-   * @param properties Configuration properties  
    * @param ownerId The owner ID for the lock provider
    * @param basePath The base path of the Hudi table
    * @param storageLockClient The storage lock client to use for reading configuration
    * @return An Option containing the audit service if enabled, Option.empty() otherwise
    */
   public static Option<AuditService> createLockProviderAuditService(
-      TypedProperties properties, String ownerId, String basePath, StorageLockClient storageLockClient) {
-    return createLockProviderAuditService(properties, ownerId, basePath, storageLockClient, true);
-  }
-  
-  /**
-   * Creates a lock provider audit service instance with optional configuration checking.
-   * 
-   * @param properties Configuration properties
-   * @param ownerId The owner ID for the lock provider  
-   * @param basePath The base path of the Hudi table
-   * @param storageLockClient The storage lock client to use for reading configuration
-   * @param checkAuditEnabled Whether to check the audit configuration file
-   * @return An Option containing the audit service if enabled, Option.empty() otherwise
-   */
-  public static Option<AuditService> createLockProviderAuditService(
-      TypedProperties properties,
       String ownerId,
       String basePath,
-      StorageLockClient storageLockClient,
-      boolean checkAuditEnabled) {
+      StorageLockClient storageLockClient) {
 
-    if (checkAuditEnabled && !isAuditEnabled(basePath, storageLockClient)) {
+    if (!isAuditEnabled(basePath, storageLockClient)) {
       return Option.empty();
     }
 
