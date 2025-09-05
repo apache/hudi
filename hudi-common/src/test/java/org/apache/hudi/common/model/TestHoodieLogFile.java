@@ -104,7 +104,7 @@ public class TestHoodieLogFile {
     for (int r = 0; r < runs; r++) {
       HoodieTimer timer = HoodieTimer.start();
       for (int i = 1; i < 1_000_000; i++) {
-        String logFileName = generateLogFileName(random);
+        String logFileName = generateFileName(random, true);
         if (firstApproach) {
           Matcher matcher = logFilePattern1.matcher(logFileName);
           assertTrue(matcher.find());
@@ -138,7 +138,7 @@ public class TestHoodieLogFile {
     for (int r = 0; r < runs; r++) {
       HoodieTimer timer = HoodieTimer.start();
       for (int i = 1; i < 1_000_000; i++) {
-        String logFileName = randomString(random, 10, 100) + ".hfile";
+        String logFileName = generateFileName(random, false);
         if (firstApproach) {
           Matcher matcher = logFilePattern1.matcher(logFileName);
           assertFalse(matcher.find());
@@ -157,7 +157,7 @@ public class TestHoodieLogFile {
         + (totalTime / runs) + " ms");
   }
 
-  private String generateLogFileName(Random random) {
+  private String generateFileName(Random random, boolean isLogFile) {
     // Part 1: random name before underscore
     String logFileId = randomString(random, 3, 6);
 
@@ -165,14 +165,14 @@ public class TestHoodieLogFile {
     String instantId = String.valueOf(Math.abs(random.nextLong()));
 
     // Extension: log or archive
-    String fileExtension = random.nextBoolean() ? ".log" : ".archive";
+    String fileExtension = isLogFile ? random.nextBoolean() ? ".log" : ".archive" : ".parquet";
 
     // Random number
     int logVersion = Math.abs(random.nextInt()) % 10;
 
     // Sometimes include date + optional .cdc
 
-    String logWriteToken = "";
+    String writeToken = "";
 
     StringBuilder sb = new StringBuilder();
 
@@ -184,13 +184,17 @@ public class TestHoodieLogFile {
         .append(token2).append("-")
         .append(token3);
 
-    if (random.nextBoolean()) {
+    if (isLogFile && random.nextBoolean()) {
       sb.append(".cdc");
     }
 
-    logWriteToken = sb.toString();
+    writeToken = sb.toString();
 
-    return FSUtils.makeLogFileName(logFileId, fileExtension, instantId, logVersion, logWriteToken);
+    if (isLogFile) {
+      return FSUtils.makeLogFileName(logFileId, fileExtension, instantId, logVersion, writeToken);
+    } else {
+      return FSUtils.makeBaseFileName(instantId, writeToken, fileId, fileExtension);
+    }
   }
 
   private String randomString(Random random, int minLen, int maxLen) {

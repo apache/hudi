@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
@@ -502,6 +503,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param pathInfoList List of StoragePathInfo
    */
   private Stream<HoodieLogFile> convertFileStatusesToLogFiles(List<StoragePathInfo> pathInfoList) {
+    // COPY_ON_WRITE tables do not have log files
+    if (metaClient.getTableConfig().getTableType().equals(HoodieTableType.COPY_ON_WRITE)) {
+      return Stream.empty();
+    }
+
     String logFileExtension = metaClient.getTableConfig().getLogFileFormat().getFileExtension();
     Predicate<StoragePathInfo> rtFilePredicate = pathInfo -> {
       String fileName = pathInfo.getPath().getName();
