@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
@@ -114,6 +115,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected final WriteLock writeLock = globalLock.writeLock();
 
   private BootstrapIndex bootstrapIndex;
+  private HoodieTableVersion tableVersion;
 
   protected AbstractTableFileSystemView(HoodieTableMetadata tableMetadata) {
     this.tableMetadata = tableMetadata;
@@ -125,6 +127,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
     this.metaClient = metaClient;
     this.completionTimeQueryView = metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient);
+    this.tableVersion = metaClient.getTableConfig().getTableVersion();
     refreshTimeline(visibleActiveTimeline);
     resetFileGroupsReplaced(visibleCommitsAndCompactionTimeline);
     this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);
@@ -254,7 +257,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   private boolean tableVersion8AndAbove() {
-    HoodieTableVersion tableVersion = metaClient.getTableConfig().getTableVersion();
     return tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT);
   }
 
@@ -475,6 +477,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param pathInfoList List of StoragePathInfo
    */
   private Stream<HoodieBaseFile> convertFileStatusesToBaseFiles(List<StoragePathInfo> pathInfoList) {
+    String baseFileExtension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
+    boolean isMultipleBaseFileFormatsEnabled = metaClient.getTableConfig().isMultipleBaseFileFormatsEnabled();
     Predicate<StoragePathInfo> roFilePredicate = pathInfo -> {
       String pathName = pathInfo.getPath().getName();
       // Filter base files if:
@@ -482,12 +486,12 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       // 2. file is not .hoodie_partition_metadata
       if (pathName.startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
         return false;
-      } else if (metaClient.getTableConfig().isMultipleBaseFileFormatsEnabled()) {
+      } else if (isMultipleBaseFileFormatsEnabled) {
         return pathName.contains(HoodieFileFormat.PARQUET.getFileExtension())
             || pathName.contains(HoodieFileFormat.ORC.getFileExtension())
             || pathName.contains(HoodieFileFormat.HFILE.getFileExtension());
       } else {
-        return pathName.contains(metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
+        return pathName.contains(baseFileExtension);
       }
     };
     return pathInfoList.stream().filter(roFilePredicate).map(HoodieBaseFile::new);
@@ -499,10 +503,16 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param pathInfoList List of StoragePathInfo
    */
   private Stream<HoodieLogFile> convertFileStatusesToLogFiles(List<StoragePathInfo> pathInfoList) {
+    // COPY_ON_WRITE tables do not have log files
+    if (metaClient.getTableConfig().getTableType().equals(HoodieTableType.COPY_ON_WRITE)) {
+      return Stream.empty();
+    }
+
+    String logFileExtension = metaClient.getTableConfig().getLogFileFormat().getFileExtension();
     Predicate<StoragePathInfo> rtFilePredicate = pathInfo -> {
       String fileName = pathInfo.getPath().getName();
       Matcher matcher = FSUtils.LOG_FILE_PATTERN.matcher(fileName);
-      return matcher.find() && fileName.contains(metaClient.getTableConfig().getLogFileFormat().getFileExtension());
+      return matcher.matches() && fileName.contains(logFileExtension);
     };
     return pathInfoList.stream().filter(rtFilePredicate).map(HoodieLogFile::new);
   }
