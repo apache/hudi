@@ -35,13 +35,12 @@ import org.apache.hudi.internal.schema.utils.Conversions
 import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.util.JFunction
-
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{expressions, InternalRow}
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, EmptyRow, EqualTo, Expression, InterpretedPredicate, Literal}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BasePredicate, BoundReference, EmptyRow, EqualTo, Expression, InterpretedPredicate, Literal}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
 import org.apache.spark.sql.internal.SQLConf
@@ -49,10 +48,8 @@ import org.apache.spark.sql.types.{ByteType, DateType, IntegerType, LongType, Sh
 import org.slf4j.LoggerFactory
 
 import javax.annotation.concurrent.NotThreadSafe
-
 import java.lang.reflect.{Array => JArray}
 import java.util.Collections
-
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 import scala.util.{Success, Try}
@@ -248,12 +245,22 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       //       the whole table
       if (haveProperPartitionValues(partitionPaths.toSeq) && partitionSchema.nonEmpty) {
         val predicate = partitionPruningPredicates.reduce(expressions.And)
-        val boundPredicate = InterpretedPredicate(predicate.transform {
+        val transformedPredicate = predicate.transform {
           case a: AttributeReference =>
             val index = partitionSchema.indexWhere(a.name == _.name)
             BoundReference(index, partitionSchema(index).dataType, nullable = true)
-        })
-
+        }
+        val boundPredicate: BasePredicate = try {
+          // Standard OSS Spark usage (1-arg constructor)
+          InterpretedPredicate(transformedPredicate)
+        } catch {
+          case _: NoSuchMethodException | _: IllegalArgumentException =>
+            // Runtime fallback for Databricks (2-arg constructor via reflection)
+            val clazz = Class.forName("org.apache.spark.sql.catalyst.expressions.InterpretedPredicate")
+            val ctor = clazz.getConstructor(classOf[Expression], classOf[Boolean])
+            ctor.newInstance(transformedPredicate, java.lang.Boolean.FALSE)
+              .asInstanceOf[BasePredicate]
+        }
         val prunedPartitionPaths = partitionPaths.filter {
           partitionPath => boundPredicate.eval(InternalRow.fromSeq(partitionPath.values))
         }.toSeq
