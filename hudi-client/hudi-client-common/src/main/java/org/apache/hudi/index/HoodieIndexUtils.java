@@ -598,6 +598,21 @@ public class HoodieIndexUtils {
     return taggedUpdatingRecords.union(taggedNewRecords);
   }
 
+  /**
+   * Tags the incoming records with their existing locations if any is found.
+   * Global indexing can support moving records across partitions. To do so, the tagging logic will result in a delete to the old partition and an insert into the new partition. When this happens
+   * with Merge-on-Read tables, the record key is present in multiple locations until the file slices are compacted. If the index relies on reading the keys directly from the file slices, then
+   * `mayContainDuplicateLookup` must be set to true to account for this. If the lookup will only contain the latest location of the record key, then `mayContainDuplicateLookup` is set to false.
+   * @param incomingRecords The new data being written to the table
+   * @param keyAndExistingLocations The existing locations of the records in the table
+   * @param mayContainDuplicateLookup Set to true if the existing locations may contain multiple entries for the same record key
+   * @param shouldUpdatePartitionPath When true, the index will handle partition path updates by merging the incoming record with the existing record and determining if the partition path has changed.
+   *                                  When false, the incoming record will always be tagged to the existing location's partition path.
+   * @param config the writer's configuration
+   * @param table the table that is being updated
+   * @return the incoming records tagged with their existing locations if any is found
+   * @param <R> the type of the data in the record
+   */
   public static <R> HoodieData<HoodieRecord<R>> tagGlobalLocationBackToRecords(
       HoodieData<HoodieRecord<R>> incomingRecords,
       HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocations,
