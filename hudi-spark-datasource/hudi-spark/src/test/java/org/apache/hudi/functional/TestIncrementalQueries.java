@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
+import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
@@ -56,8 +57,94 @@ class TestIncrementalQueries extends SparkClientFunctionalTestHarness {
       "6,COPY_ON_WRITE", "8,COPY_ON_WRITE", "9,COPY_ON_WRITE",
       "6,MERGE_ON_READ", "8,MERGE_ON_READ", "9,MERGE_ON_READ"})
   void testIncrementalQueryWithMultiCommitsInSameFile(String tableVersion, String tableType) {
-    // Prepare options.
     String path = basePath();
+    Map<String, String> hudiOptions = createWriteOption(tableVersion, tableType);
+    StructType schema = createTableSchema();
+    // Write three commits.
+    writeData(hudiOptions, path, tableVersion, tableType, schema);
+    // Get the commits and their 'commit time' based on table version.
+    HoodieTableMetaClient metaClient =
+        HoodieTableMetaClient.builder().setBasePath(path).setConf(storageConf()).build();
+    List<Pair<HoodieInstant, String>> sortedInstants = metaClient.getActiveTimeline().getInstants()
+        .stream()
+        .map(instant -> Pair.of(
+            instant, tableVersion.equals("6") ? instant.requestedTime() : instant.getCompletionTime()))
+        .collect(Collectors.toList());
+
+    // Run incremental query: last two commits are within the range.
+    // Make sure the records from the second commit are included.
+    // This avoids the differences between different versions. That is,
+    // the range type of table version 6 is open_close, but that of > 6 is close_close by default.
+    String startTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(1).getRight()) - 1);
+    Dataset<Row> result = spark().read().format("org.apache.hudi")
+        .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
+        .option(DataSourceReadOptions.START_COMMIT().key(), startTimestamp)
+        .option(DataSourceReadOptions.END_COMMIT().key(), sortedInstants.get(2).getRight()).load(path);
+    List<Row> rows = result.collectAsList();
+    // Only records from the last two commits should be returned.
+    assertEquals(3,
+        result.filter(new Column("_hoodie_commit_time")
+                .isin(
+                    sortedInstants.get(1).getLeft().requestedTime(),
+                    sortedInstants.get(2).getLeft().requestedTime()))
+            .count());
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "6,COPY_ON_WRITE", "8,COPY_ON_WRITE", "9,COPY_ON_WRITE",
+      "6,MERGE_ON_READ", "8,MERGE_ON_READ", "9,MERGE_ON_READ"})
+  void testIncrementalQueryWithMultiCommitsInSameFileAndLargeStartTime(String tableVersion, String tableType) {
+    String path = basePath();
+    Map<String, String> hudiOptions = createWriteOption(tableVersion, tableType);
+    StructType schema = createTableSchema();
+    writeData(hudiOptions, path, tableVersion, tableType, schema);
+    HoodieTableMetaClient metaClient =
+        HoodieTableMetaClient.builder().setBasePath(path).setConf(storageConf()).build();
+    List<Pair<HoodieInstant, String>> sortedInstants = metaClient.getActiveTimeline().getInstants()
+        .stream()
+        .map(instant -> Pair.of(
+            instant, tableVersion.equals("6") ? instant.requestedTime() : instant.getCompletionTime()))
+        .collect(Collectors.toList());
+
+    // Run incremental query: start time is larger than the newest instant.
+    String startTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(2).getRight()) + 100);
+    String endTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(2).getRight()) + 200);
+    Dataset<Row> result = spark().read().format("org.apache.hudi")
+        .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
+        .option(DataSourceReadOptions.START_COMMIT().key(), startTimestamp)
+        .option(DataSourceReadOptions.END_COMMIT().key(), endTimestamp).load(path);
+    assertTrue(result.collectAsList().isEmpty());
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "6,COPY_ON_WRITE", "8,COPY_ON_WRITE", "9,COPY_ON_WRITE",
+      "6,MERGE_ON_READ", "8,MERGE_ON_READ", "9,MERGE_ON_READ"})
+  void testIncrementalQueryWithMultiCommitsInSameFileAndSmallEndTime(String tableVersion, String tableType) {
+    String path = basePath();
+    Map<String, String> hudiOptions = createWriteOption(tableVersion, tableType);
+    StructType schema = createTableSchema();
+    writeData(hudiOptions, path, tableVersion, tableType, schema);
+    HoodieTableMetaClient metaClient =
+        HoodieTableMetaClient.builder().setBasePath(path).setConf(storageConf()).build();
+    List<Pair<HoodieInstant, String>> sortedInstants = metaClient.getActiveTimeline().getInstants()
+        .stream()
+        .map(instant -> Pair.of(
+            instant, tableVersion.equals("6") ? instant.requestedTime() : instant.getCompletionTime()))
+        .collect(Collectors.toList());
+
+    // Run incremental query: end time is smaller than the oldest instant.
+    String startTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(0).getRight()) - 200);
+    String endTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(0).getRight()) - 100);
+    Dataset<Row> result = spark().read().format("org.apache.hudi")
+        .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
+        .option(DataSourceReadOptions.START_COMMIT().key(), startTimestamp)
+        .option(DataSourceReadOptions.END_COMMIT().key(), endTimestamp).load(path);
+    assertTrue(result.collectAsList().isEmpty());
+  }
+
+  private Map<String, String> createWriteOption(String tableVersion, String tableType) {
     Map<String, String> hudiOptions = new HashMap<>();
     hudiOptions.put(DataSourceWriteOptions.ORDERING_FIELDS().key(), "column1");
     hudiOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "column1,column2");
@@ -67,50 +154,44 @@ class TestIncrementalQueries extends SparkClientFunctionalTestHarness {
     hudiOptions.put(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "false");
     hudiOptions.put(HoodieMetadataConfig.ENABLE.key(), "false");
     hudiOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), tableType);
-    // Record schema.
-    StructType schema = DataTypes.createStructType(new StructField[]{
+    return hudiOptions;
+  }
+
+  private StructType createTableSchema() {
+    return DataTypes.createStructType(new StructField[]{
         DataTypes.createStructField("column1", DataTypes.StringType, true),
         DataTypes.createStructField("column2", DataTypes.StringType, true),
         DataTypes.createStructField("column3", DataTypes.StringType, true)
     }).asNullable();
+  }
+
+  // Write three commits and validate the table type and version.
+  private void writeData(Map<String, String> hudiOptions,
+                         String path,
+                         String tableVersion,
+                         String tableType,
+                         StructType schema) {
     // First commit.
-    Row rowForFirstCommit = RowFactory.create("commit1.rec1.col1", "commit1.rec1.col2", "commit1.rec1.col3");
+    Row rowForFirstCommit = RowFactory.create(
+        "commit1.rec1.col1", "commit1.rec1.col2", "commit1.rec1.col3");
     writeData(Collections.singletonList(rowForFirstCommit), schema, hudiOptions, path);
     // Validate table version and type.
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(path).setConf(storageConf()).build();
-    assertEquals(Integer.valueOf(tableVersion), metaClient.getTableConfig().getTableVersion().versionCode());
+    HoodieTableMetaClient metaClient =
+        HoodieTableMetaClient.builder().setBasePath(path).setConf(storageConf()).build();
+    assertEquals(
+        Integer.valueOf(tableVersion),
+        metaClient.getTableConfig().getTableVersion().versionCode());
     assertEquals(tableType, metaClient.getTableConfig().getTableType().name());
     // Second commit.
-    Row firstRowForSecondCommit = RowFactory.create("commit2.rec1.col1", "commit2.rec1.col2", "commit2.rec1.col3");
-    Row secondRowForSecondCommit = RowFactory.create("commit2.rec2.col1", "commit2.rec2.col2", "commit2.rec2.col3");
+    Row firstRowForSecondCommit = RowFactory.create(
+        "commit2.rec1.col1", "commit2.rec1.col2", "commit2.rec1.col3");
+    Row secondRowForSecondCommit = RowFactory.create(
+        "commit2.rec2.col1", "commit2.rec2.col2", "commit2.rec2.col3");
     writeData(Arrays.asList(firstRowForSecondCommit, secondRowForSecondCommit), schema, hudiOptions, path);
     // Third commit.
-    Row firstRowForThirdCommit = RowFactory.create("commit3.rec1.col1", "commit3.rec1.col2", "commit3.rec1.col3");
+    Row firstRowForThirdCommit = RowFactory.create(
+        "commit3.rec1.col1", "commit3.rec1.col2", "commit3.rec1.col3");
     writeData(Collections.singletonList(firstRowForThirdCommit), schema, hudiOptions, path);
-    // Get the last two commits.
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    List<Pair<HoodieInstant, String>> sortedInstants = metaClient.getActiveTimeline().getInstants()
-        .stream().skip(1)
-        .map(instant -> Pair.of(
-            instant, tableVersion.equals("6") ? instant.requestedTime() : instant.getCompletionTime()))
-        .collect(Collectors.toList());
-    // Make sure the records from the second commit are included.
-    // This avoids the differences between different versions.
-    String startTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(0).getRight()) - 1);
-    // Run incremental query.
-    Dataset<Row> result = spark().read().format("org.apache.hudi")
-        .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
-        .option(DataSourceReadOptions.START_COMMIT().key(), startTimestamp)
-        .option(DataSourceReadOptions.END_COMMIT().key(), sortedInstants.get(1).getRight()).load(path);
-    java.util.List<Row> rows = result.collectAsList();
-    // Only records from the last two commits should be returned.
-    assertEquals(3, rows.size());
-    rows.forEach(r -> {
-      String commitTime = r.getString(0);
-      assertTrue(
-          commitTime.equals(sortedInstants.get(0).getLeft().requestedTime())
-              || commitTime.equals(sortedInstants.get(1).getLeft().requestedTime()));
-    });
   }
 
   private void writeData(List<Row> records, StructType schema, Map<String, String> hudiOptions, String basePath) {
@@ -124,4 +205,3 @@ class TestIncrementalQueries extends SparkClientFunctionalTestHarness {
         .save(basePath);
   }
 }
-
