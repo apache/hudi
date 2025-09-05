@@ -34,11 +34,14 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
@@ -53,12 +56,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestSavepointRestoreCopyOnWriteWithTestFormat extends HoodieClientTestBase {
 
   /**
-   * Actions: C1, C2, savepoint C2, C3, C4, restore.
+   * Actions: C1, C2, savepoint C2, C3, C4 (inflight or complete), restore.
    * Should go back to C2,
    * C3 and C4 should be cleaned up.
    */
-  @Test
-  void testBasicRollback() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testBasicRollback(boolean commitC4) throws Exception {
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieTableConfig.TABLE_FORMAT.key(), "test-format");
     initMetaClient(getTableType(), props);
@@ -69,9 +73,10 @@ public class TestSavepointRestoreCopyOnWriteWithTestFormat extends HoodieClientT
       String savepointCommit = null;
       String prevInstant = HoodieTimeline.INIT_INSTANT_TS;
       final int numRecords = 10;
-      for (int i = 1; i <= 4; i++) {
+      List<String> commitTimestamps = new ArrayList<>();
+      for (int i = 1; i <= 3; i++) {
         String newCommitTime = WriteClientTestUtils.createNewInstantTime();
-        // Write 4 inserts with the 2nd commit been rolled back
+        commitTimestamps.add(newCommitTime);
         insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
             false, true, numRecords, numRecords * i, 1, Option.empty(), INSTANT_GENERATOR);
         prevInstant = newCommitTime;
@@ -81,9 +86,24 @@ public class TestSavepointRestoreCopyOnWriteWithTestFormat extends HoodieClientT
           client.savepoint("user1", "Savepoint for 2nd commit");
         }
       }
-      assertRowNumberEqualsTo(40);
+      // Add C4 - either complete or inflight based on parameter
+      if (commitC4) {
+        String newCommitTime = WriteClientTestUtils.createNewInstantTime();
+        commitTimestamps.add(newCommitTime);
+        insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
+            false, true, numRecords, numRecords * 4, 1, Option.empty(), INSTANT_GENERATOR);
+        assertRowNumberEqualsTo(40);
+      } else {
+        // Leave C4 as inflight
+        String inflightCommit = insertBatchWithoutCommit(numRecords);
+        commitTimestamps.add(inflightCommit);
+        Assertions.assertFalse(metaClient.getActiveTimeline().filterCompletedInstants().containsInstant(inflightCommit));
+        assertRowNumberEqualsTo(30);
+      }
       // restore
       client.restoreToSavepoint(Objects.requireNonNull(savepointCommit, "restore commit should not be null"));
+      Assertions.assertEquals(1, metaClient.reloadActiveTimeline().getRestoreTimeline().filterCompletedInstants().countInstants());
+      commitTimestamps.subList(2, 4).forEach(instant -> Assertions.assertFalse(metaClient.getActiveTimeline().containsInstant(instant)));
       assertRowNumberEqualsTo(20);
     }
   }
@@ -106,7 +126,6 @@ public class TestSavepointRestoreCopyOnWriteWithTestFormat extends HoodieClientT
       final int iterations = 5;
       for (int i = 1; i <= 5; i++) {
         String newCommitTime = WriteClientTestUtils.createNewInstantTime();
-        // Write 4 inserts with the 2nd commit been rolled back
         insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
             false, true, numRecords, numRecords * i, 1, Option.empty(), INSTANT_GENERATOR);
         prevInstant = newCommitTime;
@@ -119,6 +138,7 @@ public class TestSavepointRestoreCopyOnWriteWithTestFormat extends HoodieClientT
       assertRowNumberEqualsTo(iterations * numRecords);
       // restore will be forced to rebuild the metadata table
       client.restoreToSavepoint(Objects.requireNonNull(savepointCommit, "restore commit should not be null"));
+      Assertions.assertEquals(1, metaClient.reloadActiveTimeline().getRestoreTimeline().filterCompletedInstants().countInstants());
       assertRowNumberEqualsTo(20);
       // check if the metadata table is rebuilt
       String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(hoodieWriteConfig.getBasePath());
@@ -128,46 +148,6 @@ public class TestSavepointRestoreCopyOnWriteWithTestFormat extends HoodieClientT
           .setLoadActiveTimelineOnLoad(true)
           .build();
       assertEquals(1, metadataMetaClient.getCommitsTimeline().filter(instant -> !instant.requestedTime().startsWith(SOLO_COMMIT_TIMESTAMP)).countInstants());
-    }
-  }
-
-  /**
-   * The restore should roll back all the pending instants that are beyond the savepoint.
-   *
-   * <p>Actions: C1, C2, savepoint C2, C3, C4 inflight, restore.
-   * Should go back to C2,
-   * C3, C4 should be cleaned up.
-   */
-  @Test
-  void testCleaningPendingInstants() throws Exception {
-    TypedProperties props = new TypedProperties();
-    props.setProperty(HoodieTableConfig.TABLE_FORMAT.key(), "test-format");
-    initMetaClient(getTableType(), props);
-    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
-        .withRollbackUsingMarkers(true)
-        .build();
-    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
-      String savepointCommit = null;
-      String prevInstant = HoodieTimeline.INIT_INSTANT_TS;
-      final int numRecords = 10;
-      for (int i = 1; i <= 3; i++) {
-        String newCommitTime = WriteClientTestUtils.createNewInstantTime();
-        // Write 4 inserts with the 2nd commit been rolled back
-        insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
-            false, true, numRecords, numRecords * i, 1, Option.empty(), INSTANT_GENERATOR);
-        prevInstant = newCommitTime;
-        if (i == 2) {
-          // trigger savepoint
-          savepointCommit = newCommitTime;
-          client.savepoint("user1", "Savepoint for 2nd commit");
-        }
-      }
-      assertRowNumberEqualsTo(30);
-      // write another pending instant
-      insertBatchWithoutCommit(numRecords);
-      // restore
-      client.restoreToSavepoint(Objects.requireNonNull(savepointCommit, "restore commit should not be null"));
-      assertRowNumberEqualsTo(20);
     }
   }
 
@@ -189,7 +169,6 @@ public class TestSavepointRestoreCopyOnWriteWithTestFormat extends HoodieClientT
     props.setProperty(HoodieTableConfig.TABLE_FORMAT.key(), "test-format");
     initMetaClient(getTableType(), props);
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER)
-        // eager cleaning
         .withRollbackUsingMarkers(true)
         .build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
@@ -198,7 +177,6 @@ public class TestSavepointRestoreCopyOnWriteWithTestFormat extends HoodieClientT
       final int numRecords = 10;
       for (int i = 1; i <= 2; i++) {
         String newCommitTime = WriteClientTestUtils.createNewInstantTime();
-        // Write 4 inserts with the 2nd commit been rolled back
         insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
             false, true, numRecords, numRecords * i, 1, Option.empty(), INSTANT_GENERATOR);
         prevInstant = newCommitTime;
@@ -210,7 +188,8 @@ public class TestSavepointRestoreCopyOnWriteWithTestFormat extends HoodieClientT
       }
       assertRowNumberEqualsTo(20);
       // write another pending instant
-      insertBatchWithoutCommit(numRecords);
+      String inflightCommit = insertBatchWithoutCommit(numRecords);
+      Assertions.assertFalse(metaClient.getActiveTimeline().filterCompletedInstants().containsInstant(inflightCommit));
       // rollback the pending instant
       if (commitRollback) {
         client.rollbackFailedWrites(metaClient);
@@ -228,6 +207,7 @@ public class TestSavepointRestoreCopyOnWriteWithTestFormat extends HoodieClientT
           false, true, numRecords, numRecords * 3, 1, Option.empty(), INSTANT_GENERATOR);
       // restore
       client.restoreToSavepoint(Objects.requireNonNull(savepointCommit, "restore commit should not be null"));
+      Assertions.assertEquals(1, metaClient.reloadActiveTimeline().getRestoreTimeline().filterCompletedInstants().countInstants());
       assertRowNumberEqualsTo(20);
     }
   }

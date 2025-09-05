@@ -52,7 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
-public class TestHoodieSparkCopyOnWriteTableCleanWithTestFormat extends SparkClientFunctionalTestHarness {
+public class TestHoodieSparkCopyOnWriteTableCleanAndArchiveWithTestFormat extends SparkClientFunctionalTestHarness {
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})

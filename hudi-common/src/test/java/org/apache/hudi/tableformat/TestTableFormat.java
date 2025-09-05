@@ -81,9 +81,9 @@ public class TestTableFormat implements HoodieTableFormat {
   }
 
   @Override
-  public void rollback(HoodieInstant completedInstant, HoodieEngineContext engineContext, 
+  public void rollback(HoodieInstant instantToRollback, HoodieEngineContext engineContext,
                       HoodieTableMetaClient metaClient, FileSystemViewManager viewManager) {
-    // No-op.
+    RECORDED_INSTANTS.get(metaClient.getBasePath().toString()).remove(instantToRollback);
   }
 
   @Override
