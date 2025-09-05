@@ -19,6 +19,7 @@
 package org.apache.hudi.client.transaction.lock.audit;
 
 import org.apache.hudi.client.transaction.lock.StorageLockClient;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,6 +38,7 @@ public class StorageLockProviderAuditService implements AuditService {
   
   private static final Logger LOG = LoggerFactory.getLogger(StorageLockProviderAuditService.class);
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+  public static final String AUDIT_FOLDER_NAME = "audit";
   
   private final String basePath;
   private final String ownerId;
@@ -78,11 +80,12 @@ public class StorageLockProviderAuditService implements AuditService {
         state.name().toLowerCase());
     
     // Build the full path for the audit file
-    String auditFilePath = String.format("%s%s.hoodie%s.locks%saudit%s%s",
+    String auditFilePath = String.format("%s%s%s%s%s%s%s",
         basePath,
         StoragePath.SEPARATOR,
+        HoodieTableMetaClient.LOCKS_FOLDER_NAME,
         StoragePath.SEPARATOR,
-        StoragePath.SEPARATOR,
+        AUDIT_FOLDER_NAME,
         StoragePath.SEPARATOR,
         filename);
     

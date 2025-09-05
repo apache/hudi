@@ -19,6 +19,7 @@
 package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -34,6 +35,8 @@ import org.apache.hudi.common.util.FileIOUtils;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+
+import static org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService.AUDIT_FOLDER_NAME;
 
 /**
  * CLI commands for managing Hudi table locking and audit functionality.
@@ -55,7 +58,7 @@ public class LockCommand {
 
     try {
       // Create the audit config file path using .hoodie/.locks structure 
-      String lockFolderPath = String.format("%s%s.hoodie%s.locks", HoodieCLI.basePath, StoragePath.SEPARATOR, StoragePath.SEPARATOR);
+      String lockFolderPath = String.format("%s%s%s", HoodieCLI.basePath, StoragePath.SEPARATOR, HoodieTableMetaClient.LOCKS_FOLDER_NAME);
       String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_CONFIG_FILE_NAME);
       
       // Create the JSON content
@@ -70,7 +73,7 @@ public class LockCommand {
       }
       
       return String.format("Lock audit enabled successfully.\nAudit config written to: %s\n"
-          + "Audit files will be stored at: %s%saudit%s", auditConfigPath, lockFolderPath, StoragePath.SEPARATOR, StoragePath.SEPARATOR);
+          + "Audit files will be stored at: %s%s%s", auditConfigPath, lockFolderPath, StoragePath.SEPARATOR, AUDIT_FOLDER_NAME);
       
     } catch (Exception e) {
       LOG.error("Error enabling lock audit", e);
@@ -89,7 +92,7 @@ public class LockCommand {
 
     try {
       // Create the audit config file path
-      String lockFolderPath = String.format("%s%s.hoodie%s.locks", HoodieCLI.basePath, StoragePath.SEPARATOR, StoragePath.SEPARATOR);
+      String lockFolderPath = String.format("%s%s%s", HoodieCLI.basePath, StoragePath.SEPARATOR, HoodieTableMetaClient.LOCKS_FOLDER_NAME);
       String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_CONFIG_FILE_NAME);
       
       // Check if config file exists
@@ -111,10 +114,10 @@ public class LockCommand {
       String message = String.format("Lock audit disabled successfully.\nAudit config updated at: %s", auditConfigPath);
       
       if (keepAuditFiles) {
-        message += String.format("\nExisting audit files preserved at: %s%saudit%s", lockFolderPath, StoragePath.SEPARATOR, StoragePath.SEPARATOR);
+        message += String.format("\nExisting audit files preserved at: %s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_FOLDER_NAME);
       } else {
         // Todo: write then call the api method to prune the old files
-        message += String.format("\nAudit files cleaned up at: %s%saudit%s", lockFolderPath, StoragePath.SEPARATOR, StoragePath.SEPARATOR);
+        message += String.format("\nAudit files cleaned up at: %s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_FOLDER_NAME);
       }
       
       return message;
@@ -134,7 +137,7 @@ public class LockCommand {
 
     try {
       // Create the audit config file path
-      String lockFolderPath = String.format("%s%s.hoodie%s.locks", HoodieCLI.basePath, StoragePath.SEPARATOR, StoragePath.SEPARATOR);
+      String lockFolderPath = String.format("%s%s%s", HoodieCLI.basePath, StoragePath.SEPARATOR, HoodieTableMetaClient.LOCKS_FOLDER_NAME);
       String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_CONFIG_FILE_NAME);
       
       // Check if config file exists
@@ -161,8 +164,8 @@ public class LockCommand {
       return String.format("Lock Audit Status: %s\n"
           + "Table: %s\n"
           + "Config file: %s\n"
-          + "Audit files location: %s%saudit%s",
-          status, HoodieCLI.basePath, auditConfigPath, lockFolderPath, StoragePath.SEPARATOR, StoragePath.SEPARATOR);
+          + "Audit files location: %s%s%s",
+          status, HoodieCLI.basePath, auditConfigPath, lockFolderPath, StoragePath.SEPARATOR, AUDIT_FOLDER_NAME);
       
     } catch (Exception e) {
       LOG.error("Error checking lock audit status", e);
