@@ -26,8 +26,31 @@ import java.util.Objects;
 
 /**
  * Represents a raw key for bloom filter metadata.
+ * <p>
+ * The BLOOM_FILTERS partition stores bloom filters for each data file to enable
+ * efficient filtering of files that might contain a specific record key.
+ * Each bloom filter helps avoid reading files that definitely don't contain a record.
+ * <p>
+ * Raw key format: base64(partition_identifier) + base64(file_name)
+ * - partition_identifier: The partition path (or "." for non-partitioned tables)
+ * - file_name: Name of the data file (base file)
+ * <p>
+ * Examples:
+ * - For file "f1.parquet" in partition "2023/01/15":
+ *   key = base64("2023/01/15") + base64("f1.parquet")
+ *   Example encoded: "MjAyMy8wMS8xNQ==" + "ZjEucGFycXVldA=="
+ * <p>
+ * - For file "base_001.parquet" in non-partitioned table:
+ *   key = base64(".") + base64("base_001.parquet")
+ *   Example encoded: "X19ISVZFX0RFRkFVTFRfUEFSVElUSU9OX18=" + "YmFzZV8wMDEucGFycXVldA=="
+ * <p>
+ * - For file "data.parquet" in partition "country=US/state=CA":
+ *   key = base64("country=US/state=CA") + base64("data.parquet")
+ *   Example encoded: "Y291bnRyeT1VUy9zdGF0ZT1DQQ==" + "ZGF0YS5wYXJxdWV0"
+ * <p>
+ * The value contains the serialized bloom filter for efficient key lookups in that file.
  */
-public class BloomFilterIndexRawKey implements RawKey {
+public class BloomFilterIndexRawKey implements MetadataRawKey {
   private final String partitionName;
   private final String fileName;
 
@@ -43,11 +66,11 @@ public class BloomFilterIndexRawKey implements RawKey {
         new FileIndexID(fileName));
   }
 
-  public String getPartitionName() {
+  public String partitionName() {
     return partitionName;
   }
 
-  public String getFileName() {
+  public String fileName() {
     return fileName;
   }
 

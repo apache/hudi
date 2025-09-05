@@ -312,24 +312,24 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
   @Override
   public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(
-      HoodieData<? extends RawKey> rawKeys,
+      HoodieData<? extends MetadataRawKey> rawKeys,
       String partitionName,
       boolean shouldLoadInMemory) {
     throw new HoodieMetadataException("Unsupported operation: getRecordsByKeyPrefixes!");
   }
 
   @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys) {
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexKeysAndLocations(HoodieData<String> recordKeys) {
     throw new HoodieMetadataException("Unsupported operation: readRecordIndex!");
   }
 
   @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys, Option<String> dataTablePartition) {
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexKeysAndLocations(HoodieData<String> recordKeys, Option<String> dataTablePartition) {
     throw new HoodieMetadataException("Unsupported operation: readRecordIndex!");
   }
 
   @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexLocationsWithKeys(HoodieData<String> secondaryKeys, String partitionName) {
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexKeysAndLocations(HoodieData<String> secondaryKeys, String partitionName) {
     throw new HoodieMetadataException("Unsupported operation: readSecondaryIndex!");
   }
 

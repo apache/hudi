@@ -28,8 +28,31 @@ import java.util.Objects;
 /**
  * Represents a raw key for column stats indexed by partition, file and column.
  * This is different from ColumnStatsIndexPrefixRawKey which is used for prefix lookups.
+ * <p>
+ * The COLUMN_STATS partition stores statistics for each column in each file to enable
+ * query optimization through data skipping. Statistics include min/max values, null counts, etc.
+ * <p>
+ * Raw key format: base64(column_name) + base64(partition_identifier) + base64(file_name)
+ * - column_name: The name of the column
+ * - partition_identifier: The partition path (or "." for non-partitioned tables)
+ * - file_name: Name of the data file
+ * <p>
+ * Examples:
+ * - For column "price" in file "f1.parquet" in partition "2023/01/15":
+ *   key = base64("price") + base64("2023/01/15") + base64("f1.parquet")
+ *   Example encoded: "cHJpY2U=" + "MjAyMy8wMS8xNQ==" + "ZjEucGFycXVldA=="
+ * <p>
+ * - For column "user_id" in file "data.parquet" in non-partitioned table:
+ *   key = base64("user_id") + base64(".") + base64("data.parquet")
+ *   Example encoded: "dXNlcl9pZA==" + "X19ISVZFX0RFRkFVTFRfUEFSVElUSU9OX18=" + "ZGF0YS5wYXJxdWV0"
+ * <p>
+ * - For column "revenue" in file "sales.parquet" in partition "country=US/state=CA":
+ *   key = base64("revenue") + base64("country=US/state=CA") + base64("sales.parquet")
+ *   Example encoded: "cmV2ZW51ZQ==" + "Y291bnRyeT1VUy9zdGF0ZT1DQQ==" + "c2FsZXMucGFycXVldA=="
+ * <p>
+ * The value contains statistics like min/max values, null count, value count, and total size.
  */
-public class ColumnStatsIndexRawKey implements RawKey {
+public class ColumnStatsIndexRawKey implements MetadataRawKey {
   private final String partitionName;
   private final String fileName;
   private final String columnName;
@@ -48,15 +71,15 @@ public class ColumnStatsIndexRawKey implements RawKey {
         new ColumnIndexID(columnName));
   }
 
-  public String getPartitionName() {
+  public String partitionName() {
     return partitionName;
   }
 
-  public String getFileName() {
+  public String fileName() {
     return fileName;
   }
 
-  public String getColumnName() {
+  public String columnName() {
     return columnName;
   }
 
