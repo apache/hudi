@@ -101,7 +101,6 @@ public class S3StorageLockClient implements StorageLockClient {
     this.logger = logger;
   }
 
-
   @Override
   public Pair<LockGetResult, Option<StorageLockFile>> readCurrentLockFile() {
     try (ResponseInputStream<GetObjectResponse> in = s3Client.getObject(
