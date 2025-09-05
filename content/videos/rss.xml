@@ -4,10 +4,20 @@
         <title>Apache Hudi Blog</title>
         <link>https://hudi.apache.org/videos</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Mon, 16 Jun 2025 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Mon, 11 Aug 2025 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>en</language>
+        <item>
+            <title><![CDATA[Redefining Open Lakehouse Architecture with Apache Hudi 1.0]]></title>
+            <link>https://hudi.apache.org/videos/2025/08/11/redefining-open-lakehouse-architecture-1.x</link>
+            <guid>https://hudi.apache.org/videos/2025/08/11/redefining-open-lakehouse-architecture-1.x</guid>
+            <pubDate>Mon, 11 Aug 2025 00:00:00 GMT</pubDate>
+            <category>hudi</category>
+            <category>data lake</category>
+            <category>lakehouse</category>
+            <category>apache hudi</category>
+        </item>
         <item>
             <title><![CDATA[Apache Hudi does XYZ (1/10): File pruning with multi-modal index]]></title>
             <link>https://hudi.apache.org/videos/2025/06/16/apache-hudi-does-xyz-110</link>
@@ -226,20 +236,6 @@
             <category>scd2</category>
             <category>hudi streamer</category>
             <category>deltastreamer</category>
-        </item>
-        <item>
-            <title><![CDATA[Hudi Streamer implementing Slowly Changing Dimension Type 2 and Query Real Time Trino | Hands on]]></title>
-            <link>https://hudi.apache.org/videos/2024/05/22/hudi-streamer-implementing-slowly-changing-dimension-type-2-and-query-real-time-trino</link>
-            <guid>https://hudi.apache.org/videos/2024/05/22/hudi-streamer-implementing-slowly-changing-dimension-type-2-and-query-real-time-trino</guid>
-            <pubDate>Wed, 22 May 2024 00:00:00 GMT</pubDate>
-            <category>guide</category>
-            <category>beginner</category>
-            <category>apache hudi</category>
-            <category>slowly changing dimension type 2</category>
-            <category>scd2</category>
-            <category>hudi streamer</category>
-            <category>deltastreamer</category>
-            <category>trino</category>
         </item>
     </channel>
 </rss>

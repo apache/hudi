@@ -4,10 +4,27 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Mon, 21 Jul 2025 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Fri, 29 Aug 2025 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>en</language>
+        <item>
+            <title><![CDATA[Building a RAG-based AI Recommender (2/2)]]></title>
+            <link>https://hudi.apache.org/blog/2025/08/29/building-a-rag-based-ai-recommender-2</link>
+            <guid>https://hudi.apache.org/blog/2025/08/29/building-a-rag-based-ai-recommender-2</guid>
+            <pubDate>Fri, 29 Aug 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blog.datumagic.ai/p/building-a-rag-based-ai-recommender-147">here</a></span>]]></content:encoded>
+            <category>blog</category>
+            <category>Apache Hudi</category>
+            <category>AI</category>
+            <category>RAG</category>
+            <category>Artificial Intelligence</category>
+            <category>data lakehouse</category>
+            <category>Lakehouse</category>
+            <category>use-case</category>
+            <category>datumagic</category>
+        </item>
         <item>
             <title><![CDATA[A Deep Dive on Merge-on-Read (MoR) in Lakehouse Table Formats]]></title>
             <link>https://hudi.apache.org/blog/2025/07/21/mor-comparison</link>
@@ -459,6 +476,20 @@
             <category>apache spark</category>
         </item>
         <item>
+            <title><![CDATA[Optimizing Apache Hudi Workflows: Automation for Clustering, Resizing & Concurrency]]></title>
+            <link>https://hudi.apache.org/blog/2025/06/13/Optimizing-Apache-Hudi-Workflows-Automation-for-Clustering-Resizing-Concurrency</link>
+            <guid>https://hudi.apache.org/blog/2025/06/13/Optimizing-Apache-Hudi-Workflows-Automation-for-Clustering-Resizing-Concurrency</guid>
+            <pubDate>Fri, 13 Jun 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blog.datumagic.ai/p/apache-hudi-does-xyz-110">here</a></span>]]></content:encoded>
+            <category>hudi</category>
+            <category>blog</category>
+            <category>halodoc</category>
+            <category>data lake</category>
+            <category>lakehouse</category>
+            <category>apache hudi</category>
+        </item>
+        <item>
             <title><![CDATA[Exploring Apache Hudi’s New Log-Structured Merge (LSM) Timeline]]></title>
             <link>https://hudi.apache.org/blog/2025/05/29/lsm-timeline</link>
             <guid>https://hudi.apache.org/blog/2025/05/29/lsm-timeline</guid>
@@ -891,31 +922,6 @@
             <category>Delta Lake</category>
             <category>Clustering</category>
             <category>Z-order</category>
-        </item>
-        <item>
-            <title><![CDATA[Data Deduplication Strategies in an Open Lakehouse Architecture]]></title>
-            <link>https://hudi.apache.org/blog/2025/03/26/dedupe</link>
-            <guid>https://hudi.apache.org/blog/2025/03/26/dedupe</guid>
-            <pubDate>Wed, 26 Mar 2025 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.onehouse.ai/blog/data-deduplication-strategies-in-an-open-lakehouse-architecture">here</a></span>]]></content:encoded>
-            <category>blog</category>
-            <category>Apache Hudi</category>
-            <category>Apache Iceberg</category>
-            <category>Delta Lake</category>
-            <category>Deduplication</category>
-        </item>
-        <item>
-            <title><![CDATA[From Transactional Bottlenecks to Lightning-Fast Analytics]]></title>
-            <link>https://hudi.apache.org/blog/2025/03/26/uptycs</link>
-            <guid>https://hudi.apache.org/blog/2025/03/26/uptycs</guid>
-            <pubDate>Wed, 26 Mar 2025 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/allthatscales/from-transactional-bottlenecks-to-lightning-fast-analytics-74e0d3fff1c0">here</a></span>]]></content:encoded>
-            <category>blog</category>
-            <category>Apache Hudi</category>
-            <category>CDC</category>
-            <category>Debezium</category>
         </item>
     </channel>
 </rss>
