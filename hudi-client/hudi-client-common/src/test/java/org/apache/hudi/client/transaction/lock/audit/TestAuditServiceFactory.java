@@ -25,6 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -52,7 +53,9 @@ public class TestAuditServiceFactory {
         .thenReturn(Option.empty());
     
     Option<AuditService> result = AuditServiceFactory.createLockProviderAuditService(
-        ownerId, basePath, mockStorageLockClient);
+        ownerId, basePath, mockStorageLockClient,
+        () -> System.currentTimeMillis() + 10000,
+        () -> true);
     
     // Should return empty when config not found
     assertTrue(result.isEmpty());
@@ -68,7 +71,9 @@ public class TestAuditServiceFactory {
         .thenReturn(Option.of(configJson));
     
     Option<AuditService> result = AuditServiceFactory.createLockProviderAuditService(
-        ownerId, basePath, mockStorageLockClient);
+        ownerId, basePath, mockStorageLockClient,
+        () -> System.currentTimeMillis() + 10000,
+        () -> true);
     
     // Should return empty when audit is disabled
     assertTrue(result.isEmpty());
@@ -82,13 +87,17 @@ public class TestAuditServiceFactory {
     String configJson = "{\"STORAGE_LOCK_AUDIT_SERVICE_ENABLED\": true}";
     when(mockStorageLockClient.readObject(eq(expectedPath), eq(true)))
         .thenReturn(Option.of(configJson));
+    // Mock writeObject method to return true for audit file writes
+    when(mockStorageLockClient.writeObject(anyString(), anyString()))
+        .thenReturn(true);
     
     Option<AuditService> result = AuditServiceFactory.createLockProviderAuditService(
-        ownerId, basePath, mockStorageLockClient);
+        ownerId, basePath, mockStorageLockClient,
+        () -> System.currentTimeMillis() + 10000, // lockExpirationSupplier
+        () -> true); // lockHeldSupplier
     
-    // Should return empty for now (no concrete implementation yet)
-    // When implementation is added, this should return a present Option
-    assertTrue(result.isEmpty());
+    // Should return the audit service when enabled
+    assertTrue(result.isPresent());
     verify(mockStorageLockClient).readObject(expectedPath, true);
   }
   
@@ -101,7 +110,9 @@ public class TestAuditServiceFactory {
         .thenReturn(Option.of(malformedJson));
     
     Option<AuditService> result = AuditServiceFactory.createLockProviderAuditService(
-        ownerId, basePath, mockStorageLockClient);
+        ownerId, basePath, mockStorageLockClient,
+        () -> System.currentTimeMillis() + 10000,
+        () -> true);
     
     // Should return empty when JSON is malformed
     assertTrue(result.isEmpty());
@@ -117,7 +128,9 @@ public class TestAuditServiceFactory {
         .thenReturn(Option.of(configJson));
     
     Option<AuditService> result = AuditServiceFactory.createLockProviderAuditService(
-        ownerId, basePath, mockStorageLockClient);
+        ownerId, basePath, mockStorageLockClient,
+        () -> System.currentTimeMillis() + 10000,
+        () -> true);
     
     // Should return empty when field is missing (defaults to false)
     assertTrue(result.isEmpty());
@@ -132,7 +145,9 @@ public class TestAuditServiceFactory {
         .thenReturn(Option.empty());
     
     AuditServiceFactory.createLockProviderAuditService(
-        ownerId, basePath, mockStorageLockClient);
+        ownerId, basePath, mockStorageLockClient,
+        () -> System.currentTimeMillis() + 10000,
+        () -> true);
     
     // Should pass true for checkExistsFirst since audit config is rarely present
     verify(mockStorageLockClient).readObject(expectedPath, true);

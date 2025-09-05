@@ -27,6 +27,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.function.Supplier;
+
 /**
  * Generic factory for creating audit services.
  * This factory determines whether auditing is enabled by checking configuration files.
@@ -41,22 +43,33 @@ public class AuditServiceFactory {
   /**
    * Creates a lock provider audit service instance by checking the audit configuration file.
    * 
-   * @param ownerId The owner ID for the lock provider
+   * @param ownerId The owner ID for the lock provider  
    * @param basePath The base path of the Hudi table
    * @param storageLockClient The storage lock client to use for reading configuration
+   * @param lockExpirationSupplier Supplier that provides the lock expiration time
+   * @param lockHeldSupplier Supplier that provides whether the lock is currently held
    * @return An Option containing the audit service if enabled, Option.empty() otherwise
    */
   public static Option<AuditService> createLockProviderAuditService(
       String ownerId,
       String basePath,
-      StorageLockClient storageLockClient) {
+      StorageLockClient storageLockClient,
+      Supplier<Long> lockExpirationSupplier,
+      Supplier<Boolean> lockHeldSupplier) {
 
     if (!isAuditEnabled(basePath, storageLockClient)) {
       return Option.empty();
     }
 
-    // For now, return empty since we haven't implemented a concrete service yet
-    return Option.empty();
+    // Create and return the audit service
+    AuditService auditService = new StorageLockProviderAuditService(
+        basePath,
+        ownerId, 
+        storageLockClient,
+        lockExpirationSupplier,
+        lockHeldSupplier);
+    
+    return Option.of(auditService);
   }
   
   /**

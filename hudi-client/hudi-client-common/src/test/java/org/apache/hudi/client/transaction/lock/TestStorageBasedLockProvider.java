@@ -837,6 +837,9 @@ class TestStorageBasedLockProvider {
         .thenReturn(Option.of(enabledConfig));
     when(auditMockClient.readCurrentLockFile())
         .thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
+    // Mock writeObject method to return true for audit file writes
+    when(auditMockClient.writeObject(anyString(), anyString()))
+        .thenReturn(true);
     
     StorageBasedLockProvider auditLockProvider = new StorageBasedLockProvider(
         ownerId,
@@ -877,6 +880,12 @@ class TestStorageBasedLockProvider {
     public Option<String> readObject(String filePath, boolean checkExistsFirst) {
       // Stub implementation for testing
       return Option.empty();
+    }
+
+    @Override
+    public boolean writeObject(String filePath, String content) {
+      // Stub implementation for testing
+      return true;
     }
 
     @Override

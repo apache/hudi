@@ -191,7 +191,9 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     this.ownerId = ownerId;
     this.logger = logger;
     this.hoodieLockMetrics = Option.ofNullable(hoodieLockMetrics);
-    this.auditService = AuditServiceFactory.createLockProviderAuditService(ownerId, config.getHudiTableBasePath(), storageLockClient);
+    this.auditService = AuditServiceFactory.createLockProviderAuditService(
+        ownerId, config.getHudiTableBasePath(), storageLockClient,
+        this::calculateLockExpiration, this::actuallyHoldsLock);
     shutdownThread = new Thread(() -> shutdown(true));
     Runtime.getRuntime().addShutdownHook(shutdownThread);
     logger.info("Instantiated new storage-based lock provider, owner: {}, lockfilePath: {}", ownerId, lockFilePath);
@@ -338,7 +340,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
 
     // Try to acquire the lock
     long acquisitionTimestamp = getCurrentEpochMs();
-    long lockExpirationMs = acquisitionTimestamp + TimeUnit.SECONDS.toMillis(lockValiditySecs);
+    long lockExpirationMs = calculateLockExpiration();
     StorageLockData newLockData = new StorageLockData(false, lockExpirationMs, ownerId);
     Pair<LockUpsertResult, Option<StorageLockFile>> lockUpdateStatus = this.storageLockClient.tryUpsertLockFile(
         newLockData,
@@ -520,7 +522,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       // prevents further data corruption by
       // letting someone else acquire the lock.
       long acquisitionTimestamp = getCurrentEpochMs();
-      long lockExpirationMs = acquisitionTimestamp + TimeUnit.SECONDS.toMillis(lockValiditySecs);
+      long lockExpirationMs = calculateLockExpiration();
       Pair<LockUpsertResult, Option<StorageLockFile>> currentLock = this.storageLockClient.tryUpsertLockFile(
           new StorageLockData(false, lockExpirationMs, ownerId),
           Option.of(getLock()));
@@ -606,6 +608,16 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   @VisibleForTesting
   long getCurrentEpochMs() {
     return System.currentTimeMillis();
+  }
+
+  /**
+   * Calculates the lock expiration time based on current time and validity period.
+   * 
+   * @return Lock expiration time in milliseconds
+   */
+  @VisibleForTesting
+  long calculateLockExpiration() {
+    return getCurrentEpochMs() + TimeUnit.SECONDS.toMillis(lockValiditySecs);
   }
 
   /**
