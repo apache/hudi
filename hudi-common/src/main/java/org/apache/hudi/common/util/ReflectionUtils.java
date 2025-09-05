@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.exception.HoodieException;
 
 import org.slf4j.Logger;
@@ -47,7 +48,44 @@ public class ReflectionUtils {
 
   private static final Map<String, Class<?>> CLAZZ_CACHE = new ConcurrentHashMap<>();
 
+  private static final String ENABLE_THREAD_CONTEXT_REFLECTION_KEY = "hoodie.reflection.usethreadcontext";
+  // The properties must be on the classpath for this to evaluate to true.
+  // This allows us to use the thread context class loader in cases
+  // where the jars are dynamically added to the classpath.
+  private static volatile Boolean useThreadContextClassLoader = null;
+
+  /**
+   * Protected method that can be mocked in tests.
+   * This method is called to determine whether to use thread context class loader.
+   */
+  protected static boolean shouldUseThreadContextClassLoader() {
+    if (useThreadContextClassLoader == null) {
+      synchronized (ReflectionUtils.class) {
+        if (useThreadContextClassLoader == null) {
+          useThreadContextClassLoader = DFSPropertiesConfiguration.loadGlobalProps()
+              .getBoolean(ENABLE_THREAD_CONTEXT_REFLECTION_KEY, false);
+        }
+      }
+    }
+    return useThreadContextClassLoader;
+  }
+
   public static Class<?> getClass(String clazzName) {
+    return CLAZZ_CACHE.computeIfAbsent(clazzName, c -> {
+      try {
+        return shouldUseThreadContextClassLoader()
+            ? Class.forName(clazzName, true, Thread.currentThread().getContextClassLoader())
+            : Class.forName(c);
+      } catch (ClassNotFoundException e) {
+        throw new HoodieException("Unable to load class", e);
+      }
+    });
+  }
+
+  /**
+   * Use caller's class loader, not considering context class loader.
+   */
+  public static Class<?> getClassWithCallerClassLoader(String clazzName) {
     return CLAZZ_CACHE.computeIfAbsent(clazzName, c -> {
       try {
         return Class.forName(c);
@@ -71,6 +109,18 @@ public class ReflectionUtils {
   public static Object loadClass(String clazz, Class<?>[] constructorArgTypes, Object... constructorArgs) {
     try {
       return getClass(clazz).getConstructor(constructorArgTypes).newInstance(constructorArgs);
+    } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+      throw new HoodieException("Unable to instantiate class " + clazz, e);
+    }
+  }
+
+  /**
+   * Creates an instance of the given class. Use this version when dealing with interface types as constructor args.
+   * Not consider any context class loader.
+   */
+  public static Object loadClassWithCallerClassLoader(String clazz, Class<?>[] constructorArgTypes, Object... constructorArgs) {
+    try {
+      return getClassWithCallerClassLoader(clazz).getConstructor(constructorArgTypes).newInstance(constructorArgs);
     } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
       throw new HoodieException("Unable to instantiate class " + clazz, e);
     }
