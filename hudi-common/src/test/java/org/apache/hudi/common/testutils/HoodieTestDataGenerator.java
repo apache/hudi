@@ -1048,6 +1048,10 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return generateUniqueUpdatesStream(instantTime, n, schemaStr).collect(Collectors.toList());
   }
 
+  public List<HoodieRecord> generateUniqueUpdates(String instantTime, Integer n, String schemaStr, long timestamp) {
+    return generateUniqueUpdatesStream(instantTime, n, schemaStr, timestamp).collect(Collectors.toList());
+  }
+
   public List<HoodieRecord> generateUniqueUpdatesNestedExample(String instantTime, Integer n) {
     return generateUniqueUpdatesStream(instantTime, n, TRIP_NESTED_EXAMPLE_SCHEMA).collect(Collectors.toList());
   }

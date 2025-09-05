@@ -698,13 +698,15 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
 
     val executor = Executors.newFixedThreadPool(2)
     implicit val executorContext: ExecutionContext = ExecutionContext.fromExecutor(executor)
+    val timestamp = System.currentTimeMillis()
     val function = new Function0[Boolean] {
       override def apply(): Boolean = {
         try {
           doWriteAndValidateDataAndRecordIndex(hudiOpts,
             operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
             saveMode = SaveMode.Append,
-            validate = false)
+            validate = false,
+            timestamp = timestamp)
           true
         } catch {
           case _: HoodieWriteConflictException => false
