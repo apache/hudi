@@ -18,25 +18,67 @@
 # RFC-60: Federated Storage Layout
 
 ## Proposers
+- @zhangyue19921010
+- @CTTY
 - @umehrot2
 
 ## Approvers
 - @vinoth
 - @shivnarayan
+- @yihua
 
 ## Status
 
 JIRA: [https://issues.apache.org/jira/browse/HUDI-3625](https://issues.apache.org/jira/browse/HUDI-3625)
 
 ## Abstract
+In this RFC, we will support the Federated Storage Layout for Hudi tables, enabling Hudi to support multiple pluggable physical 
+storage systems. By combining Hudi's own metadata, we can construct logical table views and expose these views externally,
+making them transparent to the engine.
 
+![](FederatedStorageLayout.png)
+
+After implementing the Hudi Federated Storage Layout, we can develop many interesting new features for Hudi lake tables based on this, such as:
+
+### Object Store Optimized Layout
 As you scale your Apache Hudi workloads over cloud object stores like Amazon S3, there is potential of hitting request
 throttling limits which in-turn impacts performance. In this RFC, we are proposing to support an alternate storage
 layout that is optimized for Amazon S3 and other cloud object stores, which helps achieve maximum throughput and
 significantly reduce throttling.
 
+![](ObjectStoreOptimizedLayout.png)
+
+### Hudi Storage Cache Layer
+The Hudi lake table data cache layer involves dividing the lake table physical storage into a high-performance HDFS-based data 
+cache layer and a shared HDFS-based data persistence layer. Hot data is initially written to the cache layer and later moved to 
+the persistence layer through table services like Compaction and Clustering. This approach meets the strong demands for performance 
+and stability in scenarios involving massive data ingestion into the lake. It is important to note that once data is written to the 
+cache layer and committed, it becomes visible to downstream consumers, regardless of when the subsequent "moving operations" start 
+or finish, ensuring data visibility and timeliness are unaffected. Additionally, since the data movement from the cache layer to 
+the persistence layer leverages the lake table's own Compaction and Clustering table service capabilities, this process adheres to 
+the lake table's commit mechanism and MVCC snapshot isolation design. Therefore, with the data cache layer enabled, the lake table 
+maintains atomicity, transactional guarantees, and Exactly Once semantics.
+
+![](HudiStorageCacheLayer.png)
+
+### Hudi Table Second-Level Latency
+Before, when data is ingested into the lake, it is first written to data files and metadata, and only becomes visible after the transaction 
+is successfully committed. Since writing data files is relatively slow, it typically involves minute-level commits. Here, the capabilities 
+of the Federated Storage Layout can be extended by writing data to high-speed storage systems like Kafka, HBase, or Redis, and recording 
+metadata such as offsets or keys in the lake table's metadata. During reads, the content from both persistent storage and high-speed storage 
+can be combined, enabling Hudi to achieve second-level latency.
+
+Case 3 is another implementation of the Federated Storage Layout, rather than just a concept of a caching layer. In Case 3, we effectively 
+use Kafka as a log storage (since both follow an append-only model like avro) and implement a complete set of HoodieKafkaLogScanner and corresponding 
+Compactor. Regarding data visibility in Case 3, the data should be visible externally as soon as it enters Kafka, without a strong dependency on 
+Compaction/Clustering operations. For the query side, it will return a union of data from Kafka and the base files. Of course, it also needs to provide 
+the capability to read/stream Kafka logs in a read-only manner. In summary, this approach aims to achieve second-level latency and visibility for lake tables 
+based on the Hudi Federated Storage Layout.
+
 In addition, we are proposing an interface that would allow users to implement their own custom strategy to allow them
 to distribute the data files across cloud stores, hdfs or on prem based on their specific use-cases.
+
+![](HudiTableSecondLevelLatency.png)
 
 ## Background
 
@@ -44,7 +86,7 @@ Apache Hudi follows the traditional Hive storage layout while writing files on s
 - Partitioned Tables: The files are distributed across multiple physical partition folders, under the table's base path.
 - Non Partitioned Tables: The files are stored directly under the table's base path.
 
-While this storage layout scales well for HDFS, it increases the probability of hitting request throttle limits when
+However, this design still has some limitations in certain situations. For example original design increases the probability of hitting request throttle limits when
 working with cloud object stores like Amazon S3 and others. This is because Amazon S3 and other cloud stores [throttle
 requests based on object prefix](https://aws.amazon.com/premiumsupport/knowledge-center/s3-request-limit-avoid-throttling/).
 Amazon S3 does scale based on request patterns for different prefixes and adds internal partitions (with their own request limits),
@@ -74,7 +116,39 @@ not meet their use-case.
 
 ## Design
 
-### Interface
+### Config
+We will add two table-level parameters, namely Hoodie Table Config:
+
+The first one, `hoodie.storage.path` allows users to specify additional physical storage locations apart from the Base Path, separated by commas if there are multiple.
+
+The second one, `hoodie.storage.strategy.class` allows users to specify the storage strategy for the current Hudi table, such as 
+HoodieDefaultStorageStrategy (default), HoodieCacheLayerStorageStrategy, and HoodieObjectStorageStrategy.
+Take HoodieCacheLayerStorageStrategy as example, related table config should like this
+```text
+[sss@ssss ~]$ hdfs dfs -cat hdfs://nsxxx/user/jdr_lakehouse/gdm.db/xxx/.hoodie/hoodie.properties
+#Updated at 2024-08-07T11:49:10.252Z
+#Wed Aug 07 19:49:10 CST 2024
+hoodie.table.keygenerator.class=org.apache.hudi.keygen.ComplexAvroKeyGenerator
+hoodie.table.precombine.field=receive_ts
+hoodie.table.version=5
+hoodie.datasource.write.hive_style_partitioning=true
+hoodie.table.checksum=318067208
+hoodie.table.create.schema={xxxx}
+hoodie.table.cdc.enabled=false
+hoodie.archivelog.folder=archived
+hoodie.table.name=xxxx
+hoodie.table.type=COPY_ON_WRITE
+hoodie.datasource.write.partitionpath.urlencode=false
+hoodie.datasource.write.drop.partition.columns=false
+hoodie.timeline.layout.version=1
+hoodie.table.recordkey.fields=mid,dt
+hoodie.table.partition.fields=dt,application,business
+hoodie.storage.path=hdfs\://nsxxxx/user/jdr_lakehouse/jdr_lakehouse_traffic/gdm.db/gdm_jdr_xxxxx
+hoodie.storage.strategy.class=org.apache.hudi.common.storage.HoodieCacheLayerStorageStrategy
+```
+
+
+### Core Abstraction
 
 ```java
 /**
@@ -82,29 +156,39 @@ not meet their use-case.
  */
 public interface HoodieStorageStrategy extends Serializable {
   /**
-   * Return a storage location for the given filename.
+   * Return a storage location for the given path
    *
-   * @param fileId data file ID
-   * @return a storage location string for a data file
+   * @param path
+   * @param instantTime
+   * @param fileID
+   * @return Append the appropriate prefix based on the Path and return
    */
-  String storageLocation(String fileId);
+  StoragePath storageLocation(String path, String instantTime, String fileID);
 
   /**
-   * Return a storage location for the given partition and filename.
+   * Return all possible StoragePaths
    *
-   * @param partitionPath partition path for the file
-   * @param fileId data file ID
-   * @return a storage location string for a data file
+   * @param partitionPath
+   * @param checkExist check if StoragePath is truly existed or not. 
+   * @return a st of storage partition path
    */
-  String storageLocation(String partitionPath, String fileId);
+  Set<StoragePath> getAllLocations(String partitionPath, boolean checkExist);
+
+  /**
+   * Return RelativePath base on path and locations.
+   *
+   * @param path
+   * @return relative path
+   */
+  StoragePath getRelativePath(Path path);
 }
 ```
 
-### Generating File Paths for Object Store Optimized Layout
+### Case1: Generating File Paths for Object Store Optimized Layout
 
 We want to distribute files evenly across multiple random prefixes, instead of following the traditional Hive storage
-layout of keeping them under a common table path/prefix. In addition to the `Table Path`, for this new layout user will
-configure another `Table Storage Path` under which the actual data files will be distributed. The original `Table Path` will
+layout of keeping them under a common table path/prefix. In addition to the `Hoodie Base Path`, for this new layout user will
+configure another `Table Storage Path` using config `hoodie.storage.path` under which the actual data files will be distributed. The original `Table Path` will
 be used to maintain the table/partitions Hudi metadata.
 
 For the purpose of this documentation let's assume:
@@ -150,10 +234,12 @@ s3://<table_storage_bucket>/0bfb3d6e/<hudi_table_name>/.075f3295-def8-4a42-a927-
 ...
 ```
 
-Storage strategy would only return a storage location instead of a full path. In the above example,
-the storage location is `s3://<table_storage_bucket>/0bfb3d6e/`, and the lower-level folder structure would be appended
-later automatically to get the actual file path. In another word, 
-users would only be able to customize upper-level folder structure (storage location). 
+Storage strategy would append proper prefix based on input relative path abd return as StoragePath. In the above example,
+the storage location is `s3://<table_storage_bucket>/` (hoodie.storage.path),
+We first calculate the hash value based on the partition and file ID, then concatenate the final StoragePath in the format of 
+`prefix/hash/tablename/partition`. 
+
+In another word, users would only be able to customize upper-level folder structure (storage location).
 Having a fixed lower-level folder structure would be beneficial because:
 - It's much more intuitive in case someone needs to check data files
 - Easier to figure out where the data is when Hudi needs to fall back on file listing
@@ -178,6 +264,87 @@ The hashing function should be made user configurable for use cases like bucketi
 sub-partitioning/re-hash to reduce the number of hash prefixes. Having too many unique hash prefixes
 would make files too dispersed, and affect performance on other operations such as listing.
 
+### Case2: Hudi Storage Cache Layer
+
+The cache layer of a lake table is a specific implementation scenario for Federated Storage Layout in hudi tables. 
+It divides the physical storage of the lake table into a high-performance HDFS-based cache layer and a shared HDFS-based persistent layer. 
+Hot data is first written to the cache layer and later moved to the persistent layer through table services like Compaction and Clustering. 
+This setup addresses the strong demands for performance and stability in scenarios involving massive data ingestion into the lake. 
+It is important to note that once data is written to the cache layer and committed, it becomes visible to downstream processes, regardless of when 
+the "relocation work" starts or finishes. Additionally, since the data relocation from the cache layer to the persistent layer leverages the lake table's 
+own Compaction and Clustering capabilities, this process adheres to the lake table's commit mechanism and MVCC snapshot isolation design. Therefore, 
+after enabling the cache layer, the lake table maintains atomicity, transactional guarantees, and Exactly Once semantics.
+
+Below is a comparison between the normal read/write process of a lake table and the process after enabling the lake table cache layer. 
+Green arrows indicate data reads, and red arrows indicate data writes. Before enabling the cache layer, the compute engine directly writes 
+data to the shared HDFS and commits, including Parquet base files, log files, and metadata files. The compute engine queries the lake table 
+by directly reading data from the shared HDFS. Additionally, the lake table services for Clustering and Compaction also directly query data from 
+the shared HDFS, process it, and write it back to the shared HDFS. After enabling the lake table cache layer, the compute engine first writes hot 
+data to the high-performance HDFS and commits, including Parquet files and log files. During queries, a unified logical view of both the cache layer 
+and the persistent layer is constructed to meet query demands. The Clustering and Compaction table services, while performing regular lake table file 
+organization, also facilitate data relocation from the cache layer to the persistent layer. Notably, regardless of when Clustering and Compaction jobs 
+start or finish, the data visible to downstream processes is always complete and timely.
+
+Original Read/Write workflow
+![originalReadWrite.png](originalReadWrite.png)
+
+Read/Write workflow with hudi cache layer enabled
+![ReadWriteWithCacheLayer.png](ReadWriteWithCacheLayer.png)
+
+#### HoodieCacheLayerStorageStrategy
+Based on the HoodieActiveTimeline and the current write instant, determine the specific write path. For common commit operations 
+in COW (Copy on Write) tables and delta commit operations in MOR (Merge on Read) tables, we generate a CacheLayer-related Storage 
+Path to write/read. This type of I/O is targeted at the cache layer.
+
+As for commit action in mor table and replace commit in cow table, we will generate a persistent Storage Path which will let 
+Compaction/Clustering do the data migration works from cache layer to persistent layer
+
+Note: It is required that Clustering is enabled for COW tables and Compaction is enabled for MOR tables; otherwise, there is a 
+risk of storage overflow in the cache layer.
+
+```java
+/**
+ * When using Storage Cache Layer make sure that table service is enabled :
+ * 1. MOR + Upsert + Compaction
+ * 2. COW + Insert + Clustering
+ */
+public class HoodieCacheLayerStorageStrategy extends HoodieDefaultStorageStrategy {
+  
+  public HoodieCacheLayerStorageStrategy(String basePath,
+                                         String storagePath,
+                                         Option<HoodieTableMetaClient> metaClient) {
+    // init
+  }
+
+  /**
+   * Generate StoragePath based on active instant time
+   * for common write instant :
+   * 1. commit for cow table 
+   * 2. delta commit for mor table
+   * We will generate a CacheLayer related Storage Path to write/read
+   * 
+   * As for commit action in mor table and replace commit in cow table,
+   * we will generate a persistent Storage Path which will let Compaction/Clustering
+   * do the data migration works from cache layer to persistent layer
+   */
+  @Override
+  public StoragePath storageLocation(String path, String instantTime, String fileID) {
+    // 
+  }
+
+  @Override
+  public Set<Path> getAllLocations(String partitionPath, boolean checkExist) {
+    // 
+  }
+
+  @Override
+  public String getRelativePath(Path path) {
+    // getRelativePath
+  }
+}
+```
+
+
 ### Maintaining Mapping to Files with Metadata Table
 
 In [RFC-15](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=147427331), we introduced an internal
@@ -198,46 +365,70 @@ for metadata table to be populated.
 
 4. If there is an error reading from Metadata table, we will not fall back listing from file system.
 
+After enabling the Federated Storage Layout feature, under certain strategies such as the "data cache layer," 
+data from different lake tables may be stored on different physical media, resulting in different schemes. 
+For example, cache layer data may be stored on hdfs://ns1/, while persistent layer data is stored on hdfs://ns2/. 
+In this case, we need to add a new field named "prefix" in MDT HoodieMetadataFileInfo to store the prefix information for different files, 
+which will be used for path restoration.
+
+```avro schema
+        {
+            "doc": "Contains information about partitions and files within the dataset",
+            "name": "filesystemMetadata",
+            "type": [
+                "null",
+                {
+                    "type": "map",
+                    "values": {
+                        "type": "record",
+                        "name": "HoodieMetadataFileInfo",
+                        "fields": [
+                            {
+                                "name": "size",
+                                "type": "long",
+                                "doc": "Size of the file"
+                            },
+                            {
+                                "name": "isDeleted",
+                                "type": "boolean",
+                                "doc": "True if this file has been deleted"
+                            },
+                            {
+                                "name":"prefix",
+                                "type": ["null","string"],
+                                "default":null,
+                                "doc": "prefix for current file, for example hdfs://ns2002:8020/ or s3a://bucket/"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+```
+
+Note: For lake tables that do not have the Federated Storage Layout enabled, the value of this "scheme" field will be null.
+
 ### Integration
 This section mainly describes how storage strategy is integrated with other components and how read/write
-would look like from Hudi side with object storage layout.
+would look like from Hudi side with Federated Storage Layout.
 
-We propose integrating the storage strategy at the filesystem level, specifically within `HoodieWrapperFileSystem`. 
-This way, only file read/write operations undergo path conversion and we can limit the usage of 
-storage strategy to only filesystem level so other upper-level components don't need to be aware of physical paths.
+We already have the abstractions HoodieStorage, StoragePath, and HoodieWrapperFileSystem. Here, we need to add a 
+HoodieStorageStrategy member variable to HoodieStorage. This will allow HoodieStorage to generate the corresponding 
+StoragePath based on different strategies. Subsequent operations, such as HoodieCreateHandle, can directly work with 
+the modified StoragePath, thus remaining transparent to the subsequent code logic.
 
-This also mandates that `HoodieWrapperFileSystem` is the filesystem of choice for all upper-level Hudi components.
-Getting filesystem from `Path` or such won't be allowed anymore as using raw filesystem may not reach 
-to physical locations without storage strategy. Hudi components can simply call `HoodieMetaClient#getFs` 
-to get `HoodieWrapperFileSystem`, and this needs to be the only allowed way for any filesystem-related operation. 
-The only exception is when we need to interact with metadata that's still stored under the original table path, 
-and we should call `HoodieMetaClient#getRawFs` in this case so `HoodieMetaClient` can still be the single entry
-for getting filesystem.
+For HoodieWrapperFileSystem, after enabling the Federated Storage Layout feature, a single HoodieWrapperFileSystem 
+instance will handle file objects with different schemes. Therefore, we need to cache the inner file systems corresponding 
+to different schemes within HoodieWrapperFileSystem. When necessary, the correct inner file system object can be retrieved 
+from the cache based on the input path scheme.
+Using HoodieCreateHandle as an example.
 
-![](wrapper_fs.png)
+![Write_Flow.png](Write_Flow.png)
 
-When conducting a read operation, Hudi would: 
-1. Access filesystem view, `HoodieMetadataFileSystemView` specifically
-2. Scan metadata table via filesystem view to compose `HoodieMetadataPayload`
-3. Call `HoodieMetadataPayload#getFileStatuses` and employ `HoodieWrapperFileSystem` to get 
-file statuses with physical locations
-
-This flow can be concluded in the chart below.
-
-![](read_flow.png)
-
-#### Considerations
-- Path conversion happens on the fly when reading/writing files. This saves Hudi from storing physical locations,
-and adds the cost of hashing, but the performance burden should be negligible.
-- Since table path and data path will most likely have different top-level folders/authorities,
-`HoodieWrapperFileSystem` should maintain at least two `FileSystem` objects: one to access table path and another
-to access storage path. `HoodieWrapperFileSystem` should intelligently tell if it needs
-to convert the path by checking the path on the fly.
-- When using Hudi file reader/writer implementation, we will need to pass `HoodieWrapperFileSystem` down
-to parent reader. For instance, when using `HoodieAvroHFileReader`, we will need to pass `HoodieWrapperFileSystem`
-to `HFile.Reader` so it can have access to storage strategy. If reader/writer doesn't take filesystem
-directly (e.g. `ParquetFileReader` only takes `Configuration` and `Path` for reading), then we will
-need to register `HoodieWrapperFileSystem` to `Configuration` so it can be initialized/used later.
+When conducting a read operation it is quite simple, Hudi would: 
+1. Get relative partitions, file names and related scheme(new recorded in this rfc) from MDT.
+2. Build new full path based on informations mentioned in 1.
+3. Keep the remaining operations unchanged.
 
 ### Repair Tool
 In case of metadata table getting corrupted or lost, we need to have a solution here to reconstruct metadata table
@@ -283,12 +474,39 @@ should not be user's responsibility to enable metadata listing from query engine
 
 - We need to ensure that partition pruning continues to work for the query engines.
 
+#### Hive Integration With Federated Storage Layout Enable
+When integrating Hudi with Hive through custom InputFormat and OutputFormat, the following three issues arise in practical use:
+Firstly, When processing splits, the basePath of the table is obtained by extracting segments from the path. This method is used to retrieve objects like 
+HoodieTableConfig and HoodieTableMetaClient. However, the path of Federated Storage Layout files cannot be used to derive the basePath of the table through segmentation.
+
+Secondly, For Hive native tables, when returning partition paths, if there are only log files under the partition path, Hive will ignore that 
+partition path (as log files are hidden files).
+
+Finally, When using Hudi tables in Hive, it is necessary to first specify the input format, 
+e.g., by setting hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat; or set hive.input.format=org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;, 
+which affects user experience.
+
+![HiveIntegration.png](HiveIntegration.png)
+
+To address the issues mentioned above, the Hive StorageHandler interface was implemented to transform the table into a non-native table:
+
+Firstly, in the configureInputJobProperties and configureOutputJobProperties methods of the StorageHandler, tableName and basePath information 
+is retrieved and injected into the JobConf.
+
+Secondly, extract HoodieInputSplit as the parent class for various Hudi inputSplits, providing tableName and basePath as member variables.
+
+Thirdly, in the getSplits method of Hudi's base class InputFormat (HoodieParquetInputFormatBase), retrieve tableName and basePath from 
+JobConf and inject them into HoodieInputSplit.
+
+Finally, When creating tables in Spark, Flink, or during HiveSync, control the activation of the StorageHandler feature with the switch 
+parameter hoodie.datasource.hive_sync.storage_handler.enabled, which is disabled by default.
+
+Note that when hoodie.datasource.hive_sync.storage_handler.enabled is enabled, you must also set hoodie.datasource.hive_sync.mode to hms.
+
 ### Future Work
 
 - We need a tool to bootstrap existing Hudi table to switch to another storage strategy.
 - Partition-level storage strategy: Each partition can have its own storage strategy for users to have
 finer grasp on how data is stored. It would also make new storage strategies more accessible for
 existing Hudi tables as they would only need to re-construct the metadata table.
-- For the first cut, we would only have 2 `FileSystem` objects in `HoodieWrapperFileSystem`, and this
-prevents users from distributing their data across multiple different buckets. We'll need to support
-this in the future.
+- Achieving second-level latency for lake tables
