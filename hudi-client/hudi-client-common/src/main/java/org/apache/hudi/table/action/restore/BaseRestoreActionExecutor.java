@@ -127,7 +127,11 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
         instantTime, durationInMs, instantsRolledBack, instantToMetadata);
     HoodieInstant restoreInflightInstant = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.RESTORE_ACTION, instantTime);
     writeToMetadata(restoreMetadata, restoreInflightInstant);
-    table.getActiveTimeline().saveAsComplete(restoreInflightInstant, Option.of(restoreMetadata));
+    table.getActiveTimeline().saveAsComplete(
+        true,
+        restoreInflightInstant,
+        Option.of(restoreMetadata),
+        restoreCompletedInstant -> table.getMetaClient().getTableFormat().restore(restoreCompletedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
     // get all pending rollbacks instants after restore instant time and delete them.
     // if not, rollbacks will be considered not completed and might hinder metadata table compaction.
     List<HoodieInstant> instantsToRollback = table.getActiveTimeline().getRollbackTimeline()
