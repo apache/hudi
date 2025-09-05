@@ -25,8 +25,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 
 import java.util.Map;
 import java.util.function.Supplier;
@@ -38,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -54,20 +53,17 @@ public class TestStorageLockProviderAuditService {
   private static final long LOCK_EXPIRATION = 1000000L;
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-  @Mock
   private StorageLockClient storageLockClient;
-  
-  @Mock
   private Supplier<Long> lockExpirationSupplier;
-  
-  @Mock
   private Supplier<Boolean> lockHeldSupplier;
-
   private StorageLockProviderAuditService auditService;
 
   @BeforeEach
   void setUp() {
-    MockitoAnnotations.openMocks(this);
+    storageLockClient = mock(StorageLockClient.class);
+    lockExpirationSupplier = (Supplier<Long>) mock(Supplier.class);
+    lockHeldSupplier = (Supplier<Boolean>) mock(Supplier.class);
+    
     when(lockExpirationSupplier.get()).thenReturn(LOCK_EXPIRATION);
     when(lockHeldSupplier.get()).thenReturn(true);
     
