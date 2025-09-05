@@ -64,6 +64,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     this(key, data, null, null, null);
   }
 
+  //
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation hoodieOperation) {
     this(key, data, hoodieOperation, Option.empty());
   }
