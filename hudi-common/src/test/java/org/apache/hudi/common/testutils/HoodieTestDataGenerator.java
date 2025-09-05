@@ -800,6 +800,10 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return generateInserts(instantTime, n, false);
   }
 
+  public List<HoodieRecord> generateInserts(String instantTime, Integer n, long timestamp) {
+    return generateInsertsStream(instantTime, n, false, TRIP_EXAMPLE_SCHEMA, timestamp).collect(Collectors.toList());
+  }
+
   public List<HoodieRecord> generateInsertsNestedExample(String instantTime, Integer n) {
     return generateInsertsStream(instantTime, n, false, TRIP_NESTED_EXAMPLE_SCHEMA, System.currentTimeMillis()).collect(Collectors.toList());
   }
