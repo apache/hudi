@@ -191,7 +191,6 @@ public class HFileWriterImpl implements HFileWriter {
     builder.setLastDataBlockOffset(lastDataBlockOffset);
     builder.setComparatorClassName(COMPARATOR_CLASS_NAME);
     builder.setCompressionCodec(context.getCompressionCodec().getId());
-    builder.setEncryptionKey(ByteString.EMPTY);
     HFileProtos.TrailerProto trailerProto = builder.build();
 
     ByteBuffer trailer = ByteBuffer.allocate(TRAILER_SIZE);
