@@ -19,9 +19,9 @@ package org.apache.spark.sql.catalyst.plans.logical
 
 import org.apache.hudi.common.util.ValidationUtils.checkState
 
-import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.LeafNode
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
 case class HoodieQuery(args: Seq[Expression]) extends LeafNode {
 
@@ -46,7 +46,7 @@ object HoodieQuery {
         Map("hoodie.datasource.query.type" -> queryMode)
 
       case _ =>
-        throw new AnalysisException(s"'hudi_query' doesn't currently support `$queryMode`")
+        throw new HoodieAnalysisException(s"'hudi_query' doesn't currently support `$queryMode`")
     }
 
     (identifier, opts)

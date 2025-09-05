@@ -219,7 +219,7 @@ public class HoodieSnapshotExporter {
             .map(HoodieBaseFile::getPath).iterator())
         .toLocalIterator();
 
-    Dataset<Row> sourceDataset = new SQLContext(jsc).read().parquet(JavaScalaConverters.convertJavaIteratorToScalaIterator(exportingFilePaths).toSeq());
+    Dataset<Row> sourceDataset = SQLContext.getOrCreate(jsc.sc()).read().parquet(JavaScalaConverters.convertJavaIteratorToScalaIterator(exportingFilePaths).toSeq());
 
     if (!StringUtils.isNullOrEmpty(cfg.transformerClassName)) {
       Option<Transformer> transformer = UtilHelpers.createTransformer(

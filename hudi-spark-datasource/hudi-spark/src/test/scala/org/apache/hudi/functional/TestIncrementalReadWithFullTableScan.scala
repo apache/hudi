@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -128,7 +128,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     // Test both start and end commits are archived
     runIncrementalQueryAndCompare(startArchivedCompletionTs, endArchivedCompletionTs, 1, true)
     // Test start commit is archived, end commit is not archived
-    shouldThrowIfFallbackIsFalse(
+    shouldThrowSparkExceptionIfFallbackIsFalse(
       () => runIncrementalQueryAndCompare(startArchivedCompletionTs, endUnarchivedCompletionTs, nArchivedInstants + 1, false))
     runIncrementalQueryAndCompare(startArchivedCompletionTs, endUnarchivedCompletionTs, nArchivedInstants + 1, true)
 
@@ -188,17 +188,11 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
         fn()
       }
     }, msg)
-    assertTrue(exp.getMessage.contains("FileNotFoundException"))
-  }
-
-  private def shouldThrowIfFallbackIsFalse(fn: () => Unit): Unit = {
-    val msg = "Should fail with Path does not exist"
-    val exp = assertThrows(classOf[SparkException], new Executable {
-      override def execute(): Unit = {
-        fn()
-      }
-    }, msg)
-    assertTrue(exp.getMessage.contains("FileNotFoundException"),
-      "Expected to fail with 'FileNotFoundException' but the message was: " + exp.getMessage)
+    val expected = if (HoodieSparkUtils.gteqSpark4_0)
+      "[FAILED_READ_FILE.FILE_NOT_EXIST]"
+    else
+      "FileNotFoundException"
+    assertTrue(exp.getMessage.contains(expected),
+      "Expected to contain: " + expected + ", but got: " + exp.getMessage)
   }
 }

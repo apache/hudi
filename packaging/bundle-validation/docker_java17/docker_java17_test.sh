@@ -106,8 +106,13 @@ stop_hdfs() {
   $HADOOP_HOME/sbin/stop-dfs.sh
 }
 
-build_hudi_java8 () {
-  use_default_java_runtime
+build_hudi () {
+  if [ "$SPARK_PROFILE" = "spark4.0" ]; then
+    change_java_runtime_version
+  else
+    use_default_java_runtime
+  fi
+
   mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true \
     -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log \
     -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn \
@@ -115,7 +120,7 @@ build_hudi_java8 () {
     -pl packaging/hudi-spark-bundle -am
 
   if [ "$?" -ne 0 ]; then
-    echo "::error::docker_test_java17.sh Failed building Hudi with Java 8!"
+    echo "::error::docker_test_java17.sh Failed building Hudi!"
     exit 1
   fi
 
@@ -162,9 +167,9 @@ whoami
 which ssh
 whoami
 
-echo "::warning::docker_test_java17.sh Building Hudi with Java 8"
-build_hudi_java8
-echo "::warning::docker_test_java17.sh Done building Hudi with Java 8"
+echo "::warning::docker_test_java17.sh Building Hudi"
+build_hudi
+echo "::warning::docker_test_java17.sh Done building Hudi"
 
 setup_hdfs
 

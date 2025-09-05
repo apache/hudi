@@ -34,7 +34,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_ST
 import org.apache.hudi.util.JFunction
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{Column, SparkSession}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, Expression, FromUnixTime, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.hudi.DataSkippingUtils.{containsNullOrValueCountBasedFilters, translateIntoColumnStatsIndexFilterExpr}
@@ -48,7 +48,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
                                  @transient metadataConfig: HoodieMetadataConfig,
                                  @transient metaClient: HoodieTableMetaClient,
                                  allowCaching: Boolean = false)
-  extends ColumnStatsIndexSupport(spark, tableSchema, metadataConfig, metaClient, allowCaching) with Logging {
+  extends ColumnStatsIndexSupport(spark, tableSchema, metadataConfig, metaClient, allowCaching) with Logging with SparkAdapterSupport {
 
   override def getIndexName: String = PartitionStatsIndexSupport.INDEX_NAME
 
@@ -116,7 +116,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
                   // if there are any non indexed cols or we can't translate source expr, we cannot prune partitions based on col stats lookup.
                   Some(allPartitions)
                 } else {
-                  Some(transposedPartitionStatsDF.where(new Column(indexFilter))
+                  Some(transposedPartitionStatsDF.where(sparkAdapter.createColumnFromExpression(indexFilter))
                     .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
                     .collect()
                     .map(_.getString(0))
