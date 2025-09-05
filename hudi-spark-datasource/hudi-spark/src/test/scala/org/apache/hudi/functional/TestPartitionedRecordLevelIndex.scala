@@ -77,7 +77,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
       HoodieCompactionConfig.INLINE_COMPACT.key() -> "false",
       HoodieIndexConfig.INDEX_TYPE.key() -> PARTITIONED_RECORD_INDEX.name())
     holder.options = options
-    insertDf.write.format("org.apache.hudi")
+    insertDf.write.format("hudi")
       .options(options)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -106,7 +106,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
     val nextBatchDf = spark.read.json(spark.sparkContext.parallelize(nextBatch, 1))
     val updateDf = nextBatchDf.withColumn("data_partition_path", lit("partition1"))
 
-    updateDf.write.format("org.apache.hudi")
+    updateDf.write.format("hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key(), UPSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -124,7 +124,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
     val newInsertBatch = recordsToStrings(newInserts).asScala.toSeq
     val newInsertBatchDf = spark.read.json(spark.sparkContext.parallelize(newInsertBatch, 1))
     val newInsertDf = newInsertBatchDf.withColumn("data_partition_path", lit("partition2")).union(newInsertBatchDf.withColumn("data_partition_path", lit("partition3")))
-    newInsertDf.write.format("org.apache.hudi")
+    newInsertDf.write.format("hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key(), UPSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -152,7 +152,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
     val newDeletesBatch = recordsToStrings(newDeletes).asScala.toSeq
     val newDeletesBatchDf = spark.read.json(spark.sparkContext.parallelize(newDeletesBatch, 1))
     val newDeletesDf = newDeletesBatchDf.withColumn("data_partition_path", lit("partition1"))
-    newDeletesDf.write.format("org.apache.hudi")
+    newDeletesDf.write.format("hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key(), DELETE_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -184,7 +184,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
     val bulkInsertPartitionedDf = bulkInsertDf.withColumn("data_partition_path", lit("partition0"))
 
     // Use bulk_insert operation explicitly
-    bulkInsertPartitionedDf.write.format("org.apache.hudi")
+    bulkInsertPartitionedDf.write.format("hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -351,7 +351,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
       HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key() -> streamingWriteEnabled.toString,
       HoodieCompactionConfig.INLINE_COMPACT.key() -> "false",
       HoodieIndexConfig.INDEX_TYPE.key() -> PARTITIONED_RECORD_INDEX.name())
-    insertDf.write.format("org.apache.hudi")
+    insertDf.write.format("hudi")
       .options(options)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -362,7 +362,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
     val nextBatch = recordsToStrings(updates).asScala.toSeq
     val nextBatchDf = spark.read.json(spark.sparkContext.parallelize(nextBatch, 1))
     val updateDf = nextBatchDf.withColumn("data_partition_path", lit("partition1"))
-    updateDf.write.format("org.apache.hudi")
+    updateDf.write.format("hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key(), UPSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -377,7 +377,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
       val batchToFail = recordsToStrings(updatesToFail).asScala.toSeq
       val batchToFailDf = spark.read.json(spark.sparkContext.parallelize(batchToFail, 1))
       val failDf = batchToFailDf.withColumn("data_partition_path", lit("partition1")).union(batchToFailDf.withColumn("data_partition_path", lit("partition3")))
-      failDf.write.format("org.apache.hudi")
+      failDf.write.format("hudi")
         .options(options)
         .option(DataSourceWriteOptions.OPERATION.key(), UPSERT_OPERATION_OPT_VAL)
         .mode(SaveMode.Append)
@@ -469,7 +469,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
     val deleteDf = spark.read.json(spark.sparkContext.parallelize(deleteBatch.toSeq, 1))
     deleteDf.cache()
     val recordKeyToDelete = deleteDf.collectAsList().get(0).getAs("_row_key").asInstanceOf[String]
-    deleteDf.write.format("org.apache.hudi")
+    deleteDf.write.format("hudi")
       .options(hudiOpts)
       .mode(SaveMode.Append)
       .save(basePath)
