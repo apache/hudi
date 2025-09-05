@@ -25,11 +25,9 @@ import org.apache.hudi.client.transaction.lock.models.StorageLockData;
 import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieLockException;
 
 import com.google.cloud.storage.Blob;
 import com.google.cloud.storage.BlobId;
@@ -46,10 +44,10 @@ import javax.annotation.concurrent.ThreadSafe;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.channels.Channels;
 import java.util.Properties;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * A GCS-based implementation of a distributed lock provider using conditional writes
@@ -87,25 +85,12 @@ public class GCSStorageLockClient implements StorageLockClient {
       Properties properties,
       Functions.Function1<Properties, Storage> gcsClientSupplier,
       Logger logger) {
-    try {
-      // This logic can likely be extended to other lock client implementations.
-      // Consider creating base class with utilities, incl error handling.
-      URI uri = new URI(lockFileUri);
-      this.bucketName = uri.getAuthority();
-      this.lockFilePath = uri.getPath().replaceFirst("/", "");
-      this.gcsClient = gcsClientSupplier.apply(properties);
-
-      if (StringUtils.isNullOrEmpty(this.bucketName)) {
-        throw new IllegalArgumentException("LockFileUri does not contain a valid bucket name.");
-      }
-      if (StringUtils.isNullOrEmpty(this.lockFilePath)) {
-        throw new IllegalArgumentException("LockFileUri does not contain a valid lock file path.");
-      }
-      this.ownerId = ownerId;
-      this.logger = logger;
-    } catch (URISyntaxException e) {
-      throw new HoodieLockException(e);
-    }
+    Pair<String, String> bucketAndPath = StorageLockClient.parseBucketAndPath(lockFileUri);
+    this.bucketName = bucketAndPath.getLeft();
+    this.lockFilePath = bucketAndPath.getRight();
+    this.gcsClient = gcsClientSupplier.apply(properties);
+    this.ownerId = ownerId;
+    this.logger = logger;
   }
 
   private static Functions.Function1<Properties, Storage> createDefaultGcsClient() {
@@ -222,6 +207,47 @@ public class GCSStorageLockClient implements StorageLockClient {
     } catch (IOException e) {
       // Our createFromStream method does not throw IOExceptions, it wraps in HoodieIOException, however Sonar requires handling this.
       throw new UncheckedIOException("Failed reading blob: " + lockFilePath, e);
+    }
+  }
+
+  @Override
+  public Option<String> readObject(String filePath, boolean checkExistsFirst) {
+    try {
+      // Parse the file path to get bucket and object path
+      Pair<String, String> bucketAndPath = StorageLockClient.parseBucketAndPath(filePath);
+      String bucket = bucketAndPath.getLeft();
+      String objectPath = bucketAndPath.getRight();
+      
+      BlobId blobId = BlobId.of(bucket, objectPath);
+      
+      if (checkExistsFirst) {
+        // First check if the file exists (lightweight metadata check)
+        Blob blob = gcsClient.get(blobId);
+        
+        if (blob == null || !blob.exists()) {
+          // File doesn't exist - this is the common case for optional configs
+          logger.debug("JSON config file not found: {}", filePath);
+          return Option.empty();
+        }
+        
+        // File exists, read its content
+        byte[] content = blob.getContent();
+        return Option.of(new String(content, UTF_8));
+      } else {
+        // Direct read without existence check
+        byte[] content = gcsClient.readAllBytes(blobId);
+        return Option.of(new String(content, UTF_8));
+      }
+    } catch (StorageException e) {
+      if (e.getCode() == NOT_FOUND_ERROR_CODE) {
+        logger.debug("JSON config file not found: {}", filePath);
+      } else {
+        logger.warn("Error reading JSON config file: {}", filePath, e);
+      }
+      return Option.empty();
+    } catch (Exception e) {
+      logger.warn("Error reading JSON config file: {}", filePath, e);
+      return Option.empty();
     }
   }
 
