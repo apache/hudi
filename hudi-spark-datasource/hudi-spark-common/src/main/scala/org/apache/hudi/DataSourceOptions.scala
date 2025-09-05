@@ -973,7 +973,10 @@ object DataSourceOptionsHelper {
     DataSourceReadOptions.QUERY_TYPE,
     DataSourceWriteOptions.TABLE_TYPE,
     HoodieTableConfig.BASE_FILE_FORMAT,
-    HoodieTableConfig.LOG_FILE_FORMAT
+    HoodieTableConfig.LOG_FILE_FORMAT,
+    HoodieTableConfig.RECORD_MERGE_MODE,
+    HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME,
+    HoodieTableConfig.RECORD_MERGE_STRATEGY_ID
   )
 
   // put all the deprecated configs here
