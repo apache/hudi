@@ -65,7 +65,6 @@ import static org.apache.hudi.common.lock.LockState.FAILED_TO_ACQUIRE;
 import static org.apache.hudi.common.lock.LockState.FAILED_TO_RELEASE;
 import static org.apache.hudi.common.lock.LockState.RELEASED;
 import static org.apache.hudi.common.lock.LockState.RELEASING;
-import static org.apache.hudi.common.table.HoodieTableMetaClient.LOCKS_FOLDER_NAME;
 
 /**
  * A distributed filesystem storage based lock provider. This {@link LockProvider} implementation

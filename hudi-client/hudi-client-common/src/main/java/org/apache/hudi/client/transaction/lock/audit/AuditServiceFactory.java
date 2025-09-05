@@ -27,8 +27,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.hudi.common.table.HoodieTableMetaClient.LOCKS_FOLDER_NAME;
-
 /**
  * Generic factory for creating audit services.
  * This factory determines whether auditing is enabled by checking configuration files.
