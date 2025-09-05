@@ -145,6 +145,22 @@ public interface HoodieTableFormat extends Serializable {
   }
 
   /**
+   * Called after marking a "restore" action as complete in the hoodie timeline.
+   *
+   * @param restoreCompletedInstant The completed restore instant in hoodie timeline.
+   * @param engineContext           engine context used for execution - local,spark or flink etc.
+   * @param metaClient              metaClient from HoodieTable.
+   * @param viewManager             viewManager from HoodieTable.
+   */
+
+  default void restore(
+      HoodieInstant restoreCompletedInstant,
+      HoodieEngineContext engineContext,
+      HoodieTableMetaClient metaClient,
+      FileSystemViewManager viewManager) {
+  }
+
+  /**
    * Return the timeline factory for table format.
    */
   TimelineFactory getTimelineFactory();

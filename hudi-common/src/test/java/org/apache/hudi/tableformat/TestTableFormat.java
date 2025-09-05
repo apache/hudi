@@ -100,6 +100,11 @@ public class TestTableFormat implements HoodieTableFormat {
   }
 
   @Override
+  public void restore(HoodieInstant restoreCompletedInstant, HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager) {
+    RECORDED_INSTANTS.get(metaClient.getBasePath().toString()).add(restoreCompletedInstant);
+  }
+
+  @Override
   public TimelineFactory getTimelineFactory() {
     return new TestTimelineFactory(null);
   }
