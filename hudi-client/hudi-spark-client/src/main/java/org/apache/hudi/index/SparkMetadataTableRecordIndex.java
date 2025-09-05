@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
@@ -196,8 +197,8 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
       HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData =
           hoodieTable.getMetadataTable().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup));
       try {
-        Map<String, HoodieRecordGlobalLocation> recordIndexInfo = HoodieDataUtils.dedupeAndCollectAsMap(recordIndexData);
-        return recordIndexInfo.entrySet().stream()
+        List<Pair<String, HoodieRecordGlobalLocation>> recordIndexInfo = HoodieDataUtils.dedupeAndCollectAsList(recordIndexData);
+        return recordIndexInfo.stream()
             .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
       } finally {
         // Clean up the RDD to avoid memory leaks
