@@ -76,8 +76,8 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
                                                          SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    // Handle secondary index.
-    UpgradeDowngradeUtils.dropNonV1SecondaryIndexPartitions(
+    // Handle index Changes
+    UpgradeDowngradeUtils.dropNonV1IndexPartitions(
         config, context, table, upgradeDowngradeHelper, "downgrading from table version nine to eight");
     // Update table properties.
     Set<ConfigProperty> propertiesToRemove = new HashSet<>();
