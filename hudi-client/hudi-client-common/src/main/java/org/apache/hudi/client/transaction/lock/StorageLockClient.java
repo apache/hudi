@@ -23,7 +23,15 @@ import org.apache.hudi.client.transaction.lock.models.StorageLockData;
 import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
 import org.apache.hudi.client.transaction.lock.models.LockGetResult;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.storage.StoragePath;
+
+import java.net.URI;
+import java.net.URISyntaxException;
+
+import static org.apache.hudi.common.table.HoodieTableMetaClient.LOCKS_FOLDER_NAME;
 
 /**
  * Defines a contract for a service which should be able to perform conditional writes to object storage.
@@ -59,4 +67,42 @@ public interface StorageLockClient extends AutoCloseable {
    * @return An Option containing the content as a string if successful, Option.empty() otherwise
    */
   Option<String> readObject(String filePath, boolean checkExistsFirst);
+  
+  /**
+   * Gets the lock folder path for the given base path.
+   * This is a static utility method that can be used without creating an instance.
+   * 
+   * @param basePath The base path of the Hudi table
+   * @return The lock folder path (e.g., "s3://bucket/table/.hoodie/locks")
+   */
+  static String getLockFolderPath(String basePath) {
+    return String.format("%s%s%s", basePath, StoragePath.SEPARATOR, LOCKS_FOLDER_NAME);
+  }
+
+  /**
+   * Parses a URI and returns bucket name and path as a Pair.
+   * This is a shared utility method for all storage lock client implementations.
+   * 
+   * @param uriString The URI string to parse
+   * @return A Pair containing bucket name (left) and path (right)
+   * @throws HoodieLockException if URI parsing fails or components are invalid
+   */
+  static Pair<String, String> parseBucketAndPath(String uriString) {
+    try {
+      URI uri = new URI(uriString);
+      String bucketName = uri.getAuthority();
+      String path = uri.getPath().replaceFirst("/", "");
+      
+      if (StringUtils.isNullOrEmpty(bucketName)) {
+        throw new IllegalArgumentException("URI does not contain a valid bucket name.");
+      }
+      if (StringUtils.isNullOrEmpty(path)) {
+        throw new IllegalArgumentException("URI does not contain a valid path.");
+      }
+      
+      return Pair.of(bucketName, path);
+    } catch (URISyntaxException e) {
+      throw new HoodieLockException("Failed to parse URI: " + uriString, e);
+    }
+  }
 }

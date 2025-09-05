@@ -185,13 +185,8 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     StorageBasedLockConfig config = new StorageBasedLockConfig.Builder().fromProperties(properties).build();
     long heartbeatPollSeconds = config.getHeartbeatPollSeconds();
     this.lockValiditySecs = config.getValiditySeconds();
-    this.lockFilePath = String.format(
-            "%s%s%s%s%s",
-            config.getHudiTableBasePath(),
-            StoragePath.SEPARATOR,
-            LOCKS_FOLDER_NAME,
-            StoragePath.SEPARATOR,
-            DEFAULT_TABLE_LOCK_FILE_NAME);
+    String lockFolderPath = StorageLockClient.getLockFolderPath(config.getHudiTableBasePath());
+    this.lockFilePath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, DEFAULT_TABLE_LOCK_FILE_NAME);
     this.heartbeatManager = heartbeatManagerLoader.apply(ownerId, TimeUnit.SECONDS.toMillis(heartbeatPollSeconds), this::renewLock);
     this.storageLockClient = storageLockClientLoader.apply(ownerId, lockFilePath, properties);
     this.ownerId = ownerId;

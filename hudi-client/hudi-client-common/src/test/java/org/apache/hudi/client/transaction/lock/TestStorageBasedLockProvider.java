@@ -56,6 +56,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
@@ -89,6 +90,8 @@ class TestStorageBasedLockProvider {
     mockHeartbeatManager = mock(HeartbeatManager.class);
     mockLogger = mock(Logger.class);
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
+    // Mock the readObject method to return Option.empty() to prevent NPE in audit service creation
+    when(mockLockService.readObject(anyString(), anyBoolean())).thenReturn(Option.empty());
     TypedProperties props = new TypedProperties();
     props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
     props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");

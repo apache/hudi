@@ -89,14 +89,9 @@ public class AuditServiceFactory {
    */
   private static boolean isAuditEnabled(String basePath, StorageLockClient storageLockClient) {
     try {
-      // Construct the audit config path the same way as lock file path
-      // basePath + / + .hoodie/locks + / + audit_enabled.json
-      String auditConfigPath = String.format("%s%s%s%s%s",
-          basePath,
-          StoragePath.SEPARATOR,
-          LOCKS_FOLDER_NAME,
-          StoragePath.SEPARATOR,
-          AUDIT_CONFIG_FILE_NAME);
+      // Construct the audit config path using the same lock folder as the lock file
+      String lockFolderPath = StorageLockClient.getLockFolderPath(basePath);
+      String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_CONFIG_FILE_NAME);
       
       LOG.debug("Checking for audit configuration at: {}", auditConfigPath);
       

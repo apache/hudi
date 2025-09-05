@@ -31,7 +31,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieLockException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,8 +54,6 @@ import javax.annotation.concurrent.ThreadSafe;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.time.Duration;
 import java.util.Properties;
 
@@ -95,26 +92,15 @@ public class S3StorageLockClient implements StorageLockClient {
 
   @VisibleForTesting
   S3StorageLockClient(String ownerId, String lockFileUri, Properties props, Functions.Function2<String, Properties, S3Client> s3ClientSupplier, Logger logger) {
-    try {
-      // This logic can likely be extended to other lock client implementations.
-      // Consider creating base class with utilities, incl error handling.
-      URI uri = new URI(lockFileUri);
-      this.bucketName = uri.getHost();
-      this.lockFilePath = uri.getPath().replaceFirst("/", "");
-      this.s3Client = s3ClientSupplier.apply(bucketName, props);
-
-      if (StringUtils.isNullOrEmpty(this.bucketName)) {
-        throw new IllegalArgumentException("LockFileUri does not contain a valid bucket name.");
-      }
-      if (StringUtils.isNullOrEmpty(this.lockFilePath)) {
-        throw new IllegalArgumentException("LockFileUri does not contain a valid lock file path.");
-      }
-      this.ownerId = ownerId;
-      this.logger = logger;
-    } catch (URISyntaxException e) {
-      throw new HoodieLockException(e);
-    }
+    Pair<String, String> bucketAndPath = StorageLockClient.parseBucketAndPath(lockFileUri);
+    this.bucketName = bucketAndPath.getLeft();
+    this.lockFilePath = bucketAndPath.getRight();
+    
+    this.s3Client = s3ClientSupplier.apply(bucketName, props);
+    this.ownerId = ownerId;
+    this.logger = logger;
   }
+
 
   @Override
   public Pair<LockGetResult, Option<StorageLockFile>> readCurrentLockFile() {
@@ -272,9 +258,9 @@ public class S3StorageLockClient implements StorageLockClient {
   public Option<String> readObject(String filePath, boolean checkExistsFirst) {
     try {
       // Parse the file path to get bucket and key
-      URI uri = new URI(filePath);
-      String bucket = uri.getHost();
-      String key = uri.getPath().replaceFirst("/", "");
+      Pair<String, String> bucketAndKey = StorageLockClient.parseBucketAndPath(filePath);
+      String bucket = bucketAndKey.getLeft();
+      String key = bucketAndKey.getRight();
       
       if (checkExistsFirst) {
         // First check if the file exists (lightweight HEAD request)

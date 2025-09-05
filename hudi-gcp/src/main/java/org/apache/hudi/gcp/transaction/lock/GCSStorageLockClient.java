@@ -46,8 +46,6 @@ import javax.annotation.concurrent.ThreadSafe;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.channels.Channels;
 import java.util.Properties;
 
@@ -89,25 +87,12 @@ public class GCSStorageLockClient implements StorageLockClient {
       Properties properties,
       Functions.Function1<Properties, Storage> gcsClientSupplier,
       Logger logger) {
-    try {
-      // This logic can likely be extended to other lock client implementations.
-      // Consider creating base class with utilities, incl error handling.
-      URI uri = new URI(lockFileUri);
-      this.bucketName = uri.getAuthority();
-      this.lockFilePath = uri.getPath().replaceFirst("/", "");
-      this.gcsClient = gcsClientSupplier.apply(properties);
-
-      if (StringUtils.isNullOrEmpty(this.bucketName)) {
-        throw new IllegalArgumentException("LockFileUri does not contain a valid bucket name.");
-      }
-      if (StringUtils.isNullOrEmpty(this.lockFilePath)) {
-        throw new IllegalArgumentException("LockFileUri does not contain a valid lock file path.");
-      }
-      this.ownerId = ownerId;
-      this.logger = logger;
-    } catch (URISyntaxException e) {
-      throw new HoodieLockException(e);
-    }
+    Pair<String, String> bucketAndPath = StorageLockClient.parseBucketAndPath(lockFileUri);
+    this.bucketName = bucketAndPath.getLeft();
+    this.lockFilePath = bucketAndPath.getRight();
+    this.gcsClient = gcsClientSupplier.apply(properties);
+    this.ownerId = ownerId;
+    this.logger = logger;
   }
 
   private static Functions.Function1<Properties, Storage> createDefaultGcsClient() {
@@ -231,9 +216,9 @@ public class GCSStorageLockClient implements StorageLockClient {
   public Option<String> readObject(String filePath, boolean checkExistsFirst) {
     try {
       // Parse the file path to get bucket and object path
-      URI uri = new URI(filePath);
-      String bucket = uri.getAuthority();
-      String objectPath = uri.getPath().replaceFirst("/", "");
+      Pair<String, String> bucketAndPath = StorageLockClient.parseBucketAndPath(filePath);
+      String bucket = bucketAndPath.getLeft();
+      String objectPath = bucketAndPath.getRight();
       
       BlobId blobId = BlobId.of(bucket, objectPath);
       

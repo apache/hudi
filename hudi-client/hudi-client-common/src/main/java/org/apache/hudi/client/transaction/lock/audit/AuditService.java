@@ -18,10 +18,14 @@
 
 package org.apache.hudi.client.transaction.lock.audit;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+
 /**
  * Generic audit service interface for tracking operation lifecycles.
  * Provides a single method for recording all types of audit operations.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public interface AuditService extends AutoCloseable {
   
   /**
