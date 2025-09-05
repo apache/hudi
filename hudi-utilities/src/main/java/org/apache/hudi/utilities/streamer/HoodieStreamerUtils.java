@@ -119,8 +119,9 @@ public class HoodieStreamerUtils {
                       ? OrderingValues.create(cfg.sourceOrderingFields.split(","),
                          field -> (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, field, false, useConsistentLogicalTimestamp))
                       : null;
-                  HoodieRecord record = shouldUseOrderingField ? HoodieRecordUtils.createHoodieRecord(gr, orderingValue, hoodieKey, payloadClassName, requiresPayload)
-                      : HoodieRecordUtils.createHoodieRecord(gr, hoodieKey, payloadClassName, requiresPayload);
+                  HoodieRecord record = shouldUseOrderingField
+                      ? HoodieRecordUtils.createHoodieRecord(gr, orderingValue, hoodieKey, payloadClassName, requiresPayload, shouldErrorTable)
+                      : HoodieRecordUtils.createHoodieRecord(gr, hoodieKey, payloadClassName, requiresPayload, shouldErrorTable);
                   return Either.left(record);
                 } catch (Exception e) {
                   return generateErrorRecordOrThrowException(genRec, e, shouldErrorTable);

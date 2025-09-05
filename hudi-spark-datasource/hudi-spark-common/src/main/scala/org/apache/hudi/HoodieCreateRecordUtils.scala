@@ -26,7 +26,6 @@ import org.apache.hudi.common.model._
 import org.apache.hudi.common.model.WriteOperationType.isChangingRecords
 import org.apache.hudi.common.util.{HoodieRecordUtils, Option => HOption, OrderingValues}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.io.FileGroupReaderBasedMergeHandle
 import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, SparkKeyGeneratorInterface}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
@@ -154,10 +153,10 @@ object HoodieCreateRecordUtils {
                   field => HoodieAvroUtils.getNestedFieldVal(avroRec, field, false,
                     consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]))
               HoodieRecordUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
-                config.getPayloadClass, null, recordLocation, requiresPayload)
+                config.getPayloadClass, null, recordLocation, requiresPayload, false)
             } else {
               HoodieRecordUtils.createHoodieRecord(processedRecord, hoodieKey,
-                config.getPayloadClass, recordLocation, requiresPayload)
+                config.getPayloadClass, recordLocation, requiresPayload, false)
             }
             hoodieRecord
           }

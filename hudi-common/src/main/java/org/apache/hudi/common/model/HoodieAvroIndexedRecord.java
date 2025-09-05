@@ -61,9 +61,13 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data) {
-    this(key, data, null, null, null);
+    this(key, data, false);
   }
 
+  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, boolean validateRecord) {
+    this(key, data, null, null, null, validateRecord);
+  }
+  
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation hoodieOperation) {
     this(key, data, hoodieOperation, Option.empty());
   }
@@ -79,11 +83,30 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, Comparable<?> orderingValue, HoodieOperation operation) {
     this(key, data, operation, null, null);
+  }
+
+  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, Comparable<?> orderingValue, HoodieOperation operation, boolean validateRecord) {
+    this(key, data, operation, null, null, validateRecord);
     this.orderingValue = orderingValue;
   }
 
-  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation operation, HoodieRecordLocation currentLocation, HoodieRecordLocation newLocation) {
-    super(key, SerializableIndexedRecord.createInstance(data), operation, currentLocation, newLocation);
+  public HoodieAvroIndexedRecord(
+      HoodieKey key,
+      IndexedRecord data,
+      HoodieOperation operation,
+      HoodieRecordLocation currentLocation,
+      HoodieRecordLocation newLocation) {
+    this(key, data, operation, currentLocation, newLocation, false);
+  }
+
+  public HoodieAvroIndexedRecord(
+      HoodieKey key,
+      IndexedRecord data,
+      HoodieOperation operation,
+      HoodieRecordLocation currentLocation,
+      HoodieRecordLocation newLocation,
+      boolean validateRecord) {
+    super(key, SerializableIndexedRecord.createInstance(data, validateRecord), operation, currentLocation, newLocation);
     this.binaryRecord = (SerializableIndexedRecord) this.data;
   }
 
@@ -96,7 +119,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       IndexedRecord data,
       HoodieOperation operation,
       Option<Map<String, String>> metaData) {
-    super(key, SerializableIndexedRecord.createInstance(data), operation, metaData);
+    super(key, SerializableIndexedRecord.createInstance(data, false), operation, metaData);
     this.binaryRecord = (SerializableIndexedRecord) this.data;
   }
 
