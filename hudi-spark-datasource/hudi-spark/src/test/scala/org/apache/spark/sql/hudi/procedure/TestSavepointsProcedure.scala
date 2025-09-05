@@ -446,4 +446,61 @@ class TestSavepointsProcedure extends HoodieSparkProcedureTestBase {
       )
     })
   }
+
+  test("Test enhanced show_savepoints procedure") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath + "/" + tableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+
+      val commits = spark.sql(s"""call show_commits(table => '$tableName')""").collect()
+      val commitTime = commits.apply(0).getString(0)
+
+      checkAnswer(s"""call create_savepoint('$tableName', '$commitTime', 'testuser', 'test savepoint')""")(Seq(true))
+
+      val savepoints = spark.sql(s"""call show_savepoints(table => '$tableName')""")
+      val savepointData = savepoints.collect()
+
+      assert(savepointData.length >= 1, "Should have at least one savepoint")
+      assert(savepoints.schema.fields.length == 11, "show_savepoints should have 11 fields")
+
+      val schema = savepoints.schema
+      assert(schema.fieldNames.contains("savepoint_time"))
+      assert(schema.fieldNames.contains("state_transition_time"))
+      assert(schema.fieldNames.contains("state"))
+      assert(schema.fieldNames.contains("action"))
+      assert(schema.fieldNames.contains("savepointed_by"))
+      assert(schema.fieldNames.contains("savepointed_at"))
+      assert(schema.fieldNames.contains("comments"))
+      assert(schema.fieldNames.contains("partition_path"))
+      assert(schema.fieldNames.contains("savepoint_data_file"))
+      assert(schema.fieldNames.contains("version"))
+
+      val savepoint = savepointData(0)
+      assert(savepoint.getString(0) != null)
+      assert(savepoint.getString(1) != null)
+      assert(savepoint.getString(2) == "COMPLETED")
+      assert(savepoint.getString(3) == "savepoint")
+      assert(savepoint.getString(5) == "testuser")
+      assert(savepoint.getLong(6) > 0)
+      assert(savepoint.getString(7) == "test savepoint")
+      assert(savepoint.getInt(10) >= 1)
+    }
+  }
 }
