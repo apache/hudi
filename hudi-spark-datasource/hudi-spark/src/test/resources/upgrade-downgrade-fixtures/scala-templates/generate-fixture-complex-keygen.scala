@@ -24,20 +24,20 @@ val basePath = "${BASE_PATH}"
 
 // Create simple test data with consistent schema
 val testData = Seq(
-  ("id1", "Alice", 1000L, "2023-01-01"),
-  ("id2", "Bob", 2000L, "2023-01-01"),  
-  ("id3", "Charlie", 3000L, "2023-01-02"),
-  ("id4", "David", 4000L, "2023-01-02"),
-  ("id5", "Eve", 5000L, "2023-01-03")
+  ("id1", "Alice", 1000L, "2023-01-01", "a"),
+  ("id2", "Bob", 2000L, "2023-01-01", "b"),
+  ("id3", "Charlie", 3000L, "2023-01-02", "a"),
+  ("id4", "David", 4000L, "2023-01-02", "b"),
+  ("id5", "Eve", 5000L, "2023-01-03", "a")
 )
 
-val df = testData.toDF("id", "name", "ts", "partition")
+val df = testData.toDF("id", "name", "ts", "partition", "category")
 
 // Write initial batch (creates base files)
 df.write.format("hudi").
   option(PRECOMBINE_FIELD.key, "ts").
   option(RECORDKEY_FIELD.key, "id").
-  option(PARTITIONPATH_FIELD.key, "partition").
+  option(PARTITIONPATH_FIELD.key, "partition,category").
   option("hoodie.table.name", tableName).
   option("hoodie.datasource.write.table.type", "MERGE_ON_READ").
   option("hoodie.datasource.write.operation", "insert").
@@ -53,17 +53,17 @@ println("Initial batch written")
 
 // Write update batch (creates log files)
 val updateData = Seq(
-  ("id1", "Alice_Updated", 1001L, "2023-01-01"),
-  ("id2", "Bob_Updated", 2001L, "2023-01-01"),
-  ("id6", "Frank", 6000L, "2023-01-03")
+  ("id1", "Alice_Updated", 1001L, "2023-01-01", "a"),
+  ("id2", "Bob_Updated", 2001L, "2023-01-01", "b"),
+  ("id6", "Frank", 6000L, "2023-01-03", "a")
 )
 
-val updateDf = updateData.toDF("id", "name", "ts", "partition")
+val updateDf = updateData.toDF("id", "name", "ts", "partition", "category")
 
 updateDf.write.format("hudi").
   option(PRECOMBINE_FIELD.key, "ts").
   option(RECORDKEY_FIELD.key, "id").
-  option(PARTITIONPATH_FIELD.key, "partition").
+  option(PARTITIONPATH_FIELD.key, "partition,category").
   option("hoodie.table.name", tableName).
   option("hoodie.datasource.write.table.type", "MERGE_ON_READ").
   option("hoodie.datasource.write.operation", "upsert").
@@ -79,16 +79,16 @@ println("Update batch written")
 
 // Create one more insert to have multiple commits
 val insertData = Seq(
-  ("id7", "Grace", 7000L, "2023-01-04"),
-  ("id8", "Henry", 8000L, "2023-01-04")
+  ("id7", "Grace", 7000L, "2023-01-04", "b"),
+  ("id8", "Henry", 8000L, "2023-01-04", "b")
 )
 
-val insertDf = insertData.toDF("id", "name", "ts", "partition")
+val insertDf = insertData.toDF("id", "name", "ts", "partition", "category")
 
 insertDf.write.format("hudi").
   option(PRECOMBINE_FIELD.key, "ts").
   option(RECORDKEY_FIELD.key, "id").
-  option(PARTITIONPATH_FIELD.key, "partition").
+  option(PARTITIONPATH_FIELD.key, "partition,category").
   option("hoodie.table.name", tableName).
   option("hoodie.datasource.write.table.type", "MERGE_ON_READ").
   option("hoodie.datasource.write.operation", "insert").

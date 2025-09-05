@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.keygen.KeyGenerator
+import org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 
@@ -173,7 +174,13 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
       var recordKeyQueries: List[Expression] = List.empty
       var compositeRecordKeys: List[String] = List.empty
       val recordKeyOpt = getRecordKeyConfig
-      val isComplexRecordKey = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0) > 1
+      val isComplexRecordKey = {
+        val fieldCount = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0)
+        // Consider as complex if:
+        // 1. Multiple fields (> 1), OR
+        // 2. Using complex key generator with single record key field
+        fieldCount > 1 || isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig)
+      }
       recordKeyOpt.foreach { recordKeysArray =>
         // Handle composite record keys
         breakable {
@@ -229,5 +236,4 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
     // Convert the Hudi Option to Scala Option and return if present
     Option(recordKeysOpt.orElse(null)).filter(_.nonEmpty)
   }
-
 }
