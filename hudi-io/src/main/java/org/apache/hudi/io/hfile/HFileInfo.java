@@ -31,12 +31,16 @@ public class HFileInfo {
   private static final String RESERVED_PREFIX = "hfile.";
   static final UTF8StringKey LAST_KEY =
       new UTF8StringKey(RESERVED_PREFIX + "LASTKEY");
-  private static final UTF8StringKey FILE_CREATION_TIME_TS =
+  static final UTF8StringKey FILE_CREATION_TIME_TS =
       new UTF8StringKey(RESERVED_PREFIX + "CREATE_TIME_TS");
   private static final UTF8StringKey KEY_VALUE_VERSION =
       new UTF8StringKey("KEY_VALUE_VERSION");
   static final UTF8StringKey MAX_MVCC_TS_KEY =
       new UTF8StringKey("MAX_MEMSTORE_TS_KEY");
+  static final UTF8StringKey AVG_KEY_LEN =
+      new UTF8StringKey(RESERVED_PREFIX + "AVG_KEY_LEN");
+  static final UTF8StringKey AVG_VALUE_LEN =
+      new UTF8StringKey(RESERVED_PREFIX + "AVG_VALUE_LEN");
 
   private static final int KEY_VALUE_VERSION_WITH_MVCC_TS = 1;
 

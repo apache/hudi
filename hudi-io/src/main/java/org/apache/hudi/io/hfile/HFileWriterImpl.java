@@ -68,6 +68,8 @@ public class HFileWriterImpl implements HFileWriter {
   private long firstDataBlockOffset = -1;
   private long lastDataBlockOffset;
   private long totalNumberOfRecords = 0;
+  private long totalKeyLength = 0;
+  private long totalValueLength = 0;
 
   public HFileWriterImpl(HFileContext context, OutputStream outputStream) {
     this.outputStream = outputStream;
@@ -87,6 +89,8 @@ public class HFileWriterImpl implements HFileWriter {
   public void append(String key, byte[] value) throws IOException {
     byte[] keyBytes = StringUtils.getUTF8Bytes(key);
     lastKey = keyBytes;
+    totalKeyLength += keyBytes.length;
+    totalValueLength += value.length;
     // Records with the same key must be put into the same block.
     // Here 9 = 4 bytes of key length + 4 bytes of value length + 1 byte MVCC.
     if (!Arrays.equals(currentDataBlock.getLastKeyContent(), keyBytes)
@@ -170,10 +174,7 @@ public class HFileWriterImpl implements HFileWriter {
     metaIndexBlock.setStartOffsetInBuffForWrite(currentOffset);
     writeBuffer(metaIndexBuffer);
     // Write File Info.
-    fileInfoBlock.add(
-        new String(LAST_KEY.getBytes(), StandardCharsets.UTF_8),
-        addKeyLength(lastKey));
-    fileInfoBlock.setStartOffsetInBuffForWrite(currentOffset);
+    finishFileInfo();
     writeBuffer(fileInfoBlock.serialize());
   }
 
@@ -218,6 +219,31 @@ public class HFileWriterImpl implements HFileWriter {
         new byte[]{0});
   }
 
+  protected void finishFileInfo() {
+    // Record last key.
+    fileInfoBlock.add(
+        new String(LAST_KEY.getBytes(), StandardCharsets.UTF_8),
+        addKeyLength(lastKey));
+    fileInfoBlock.setStartOffsetInBuffForWrite(currentOffset);
+
+    // Average key length.
+    int avgKeyLen = totalNumberOfRecords == 0
+        ? 0 : (int) (totalKeyLength / totalNumberOfRecords);
+    fileInfoBlock.add(
+        new String(HFileInfo.AVG_KEY_LEN.getBytes(), StandardCharsets.UTF_8),
+        addKeyLength(toBytes(avgKeyLen)));
+    fileInfoBlock.add(
+        new String(HFileInfo.FILE_CREATION_TIME_TS.getBytes(), StandardCharsets.UTF_8),
+        addKeyLength(toBytes(context.getFileCreateTime())));
+
+    // Average value length.
+    int avgValueLen = totalNumberOfRecords == 0
+        ? 0 : (int) (totalValueLength / totalNumberOfRecords);
+    fileInfoBlock.add(
+        new String(HFileInfo.AVG_VALUE_LEN.getBytes(), StandardCharsets.UTF_8),
+        addKeyLength(toBytes(avgValueLen)));
+  }
+
   // Note: HFileReaderImpl assumes that:
   //   The last key should contain the content length bytes.
   public byte[] addKeyLength(byte[] key) {
@@ -228,5 +254,38 @@ public class HFileWriterImpl implements HFileWriter {
     byteBuffer.putShort((short) key.length);
     byteBuffer.put(key);
     return byteBuffer.array();
+  }
+
+  /**
+   * Convert an int value to a byte array.  Big-endian.  Same as what DataOutputStream.writeInt
+   * does.
+   *
+   * @param val value
+   * @return the byte array
+   */
+  public static byte[] toBytes(int val) {
+    byte [] b = new byte[4];
+    for(int i = 3; i > 0; i--) {
+      b[i] = (byte) val;
+      val >>>= 8;
+    }
+    b[0] = (byte) val;
+    return b;
+  }
+
+  /**
+   * Convert a long value to a byte array using big-endian.
+   *
+   * @param val value to convert
+   * @return the byte array
+   */
+  public static byte[] toBytes(long val) {
+    byte [] b = new byte[8];
+    for (int i = 7; i > 0; i--) {
+      b[i] = (byte) val;
+      val >>>= 8;
+    }
+    b[0] = (byte) val;
+    return b;
   }
 }
