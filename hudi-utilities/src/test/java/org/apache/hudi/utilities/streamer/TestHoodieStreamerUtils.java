@@ -69,19 +69,6 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
     initTestServices();
   }
 
-  private static Stream<Arguments> testCreateHoodieRecordsWithError() {
-    HoodieRecordType[] recordTypes = {HoodieRecordType.SPARK, HoodieRecordType.AVRO};
-    Boolean[] booleanValues = {true, false};
-    String[] recordKeyFields = {"_row_key", "rider"};
-
-    return Stream.of(recordTypes)
-        .flatMap(recordType ->
-            Stream.of(booleanValues)
-                .flatMap(booleanValue ->
-                    Stream.of(recordKeyFields)
-                        .map(recordKeyField -> Arguments.of(recordType, booleanValue, recordKeyField))));
-  }
-
   private static Stream<Arguments> testCreateHoodieRecords() {
     HoodieRecordType[] recordTypes = {HoodieRecordType.SPARK, HoodieRecordType.AVRO};
     Boolean[] booleanValues = {true, false};
