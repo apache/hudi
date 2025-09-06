@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.exception.HoodieRecordCreationException;
@@ -118,7 +119,7 @@ public class HoodieStreamerUtils {
                   if (shouldErrorTable) {
                     Schema schema = genRec.getSchema();
                     if (!GenericData.get().validate(schema, genRec)) {
-                      throw new HoodieException("The record does not match the schema: " + schema);
+                      throw new HoodieIOException("The record to be serialized does not match the schema: " + schema);
                     }
                   }
                   HoodieKey hoodieKey = new HoodieKey(builtinKeyGenerator.getRecordKey(genRec), builtinKeyGenerator.getPartitionPath(genRec));
