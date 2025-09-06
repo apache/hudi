@@ -51,7 +51,7 @@ class TestSerializableIndexRecord {
         .set("field_2", 42)
         .build();
 
-    SerializableIndexedRecord serializableIndexedRecord = SerializableIndexedRecord.createInstance(record1, false);
+    SerializableIndexedRecord serializableIndexedRecord = SerializableIndexedRecord.createInstance(record1);
 
     assertEquals(record1, serializableIndexedRecord.getRecord());
     assertEquals(serializableIndexedRecord, record1);
@@ -68,7 +68,7 @@ class TestSerializableIndexRecord {
         .set("field_1", "value1")
         .set("field_2", 42)
         .build();
-    SerializableIndexedRecord serializableIndexedRecord = SerializableIndexedRecord.createInstance(originalRecord, false);
+    SerializableIndexedRecord serializableIndexedRecord = SerializableIndexedRecord.createInstance(originalRecord);
     byte[] encoded = serializableIndexedRecord.encodeRecord();
 
     assertEquals(originalRecord, HoodieAvroUtils.bytesToAvro(encoded, schema));

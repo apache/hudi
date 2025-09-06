@@ -21,7 +21,6 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import com.esotericsoftware.kryo.Kryo;
@@ -29,7 +28,6 @@ import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -50,17 +48,11 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
   private IndexedRecord record;
   private byte[] recordBytes;
 
-  static SerializableIndexedRecord createInstance(IndexedRecord record, boolean validateRecord) {
-    return record == null ? null : new SerializableIndexedRecord(record, validateRecord);
+  static SerializableIndexedRecord createInstance(IndexedRecord record) {
+    return record == null ? null : new SerializableIndexedRecord(record);
   }
 
-  private SerializableIndexedRecord(IndexedRecord record, boolean validateRecord) {
-    if (validateRecord) {
-      Schema schema = record.getSchema();
-      if (!GenericData.get().validate(schema, record)) {
-        throw new HoodieException("The record does not match the schema: " + schema);
-      }
-    }
+  private SerializableIndexedRecord(IndexedRecord record) {
     this.record = record;
     this.recordBytes = null; // Initialize recordBytes to null, will be set when encodeRecord is called
   }
