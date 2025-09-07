@@ -30,6 +30,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -385,7 +386,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
         if (errorTableInstantTime.isPresent()) {
           throw new IllegalStateException("Error table instant time should be empty before calling upsert");
         }
-        errorTableInstantTime = Option.of(String.valueOf(System.currentTimeMillis()));
+        errorTableInstantTime = Option.of(InProcessTimeGenerator.createNewInstantTime());
         JavaRDD errorsCombined = errorEvents.get(0);
         for (int i = 1; i < errorEvents.size(); i++) {
           errorsCombined = errorsCombined.union(errorEvents.get(i));
