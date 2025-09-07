@@ -163,18 +163,12 @@ public class HoodieAvroUtils {
   }
 
   public static byte[] convertIndexedRecordToAvroFileFormat(IndexedRecord record) {
-    try {
-      byte[] bytes = HoodieAvroUtils.avroToBytes(record);
-      if (bytes.length >= 4 && bytes[0] == 0x4F && bytes[1] == 0x62 && bytes[2] == 0x6A && bytes[3] == 0x01) { // "Obj" magic bytes to check if its already in avro file format
-        return bytes;
-      }
-      try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-        try (DataFileWriter<IndexedRecord> writer = new DataFileWriter<>(new GenericDatumWriter<>(record.getSchema()))) {
-          writer.create(record.getSchema(), baos);
-          writer.append(record);
-          writer.flush();
-          return baos.toByteArray();
-        }
+    try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+      try (DataFileWriter<IndexedRecord> writer = new DataFileWriter<>(new GenericDatumWriter<>(record.getSchema()))) {
+        writer.create(record.getSchema(), baos);
+        writer.append(record);
+        writer.flush();
+        return baos.toByteArray();
       }
     } catch (IOException e) {
       throw new HoodieIOException("Failed to convert IndexedRecord to Avro file format", e);
