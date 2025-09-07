@@ -84,17 +84,17 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
 
   @ParameterizedTest
   @MethodSource("testCreateHoodieRecords")
-  public void testCreateValidHoodieRecords(
+  void testCreateValidHoodieRecords(
       HoodieRecordType recordType, boolean enableErrorTableWriter, String recordKeyField) {
     Schema schema = new Schema.Parser().parse(SCHEMA_STRING);
     JavaRDD<GenericRecord> recordRdd = jsc.parallelize(Collections.singletonList(1)).map(i -> {
-      GenericRecord record = new GenericData.Record(schema);
-      record.put(0, i * 1000L);
-      record.put(1, "key" + i);
-      record.put(2, "path" + i);
-      record.put(3, "rider1");
-      record.put(4, "driver1");
-      return record;
+      GenericRecord genericRecord = new GenericData.Record(schema);
+      genericRecord.put(0, i * 1000L);
+      genericRecord.put(1, "key" + i);
+      genericRecord.put(2, "path" + i);
+      genericRecord.put(3, "rider1");
+      genericRecord.put(4, "driver1");
+      return genericRecord;
     });
     HoodieStreamer.Config cfg = new HoodieStreamer.Config();
     cfg.payloadClassName = DefaultHoodieRecordPayload.class.getName();
@@ -127,18 +127,18 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
 
   @ParameterizedTest
   @MethodSource("testCreateHoodieRecords")
-  public void testCreateHoodieRecordsWithError(
+  void testCreateHoodieRecordsWithError(
       HoodieRecordType recordType, boolean enableErrorTableWriter, String recordKeyField) {
     Schema schema = new Schema.Parser().parse(SCHEMA_STRING);
     JavaRDD<GenericRecord> recordRdd = jsc.parallelize(Collections.singletonList(1)).map(i -> {
-      GenericRecord record = new GenericData.Record(schema);
-      record.put(0, i * 1000L);
-      record.put(1, "key" + i);
-      record.put(2, "path" + i);
+      GenericRecord genericRecord = new GenericData.Record(schema);
+      genericRecord.put(0, i * 1000L);
+      genericRecord.put(1, "key" + i);
+      genericRecord.put(2, "path" + i);
       // The field is non-null in schema but the value is null, so this fails the Hudi record creation
-      record.put(3, null);
-      record.put(4, "driver");
-      return record;
+      genericRecord.put(3, null);
+      genericRecord.put(4, "driver");
+      return genericRecord;
     });
     HoodieStreamer.Config cfg = new HoodieStreamer.Config();
     cfg.payloadClassName = DefaultHoodieRecordPayload.class.getName();
