@@ -162,7 +162,7 @@ public class HoodieAvroUtils {
     }
   }
 
-  public static byte[] convertIndexedRecordToAvroFileFormat(IndexedRecord record) {
+  public static byte[] avroToFileBytes(IndexedRecord record) {
     try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
       try (DataFileWriter<IndexedRecord> writer = new DataFileWriter<>(new GenericDatumWriter<>(record.getSchema()))) {
         writer.create(record.getSchema(), baos);
