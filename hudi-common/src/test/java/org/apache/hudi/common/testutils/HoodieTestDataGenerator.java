@@ -153,10 +153,16 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       + "{\"name\":\"current_ts\",\"type\": {\"type\": \"long\"}},"
       + "{\"name\":\"height\",\"type\":{\"type\":\"fixed\",\"name\":\"abc\",\"size\":5,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":6}},";
 
+  public static final String EXTENDED_LOGICAL_TYPES_SCHEMA_V6 = "{\"name\":\"ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}},"
+      + "{\"name\":\"ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},"
+      + "{\"name\":\"local_ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}},"
+      + "{\"name\":\"local_ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}},"
+      + "{\"name\":\"event_date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},"
+      + "{\"name\":\"dec_fixed_small\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedSmall\",\"size\":3,\"logicalType\":\"decimal\",\"precision\":5,\"scale\":2}},"
+      + "{\"name\":\"dec_fixed_large\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedLarge\",\"size\":8,\"logicalType\":\"decimal\",\"precision\":18,\"scale\":9}},";
+
   public static final String EXTENDED_LOGICAL_TYPES_SCHEMA = "{\"name\":\"ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}},"
           + "{\"name\":\"ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},"
-          //+ "{\"name\":\"time_millis\",\"type\":{\"type\":\"int\",\"logicalType\":\"time-millis\"}},"
-          //+ "{\"name\":\"time_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"time-micros\"}},"
           + "{\"name\":\"local_ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}},"
           + "{\"name\":\"local_ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}},"
           + "{\"name\":\"event_date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},"
@@ -179,6 +185,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + EXTRA_COL_SCHEMA2 + TRIP_SCHEMA_SUFFIX;
   public static final String TRIP_FLATTENED_SCHEMA =
       TRIP_SCHEMA_PREFIX + FARE_FLATTENED_SCHEMA + TRIP_SCHEMA_SUFFIX;
+  public static final String TRIP_LOGICAL_TYPES_SCHEMA_V6 =
+      TRIP_SCHEMA_PREFIX + EXTENDED_LOGICAL_TYPES_SCHEMA_V6 + TRIP_SCHEMA_SUFFIX;
   public static final String TRIP_LOGICAL_TYPES_SCHEMA =
       TRIP_SCHEMA_PREFIX + EXTENDED_LOGICAL_TYPES_SCHEMA + TRIP_SCHEMA_SUFFIX;
 
@@ -211,6 +219,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final Schema AVRO_SHORT_TRIP_SCHEMA = new Schema.Parser().parse(SHORT_TRIP_SCHEMA);
   public static final Schema AVRO_TRIP_ENCODED_DECIMAL_SCHEMA = new Schema.Parser().parse(TRIP_ENCODED_DECIMAL_SCHEMA);
   public static final Schema AVRO_TRIP_LOGICAL_TYPES_SCHEMA = new Schema.Parser().parse(TRIP_LOGICAL_TYPES_SCHEMA);
+  public static final Schema AVRO_TRIP_LOGICAL_TYPES_SCHEMA_V6 = new Schema.Parser().parse(TRIP_LOGICAL_TYPES_SCHEMA_V6);
   public static final Schema AVRO_TRIP_SCHEMA = new Schema.Parser().parse(TRIP_SCHEMA);
   public static final Schema FLATTENED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_FLATTENED_SCHEMA);
 
@@ -354,12 +363,16 @@ public class HoodieTestDataGenerator implements AutoCloseable {
         return generateRandomValueWithColumnRequired(key, commitTime);
       } else if (TRIP_LOGICAL_TYPES_SCHEMA.equals(schemaStr)) {
         return generatePayloadForLogicalTypesSchema(key, commitTime, false);
+      } else if (TRIP_LOGICAL_TYPES_SCHEMA_V6.equals(schemaStr)) {
+        return generatePayloadForLogicalTypesSchemaV6(key, commitTime, false);
       }
     } else {
       if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
         return generateRandomDeleteValue(key, commitTime);
       } else if (TRIP_LOGICAL_TYPES_SCHEMA.equals(schemaStr)) {
         return generatePayloadForLogicalTypesSchema(key, commitTime, true);
+      } else if (TRIP_LOGICAL_TYPES_SCHEMA_V6.equals(schemaStr)) {
+        return generatePayloadForLogicalTypesSchemaV6(key, commitTime, true);
       }
     }
 
@@ -416,7 +429,11 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   public IndexedRecord generatePayloadForLogicalTypesSchema(HoodieKey key, String commitTime, boolean isDelete) {
-    return generateRecordForTripLogicalTypesSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0, isDelete);
+    return generateRecordForTripLogicalTypesSchema(key, "rider-" + commitTime, "driver-" + commitTime, 0, isDelete, false);
+  }
+
+  public IndexedRecord generatePayloadForLogicalTypesSchemaV6(HoodieKey key, String commitTime, boolean isDelete) {
+    return generateRecordForTripLogicalTypesSchema(key, "rider-" + commitTime, "driver-" + commitTime, 0, isDelete, true);
   }
 
   /**
@@ -634,12 +651,13 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return rec;
   }
 
-  public GenericRecord generateRecordForTripLogicalTypesSchema(String rowKey, String riderName, String driverName,
-                                                               long timestamp, boolean isDeleteRecord) {
-    GenericRecord rec = new GenericData.Record(AVRO_TRIP_LOGICAL_TYPES_SCHEMA);
-    generateTripPrefixValues(rec, rowKey, "partition_path", riderName, driverName, timestamp);
+  public GenericRecord generateRecordForTripLogicalTypesSchema(HoodieKey key, String riderName, String driverName,
+                                                               long timestamp, boolean isDeleteRecord, boolean v6) {
+    GenericRecord rec = v6 ? new GenericData.Record(AVRO_TRIP_LOGICAL_TYPES_SCHEMA_V6)
+        : new GenericData.Record(AVRO_TRIP_LOGICAL_TYPES_SCHEMA);
+    generateTripPrefixValues(rec, key.getRecordKey(), key.getPartitionPath(), riderName, driverName, timestamp);
 
-    int hash = rowKey.hashCode();
+    int hash = key.getRecordKey().hashCode();
     boolean above = (hash & 1) == 0; // half above, half below threshold
 
     // -------------------
@@ -705,9 +723,11 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     BigDecimal incLargeScale10 = new BigDecimal("0.0000000001");
 
     // Assign thresholded decimals
-    rec.put("dec_plain_large", ByteBuffer.wrap((above
-        ? decPlainLargeThreshold.add(incLargeScale10)
-        : decPlainLargeThreshold.subtract(incLargeScale10)).unscaledValue().toByteArray()));
+    if (!v6) {
+      rec.put("dec_plain_large", ByteBuffer.wrap((above
+          ? decPlainLargeThreshold.add(incLargeScale10)
+          : decPlainLargeThreshold.subtract(incLargeScale10)).unscaledValue().toByteArray()));
+    }
 
     Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
     Schema decFixedSmallSchema = AVRO_TRIP_LOGICAL_TYPES_SCHEMA.getField("dec_fixed_small").schema();
