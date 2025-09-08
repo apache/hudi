@@ -165,7 +165,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
   }
 
   @VisibleForTesting
-  HoodieFileGroupReaderBasedRecordReader (
+  HoodieFileGroupReaderBasedRecordReader(
       HiveHoodieReaderContext readerContext,
       ClosableIterator<ArrayWritable> recordIterator,
       ArrayWritable arrayWritable,
