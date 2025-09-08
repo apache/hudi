@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.Option;
 
 import com.google.cloud.storage.Blob;
 import com.google.cloud.storage.BlobId;
+import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
 import com.google.cloud.storage.StorageException;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,29 +32,34 @@ import org.slf4j.Logger;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * Tests for GCSStorageLockClient.readObject method
+ * Tests for GCSStorageLockClient audit operations (readObject and writeObject methods)
  */
-public class TestGCSStorageLockClientReadConfig {
+public class TestGCSStorageLockClientAuditOperations {
   
   private Storage mockGcsClient;
   private Blob mockBlob;
-  
+  private Logger mockLogger;
   private GCSStorageLockClient lockClient;
 
   @BeforeEach
   void setUp() {
     mockGcsClient = mock(Storage.class);
-    Logger mockLogger = mock(Logger.class);
+    mockLogger = mock(Logger.class);
     mockBlob = mock(Blob.class);
     String lockFileUri = "gs://test-bucket/table/.hoodie/.locks/table_lock.json";
     String ownerId = "test-owner";
@@ -197,5 +203,72 @@ public class TestGCSStorageLockClientReadConfig {
     
     assertTrue(result.isEmpty());
     verify(mockGcsClient, times(1)).readAllBytes(any(BlobId.class));
+  }
+
+  // ================================
+  // writeObject() tests
+  // ================================
+
+  @Test
+  void testWriteObject_success() {
+    String filePath = "gs://test-bucket/audit/test-audit.jsonl";
+    String content = "{\"test\": \"data\"}\n";
+    when(mockGcsClient.create(any(BlobInfo.class), any(byte[].class))).thenReturn(mockBlob);
+
+    boolean result = lockClient.writeObject(filePath, content);
+
+    assertTrue(result);
+    verify(mockGcsClient).create(any(BlobInfo.class), eq(content.getBytes(UTF_8)));
+    verify(mockLogger).debug("Successfully wrote object to: {}", filePath);
+  }
+
+  @Test
+  void testWriteObject_storageException() {
+    String filePath = "gs://test-bucket/audit/test-audit.jsonl";
+    String content = "{\"test\": \"data\"}\n";
+    StorageException storageException = new StorageException(500, "Internal Server Error");
+    when(mockGcsClient.create(any(BlobInfo.class), any(byte[].class))).thenThrow(storageException);
+
+    boolean result = lockClient.writeObject(filePath, content);
+
+    assertFalse(result);
+    verify(mockLogger).warn(contains("Error writing object to"), eq(filePath), eq(storageException));
+  }
+
+  @Test
+  void testWriteObject_invalidPath() {
+    String invalidPath = "invalid-path";
+    String content = "{\"test\": \"data\"}\n";
+
+    boolean result = lockClient.writeObject(invalidPath, content);
+
+    assertFalse(result);
+    verify(mockLogger).warn(contains("Error writing object to"), eq(invalidPath), any(Exception.class));
+  }
+
+  @Test
+  void testWriteObject_emptyContent() {
+    String filePath = "gs://test-bucket/audit/empty-content.jsonl";
+    String content = "";
+    when(mockGcsClient.create(any(BlobInfo.class), any(byte[].class))).thenReturn(mockBlob);
+
+    boolean result = lockClient.writeObject(filePath, content);
+
+    assertTrue(result);
+    verify(mockGcsClient).create(any(BlobInfo.class), eq(content.getBytes(UTF_8)));
+    verify(mockLogger).debug("Successfully wrote object to: {}", filePath);
+  }
+
+  @Test
+  void testWriteObject_rateLimitExceeded() {
+    String filePath = "gs://test-bucket/audit/test-audit.jsonl";
+    String content = "{\"test\": \"data\"}\n";
+    StorageException rateLimitException = new StorageException(429, "Rate Limit Exceeded");
+    when(mockGcsClient.create(any(BlobInfo.class), any(byte[].class))).thenThrow(rateLimitException);
+
+    boolean result = lockClient.writeObject(filePath, content);
+
+    assertFalse(result);
+    verify(mockLogger).warn(contains("Error writing object to"), eq(filePath), eq(rateLimitException));
   }
 }

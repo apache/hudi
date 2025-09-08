@@ -23,20 +23,27 @@ import org.apache.hudi.common.util.Option;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.ResponseBytes;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -44,18 +51,18 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Tests for S3StorageLockClient.readObject method
+ * Tests for S3StorageLockClient audit operations (readObject and writeObject methods)
  */
-public class TestS3StorageLockClientReadConfig {
+public class TestS3StorageLockClientAuditOperations {
   
   private S3Client mockS3Client;
-
+  private Logger mockLogger;
   private S3StorageLockClient lockClient;
 
   @BeforeEach
   void setUp() {
     mockS3Client = mock(S3Client.class);
-    Logger mockLogger = mock(Logger.class);
+    mockLogger = mock(Logger.class);
     String ownerId = "test-owner";
     String lockFileUri = "s3://test-bucket/table/.hoodie/.locks/table_lock.json";
     lockClient = new S3StorageLockClient(
@@ -199,5 +206,67 @@ public class TestS3StorageLockClientReadConfig {
     
     assertTrue(result.isEmpty());
     verify(mockS3Client, times(1)).getObjectAsBytes(any(GetObjectRequest.class));
+  }
+
+  // ================================
+  // writeObject() tests
+  // ================================
+
+  @Test
+  void testWriteObject_success() {
+    String filePath = "s3://test-bucket/audit/test-audit.jsonl";
+    String content = "{\"test\": \"data\"}\n";
+    PutObjectResponse putResp = PutObjectResponse.builder().eTag("write-etag-123").build();
+    when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenReturn(putResp);
+
+    boolean result = lockClient.writeObject(filePath, content);
+
+    assertTrue(result);
+    verify(mockS3Client, times(1)).putObject(
+        eq(PutObjectRequest.builder().bucket("test-bucket").key("audit/test-audit.jsonl").build()),
+        any(RequestBody.class)
+    );
+    verify(mockLogger).debug("Successfully wrote object to: {}", filePath);
+  }
+
+  @Test
+  void testWriteObject_s3Exception() {
+    String filePath = "s3://test-bucket/audit/test-audit.jsonl";
+    String content = "{\"test\": \"data\"}\n";
+    AwsServiceException s3Exception = S3Exception.builder().statusCode(500).build();
+    when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(s3Exception);
+
+    boolean result = lockClient.writeObject(filePath, content);
+
+    assertFalse(result);
+    verify(mockLogger).warn(contains("Error writing object to"), eq(filePath), eq(s3Exception));
+  }
+
+  @Test
+  void testWriteObject_invalidPath() {
+    String invalidPath = "invalid-path";
+    String content = "{\"test\": \"data\"}\n";
+
+    boolean result = lockClient.writeObject(invalidPath, content);
+
+    assertFalse(result);
+    verify(mockLogger).warn(contains("Error writing object to"), eq(invalidPath), any(Exception.class));
+  }
+
+  @Test
+  void testWriteObject_emptyContent() {
+    String filePath = "s3://test-bucket/audit/empty-content.jsonl";
+    String content = "";
+    PutObjectResponse putResp = PutObjectResponse.builder().eTag("empty-etag-456").build();
+    when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenReturn(putResp);
+
+    boolean result = lockClient.writeObject(filePath, content);
+
+    assertTrue(result);
+    verify(mockS3Client, times(1)).putObject(
+        eq(PutObjectRequest.builder().bucket("test-bucket").key("audit/empty-content.jsonl").build()),
+        any(RequestBody.class)
+    );
+    verify(mockLogger).debug("Successfully wrote object to: {}", filePath);
   }
 }
