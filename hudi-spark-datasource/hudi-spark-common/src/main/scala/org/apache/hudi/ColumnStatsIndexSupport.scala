@@ -490,17 +490,6 @@ object ColumnStatsIndexSupport {
           throw new UnsupportedOperationException(s"Cannot deserialize value for LongType: unexpected type ${valueMetadata.getValueType.name()}")
         }
 
-      case TimestampNTZType =>
-        if (valueMetadata.getValueType.equals(ValueType.LOCAL_TIMESTAMP_MILLIS)) {
-          // might need to do something for local as well
-          DateTimeUtils.microsToLocalDateTime(DateTimeUtils.millisToMicros(value.asInstanceOf[Long]))
-        } else if (valueMetadata.getValueType.equals(ValueType.LOCAL_TIMESTAMP_MICROS)) {
-          // todo fix local issue if needed
-          DateTimeUtils.microsToLocalDateTime(value.asInstanceOf[Long])
-        } else {
-          throw new UnsupportedOperationException(s"Cannot deserialize value for LongType: unexpected type ${valueMetadata.getValueType.name()}")
-        }
-
       case DateType => DateTimeUtils.toJavaDate(value.asInstanceOf[Int])
       // Standard types
       case StringType =>
@@ -593,7 +582,18 @@ object ColumnStatsIndexSupport {
           case other => other
         }
 
-      case _ =>
+      case a: Any =>
+        if (HoodieSparkUtils.gteqSpark3_4 && "TimestampNTZType".equals(a.getClass.getName)) {
+          if (valueMetadata.getValueType.equals(ValueType.LOCAL_TIMESTAMP_MILLIS)) {
+            // might need to do something for local as well
+            DateTimeUtils.microsToLocalDateTime(DateTimeUtils.millisToMicros(value.asInstanceOf[Long]))
+          } else if (valueMetadata.getValueType.equals(ValueType.LOCAL_TIMESTAMP_MICROS)) {
+            // todo fix local issue if needed
+            DateTimeUtils.microsToLocalDateTime(value.asInstanceOf[Long])
+          } else {
+            throw new UnsupportedOperationException(s"Cannot deserialize value for LongType: unexpected type ${valueMetadata.getValueType.name()}")
+          }
+        }
         throw new UnsupportedOperationException(s"Data type for the statistic value is not recognized $dataType")
     }
   }
