@@ -71,7 +71,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -443,14 +442,9 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       Map<HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, wrapperSchema.toString());
       final String keyField = table.getMetaClient().getTableConfig().getRecordKeyFieldProp();
-      List<HoodieRecord> indexRecords = records.stream()
-          .filter(Objects::nonNull)
-          .map(HoodieAvroIndexedRecord::new)
-          .collect(Collectors.toList());
-      if (!indexRecords.isEmpty()) {
-        HoodieAvroDataBlock block = new HoodieAvroDataBlock(indexRecords, header, keyField);
-        writer.appendBlock(block);
-      }
+      List<HoodieRecord> indexRecords = records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
+      HoodieAvroDataBlock block = new HoodieAvroDataBlock(indexRecords, header, keyField);
+      writer.appendBlock(block);
       records.clear();
     }
   }
