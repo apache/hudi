@@ -31,7 +31,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.HoodieUpgradeDowngradeException
+import org.apache.hudi.exception.{HoodieException, HoodieUpgradeDowngradeException}
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.{metadataPartitionExists, PARTITION_NAME_SECONDARY_INDEX_PREFIX}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
@@ -50,6 +50,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
+import org.scalatest.Assertions._
 
 import java.io.File
 import java.nio.file.Files
@@ -1616,6 +1617,94 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .save(basePath)
     metaClient = createMetaClient(spark, basePath)
     assertEquals(metaClient.getTableConfig.getRecordMergeStrategyId, mergerStrategyName)
+  }
+
+  @Test
+  def testPayloadClassUpdate(): Unit = {
+    val (writeOpts, _) = getWriterReaderOpts()
+    val input = recordsToStrings(dataGen.generateInserts("000", 1)).asScala
+    val inputDf= spark.read.json(spark.sparkContext.parallelize(input.toSeq, 1))
+    inputDf.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, "MERGE_ON_READ")
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), classOf[OverwriteWithLatestAvroPayload].getName)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    metaClient = createMetaClient(spark, basePath)
+    assertEquals(metaClient.getTableConfig.getPayloadClass, classOf[OverwriteWithLatestAvroPayload].getName)
+    val e = intercept[HoodieException] {
+      inputDf.write.format("hudi")
+        .options(writeOpts)
+        .option(DataSourceWriteOptions.TABLE_TYPE.key, "MERGE_ON_READ")
+        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+        .option(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), classOf[DefaultHoodieRecordPayload].getName)
+        .mode(SaveMode.Append)
+        .save(basePath)
+    }
+    assert(e.getMessage.contains("Config conflict(key"))
+    assert(e.getMessage.contains(HoodieTableConfig.PAYLOAD_CLASS_NAME.key))
+  }
+
+  @Test
+  def testMergeModeUpdate(): Unit = {
+    val (writeOpts, _) = getWriterReaderOpts()
+    val input = recordsToStrings(dataGen.generateInserts("000", 1)).asScala
+    val inputDf= spark.read.json(spark.sparkContext.parallelize(input.toSeq, 1))
+    val mergerStrategyName = "example_merger_strategy"
+    inputDf.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, "MERGE_ON_READ")
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), mergerStrategyName)
+      .option(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    metaClient = createMetaClient(spark, basePath)
+    assertEquals(metaClient.getTableConfig.getRecordMergeMode, RecordMergeMode.CUSTOM)
+    val e = intercept[HoodieException] {
+      inputDf.write.format("hudi")
+        .options(writeOpts)
+        .option(DataSourceWriteOptions.TABLE_TYPE.key, "MERGE_ON_READ")
+        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+        .option(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)
+        .option(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.COMMIT_TIME_ORDERING.name())
+        .mode(SaveMode.Append)
+        .save(basePath)
+    }
+    assert(e.getMessage.contains("Config conflict(key"))
+    assert(e.getMessage.contains(HoodieTableConfig.RECORD_MERGE_MODE.key))
+  }
+
+  @Test
+  def testMergeStrategyIdUpdate(): Unit = {
+    val (writeOpts, _) = getWriterReaderOpts()
+    val input = recordsToStrings(dataGen.generateInserts("000", 1)).asScala
+    val inputDf= spark.read.json(spark.sparkContext.parallelize(input.toSeq, 1))
+    val mergerStrategyName = "example_merger_strategy"
+    inputDf.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, "MERGE_ON_READ")
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), mergerStrategyName)
+      .option(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    metaClient = createMetaClient(spark, basePath)
+    assertEquals(metaClient.getTableConfig.getRecordMergeStrategyId, mergerStrategyName)
+    val e = intercept[HoodieException] {
+      inputDf.write.format("hudi")
+        .options(writeOpts)
+        .option(DataSourceWriteOptions.TABLE_TYPE.key, "MERGE_ON_READ")
+        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+        .option(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID)
+        .option(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
+        .mode(SaveMode.Append)
+        .save(basePath)
+    }
+    assert(e.getMessage.contains("Config conflict(key"))
+    assert(e.getMessage.contains(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key))
   }
 
   /**

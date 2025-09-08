@@ -238,13 +238,15 @@ class HoodieSparkSqlWriterInternal {
       originKeyGeneratorClassName, paramsWithoutDefaults)
 
     // Validate datasource and tableconfig keygen are the same
+    val paramsWithMergeProperties = setMergePropertiesForValidation(optParams, tableConfig)
     validateKeyGeneratorConfig(originKeyGeneratorClassName, tableConfig)
-    validateTableConfig(sqlContext.sparkSession, optParams, tableConfig, mode == SaveMode.Overwrite)
+    validateTableConfig(sqlContext.sparkSession, paramsWithMergeProperties, tableConfig, mode == SaveMode.Overwrite)
 
     asyncCompactionTriggerFnDefined = streamingWritesParamsOpt.map(_.asyncCompactionTriggerFn.isDefined).orElse(Some(false)).get
     asyncClusteringTriggerFnDefined = streamingWritesParamsOpt.map(_.asyncClusteringTriggerFn.isDefined).orElse(Some(false)).get
     // re-use table configs and inject defaults.
     var (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig, mode, streamingWritesParamsOpt.isDefined)
+
     val databaseName = hoodieConfig.getStringOrDefault(HoodieTableConfig.DATABASE_NAME, "")
     val tblName = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TBL_NAME,
       s"'${HoodieWriteConfig.TBL_NAME.key}' must be set.").trim
@@ -1075,6 +1077,51 @@ class HoodieSparkSqlWriterInternal {
     } else {
       null
     }
+  }
+
+  private def setMergePropertiesForValidation(optParams: Map[String, String],
+                                              tableConfig: HoodieTableConfig): Map[String, String] = {
+    val mergedParams = mutable.Map.empty ++ optParams
+    val tableVersion = if (tableConfig != null) {
+      tableConfig.getTableVersion
+    } else {
+      HoodieTableVersion.fromVersionCode(
+        SparkConfigUtils.getStringWithAltKeys(mergedParams, WRITE_TABLE_VERSION).toInt)
+    }
+    // Handle merge properties.
+    if (!mergedParams.contains(DataSourceWriteOptions.RECORD_MERGE_MODE.key())
+      || !mergedParams.contains(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key())
+      || !mergedParams.contains(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key())) {
+      val inferredMergeConfigs =
+        HoodieTableConfig.inferMergingConfigsForWrites(
+          RecordMergeMode.getValue(mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), null)),
+          mergedParams.getOrElse(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), ""),
+          mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), ""),
+          ConfigUtils.getOrderingFieldsStrDuringWrite(optParams.asJava),
+          tableVersion
+        )
+      mergedParams.put(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), inferredMergeConfigs.getMiddle)
+      mergedParams.put(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), inferredMergeConfigs.getMiddle)
+      if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) { // For table version >= 9
+        val mergeConfigs = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+          RecordMergeMode.getValue(mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), null)),
+          mergedParams.getOrElse(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), ""),
+          mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), ""),
+          ConfigUtils.getOrderingFieldsStrDuringWrite(optParams.asJava),
+          tableVersion).asScala
+        println(s"yijiacui: merged configs are: ${mergeConfigs}")
+        mergedParams.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), mergeConfigs(HoodieTableConfig.RECORD_MERGE_MODE.key()))
+        mergedParams.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), mergeConfigs(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key()))
+      } else {
+        mergedParams.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), inferredMergeConfigs.getLeft.name())
+        mergedParams.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), inferredMergeConfigs.getRight)
+      }
+    } else {
+      mergedParams.put(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), mergedParams(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()))
+      mergedParams.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), mergedParams(HoodieWriteConfig.RECORD_MERGE_MODE.key()))
+      mergedParams.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), mergedParams(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key()))
+    }
+    mergedParams.toMap
   }
 
   private def mergeParamsAndGetHoodieConfig(optParams: Map[String, String],
