@@ -252,6 +252,28 @@ public class GCSStorageLockClient implements StorageLockClient {
   }
 
   @Override
+  public boolean writeObject(String filePath, String content) {
+    try {
+      // Parse the file path to get bucket and object path
+      Pair<String, String> bucketAndPath = StorageLockClient.parseBucketAndPath(filePath);
+      String bucket = bucketAndPath.getLeft();
+      String objectPath = bucketAndPath.getRight();
+
+      BlobId blobId = BlobId.of(bucket, objectPath);
+      BlobInfo blobInfo = BlobInfo.newBuilder(blobId).build();
+
+      // Write the content to GCS
+      gcsClient.create(blobInfo, content.getBytes(UTF_8));
+
+      logger.debug("Successfully wrote object to: {}", filePath);
+      return true;
+    } catch (Exception e) {
+      logger.warn("Error writing object to: {}", filePath, e);
+      return false;
+    }
+  }
+
+  @Override
   public void close() throws Exception {
     this.gcsClient.close();
   }

@@ -67,7 +67,18 @@ public interface StorageLockClient extends AutoCloseable {
    * @return An Option containing the content as a string if successful, Option.empty() otherwise
    */
   Option<String> readObject(String filePath, boolean checkExistsFirst);
-  
+
+  /**
+   * Writes an object to the specified path.
+   * This method is intended for writing small files (e.g., audit logs, configuration files)
+   * and should not be used for large files.
+   *
+   * @param filePath The path where the object should be written
+   * @param content The content to write as a string
+   * @return true if the write was successful, false otherwise
+   */
+  boolean writeObject(String filePath, String content);
+
   /**
    * Gets the lock folder path for the given base path.
    * This is a static utility method that can be used without creating an instance.
