@@ -87,7 +87,10 @@ export default function BlogPostBox({metadata = {}, assets, frontMatter}) {
                     )}
                     <TitleHeading className={styles.blogPostTitle} itemProp="headline">
                         {location.pathname.startsWith('/blog') ?
-                                <Link itemProp="url" to={permalink}>
+                                <Link itemProp="url" to={permalink} onClick={(e) => {
+                                        e.preventDefault();
+                                        window.open(permalink, '_blank', 'noopener,noreferrer');
+                                    }}>
                                     <TitleHeading className={styles.blogPostTitle} itemProp="headline">
                                         {title}
                                     </TitleHeading>
@@ -99,6 +102,7 @@ export default function BlogPostBox({metadata = {}, assets, frontMatter}) {
                                 </TitleHeading>
                         }
                     </TitleHeading>
+
                     <div className={clsx(styles.blogInfo, "margin-top--sm margin-bottom--sm")}>
                         {AuthorsList()}
                     </div>
