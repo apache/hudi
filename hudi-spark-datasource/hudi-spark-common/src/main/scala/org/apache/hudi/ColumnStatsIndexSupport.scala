@@ -583,7 +583,7 @@ object ColumnStatsIndexSupport {
         }
 
       case a: Any =>
-        if (HoodieSparkUtils.gteqSpark3_4 && "TimestampNTZType".equals(a.getClass.getName)) {
+        if (HoodieSparkUtils.gteqSpark3_4 && a.getClass.getName.contains("TimestampNTZType")) {
           if (valueMetadata.getValueType.equals(ValueType.LOCAL_TIMESTAMP_MILLIS)) {
             // might need to do something for local as well
             DateTimeUtils.microsToLocalDateTime(DateTimeUtils.millisToMicros(value.asInstanceOf[Long]))
@@ -593,8 +593,9 @@ object ColumnStatsIndexSupport {
           } else {
             throw new UnsupportedOperationException(s"Cannot deserialize value for LongType: unexpected type ${valueMetadata.getValueType.name()}")
           }
+        } else {
+          throw new UnsupportedOperationException(s"Data type for the statistic value is not recognized $dataType")
         }
-        throw new UnsupportedOperationException(s"Data type for the statistic value is not recognized $dataType")
     }
   }
 }
