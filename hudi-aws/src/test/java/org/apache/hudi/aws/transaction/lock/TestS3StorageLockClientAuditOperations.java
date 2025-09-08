@@ -54,7 +54,6 @@ import static org.mockito.Mockito.when;
  * Tests for S3StorageLockClient audit operations (readObject and writeObject methods)
  */
 public class TestS3StorageLockClientAuditOperations {
-  
   private S3Client mockS3Client;
   private Logger mockLogger;
   private S3StorageLockClient lockClient;
@@ -72,138 +71,138 @@ public class TestS3StorageLockClientAuditOperations {
             (bucket, props) -> mockS3Client,
             mockLogger);
   }
-  
+
   @Test
   void testReadConfigWithCheckExistsFirstFileNotFound() {
     String configPath = "s3://test-bucket/table/.hoodie/.locks/audit_enabled.json";
-    
+
     // HEAD request returns 404
     S3Exception notFoundException = (S3Exception) S3Exception.builder()
-        .statusCode(404)
-        .message("Not Found")
-        .build();
+            .statusCode(404)
+            .message("Not Found")
+            .build();
     when(mockS3Client.headObject(any(HeadObjectRequest.class)))
-        .thenThrow(notFoundException);
-    
+            .thenThrow(notFoundException);
+
     Option<String> result = lockClient.readObject(configPath, true);
-    
+
     assertTrue(result.isEmpty());
     // Should only call HEAD, not GET
     verify(mockS3Client, times(1)).headObject(any(HeadObjectRequest.class));
     verify(mockS3Client, never()).getObjectAsBytes(any(GetObjectRequest.class));
   }
-  
+
   @Test
   void testReadConfigWithCheckExistsFirstFileExists() {
     String configPath = "s3://test-bucket/table/.hoodie/.locks/audit_enabled.json";
     String expectedContent = "{\"STORAGE_LP_AUDIT_SERVICE_ENABLED\": true}";
-    
+
     // HEAD request succeeds
     HeadObjectResponse headResponse = HeadObjectResponse.builder().build();
     when(mockS3Client.headObject(any(HeadObjectRequest.class)))
-        .thenReturn(headResponse);
-    
+            .thenReturn(headResponse);
+
     // GET request returns content
     ResponseBytes<GetObjectResponse> responseBytes = ResponseBytes.fromByteArray(
-        GetObjectResponse.builder().build(),
-        expectedContent.getBytes(StandardCharsets.UTF_8));
+            GetObjectResponse.builder().build(),
+            expectedContent.getBytes(StandardCharsets.UTF_8));
     when(mockS3Client.getObjectAsBytes(any(GetObjectRequest.class)))
-        .thenReturn(responseBytes);
-    
+            .thenReturn(responseBytes);
+
     Option<String> result = lockClient.readObject(configPath, true);
-    
+
     assertTrue(result.isPresent());
     assertEquals(expectedContent, result.get());
     // Should call both HEAD and GET
     verify(mockS3Client, times(1)).headObject(any(HeadObjectRequest.class));
     verify(mockS3Client, times(1)).getObjectAsBytes(any(GetObjectRequest.class));
   }
-  
+
   @Test
   void testReadConfigWithoutCheckExistsFirstFileNotFound() {
     String configPath = "s3://test-bucket/table/.hoodie/.locks/audit_enabled.json";
-    
+
     // Direct GET request returns 404
     S3Exception notFoundException = (S3Exception) S3Exception.builder()
-        .statusCode(404)
-        .message("Not Found")
-        .build();
+            .statusCode(404)
+            .message("Not Found")
+            .build();
     when(mockS3Client.getObjectAsBytes(any(GetObjectRequest.class)))
-        .thenThrow(notFoundException);
-    
+            .thenThrow(notFoundException);
+
     Option<String> result = lockClient.readObject(configPath, false);
-    
+
     assertTrue(result.isEmpty());
     // Should not call HEAD, only GET
     verify(mockS3Client, never()).headObject(any(HeadObjectRequest.class));
     verify(mockS3Client, times(1)).getObjectAsBytes(any(GetObjectRequest.class));
   }
-  
+
   @Test
   void testReadConfigWithoutCheckExistsFirstFileExists() {
     String configPath = "s3://test-bucket/table/.hoodie/.locks/audit_enabled.json";
     String expectedContent = "{\"STORAGE_LP_AUDIT_SERVICE_ENABLED\": false}";
-    
+
     // Direct GET request returns content
     ResponseBytes<GetObjectResponse> responseBytes = ResponseBytes.fromByteArray(
-        GetObjectResponse.builder().build(),
-        expectedContent.getBytes(StandardCharsets.UTF_8));
+            GetObjectResponse.builder().build(),
+            expectedContent.getBytes(StandardCharsets.UTF_8));
     when(mockS3Client.getObjectAsBytes(any(GetObjectRequest.class)))
-        .thenReturn(responseBytes);
-    
+            .thenReturn(responseBytes);
+
     Option<String> result = lockClient.readObject(configPath, false);
-    
+
     assertTrue(result.isPresent());
     assertEquals(expectedContent, result.get());
     // Should not call HEAD, only GET
     verify(mockS3Client, never()).headObject(any(HeadObjectRequest.class));
     verify(mockS3Client, times(1)).getObjectAsBytes(any(GetObjectRequest.class));
   }
-  
+
   @Test
   void testReadConfigWithCheckExistsFirstOtherS3Error() {
     String configPath = "s3://test-bucket/table/.hoodie/.locks/audit_enabled.json";
-    
+
     // HEAD request returns non-404 error
     S3Exception serverError = (S3Exception) S3Exception.builder()
-        .statusCode(500)
-        .message("Internal Server Error")
-        .build();
+            .statusCode(500)
+            .message("Internal Server Error")
+            .build();
     when(mockS3Client.headObject(any(HeadObjectRequest.class)))
-        .thenThrow(serverError);
-    
+            .thenThrow(serverError);
+
     Option<String> result = lockClient.readObject(configPath, true);
-    
+
     assertTrue(result.isEmpty());
     verify(mockS3Client, times(1)).headObject(any(HeadObjectRequest.class));
     verify(mockS3Client, never()).getObjectAsBytes(any(GetObjectRequest.class));
   }
-  
+
   @Test
   void testReadConfigWithInvalidUri() {
     String invalidPath = "not-a-valid-uri";
-    
+
     Option<String> result = lockClient.readObject(invalidPath, false);
-    
+
     assertTrue(result.isEmpty());
     // Should not make any S3 calls due to URI parsing error
     verify(mockS3Client, never()).headObject(any(HeadObjectRequest.class));
   }
-  
+
   @Test
   void testReadConfigWithRateLimitError() {
     String configPath = "s3://test-bucket/table/.hoodie/.locks/audit_enabled.json";
-    
+
     // GET request returns rate limit error
     S3Exception rateLimitException = (S3Exception) S3Exception.builder()
-        .statusCode(429)
-        .message("Too Many Requests")
-        .build();
+            .statusCode(429)
+            .message("Too Many Requests")
+            .build();
     when(mockS3Client.getObjectAsBytes(any(GetObjectRequest.class)))
-        .thenThrow(rateLimitException);
-    
+            .thenThrow(rateLimitException);
+
     Option<String> result = lockClient.readObject(configPath, false);
-    
+
     assertTrue(result.isEmpty());
     verify(mockS3Client, times(1)).getObjectAsBytes(any(GetObjectRequest.class));
   }
@@ -223,8 +222,8 @@ public class TestS3StorageLockClientAuditOperations {
 
     assertTrue(result);
     verify(mockS3Client, times(1)).putObject(
-        eq(PutObjectRequest.builder().bucket("test-bucket").key("audit/test-audit.jsonl").build()),
-        any(RequestBody.class)
+            eq(PutObjectRequest.builder().bucket("test-bucket").key("audit/test-audit.jsonl").build()),
+            any(RequestBody.class)
     );
     verify(mockLogger).debug("Successfully wrote object to: {}", filePath);
   }
@@ -264,8 +263,8 @@ public class TestS3StorageLockClientAuditOperations {
 
     assertTrue(result);
     verify(mockS3Client, times(1)).putObject(
-        eq(PutObjectRequest.builder().bucket("test-bucket").key("audit/empty-content.jsonl").build()),
-        any(RequestBody.class)
+            eq(PutObjectRequest.builder().bucket("test-bucket").key("audit/empty-content.jsonl").build()),
+            any(RequestBody.class)
     );
     verify(mockLogger).debug("Successfully wrote object to: {}", filePath);
   }

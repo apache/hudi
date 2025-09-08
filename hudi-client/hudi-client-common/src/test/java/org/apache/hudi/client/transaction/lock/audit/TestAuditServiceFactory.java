@@ -35,53 +35,54 @@ import static org.mockito.Mockito.when;
  * Test class for AuditServiceFactory
  */
 public class TestAuditServiceFactory {
-  
+
   private StorageLockClient mockStorageLockClient;
   private final String ownerId = "test-owner";
   private final String basePath = "s3://bucket/path/to/table";
-  
+
   @BeforeEach
   void setUp() {
     mockStorageLockClient = mock(StorageLockClient.class);
   }
-  
+
   @Test
   void testCreateAuditServiceWhenConfigNotFound() {
     // Config file doesn't exist
     String expectedPath = basePath + "/.hoodie/.locks/audit_enabled.json";
     when(mockStorageLockClient.readObject(eq(expectedPath), eq(true)))
-        .thenReturn(Option.empty());
-    
+            .thenReturn(Option.empty());
+
     Option<AuditService> result = AuditServiceFactory.createLockProviderAuditService(
-        ownerId, basePath, mockStorageLockClient,
-        System.currentTimeMillis(),
-        timestamp -> timestamp + 10000,
-        () -> true);
-    
-    // Should return empty when config not found
+            ownerId, basePath, mockStorageLockClient,
+            System.currentTimeMillis(),
+            timestamp -> timestamp + 10000,
+            () -> true);
+
+    // Should return empty for now (no concrete implementation yet)
+    // When implementation is added, this should return a present Option
     assertTrue(result.isEmpty());
     verify(mockStorageLockClient).readObject(expectedPath, true);
   }
-  
+
   @Test
   void testCreateAuditServiceWhenDisabledInConfig() {
     // Config file exists but audit is disabled
     String expectedPath = basePath + "/.hoodie/.locks/audit_enabled.json";
     String configJson = "{\"STORAGE_LOCK_AUDIT_SERVICE_ENABLED\": false}";
     when(mockStorageLockClient.readObject(eq(expectedPath), eq(true)))
-        .thenReturn(Option.of(configJson));
-    
+            .thenReturn(Option.of(configJson));
+
     Option<AuditService> result = AuditServiceFactory.createLockProviderAuditService(
-        ownerId, basePath, mockStorageLockClient,
-        System.currentTimeMillis(),
-        timestamp -> timestamp + 10000,
-        () -> true);
-    
+            ownerId, basePath, mockStorageLockClient,
+            System.currentTimeMillis(),
+            timestamp -> timestamp + 10000,
+            () -> true);
+
     // Should return empty when audit is disabled
     assertTrue(result.isEmpty());
     verify(mockStorageLockClient).readObject(expectedPath, true);
   }
-  
+
   @Test
   void testCreateAuditServiceWhenEnabledInConfig() {
     // Config file exists and audit is enabled
@@ -103,60 +104,60 @@ public class TestAuditServiceFactory {
     assertTrue(result.isPresent());
     verify(mockStorageLockClient).readObject(expectedPath, true);
   }
-  
+
   @Test
   void testCreateAuditServiceWithMalformedJson() {
     // Config file exists but contains invalid JSON
     String expectedPath = basePath + "/.hoodie/.locks/audit_enabled.json";
     String malformedJson = "{invalid json}";
     when(mockStorageLockClient.readObject(eq(expectedPath), eq(true)))
-        .thenReturn(Option.of(malformedJson));
-    
+            .thenReturn(Option.of(malformedJson));
+
     Option<AuditService> result = AuditServiceFactory.createLockProviderAuditService(
-        ownerId, basePath, mockStorageLockClient,
-        System.currentTimeMillis(),
-        timestamp -> timestamp + 10000,
-        () -> true);
-    
+            ownerId, basePath, mockStorageLockClient,
+            System.currentTimeMillis(),
+            timestamp -> timestamp + 10000,
+            () -> true);
+
     // Should return empty when JSON is malformed
     assertTrue(result.isEmpty());
     verify(mockStorageLockClient).readObject(expectedPath, true);
   }
-  
+
   @Test
   void testCreateAuditServiceWithEmptyConfig() {
     // Config file exists but doesn't contain the expected field
     String expectedPath = basePath + "/.hoodie/.locks/audit_enabled.json";
     String configJson = "{\"some_other_field\": true}";
     when(mockStorageLockClient.readObject(eq(expectedPath), eq(true)))
-        .thenReturn(Option.of(configJson));
-    
+            .thenReturn(Option.of(configJson));
+
     Option<AuditService> result = AuditServiceFactory.createLockProviderAuditService(
-        ownerId, basePath, mockStorageLockClient,
-        System.currentTimeMillis(),
-        timestamp -> timestamp + 10000,
-        () -> true);
-    
+            ownerId, basePath, mockStorageLockClient,
+            System.currentTimeMillis(),
+            timestamp -> timestamp + 10000,
+            () -> true);
+
     // Should return empty when field is missing (defaults to false)
     assertTrue(result.isEmpty());
     verify(mockStorageLockClient).readObject(expectedPath, true);
   }
-  
+
   @Test
   void testCreateAuditServiceUsesCheckExistsFirst() {
     // Verify that the factory passes true for checkExistsFirst
     String expectedPath = basePath + "/.hoodie/.locks/audit_enabled.json";
     when(mockStorageLockClient.readObject(eq(expectedPath), eq(true)))
-        .thenReturn(Option.empty());
-    
+            .thenReturn(Option.empty());
+
     AuditServiceFactory.createLockProviderAuditService(
-        ownerId, basePath, mockStorageLockClient,
-        System.currentTimeMillis(),
-        timestamp -> timestamp + 10000,
-        () -> true);
-    
+            ownerId, basePath, mockStorageLockClient,
+            System.currentTimeMillis(),
+            timestamp -> timestamp + 10000,
+            () -> true);
+
     // Should pass true for checkExistsFirst since audit config is rarely present
     verify(mockStorageLockClient).readObject(expectedPath, true);
   }
-  
+
 }

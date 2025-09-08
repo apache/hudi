@@ -306,15 +306,15 @@ public class S3StorageLockClient implements StorageLockClient {
       Pair<String, String> bucketAndPath = StorageLockClient.parseBucketAndPath(filePath);
       String bucket = bucketAndPath.getLeft();
       String key = bucketAndPath.getRight();
-      
+
       // Write the content to S3
       s3Client.putObject(
-          PutObjectRequest.builder()
-              .bucket(bucket)
-              .key(key)
-              .build(),
-          RequestBody.fromString(content));
-      
+              PutObjectRequest.builder()
+                      .bucket(bucket)
+                      .key(key)
+                      .build(),
+              RequestBody.fromString(content));
+
       logger.debug("Successfully wrote object to: {}", filePath);
       return true;
     } catch (Exception e) {
