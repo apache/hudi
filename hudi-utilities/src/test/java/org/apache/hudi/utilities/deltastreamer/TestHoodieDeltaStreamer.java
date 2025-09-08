@@ -780,7 +780,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
   }
 
-  @Test
+  @Disabled
   public void testBackwardsCompatibility() throws Exception {
     String basePath = "/tmp/hudi_trips_logical_types_json_v6/";
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(

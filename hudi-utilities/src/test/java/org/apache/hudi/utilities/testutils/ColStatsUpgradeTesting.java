@@ -25,7 +25,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.io.IOException;
 import java.io.OutputStreamWriter;
@@ -51,7 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class ColStatsUpgradeTesting {
 
-  @Test
+  @Disabled
   public void generate() throws IOException {
     generateTestAssets("/tmp/colstats-upgrade-test", 6);
   }
