@@ -1851,28 +1851,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
-  public void testPayloadClassUpdate() throws Exception {
-    String dataSetBasePath = basePath + "/test_dataset_mor_payload_class_update";
-    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
-        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
-        true, false, null, "MERGE_ON_READ");
-    new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
-    assertRecordCount(1000, dataSetBasePath, sqlContext);
-    HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, dataSetBasePath, false);
-    assertEquals(metaClient.getTableConfig().getPayloadClass(), DefaultHoodieRecordPayload.class.getName());
-
-    //now create one more deltaStreamer instance and update payload class
-    HoodieDeltaStreamer.Config updatedConfig = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
-        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
-        true, true, DummyAvroPayload.class.getName(), "MERGE_ON_READ");
-    Exception e = assertThrows(HoodieException.class, () -> {
-      new HoodieDeltaStreamer(updatedConfig, jsc, fs, hiveServer.getHiveConf());
-    }, "Should error out when payload class is switched");
-    assertTrue(e.getMessage().contains("Config conflict(key"));
-    assertTrue(e.getMessage().contains(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
-  }
-
-  @Test
   public void testPartialPayloadClass() throws Exception {
     String dataSetBasePath = basePath + "/test_dataset_mor";
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
@@ -1886,13 +1864,34 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(metaClient.getTableConfig().getPayloadClass(), DefaultHoodieRecordPayload.class.getName());
   }
 
-  @Test
-  public void testMergeModeUpdate() throws Exception {
-    String dataSetBasePath = basePath + "/test_dataset_mor_payload_class_update";
+  private static Stream<Arguments> getArgsForMergeRelatedPropertiesUpdate() {
+    return Stream.of(
+        Arguments.of(true, DummyAvroPayload.class.getName(), null, null, null, null, HoodieTableConfig.PAYLOAD_CLASS_NAME.key()),
+        Arguments.of(false, null, null, null, RecordMergeMode.CUSTOM, HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID, HoodieTableConfig.RECORD_MERGE_MODE.key()),
+        Arguments.of(false, null, RecordMergeMode.CUSTOM, "strategy_id_1", RecordMergeMode.CUSTOM, "strategy_id_2", HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key())
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("getArgsForMergeRelatedPropertiesUpdate")
+  public void testMergeRelatedPropertiesUpdate(
+      Boolean updatePayloadClass,
+      String updatedPayloadClassName,
+      RecordMergeMode firstMergeMode,
+      String firstStrategyId,
+      RecordMergeMode secondMergeMode,
+      String secondStrategyId,
+      String exceptionKey
+  ) throws Exception {
+    String dataSetBasePath = basePath + "/test_dataset_mor_merge_update";
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
         Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
         true, false, null, "MERGE_ON_READ");
     new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
+    if (null != firstMergeMode) {
+      cfg.recordMergeMode = firstMergeMode;
+      cfg.recordMergeStrategyId = firstStrategyId;
+    }
     assertRecordCount(1000, dataSetBasePath, sqlContext);
     HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, dataSetBasePath, false);
     assertEquals(metaClient.getTableConfig().getPayloadClass(), DefaultHoodieRecordPayload.class.getName());
@@ -1900,14 +1899,16 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     //now create one more deltaStreamer instance and update payload class
     HoodieDeltaStreamer.Config updatedConfig = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
         Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
-        true, false, null, "MERGE_ON_READ");
-    updatedConfig.recordMergeMode = RecordMergeMode.CUSTOM;
-    updatedConfig.recordMergeStrategyId = HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
+        true, updatePayloadClass, updatedPayloadClassName, "MERGE_ON_READ");
+    if (null != secondMergeMode) {
+      updatedConfig.recordMergeMode = secondMergeMode;
+      updatedConfig.recordMergeStrategyId = secondStrategyId;
+    }
     Exception e = assertThrows(HoodieException.class, () -> {
       new HoodieDeltaStreamer(updatedConfig, jsc, fs, hiveServer.getHiveConf());
     }, "Should error out when merge mode is switched");
     assertTrue(e.getMessage().contains("Config conflict(key"));
-    assertTrue(e.getMessage().contains(HoodieTableConfig.RECORD_MERGE_MODE.key()));
+    assertTrue(e.getMessage().contains(exceptionKey));
   }
 
   @Test
