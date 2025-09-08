@@ -54,7 +54,8 @@ public class TestAuditServiceFactory {
     
     Option<AuditService> result = AuditServiceFactory.createLockProviderAuditService(
         ownerId, basePath, mockStorageLockClient,
-        () -> System.currentTimeMillis() + 10000,
+        System.currentTimeMillis(),
+        timestamp -> timestamp + 10000,
         () -> true);
     
     // Should return empty when config not found
@@ -72,7 +73,8 @@ public class TestAuditServiceFactory {
     
     Option<AuditService> result = AuditServiceFactory.createLockProviderAuditService(
         ownerId, basePath, mockStorageLockClient,
-        () -> System.currentTimeMillis() + 10000,
+        System.currentTimeMillis(),
+        timestamp -> timestamp + 10000,
         () -> true);
     
     // Should return empty when audit is disabled
@@ -93,7 +95,8 @@ public class TestAuditServiceFactory {
     
     Option<AuditService> result = AuditServiceFactory.createLockProviderAuditService(
         ownerId, basePath, mockStorageLockClient,
-        () -> System.currentTimeMillis() + 10000, // lockExpirationSupplier
+        System.currentTimeMillis(),
+        timestamp -> timestamp + 10000, // lockExpirationFunction
         () -> true); // lockHeldSupplier
     
     // Should return the audit service when enabled
@@ -111,7 +114,8 @@ public class TestAuditServiceFactory {
     
     Option<AuditService> result = AuditServiceFactory.createLockProviderAuditService(
         ownerId, basePath, mockStorageLockClient,
-        () -> System.currentTimeMillis() + 10000,
+        System.currentTimeMillis(),
+        timestamp -> timestamp + 10000,
         () -> true);
     
     // Should return empty when JSON is malformed
@@ -129,7 +133,8 @@ public class TestAuditServiceFactory {
     
     Option<AuditService> result = AuditServiceFactory.createLockProviderAuditService(
         ownerId, basePath, mockStorageLockClient,
-        () -> System.currentTimeMillis() + 10000,
+        System.currentTimeMillis(),
+        timestamp -> timestamp + 10000,
         () -> true);
     
     // Should return empty when field is missing (defaults to false)
@@ -146,7 +151,8 @@ public class TestAuditServiceFactory {
     
     AuditServiceFactory.createLockProviderAuditService(
         ownerId, basePath, mockStorageLockClient,
-        () -> System.currentTimeMillis() + 10000,
+        System.currentTimeMillis(),
+        timestamp -> timestamp + 10000,
         () -> true);
     
     // Should pass true for checkExistsFirst since audit config is rarely present

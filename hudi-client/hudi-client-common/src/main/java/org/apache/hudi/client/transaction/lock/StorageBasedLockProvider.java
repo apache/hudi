@@ -99,7 +99,8 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   private final HeartbeatManager heartbeatManager;
   private final transient Thread shutdownThread;
   private final Option<HoodieLockMetrics> hoodieLockMetrics;
-  private final Option<AuditService> auditService;
+  private Option<AuditService> auditService;
+  private final String basePath;
 
   @GuardedBy("this")
   private StorageLockFile currentLockObj = null;
@@ -184,16 +185,15 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     StorageBasedLockConfig config = new StorageBasedLockConfig.Builder().fromProperties(properties).build();
     long heartbeatPollSeconds = config.getHeartbeatPollSeconds();
     this.lockValiditySecs = config.getValiditySeconds();
-    String lockFolderPath = StorageLockClient.getLockFolderPath(config.getHudiTableBasePath());
+    this.basePath = config.getHudiTableBasePath();
+    String lockFolderPath = StorageLockClient.getLockFolderPath(basePath);
     this.lockFilePath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, DEFAULT_TABLE_LOCK_FILE_NAME);
     this.heartbeatManager = heartbeatManagerLoader.apply(ownerId, TimeUnit.SECONDS.toMillis(heartbeatPollSeconds), this::renewLock);
     this.storageLockClient = storageLockClientLoader.apply(ownerId, lockFilePath, properties);
     this.ownerId = ownerId;
     this.logger = logger;
     this.hoodieLockMetrics = Option.ofNullable(hoodieLockMetrics);
-    this.auditService = AuditServiceFactory.createLockProviderAuditService(
-        ownerId, config.getHudiTableBasePath(), storageLockClient,
-        this::calculateLockExpiration, this::actuallyHoldsLock);
+    this.auditService = Option.empty(); // Will be created lazily on first lock acquisition
     shutdownThread = new Thread(() -> shutdown(true));
     Runtime.getRuntime().addShutdownHook(shutdownThread);
     logger.info("Instantiated new storage-based lock provider, owner: {}, lockfilePath: {}", ownerId, lockFilePath);
@@ -276,6 +276,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           logger.error("Owner {}: Audit service failed to close.", ownerId, e);
         }
       });
+      this.auditService = Option.empty();
     } catch (Exception e) {
       logger.error("Owner {}: Failed to close audit service.", ownerId, e);
     }
@@ -340,7 +341,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
 
     // Try to acquire the lock
     long acquisitionTimestamp = getCurrentEpochMs();
-    long lockExpirationMs = calculateLockExpiration();
+    long lockExpirationMs = calculateLockExpiration(acquisitionTimestamp);
     StorageLockData newLockData = new StorageLockData(false, lockExpirationMs, ownerId);
     Pair<LockUpsertResult, Option<StorageLockFile>> lockUpdateStatus = this.storageLockClient.tryUpsertLockFile(
         newLockData,
@@ -373,6 +374,14 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     }
 
     logInfoLockState(ACQUIRED);
+    
+    // Create audit service lazily on first successful lock acquisition if auditing is enabled
+    if (auditService.isEmpty()) {
+      auditService = AuditServiceFactory.createLockProviderAuditService(
+          ownerId, basePath, storageLockClient, acquisitionTimestamp,
+          this::calculateLockExpiration, this::actuallyHoldsLock);
+    }
+    
     recordAuditOperation(AuditOperationState.START, acquisitionTimestamp);
     return true;
   }
@@ -522,7 +531,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       // prevents further data corruption by
       // letting someone else acquire the lock.
       long acquisitionTimestamp = getCurrentEpochMs();
-      long lockExpirationMs = calculateLockExpiration();
+      long lockExpirationMs = calculateLockExpiration(acquisitionTimestamp);
       Pair<LockUpsertResult, Option<StorageLockFile>> currentLock = this.storageLockClient.tryUpsertLockFile(
           new StorageLockData(false, lockExpirationMs, ownerId),
           Option.of(getLock()));
@@ -611,13 +620,14 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   }
 
   /**
-   * Calculates the lock expiration time based on current time and validity period.
+   * Calculates the lock expiration time based on given timestamp and validity period.
+   * This is the shared function used by both the lock provider and audit service.
    * 
+   * @param timestamp The base timestamp to calculate expiration from
    * @return Lock expiration time in milliseconds
    */
-  @VisibleForTesting
-  long calculateLockExpiration() {
-    return getCurrentEpochMs() + TimeUnit.SECONDS.toMillis(lockValiditySecs);
+  private long calculateLockExpiration(long timestamp) {
+    return timestamp + TimeUnit.SECONDS.toMillis(lockValiditySecs);
   }
 
   /**

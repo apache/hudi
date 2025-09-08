@@ -28,11 +28,12 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
  * Storage-based audit service implementation for lock provider operations.
- * Writes audit records as individual JSON files to track lock lifecycle events.
+ * Writes audit records to a single JSONL file per transaction to track lock lifecycle events.
  */
 public class StorageLockProviderAuditService implements AuditService {
   
@@ -40,47 +41,41 @@ public class StorageLockProviderAuditService implements AuditService {
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   public static final String AUDIT_FOLDER_NAME = "audit";
   
-  private final String basePath;
   private final String ownerId;
-  private final String ownerShortUuid;
+  private final long transactionStartTime;
+  private final String auditFilePath;
   private final StorageLockClient storageLockClient;
-  private final Supplier<Long> lockExpirationSupplier;
+  private final Function<Long, Long> lockExpirationFunction;
   private final Supplier<Boolean> lockHeldSupplier;
+  private final StringBuilder auditBuffer;
   
   /**
    * Constructor for StorageLockProviderAuditService.
    * 
    * @param basePath The base path where audit files will be written
    * @param ownerId The full owner ID
+   * @param transactionStartTime The timestamp when the transaction started (lock acquired)
    * @param storageLockClient The storage client for writing audit files
-   * @param lockExpirationSupplier Supplier that provides the lock expiration time
+   * @param lockExpirationFunction Function that takes a timestamp and returns the lock expiration time
    * @param lockHeldSupplier Supplier that provides whether the lock is currently held
    */
   public StorageLockProviderAuditService(
       String basePath,
       String ownerId,
+      long transactionStartTime,
       StorageLockClient storageLockClient,
-      Supplier<Long> lockExpirationSupplier,
+      Function<Long, Long> lockExpirationFunction,
       Supplier<Boolean> lockHeldSupplier) {
-    this.basePath = basePath;
     this.ownerId = ownerId;
-    // Extract short UUID from owner ID (first 8 characters of UUID portion)
-    this.ownerShortUuid = extractShortUuid(ownerId);
+    this.transactionStartTime = transactionStartTime;
     this.storageLockClient = storageLockClient;
-    this.lockExpirationSupplier = lockExpirationSupplier;
+    this.lockExpirationFunction = lockExpirationFunction;
     this.lockHeldSupplier = lockHeldSupplier;
-  }
-  
-  @Override
-  public void recordOperation(AuditOperationState state, long timestamp) throws Exception {
-    // Generate unique filename: <timestamp>-<owner-short-uuid>-<state>.json
-    String filename = String.format("%d-%s-%s.json", 
-        timestamp, 
-        ownerShortUuid, 
-        state.name().toLowerCase());
+    this.auditBuffer = new StringBuilder();
     
-    // Build the full path for the audit file
-    String auditFilePath = String.format("%s%s%s%s%s%s%s",
+    // Generate audit file path: <txn-start>_<full-owner-id>.jsonl
+    String filename = String.format("%d_%s.jsonl", transactionStartTime, ownerId);
+    this.auditFilePath = String.format("%s%s%s%s%s%s%s",
         basePath,
         StoragePath.SEPARATOR,
         HoodieTableMetaClient.LOCKS_FOLDER_NAME,
@@ -89,51 +84,56 @@ public class StorageLockProviderAuditService implements AuditService {
         StoragePath.SEPARATOR,
         filename);
     
+    LOG.debug("Initialized audit service for transaction starting at {} with file: {}", 
+        transactionStartTime, auditFilePath);
+  }
+  
+  @Override
+  public synchronized void recordOperation(AuditOperationState state, long timestamp) throws Exception {
     // Create audit record
     Map<String, Object> auditRecord = new HashMap<>();
     auditRecord.put("ownerId", ownerId);
+    auditRecord.put("transactionStartTime", transactionStartTime);
     auditRecord.put("timestamp", timestamp);
     auditRecord.put("state", state.name());
-    auditRecord.put("lockExpiration", lockExpirationSupplier.get());
+    auditRecord.put("lockExpiration", lockExpirationFunction.apply(timestamp));
     auditRecord.put("lockHeld", lockHeldSupplier.get());
     
-    // Convert to JSON
-    String jsonContent = OBJECT_MAPPER.writeValueAsString(auditRecord);
+    // Convert to JSON and append newline for JSONL format
+    String jsonLine = OBJECT_MAPPER.writeValueAsString(auditRecord) + "\n";
     
-    // Write the audit file
-    writeAuditFile(auditFilePath, jsonContent);
+    // Append to buffer
+    auditBuffer.append(jsonLine);
     
-    LOG.debug("Recorded audit operation: state={}, timestamp={}, path={}", 
+    // Write the accumulated audit records to file
+    writeAuditFile();
+    
+    LOG.debug("Recorded audit operation: state={}, timestamp={}, file={}", 
         state, timestamp, auditFilePath);
   }
   
-  private void writeAuditFile(String filePath, String content) {
+  private void writeAuditFile() {
     try {
-      // Use the storage client's writeObject method to write the audit file
-      boolean success = storageLockClient.writeObject(filePath, content);
+      // Write the entire buffer content to the audit file
+      // This overwrites the file with all accumulated records
+      String content = auditBuffer.toString();
+      boolean success = storageLockClient.writeObject(auditFilePath, content);
       if (success) {
-        LOG.debug("Successfully wrote audit file to: {}", filePath);
+        LOG.debug("Successfully wrote audit records to: {}", auditFilePath);
       } else {
-        LOG.warn("Failed to write audit file to: {}", filePath);
+        LOG.warn("Failed to write audit records to: {}", auditFilePath);
       }
     } catch (Exception e) {
-      LOG.warn("Failed to write audit file to: {}", filePath, e);
+      LOG.warn("Failed to write audit records to: {}", auditFilePath, e);
       // Don't throw exception - audit failures should not break lock operations
     }
   }
   
-  private String extractShortUuid(String fullOwnerId) {
-    // Owner ID typically contains UUID, extract first 8 characters for short form
-    if (fullOwnerId != null && fullOwnerId.length() >= 8) {
-      // Otherwise, just use first 8 characters
-      return fullOwnerId.substring(0, 8);
-    }
-    return fullOwnerId;
-  }
-  
   @Override
-  public void close() throws Exception {
-    // No resources to clean up
-    LOG.debug("Closing StorageLockProviderAuditService for owner: {}", ownerId);
+  public synchronized void close() throws Exception {
+    // All audit records are already written after each recordOperation()
+    // No additional writes needed during close
+    LOG.debug("Closed StorageLockProviderAuditService for transaction: {}, owner: {}", 
+        transactionStartTime, ownerId);
   }
 }

@@ -776,10 +776,6 @@ class TestStorageBasedLockProvider {
         mockLogger,
         null);
     
-    // Verify audit config was checked
-    verify(auditMockClient, times(1)).readObject(
-        contains(".locks/audit_enabled.json"), eq(true));
-    
     // Lock provider should work normally even without audit
     StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     StorageLockFile lockFile = new StorageLockFile(data, "v1");
@@ -787,7 +783,17 @@ class TestStorageBasedLockProvider {
         .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(lockFile)));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
     
+    // tryLock should trigger audit service creation (lazily)
     assertTrue(auditLockProvider.tryLock());
+    
+    // Verify audit config was checked during tryLock
+    verify(auditMockClient, times(1)).readObject(
+        contains(".locks/audit_enabled.json"), eq(true));
+    
+    // No audit writes should happen since audit is not present
+    verify(auditMockClient, never()).writeObject(
+        contains(".locks/audit"), anyString());
+    
     auditLockProvider.close();
   }
   
@@ -815,9 +821,23 @@ class TestStorageBasedLockProvider {
         mockLogger,
         null);
     
-    // Verify audit config was checked
+    // Set up lock acquisition
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile lockFile = new StorageLockFile(data, "v1");
+    when(auditMockClient.tryUpsertLockFile(any(), eq(Option.empty())))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(lockFile)));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+    
+    // tryLock should trigger audit service creation check
+    assertTrue(auditLockProvider.tryLock());
+    
+    // Verify audit config was checked during tryLock
     verify(auditMockClient, times(1)).readObject(
         contains(".locks/audit_enabled.json"), eq(true));
+    
+    // No audit writes should happen since audit is disabled
+    verify(auditMockClient, never()).writeObject(
+        contains(".locks/audit"), anyString());
     
     auditLockProvider.close();
   }
@@ -849,12 +869,33 @@ class TestStorageBasedLockProvider {
         mockLogger,
         null);
     
-    // Verify audit config was checked
+    // Set up lock acquisition
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile lockFile = new StorageLockFile(data, "v1");
+    when(auditMockClient.tryUpsertLockFile(any(), eq(Option.empty())))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(lockFile)));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+    
+    // tryLock should trigger audit service creation and START audit
+    assertTrue(auditLockProvider.tryLock());
+    
+    // Verify audit config was checked during tryLock
     verify(auditMockClient, times(1)).readObject(
         contains(".locks/audit_enabled.json"), eq(true));
     
-    // Note: Actual audit service implementation would be instantiated here
-    // Currently returns empty since no concrete implementation yet
+    // Verify audit START operation was written
+    verify(auditMockClient, times(1)).writeObject(
+        contains(".locks/audit/"), anyString());
+    
+    // Unlock should trigger END audit
+    when(auditMockClient.tryUpsertLockFile(any(), any()))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(lockFile)));
+    when(mockHeartbeatManager.stopHeartbeat(anyBoolean())).thenReturn(true);
+    auditLockProvider.unlock();
+    
+    // Verify audit END operation was written (total 2 writes: START and END)
+    verify(auditMockClient, times(2)).writeObject(
+        contains(".locks/audit/"), anyString());
     
     auditLockProvider.close();
   }

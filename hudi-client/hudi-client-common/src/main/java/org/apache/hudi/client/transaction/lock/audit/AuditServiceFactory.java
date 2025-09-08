@@ -46,7 +46,8 @@ public class AuditServiceFactory {
    * @param ownerId The owner ID for the lock provider  
    * @param basePath The base path of the Hudi table
    * @param storageLockClient The storage lock client to use for reading configuration
-   * @param lockExpirationSupplier Supplier that provides the lock expiration time
+   * @param transactionStartTime The timestamp when the transaction started (lock acquired)
+   * @param lockExpirationFunction Function that takes a timestamp and returns the lock expiration time
    * @param lockHeldSupplier Supplier that provides whether the lock is currently held
    * @return An Option containing the audit service if enabled, Option.empty() otherwise
    */
@@ -54,7 +55,8 @@ public class AuditServiceFactory {
       String ownerId,
       String basePath,
       StorageLockClient storageLockClient,
-      Supplier<Long> lockExpirationSupplier,
+      long transactionStartTime,
+      java.util.function.Function<Long, Long> lockExpirationFunction,
       Supplier<Boolean> lockHeldSupplier) {
 
     if (!isAuditEnabled(basePath, storageLockClient)) {
@@ -65,8 +67,9 @@ public class AuditServiceFactory {
     AuditService auditService = new StorageLockProviderAuditService(
         basePath,
         ownerId, 
+        transactionStartTime,
         storageLockClient,
-        lockExpirationSupplier,
+        lockExpirationFunction,
         lockHeldSupplier);
     
     return Option.of(auditService);
