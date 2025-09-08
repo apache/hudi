@@ -34,21 +34,21 @@ import java.util.Collections;
 import java.util.Iterator;
 
 /**
- * A {@link FlinkMergeAndReplaceHandle} that supports CONCAT write incrementally(small data buffers).
+ * A {@link FlinkIncrementalMergeHandle} that supports CONCAT write incrementally(small data buffers).
  *
  * <P>The records iterator for super constructor is reset as empty thus the initialization for new records
  * does nothing. This handle keep the iterator for itself to override the write behavior.
  */
-public class FlinkConcatAndReplaceHandle<T, I, K, O>
-    extends FlinkMergeAndReplaceHandle<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkConcatAndReplaceHandle.class);
+public class FlinkIncrementalConcatHandle<T, I, K, O>
+    extends FlinkIncrementalMergeHandle<T, I, K, O> {
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkIncrementalConcatHandle.class);
 
   // a representation of incoming records that tolerates duplicate keys
   private final Iterator<HoodieRecord<T>> recordItr;
 
-  public FlinkConcatAndReplaceHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                     Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                                     TaskContextSupplier taskContextSupplier, StoragePath basePath) {
+  public FlinkIncrementalConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                      Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                                      TaskContextSupplier taskContextSupplier, StoragePath basePath) {
     super(config, instantTime, hoodieTable, Collections.emptyIterator(), partitionPath, fileId, taskContextSupplier, basePath);
     this.recordItr = recordItr;
   }

@@ -358,11 +358,11 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(makeDatesAmbiguous);
     if (useCustomSchema) {
       Helpers.saveParquetToDFS(Helpers.toGenericRecords(
-          dataGenerator.generateInsertsAsPerSchema("000", numRecords, schemaStr),
+          dataGenerator.generateInsertsAsPerSchema("000", numRecords, schemaStr, 0L),
           schema), new Path(path), HoodieTestDataGenerator.AVRO_TRIP_SCHEMA);
     } else {
       Helpers.saveParquetToDFS(Helpers.toGenericRecords(
-          dataGenerator.generateInserts("000", numRecords)), new Path(path));
+          dataGenerator.generateInserts("000", numRecords, 0L)), new Path(path));
     }
     return dataGenerator;
   }

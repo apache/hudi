@@ -204,6 +204,10 @@ public class WriteStatus implements Serializable {
     return this;
   }
 
+  public double getFailureFraction() {
+    return failureFraction;
+  }
+
   public String getFileId() {
     return fileId;
   }
