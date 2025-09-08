@@ -154,7 +154,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
       fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
     } else {
       // rewrite the record to include metadata fields in schema, and the values will be set later.
-      record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
+      record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps(), hasOperationMetaField);
       if (isSecondaryIndexStatsStreamingWritesEnabled) {
         SecondaryIndexStreamingTracker.trackSecondaryIndexStats(record, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, config);
       }
@@ -164,7 +164,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
 
   protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, Schema schema, Schema targetSchema, String fileName, Properties prop) {
     MetadataValues metadataValues = new MetadataValues().setFileName(fileName);
-    return record.prependMetaFields(schema, targetSchema, metadataValues, prop);
+    return record.prependMetaFields(schema, targetSchema, metadataValues, prop, hasOperationMetaField);
   }
 
   @Override

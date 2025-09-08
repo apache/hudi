@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.AvroRecordContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.JoinedGenericRecord;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -39,6 +40,8 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -195,9 +198,17 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
+  public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props,
+                                        boolean hasOperationMetaField) {
     decodeRecord(recordSchema);
-    GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecordOld((GenericRecord) data, targetSchema);
+    List<String> metaFields = hasOperationMetaField ? HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION_LIST : HoodieRecord.HOODIE_META_COLUMNS;
+    /*GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecordWithPrependedMetaFieldsOptimized(data, targetSchema, recordSchema.getFields().size(),
+        targetSchema.getFields().size() - recordSchema.getFields().size());*/
+
+    GenericRecord newAvroRecord = new JoinedGenericRecord((GenericRecord) data, new HashMap<>(metaFields.size()),
+        metaFields, targetSchema);
+    //GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecord((GenericRecord) data, targetSchema); // 0.10.1 impl
+    //GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecordOld((GenericRecord) data, targetSchema);
     updateMetadataValuesInternal(newAvroRecord, metadataValues);
     HoodieAvroIndexedRecord newRecord = new HoodieAvroIndexedRecord(key, newAvroRecord, operation, metaData, orderingValue);
     newRecord.setNewLocation(this.newLocation);

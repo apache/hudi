@@ -177,7 +177,8 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
+  public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props,
+                                        boolean hasOperationMetaField) {
     throw new UnsupportedOperationException("Not supported for HoodieHiveRecord");
   }
 

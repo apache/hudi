@@ -973,6 +973,17 @@ public class HoodieAvroUtils {
     return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.emptyMap());
   }
 
+  public static GenericRecord rewriteRecordWithPrependedMetaFieldsOptimized(IndexedRecord oldRecord, Schema newSchema, int oldFieldCount, int metaFieldCount) {
+    // Fast path: direct positional copy with offset using pre-calculated values
+    GenericData.Record newRecord = new GenericData.Record(newSchema);
+    // Single loop: directly copy original fields to offset positions
+    // Meta fields are already initialized to null by GenericData.Record constructor
+    for (int i = 0; i < oldFieldCount; i++) {
+      newRecord.put(i + metaFieldCount, oldRecord.get(i));
+    }
+    return newRecord;
+  }
+
   public static GenericRecord rewriteRecordOld(GenericRecord oldRecord, Schema newSchema) {
     GenericRecord newRecord = new GenericData.Record(newSchema);
     boolean isSpecificRecord = oldRecord instanceof SpecificRecordBase;

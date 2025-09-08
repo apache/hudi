@@ -125,6 +125,17 @@ public class TestHoodieAvroUtils {
       + "{\"name\": \"pii_col\", \"type\": \"string\", \"column_category\": \"user_profile\"}], "
       + "\"custom_schema_property\": \"custom_schema_property_value\"}";
 
+  private static final String EXAMPLE_SCHEMA_WITH_META_FIELDS = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
+      + "{\"name\": \"_hoodie_commit_time\",\"type\": \"string\"},"
+      + "{\"name\": \"_hoodie_commit_seqno\",\"type\": \"string\"},"
+      + "{\"name\": \"_hoodie_record_key\",\"type\": \"string\"},"
+      + "{\"name\": \"_hoodie_partition_path\",\"type\": \"string\"},"
+      + "{\"name\": \"_hoodie_file_name\",\"type\": \"string\"},"
+      + "{\"name\": \"timestamp\",\"type\": \"double\"},"
+      + "{\"name\": \"_row_key\", \"type\": \"string\"},"
+      + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
+      + "{\"name\": \"pii_col\", \"type\": \"string\", \"column_category\": \"user_profile\"}]}";
+
   private static final int NUM_FIELDS_IN_EXAMPLE_SCHEMA = 4;
 
   private static final String SCHEMA_WITH_METADATA_FIELD = "{\"type\": \"record\",\"name\": \"testrec2\",\"fields\": [ "
@@ -289,6 +300,55 @@ public class TestHoodieAvroUtils {
     assertNull(rec1.get("_hoodie_commit_time"));
     assertNull(rec1.get("nullable_field"));
     assertNull(rec1.get("nullable_field_wo_default"));
+  }
+
+  @Test
+  public void testJoinedGenericRecord() {
+    GenericRecord rec = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
+    rec.put("_row_key", "key1");
+    rec.put("non_pii_col", "val1");
+    rec.put("pii_col", "val2");
+    rec.put("timestamp", 3.5);
+
+    int totalMetaFields = 5;
+    List<String> metaFields = new ArrayList<>(totalMetaFields);
+    metaFields.add(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+    metaFields.add(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD);
+    metaFields.add(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    metaFields.add(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
+    metaFields.add(HoodieRecord.FILENAME_METADATA_FIELD);
+
+    GenericRecord rec1 = new JoinedGenericRecord(rec, new HashMap<>(metaFields.size()),
+        metaFields, new Schema.Parser().parse(EXAMPLE_SCHEMA_WITH_META_FIELDS));
+    assertNull(rec1.get("_hoodie_commit_time"));
+    assertNull(rec1.get("_hoodie_record_key"));
+
+    assertEquals(rec.get("_row_key"), rec1.get("_row_key"));
+    assertEquals(rec.get("_row_key"), rec1.get(6));
+    assertEquals(rec.get("non_pii_col"), rec1.get("non_pii_col"));
+    assertEquals(rec.get("non_pii_col"), rec1.get(7));
+    assertEquals(rec.get("pii_col"), rec1.get("pii_col"));
+    assertEquals(rec.get("pii_col"), rec1.get(8));
+    assertEquals(rec.get("timestamp"), rec1.get("timestamp"));
+    assertEquals(rec.get("timestamp"), rec1.get(5));
+
+    // lets add meta field values and validate
+    rec1.put(0, "commitTime1");
+    rec1.put(1, "commitSecNo1");
+    rec1.put(2, "recKey1");
+    rec1.put(3, "pPath1");
+    rec1.put(4, "fileName");
+
+    assertEquals("commitTime1", rec1.get(0));
+    assertEquals("commitTime1", rec1.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+    assertEquals("commitSecNo1", rec1.get(1));
+    assertEquals("commitSecNo1", rec1.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD));
+    assertEquals("recKey1", rec1.get(2));
+    assertEquals("recKey1", rec1.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+    assertEquals("pPath1", rec1.get(3));
+    assertEquals("pPath1", rec1.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+    assertEquals("fileName", rec1.get(4));
+    assertEquals("fileName", rec1.get(HoodieRecord.FILENAME_METADATA_FIELD));
   }
 
   @Test
