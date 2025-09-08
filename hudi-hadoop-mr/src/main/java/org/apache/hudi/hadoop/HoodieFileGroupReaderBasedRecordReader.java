@@ -104,6 +104,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
   private final InputSplit inputSplit;
   private final JobConf jobConfCopy;
   private final UnaryOperator<ArrayWritable> reverseProjection;
+  private final boolean hasBaseFile;
 
   public HoodieFileGroupReaderBasedRecordReader(HiveReaderCreator readerCreator,
                                                 final InputSplit split,
@@ -141,6 +142,8 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
       }
     }
     LOG.debug("Creating HoodieFileGroupReaderRecordReader with tableBasePath={}, latestCommitTime={}, fileSplit={}", tableBasePath, latestCommitTime, fileSplit.getPath());
+    FileSlice fileSlice = getFileSliceFromSplit(fileSplit, getFs(tableBasePath, jobConfCopy), tableBasePath);
+    this.hasBaseFile = fileSlice.getBaseFile().isPresent();
     this.recordIterator = HoodieFileGroupReader.<ArrayWritable>newBuilder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)
@@ -183,7 +186,10 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
 
   @Override
   public long getPos() throws IOException {
-    return readerContext.getPos();
+    if (this.hasBaseFile) {
+      return readerContext.getPos();
+    }
+    return 0;
   }
 
   @Override
@@ -193,7 +199,10 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
 
   @Override
   public float getProgress() throws IOException {
-    return readerContext.getProgress();
+    if (this.hasBaseFile) {
+      return readerContext.getProgress();
+    }
+    return 0;
   }
 
   /**

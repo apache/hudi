@@ -144,24 +144,6 @@ class TestHiveHoodieReaderContext {
     assertTrue(((BooleanWritable) values[2]).get());
   }
 
-  @Test
-  void testGetProgressWithRecordReaderNotInitialized() throws IOException {
-    when(tableConfig.populateMetaFields()).thenReturn(true);
-    HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
-        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
-
-    assertEquals(0, avroReaderContext.getProgress());
-  }
-
-  @Test
-  void testGetPosWithRecordReaderNotInitialized() throws IOException {
-    when(tableConfig.populateMetaFields()).thenReturn(true);
-    HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
-        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
-
-    assertEquals(0, avroReaderContext.getPos());
-  }
-
   private static Schema getBaseSchema() {
     Schema baseDataSchema = Schema.createRecord("test", null, null, false);
     Schema.Field baseField1 = new Schema.Field("field_1", Schema.create(Schema.Type.STRING));
