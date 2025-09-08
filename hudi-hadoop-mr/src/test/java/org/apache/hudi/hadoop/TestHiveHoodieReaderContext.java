@@ -34,7 +34,6 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -142,24 +141,6 @@ class TestHiveHoodieReaderContext {
     assertEquals(2, ((IntWritable) values[0]).get());
     assertEquals("Bob", values[1].toString());
     assertTrue(((BooleanWritable) values[2]).get());
-  }
-
-  @Test
-  void testGetProgressWithRecordReaderNotInitialized() throws IOException {
-    when(tableConfig.populateMetaFields()).thenReturn(true);
-    HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
-        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
-
-    assertEquals(0, avroReaderContext.getProgress());
-  }
-
-  @Test
-  void testGetPosWithRecordReaderNotInitialized() throws IOException {
-    when(tableConfig.populateMetaFields()).thenReturn(true);
-    HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
-        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
-
-    assertEquals(0, avroReaderContext.getPos());
   }
 
   private static Schema getBaseSchema() {
