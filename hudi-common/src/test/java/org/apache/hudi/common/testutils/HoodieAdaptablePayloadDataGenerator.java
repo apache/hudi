@@ -200,7 +200,8 @@ public class HoodieAdaptablePayloadDataGenerator {
             SCHEMA,
             SCHEMA_WITH_METAFIELDS,
             new MetadataValues().setRecordKey(r.get("id").toString()).setPartitionPath(r.get("pt").toString()),
-            new Properties())
+            new Properties(),
+            false)
         .wrapIntoHoodieRecordPayloadWithParams(
             SCHEMA_WITH_METAFIELDS,
             getPayloadProps(payloadClass),
