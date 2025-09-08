@@ -503,11 +503,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param pathInfoList List of StoragePathInfo
    */
   private Stream<HoodieLogFile> convertFileStatusesToLogFiles(List<StoragePathInfo> pathInfoList) {
-    // COPY_ON_WRITE tables do not have log files
-    if (metaClient.getTableConfig().getTableType().equals(HoodieTableType.COPY_ON_WRITE)) {
-      return Stream.empty();
-    }
-
     String logFileExtension = metaClient.getTableConfig().getLogFileFormat().getFileExtension();
     Predicate<StoragePathInfo> rtFilePredicate = pathInfo -> {
       String fileName = pathInfo.getPath().getName();

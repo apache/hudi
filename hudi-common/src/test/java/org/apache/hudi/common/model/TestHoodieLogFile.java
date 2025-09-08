@@ -18,20 +18,12 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Random;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieLogFile {
   private final String pathStr = "file:///tmp/hoodie/2021/01/01/.136281f3-c24e-423b-a65a-95dbfbddce1d_100.log.2_1-0-1";
@@ -83,128 +75,6 @@ public class TestHoodieLogFile {
     String pathWithSuffix = pathStr + suffix;
     HoodieLogFile hoodieLogFile = new HoodieLogFile(pathWithSuffix);
     assertFileGetters(pathWithSuffix, null, hoodieLogFile, -1, suffix);
-  }
-
-  @Test
-  void name() {
-  }
-
-  @Test
-  void testLogPatternMatch() {
-    boolean firstApproach = true; // toggle this to false if you want the other one
-    int runs = 10;
-    long totalTime = 0;
-    Random random = new Random();
-
-    Pattern logFilePattern1 =
-        Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
-    Pattern logFilePattern2 =
-        Pattern.compile("^\\.([^._]+)_([^.]*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(\\.cdc)?)?$");
-
-    for (int r = 0; r < runs; r++) {
-      HoodieTimer timer = HoodieTimer.start();
-      for (int i = 1; i < 1_000_000; i++) {
-        String logFileName = generateFileName(random, true);
-        if (firstApproach) {
-          Matcher matcher = logFilePattern1.matcher(logFileName);
-          assertTrue(matcher.find());
-        } else {
-          Matcher matcher = logFilePattern2.matcher(logFileName);
-          assertTrue(matcher.matches());
-        }
-      }
-      long elapsed = timer.endTimer();
-      totalTime += elapsed;
-      System.out.println("Run " + (r + 1) + " took " + elapsed + " ms");
-    }
-
-    System.out.println("===================================");
-    System.out.println("Average time (" + (firstApproach ? "previous" : "new") + ") = "
-        + (totalTime / runs) + " ms");
-  }
-
-  @Test
-  void testLogPatternMisMatch() {
-    boolean firstApproach = true; // toggle this to false if you want the other one
-    int runs = 10;
-    long totalTime = 0;
-    Random random = new Random();
-
-    Pattern logFilePattern1 =
-        Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
-    Pattern logFilePattern2 =
-        Pattern.compile("^\\.([^._]+)_([^.]*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(\\.cdc)?)?$");
-
-    for (int r = 0; r < runs; r++) {
-      HoodieTimer timer = HoodieTimer.start();
-      for (int i = 1; i < 1_000_000; i++) {
-        String logFileName = generateFileName(random, false);
-        if (firstApproach) {
-          Matcher matcher = logFilePattern1.matcher(logFileName);
-          assertFalse(matcher.find());
-        } else {
-          Matcher matcher = logFilePattern2.matcher(logFileName);
-          assertFalse(matcher.matches());
-        }
-      }
-      long elapsed = timer.endTimer();
-      totalTime += elapsed;
-      System.out.println("Run " + (r + 1) + " took " + elapsed + " ms");
-    }
-
-    System.out.println("===================================");
-    System.out.println("Average time (" + (firstApproach ? "previous" : "new") + ") = "
-        + (totalTime / runs) + " ms");
-  }
-
-  private String generateFileName(Random random, boolean isLogFile) {
-    // Part 1: random name before underscore
-    String logFileId = randomString(random, 3, 6);
-
-    // Part 2: random name after underscore
-    String instantId = String.valueOf(Math.abs(random.nextLong()));
-
-    // Extension: log or archive
-    String fileExtension = isLogFile ? random.nextBoolean() ? ".log" : ".archive" : ".parquet";
-
-    // Random number
-    int logVersion = Math.abs(random.nextInt()) % 10;
-
-    // Sometimes include date + optional .cdc
-
-    String writeToken = "";
-
-    StringBuilder sb = new StringBuilder();
-
-    int token1 = Math.abs(random.nextInt());
-    int token2 = Math.abs(random.nextInt());
-    int token3 = Math.abs(random.nextInt());
-
-    sb.append(token1).append("-")
-        .append(token2).append("-")
-        .append(token3);
-
-    if (isLogFile && random.nextBoolean()) {
-      sb.append(".cdc");
-    }
-
-    writeToken = sb.toString();
-
-    if (isLogFile) {
-      return FSUtils.makeLogFileName(logFileId, fileExtension, instantId, logVersion, writeToken);
-    } else {
-      return FSUtils.makeBaseFileName(instantId, writeToken, fileId, fileExtension);
-    }
-  }
-
-  private String randomString(Random random, int minLen, int maxLen) {
-    int len = minLen + random.nextInt(maxLen - minLen + 1);
-    StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < len; i++) {
-      char c = (char) ('a' + random.nextInt(26));
-      sb.append(c);
-    }
-    return sb.toString();
   }
 
   private void assertFileGetters(StoragePathInfo pathInfo, HoodieLogFile hoodieLogFile,
