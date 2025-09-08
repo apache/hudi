@@ -203,13 +203,13 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     return arrayWritable;
   }
 
-  // for log only split, firstRecordReader is not initialized
-  // we return 0 to make it consistent with non HoodieFileGroupBased Record Readers
   @Override
   public long getPos() throws IOException {
     if (this.containsBaseFile) {
       return readerContext.getPos();
     }
+
+    // for log only split, we return 0 to make it consistent with non HoodieFileGroupReader based Record Readers
     return 0;
   }
 
@@ -218,13 +218,13 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     recordIterator.close();
   }
 
-  // for log only split, firstRecordReader is not initialized
-  // we return 0 to make it consistent with non HoodieFileGroupBased Record Readers
   @Override
   public float getProgress() throws IOException {
     if (this.containsBaseFile) {
       return readerContext.getProgress();
     }
+
+    // for log only split, we return 0 to make it consistent with non HoodieFileGroupReader based Record Readers
     return 0;
   }
 
