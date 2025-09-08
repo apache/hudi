@@ -183,9 +183,7 @@ public class MetadataConversionUtils {
     switch (actionType) {
       case HoodieTimeline.CLEAN_ACTION: {
         archivedMetaWrapper.setHoodieCleanMetadata(CleanerUtils.getCleanerMetadata(metaClient, new ByteArrayInputStream(instantDetails.get())));
-        if (planBytes.isPresent()) {
-          archivedMetaWrapper.setHoodieCleanerPlan(CleanerUtils.getCleanerPlan(metaClient, new ByteArrayInputStream(planBytes.get())));
-        }
+        archivedMetaWrapper.setHoodieCleanerPlan(CleanerUtils.getCleanerPlan(metaClient, new ByteArrayInputStream(planBytes.get())));
         archivedMetaWrapper.setActionType(ActionType.clean.name());
         break;
       }

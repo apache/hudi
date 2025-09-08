@@ -40,7 +40,6 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.LogicalTypes.Decimal;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
-import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericData.Record;
 import org.apache.avro.generic.GenericDatumReader;
@@ -159,19 +158,6 @@ public class HoodieAvroUtils {
       return out;
     } catch (IOException e) {
       throw new HoodieIOException("Cannot convert GenericRecord to bytes", e);
-    }
-  }
-
-  public static byte[] avroToFileBytes(IndexedRecord record) {
-    try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-      try (DataFileWriter<IndexedRecord> writer = new DataFileWriter<>(new GenericDatumWriter<>(record.getSchema()))) {
-        writer.create(record.getSchema(), baos);
-        writer.append(record);
-        writer.flush();
-        return baos.toByteArray();
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to convert IndexedRecord to Avro file format", e);
     }
   }
 
