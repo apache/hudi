@@ -141,15 +141,15 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     if (!reachedMax && numUpdates >= 50) {
       LOG.info("After adjustments => NumInserts={}, NumUpdates={}, NumDeletes=50, maxUniqueRecords={}", numInserts, (numUpdates - 50), maxUniqueKeys);
       // if we generate update followed by deletes -> some keys in update batch might be picked up for deletes. Hence generating delete batch followed by updates
-      deleteStream = dataGenerator.generateUniqueDeleteRecordStream(instantTime, 50, false, schemaStr).map(AbstractBaseTestSource::toGenericRecord);
-      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates - 50, schemaStr)
+      deleteStream = dataGenerator.generateUniqueDeleteRecordStream(instantTime, 50, false, schemaStr, 0L).map(AbstractBaseTestSource::toGenericRecord);
+      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates - 50, schemaStr, 0L)
           .map(AbstractBaseTestSource::toGenericRecord);
     } else {
       LOG.info("After adjustments => NumInserts={}, NumUpdates={}, maxUniqueRecords={}", numInserts, numUpdates, maxUniqueKeys);
-      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates, schemaStr)
+      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates, schemaStr, 0L)
           .map(AbstractBaseTestSource::toGenericRecord);
     }
-    Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(instantTime, numInserts, false, schemaStr)
+    Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(instantTime, numInserts, false, schemaStr, 0L)
         .map(AbstractBaseTestSource::toGenericRecord);
     if (Boolean.valueOf(props.getOrDefault("hoodie.test.source.generate.inserts", "false").toString())) {
       return insertStream;

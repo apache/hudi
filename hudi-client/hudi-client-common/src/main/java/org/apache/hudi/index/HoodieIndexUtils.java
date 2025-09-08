@@ -20,6 +20,7 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
@@ -38,7 +39,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -505,10 +506,13 @@ public class HoodieIndexUtils {
   /**
    * Merge tagged incoming records with existing records in case of partition path updated.
    */
-  public static <R> HoodieData<HoodieRecord<R>> mergeForPartitionUpdatesIfNeeded(
-      HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations,
-      HoodieWriteConfig config,
-      HoodieTable hoodieTable) {
+  public static <R> HoodieData<HoodieRecord<R>> mergeForPartitionUpdatesAndDeletionsIfNeeded(HoodieData<Pair<HoodieRecord<R>,
+                                                                                             Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations,
+                                                                                             boolean shouldUpdatePartitionPath,
+                                                                                             HoodieWriteConfig config,
+                                                                                             HoodieTable hoodieTable,
+                                                                                             HoodieReaderContext<R> readerContext,
+                                                                                             SerializableSchema writerSchema) {
     boolean isExpressionPayload = config.getPayloadClass().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload");
     Pair<HoodieWriteConfig, BaseKeyGenerator> keyGeneratorWriteConfigOpt =
         getKeygenAndUpdatedWriteConfig(config, hoodieTable.getMetaClient().getTableConfig(), isExpressionPayload);
@@ -527,19 +531,14 @@ public class HoodieIndexUtils {
         .map(p -> Pair.of(p.getRight().get().getPartitionPath(), p.getRight().get().getFileId()))
         .distinct(updatedConfig.getGlobalIndexReconcileParallelism());
     // define the buffered record merger.
-    ReaderContextFactory<R> readerContextFactory = (ReaderContextFactory<R>) hoodieTable.getContext()
-        .getReaderContextFactoryForWrite(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType(), config.getProps());
-    HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
     TypedProperties properties = readerContext.getMergeProps(updatedConfig.getProps());
     RecordContext<R> incomingRecordContext = readerContext.getRecordContext();
-    readerContext.initRecordMergerForIngestion(config.getProps());
     // Create a reader context for the existing records. In the case of merge-into commands, the incoming records
     // can be using an expression payload so here we rely on the table's configured payload class if it is required.
     ReaderContextFactory<R> readerContextFactoryForExistingRecords = (ReaderContextFactory<R>) hoodieTable.getContext()
         .getReaderContextFactoryForWrite(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType(), hoodieTable.getMetaClient().getTableConfig().getProps());
     RecordContext<R> existingRecordContext = readerContextFactoryForExistingRecords.getContext().getRecordContext();
     // merged existing records with current locations being set
-    SerializableSchema writerSchema = new SerializableSchema(hoodieTable.getConfig().getWriteSchema());
     SerializableSchema writerSchemaWithMetaFields = new SerializableSchema(HoodieAvroUtils.addMetadataFields(writerSchema.get(), updatedConfig.allowOperationMetadataField()));
     AvroSchemaCache.intern(writerSchema.get());
     AvroSchemaCache.intern(writerSchemaWithMetaFields.get());
@@ -570,10 +569,7 @@ public class HoodieIndexUtils {
           }
           HoodieRecord<R> existing = existingOpt.get();
           Schema writeSchema = writerSchema.get();
-          if (incoming.isDelete(writeSchema, properties)) {
-            // incoming is a delete: force tag the incoming to the old partition
-            return Collections.singletonList(tagRecord(incoming.newInstance(existing.getKey()), existing.getCurrentLocation())).iterator();
-          }
+
           Option<HoodieRecord<R>> mergedOpt = mergeIncomingWithExistingRecord(
               incoming, existing, writeSchema, writerSchemaWithMetaFields.get(), updatedConfig,
               recordMerger, keyGenerator, incomingRecordContext, existingRecordContext, orderingFieldsArray, properties, isExpressionPayload);
@@ -589,16 +585,34 @@ public class HoodieIndexUtils {
           if (Objects.equals(merged.getPartitionPath(), existing.getPartitionPath())) {
             // merged record has the same partition: route the merged result to the current location as an update
             return Collections.singletonList(tagRecord(merged, existing.getCurrentLocation())).iterator();
-          } else {
+          } else if (shouldUpdatePartitionPath) {
             // merged record has a different partition: issue a delete to the old partition and insert the merged record to the new partition
             HoodieRecord<R> deleteRecord = createDeleteRecord(updatedConfig, existing.getKey());
             deleteRecord.setIgnoreIndexUpdate(true);
             return Arrays.asList(tagRecord(deleteRecord, existing.getCurrentLocation()), merged).iterator();
+          } else {
+            // merged record has a different partition path but shouldUpdatePartitionPath is false, treat as an update to the existing location
+            return Collections.singletonList(merged.newInstance(existing.getKey())).iterator();
           }
         });
     return taggedUpdatingRecords.union(taggedNewRecords);
   }
 
+  /**
+   * Tags the incoming records with their existing locations if any is found.
+   * Global indexing can support moving records across partitions. To do so, the tagging logic will result in a delete to the old partition and an insert into the new partition. When this happens
+   * with Merge-on-Read tables, the record key is present in multiple locations until the file slices are compacted. If the index relies on reading the keys directly from the file slices, then
+   * `mayContainDuplicateLookup` must be set to true to account for this. If the lookup will only contain the latest location of the record key, then `mayContainDuplicateLookup` is set to false.
+   * @param incomingRecords The new data being written to the table
+   * @param keyAndExistingLocations The existing locations of the records in the table
+   * @param mayContainDuplicateLookup Set to true if the existing locations may contain multiple entries for the same record key
+   * @param shouldUpdatePartitionPath When true, the index will handle partition path updates by merging the incoming record with the existing record and determining if the partition path has changed.
+   *                                  When false, the incoming record will always be tagged to the existing location's partition path.
+   * @param config the writer's configuration
+   * @param table the table that is being updated
+   * @return the incoming records tagged with their existing locations if any is found
+   * @param <R> the type of the data in the record
+   */
   public static <R> HoodieData<HoodieRecord<R>> tagGlobalLocationBackToRecords(
       HoodieData<HoodieRecord<R>> incomingRecords,
       HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocations,
@@ -606,10 +620,19 @@ public class HoodieIndexUtils {
       boolean shouldUpdatePartitionPath,
       HoodieWriteConfig config,
       HoodieTable table) {
-    final HoodieRecordMerger merger = config.getRecordMerger();
-
     HoodiePairData<String, HoodieRecord<R>> keyAndIncomingRecords =
         incomingRecords.mapToPair(record -> Pair.of(record.getRecordKey(), record));
+
+    ReaderContextFactory<R> readerContextFactory = (ReaderContextFactory<R>) table.getContext()
+        .getReaderContextFactoryForWrite(table.getMetaClient(), config.getRecordMerger().getRecordType(), config.getProps());
+    HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
+    readerContext.initRecordMergerForIngestion(config.getProps());
+    TypedProperties properties = readerContext.getMergeProps(config.getProps());
+    SerializableSchema writerSchema = new SerializableSchema(config.getWriteSchema());
+    boolean isCommitTimeOrdered = readerContext.getMergeMode() == RecordMergeMode.COMMIT_TIME_ORDERING;
+    // if the index is not updating the partition of the record, and the table is COW, then we do not need to do merging at
+    // this phase since the writer path will merge when rewriting the files as part of the upsert operation.
+    boolean requiresMergingWithOlderRecordVersion = shouldUpdatePartitionPath || table.getMetaClient().getTableConfig().getTableType() == HoodieTableType.MERGE_ON_READ;
 
     // Pair of incoming record and the global location if meant for merged lookup in later stage
     HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations
@@ -619,9 +642,10 @@ public class HoodieIndexUtils {
           Option<HoodieRecordGlobalLocation> currentLocOpt = Option.ofNullable(v.getRight().orElse(null));
           if (currentLocOpt.isPresent()) {
             HoodieRecordGlobalLocation currentLoc = currentLocOpt.get();
-            boolean shouldDoMergedLookUpThenTag = mayContainDuplicateLookup
-                || !Objects.equals(incomingRecord.getPartitionPath(), currentLoc.getPartitionPath());
-            if (shouldUpdatePartitionPath && shouldDoMergedLookUpThenTag) {
+            boolean shouldDoMergedLookUpThenTag = mayContainDuplicateLookup // handle event time ordering updates
+                || shouldUpdatePartitionPath && !Objects.equals(incomingRecord.getPartitionPath(), currentLoc.getPartitionPath())  // handle partition updates
+                || (!isCommitTimeOrdered && incomingRecord.isDelete(writerSchema.get(), properties)); // handle event time ordering deletes
+            if (requiresMergingWithOlderRecordVersion && shouldDoMergedLookUpThenTag) {
               // the pair's right side is a non-empty Option, which indicates that a merged lookup will be performed
               // at a later stage.
               return Pair.of(incomingRecord, currentLocOpt);
@@ -637,8 +661,8 @@ public class HoodieIndexUtils {
             return Pair.of(incomingRecord, Option.empty());
           }
         });
-    return shouldUpdatePartitionPath
-        ? mergeForPartitionUpdatesIfNeeded(incomingRecordsAndLocations, config, table)
+    return requiresMergingWithOlderRecordVersion
+        ? mergeForPartitionUpdatesAndDeletionsIfNeeded(incomingRecordsAndLocations, shouldUpdatePartitionPath, config, table, readerContext, writerSchema)
         : incomingRecordsAndLocations.map(Pair::getLeft);
   }
 

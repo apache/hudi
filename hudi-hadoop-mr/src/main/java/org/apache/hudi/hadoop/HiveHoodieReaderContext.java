@@ -229,13 +229,17 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     if (firstRecordReader != null) {
       return firstRecordReader.getPos();
     }
-    throw new IllegalStateException("getPos() should not be called before a record reader has been initialized");
+    // for log only split, firstRecordReader is not initialized
+    // we return 0 to make it consistent with non HoodieFileGroupBased Record Readers
+    return 0;
   }
 
   public float getProgress() throws IOException {
     if (firstRecordReader != null) {
       return firstRecordReader.getProgress();
     }
-    throw new IllegalStateException("getProgress() should not be called before a record reader has been initialized");
+    // for log only split, firstRecordReader is not initialized
+    // we return 0 to make it consistent with non HoodieFileGroupBased Record Readers
+    return 0;
   }
 }

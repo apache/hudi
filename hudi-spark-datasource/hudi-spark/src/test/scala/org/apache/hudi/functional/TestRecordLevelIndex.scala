@@ -25,7 +25,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeGenerator}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
@@ -47,7 +47,6 @@ import org.junit.jupiter.params.provider.Arguments.arguments
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.Executors
-import java.util.stream.Collectors
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -85,7 +84,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     var operation = INSERT_OPERATION_OPT_VAL
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch, 1))
     latestBatchDf.cache()
-    latestBatchDf.write.format("org.apache.hudi")
+    latestBatchDf.write.format("hudi")
       .options(hudiOpts)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -103,7 +102,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     val latestBatchDf2_3 = spark.read.json(spark.sparkContext.parallelize(latestBatch2_3, 1))
     val latestBatchDf2Final = latestBatchDf2_3.union(latestBatchDf2_2)
     latestBatchDf2Final.cache()
-    latestBatchDf2Final.write.format("org.apache.hudi")
+    latestBatchDf2Final.write.format("hudi")
       .options(hudiOpts)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -123,14 +122,16 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     val latestBatch3 = recordsToStrings(dataGen2.generateUniqueUpdates(instantTime3, 2)).asScala.toSeq
     val latestBatchDf3 = spark.read.json(spark.sparkContext.parallelize(latestBatch3, 1))
     latestBatchDf3.cache()
-    latestBatchDf.write.format("org.apache.hudi")
+    latestBatchDf3.write.format("hudi")
       .options(hudiOpts2)
       .mode(SaveMode.Append)
       .save(basePath)
-    val deletedDf3 = calculateMergedDf(latestBatchDf, operation, true)
+    val deletedDf3 = calculateMergedDf(latestBatchDf3, operation, true)
     deletedDf3.cache()
     metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     validateDataAndRecordIndices(hudiOpts, deletedDf3)
+    deletedDf2.unpersist()
+    deletedDf3.unpersist()
   }
 
   private def getNewInstantTime(): String = {
@@ -248,7 +249,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
     val deleteDf = insertDf.limit(1)
-    deleteDf.write.format("org.apache.hudi")
+    deleteDf.write.format("hudi")
       .options(hudiOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DELETE_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
@@ -291,15 +292,54 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     insertDf.cache()
 
     val instantTime = getNewInstantTime
-    // Issue two deletes, one with the original partition and one with an updated partition
-    val recordsToDelete = dataGen.generateUniqueDeleteRecords(instantTime, 1)
-    recordsToDelete.addAll(dataGen.generateUniqueDeleteRecordsWithUpdatedPartition(instantTime, 1))
-    val deleteBatch = recordsToStrings(recordsToDelete).asScala
+    // Issue four deletes, one with the original partition, one with an updated partition,
+    // and two with an older ordering value that should be ignored
+    val deletedRecords = dataGen.generateUniqueDeleteRecords(instantTime, 1)
+    deletedRecords.addAll(dataGen.generateUniqueDeleteRecordsWithUpdatedPartition(instantTime, 1))
+    val inputRecords = new util.ArrayList[HoodieRecord[_]](deletedRecords)
+    val lowerOrderingValue = 1L
+    inputRecords.addAll(dataGen.generateUniqueDeleteRecords(instantTime, 1, lowerOrderingValue))
+    inputRecords.addAll(dataGen.generateUniqueDeleteRecordsWithUpdatedPartition(instantTime, 1, lowerOrderingValue))
+    val deleteBatch = recordsToStrings(inputRecords).asScala
     val deleteDf = spark.read.json(spark.sparkContext.parallelize(deleteBatch.toSeq, 1))
     deleteDf.cache()
     val recordKeyToDelete1 = deleteDf.collectAsList().get(0).getAs("_row_key").asInstanceOf[String]
     val recordKeyToDelete2 = deleteDf.collectAsList().get(1).getAs("_row_key").asInstanceOf[String]
-    deleteDf.write.format("org.apache.hudi")
+    deleteDf.write.format("hudi")
+      .options(hudiOpts)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val prevDf = mergedDfList.last
+    mergedDfList = mergedDfList :+ prevDf.filter(row => row.getAs("_row_key").asInstanceOf[String] != recordKeyToDelete1 &&
+      row.getAs("_row_key").asInstanceOf[String] != recordKeyToDelete2)
+    validateDataAndRecordIndices(hudiOpts, spark.read.json(spark.sparkContext.parallelize(recordsToStrings(deletedRecords).asScala.toSeq, 1)))
+    deleteDf.unpersist()
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testRLIForDeletesWithCommitTimeOrdering(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name()) +
+      (HoodieIndexConfig.INDEX_TYPE.key -> "RECORD_INDEX") +
+      (HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE.key -> "true") +
+      (HoodieTableConfig.ORDERING_FIELDS.key -> "")
+    val insertDf = doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    insertDf.cache()
+
+    val instantTime = getNewInstantTime
+    val lowerOrderingValue = 1L
+    // Issue two deletes, one with the original partition, one with an updated partition,
+    // Both have an older ordering value but that is ignored since the table uses commit time ordering
+    val deletedRecords = dataGen.generateUniqueDeleteRecords(instantTime, 1, lowerOrderingValue)
+    deletedRecords.addAll(dataGen.generateUniqueDeleteRecordsWithUpdatedPartition(instantTime, 1, lowerOrderingValue))
+    val deleteBatch = recordsToStrings(deletedRecords).asScala
+    val deleteDf = spark.read.json(spark.sparkContext.parallelize(deleteBatch.toSeq, 1))
+    deleteDf.cache()
+    val recordKeyToDelete1 = deleteDf.collectAsList().get(0).getAs("_row_key").asInstanceOf[String]
+    val recordKeyToDelete2 = deleteDf.collectAsList().get(1).getAs("_row_key").asInstanceOf[String]
+    deleteDf.write.format("hudi")
       .options(hudiOpts)
       .mode(SaveMode.Append)
       .save(basePath)
@@ -658,13 +698,15 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
 
     val executor = Executors.newFixedThreadPool(2)
     implicit val executorContext: ExecutionContext = ExecutionContext.fromExecutor(executor)
+    val timestamp = System.currentTimeMillis()
     val function = new Function0[Boolean] {
       override def apply(): Boolean = {
         try {
           doWriteAndValidateDataAndRecordIndex(hudiOpts,
             operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
             saveMode = SaveMode.Append,
-            validate = false)
+            validate = false,
+            timestamp = timestamp)
           true
         } catch {
           case _: HoodieWriteConflictException => false
