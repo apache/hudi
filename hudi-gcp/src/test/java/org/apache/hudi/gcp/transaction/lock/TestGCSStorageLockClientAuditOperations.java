@@ -63,11 +63,11 @@ public class TestGCSStorageLockClientAuditOperations {
     String lockFileUri = "gs://test-bucket/table/.hoodie/.locks/table_lock.json";
     String ownerId = "test-owner";
     lockClient = new GCSStorageLockClient(
-            ownerId,
-            lockFileUri,
-            new Properties(),
-            props -> mockGcsClient,
-            mockLogger);
+        ownerId,
+        lockFileUri,
+        new Properties(),
+        props -> mockGcsClient,
+        mockLogger);
   }
 
   @Test
@@ -76,7 +76,7 @@ public class TestGCSStorageLockClientAuditOperations {
 
     // get() returns null for non-existent blob
     when(mockGcsClient.get(any(BlobId.class)))
-            .thenReturn(null);
+        .thenReturn(null);
 
     Option<String> result = lockClient.readObject(configPath, true);
 
@@ -92,7 +92,7 @@ public class TestGCSStorageLockClientAuditOperations {
 
     // get() returns blob but exists() is false
     when(mockGcsClient.get(any(BlobId.class)))
-            .thenReturn(mockBlob);
+        .thenReturn(mockBlob);
     when(mockBlob.exists()).thenReturn(false);
 
     Option<String> result = lockClient.readObject(configPath, true);
@@ -111,10 +111,10 @@ public class TestGCSStorageLockClientAuditOperations {
 
     // get() returns existing blob
     when(mockGcsClient.get(any(BlobId.class)))
-            .thenReturn(mockBlob);
+        .thenReturn(mockBlob);
     when(mockBlob.exists()).thenReturn(true);
     when(mockBlob.getContent())
-            .thenReturn(expectedContent.getBytes(StandardCharsets.UTF_8));
+        .thenReturn(expectedContent.getBytes(StandardCharsets.UTF_8));
 
     Option<String> result = lockClient.readObject(configPath, true);
 

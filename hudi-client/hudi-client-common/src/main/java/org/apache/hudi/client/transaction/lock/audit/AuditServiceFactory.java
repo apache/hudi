@@ -52,12 +52,12 @@ public class AuditServiceFactory {
    * @return An Option containing the audit service if enabled, Option.empty() otherwise
    */
   public static Option<AuditService> createLockProviderAuditService(
-          String ownerId,
-          String basePath,
-          StorageLockClient storageLockClient,
-          long transactionStartTime,
-          java.util.function.Function<Long, Long> lockExpirationFunction,
-          Supplier<Boolean> lockHeldSupplier) {
+      String ownerId,
+      String basePath,
+      StorageLockClient storageLockClient,
+      long transactionStartTime,
+      java.util.function.Function<Long, Long> lockExpirationFunction,
+      Supplier<Boolean> lockHeldSupplier) {
 
     if (!isAuditEnabled(basePath, storageLockClient)) {
       return Option.empty();

@@ -378,8 +378,8 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     // Create audit service lazily on first successful lock acquisition if auditing is enabled
     if (auditService.isEmpty()) {
       auditService = AuditServiceFactory.createLockProviderAuditService(
-              ownerId, basePath, storageLockClient, acquisitionTimestamp,
-              this::calculateLockExpiration, this::actuallyHoldsLock);
+          ownerId, basePath, storageLockClient, acquisitionTimestamp,
+          this::calculateLockExpiration, this::actuallyHoldsLock);
     }
 
     recordAuditOperation(AuditOperationState.START, acquisitionTimestamp);
