@@ -46,7 +46,6 @@ import java.util.Set;
 import static org.apache.avro.JsonProperties.NULL_VALUE;
 import static org.apache.parquet.avro.AvroReadSupport.READ_INT96_AS_FIXED;
 import static org.apache.parquet.avro.AvroReadSupport.READ_INT96_AS_FIXED_DEFAULT;
-import static org.apache.parquet.avro.AvroRecordConverter.getRuntimeAvroVersion;
 import static org.apache.parquet.avro.AvroWriteSupport.WRITE_FIXED_AS_INT96;
 import static org.apache.parquet.avro.AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE;
 import static org.apache.parquet.avro.AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE_DEFAULT;
@@ -589,5 +588,9 @@ public class HoodieAvroSchemaConverter {
         || !(avroVersion.startsWith("1.7.")
         || avroVersion.startsWith("1.8.")
         || avroVersion.startsWith("1.9."));
+  }
+
+  private static String getRuntimeAvroVersion() {
+    return Schema.Parser.class.getPackage().getImplementationVersion();
   }
 }
