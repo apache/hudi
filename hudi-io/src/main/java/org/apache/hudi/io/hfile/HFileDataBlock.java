@@ -26,7 +26,9 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.hudi.io.hfile.DataSize.SIZEOF_BYTE;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
+import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT64;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_BEFORE_BLOCK_FIRST_KEY;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_FOUND;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_IN_RANGE;
@@ -203,17 +205,30 @@ public class HFileDataBlock extends HFileBlock {
     ByteBuffer dataBuf = ByteBuffer.allocate(context.getBlockSize());
     for (KeyValueEntry kv : entriesToWrite) {
       // Length of key + length of a short variable indicating length of key.
-      dataBuf.putInt(kv.key.length + SIZEOF_INT16);
+      // Note that 10 extra bytes are required by hbase reader.
+      // That is: 1 byte for column family length, 8 bytes for timestamp, 1 bytes for key type.
+      dataBuf.putInt(kv.key.length + SIZEOF_INT16 + SIZEOF_BYTE + SIZEOF_INT64 + SIZEOF_BYTE);
       // Length of value.
       dataBuf.putInt(kv.value.length);
       // Key content length.
       dataBuf.putShort((short)kv.key.length);
       // Key.
       dataBuf.put(kv.key);
+      // Column family length: constant 0.
+      dataBuf.put((byte)0);
+      // Column qualifier: assume 0 bits.
+      // Timestamp: constant 0.
+      dataBuf.putLong(0L);
+      // Key type: constant Put (4) in Hudi.
+      // Minimum((byte) 0), Put((byte) 4), Delete((byte) 8),
+      // DeleteFamilyVersion((byte) 10), DeleteColumn((byte) 12),
+      // DeleteFamily((byte) 14), Maximum((byte) 255).
+      dataBuf.put((byte)4);
       // Value.
       dataBuf.put(kv.value);
       // MVCC.
       dataBuf.put((byte)0);
+
       // Copy to output stream.
       baos.write(dataBuf.array(), 0, dataBuf.position());
       // Clear the buffer.

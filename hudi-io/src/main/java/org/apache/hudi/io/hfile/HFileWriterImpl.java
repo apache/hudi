@@ -22,8 +22,6 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.io.hfile.protobuf.generated.HFileProtos;
 
-import com.google.protobuf.ByteString;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -35,9 +33,11 @@ import java.util.Map;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
 import static org.apache.hudi.io.hfile.HFileBlock.getVariableLengthEncodedBytes;
 import static org.apache.hudi.io.hfile.HFileBlockType.TRAILER;
+import static org.apache.hudi.io.hfile.HFileInfo.KEY_VALUE_VERSION_WITH_MVCC_TS;
 import static org.apache.hudi.io.hfile.HFileInfo.LAST_KEY;
 import static org.apache.hudi.io.hfile.HFileInfo.MAX_MVCC_TS_KEY;
 import static org.apache.hudi.io.hfile.HFileTrailer.TRAILER_SIZE;
+import static org.apache.hudi.io.util.IOUtils.toBytes;
 
 /**
  * Pure Java implementation of HFile writer (HFile v3 format) for Hudi.
@@ -231,17 +231,27 @@ public class HFileWriterImpl implements HFileWriter {
         ? 0 : (int) (totalKeyLength / totalNumberOfRecords);
     fileInfoBlock.add(
         new String(HFileInfo.AVG_KEY_LEN.getBytes(), StandardCharsets.UTF_8),
-        addKeyLength(toBytes(avgKeyLen)));
+        toBytes(avgKeyLen));
     fileInfoBlock.add(
         new String(HFileInfo.FILE_CREATION_TIME_TS.getBytes(), StandardCharsets.UTF_8),
-        addKeyLength(toBytes(context.getFileCreateTime())));
+        toBytes(context.getFileCreateTime()));
 
     // Average value length.
     int avgValueLen = totalNumberOfRecords == 0
         ? 0 : (int) (totalValueLength / totalNumberOfRecords);
     fileInfoBlock.add(
         new String(HFileInfo.AVG_VALUE_LEN.getBytes(), StandardCharsets.UTF_8),
-        addKeyLength(toBytes(avgValueLen)));
+        toBytes(avgValueLen));
+
+    // NOTE: To make MVCC usage consistent cross different table versions,
+    // we should set following properties.
+    // After table versions <= 8 are deprecated, MVCC byte can be removed from key-value pair.
+    fileInfoBlock.add(
+        new String(HFileInfo.KEY_VALUE_VERSION.getBytes(), StandardCharsets.UTF_8),
+        toBytes(KEY_VALUE_VERSION_WITH_MVCC_TS));
+    fileInfoBlock.add(
+        new String(MAX_MVCC_TS_KEY.getBytes(), StandardCharsets.UTF_8),
+        toBytes(1L));
   }
 
   // Note: HFileReaderImpl assumes that:
@@ -254,38 +264,5 @@ public class HFileWriterImpl implements HFileWriter {
     byteBuffer.putShort((short) key.length);
     byteBuffer.put(key);
     return byteBuffer.array();
-  }
-
-  /**
-   * Convert an int value to a byte array.  Big-endian.  Same as what DataOutputStream.writeInt
-   * does.
-   *
-   * @param val value
-   * @return the byte array
-   */
-  public static byte[] toBytes(int val) {
-    byte [] b = new byte[4];
-    for(int i = 3; i > 0; i--) {
-      b[i] = (byte) val;
-      val >>>= 8;
-    }
-    b[0] = (byte) val;
-    return b;
-  }
-
-  /**
-   * Convert a long value to a byte array using big-endian.
-   *
-   * @param val value to convert
-   * @return the byte array
-   */
-  public static byte[] toBytes(long val) {
-    byte [] b = new byte[8];
-    for (int i = 7; i > 0; i--) {
-      b[i] = (byte) val;
-      val >>>= 8;
-    }
-    b[0] = (byte) val;
-    return b;
   }
 }
