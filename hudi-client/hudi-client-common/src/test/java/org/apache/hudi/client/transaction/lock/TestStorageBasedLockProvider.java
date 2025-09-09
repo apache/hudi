@@ -56,7 +56,10 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.refEq;
 import static org.mockito.Mockito.atLeastOnce;
@@ -66,6 +69,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -86,6 +90,8 @@ class TestStorageBasedLockProvider {
     mockHeartbeatManager = mock(HeartbeatManager.class);
     mockLogger = mock(Logger.class);
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
+    // Mock the readObject method to return Option.empty() to prevent NPE in audit service creation
+    when(mockLockService.readObject(anyString(), anyBoolean())).thenReturn(Option.empty());
     TypedProperties props = new TypedProperties();
     props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
     props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
@@ -94,8 +100,8 @@ class TestStorageBasedLockProvider {
     lockProvider = spy(new StorageBasedLockProvider(
         ownerId,
         props,
-        (a,b,c) -> mockHeartbeatManager,
-        (a,b,c) -> mockLockService,
+        (a, b, c) -> mockHeartbeatManager,
+        (a, b, c) -> mockLockService,
         mockLogger,
         null));
   }
@@ -134,8 +140,8 @@ class TestStorageBasedLockProvider {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = { "gs://bucket/lake/db/tbl-default", "s3://bucket/lake/db/tbl-default",
-      "s3a://bucket/lake/db/tbl-default" })
+  @ValueSource(strings = {"gs://bucket/lake/db/tbl-default", "s3://bucket/lake/db/tbl-default",
+      "s3a://bucket/lake/db/tbl-default"})
   void testNonExistentWriteServiceWithDefaults(String tableBasePathString) {
     TypedProperties props = new TypedProperties();
     props.put(BASE_PATH.key(), tableBasePathString);
@@ -548,7 +554,7 @@ class TestStorageBasedLockProvider {
     StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     StorageLockFile realLockFile = new StorageLockFile(data, "v1");
     when(mockLockService.tryUpsertLockFile(any(), eq(Option.empty())))
-            .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
 
     boolean acquired = lockProvider.tryLock();
@@ -557,7 +563,7 @@ class TestStorageBasedLockProvider {
     verify(mockLockService, atLeastOnce()).tryUpsertLockFile(any(), any());
 
     when(mockLockService.tryUpsertLockFile(any(StorageLockData.class), eq(Option.of(realLockFile))))
-            .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
 
     // Mock shutdown
     lockProvider.shutdown(true);
@@ -672,7 +678,7 @@ class TestStorageBasedLockProvider {
     LockConfiguration lockConfiguration = new LockConfiguration(props);
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
 
-    // Create a mock HoodieLockMetrics object
+    // Create a mock HoodieLockMetrics object  
     HoodieLockMetrics mockMetrics = mock(HoodieLockMetrics.class);
 
     // Test that constructor with metrics works by using the internal constructor to avoid scheme issues
@@ -688,8 +694,8 @@ class TestStorageBasedLockProvider {
       lockProviderWithMetrics = new StorageBasedLockProvider(
           UUID.randomUUID().toString(),
           props,
-          (a,b,c) -> mock(HeartbeatManager.class),
-          (a,b,c) -> new StubStorageLockClient(a, b, new Properties()),
+          (a, b, c) -> mock(HeartbeatManager.class),
+          (a, b, c) -> new StubStorageLockClient(a, b, new Properties()),
           mock(Logger.class),
           mockMetrics);
 
@@ -731,15 +737,15 @@ class TestStorageBasedLockProvider {
       lockProviderStandard = new StorageBasedLockProvider(
           UUID.randomUUID().toString(),
           props,
-          (a,b,c) -> mock(HeartbeatManager.class),
-          (a,b,c) -> new StubStorageLockClient(a, b, new Properties()),
+          (a, b, c) -> mock(HeartbeatManager.class),
+          (a, b, c) -> new StubStorageLockClient(a, b, new Properties()),
           mock(Logger.class),
           null);  // No metrics for standard constructor test
 
       // Verify the lock provider was created successfully
       assertNotNull(lockProviderStandard, "StorageBasedLockProvider should be created successfully");
 
-      // Verify that it can perform basic operations
+      // Verify that it can perform basic operations  
       assertNull(lockProviderStandard.getLock(), "Initially should have no lock");
 
     } catch (Exception e) {
@@ -749,6 +755,95 @@ class TestStorageBasedLockProvider {
         lockProviderStandard.close();
       }
     }
+  }
+
+  @Test
+  void testAuditServiceIntegrationWhenConfigNotPresent() {
+    // Test that lock provider works correctly when audit config is not present
+    TypedProperties props = new TypedProperties();
+    props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
+    props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
+    props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-audit-test");
+
+    // Mock client that returns empty for audit config
+    StorageLockClient auditMockClient = mock(StorageLockClient.class);
+    when(auditMockClient.readObject(anyString(), eq(true)))
+        .thenReturn(Option.empty());
+    when(auditMockClient.readCurrentLockFile())
+        .thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
+
+    StorageBasedLockProvider auditLockProvider = new StorageBasedLockProvider(
+        ownerId,
+        props,
+        (a, b, c) -> mockHeartbeatManager,
+        (a, b, c) -> auditMockClient,
+        mockLogger,
+        null);
+
+    // Lock provider should work normally even without audit
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile lockFile = new StorageLockFile(data, "v1");
+    when(auditMockClient.tryUpsertLockFile(any(), eq(Option.empty())))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(lockFile)));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+
+    // tryLock should trigger audit service creation (lazily)
+    assertTrue(auditLockProvider.tryLock());
+
+    // Verify audit config was checked during tryLock
+    verify(auditMockClient, times(1)).readObject(
+        contains(".locks/audit_enabled.json"), eq(true));
+
+    // No audit writes should happen since audit is not present
+    verify(auditMockClient, never()).writeObject(
+        contains(".locks/audit"), anyString());
+
+    auditLockProvider.close();
+  }
+
+  @Test
+  void testAuditServiceIntegrationWhenConfigDisabled() {
+    // Test that lock provider works correctly when audit is explicitly disabled
+    TypedProperties props = new TypedProperties();
+    props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
+    props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
+    props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-audit-disabled");
+
+    // Mock client that returns disabled config
+    StorageLockClient auditMockClient = mock(StorageLockClient.class);
+    String disabledConfig = "{\"STORAGE_LOCK_AUDIT_SERVICE_ENABLED\": false}";
+    when(auditMockClient.readObject(anyString(), eq(true)))
+        .thenReturn(Option.of(disabledConfig));
+    when(auditMockClient.readCurrentLockFile())
+        .thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
+
+    StorageBasedLockProvider auditLockProvider = new StorageBasedLockProvider(
+        ownerId,
+        props,
+        (a, b, c) -> mockHeartbeatManager,
+        (a, b, c) -> auditMockClient,
+        mockLogger,
+        null);
+
+    // Set up lock acquisition
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile lockFile = new StorageLockFile(data, "v1");
+    when(auditMockClient.tryUpsertLockFile(any(), eq(Option.empty())))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(lockFile)));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+
+    // tryLock should trigger audit service creation check
+    assertTrue(auditLockProvider.tryLock());
+
+    // Verify audit config was checked during tryLock
+    verify(auditMockClient, times(1)).readObject(
+        contains(".locks/audit_enabled.json"), eq(true));
+
+    // No audit writes should happen since audit is disabled
+    verify(auditMockClient, never()).writeObject(
+        contains(".locks/audit"), anyString());
+
+    auditLockProvider.close();
   }
 
   public static class StubStorageLockClient implements StorageLockClient {
@@ -766,6 +861,18 @@ class TestStorageBasedLockProvider {
     @Override
     public Pair<LockGetResult, Option<StorageLockFile>> readCurrentLockFile() {
       return null;
+    }
+
+    @Override
+    public Option<String> readObject(String filePath, boolean checkExistsFirst) {
+      // Stub implementation for testing
+      return Option.empty();
+    }
+
+    @Override
+    public boolean writeObject(String filePath, String content) {
+      // Stub implementation for testing
+      return true;
     }
 
     @Override
