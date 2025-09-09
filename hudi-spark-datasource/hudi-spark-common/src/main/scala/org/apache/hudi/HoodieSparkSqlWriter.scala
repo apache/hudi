@@ -1079,6 +1079,10 @@ class HoodieSparkSqlWriterInternal {
     }
   }
 
+  /**
+   * While validating the merge related write properties against existing table config, we need to infer
+   * the right merge related properties that are consistent with the ones persisted eventually.
+   */
   private def setMergePropertiesForValidation(optParams: Map[String, String],
                                               tableConfig: HoodieTableConfig,
                                               mode: SaveMode): Map[String, String] = {

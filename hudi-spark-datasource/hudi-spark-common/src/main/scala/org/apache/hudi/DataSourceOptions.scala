@@ -1017,6 +1017,9 @@ object DataSourceOptionsHelper {
     translatedOpt.toMap
   }
 
+  /**
+   * This method assists in fetching the right table config and populating write configs for merge related properties.
+   */
   def fetchMissingMergeConfigsFromTableConfig(tableConfig: HoodieTableConfig, params: Map[String, String]): Map[String, String] = {
     val missingWriteConfigs = scala.collection.mutable.Map[String, String]()
     if (!params.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()) && tableConfig.getPayloadClass != null) {
