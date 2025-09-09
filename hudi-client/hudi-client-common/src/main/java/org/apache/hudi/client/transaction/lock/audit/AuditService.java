@@ -28,11 +28,11 @@ import org.apache.hudi.PublicAPIMethod;
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public interface AuditService extends AutoCloseable {
-  
+
   /**
    * Records an audit operation with the given state and timestamp.
-   * 
-   * @param state The type of operation (START, RENEW, END)
+   *
+   * @param state     The type of operation (START, RENEW, END)
    * @param timestamp When the operation occurred
    * @throws Exception if the operation cannot be recorded
    */

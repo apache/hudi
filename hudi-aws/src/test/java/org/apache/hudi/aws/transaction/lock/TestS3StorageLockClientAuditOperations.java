@@ -66,11 +66,11 @@ public class TestS3StorageLockClientAuditOperations {
     String ownerId = "test-owner";
     String lockFileUri = "s3://test-bucket/table/.hoodie/.locks/table_lock.json";
     lockClient = new S3StorageLockClient(
-            ownerId,
-            lockFileUri,
-            new Properties(),
-            (bucket, props) -> mockS3Client,
-            mockLogger);
+        ownerId,
+        lockFileUri,
+        new Properties(),
+        (bucket, props) -> mockS3Client,
+        mockLogger);
   }
 
   @Test
@@ -125,9 +125,9 @@ public class TestS3StorageLockClientAuditOperations {
 
     // Direct GET request returns 404
     S3Exception notFoundException = (S3Exception) S3Exception.builder()
-            .statusCode(404)
-            .message("Not Found")
-            .build();
+        .statusCode(404)
+        .message("Not Found")
+        .build();
     when(mockS3Client.getObjectAsBytes(any(GetObjectRequest.class)))
         .thenThrow(notFoundException);
 
@@ -223,8 +223,8 @@ public class TestS3StorageLockClientAuditOperations {
 
     assertTrue(result);
     verify(mockS3Client, times(1)).putObject(
-            eq(PutObjectRequest.builder().bucket("test-bucket").key("audit/test-audit.jsonl").build()),
-            any(RequestBody.class)
+        eq(PutObjectRequest.builder().bucket("test-bucket").key("audit/test-audit.jsonl").build()),
+        any(RequestBody.class)
     );
     verify(mockLogger).debug("Successfully wrote object to: {}", filePath);
   }
@@ -264,8 +264,8 @@ public class TestS3StorageLockClientAuditOperations {
 
     assertTrue(result);
     verify(mockS3Client, times(1)).putObject(
-            eq(PutObjectRequest.builder().bucket("test-bucket").key("audit/empty-content.jsonl").build()),
-            any(RequestBody.class)
+        eq(PutObjectRequest.builder().bucket("test-bucket").key("audit/empty-content.jsonl").build()),
+        any(RequestBody.class)
     );
     verify(mockLogger).debug("Successfully wrote object to: {}", filePath);
   }

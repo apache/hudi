@@ -26,12 +26,12 @@ public enum AuditOperationState {
    * Operation started.
    */
   START,
-  
+
   /**
    * Operation renewal/heartbeat.
    */
   RENEW,
-  
+
   /**
    * Operation end.
    */

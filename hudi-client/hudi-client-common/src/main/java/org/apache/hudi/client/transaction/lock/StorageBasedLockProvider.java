@@ -110,7 +110,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   private synchronized void setLock(StorageLockFile lockObj) {
     if (lockObj != null && !Objects.equals(lockObj.getOwner(), this.ownerId)) {
       throw new HoodieLockException("Owners do not match. Current lock owner: " + this.ownerId + " lock path: "
-              + this.lockFilePath + " owner: " + lockObj.getOwner());
+          + this.lockFilePath + " owner: " + lockObj.getOwner());
     }
     this.currentLockObj = lockObj;
   }
@@ -157,8 +157,8 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       try {
         return (StorageLockClient) ReflectionUtils.loadClass(
             getLockServiceClassName(new URI(lockFilePath).getScheme()),
-            new Class<?>[]{String.class, String.class, Properties.class},
-            new Object[]{ownerId, lockFilePath, lockConfig});
+            new Class<?>[] {String.class, String.class, Properties.class},
+            new Object[] {ownerId, lockFilePath, lockConfig});
       } catch (Throwable e) {
         throw new HoodieLockException("Failed to load and initialize StorageLock", e);
       }
@@ -344,8 +344,8 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     long lockExpirationMs = calculateLockExpiration(acquisitionTimestamp);
     StorageLockData newLockData = new StorageLockData(false, lockExpirationMs, ownerId);
     Pair<LockUpsertResult, Option<StorageLockFile>> lockUpdateStatus = this.storageLockClient.tryUpsertLockFile(
-          newLockData,
-          latestLock.getRight());
+        newLockData,
+        latestLock.getRight());
     if (lockUpdateStatus.getLeft() != LockUpsertResult.SUCCESS) {
       // failed to acquire the lock, indicates concurrent contention
       logInfoLockState(FAILED_TO_ACQUIRE);
@@ -354,7 +354,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     }
     this.setLock(lockUpdateStatus.getRight().get());
     hoodieLockMetrics.ifPresent(metrics -> metrics.updateLockExpirationDeadlineMetric(
-          (int) (lockUpdateStatus.getRight().get().getValidUntilMs() - getCurrentEpochMs())));
+        (int) (lockUpdateStatus.getRight().get().getValidUntilMs() - getCurrentEpochMs())));
 
     // There is a remote chance that
     // - after lock is acquired but before heartbeat starts the lock is expired.
@@ -395,7 +395,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
    * valid only if it exists and has not expired according to its timestamp.
    *
    * @return {@code true} if this provider holds a valid lock, {@code false}
-   *         otherwise
+   * otherwise
    */
   private boolean actuallyHoldsLock() {
     return believesLockMightBeHeld() && isLockStillValid(getLock());
@@ -414,7 +414,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
    * StorageBasedLockProvider#actuallyHoldsLock should be used.
    *
    * @return {@code true} if this provider has a non-null lock object,
-   *         {@code false} otherwise
+   * {@code false} otherwise
    * @see StorageBasedLockProvider#actuallyHoldsLock()
    */
   private boolean believesLockMightBeHeld() {
@@ -463,6 +463,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
 
   /**
    * Tries to expire the currently held lock.
+   *
    * @param fromShutdownHook Whether we are attempting best effort quick unlock from shutdown hook.
    * @return True if we were successfully able to upload an expired lock.
    */
@@ -506,6 +507,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
    * Renews (heartbeats) the current lock if we are the holder, it forcefully set
    * the expiration flag
    * to false and the lock expiration time to a later time in the future.
+   *
    * @return True if we successfully renewed the lock, false if not.
    */
   @VisibleForTesting
@@ -553,9 +555,9 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           // Only positive outcome
           this.setLock(currentLock.getRight().get());
           hoodieLockMetrics.ifPresent(metrics -> metrics.updateLockExpirationDeadlineMetric(
-                  (int) (oldExpirationMs - getCurrentEpochMs())));
+              (int) (oldExpirationMs - getCurrentEpochMs())));
           logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}.",
-                  ownerId, oldExpirationMs - getCurrentEpochMs(), lockFilePath);
+              ownerId, oldExpirationMs - getCurrentEpochMs(), lockFilePath);
           recordAuditOperation(AuditOperationState.RENEW, acquisitionTimestamp);
           // Let heartbeat continue to renew lock lease again later.
           return true;
@@ -584,11 +586,11 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
   private String generateLockStateMessage(LockState state) {
     String threadName = Thread.currentThread().getName();
     return String.format(
-            "Owner %s: Lock file path %s, Thread %s, Storage based lock state %s",
-            ownerId,
-            lockFilePath,
-            threadName,
-            state.toString());
+        "Owner %s: Lock file path %s, Thread %s, Storage based lock state %s",
+        ownerId,
+        lockFilePath,
+        threadName,
+        state.toString());
   }
 
   private static final String LOCK_STATE_LOGGER_MSG = "Owner {}: Lock file path {}, Thread {}, Storage based lock state {}";
