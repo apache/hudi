@@ -168,6 +168,7 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
       // there is only one log message for one data bucket.
       LOG.info("Processing input split : {}", split);
       format.open(split);
+      readMetrics.setTotalCorruptLogFiles(format.getLogReadStats().getTotalCorruptLogFiles());
       readMetrics.setSplitLatestCommit(split.getLatestCommit());
     }
 

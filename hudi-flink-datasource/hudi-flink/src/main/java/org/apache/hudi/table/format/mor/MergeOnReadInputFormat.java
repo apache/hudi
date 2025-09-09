@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -202,6 +203,10 @@ public class MergeOnReadInputFormat
   public BaseStatistics getStatistics(BaseStatistics baseStatistics) {
     // statistics not supported yet.
     return null;
+  }
+
+  public HoodieReadStats getLogReadStats() {
+    return ((HoodieFileGroupReader.HoodieFileGroupReaderIterator)this.iterator).getReadStats();
   }
 
   @Override

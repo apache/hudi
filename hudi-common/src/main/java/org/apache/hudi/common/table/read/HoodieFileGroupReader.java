@@ -324,8 +324,15 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<BufferedRecord<T>> {
     private HoodieFileGroupReader<T> reader;
 
+    private final HoodieReadStats readStats;
+
     public HoodieFileGroupReaderIterator(HoodieFileGroupReader<T> reader) {
       this.reader = reader;
+      this.readStats = reader.readStats;
+    }
+
+    public HoodieReadStats getReadStats() {
+      return this.readStats;
     }
 
     @Override
