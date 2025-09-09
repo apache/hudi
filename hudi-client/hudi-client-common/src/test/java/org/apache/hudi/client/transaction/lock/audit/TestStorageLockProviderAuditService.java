@@ -64,9 +64,9 @@ public class TestStorageLockProviderAuditService {
   void setUp() {
     storageLockClient = mock(StorageLockClient.class);
     lockHeldSupplier = (Supplier<Boolean>) mock(Supplier.class);
-    
+
     when(lockHeldSupplier.get()).thenReturn(true);
-    
+
     auditService = new StorageLockProviderAuditService(
         BASE_PATH,
         OWNER_ID,
@@ -100,7 +100,7 @@ public class TestStorageLockProviderAuditService {
     // Parse JSONL content (should be a single line)
     String[] lines = contentCaptor.getValue().trim().split("\n");
     assertEquals(1, lines.length, "Should have one JSON line");
-    
+
     Map<String, Object> auditRecord = OBJECT_MAPPER.readValue(lines[0], Map.class);
     assertEquals(OWNER_ID, auditRecord.get("ownerId"));
     assertEquals(TRANSACTION_START_TIME, ((Number) auditRecord.get("transactionStartTime")).longValue());
@@ -246,18 +246,18 @@ public class TestStorageLockProviderAuditService {
     // All operations write to the same JSONL file
     ArgumentCaptor<String> contentCaptor = ArgumentCaptor.forClass(String.class);
     verify(storageLockClient, times(3)).writeObject(
-        contains(String.format("%d_%s.jsonl", TRANSACTION_START_TIME, OWNER_ID)), 
+        contains(String.format("%d_%s.jsonl", TRANSACTION_START_TIME, OWNER_ID)),
         contentCaptor.capture());
-    
+
     // The last write should contain all three records
     String lastContent = contentCaptor.getValue();
     String[] lines = lastContent.trim().split("\n");
     assertEquals(3, lines.length, "Should have three JSON lines");
-    
+
     Map<String, Object> startRecord = OBJECT_MAPPER.readValue(lines[0], Map.class);
     Map<String, Object> renewRecord = OBJECT_MAPPER.readValue(lines[1], Map.class);
     Map<String, Object> endRecord = OBJECT_MAPPER.readValue(lines[2], Map.class);
-    
+
     assertEquals("START", startRecord.get("state"));
     assertEquals("RENEW", renewRecord.get("state"));
     assertEquals("END", endRecord.get("state"));
@@ -276,27 +276,27 @@ public class TestStorageLockProviderAuditService {
 
     String[] lines = contentCaptor.getValue().trim().split("\n");
     Map<String, Object> auditRecord = OBJECT_MAPPER.readValue(lines[0], Map.class);
-    
+
     assertNotNull(auditRecord.get("ownerId"));
     assertNotNull(auditRecord.get("transactionStartTime"));
     assertNotNull(auditRecord.get("timestamp"));
     assertNotNull(auditRecord.get("state"));
     assertNotNull(auditRecord.get("lockExpiration"));
     assertNotNull(auditRecord.get("lockHeld"));
-    
+
     assertEquals(6, auditRecord.size(), "Audit record should contain exactly 6 fields");
   }
 
   @Test
   void testCloseMethodWithBufferedData() throws Exception {
     when(storageLockClient.writeObject(anyString(), anyString())).thenReturn(true);
-    
+
     // Record an operation to buffer some data
     auditService.recordOperation(AuditOperationState.START, System.currentTimeMillis());
-    
+
     // Close should write any buffered data
     auditService.close();
-    
+
     // Verify write was called once for the START and no additional calls during close
     // (since writeAuditFile is called immediately after each recordOperation)
     verify(storageLockClient, times(1)).writeObject(anyString(), anyString());
@@ -306,7 +306,7 @@ public class TestStorageLockProviderAuditService {
   void testDynamicFunctionValues() throws Exception {
     long timestamp = System.currentTimeMillis();
     when(storageLockClient.writeObject(anyString(), anyString())).thenReturn(true);
-    
+
     // Create a service that calculates different expiration times based on the timestamp
     StorageLockProviderAuditService dynamicService = new StorageLockProviderAuditService(
         BASE_PATH,
@@ -315,7 +315,7 @@ public class TestStorageLockProviderAuditService {
         storageLockClient,
         ts -> ts + 1000L, // Different function: adds 1000ms to timestamp
         lockHeldSupplier);
-    
+
     when(lockHeldSupplier.get()).thenReturn(true, false);
 
     dynamicService.recordOperation(AuditOperationState.START, timestamp);
@@ -327,14 +327,14 @@ public class TestStorageLockProviderAuditService {
     // First write contains only START record
     String[] firstLines = contentCaptor.getAllValues().get(0).trim().split("\n");
     Map<String, Object> firstRecord = OBJECT_MAPPER.readValue(firstLines[0], Map.class);
-    
+
     // Second write contains both START and END records
     String[] secondLines = contentCaptor.getAllValues().get(1).trim().split("\n");
     Map<String, Object> secondRecord = OBJECT_MAPPER.readValue(secondLines[1], Map.class);
 
     assertTrue((Boolean) firstRecord.get("lockHeld"));
     assertEquals(timestamp + 1000L, ((Number) firstRecord.get("lockExpiration")).longValue());
-    
+
     assertFalse((Boolean) secondRecord.get("lockHeld"));
     assertEquals(timestamp + 1000L + 1000L, ((Number) secondRecord.get("lockExpiration")).longValue());
   }
@@ -348,7 +348,7 @@ public class TestStorageLockProviderAuditService {
 
     String expectedFilename = String.format("%d_%s.jsonl", TRANSACTION_START_TIME, OWNER_ID);
     String expectedPath = String.format("%s/.hoodie/.locks/audit/%s", BASE_PATH, expectedFilename);
-    
+
     verify(storageLockClient).writeObject(eq(expectedPath), anyString());
   }
 
@@ -373,13 +373,13 @@ public class TestStorageLockProviderAuditService {
   void testConcurrentRenewAndEndOperations() throws Exception {
     when(storageLockClient.writeObject(anyString(), anyString())).thenReturn(true);
     when(lockHeldSupplier.get()).thenReturn(true, false);
-    
+
     ExecutorService executor = Executors.newFixedThreadPool(2);
     CountDownLatch startLatch = new CountDownLatch(1);
     CountDownLatch completionLatch = new CountDownLatch(2);
-    
+
     long baseTime = System.currentTimeMillis();
-    
+
     // Thread 1: RENEW operation (simulating heartbeat thread)
     executor.submit(() -> {
       try {
@@ -391,7 +391,7 @@ public class TestStorageLockProviderAuditService {
         completionLatch.countDown();
       }
     });
-    
+
     // Thread 2: END operation (simulating main thread unlocking)
     executor.submit(() -> {
       try {
@@ -403,39 +403,39 @@ public class TestStorageLockProviderAuditService {
         completionLatch.countDown();
       }
     });
-    
+
     // Signal both threads to start simultaneously
     startLatch.countDown();
-    
+
     // Wait for both operations to complete
     assertTrue(completionLatch.await(5, TimeUnit.SECONDS), "Both operations should complete within 5 seconds");
-    
+
     // Verify that both operations were recorded (order may vary due to concurrency)
     ArgumentCaptor<String> contentCaptor = ArgumentCaptor.forClass(String.class);
     verify(storageLockClient, times(2)).writeObject(anyString(), contentCaptor.capture());
-    
+
     // Parse the final content to verify both RENEW and END are present
     String finalContent = contentCaptor.getValue();
     String[] lines = finalContent.trim().split("\\n");
     assertEquals(2, lines.length, "Should have exactly 2 audit records");
-    
+
     // Parse both records and verify they contain both RENEW and END states
     Map<String, Object> record1 = OBJECT_MAPPER.readValue(lines[0], Map.class);
     Map<String, Object> record2 = OBJECT_MAPPER.readValue(lines[1], Map.class);
-    
+
     // Verify we have both RENEW and END states (order may vary)
     String state1 = (String) record1.get("state");
     String state2 = (String) record2.get("state");
     assertTrue((state1.equals("RENEW") && state2.equals("END"))
-               || (state1.equals("END") && state2.equals("RENEW")),
-               "Should contain both RENEW and END operations");
-    
+        || (state1.equals("END") && state2.equals("RENEW")),
+        "Should contain both RENEW and END operations");
+
     // Verify timestamps are correct
     long timestamp1 = ((Number) record1.get("timestamp")).longValue();
     long timestamp2 = ((Number) record2.get("timestamp")).longValue();
     assertTrue(timestamp1 >= baseTime + 1000 && timestamp1 <= baseTime + 1001);
     assertTrue(timestamp2 >= baseTime + 1000 && timestamp2 <= baseTime + 1001);
-    
+
     executor.shutdown();
     assertTrue(executor.awaitTermination(1, TimeUnit.SECONDS));
   }

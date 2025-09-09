@@ -827,10 +827,10 @@ class TestStorageBasedLockProvider {
     when(auditMockClient.tryUpsertLockFile(any(), eq(Option.empty())))
         .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(lockFile)));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
-    
+
     // tryLock should trigger audit service creation check
     assertTrue(auditLockProvider.tryLock());
-    
+
     // Verify audit config was checked during tryLock
     verify(auditMockClient, times(1)).readObject(
         contains(".locks/audit_enabled.json"), eq(true));
@@ -841,7 +841,7 @@ class TestStorageBasedLockProvider {
 
     auditLockProvider.close();
   }
-  
+
   @Test
   void testAuditServiceIntegrationWhenConfigEnabled() {
     // Test that lock provider works correctly when audit is enabled
@@ -849,7 +849,7 @@ class TestStorageBasedLockProvider {
     props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
     props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
     props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-audit-enabled");
-    
+
     // Mock client that returns enabled config
     StorageLockClient auditMockClient = mock(StorageLockClient.class);
     String enabledConfig = "{\"STORAGE_LOCK_AUDIT_SERVICE_ENABLED\": true}";
@@ -860,46 +860,46 @@ class TestStorageBasedLockProvider {
     // Mock writeObject method to return true for audit file writes
     when(auditMockClient.writeObject(anyString(), anyString()))
         .thenReturn(true);
-    
+
     StorageBasedLockProvider auditLockProvider = new StorageBasedLockProvider(
         ownerId,
         props,
-        (a,b,c) -> mockHeartbeatManager,
-        (a,b,c) -> auditMockClient,
+        (a, b, c) -> mockHeartbeatManager,
+        (a, b, c) -> auditMockClient,
         mockLogger,
         null);
-    
+
     // Set up lock acquisition
     StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
     StorageLockFile lockFile = new StorageLockFile(data, "v1");
     when(auditMockClient.tryUpsertLockFile(any(), eq(Option.empty())))
         .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(lockFile)));
     when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
-    
+
     // tryLock should trigger audit service creation and START audit
     assertTrue(auditLockProvider.tryLock());
-    
+
     // Verify audit config was checked during tryLock
     verify(auditMockClient, times(1)).readObject(
         contains(".locks/audit_enabled.json"), eq(true));
-    
+
     // Verify audit START operation was written
     verify(auditMockClient, times(1)).writeObject(
         contains(".locks/audit/"), anyString());
-    
+
     // Unlock should trigger END audit
     when(auditMockClient.tryUpsertLockFile(any(), any()))
         .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(lockFile)));
     when(mockHeartbeatManager.stopHeartbeat(anyBoolean())).thenReturn(true);
     auditLockProvider.unlock();
-    
+
     // Verify audit END operation was written (total 2 writes: START and END)
     verify(auditMockClient, times(2)).writeObject(
         contains(".locks/audit/"), anyString());
-    
+
     auditLockProvider.close();
   }
-  
+
   public static class StubStorageLockClient implements StorageLockClient {
     public StubStorageLockClient(String ownerId, String lockFileUri, Properties props) {
       assertTrue(lockFileUri.endsWith("table_lock.json"));
