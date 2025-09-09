@@ -281,9 +281,10 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       // One commit; reading one file group containing a log file only
       List<HoodieRecord> initialRecords = dataGen.generateInserts("001", 100);
       commitToTable(initialRecords, UPSERT.value(), true, writeConfigs, TRIP_EXAMPLE_SCHEMA);
+      String[] orderingFields = recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING ? new String[0] : new String[]{ORDERING_FIELD_NAME};
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), false, 1, recordMergeMode,
-          initialRecords, initialRecords, new String[]{ORDERING_FIELD_NAME});
+          initialRecords, initialRecords, orderingFields);
 
       // Two commits; reading one file group containing two log files
       List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
@@ -291,7 +292,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       commitToTable(updates, UPSERT.value(), false, writeConfigs, TRIP_EXAMPLE_SCHEMA);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), false, 2, recordMergeMode,
-          allRecords, CollectionUtils.combine(initialRecords, updates), new String[] {ORDERING_FIELD_NAME});
+          allRecords, CollectionUtils.combine(initialRecords, updates), orderingFields);
     }
   }
 

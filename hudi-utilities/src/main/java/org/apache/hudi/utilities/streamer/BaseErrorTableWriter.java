@@ -87,7 +87,9 @@ public abstract class BaseErrorTableWriter<T extends ErrorEvent> implements Seri
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract boolean upsertAndCommit(String baseTableInstantTime, Option<String> commitedInstantTime);
 
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract JavaRDD<WriteStatus> upsert(String baseTableInstantTime, Option<String> commitedInstantTime);
 
-  public abstract boolean commit(String errorTableInstantTime, JavaRDD<WriteStatus> writeStatuses);
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract boolean commit(JavaRDD<WriteStatus> writeStatuses);
 }
