@@ -54,6 +54,7 @@ import static org.mockito.Mockito.when;
  * Tests for S3StorageLockClient audit operations (readObject and writeObject methods)
  */
 public class TestS3StorageLockClientAuditOperations {
+
   private S3Client mockS3Client;
   private Logger mockLogger;
   private S3StorageLockClient lockClient;
