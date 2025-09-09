@@ -21,8 +21,8 @@ package org.apache.hudi.functional
 import org.apache.hudi.DataSourceUtils
 import org.apache.hudi.DataSourceWriteOptions.{INSERT_OPERATION_OPT_VAL, KEYGENERATOR_CLASS_NAME, OPERATION, ORDERING_FIELDS, PARTITIONPATH_FIELD, PAYLOAD_CLASS_NAME, RECORD_MERGE_MODE, RECORDKEY_FIELD, TABLE_TYPE, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.config.LockConfiguration.{LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode, TypedProperties}
+import org.apache.hudi.common.config.LockConfiguration.{LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY}
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecordMerger, HoodieRecordPayload, HoodieTableType, OverwriteWithLatestAvroPayload, TableServiceType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.timeline.InstantComparison.{compareTimestamps, GREATER_THAN_OR_EQUALS}
