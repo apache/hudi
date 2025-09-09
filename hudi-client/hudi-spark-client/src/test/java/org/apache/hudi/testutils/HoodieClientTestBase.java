@@ -639,7 +639,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
    * @param numRecords    The number of records to insert
    */
   @SuppressWarnings("rawtypes, unchecked")
-  protected void insertBatchWithoutCommit(int numRecords) {
+  protected String insertBatchWithoutCommit(int numRecords) {
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
         .withRollbackUsingMarkers(true)
         .build();
@@ -652,6 +652,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
 
       List<WriteStatus> statuses = client.insert(writeRecords, newCommitTime).collect();
       assertNoWriteErrors(statuses);
+      return newCommitTime;
     }
   }
 

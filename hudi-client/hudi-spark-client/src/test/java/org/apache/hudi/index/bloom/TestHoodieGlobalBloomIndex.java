@@ -217,6 +217,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
   @Test
   public void testTagLocation() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withSchema(SCHEMA.toString())
         .withIndexConfig(HoodieIndexConfig.newBuilder()
             .withIndexType(HoodieIndex.IndexType.GLOBAL_BLOOM)
             .withGlobalBloomIndexUpdatePartitionPath(false)

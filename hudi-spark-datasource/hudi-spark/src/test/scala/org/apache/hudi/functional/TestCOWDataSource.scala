@@ -185,6 +185,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // Insert Operation
     var records = recordsToStrings(dataGen.generateInserts("003", 100)).asScala.toList
     var inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    inputDF = inputDF.withColumn("timestamp", lit(10))
 
     val commonOptsWithMultipleOrderingFields = writeOpts ++ Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
@@ -203,6 +204,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     records = recordsToStrings(dataGen.generateUniqueUpdates("002", 10)).asScala.toList
     inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    inputDF = inputDF.withColumn("timestamp", lit(10))
     inputDF.write.format("hudi")
       .options(commonOptsWithMultipleOrderingFields)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
@@ -212,6 +214,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     records = recordsToStrings(dataGen.generateUniqueUpdates("004", 10)).asScala.toList
     inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    inputDF = inputDF.withColumn("timestamp", lit(10))
     inputDF.write.format("hudi")
       .options(commonOptsWithMultipleOrderingFields)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
@@ -221,7 +224,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     records = recordsToStrings(dataGen.generateUniqueUpdates("001", 10)).asScala.toList
     inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
-    inputDF = inputDF.withColumn("timestamp", lit(1))
+    inputDF = inputDF.withColumn("timestamp", lit(20))
     inputDF.write.format("hudi")
       .options(commonOptsWithMultipleOrderingFields)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
