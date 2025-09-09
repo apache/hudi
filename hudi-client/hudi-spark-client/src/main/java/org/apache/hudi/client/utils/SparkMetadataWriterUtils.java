@@ -79,6 +79,7 @@ import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.functions;
+import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
@@ -166,14 +167,16 @@ public class SparkMetadataWriterUtils {
             functions.min(columnToIndex).alias(COLUMN_STATS_FIELD_MIN_VALUE),
             functions.max(columnToIndex).alias(COLUMN_STATS_FIELD_MAX_VALUE),
             functions.count(columnToIndex).alias(COLUMN_STATS_FIELD_VALUE_COUNT));
+
+
     // Generate column stat records using the aggregated data
     HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> rangeMetadataHoodieJavaRDD = HoodieJavaRDD.of(columnRangeMetadataDataset.javaRDD())
         .flatMapToPair((SerializableFunction<Row, Iterator<? extends Pair<String, HoodieColumnRangeMetadata<Comparable>>>>)
             row -> {
               int baseAggregatePosition = SparkMetadataWriterUtils.getExpressionIndexColumnNames().length;
               long nullCount = row.getLong(baseAggregatePosition);
-              Comparable minValue = convertSparkToJava(row.get(baseAggregatePosition + 1), indexVersion);
-              Comparable maxValue = convertSparkToJava(row.get(baseAggregatePosition + 2), indexVersion);
+              Comparable minValue = convertSparkToJava(row.get(baseAggregatePosition + 1), indexVersion, row.schema().apply(baseAggregatePosition + 1).dataType());
+              Comparable maxValue = convertSparkToJava(row.get(baseAggregatePosition + 2), indexVersion, row.schema().apply(baseAggregatePosition + 2).dataType());
               long valueCount = row.getLong(baseAggregatePosition + 3);
 
               String partitionName = row.getString(0);
@@ -214,11 +217,11 @@ public class SparkMetadataWriterUtils {
         : new ExpressionIndexComputationMetadata(colStatRecords);
   }
 
-  private static Comparable convertSparkToJava(Object value, HoodieIndexVersion indexVersion) {
+  private static Comparable convertSparkToJava(Object value, HoodieIndexVersion indexVersion, DataType dataType) {
     if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
       return (Comparable) value;
     }
-    return (Comparable) BaseSparkInternalRecordContext.sparkTypeToJavaType(value);
+    return (Comparable) BaseSparkInternalRecordContext.sparkTypeToJavaType(value, dataType);
   }
 
   public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingBloomFilter(

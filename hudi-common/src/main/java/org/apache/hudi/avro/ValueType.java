@@ -21,6 +21,7 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.avro.model.ArrayWrapper;
 import org.apache.hudi.common.util.DateTimeUtils;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 
 import org.apache.avro.LogicalTypes;
@@ -44,6 +45,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
+import java.util.Collection;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.BiFunction;
@@ -119,6 +121,11 @@ public enum ValueType {
   }
 
   Comparable<?> standardizeJavaTypeAndPromote(Object val, ValueMetadata meta) {
+    if (val instanceof Collection) {
+      return OrderingValues.create(((Collection<?>) val).stream()
+          .map(v -> standardizeJavaTypeAndPromote(v, meta))
+          .toArray(Comparable[]::new));
+    }
     return standardize.apply(val, meta);
   }
 
@@ -135,12 +142,16 @@ public enum ValueType {
       return;
     }
 
-    if (!internalType.isInstance(val)) {
-      throw new IllegalArgumentException(String.format(
-          "should be %s, but got %s",
-          internalType.getSimpleName(),
-          val.getClass().getSimpleName()
-      ));
+    if (val instanceof Collection) {
+      ((Collection) val).forEach(this::validate);
+    } else {
+      if (!internalType.isInstance(val)) {
+        throw new IllegalArgumentException(String.format(
+            "should be %s, but got %s",
+            internalType.getSimpleName(),
+            val.getClass().getSimpleName()
+        ));
+      }
     }
   }
 

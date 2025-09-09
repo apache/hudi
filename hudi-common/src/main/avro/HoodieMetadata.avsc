@@ -362,7 +362,8 @@
                                 "org.apache.hudi.avro.model.DecimalWrapper",
                                 "org.apache.hudi.avro.model.TimeMicrosWrapper",
                                 "org.apache.hudi.avro.model.TimestampMicrosWrapper",
-                                "org.apache.hudi.avro.model.LocalDateWrapper"
+                                "org.apache.hudi.avro.model.LocalDateWrapper",
+                                "org.apache.hudi.avro.model.ArrayWrapper"
                             ],
                             "default": null
                         },
