@@ -154,7 +154,7 @@ Hudi storage format supports two table types offering different trade-offs betwe
 | **Table Type** | **Description** |
 | ---| --- |
 | Copy-on-Write (CoW) | Data is stored entirely in base files, optimized for read performance and ideal for slow changing datasets. Any updates, inserts, deletes accordingly produce new base files for each write operation. Change data is still stored as log files associated with the base files. |
-| Merge-on-Read (MoR) | Data is stored in a combination of base and log files, optimized to [Balancing Write and Query Performance](#balancing-write-and-query-performance) and ideal for frequently changing datasets |
+| Merge-on-Read (MoR) | Data is stored in a combination of base and log files, optimized to [Balancing Write and Query Performance](#balancing-write-and-read-performance) and ideal for frequently changing datasets |
 
 Readers need to then satisfy different query types on these tables.
 
@@ -369,7 +369,7 @@ stored with the actual record to avoid re-computation.
 
 | Hudi meta-fields | Description |
 | ---| --- |
-| \_hoodie\_commit\_time | This field contains the commit timestamp in the [timeline](#transaction-log-timeline) that created this record. This enables granular, record-level history tracking on the table, much like database change-data-capture. |
+| \_hoodie\_commit\_time | This field contains the commit timestamp in the timeline that created this record. This enables granular, record-level history tracking on the table, much like database change-data-capture. |
 | \_hoodie\_commit\_seqno | This field contains a unique sequence number for each record within each transaction. This serves much like offsets in Apache Kafka topics, to enable generating streams out of tables. |
 | \_hoodie\_record\_key | Unique record key identifying the record within the partition. Key is materialized to avoid changes to key field(s) resulting in violating unique constraints maintained within a table. |
 | \_hoodie\_partition\_path | Partition path under which the record is organized into. |
