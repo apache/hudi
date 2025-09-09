@@ -66,10 +66,12 @@ public class GCSStorageLockClient implements StorageLockClient {
   private final String lockFilePath;
   private final String ownerId;
 
-  /** Constructor that is used by reflection to instantiate a GCS-based locking service.
-   * @param ownerId The owner id.
+  /**
+   * Constructor that is used by reflection to instantiate a GCS-based locking service.
+   *
+   * @param ownerId     The owner id.
    * @param lockFileUri The path within the bucket where to write lock files.
-   * @param props The properties for the lock config, can be used to customize client.
+   * @param props       The properties for the lock config, can be used to customize client.
    */
   public GCSStorageLockClient(
       String ownerId,
@@ -104,7 +106,7 @@ public class GCSStorageLockClient implements StorageLockClient {
   /**
    * Attempts to create or update the lock file using the given lock data and generation number.
    *
-   * @param lockData the new lock data to use.
+   * @param lockData         the new lock data to use.
    * @param generationNumber the expected generation number (0 for creation).
    * @return the updated StorageLockFile instance.
    * @throws StorageException if the update fails.
@@ -134,13 +136,13 @@ public class GCSStorageLockClient implements StorageLockClient {
       return Pair.of(LockUpsertResult.SUCCESS, Option.of(updatedFile));
     } catch (StorageException e) {
       if (e.getCode() == PRECONDITION_FAILURE_ERROR_CODE) {
-        logger.info("OwnerId: {}, Unable to write new lock file. Another process has modified this lockfile {} already.", 
+        logger.info("OwnerId: {}, Unable to write new lock file. Another process has modified this lockfile {} already.",
             ownerId, lockFilePath);
         return Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty());
       } else if (e.getCode() == RATE_LIMIT_ERROR_CODE) {
         logger.warn("OwnerId: {}, Rate limit exceeded for lock file: {}", ownerId, lockFilePath);
       } else if (e.getCode() >= INTERNAL_SERVER_ERROR_CODE_MIN) {
-        logger.warn("OwnerId: {}, GCS returned internal server error code for lock file: {}", 
+        logger.warn("OwnerId: {}, GCS returned internal server error code for lock file: {}",
             ownerId, lockFilePath, e);
       } else {
         throw e;
@@ -151,7 +153,8 @@ public class GCSStorageLockClient implements StorageLockClient {
 
   /**
    * Handling storage exception for GET request
-   * @param e The error to handle.
+   *
+   * @param e         The error to handle.
    * @param ignore404 Whether to ignore 404 as a valid exception.
    *                  When we read from stream we might see this, and
    *                  it should not be counted as NOT_EXISTS.
@@ -217,19 +220,19 @@ public class GCSStorageLockClient implements StorageLockClient {
       Pair<String, String> bucketAndPath = StorageLockClient.parseBucketAndPath(filePath);
       String bucket = bucketAndPath.getLeft();
       String objectPath = bucketAndPath.getRight();
-      
+
       BlobId blobId = BlobId.of(bucket, objectPath);
-      
+
       if (checkExistsFirst) {
         // First check if the file exists (lightweight metadata check)
         Blob blob = gcsClient.get(blobId);
-        
+
         if (blob == null || !blob.exists()) {
           // File doesn't exist - this is the common case for optional configs
           logger.debug("JSON config file not found: {}", filePath);
           return Option.empty();
         }
-        
+
         // File exists, read its content
         byte[] content = blob.getContent();
         return Option.of(new String(content, UTF_8));
