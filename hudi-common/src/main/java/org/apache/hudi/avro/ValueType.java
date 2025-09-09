@@ -145,6 +145,10 @@ public enum ValueType {
   }
 
   public Object wrapValue(Comparable<?> val, ValueMetadata meta) {
+    if (meta.getValueType() == V1) {
+      return primitiveWrapperType.wrap(val);
+    }
+
     if (val == null) {
       return null;
     }
@@ -155,12 +159,23 @@ public enum ValueType {
   }
 
   public Comparable<?> unwrapValue(Object val, ValueMetadata meta) {
+    if (meta.getValueType() == V1) {
+      return primitiveWrapperType.unwrap(val);
+    }
+
     if (val == null) {
       return null;
     }
     if (val instanceof ArrayWrapper) {
       return HoodieAvroWrapperUtils.unwrapArray(val, v -> unwrapValue(v, meta));
-    } else if (val instanceof GenericRecord) {
+    } else if (!primitiveWrapperType.getWrapperClass().isInstance(val)) {
+      if (!(val instanceof GenericRecord)) {
+        throw new IllegalArgumentException(String.format(
+            "should be %s, but got %s",
+            primitiveWrapperType.getWrapperClass().getSimpleName(),
+            val.getClass().getSimpleName()
+        ));
+      }
       return standardizeJavaTypeAndPromote(HoodieAvroWrapperUtils.unwrapGenericRecord(val), meta);
     }
     return convertIntoComplex(primitiveWrapperType.unwrap(val), meta);

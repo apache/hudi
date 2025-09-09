@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.ValueMetadata;
+import org.apache.hudi.avro.ValueType;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.metadata.HoodieIndexVersion;
@@ -210,10 +211,12 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
 
     if (left.getValueMetadata().getValueType() != right.getValueMetadata().getValueType()) {
       throw new IllegalArgumentException("Value types should be the same for merging column ranges");
-    } else if (left.minValue != null && right.minValue != null && left.minValue.getClass() != right.minValue.getClass()) {
-      throw new IllegalArgumentException("Value types should be the same for merging column ranges");
-    } else if (left.maxValue != null && right.maxValue != null && left.maxValue.getClass() != right.maxValue.getClass()) {
-      throw new IllegalArgumentException("Value types should be the same for merging column ranges");
+    } else if (left.getValueMetadata().getValueType() != ValueType.V1) {
+      if (left.minValue != null && right.minValue != null && left.minValue.getClass() != right.minValue.getClass()) {
+        throw new IllegalArgumentException("Value types should be the same for merging column ranges");
+      } else if (left.maxValue != null && right.maxValue != null && left.maxValue.getClass() != right.maxValue.getClass()) {
+        throw new IllegalArgumentException("Value types should be the same for merging column ranges");
+      }
     }
 
     ValidationUtils.checkArgument(left.getColumnName().equals(right.getColumnName()),

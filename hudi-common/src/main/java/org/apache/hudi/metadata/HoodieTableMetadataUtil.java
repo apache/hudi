@@ -1755,9 +1755,8 @@ public class HoodieTableMetadataUtil {
     } catch (Exception e) {
       // NOTE: In case reading column range metadata from individual file failed,
       //       we simply fall back, in lieu of failing the whole task
-      throw new HoodieException("Failed to fetch column range metadata for: " + partitionPathFileName, e);
-      //LOG.error("Failed to fetch column range metadata for: {}", partitionPathFileName);
-      //return Collections.emptyList();
+      LOG.error("Failed to fetch column range metadata for: {}", partitionPathFileName);
+      return Collections.emptyList();
     }
   }
 
@@ -1796,7 +1795,8 @@ public class HoodieTableMetadataUtil {
         if (!recordIterator.hasNext()) {
           return Collections.emptyList();
         }
-        HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionPath, datasetMetaClient);
+        // TODO: maybe get the actual mdt partition path
+        HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, datasetMetaClient);
         Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
             collectColumnRangeMetadata(recordIterator, fieldsToIndex, getFileNameFromPath(filePath), writerSchemaOpt.get(), datasetMetaClient.getStorage().getConf(), indexVersion);
         return new ArrayList<>(columnRangeMetadataMap.values());

@@ -233,24 +233,26 @@ public class HoodieAvroWrapperUtils {
   }
 
   public enum PrimitiveWrapperType {
-    V1(Object.class, HoodieAvroWrapperUtils::wrapValueIntoAvro, HoodieAvroWrapperUtils::unwrapAvroValueWrapper),
-    NULL(Void.class, HoodieAvroWrapperUtils::wrapNull, HoodieAvroWrapperUtils::unwrapNull),
-    BOOLEAN(Boolean.class, HoodieAvroWrapperUtils::wrapBoolean, HoodieAvroWrapperUtils::unwrapBoolean),
-    INT(Integer.class, HoodieAvroWrapperUtils::wrapInt, HoodieAvroWrapperUtils::unwrapInt),
-    LONG(Long.class, HoodieAvroWrapperUtils::wrapLong, HoodieAvroWrapperUtils::unwrapLong),
-    FLOAT(Float.class, HoodieAvroWrapperUtils::wrapFloat, HoodieAvroWrapperUtils::unwrapFloat),
-    DOUBLE(Double.class, HoodieAvroWrapperUtils::wrapDouble, HoodieAvroWrapperUtils::unwrapDouble),
-    STRING(String.class, HoodieAvroWrapperUtils::wrapString, HoodieAvroWrapperUtils::unwrapString),
-    BYTES(ByteBuffer.class, HoodieAvroWrapperUtils::wrapBytes, HoodieAvroWrapperUtils::unwrapBytes);
+    V1(Object.class, HoodieAvroWrapperUtils::wrapValueIntoAvro, HoodieAvroWrapperUtils::unwrapAvroValueWrapper, GenericRecord.class),
+    NULL(Void.class, HoodieAvroWrapperUtils::wrapNull, HoodieAvroWrapperUtils::unwrapNull, Void.class),
+    BOOLEAN(Boolean.class, HoodieAvroWrapperUtils::wrapBoolean, HoodieAvroWrapperUtils::unwrapBoolean, BooleanWrapper.class),
+    INT(Integer.class, HoodieAvroWrapperUtils::wrapInt, HoodieAvroWrapperUtils::unwrapInt, IntWrapper.class),
+    LONG(Long.class, HoodieAvroWrapperUtils::wrapLong, HoodieAvroWrapperUtils::unwrapLong, LongWrapper.class),
+    FLOAT(Float.class, HoodieAvroWrapperUtils::wrapFloat, HoodieAvroWrapperUtils::unwrapFloat, FloatWrapper.class),
+    DOUBLE(Double.class, HoodieAvroWrapperUtils::wrapDouble, HoodieAvroWrapperUtils::unwrapDouble, DoubleWrapper.class),
+    STRING(String.class, HoodieAvroWrapperUtils::wrapString, HoodieAvroWrapperUtils::unwrapString, StringWrapper.class),
+    BYTES(ByteBuffer.class, HoodieAvroWrapperUtils::wrapBytes, HoodieAvroWrapperUtils::unwrapBytes, BytesWrapper.class);
 
     private final Class<?> clazz;
     private final Function<Comparable<?>, Object> wrapper;
     private final Function<Object, Comparable<?>> unwrapper;
+    private final Class<?> wrapperClass;
 
-    PrimitiveWrapperType(Class<?> clazz, Function<Comparable<?>, Object> wrapper, Function<Object, Comparable<?>> unwrapper) {
+    PrimitiveWrapperType(Class<?> clazz, Function<Comparable<?>, Object> wrapper, Function<Object, Comparable<?>> unwrapper, Class<?> wrapperClass) {
       this.clazz = clazz;
       this.wrapper = wrapper;
       this.unwrapper = unwrapper;
+      this.wrapperClass = wrapperClass;
     }
 
     Class<?> getClazz() {
@@ -263,6 +265,10 @@ public class HoodieAvroWrapperUtils {
 
     Comparable<?> unwrap(Object value) {
       return unwrapper.apply(value);
+    }
+
+    Class<?> getWrapperClass() {
+      return wrapperClass;
     }
   }
 

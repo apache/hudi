@@ -482,11 +482,12 @@ public class ParquetUtils extends FileFormatUtils {
   }
 
   private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable<?> val, ValueMetadata valueMetadata) {
-    if (valueMetadata.getValueType() != ValueType.V1) {
-      return valueMetadata.standardizeJavaTypeAndPromote(val);
-    }
     if (val == null) {
       return null;
+    }
+
+    if (valueMetadata.getValueType() != ValueType.V1) {
+      return valueMetadata.standardizeJavaTypeAndPromote(val);
     }
 
     if (primitiveType.getOriginalType() == OriginalType.DECIMAL) {
