@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -89,8 +90,8 @@ public class TestHoodieIncrSourceE2E extends S3EventsHoodieIncrSourceHarness {
         false,
         false,
         100000,
-        false,
-        null,
+        true,
+        HoodieAvroPayload.class.getName(),
         null,
         "timestamp",
         sourceCheckpoint);
