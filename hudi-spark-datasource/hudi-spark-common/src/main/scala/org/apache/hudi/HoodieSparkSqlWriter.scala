@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.AutoRecordKeyGenerationUtils.mayBeValidateParamsForAutoGenerationOfRecordKeys
 import org.apache.hudi.AvroConversionUtils.{convertAvroSchemaToStructType, convertStructTypeToAvroSchema, getAvroRecordNameAndNamespace}
-import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTableConfig
+import org.apache.hudi.DataSourceOptionsHelper.{fetchMissingMergeConfigsFromTableConfig, fetchMissingWriteConfigsFromTableConfig}
 import org.apache.hudi.DataSourceUtils.SparkDataSourceWriteStatusValidator
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
@@ -238,7 +238,7 @@ class HoodieSparkSqlWriterInternal {
       originKeyGeneratorClassName, paramsWithoutDefaults)
 
     // Validate datasource and tableconfig keygen are the same
-    val paramsWithMergeProperties = setMergePropertiesForValidation(optParams, tableConfig)
+    val paramsWithMergeProperties = setMergePropertiesForValidation(optParams, tableConfig, mode)
     validateKeyGeneratorConfig(originKeyGeneratorClassName, tableConfig)
     validateTableConfig(sqlContext.sparkSession, paramsWithMergeProperties, tableConfig, mode == SaveMode.Overwrite)
 
@@ -1080,8 +1080,13 @@ class HoodieSparkSqlWriterInternal {
   }
 
   private def setMergePropertiesForValidation(optParams: Map[String, String],
-                                              tableConfig: HoodieTableConfig): Map[String, String] = {
+                                              tableConfig: HoodieTableConfig,
+                                              mode: SaveMode): Map[String, String] = {
     val mergedParams = mutable.Map.empty ++ optParams
+    if (tableConfig != null && mode != SaveMode.Overwrite) {
+      // for missing write configs corresponding to table configs, fill them up.
+      mergedParams ++= fetchMissingMergeConfigsFromTableConfig(tableConfig, optParams)
+    }
     val tableVersion = if (tableConfig != null) {
       tableConfig.getTableVersion
     } else {
@@ -1109,7 +1114,6 @@ class HoodieSparkSqlWriterInternal {
           mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), ""),
           ConfigUtils.getOrderingFieldsStrDuringWrite(optParams.asJava),
           tableVersion).asScala
-        println(s"yijiacui: merged configs are: ${mergeConfigs}")
         mergedParams.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), mergeConfigs(HoodieTableConfig.RECORD_MERGE_MODE.key()))
         mergedParams.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), mergeConfigs(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key()))
       } else {
