@@ -31,6 +31,26 @@ import java.util.function.Supplier
 
 import scala.util.{Failure, Success, Try}
 
+
+/**
+ * Spark SQL procedure for enabling or disabling lock audit logging for Hudi tables.
+ *
+ * This procedure allows users to control audit logging for storage lock operations through
+ * Spark SQL commands. When enabled, lock operations will generate audit logs in JSONL format
+ * that track lock lifecycle events.
+ *
+ * Usage:
+ * {{{
+ * CALL audit_lock_set(table => 'my_table', state => 'enabled')
+ * CALL audit_lock_set(table => 'my_table', state => 'disabled')
+ * }}}
+ *
+ * The procedure creates or updates an audit configuration file at:
+ * `{table_path}/.hoodie/.locks/audit_enabled.json`
+ *
+ * @author Apache Hudi
+ * @since 1.0.0
+ */
 class AuditLockSetProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType),
@@ -45,10 +65,27 @@ class AuditLockSetProcedure extends BaseProcedure with ProcedureBuilder {
 
   private val OBJECT_MAPPER = new ObjectMapper()
 
+  /**
+   * Returns the procedure parameters definition.
+   *
+   * @return Array of required parameters: table (String) and state (String)
+   */
   def parameters: Array[ProcedureParameter] = PARAMETERS
 
+  /**
+   * Returns the output schema for the procedure result.
+   *
+   * @return StructType containing table, audit_state, and message columns
+   */
   def outputType: StructType = OUTPUT_TYPE
 
+  /**
+   * Executes the audit lock set procedure.
+   *
+   * @param args Procedure arguments containing table name and desired state
+   * @return Sequence containing a single Row with execution results
+   * @throws IllegalArgumentException if state parameter is not 'enabled' or 'disabled'
+   */
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
@@ -78,6 +115,14 @@ class AuditLockSetProcedure extends BaseProcedure with ProcedureBuilder {
     }
   }
 
+  /**
+   * Sets the audit state by creating or updating the audit configuration file.
+   *
+   * @param metaClient Hudi table meta client for storage operations
+   * @param basePath Base path of the Hudi table
+   * @param enabled Whether audit logging should be enabled
+   * @throws RuntimeException if unable to write the audit configuration
+   */
   private def setAuditState(metaClient: HoodieTableMetaClient, basePath: String, enabled: Boolean): Unit = {
     val storage = metaClient.getStorage
     val lockFolderPath = StorageLockClient.getLockFolderPath(basePath)
@@ -106,6 +151,12 @@ class AuditLockSetProcedure extends BaseProcedure with ProcedureBuilder {
     }
   }
 
+  /**
+   * Creates the JSON configuration content for audit settings.
+   *
+   * @param enabled Whether audit logging should be enabled
+   * @return JSON string representation of the audit configuration
+   */
   private def createAuditConfig(enabled: Boolean): String = {
     val rootNode: ObjectNode = OBJECT_MAPPER.createObjectNode()
     rootNode.put(StorageLockProviderAuditService.STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD, enabled)
@@ -115,8 +166,16 @@ class AuditLockSetProcedure extends BaseProcedure with ProcedureBuilder {
   override def build: Procedure = new AuditLockSetProcedure()
 }
 
+/**
+ * Companion object for AuditLockSetProcedure containing constants and factory methods.
+ */
 object AuditLockSetProcedure {
   val NAME = "audit_lock_set"
 
+  /**
+   * Factory method to create procedure builder instances.
+   *
+   * @return Supplier that creates new AuditLockSetProcedure instances
+   */
   def builder: Supplier[ProcedureBuilder] = () => new AuditLockSetProcedure()
 }

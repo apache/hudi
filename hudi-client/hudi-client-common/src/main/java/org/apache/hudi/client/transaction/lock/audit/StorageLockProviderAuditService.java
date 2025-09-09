@@ -75,10 +75,10 @@ public class StorageLockProviderAuditService implements AuditService {
   private final StringBuilder auditBuffer;
   
   /**
-   * Constructor for StorageLockProviderAuditService.
+   * Creates a new StorageLockProviderAuditService instance.
    * 
    * @param basePath The base path where audit files will be written
-   * @param ownerId The full owner ID
+   * @param ownerId The full owner ID for the lock
    * @param transactionStartTime The timestamp when the transaction started (lock acquired)
    * @param storageLockClient The storage client for writing audit files
    * @param lockExpirationFunction Function that takes a timestamp and returns the lock expiration time
@@ -109,6 +109,13 @@ public class StorageLockProviderAuditService implements AuditService {
         transactionStartTime, auditFilePath);
   }
   
+  /**
+   * Records an audit operation with the current timestamp and state.
+   * 
+   * @param state The audit operation state to record
+   * @param timestamp The timestamp when the operation occurred
+   * @throws Exception if there's an error creating or writing the audit record
+   */
   @Override
   public synchronized void recordOperation(AuditOperationState state, long timestamp) throws Exception {
     // Create audit record
@@ -133,6 +140,12 @@ public class StorageLockProviderAuditService implements AuditService {
         state, timestamp, auditFilePath);
   }
   
+  /**
+   * Writes the accumulated audit records to the audit file.
+   * This method is called after each recordOperation to persist the audit log.
+   * Failures to write audit records are logged but do not throw exceptions
+   * to avoid breaking lock operations.
+   */
   private void writeAuditFile() {
     try {
       // Write the entire buffer content to the audit file
@@ -150,6 +163,12 @@ public class StorageLockProviderAuditService implements AuditService {
     }
   }
   
+  /**
+   * Closes the audit service. Since all audit records are written after each operation,
+   * no additional cleanup is required during close.
+   * 
+   * @throws Exception if there's an error during cleanup (not expected in current implementation)
+   */
   @Override
   public synchronized void close() throws Exception {
     // All audit records are already written after each recordOperation()

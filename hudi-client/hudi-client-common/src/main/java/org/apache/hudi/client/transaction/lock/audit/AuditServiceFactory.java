@@ -40,6 +40,8 @@ public class AuditServiceFactory {
 
   /**
    * Creates a lock provider audit service instance by checking the audit configuration file.
+   * This method reads the audit configuration to determine if auditing is enabled.
+   * If auditing is enabled, it returns a StorageLockProviderAuditService instance.
    *
    * @param ownerId The owner ID for the lock provider
    * @param basePath The base path of the Hudi table
@@ -72,6 +74,9 @@ public class AuditServiceFactory {
 
   /**
    * Checks if audit is enabled by reading the audit configuration file.
+   * This method looks for the audit configuration file at the expected location
+   * and parses it to determine if auditing is enabled. Returns false if the
+   * configuration file doesn't exist or cannot be read.
    *
    * @param basePath The base path of the Hudi table
    * @param storageLockClient The storage lock client to use for reading configuration

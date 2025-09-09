@@ -44,6 +44,13 @@ public class LockAuditingCommand {
   private static final Logger LOG = LoggerFactory.getLogger(LockAuditingCommand.class);
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+  /**
+   * Enables lock audit logging for the currently connected Hudi table.
+   * This command creates or updates the audit configuration file to enable
+   * audit logging for storage lock operations.
+   * 
+   * @return Status message indicating success or failure
+   */
   @ShellMethod(key = "locks audit enable", value = "Enable storage lock audit service for the current table")
   public String enableLockAudit() {
     
@@ -75,6 +82,13 @@ public class LockAuditingCommand {
     }
   }
 
+  /**
+   * Disables lock audit logging for the currently connected Hudi table.
+   * This command updates the audit configuration file to disable audit logging.
+   * 
+   * @param keepAuditFiles Whether to preserve existing audit files when disabling
+   * @return Status message indicating success or failure
+   */
   @ShellMethod(key = "locks audit disable", value = "Disable storage lock audit service for the current table")
   public String disableLockAudit(
       @ShellOption(value = {"--keepAuditFiles"}, defaultValue = "true",
@@ -121,6 +135,13 @@ public class LockAuditingCommand {
     }
   }
 
+  /**
+   * Shows the current status of lock audit logging for the connected table.
+   * This command checks the audit configuration file and reports whether
+   * auditing is currently enabled or disabled.
+   * 
+   * @return Status information about the current audit configuration
+   */
   @ShellMethod(key = "locks audit status", value = "Show the current status of lock audit service")
   public String showLockAuditStatus() {
     

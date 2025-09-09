@@ -17,8 +17,23 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+/**
+ * Test suite for the AuditLockSetProcedure Spark SQL procedure.
+ *
+ * This class contains comprehensive tests to verify the functionality of
+ * the audit_lock_set procedure, including enabling/disabling audit logging,
+ * parameter validation, and error handling scenarios.
+ *
+ * @author Apache Hudi
+ * @since 1.0.0
+ */
 class TestAuditLockSetProcedure extends HoodieSparkProcedureTestBase {
 
+  /**
+   * Test enabling audit logging through the audit_lock_set procedure.
+   * Verifies that the procedure successfully enables audit logging and
+   * returns the expected result structure.
+   */
   test("Test Call audit_lock_set Procedure - Enable Audit") {
     withTempDir { tmp =>
       val tableName = generateTableName
@@ -53,6 +68,11 @@ class TestAuditLockSetProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  /**
+   * Test disabling audit logging through the audit_lock_set procedure.
+   * Verifies that the procedure successfully disables audit logging and
+   * returns the expected result structure.
+   */
   test("Test Call audit_lock_set Procedure - Disable Audit") {
     withTempDir { tmp =>
       val tableName = generateTableName
@@ -87,6 +107,11 @@ class TestAuditLockSetProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  /**
+   * Test parameter validation by providing an invalid state parameter.
+   * Verifies that the procedure rejects invalid state values and provides
+   * an appropriate error message.
+   */
   test("Test Call audit_lock_set Procedure - Invalid State Parameter") {
     withTempDir { tmp =>
       val tableName = generateTableName
@@ -112,6 +137,11 @@ class TestAuditLockSetProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  /**
+   * Test parameter validation by omitting required arguments.
+   * Verifies that the procedure properly validates required parameters
+   * and provides appropriate error messages for missing arguments.
+   */
   test("Test Call audit_lock_set Procedure - Missing Required Arguments") {
     withTempDir { tmp =>
       val tableName = generateTableName
