@@ -233,23 +233,17 @@ public class PrometheusReporter extends MetricsReporter {
   }
 
   public static boolean isServerRunning(int port) {
-    synchronized (PrometheusReporter.class) {
-      return PORT_TO_SERVER_STATE.containsKey(port);
-    }
+    return PORT_TO_SERVER_STATE.containsKey(port);
   }
 
   public static int getReferenceCount(int port) {
-    synchronized (PrometheusReporter.class) {
-      PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(port);
-      return serverState != null ? serverState.getReferenceCount().get() : 0;
-    }
+    PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(port);
+    return serverState != null ? serverState.getReferenceCount().get() : 0;
   }
 
   public static int getActiveExportsCount(int port) {
-    synchronized (PrometheusReporter.class) {
-      PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(port);
-      return serverState != null ? serverState.getExports().size() : 0;
-    }
+    PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(port);
+    return serverState != null ? serverState.getExports().size() : 0;
   }
 
   private static class LabeledSampleBuilder implements SampleBuilder {
