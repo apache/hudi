@@ -42,7 +42,7 @@ import static org.apache.hudi.client.transaction.lock.audit.StorageLockProviderA
  * CLI commands for managing Hudi table locking and audit functionality.
  */
 @ShellComponent
-public class LockCommand {
+public class LockAuditingCommand {
 
   private static final Logger LOG = LoggerFactory.getLogger(LockCommand.class);
   private static final String AUDIT_CONFIG_FILE_NAME = "audit_enabled.json";
