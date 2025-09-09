@@ -116,8 +116,8 @@ public class TestHoodieIncrSourceE2EAutoUpgrade extends S3EventsHoodieIncrSource
         false,
         false,
         100000,
-        false,
-        null,
+        true,
+        HoodieAvroPayload.class.getName(),
         null,
         "timestamp",
         sourceCheckpoint);
