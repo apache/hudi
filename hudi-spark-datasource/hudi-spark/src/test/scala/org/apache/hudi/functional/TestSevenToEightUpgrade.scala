@@ -21,6 +21,7 @@ package org.apache.hudi.functional
 import org.apache.hudi.DataSourceUtils
 import org.apache.hudi.DataSourceWriteOptions.{INSERT_OPERATION_OPT_VAL, KEYGENERATOR_CLASS_NAME, OPERATION, ORDERING_FIELDS, PARTITIONPATH_FIELD, PAYLOAD_CLASS_NAME, RECORD_MERGE_MODE, RECORDKEY_FIELD, TABLE_TYPE, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.common.config.LockConfiguration.{LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecordMerger, HoodieRecordPayload, HoodieTableType, OverwriteWithLatestAvroPayload, TableServiceType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
@@ -303,7 +304,12 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "15",
       HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key -> "3",
       HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key -> "4",
-      HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key -> "5"
+      HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key -> "5",
+      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key -> "org.apache.hudi.client.transaction.lock.InProcessLockProvider",
+      LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY -> "60000",
+      LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY -> "10",
+      LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY -> "1000",
+      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> "OPTIMISTIC_CONCURRENCY_CONTROL"
     )
 
     doWriteAndValidateDataAndRecordIndex(hudiOptsV6,
@@ -332,7 +338,9 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       .build()
 
     val hudiOptsUpgrade = hudiOptsV6 ++ Map(
-      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.current().versionCode().toString
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.current().versionCode().toString,
+      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key -> "org.apache.hudi.client.transaction.lock.InProcessLockProvider",
+      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> "OPTIMISTIC_CONCURRENCY_CONTROL"
     ) - HoodieWriteConfig.AUTO_UPGRADE_VERSION.key
 
     doWriteAndValidateDataAndRecordIndex(hudiOptsUpgrade,
@@ -354,7 +362,9 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       "Even after upgrade, fresh table with ~12 commits should have archived files")
 
     val hudiOptsDowngrade = hudiOptsV6 ++ Map(
-      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.SIX.versionCode().toString
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.SIX.versionCode().toString,
+      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key -> "org.apache.hudi.client.transaction.lock.InProcessLockProvider",
+      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> "OPTIMISTIC_CONCURRENCY_CONTROL"
     )
 
     new UpgradeDowngrade(metaClient, getWriteConfig(hudiOptsDowngrade, basePath), context, SparkUpgradeDowngradeHelper.getInstance)

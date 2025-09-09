@@ -36,9 +36,6 @@ import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -81,8 +78,6 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class HoodieAvroDataBlock extends HoodieDataBlock {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroDataBlock.class);
-
   public HoodieAvroDataBlock(Supplier<SeekableDataInputStream> inputStreamSupplier,
                              Option<byte[]> content,
                              boolean readBlockLazily,
@@ -113,31 +108,23 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       // 1. Write out the log block version
       output.writeInt(HoodieLogBlock.version);
 
-      // 2. Pre-serialize records to handle and get accurate count
+      // 2. Write total number of records
+      output.writeInt(records.size());
+
+      // 3. Write the records
       Properties props = initProperties(storage.getConf());
-      List<ByteArrayOutputStream> serializedRecords = new ArrayList<>();
       for (HoodieRecord<?> s : records) {
         try {
           // Encode the record into bytes
           // Spark Record not support write avro log
           ByteArrayOutputStream data = s.getAvroBytes(schema, props);
-          serializedRecords.add(data);
+          // Write the record size
+          output.writeInt(data.size());
+          // Write the content
+          data.writeTo(output);
         } catch (IOException e) {
           throw new HoodieIOException("IOException converting HoodieAvroDataBlock to bytes", e);
-        } catch (Exception e) {
-          LOG.warn("Skipping record during serialization: {}. This may be due to concurrent archiving race conditions. "
-                  + "Record key: {}, Error: {}", s.getClass().getSimpleName(),
-              s.getKey() != null ? s.getKey().getRecordKey() : "unknown", e.getMessage(), e);
         }
-      }
-      // Write total number of records
-      output.writeInt(serializedRecords.size());
-
-      for (ByteArrayOutputStream data : serializedRecords) {
-        // Write the record size
-        output.writeInt(data.size());
-        // Write the content
-        data.writeTo(output);
       }
     }
     return baos;
