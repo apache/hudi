@@ -163,9 +163,15 @@ public class HoodieStreamer implements Serializable {
     cfg.recordMergeMode = mergingConfigs.getLeft();
     cfg.payloadClassName = mergingConfigs.getMiddle();
     cfg.recordMergeStrategyId = mergingConfigs.getRight();
-    this.properties.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), cfg.recordMergeMode.name());
-    this.properties.put(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), cfg.payloadClassName);
-    this.properties.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), cfg.recordMergeStrategyId);
+    if (null != cfg.recordMergeMode && !StringUtils.isNullOrEmpty(cfg.recordMergeMode.name())) {
+      this.properties.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), cfg.recordMergeMode.name());
+    }
+    if (!StringUtils.isNullOrEmpty(cfg.payloadClassName)) {
+      this.properties.put(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), cfg.payloadClassName);
+    }
+    if (!StringUtils.isNullOrEmpty(cfg.recordMergeStrategyId)) {
+      this.properties.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), cfg.recordMergeStrategyId);
+    }
     if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
       InitialCheckPointProvider checkPointProvider =
           UtilHelpers.createInitialCheckpointProvider(cfg.initialCheckpointProvider, this.properties);
