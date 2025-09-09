@@ -317,6 +317,30 @@ object HoodieWriterUtils {
           && currentPartitionFields != tableConfigPartitionFields) {
           diffConfigs.append(s"PartitionPath:\t$currentPartitionFields\t$tableConfigPartitionFields\n")
         }
+
+        val datasourcePayloadClassName = params.getOrElse(PAYLOAD_CLASS_NAME.key(), null)
+        val tableConfigPayloadClassName = tableConfig.getString(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME)
+        if ((null != datasourcePayloadClassName && null != tableConfigPayloadClassName
+            && datasourcePayloadClassName != tableConfigPayloadClassName)) {
+          // if both are non null, they should match.
+          diffConfigs.append(s"PayloadClassName:\t$datasourcePayloadClassName\t$tableConfigPayloadClassName\n")
+        }
+
+        val datasourceRecordMergeMode = params.getOrElse(RECORD_MERGE_MODE.key(), null)
+        val tableConfigRecordMergeMode = tableConfig.getString(HoodieTableConfig.RECORD_MERGE_MODE)
+        if ((null != datasourceRecordMergeMode && null != tableConfigRecordMergeMode
+          && datasourceRecordMergeMode != tableConfigRecordMergeMode)) {
+          // if both are non null, they should match.
+          diffConfigs.append(s"RecordMergeMode:\t$datasourceRecordMergeMode\t$tableConfigRecordMergeMode\n")
+        }
+
+        val datasourceRecordMergeStrategyId = params.getOrElse(RECORD_MERGE_STRATEGY_ID.key(), null)
+        val tableConfigRecordMergeStrategyId = tableConfig.getString(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID)
+        if ((null != datasourceRecordMergeStrategyId && null != tableConfigRecordMergeStrategyId
+          && datasourceRecordMergeStrategyId != tableConfigRecordMergeStrategyId)) {
+          // if both are non null, they should match.
+          diffConfigs.append(s"RecordMergeStrategyId:\t$datasourceRecordMergeStrategyId\t$tableConfigRecordMergeStrategyId\n")
+        }
       }
 
       if (diffConfigs.nonEmpty) {

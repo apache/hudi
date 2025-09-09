@@ -1018,23 +1018,6 @@ object DataSourceOptionsHelper {
   }
 
   /**
-   * This method assists in fetching the right table config and populating write configs for merge related properties.
-   */
-  def fetchMissingMergeConfigsFromTableConfig(tableConfig: HoodieTableConfig, params: Map[String, String]): Map[String, String] = {
-    val missingWriteConfigs = scala.collection.mutable.Map[String, String]()
-    if (!params.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()) && tableConfig.getPayloadClass != null) {
-      missingWriteConfigs ++= Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> tableConfig.getPayloadClass)
-    }
-    if (!params.contains(HoodieWriteConfig.RECORD_MERGE_MODE.key()) && tableConfig.getRecordMergeMode != null) {
-      missingWriteConfigs ++= Map(HoodieWriteConfig.RECORD_MERGE_MODE.key() -> tableConfig.getRecordMergeMode.name())
-    }
-    if (!params.contains(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key()) && tableConfig.getRecordMergeStrategyId != null) {
-      missingWriteConfigs ++= Map(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key() -> tableConfig.getRecordMergeStrategyId)
-    }
-    missingWriteConfigs.toMap
-  }
-
-  /**
    * Some config keys differ from what user sets and whats part of table Config. this method assists in fetching the
    * right table config and populating write configs.
    * @param tableConfig table config of interest.
@@ -1052,7 +1035,15 @@ object DataSourceOptionsHelper {
     if (!params.contains(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key()) && tableConfig.getKeyGeneratorClassName != null) {
       missingWriteConfigs ++= Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key() -> tableConfig.getKeyGeneratorClassName)
     }
-    missingWriteConfigs ++= fetchMissingMergeConfigsFromTableConfig(tableConfig, params)
+    if (!params.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()) && tableConfig.getPayloadClass != null) {
+      missingWriteConfigs ++= Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> tableConfig.getPayloadClass)
+    }
+    if (!params.contains(HoodieWriteConfig.RECORD_MERGE_MODE.key()) && tableConfig.getRecordMergeMode != null) {
+      missingWriteConfigs ++= Map(HoodieWriteConfig.RECORD_MERGE_MODE.key() -> tableConfig.getRecordMergeMode.name())
+    }
+    if (!params.contains(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key()) && tableConfig.getRecordMergeStrategyId != null) {
+      missingWriteConfigs ++= Map(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key() -> tableConfig.getRecordMergeStrategyId)
+    }
     if (!params.contains(DataSourceWriteOptions.TABLE_TYPE.key())) {
       missingWriteConfigs ++= Map(DataSourceWriteOptions.TABLE_TYPE.key() -> tableConfig.getTableType.name())
     }

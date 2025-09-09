@@ -1644,7 +1644,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
         .save(basePath)
     }
     assert(e.getMessage.contains("Config conflict(key"))
-    assert(e.getMessage.contains(HoodieTableConfig.PAYLOAD_CLASS_NAME.key))
+    assert(e.getMessage.contains("PayloadClassName"))
   }
 
   @Test
@@ -1674,7 +1674,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
         .save(basePath)
     }
     assert(e.getMessage.contains("Config conflict(key"))
-    assert(e.getMessage.contains(HoodieTableConfig.RECORD_MERGE_MODE.key))
+    assert(e.getMessage.contains("RecordMergeMode"))
   }
 
   @Test
@@ -1704,7 +1704,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
         .save(basePath)
     }
     assert(e.getMessage.contains("Config conflict(key"))
-    assert(e.getMessage.contains(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key))
+    assert(e.getMessage.contains("RecordMergeStrategyId"))
   }
 
   /**
