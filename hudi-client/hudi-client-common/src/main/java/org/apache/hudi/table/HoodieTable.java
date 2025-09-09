@@ -160,22 +160,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.instantGenerator = metaClient.getInstantGenerator();
     this.instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
     this.instantFileNameParser = metaClient.getInstantFileNameParser();
+    this.metaClient = metaClient;
     this.viewManager = getViewManager();
-    this.metaClient = metaClient;
     this.taskContextSupplier = context.getTaskContextSupplier();
-  }
-
-  protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager, TaskContextSupplier supplier) {
-    // TODO clean up constructors
-    this.config = config;
-    this.context = context;
-    this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
-    this.instantGenerator = metaClient.getInstantGenerator();
-    this.instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
-    this.instantFileNameParser = metaClient.getInstantFileNameParser();
-    this.viewManager = viewManager;
-    this.metaClient = metaClient;
-    this.taskContextSupplier = supplier;
   }
 
   public TransactionManager getTxnManager() {
