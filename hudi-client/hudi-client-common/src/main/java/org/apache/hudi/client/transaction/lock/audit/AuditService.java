@@ -20,6 +20,7 @@ package org.apache.hudi.client.transaction.lock.audit;
 
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
 
 /**
  * Generic audit service interface for tracking operation lifecycles.
@@ -35,5 +36,6 @@ public interface AuditService extends AutoCloseable {
    * @param timestamp When the operation occurred
    * @throws Exception if the operation cannot be recorded
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   void recordOperation(AuditOperationState state, long timestamp) throws Exception;
 }

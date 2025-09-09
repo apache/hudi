@@ -160,5 +160,4 @@ public class TestAuditServiceFactory {
     // Should pass true for checkExistsFirst since audit config is rarely present
     verify(mockStorageLockClient).readObject(expectedPath, true);
   }
-
 }

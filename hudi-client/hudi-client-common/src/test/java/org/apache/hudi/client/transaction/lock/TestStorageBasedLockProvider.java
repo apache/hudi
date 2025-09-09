@@ -98,12 +98,12 @@ class TestStorageBasedLockProvider {
     props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-default");
 
     lockProvider = spy(new StorageBasedLockProvider(
-            ownerId,
-            props,
-            (a,b,c) -> mockHeartbeatManager,
-            (a,b,c) -> mockLockService,
-            mockLogger,
-            null));
+        ownerId,
+        props,
+        (a,b,c) -> mockHeartbeatManager,
+        (a,b,c) -> mockLockService,
+        mockLogger,
+        null));
   }
 
   @AfterEach
@@ -120,7 +120,7 @@ class TestStorageBasedLockProvider {
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
 
     HoodieLockException ex = assertThrows(HoodieLockException.class,
-            () -> new StorageBasedLockProvider(lockConf, storageConf));
+        () -> new StorageBasedLockProvider(lockConf, storageConf));
     assertTrue(ex.getMessage().contains("Failed to load and initialize StorageLock"));
   }
 
@@ -135,7 +135,7 @@ class TestStorageBasedLockProvider {
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
 
     HoodieLockException ex = assertThrows(HoodieLockException.class,
-            () -> new StorageBasedLockProvider(lockConf, storageConf));
+        () -> new StorageBasedLockProvider(lockConf, storageConf));
     assertTrue(ex.getMessage().contains("Failed to load and initialize StorageLock"));
   }
 

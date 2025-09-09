@@ -27,6 +27,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -56,7 +57,7 @@ public class AuditServiceFactory {
       String basePath,
       StorageLockClient storageLockClient,
       long transactionStartTime,
-      java.util.function.Function<Long, Long> lockExpirationFunction,
+      Function<Long, Long> lockExpirationFunction,
       Supplier<Boolean> lockHeldSupplier) {
 
     if (!isAuditEnabled(basePath, storageLockClient)) {
