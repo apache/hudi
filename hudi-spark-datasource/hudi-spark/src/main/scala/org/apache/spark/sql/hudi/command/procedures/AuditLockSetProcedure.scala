@@ -17,7 +17,8 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.common.config.HoodieLockAuditConfig
+import org.apache.hudi.client.transaction.lock.StorageLockClient
+import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
 
@@ -80,8 +81,8 @@ class AuditLockSetProcedure extends BaseProcedure with ProcedureBuilder {
 
   private def setAuditState(metaClient: HoodieTableMetaClient, basePath: String, enabled: Boolean): Unit = {
     val storage = metaClient.getStorage
-    val lockFolderPath = getLockFolderPath(basePath)
-    val auditConfigPath = new StoragePath(lockFolderPath, HoodieLockAuditConfig.AUDIT_CONFIG_FILE_NAME)
+    val lockFolderPath = StorageLockClient.getLockFolderPath(basePath)
+    val auditConfigPath = new StoragePath(StorageLockProviderAuditService.getAuditConfigPath(basePath))
 
     // Ensure the locks folder exists
     if (!storage.exists(new StoragePath(lockFolderPath))) {
@@ -108,12 +109,8 @@ class AuditLockSetProcedure extends BaseProcedure with ProcedureBuilder {
 
   private def createAuditConfig(enabled: Boolean): String = {
     val rootNode: ObjectNode = OBJECT_MAPPER.createObjectNode()
-    rootNode.put(HoodieLockAuditConfig.STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD, enabled)
+    rootNode.put(StorageLockProviderAuditService.STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD, enabled)
     OBJECT_MAPPER.writeValueAsString(rootNode)
-  }
-
-  private def getLockFolderPath(basePath: String): String = {
-    s"$basePath${StoragePath.SEPARATOR}${HoodieTableMetaClient.LOCKS_FOLDER_NAME}"
   }
 
   override def build: Procedure = new AuditLockSetProcedure()

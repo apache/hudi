@@ -19,7 +19,8 @@
 package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -31,22 +32,16 @@ import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
 
-import org.apache.hudi.common.util.FileIOUtils;
-
 import java.io.InputStream;
 import java.io.OutputStream;
 
-import static org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService.AUDIT_FOLDER_NAME;
-
 /**
- * CLI commands for managing Hudi table locking and audit functionality.
+ * CLI commands for managing Hudi table lock auditing functionality.
  */
 @ShellComponent
 public class LockAuditingCommand {
 
-  private static final Logger LOG = LoggerFactory.getLogger(LockCommand.class);
-  private static final String AUDIT_CONFIG_FILE_NAME = "audit_enabled.json";
-  private static final String STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD = "STORAGE_LOCK_AUDIT_SERVICE_ENABLED";
+  private static final Logger LOG = LoggerFactory.getLogger(LockAuditingCommand.class);
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   @ShellMethod(key = "locks audit enable", value = "Enable storage lock audit service for the current table")
@@ -57,13 +52,12 @@ public class LockAuditingCommand {
     }
 
     try {
-      // Create the audit config file path using .hoodie/.locks structure 
-      String lockFolderPath = String.format("%s%s%s", HoodieCLI.basePath, StoragePath.SEPARATOR, HoodieTableMetaClient.LOCKS_FOLDER_NAME);
-      String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_CONFIG_FILE_NAME);
+      // Create the audit config file path using utility method
+      String auditConfigPath = StorageLockProviderAuditService.getAuditConfigPath(HoodieCLI.basePath);
       
       // Create the JSON content
       ObjectNode configJson = OBJECT_MAPPER.createObjectNode();
-      configJson.put(STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD, true);
+      configJson.put(StorageLockProviderAuditService.STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD, true);
       String jsonContent = OBJECT_MAPPER.writeValueAsString(configJson);
       
       // Write the config file using HoodieStorage
@@ -73,7 +67,7 @@ public class LockAuditingCommand {
       }
       
       return String.format("Lock audit enabled successfully.\nAudit config written to: %s\n"
-          + "Audit files will be stored at: %s%s%s", auditConfigPath, lockFolderPath, StoragePath.SEPARATOR, AUDIT_FOLDER_NAME);
+          + "Audit files will be stored at: %s", auditConfigPath, StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath));
       
     } catch (Exception e) {
       LOG.error("Error enabling lock audit", e);
@@ -92,8 +86,7 @@ public class LockAuditingCommand {
 
     try {
       // Create the audit config file path
-      String lockFolderPath = String.format("%s%s%s", HoodieCLI.basePath, StoragePath.SEPARATOR, HoodieTableMetaClient.LOCKS_FOLDER_NAME);
-      String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_CONFIG_FILE_NAME);
+      String auditConfigPath = StorageLockProviderAuditService.getAuditConfigPath(HoodieCLI.basePath);
       
       // Check if config file exists
       StoragePath configPath = new StoragePath(auditConfigPath);
@@ -103,7 +96,7 @@ public class LockAuditingCommand {
       
       // Create the JSON content with audit disabled
       ObjectNode configJson = OBJECT_MAPPER.createObjectNode();
-      configJson.put(STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD, false);
+      configJson.put(StorageLockProviderAuditService.STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD, false);
       String jsonContent = OBJECT_MAPPER.writeValueAsString(configJson);
       
       // Write the config file
@@ -114,10 +107,10 @@ public class LockAuditingCommand {
       String message = String.format("Lock audit disabled successfully.\nAudit config updated at: %s", auditConfigPath);
       
       if (keepAuditFiles) {
-        message += String.format("\nExisting audit files preserved at: %s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_FOLDER_NAME);
+        message += String.format("\nExisting audit files preserved at: %s", StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath));
       } else {
         // Todo: write then call the api method to prune the old files
-        message += String.format("\nAudit files cleaned up at: %s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_FOLDER_NAME);
+        message += String.format("\nAudit files cleaned up at: %s", StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath));
       }
       
       return message;
@@ -137,8 +130,7 @@ public class LockAuditingCommand {
 
     try {
       // Create the audit config file path
-      String lockFolderPath = String.format("%s%s%s", HoodieCLI.basePath, StoragePath.SEPARATOR, HoodieTableMetaClient.LOCKS_FOLDER_NAME);
-      String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_CONFIG_FILE_NAME);
+      String auditConfigPath = StorageLockProviderAuditService.getAuditConfigPath(HoodieCLI.basePath);
       
       // Check if config file exists
       StoragePath configPath = new StoragePath(auditConfigPath);
@@ -156,7 +148,7 @@ public class LockAuditingCommand {
         configContent = new String(FileIOUtils.readAsByteArray(inputStream));
       }
       JsonNode rootNode = OBJECT_MAPPER.readTree(configContent);
-      JsonNode enabledNode = rootNode.get(STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD);
+      JsonNode enabledNode = rootNode.get(StorageLockProviderAuditService.STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD);
       boolean isEnabled = enabledNode != null && enabledNode.asBoolean(false);
       
       String status = isEnabled ? "ENABLED" : "DISABLED";
@@ -164,8 +156,8 @@ public class LockAuditingCommand {
       return String.format("Lock Audit Status: %s\n"
           + "Table: %s\n"
           + "Config file: %s\n"
-          + "Audit files location: %s%s%s",
-          status, HoodieCLI.basePath, auditConfigPath, lockFolderPath, StoragePath.SEPARATOR, AUDIT_FOLDER_NAME);
+          + "Audit files location: %s",
+          status, HoodieCLI.basePath, auditConfigPath, StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath));
       
     } catch (Exception e) {
       LOG.error("Error checking lock audit status", e);

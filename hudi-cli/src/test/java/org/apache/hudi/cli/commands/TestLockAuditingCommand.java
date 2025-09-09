@@ -44,11 +44,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Test class for {@link org.apache.hudi.cli.commands.LockCommand}.
+ * Test class for {@link org.apache.hudi.cli.commands.LockAuditingCommand}.
  */
 @Tag("functional")
 @SpringBootTest(properties = {"spring.shell.interactive.enabled=false", "spring.shell.command.script.enabled=false"})
-public class TestLockCommand extends CLIFunctionalTestHarness {
+public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
 
   @Autowired
   private Shell shell;

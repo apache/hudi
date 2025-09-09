@@ -39,7 +39,33 @@ public class StorageLockProviderAuditService implements AuditService {
   
   private static final Logger LOG = LoggerFactory.getLogger(StorageLockProviderAuditService.class);
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+  
+  // Audit configuration constants
   public static final String AUDIT_FOLDER_NAME = "audit";
+  public static final String AUDIT_CONFIG_FILE_NAME = "audit_enabled.json";
+  public static final String STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD = "STORAGE_LOCK_AUDIT_SERVICE_ENABLED";
+  
+  /**
+   * Constructs the full path to the audit configuration file for a given table.
+   *
+   * @param basePath The base path of the Hudi table
+   * @return The full path to the audit_enabled.json configuration file
+   */
+  public static String getAuditConfigPath(String basePath) {
+    String lockFolderPath = StorageLockClient.getLockFolderPath(basePath);
+    return String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_CONFIG_FILE_NAME);
+  }
+  
+  /**
+   * Constructs the full path to the audit folder for a given table.
+   *
+   * @param basePath The base path of the Hudi table
+   * @return The full path to the audit folder where audit files are stored
+   */
+  public static String getAuditFolderPath(String basePath) {
+    String lockFolderPath = StorageLockClient.getLockFolderPath(basePath);
+    return String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_FOLDER_NAME);
+  }
   
   private final String ownerId;
   private final long transactionStartTime;

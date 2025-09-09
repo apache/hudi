@@ -19,9 +19,7 @@
 package org.apache.hudi.client.transaction.lock.audit;
 
 import org.apache.hudi.client.transaction.lock.StorageLockClient;
-import org.apache.hudi.common.config.HoodieLockAuditConfig;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -84,9 +82,8 @@ public class AuditServiceFactory {
    */
   private static boolean isAuditEnabled(String basePath, StorageLockClient storageLockClient) {
     try {
-      // Construct the audit config path using the same lock folder as the lock file
-      String lockFolderPath = StorageLockClient.getLockFolderPath(basePath);
-      String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, HoodieLockAuditConfig.AUDIT_CONFIG_FILE_NAME);
+      // Construct the audit config path using the utility method
+      String auditConfigPath = StorageLockProviderAuditService.getAuditConfigPath(basePath);
 
       LOG.debug("Checking for audit configuration at: {}", auditConfigPath);
 
@@ -97,7 +94,7 @@ public class AuditServiceFactory {
       if (jsonContent.isPresent()) {
         LOG.debug("Audit configuration file found, parsing content");
         JsonNode rootNode = OBJECT_MAPPER.readTree(jsonContent.get());
-        JsonNode enabledNode = rootNode.get(HoodieLockAuditConfig.STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD);
+        JsonNode enabledNode = rootNode.get(StorageLockProviderAuditService.STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD);
 
         boolean isEnabled = enabledNode != null && enabledNode.asBoolean(false);
 
