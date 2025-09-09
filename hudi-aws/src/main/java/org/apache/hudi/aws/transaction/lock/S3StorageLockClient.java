@@ -95,7 +95,7 @@ public class S3StorageLockClient implements StorageLockClient {
     Pair<String, String> bucketAndPath = StorageLockClient.parseBucketAndPath(lockFileUri);
     this.bucketName = bucketAndPath.getLeft();
     this.lockFilePath = bucketAndPath.getRight();
-    
+
     this.s3Client = s3ClientSupplier.apply(bucketName, props);
     this.ownerId = ownerId;
     this.logger = logger;
@@ -104,10 +104,10 @@ public class S3StorageLockClient implements StorageLockClient {
   @Override
   public Pair<LockGetResult, Option<StorageLockFile>> readCurrentLockFile() {
     try (ResponseInputStream<GetObjectResponse> in = s3Client.getObject(
-            GetObjectRequest.builder()
-                    .bucket(bucketName)
-                    .key(lockFilePath)
-                    .build())) {
+        GetObjectRequest.builder()
+            .bucket(bucketName)
+            .key(lockFilePath)
+            .build())) {
       String eTag = in.response().eTag();
       return Pair.of(LockGetResult.SUCCESS, Option.of(StorageLockFile.createFromStream(in, eTag)));
     } catch (S3Exception e) {
@@ -227,16 +227,16 @@ public class S3StorageLockClient implements StorageLockClient {
       S3Client s3Client = createS3Client(region, s3CallTimeoutSecs, props);
       if (requiredFallbackRegion) {
         GetBucketLocationResponse bucketLocationResponse = s3Client.getBucketLocation(
-                GetBucketLocationRequest.builder().bucket(bucketName).build());
+            GetBucketLocationRequest.builder().bucket(bucketName).build());
         // This is null when the region is US_EAST_1, so we do not need to worry about duplicate logic.
         String regionString = bucketLocationResponse.locationConstraintAsString();
         if (!StringUtils.isNullOrEmpty(regionString)) {
           // Close existing client and create another.
           s3Client.close();
           return createS3Client(
-                  Region.of(regionString),
-                  s3CallTimeoutSecs,
-                  props);
+              Region.of(regionString),
+              s3CallTimeoutSecs,
+              props);
         }
       }
 
@@ -247,10 +247,10 @@ public class S3StorageLockClient implements StorageLockClient {
   private static S3Client createS3Client(Region region, long timeoutSecs, Properties props) {
     // Set the timeout, credentials, and region
     return S3Client.builder()
-            .overrideConfiguration(
-                    b -> b.apiCallTimeout(Duration.ofSeconds(timeoutSecs)))
-            .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props))
-            .region(region).build();
+        .overrideConfiguration(
+            b -> b.apiCallTimeout(Duration.ofSeconds(timeoutSecs)))
+        .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props))
+        .region(region).build();
   }
 
   @Override
@@ -260,7 +260,7 @@ public class S3StorageLockClient implements StorageLockClient {
       Pair<String, String> bucketAndKey = StorageLockClient.parseBucketAndPath(filePath);
       String bucket = bucketAndKey.getLeft();
       String key = bucketAndKey.getRight();
-      
+
       if (checkExistsFirst) {
         // First check if the file exists (lightweight HEAD request)
         try {
@@ -277,14 +277,14 @@ public class S3StorageLockClient implements StorageLockClient {
           throw e; // Re-throw other errors
         }
       }
-      
+
       // Read the file (either after existence check or directly)
       String content = s3Client.getObjectAsBytes(
           GetObjectRequest.builder()
               .bucket(bucket)
               .key(key)
               .build()).asUtf8String();
-      
+
       return Option.of(content);
     } catch (S3Exception e) {
       if (e.statusCode() == NOT_FOUND_ERROR_CODE) {
@@ -309,11 +309,11 @@ public class S3StorageLockClient implements StorageLockClient {
 
       // Write the content to S3
       s3Client.putObject(
-              PutObjectRequest.builder()
-                      .bucket(bucket)
-                      .key(key)
-                      .build(),
-              RequestBody.fromString(content));
+          PutObjectRequest.builder()
+              .bucket(bucket)
+              .key(key)
+              .build(),
+          RequestBody.fromString(content));
 
       logger.debug("Successfully wrote object to: {}", filePath);
       return true;

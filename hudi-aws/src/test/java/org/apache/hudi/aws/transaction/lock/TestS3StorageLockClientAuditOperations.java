@@ -65,11 +65,11 @@ public class TestS3StorageLockClientAuditOperations {
     String ownerId = "test-owner";
     String lockFileUri = "s3://test-bucket/table/.hoodie/.locks/table_lock.json";
     lockClient = new S3StorageLockClient(
-            ownerId,
-            lockFileUri,
-            new Properties(),
-            (bucket, props) -> mockS3Client,
-            mockLogger);
+        ownerId,
+        lockFileUri,
+        new Properties(),
+        (bucket, props) -> mockS3Client,
+        mockLogger);
   }
 
   @Test
@@ -78,11 +78,11 @@ public class TestS3StorageLockClientAuditOperations {
 
     // HEAD request returns 404
     S3Exception notFoundException = (S3Exception) S3Exception.builder()
-            .statusCode(404)
-            .message("Not Found")
-            .build();
+        .statusCode(404)
+        .message("Not Found")
+        .build();
     when(mockS3Client.headObject(any(HeadObjectRequest.class)))
-            .thenThrow(notFoundException);
+        .thenThrow(notFoundException);
 
     Option<String> result = lockClient.readObject(configPath, true);
 
@@ -100,14 +100,14 @@ public class TestS3StorageLockClientAuditOperations {
     // HEAD request succeeds
     HeadObjectResponse headResponse = HeadObjectResponse.builder().build();
     when(mockS3Client.headObject(any(HeadObjectRequest.class)))
-            .thenReturn(headResponse);
+        .thenReturn(headResponse);
 
     // GET request returns content
     ResponseBytes<GetObjectResponse> responseBytes = ResponseBytes.fromByteArray(
-            GetObjectResponse.builder().build(),
-            expectedContent.getBytes(StandardCharsets.UTF_8));
+        GetObjectResponse.builder().build(),
+        expectedContent.getBytes(StandardCharsets.UTF_8));
     when(mockS3Client.getObjectAsBytes(any(GetObjectRequest.class)))
-            .thenReturn(responseBytes);
+        .thenReturn(responseBytes);
 
     Option<String> result = lockClient.readObject(configPath, true);
 
@@ -124,11 +124,11 @@ public class TestS3StorageLockClientAuditOperations {
 
     // Direct GET request returns 404
     S3Exception notFoundException = (S3Exception) S3Exception.builder()
-            .statusCode(404)
-            .message("Not Found")
-            .build();
+        .statusCode(404)
+        .message("Not Found")
+        .build();
     when(mockS3Client.getObjectAsBytes(any(GetObjectRequest.class)))
-            .thenThrow(notFoundException);
+        .thenThrow(notFoundException);
 
     Option<String> result = lockClient.readObject(configPath, false);
 
@@ -145,10 +145,10 @@ public class TestS3StorageLockClientAuditOperations {
 
     // Direct GET request returns content
     ResponseBytes<GetObjectResponse> responseBytes = ResponseBytes.fromByteArray(
-            GetObjectResponse.builder().build(),
-            expectedContent.getBytes(StandardCharsets.UTF_8));
+        GetObjectResponse.builder().build(),
+        expectedContent.getBytes(StandardCharsets.UTF_8));
     when(mockS3Client.getObjectAsBytes(any(GetObjectRequest.class)))
-            .thenReturn(responseBytes);
+        .thenReturn(responseBytes);
 
     Option<String> result = lockClient.readObject(configPath, false);
 
@@ -165,11 +165,11 @@ public class TestS3StorageLockClientAuditOperations {
 
     // HEAD request returns non-404 error
     S3Exception serverError = (S3Exception) S3Exception.builder()
-            .statusCode(500)
-            .message("Internal Server Error")
-            .build();
+        .statusCode(500)
+        .message("Internal Server Error")
+        .build();
     when(mockS3Client.headObject(any(HeadObjectRequest.class)))
-            .thenThrow(serverError);
+        .thenThrow(serverError);
 
     Option<String> result = lockClient.readObject(configPath, true);
 
@@ -195,11 +195,11 @@ public class TestS3StorageLockClientAuditOperations {
 
     // GET request returns rate limit error
     S3Exception rateLimitException = (S3Exception) S3Exception.builder()
-            .statusCode(429)
-            .message("Too Many Requests")
-            .build();
+        .statusCode(429)
+        .message("Too Many Requests")
+        .build();
     when(mockS3Client.getObjectAsBytes(any(GetObjectRequest.class)))
-            .thenThrow(rateLimitException);
+        .thenThrow(rateLimitException);
 
     Option<String> result = lockClient.readObject(configPath, false);
 
@@ -222,8 +222,8 @@ public class TestS3StorageLockClientAuditOperations {
 
     assertTrue(result);
     verify(mockS3Client, times(1)).putObject(
-            eq(PutObjectRequest.builder().bucket("test-bucket").key("audit/test-audit.jsonl").build()),
-            any(RequestBody.class)
+        eq(PutObjectRequest.builder().bucket("test-bucket").key("audit/test-audit.jsonl").build()),
+        any(RequestBody.class)
     );
     verify(mockLogger).debug("Successfully wrote object to: {}", filePath);
   }
@@ -263,8 +263,8 @@ public class TestS3StorageLockClientAuditOperations {
 
     assertTrue(result);
     verify(mockS3Client, times(1)).putObject(
-            eq(PutObjectRequest.builder().bucket("test-bucket").key("audit/empty-content.jsonl").build()),
-            any(RequestBody.class)
+        eq(PutObjectRequest.builder().bucket("test-bucket").key("audit/empty-content.jsonl").build()),
+        any(RequestBody.class)
     );
     verify(mockLogger).debug("Successfully wrote object to: {}", filePath);
   }

@@ -62,11 +62,11 @@ public class TestGCSStorageLockClientAuditOperations {
     String lockFileUri = "gs://test-bucket/table/.hoodie/.locks/table_lock.json";
     String ownerId = "test-owner";
     lockClient = new GCSStorageLockClient(
-            ownerId,
-            lockFileUri,
-            new Properties(),
-            props -> mockGcsClient,
-            mockLogger);
+        ownerId,
+        lockFileUri,
+        new Properties(),
+        props -> mockGcsClient,
+        mockLogger);
   }
 
   @Test
@@ -75,7 +75,7 @@ public class TestGCSStorageLockClientAuditOperations {
 
     // get() returns null for non-existent blob
     when(mockGcsClient.get(any(BlobId.class)))
-            .thenReturn(null);
+        .thenReturn(null);
 
     Option<String> result = lockClient.readObject(configPath, true);
 
@@ -91,7 +91,7 @@ public class TestGCSStorageLockClientAuditOperations {
 
     // get() returns blob but exists() is false
     when(mockGcsClient.get(any(BlobId.class)))
-            .thenReturn(mockBlob);
+        .thenReturn(mockBlob);
     when(mockBlob.exists()).thenReturn(false);
 
     Option<String> result = lockClient.readObject(configPath, true);
@@ -110,10 +110,10 @@ public class TestGCSStorageLockClientAuditOperations {
 
     // get() returns existing blob
     when(mockGcsClient.get(any(BlobId.class)))
-            .thenReturn(mockBlob);
+        .thenReturn(mockBlob);
     when(mockBlob.exists()).thenReturn(true);
     when(mockBlob.getContent())
-            .thenReturn(expectedContent.getBytes(StandardCharsets.UTF_8));
+        .thenReturn(expectedContent.getBytes(StandardCharsets.UTF_8));
 
     Option<String> result = lockClient.readObject(configPath, true);
 
@@ -132,7 +132,7 @@ public class TestGCSStorageLockClientAuditOperations {
     // Direct readAllBytes throws 404 exception
     StorageException notFoundException = new StorageException(404, "Not Found");
     when(mockGcsClient.readAllBytes(any(BlobId.class)))
-            .thenThrow(notFoundException);
+        .thenThrow(notFoundException);
 
     Option<String> result = lockClient.readObject(configPath, false);
 
@@ -149,7 +149,7 @@ public class TestGCSStorageLockClientAuditOperations {
 
     // Direct readAllBytes returns content
     when(mockGcsClient.readAllBytes(any(BlobId.class)))
-            .thenReturn(expectedContent.getBytes(StandardCharsets.UTF_8));
+        .thenReturn(expectedContent.getBytes(StandardCharsets.UTF_8));
 
     Option<String> result = lockClient.readObject(configPath, false);
 
@@ -167,7 +167,7 @@ public class TestGCSStorageLockClientAuditOperations {
     // get() throws non-404 error
     StorageException serverError = new StorageException(500, "Internal Server Error");
     when(mockGcsClient.get(any(BlobId.class)))
-            .thenThrow(serverError);
+        .thenThrow(serverError);
 
     Option<String> result = lockClient.readObject(configPath, true);
 
@@ -195,7 +195,7 @@ public class TestGCSStorageLockClientAuditOperations {
     // readAllBytes returns rate limit error
     StorageException rateLimitException = new StorageException(429, "Too Many Requests");
     when(mockGcsClient.readAllBytes(any(BlobId.class)))
-            .thenThrow(rateLimitException);
+        .thenThrow(rateLimitException);
 
     Option<String> result = lockClient.readObject(configPath, false);
 
