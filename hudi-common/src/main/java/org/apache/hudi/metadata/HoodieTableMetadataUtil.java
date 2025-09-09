@@ -2000,31 +2000,42 @@ public class HoodieTableMetadataUtil {
 
   public static boolean isColumnTypeSupported(Schema schema, Option<HoodieRecordType> recordType, HoodieIndexVersion indexVersion) {
     Schema schemaToCheck = resolveNullableSchema(schema);
-    // Check for precision and scale if the schema has a logical decimal type.
-    if (indexVersion.greaterThanOrEquals(HoodieIndexVersion.V2)) {
-      if (schemaToCheck.getType() == Schema.Type.ARRAY) {
-        return isColumnTypeSupported(schemaToCheck.getElementType(), recordType, indexVersion);
-      }
-      return schemaToCheck.getType() != Schema.Type.RECORD && schemaToCheck.getType() != Schema.Type.MAP && schemaToCheck.getType() != Schema.Type.ENUM;
-    } else {
-      LogicalType logicalType = schemaToCheck.getLogicalType();
-      if (logicalType != null && logicalType instanceof LogicalTypes.Decimal) {
-        LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) logicalType;
-        if (decimalType.getPrecision() + (DECIMAL_MAX_SCALE - decimalType.getScale()) > DECIMAL_MAX_PRECISION || decimalType.getScale() > DECIMAL_MAX_SCALE) {
-          return false;
-        }
-      }
-
-      // if record type is set and if its AVRO, MAP, ARRAY, RECORD and ENUM types are unsupported.
-      if (recordType.isPresent() && recordType.get() == HoodieRecordType.AVRO) {
-        return (schemaToCheck.getType() != Schema.Type.RECORD && schemaToCheck.getType() != Schema.Type.ARRAY && schemaToCheck.getType() != Schema.Type.MAP
-            && schemaToCheck.getType() != Schema.Type.ENUM);
-      }
-      // if record Type is not set or if recordType is SPARK then we cannot support AVRO, MAP, ARRAY, RECORD, ENUM and FIXED and BYTES type as well.
-      // HUDI-8585 will add support for BYTES and FIXED
-      return schemaToCheck.getType() != Schema.Type.RECORD && schemaToCheck.getType() != Schema.Type.ARRAY && schemaToCheck.getType() != Schema.Type.MAP
-          && schemaToCheck.getType() != Schema.Type.ENUM && schemaToCheck.getType() != Schema.Type.BYTES && schemaToCheck.getType() != Schema.Type.FIXED;
+    if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
+      return isColumnTypeSupportedV1(schemaToCheck, recordType);
     }
+    return isColumnTypeSupportedV2(schemaToCheck, true);
+  }
+
+  private static boolean isColumnTypeSupportedV1(Schema schema, Option<HoodieRecordType> recordType) {
+    LogicalType logicalType = schema.getLogicalType();
+    if (logicalType != null && logicalType instanceof LogicalTypes.Decimal) {
+      LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) logicalType;
+      if (decimalType.getPrecision() + (DECIMAL_MAX_SCALE - decimalType.getScale()) > DECIMAL_MAX_PRECISION || decimalType.getScale() > DECIMAL_MAX_SCALE) {
+        return false;
+      }
+    }
+
+    // if record type is set and if its AVRO, MAP, ARRAY, RECORD and ENUM types are unsupported.
+    if (recordType.isPresent() && recordType.get() == HoodieRecordType.AVRO) {
+      return (schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP
+          && schema.getType() != Schema.Type.ENUM);
+    }
+    // if record Type is not set or if recordType is SPARK then we cannot support AVRO, MAP, ARRAY, RECORD, ENUM and FIXED and BYTES type as well.
+    // HUDI-8585 will add support for BYTES and FIXED
+    return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP
+        && schema.getType() != Schema.Type.ENUM && schema.getType() != Schema.Type.BYTES && schema.getType() != Schema.Type.FIXED;
+  }
+
+  private static boolean isColumnTypeSupportedV2(Schema schema, boolean topLevel) {
+    // Check for precision and scale if the schema has a logical decimal type.
+    if (schema.getType() == Schema.Type.ARRAY) {
+      if (topLevel) {
+        return isColumnTypeSupportedV2(resolveNullableSchema(schema.getElementType()), false);
+      } else {
+        throw new HoodieException("Array of Arrays not supported in col stats currently");
+      }
+    }
+    return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.MAP && schema.getType() != Schema.Type.ENUM;
   }
 
   public static Set<String> getInflightMetadataPartitions(HoodieTableConfig tableConfig) {
