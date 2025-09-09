@@ -22,11 +22,10 @@ import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditSer
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
 
-import org.apache.spark.sql.Row
-import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
-
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
 
@@ -63,14 +62,14 @@ class AuditLockSetProcedure extends BaseProcedure with ProcedureBuilder {
 
     val basePath: String = getBasePath(getArgValueOrDefault(args, PARAMETERS(0)), Option.empty)
     val metaClient = createMetaClient(jsc, basePath)
-    
+
     try {
       val auditEnabled = state == "enabled"
       setAuditState(metaClient, basePath, auditEnabled)
-      
+
       val resultState = if (auditEnabled) "enabled" else "disabled"
       val message = s"Lock audit logging successfully $resultState"
-      
+
       Seq(Row(tableName, resultState, message))
     } catch {
       case e: Exception =>
@@ -91,7 +90,7 @@ class AuditLockSetProcedure extends BaseProcedure with ProcedureBuilder {
 
     // Create or update the audit configuration file
     val jsonContent = createAuditConfig(enabled)
-    
+
     Try {
       val outputStream = storage.create(auditConfigPath, true) // overwrite if exists
       try {
@@ -100,9 +99,9 @@ class AuditLockSetProcedure extends BaseProcedure with ProcedureBuilder {
         outputStream.close()
       }
     } match {
-      case Success(_) => 
+      case Success(_) =>
         // Configuration written successfully
-      case Failure(exception) => 
+      case Failure(exception) =>
         throw new RuntimeException(s"Failed to write audit configuration to ${auditConfigPath.toString}", exception)
     }
   }
