@@ -34,22 +34,7 @@ import static org.mockito.Mockito.mock;
 public class TestHoodieFileGroupReaderBasedRecordReader {
 
   @Test
-  void testGetProgressForLogFilesOnlyInMergeOnReadTable() throws Exception {
-    HoodieFileGroupReaderBasedRecordReader recordReader = new HoodieFileGroupReaderBasedRecordReader(
-        mock(HiveHoodieReaderContext.class),
-        mock(ClosableIterator.class),
-        mock(ArrayWritable.class),
-        mock(InputSplit.class),
-        mock(JobConf.class),
-        mock(UnaryOperator.class),
-        false
-        );
-
-    assertEquals(0, recordReader.getProgress());
-  }
-
-  @Test
-  void testGetPosForLogFilesOnlyInMergeOnReadTable() throws Exception {
+  void testGetProgressAndPosForLogFilesOnlyInMergeOnReadTable() throws Exception {
     HoodieFileGroupReaderBasedRecordReader recordReader = new HoodieFileGroupReaderBasedRecordReader(
         mock(HiveHoodieReaderContext.class),
         mock(ClosableIterator.class),
@@ -60,6 +45,7 @@ public class TestHoodieFileGroupReaderBasedRecordReader {
         false
     );
 
+    assertEquals(0, recordReader.getProgress());
     assertEquals(0, recordReader.getPos());
   }
 }
