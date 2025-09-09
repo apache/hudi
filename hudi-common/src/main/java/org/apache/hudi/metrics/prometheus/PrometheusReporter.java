@@ -35,7 +35,6 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -51,11 +50,37 @@ public class PrometheusReporter extends MetricsReporter {
   private static final Pattern LABEL_PATTERN = Pattern.compile("\\s*,\\s*");
 
   private static final Logger LOG = LoggerFactory.getLogger(PrometheusReporter.class);
-  private static final Map<Integer, CollectorRegistry> PORT_TO_COLLECTOR_REGISTRY = new HashMap<>();
-  private static final Map<Integer, HTTPServer> PORT_TO_SERVER = new HashMap<>();
-  
-  private static final Map<Integer, AtomicInteger> PORT_TO_REFERENCE_COUNT = new HashMap<>();
-  private static final Map<Integer, Set<DropwizardExports>> PORT_TO_EXPORTS = new HashMap<>();
+  private static final Map<Integer, PrometheusServerState> PORT_TO_SERVER_STATE = new ConcurrentHashMap<>();
+
+  private static class PrometheusServerState {
+    private final HTTPServer httpServer;
+    private final CollectorRegistry collectorRegistry;
+    private final AtomicInteger referenceCount;
+    private final Set<DropwizardExports> exports;
+
+    public PrometheusServerState(HTTPServer httpServer, CollectorRegistry collectorRegistry) {
+      this.httpServer = httpServer;
+      this.collectorRegistry = collectorRegistry;
+      this.referenceCount = new AtomicInteger(0);
+      this.exports = ConcurrentHashMap.newKeySet();
+    }
+
+    public HTTPServer getHttpServer() {
+      return httpServer;
+    }
+
+    public CollectorRegistry getCollectorRegistry() {
+      return collectorRegistry;
+    }
+
+    public AtomicInteger getReferenceCount() {
+      return referenceCount;
+    }
+
+    public Set<DropwizardExports> getExports() {
+      return exports;
+    }
+  }
 
   private final DropwizardExports metricExports;
   private final CollectorRegistry collectorRegistry;
@@ -65,7 +90,7 @@ public class PrometheusReporter extends MetricsReporter {
 
   public PrometheusReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
     this.serverPort = metricsConfig.getPrometheusPort();
-    if (!PORT_TO_SERVER.containsKey(serverPort) || !PORT_TO_COLLECTOR_REGISTRY.containsKey(serverPort)) {
+    if (!PORT_TO_SERVER_STATE.containsKey(serverPort)) {
       startHttpServer(serverPort);
     }
     List<String> labelNames = new ArrayList<>();
@@ -78,27 +103,27 @@ public class PrometheusReporter extends MetricsReporter {
           });
     }
     metricExports = new DropwizardExports(registry, new LabeledSampleBuilder(labelNames, labelValues));
-    this.collectorRegistry = PORT_TO_COLLECTOR_REGISTRY.get(serverPort);
     
     synchronized (PrometheusReporter.class) {
+      PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(serverPort);
+      this.collectorRegistry = serverState.getCollectorRegistry();
       metricExports.register(collectorRegistry);
-      PORT_TO_EXPORTS.computeIfAbsent(serverPort, k -> ConcurrentHashMap.newKeySet()).add(metricExports);
-      PORT_TO_REFERENCE_COUNT.computeIfAbsent(serverPort, k -> new AtomicInteger(0)).incrementAndGet();
+      serverState.getExports().add(metricExports);
+      serverState.getReferenceCount().incrementAndGet();
       
       LOG.debug("Registered PrometheusReporter for port {}, reference count: {}", 
-               serverPort, PORT_TO_REFERENCE_COUNT.get(serverPort).get());
+               serverPort, serverState.getReferenceCount().get());
     }
   }
 
   private static void startHttpServer(int serverPort) {
     synchronized (PrometheusReporter.class) {
-      if (!PORT_TO_COLLECTOR_REGISTRY.containsKey(serverPort)) {
-        PORT_TO_COLLECTOR_REGISTRY.put(serverPort, new CollectorRegistry());
-      }
-      if (!PORT_TO_SERVER.containsKey(serverPort)) {
+      if (!PORT_TO_SERVER_STATE.containsKey(serverPort)) {
         try {
-          HTTPServer server = new HTTPServer(new InetSocketAddress(serverPort), PORT_TO_COLLECTOR_REGISTRY.get(serverPort), true);
-          PORT_TO_SERVER.put(serverPort, server);
+          CollectorRegistry collectorRegistry = new CollectorRegistry();
+          HTTPServer server = new HTTPServer(new InetSocketAddress(serverPort), collectorRegistry, true);
+          PrometheusServerState serverState = new PrometheusServerState(server, collectorRegistry);
+          PORT_TO_SERVER_STATE.put(serverPort, serverState);
           Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try {
               server.close();
@@ -127,11 +152,13 @@ public class PrometheusReporter extends MetricsReporter {
   public void stop() {
     try {
       synchronized (PrometheusReporter.class) {
-        if (isAlreadyStopped()) {
+        if (stopped) {
+          LOG.debug("PrometheusReporter.stop() called for port {} but already stopped", serverPort);
           return;
         }
         
-        markAsStopped();
+        stopped = true;
+        LOG.debug("PrometheusReporter.stop() called for port {}", serverPort);
         unregisterMetricExports();
         removeFromExportsTracking();
         
@@ -147,19 +174,6 @@ public class PrometheusReporter extends MetricsReporter {
     }
   }
 
-  private boolean isAlreadyStopped() {
-    if (stopped) {
-      LOG.debug("PrometheusReporter.stop() called for port {} but already stopped", serverPort);
-      return true;
-    }
-    return false;
-  }
-
-  private void markAsStopped() {
-    stopped = true;
-    LOG.debug("PrometheusReporter.stop() called for port {}", serverPort);
-  }
-
   private void unregisterMetricExports() {
     if (!unregistered) {
       try {
@@ -172,21 +186,21 @@ public class PrometheusReporter extends MetricsReporter {
   }
 
   private void removeFromExportsTracking() {
-    Set<DropwizardExports> exports = PORT_TO_EXPORTS.get(serverPort);
-    if (exports != null) {
-      exports.remove(metricExports);
+    PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(serverPort);
+    if (serverState != null) {
+      serverState.getExports().remove(metricExports);
     }
   }
 
   private int decrementReferenceCount() {
-    AtomicInteger refCount = PORT_TO_REFERENCE_COUNT.get(serverPort);
-    if (refCount != null) {
-      int newCount = refCount.decrementAndGet();
+    PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(serverPort);
+    if (serverState != null) {
+      int newCount = serverState.getReferenceCount().decrementAndGet();
       LOG.debug("Unregistered PrometheusReporter for port {}, reference count: {}", 
                serverPort, newCount);
       return newCount;
     } else {
-      LOG.warn("No reference count found for port {} during stop()", serverPort);
+      LOG.warn("No server state found for port {} during stop()", serverPort);
       return 0;
     }
   }
@@ -198,10 +212,10 @@ public class PrometheusReporter extends MetricsReporter {
   }
 
   private void closeHttpServer() {
-    HTTPServer httpServer = PORT_TO_SERVER.remove(serverPort);
-    if (httpServer != null) {
+    PrometheusServerState serverState = PORT_TO_SERVER_STATE.remove(serverPort);
+    if (serverState != null) {
       try {
-        httpServer.close();
+        serverState.getHttpServer().close();
       } catch (Exception e) {
         LOG.debug("Error closing Prometheus HTTP server on port {}: {}", serverPort, e.getMessage());
       }
@@ -209,9 +223,8 @@ public class PrometheusReporter extends MetricsReporter {
   }
 
   private void removeAllPortResources() {
-    PORT_TO_COLLECTOR_REGISTRY.remove(serverPort);
-    PORT_TO_REFERENCE_COUNT.remove(serverPort);
-    PORT_TO_EXPORTS.remove(serverPort);
+    // All resources are now contained in the PrometheusServerState object
+    // which is removed in closeHttpServer()
   }
 
   private void logServerKeptAlive(int referenceCount) {
@@ -221,21 +234,21 @@ public class PrometheusReporter extends MetricsReporter {
 
   public static boolean isServerRunning(int port) {
     synchronized (PrometheusReporter.class) {
-      return PORT_TO_SERVER.containsKey(port);
+      return PORT_TO_SERVER_STATE.containsKey(port);
     }
   }
 
   public static int getReferenceCount(int port) {
     synchronized (PrometheusReporter.class) {
-      AtomicInteger refCount = PORT_TO_REFERENCE_COUNT.get(port);
-      return refCount != null ? refCount.get() : 0;
+      PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(port);
+      return serverState != null ? serverState.getReferenceCount().get() : 0;
     }
   }
 
   public static int getActiveExportsCount(int port) {
     synchronized (PrometheusReporter.class) {
-      Set<DropwizardExports> exports = PORT_TO_EXPORTS.get(port);
-      return exports != null ? exports.size() : 0;
+      PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(port);
+      return serverState != null ? serverState.getExports().size() : 0;
     }
   }
 
