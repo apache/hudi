@@ -19,6 +19,7 @@
 package org.apache.hudi.client.transaction.lock.audit;
 
 import org.apache.hudi.client.transaction.lock.StorageLockClient;
+import org.apache.hudi.common.config.HoodieLockAuditConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 
@@ -37,8 +38,6 @@ import java.util.function.Supplier;
 public class AuditServiceFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(AuditServiceFactory.class);
-  private static final String AUDIT_CONFIG_FILE_NAME = "audit_enabled.json";
-  private static final String STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD = "STORAGE_LOCK_AUDIT_SERVICE_ENABLED";
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   /**
@@ -87,7 +86,7 @@ public class AuditServiceFactory {
     try {
       // Construct the audit config path using the same lock folder as the lock file
       String lockFolderPath = StorageLockClient.getLockFolderPath(basePath);
-      String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_CONFIG_FILE_NAME);
+      String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, HoodieLockAuditConfig.AUDIT_CONFIG_FILE_NAME);
 
       LOG.debug("Checking for audit configuration at: {}", auditConfigPath);
 
@@ -98,7 +97,7 @@ public class AuditServiceFactory {
       if (jsonContent.isPresent()) {
         LOG.debug("Audit configuration file found, parsing content");
         JsonNode rootNode = OBJECT_MAPPER.readTree(jsonContent.get());
-        JsonNode enabledNode = rootNode.get(STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD);
+        JsonNode enabledNode = rootNode.get(HoodieLockAuditConfig.STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD);
 
         boolean isEnabled = enabledNode != null && enabledNode.asBoolean(false);
 
