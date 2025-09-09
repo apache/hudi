@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
@@ -85,14 +86,11 @@ public class PrometheusReporter extends MetricsReporter {
   private final DropwizardExports metricExports;
   private final CollectorRegistry collectorRegistry;
   private final int serverPort;
-  private volatile boolean stopped = false;
+  private final AtomicBoolean stopped = new AtomicBoolean(false);
   private volatile boolean unregistered = false;
 
   public PrometheusReporter(HoodieMetricsConfig metricsConfig, MetricRegistry registry) {
     this.serverPort = metricsConfig.getPrometheusPort();
-    if (!PORT_TO_SERVER_STATE.containsKey(serverPort)) {
-      startHttpServer(serverPort);
-    }
     List<String> labelNames = new ArrayList<>();
     List<String> labelValues = new ArrayList<>();
     if (StringUtils.nonEmpty(metricsConfig.getPushGatewayLabels())) {
@@ -104,40 +102,38 @@ public class PrometheusReporter extends MetricsReporter {
     }
     metricExports = new DropwizardExports(registry, new LabeledSampleBuilder(labelNames, labelValues));
     
-    synchronized (PrometheusReporter.class) {
-      PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(serverPort);
-      this.collectorRegistry = serverState.getCollectorRegistry();
-      metricExports.register(collectorRegistry);
-      serverState.getExports().add(metricExports);
-      serverState.getReferenceCount().incrementAndGet();
-      
-      LOG.debug("Registered PrometheusReporter for port {}, reference count: {}", 
-               serverPort, serverState.getReferenceCount().get());
-    }
+    PrometheusServerState serverState = getServerState(serverPort);
+    this.collectorRegistry = serverState.getCollectorRegistry();
+    metricExports.register(collectorRegistry);
+    serverState.getExports().add(metricExports);
+    serverState.getReferenceCount().incrementAndGet();
+    
+    LOG.debug("Registered PrometheusReporter for port {}, reference count: {}", 
+             serverPort, serverState.getReferenceCount().get());
   }
 
-  private static void startHttpServer(int serverPort) {
-    synchronized (PrometheusReporter.class) {
-      if (!PORT_TO_SERVER_STATE.containsKey(serverPort)) {
-        try {
-          CollectorRegistry collectorRegistry = new CollectorRegistry();
-          HTTPServer server = new HTTPServer(new InetSocketAddress(serverPort), collectorRegistry, true);
-          PrometheusServerState serverState = new PrometheusServerState(server, collectorRegistry);
-          PORT_TO_SERVER_STATE.put(serverPort, serverState);
-          Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            try {
-              server.close();
-            } catch (Exception e) {
-              LOG.debug("Error closing Prometheus HTTP server during shutdown: {}", e.getMessage());
-            }
-          }));
-        } catch (Exception e) {
-          String msg = "Could not start PrometheusReporter HTTP server on port " + serverPort;
-          LOG.error(msg, e);
-          throw new HoodieException(msg, e);
-        }
+  private static synchronized PrometheusServerState getServerState(int serverPort) {
+    PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(serverPort);
+    if (serverState == null) {
+      try {
+        CollectorRegistry collectorRegistry = new CollectorRegistry();
+        HTTPServer server = new HTTPServer(new InetSocketAddress(serverPort), collectorRegistry, true);
+        serverState = new PrometheusServerState(server, collectorRegistry);
+        PORT_TO_SERVER_STATE.put(serverPort, serverState);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+          try {
+            server.close();
+          } catch (Exception e) {
+            LOG.debug("Error closing Prometheus HTTP server during shutdown: {}", e.getMessage());
+          }
+        }));
+      } catch (Exception e) {
+        String msg = "Could not start PrometheusReporter HTTP server on port " + serverPort;
+        LOG.error(msg, e);
+        throw new HoodieException(msg, e);
       }
     }
+    return serverState;
   }
 
   @Override
@@ -150,21 +146,21 @@ public class PrometheusReporter extends MetricsReporter {
 
   @Override
   public void stop() {
+    if (stopped.get()) {
+      LOG.debug("PrometheusReporter.stop() called for port {} but already stopped", serverPort);
+      return;
+    }
+    
     try {
       synchronized (PrometheusReporter.class) {
-        if (stopped) {
-          LOG.debug("PrometheusReporter.stop() called for port {} but already stopped", serverPort);
-          return;
-        }
-        
-        stopped = true;
+        stopped.set(true);
         LOG.debug("PrometheusReporter.stop() called for port {}", serverPort);
         unregisterMetricExports();
         removeFromExportsTracking();
         
         int newReferenceCount = decrementReferenceCount();
         if (newReferenceCount <= 0) {
-          cleanupServerResources();
+          cleanupServer(serverPort);
         } else {
           logServerKeptAlive(newReferenceCount);
         }
@@ -205,13 +201,8 @@ public class PrometheusReporter extends MetricsReporter {
     }
   }
 
-  private void cleanupServerResources() {
+  private static synchronized void cleanupServer(int serverPort) {
     LOG.info("No more references to Prometheus server on port {}, stopping server", serverPort);
-    closeHttpServer();
-    removeAllPortResources();
-  }
-
-  private void closeHttpServer() {
     PrometheusServerState serverState = PORT_TO_SERVER_STATE.remove(serverPort);
     if (serverState != null) {
       try {
@@ -220,11 +211,6 @@ public class PrometheusReporter extends MetricsReporter {
         LOG.debug("Error closing Prometheus HTTP server on port {}: {}", serverPort, e.getMessage());
       }
     }
-  }
-
-  private void removeAllPortResources() {
-    // All resources are now contained in the PrometheusServerState object
-    // which is removed in closeHttpServer()
   }
 
   private void logServerKeptAlive(int referenceCount) {
