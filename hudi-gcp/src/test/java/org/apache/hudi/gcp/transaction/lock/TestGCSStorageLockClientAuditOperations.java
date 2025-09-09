@@ -49,6 +49,7 @@ import static org.mockito.Mockito.when;
  * Tests for GCSStorageLockClient audit operations (readObject and writeObject methods)
  */
 public class TestGCSStorageLockClientAuditOperations {
+
   private Storage mockGcsClient;
   private Blob mockBlob;
   private Logger mockLogger;
