@@ -19,7 +19,6 @@
 package org.apache.hudi.client.transaction.lock.audit;
 
 import org.apache.hudi.client.transaction.lock.StorageLockClient;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -101,12 +100,8 @@ public class StorageLockProviderAuditService implements AuditService {
     
     // Generate audit file path: <txn-start>_<full-owner-id>.jsonl
     String filename = String.format("%d_%s.jsonl", transactionStartTime, ownerId);
-    this.auditFilePath = String.format("%s%s%s%s%s%s%s",
-        basePath,
-        StoragePath.SEPARATOR,
-        HoodieTableMetaClient.LOCKS_FOLDER_NAME,
-        StoragePath.SEPARATOR,
-        AUDIT_FOLDER_NAME,
+    this.auditFilePath = String.format("%s%s%s",
+        getAuditFolderPath(basePath),
         StoragePath.SEPARATOR,
         filename);
     

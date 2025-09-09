@@ -60,17 +60,14 @@ public class AuditServiceFactory {
     if (!isAuditEnabled(basePath, storageLockClient)) {
       return Option.empty();
     }
-
-    // Create and return the audit service
-    AuditService auditService = new StorageLockProviderAuditService(
+    
+    return Option.of(new StorageLockProviderAuditService(
         basePath,
-        ownerId, 
+        ownerId,
         transactionStartTime,
         storageLockClient,
         lockExpirationFunction,
-        lockHeldSupplier);
-    
-    return Option.of(auditService);
+        lockHeldSupplier));
   }
 
   /**

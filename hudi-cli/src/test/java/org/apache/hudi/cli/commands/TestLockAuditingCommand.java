@@ -21,6 +21,7 @@ package org.apache.hudi.cli.commands;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
+import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -53,8 +54,6 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
   @Autowired
   private Shell shell;
 
-  private static final String AUDIT_CONFIG_FILE_NAME = "audit_enabled.json";
-  private static final String STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD = "STORAGE_LOCK_AUDIT_SERVICE_ENABLED";
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   @BeforeEach
@@ -149,7 +148,7 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
 
     // Verify the config file was created with correct content
     String lockFolderPath = String.format("%s%s.hoodie%s.locks", HoodieCLI.basePath, StoragePath.SEPARATOR, StoragePath.SEPARATOR);
-    String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_CONFIG_FILE_NAME);
+    String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, StorageLockProviderAuditService.AUDIT_CONFIG_FILE_NAME);
     StoragePath configPath = new StoragePath(auditConfigPath);
     
     assertTrue(HoodieCLI.storage.exists(configPath), "Config file should exist");
@@ -159,7 +158,7 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
       configContent = new String(FileIOUtils.readAsByteArray(inputStream));
     }
     JsonNode rootNode = OBJECT_MAPPER.readTree(configContent);
-    JsonNode enabledNode = rootNode.get(STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD);
+    JsonNode enabledNode = rootNode.get(StorageLockProviderAuditService.STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD);
     
     assertNotNull(enabledNode, "Config should contain enabled field");
     assertTrue(enabledNode.asBoolean(), "Audit should be enabled");
@@ -207,7 +206,7 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
 
     // Verify the config file still exists but with audit disabled
     String lockFolderPath = String.format("%s%s.hoodie%s.locks", HoodieCLI.basePath, StoragePath.SEPARATOR, StoragePath.SEPARATOR);
-    String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_CONFIG_FILE_NAME);
+    String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, StorageLockProviderAuditService.AUDIT_CONFIG_FILE_NAME);
     StoragePath configPath = new StoragePath(auditConfigPath);
     
     assertTrue(HoodieCLI.storage.exists(configPath), "Config file should still exist");
@@ -217,7 +216,7 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
       configContent = new String(FileIOUtils.readAsByteArray(inputStream));
     }
     JsonNode rootNode = OBJECT_MAPPER.readTree(configContent);
-    JsonNode enabledNode = rootNode.get(STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD);
+    JsonNode enabledNode = rootNode.get(StorageLockProviderAuditService.STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD);
     
     assertNotNull(enabledNode, "Config should contain enabled field");
     assertFalse(enabledNode.asBoolean(), "Audit should be disabled");
@@ -271,7 +270,7 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
 
     // Verify config is still correct
     String lockFolderPath = String.format("%s%s.hoodie%s.locks", HoodieCLI.basePath, StoragePath.SEPARATOR, StoragePath.SEPARATOR);
-    String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_CONFIG_FILE_NAME);
+    String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, StorageLockProviderAuditService.AUDIT_CONFIG_FILE_NAME);
     StoragePath configPath = new StoragePath(auditConfigPath);
     
     String configContent;
@@ -279,7 +278,7 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
       configContent = new String(FileIOUtils.readAsByteArray(inputStream));
     }
     JsonNode rootNode = OBJECT_MAPPER.readTree(configContent);
-    JsonNode enabledNode = rootNode.get(STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD);
+    JsonNode enabledNode = rootNode.get(StorageLockProviderAuditService.STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD);
     
     assertTrue(enabledNode.asBoolean(), "Audit should still be enabled");
   }
