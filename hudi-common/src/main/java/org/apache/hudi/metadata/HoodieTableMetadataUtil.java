@@ -2032,7 +2032,7 @@ public class HoodieTableMetadataUtil {
       if (topLevel) {
         return isColumnTypeSupportedV2(resolveNullableSchema(schema.getElementType()), false);
       } else {
-        throw new HoodieException("Array of Arrays not supported in col stats currently");
+        return false;
       }
     }
     return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.MAP && schema.getType() != Schema.Type.ENUM;

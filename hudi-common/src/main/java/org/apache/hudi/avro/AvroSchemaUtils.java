@@ -406,7 +406,8 @@ public class AvroSchemaUtils {
    * @param requiredSchema the target schema that defines the desired structure and field requirements
    * @param mandatoryFields a set of top level field names that should be included from the required schema
    *                     even if they don't exist in the data schema. This allows for fields like cdc operation
-   *                     don't exist in the data schema
+   *                     don't exist in the data schema. We keep the types matching the required schema because
+   *                     timestamp partition cols can be read as a different type than the data schema
    *
    * @return a new pruned schema that matches the required schema structure while preserving
    *         data schema metadata where possible
@@ -427,22 +428,24 @@ public class AvroSchemaUtils {
         }
         List<Schema.Field> newFields = new ArrayList<>();
         for (Schema.Field requiredSchemaField : requiredSchema.getFields()) {
-          Schema.Field dataSchemaField = dataSchema.getField(requiredSchemaField.name());
-          if (dataSchemaField != null) {
-            Schema.Field newField = new Schema.Field(
-                dataSchemaField.name(),
-                pruneDataSchema(dataSchemaField.schema(), requiredSchemaField.schema(), Collections.emptySet()),
-                dataSchemaField.doc(),
-                dataSchemaField.defaultVal()
-            );
-            newFields.add(newField);
-          } else if (mandatoryFields.contains(requiredSchemaField.name())) {
+          if (mandatoryFields.contains(requiredSchemaField.name())) {
             newFields.add(new Schema.Field(
                 requiredSchemaField.name(),
                 requiredSchemaField.schema(),
                 requiredSchemaField.doc(),
                 requiredSchemaField.defaultVal()
             ));
+          } else {
+            Schema.Field dataSchemaField = dataSchema.getField(requiredSchemaField.name());
+            if (dataSchemaField != null) {
+              Schema.Field newField = new Schema.Field(
+                  dataSchemaField.name(),
+                  pruneDataSchema(dataSchemaField.schema(), requiredSchemaField.schema(), Collections.emptySet()),
+                  dataSchemaField.doc(),
+                  dataSchemaField.defaultVal()
+              );
+              newFields.add(newField);
+            }
           }
         }
         Schema newRecord = Schema.createRecord(dataSchema.getName(), dataSchema.getDoc(), dataSchema.getNamespace(), false);
