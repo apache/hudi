@@ -1079,23 +1079,29 @@ class HoodieSparkSqlWriterInternal {
     }
   }
 
-  private def setWriterPropertiesForValidation(params: Map[String, String],
-                                         tableConfig: HoodieTableConfig,
-                                         mode: SaveMode): Map[String, String] = {
-    val mergedParams = mutable.Map.empty ++ params
-    if (tableConfig != null && mode != SaveMode.Overwrite) {
-      // for missing write configs corresponding to table configs, fill them up.
-      mergedParams ++= fetchMissingWriteConfigsFromTableConfig(tableConfig, params)
-    }
-    setMissingMergeProperties(mergedParams.toMap, tableConfig)
-  }
-
   /**
    * While validating the merge related write properties against existing table config, we need to infer
    * the right merge related properties that are consistent with the ones persisted eventually.
    */
+  private def setWriterPropertiesForValidation(params: Map[String, String],
+                                         tableConfig: HoodieTableConfig,
+                                         mode: SaveMode): Map[String, String] = {
+    val mergedParams = mutable.Map.empty ++ params
+    if (null != tableConfig && mode != SaveMode.Overwrite) {
+      // Overwrite the ordering fields for the proper merge properties inference.
+      if (ConfigUtils.getOrderingFieldsStrDuringWrite(params.asJava) == null) {
+        mergedParams.put(HoodieTableConfig.ORDERING_FIELDS.key(), ConfigUtils.getOrderingFieldsStr(tableConfig.getProps))
+      }
+    }
+    setMissingMergeProperties(mergedParams.toMap, tableConfig, forValidation = true)
+  }
+
+  /**
+   * Infer the right merge related properties for writes.
+   */
   private def setMissingMergeProperties(params: Map[String, String],
-                                        tableConfig: HoodieTableConfig): Map[String, String] = {
+                                        tableConfig: HoodieTableConfig,
+                                        forValidation: Boolean): Map[String, String] = {
     val mergedParams = mutable.Map.empty ++ params
 
     val tableVersion = if (tableConfig != null) {
@@ -1104,30 +1110,25 @@ class HoodieSparkSqlWriterInternal {
       HoodieTableVersion.fromVersionCode(
         SparkConfigUtils.getStringWithAltKeys(mergedParams, WRITE_TABLE_VERSION).toInt)
     }
-    // Handle merge properties.
-    if (!mergedParams.contains(DataSourceWriteOptions.RECORD_MERGE_MODE.key())
-      || !mergedParams.contains(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key())
-      || !mergedParams.contains(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key())) {
-      val inferredMergeConfigs = HoodieTableConfig.inferMergingConfigsForWrites(
+    val inferredMergeConfigs = HoodieTableConfig.inferMergingConfigsForWrites(
+      RecordMergeMode.getValue(mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), null)),
+      mergedParams.getOrElse(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), ""),
+      mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), ""),
+      ConfigUtils.getOrderingFieldsStrDuringWrite(params.asJava),
+      tableVersion)
+    mergedParams.put(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), inferredMergeConfigs.getMiddle)
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE) && forValidation) { // For table version >= 9
+      val mergeConfigs = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
         RecordMergeMode.getValue(mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), null)),
         mergedParams.getOrElse(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), ""),
         mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), ""),
         ConfigUtils.getOrderingFieldsStrDuringWrite(params.asJava),
-        tableVersion)
-      mergedParams.put(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), inferredMergeConfigs.getMiddle)
-      if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) { // For table version >= 9
-        val mergeConfigs = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
-          RecordMergeMode.getValue(mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), null)),
-          mergedParams.getOrElse(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), ""),
-          mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), ""),
-          ConfigUtils.getOrderingFieldsStrDuringWrite(params.asJava),
-          tableVersion).asScala
-        mergedParams.put(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), mergeConfigs(HoodieTableConfig.RECORD_MERGE_MODE.key()))
-        mergedParams.put(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), mergeConfigs(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key()))
-      } else {
-        mergedParams.put(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), inferredMergeConfigs.getLeft.name())
-        mergedParams.put(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), inferredMergeConfigs.getRight)
-      }
+        tableVersion).asScala
+      mergedParams.put(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), mergeConfigs(HoodieTableConfig.RECORD_MERGE_MODE.key()))
+      mergedParams.put(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), mergeConfigs(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key()))
+    } else {
+      mergedParams.put(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), inferredMergeConfigs.getLeft.name())
+      mergedParams.put(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), inferredMergeConfigs.getRight)
     }
     mergedParams.toMap
   }
@@ -1179,7 +1180,7 @@ class HoodieSparkSqlWriterInternal {
     if (!mergedParams.contains(DataSourceWriteOptions.RECORD_MERGE_MODE.key())
       || !mergedParams.contains(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key())
       || !mergedParams.contains(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key())) {
-      mergedParams ++= setMissingMergeProperties(mergedParams.toMap, tableConfig)
+      mergedParams ++= setMissingMergeProperties(mergedParams.toMap, tableConfig, forValidation = false)
     }
     mergedParams.put(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), mergedParams(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()))
     mergedParams.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), mergedParams(HoodieWriteConfig.RECORD_MERGE_MODE.key()))
