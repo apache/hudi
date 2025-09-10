@@ -19,7 +19,7 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -244,9 +244,9 @@ public class TestHoodieNativeAvroHFileReaderCaching {
 
   private HoodieAvroHFileReaderImplBase createReader(HoodieStorage storage, boolean useBloomFilter, boolean enableCache) throws Exception {
     TypedProperties props = new TypedProperties();
-    props.setProperty(HoodieMetadataConfig.METADATA_HFILE_BLOCK_CACHE_ENABLED.key(), String.valueOf(enableCache));
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), String.valueOf(enableCache));
     // Use a cache that can hold 100 blocks
-    props.setProperty(HoodieMetadataConfig.METADATA_HFILE_BLOCK_CACHE_SIZE.key(), String.valueOf(100));
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(), String.valueOf(100));
 
     HFileReaderFactory readerFactory = HFileReaderFactory.builder()
         .withStorage(storage)
@@ -256,5 +256,4 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     return HoodieNativeAvroHFileReader.builder()
         .readerFactory(readerFactory).path(getFilePath()).useBloomFilter(useBloomFilter).build();
   }
-
 }

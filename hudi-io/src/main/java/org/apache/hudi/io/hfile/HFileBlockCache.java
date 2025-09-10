@@ -35,14 +35,10 @@ public class HFileBlockCache {
 
   private final Cache<BlockCacheKey, HFileBlock> cache;
 
-  public HFileBlockCache(int maxCacheSize) {
-    this(maxCacheSize, 30, TimeUnit.MINUTES);
-  }
-
   public HFileBlockCache(int maxCacheSize, long expireAfterWrite, TimeUnit timeUnit) {
     this.cache = Caffeine.newBuilder()
         .maximumSize(maxCacheSize)
-        .expireAfterWrite(Duration.ofMillis(timeUnit.toMillis(expireAfterWrite)))
+        .expireAfterAccess(Duration.ofMillis(timeUnit.toMillis(expireAfterWrite)))
         .build();
   }
 
@@ -68,8 +64,6 @@ public class HFileBlockCache {
   
   /**
    * Gets a block from cache, or computes and caches it if not present.
-   * This method is thread-safe and prevents the "cache stampede" problem
-   * where multiple threads try to load the same value simultaneously.
    *
    * @param key      the cache key
    * @param loader   callable to load the block if not in cache
@@ -119,10 +113,6 @@ public class HFileBlockCache {
     private final String fileIdentity;
     private final long offset;
     private final int size;
-
-    public BlockCacheKey(long offset, int size) {
-      this(null, offset, size);
-    }
 
     public BlockCacheKey(String fileIdentity, long offset, int size) {
       this.fileIdentity = fileIdentity;

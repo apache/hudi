@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,16 +39,16 @@ public class TestHFileBlockCache {
 
   @Test
   public void testBlockCacheBasicOperations() {
-    HFileBlockCache cache = new HFileBlockCache(2);
+    HFileBlockCache cache = new HFileBlockCache(2, 30, TimeUnit.MINUTES);
     assertEquals(0, cache.size());
 
     // Test cache key
-    HFileBlockCache.BlockCacheKey key1 = new HFileBlockCache.BlockCacheKey(100, 64);
-    HFileBlockCache.BlockCacheKey key2 = new HFileBlockCache.BlockCacheKey(200, 64);
-    HFileBlockCache.BlockCacheKey key3 = new HFileBlockCache.BlockCacheKey(300, 64);
+    HFileBlockCache.BlockCacheKey key1 = new HFileBlockCache.BlockCacheKey(null, 100, 64);
+    HFileBlockCache.BlockCacheKey key2 = new HFileBlockCache.BlockCacheKey(null, 200, 64);
+    HFileBlockCache.BlockCacheKey key3 = new HFileBlockCache.BlockCacheKey(null, 300, 64);
 
     assertNotEquals(key1, key2);
-    assertEquals(new HFileBlockCache.BlockCacheKey(100, 64), key1);
+    assertEquals(new HFileBlockCache.BlockCacheKey(null,100, 64), key1);
 
     // Create test blocks using mock implementation with valid HFile block data
     HFileContext context = HFileContext.builder()
@@ -83,8 +84,8 @@ public class TestHFileBlockCache {
 
     // key1 should be evicted (LFU) - it was the least frequently used
     assertNull(result1);
-    assertEquals(block2, result2);
-    assertEquals(block3, result3);
+    assertSame(block2, result2);
+    assertSame(block3, result3);
 
     // Verify final cache state - should contain at most 2 items
     assertTrue(cache.size() <= 2, "Final cache size should not exceed maximum: " + cache.size());
@@ -97,19 +98,8 @@ public class TestHFileBlockCache {
   }
 
   @Test
-  public void testHFileReaderConfig() {
-    HFileReaderConfig defaultConfig = new HFileReaderConfig();
-    assertEquals(HFileReaderConfig.DEFAULT_BLOCK_CACHE_SIZE, defaultConfig.getBlockCacheSize());
-    assertEquals(HFileReaderConfig.DEFAULT_CACHE_TTL_MINUTES, defaultConfig.getCacheTtlMinutes());
-
-    HFileReaderConfig customConfig = new HFileReaderConfig(50, 60);
-    assertEquals(50, customConfig.getBlockCacheSize());
-    assertEquals(60, customConfig.getCacheTtlMinutes());
-  }
-
-  @Test
   public void testGetOrComputeWithMissAndMultipleBlocks() throws Exception {
-    HFileBlockCache cache = new HFileBlockCache(10);
+    HFileBlockCache cache = new HFileBlockCache(10, 30, TimeUnit.MINUTES);
     AtomicInteger loaderExecutionCount = new AtomicInteger(0);
 
     // 0. Define keys and blocks for the test

@@ -39,10 +39,10 @@ import static org.apache.hudi.io.hfile.HFileBlock.HFILEBLOCK_HEADER_SIZE;
 import static org.apache.hudi.io.hfile.HFileUtils.readMajorVersion;
 
 /**
- * Base implementation of {@link HFileReader} without caching.
- * This provides the core functionality for reading HFile format data.
+ * Base implementation of {@link HFileReader} without caching. This provides the core functionality for reading HFile format data.
  */
 public class HFileReaderImpl implements HFileReader {
+
   protected final SeekableDataInputStream stream;
   protected final long fileSize;
 
@@ -282,7 +282,7 @@ public class HFileReaderImpl implements HFileReader {
    * @throws IOException upon error.
    */
   private static HFileTrailer readTrailer(SeekableDataInputStream stream,
-      long fileSize) throws IOException {
+                                          long fileSize) throws IOException {
     int bufferSize = HFileTrailer.getTrailerSize();
     long seekPos = fileSize - bufferSize;
     if (seekPos < 0) {
@@ -334,19 +334,14 @@ public class HFileReaderImpl implements HFileReader {
   }
 
   /**
-   * Read single-level or multiple-level data block index, and load all data block
-   * information into memory in BFS fashion.
+   * Read single-level or multiple-level data block index, and load all data block information into memory in BFS fashion.
    *
-   * @param rootBlockReader a {@link HFileBlockReader} used to read root data index block;
-   *                        this reader will be used to read subsequent meta index block
-   *                        afterward
+   * @param rootBlockReader a {@link HFileBlockReader} used to read root data index block; this reader will be used to read subsequent meta index block afterward
    * @param numEntries      the number of entries in the root index block
    * @param levels          the level of the indexes
    * @return single/multiple-level data block index
    */
-  private TreeMap<Key, BlockIndexEntry> readDataBlockIndex(HFileBlockReader rootBlockReader,
-      int numEntries,
-      int levels) throws IOException {
+  private TreeMap<Key, BlockIndexEntry> readDataBlockIndex(HFileBlockReader rootBlockReader, int numEntries, int levels) throws IOException {
     ValidationUtils.checkArgument(levels > 0,
         "levels of data block index must be greater than 0");
     // Parse root data index block
