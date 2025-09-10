@@ -102,17 +102,14 @@ public class PrometheusReporter extends MetricsReporter {
     }
     metricExports = new DropwizardExports(registry, new LabeledSampleBuilder(labelNames, labelValues));
     
-    PrometheusServerState serverState = getServerState(serverPort);
+    PrometheusServerState serverState = getAndRegisterServerState(serverPort, metricExports);
     this.collectorRegistry = serverState.getCollectorRegistry();
-    metricExports.register(collectorRegistry);
-    serverState.getExports().add(metricExports);
-    serverState.getReferenceCount().incrementAndGet();
     
     LOG.debug("Registered PrometheusReporter for port {}, reference count: {}", 
              serverPort, serverState.getReferenceCount().get());
   }
 
-  private static synchronized PrometheusServerState getServerState(int serverPort) {
+  private static synchronized PrometheusServerState getAndRegisterServerState(int serverPort, DropwizardExports metricExports) {
     PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(serverPort);
     if (serverState == null) {
       try {
@@ -133,6 +130,11 @@ public class PrometheusReporter extends MetricsReporter {
         throw new HoodieException(msg, e);
       }
     }
+    
+    metricExports.register(serverState.getCollectorRegistry());
+    serverState.getExports().add(metricExports);
+    serverState.getReferenceCount().incrementAndGet();
+    
     return serverState;
   }
 
@@ -162,7 +164,8 @@ public class PrometheusReporter extends MetricsReporter {
         if (newReferenceCount <= 0) {
           cleanupServer(serverPort);
         } else {
-          logServerKeptAlive(newReferenceCount);
+          LOG.debug("Prometheus server on port {} still has {} references, keeping server alive", 
+                   serverPort, newReferenceCount);
         }
       }
     } catch (Exception e) {
@@ -211,11 +214,6 @@ public class PrometheusReporter extends MetricsReporter {
         LOG.debug("Error closing Prometheus HTTP server on port {}: {}", serverPort, e.getMessage());
       }
     }
-  }
-
-  private void logServerKeptAlive(int referenceCount) {
-    LOG.debug("Prometheus server on port {} still has {} references, keeping server alive", 
-             serverPort, referenceCount);
   }
 
   public static boolean isServerRunning(int port) {
