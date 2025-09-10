@@ -42,6 +42,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -714,10 +715,13 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
   @Test
   public void testParseDateFromInstantTime() throws ParseException {
-    // default second granularity instant ID
     String secondGranularityInstant = "20210101120101123";
     Date defaultSecsGranularityDate = TimelineUtils.parseDateFromInstantTime(secondGranularityInstant);
-    assertEquals(1609502461123L, defaultSecsGranularityDate.getTime());
+
+    // Parse expected date in the same way as the method under test
+    SimpleDateFormat format = new SimpleDateFormat("yyyyMMddHHmmssSSS");
+    long expectedTime = format.parse(secondGranularityInstant).getTime();
+    assertEquals(expectedTime, defaultSecsGranularityDate.getTime());
   }
 
   @Test
