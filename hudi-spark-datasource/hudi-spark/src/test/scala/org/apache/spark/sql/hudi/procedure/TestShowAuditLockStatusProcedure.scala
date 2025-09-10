@@ -34,6 +34,10 @@ import java.io.File
  */
 class TestShowAuditLockStatusProcedure extends HoodieSparkProcedureTestBase {
 
+  override def generateTableName: String = {
+    super.generateTableName.split("\\.").last
+  }
+
   /**
    * Helper method to create a test table and return its path.
    */
