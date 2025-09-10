@@ -41,8 +41,8 @@ import scala.util.{Failure, Success, Try}
  *
  * Usage:
  * {{{
- * CALL audit_lock_set(table => 'my_table', state => 'enabled')
- * CALL audit_lock_set(table => 'my_table', state => 'disabled')
+ * CALL set_audit_lock(table => 'my_table', state => 'enabled')
+ * CALL set_audit_lock(path => '/path/to/table', state => 'disabled')
  * }}}
  *
  * The procedure creates or updates an audit configuration file at:
@@ -51,10 +51,11 @@ import scala.util.{Failure, Success, Try}
  * @author Apache Hudi
  * @since 1.0.0
  */
-class AuditLockSetProcedure extends BaseProcedure with ProcedureBuilder {
+class SetAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.required(1, "state", DataTypes.StringType)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.required(2, "state", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -68,7 +69,7 @@ class AuditLockSetProcedure extends BaseProcedure with ProcedureBuilder {
   /**
    * Returns the procedure parameters definition.
    *
-   * @return Array of required parameters: table (String) and state (String)
+   * @return Array of parameters: table (optional String), path (optional String), and state (required String)
    */
   def parameters: Array[ProcedureParameter] = PARAMETERS
 
@@ -82,23 +83,35 @@ class AuditLockSetProcedure extends BaseProcedure with ProcedureBuilder {
   /**
    * Executes the audit lock set procedure.
    *
-   * @param args Procedure arguments containing table name and desired state
+   * @param args Procedure arguments containing table name or path and desired state
    * @return Sequence containing a single Row with execution results
    * @throws IllegalArgumentException if state parameter is not 'enabled' or 'disabled'
    */
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
-    val tableName = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
-    val state = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String].toLowerCase
+    val tableName = getArgValueOrDefault(args, PARAMETERS(0))
+    val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
+    val state = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String].toLowerCase
+
+    // Validate that either table or path is provided, but not both
+    if (tableName.isEmpty && tablePath.isEmpty) {
+      throw new IllegalArgumentException("Either table or path parameter must be provided")
+    }
+    if (tableName.isDefined && tablePath.isDefined) {
+      throw new IllegalArgumentException("Cannot specify both table and path parameters")
+    }
 
     // Validate state parameter
     if (state != "enabled" && state != "disabled") {
       throw new IllegalArgumentException("State parameter must be 'enabled' or 'disabled'")
     }
 
-    val basePath: String = getBasePath(getArgValueOrDefault(args, PARAMETERS(0)), Option.empty)
+    val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
+
+    // Use table name if provided, otherwise extract from path
+    val displayName = tableName.map(_.asInstanceOf[String]).getOrElse(tablePath.get.asInstanceOf[String])
 
     try {
       val auditEnabled = state == "enabled"
@@ -107,11 +120,11 @@ class AuditLockSetProcedure extends BaseProcedure with ProcedureBuilder {
       val resultState = if (auditEnabled) "enabled" else "disabled"
       val message = s"Lock audit logging successfully $resultState"
 
-      Seq(Row(tableName, resultState, message))
+      Seq(Row(displayName, resultState, message))
     } catch {
       case e: Exception =>
         val errorMessage = s"Failed to set audit state: ${e.getMessage}"
-        Seq(Row(tableName, "error", errorMessage))
+        Seq(Row(displayName, "error", errorMessage))
     }
   }
 
@@ -163,19 +176,19 @@ class AuditLockSetProcedure extends BaseProcedure with ProcedureBuilder {
     OBJECT_MAPPER.writeValueAsString(rootNode)
   }
 
-  override def build: Procedure = new AuditLockSetProcedure()
+  override def build: Procedure = new SetAuditLockProcedure()
 }
 
 /**
- * Companion object for AuditLockSetProcedure containing constants and factory methods.
+ * Companion object for SetAuditLockProcedure containing constants and factory methods.
  */
-object AuditLockSetProcedure {
-  val NAME = "audit_lock_set"
+object SetAuditLockProcedure {
+  val NAME = "set_audit_lock"
 
   /**
    * Factory method to create procedure builder instances.
    *
-   * @return Supplier that creates new AuditLockSetProcedure instances
+   * @return Supplier that creates new SetAuditLockProcedure instances
    */
-  def builder: Supplier[ProcedureBuilder] = () => new AuditLockSetProcedure()
+  def builder: Supplier[ProcedureBuilder] = () => new SetAuditLockProcedure()
 }
