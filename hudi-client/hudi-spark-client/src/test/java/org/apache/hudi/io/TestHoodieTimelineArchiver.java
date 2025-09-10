@@ -26,6 +26,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -280,7 +281,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
             .withParallelism(2, 2).forTable("test-trip-table").build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieSparkTable.createForReads(cfg, context, metaClient);
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(cfg);
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient, Option.of(writeClient.getTransactionManager()));
     TimelineArchiverV2 archiver = new TimelineArchiverV2(cfg, table);
     int result = archiver.archiveIfRequired(context);
     assertEquals(0, result);
@@ -847,32 +849,34 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     final AtomicReference<String> lastInstant = new AtomicReference<>();
     IntStream.range(0, 2).forEach(index -> {
       completableFutureList.add(CompletableFuture.supplyAsync(() -> {
-        HoodieTable table = HoodieSparkTable.createForReads(writeConfig, context, metaClient);
-        try {
-          // wait until 4 commits are available so that archival thread will have something to archive.
-          countDownLatch.await(30, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-          throw new HoodieException("Should not have thrown InterruptedException ", e);
-        }
-        metaClient.reloadActiveTimeline();
-        while (!metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().get().requestedTime().equals(lastInstant.get())
-            || metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() > 5) {
+        try (TransactionManager txnManager = new TransactionManager(writeConfig, metaClient.getStorage())) {
+          HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient, Option.of(txnManager));
           try {
-            TimelineArchiverV2 archiver = new TimelineArchiverV2(writeConfig, table);
-            archiver.archiveIfRequired(context, true);
-            // if not for below sleep, both archiving threads acquires lock in quick succession and does not give space for main thread
-            // to complete the write operation when metadata table is enabled.
-            if (enableMetadata) {
-              Thread.sleep(2);
-            }
-          } catch (IOException e) {
-            throw new HoodieException("IOException thrown while archiving ", e);
+            // wait until 4 commits are available so that archival thread will have something to archive.
+            countDownLatch.await(30, TimeUnit.SECONDS);
           } catch (InterruptedException e) {
             throw new HoodieException("Should not have thrown InterruptedException ", e);
           }
-          table.getMetaClient().reloadActiveTimeline();
+          metaClient.reloadActiveTimeline();
+          while (!metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().get().requestedTime().equals(lastInstant.get())
+              || metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() > 5) {
+            try {
+              TimelineArchiverV2 archiver = new TimelineArchiverV2(writeConfig, table);
+              archiver.archiveIfRequired(context, true);
+              // if not for below sleep, both archiving threads acquires lock in quick succession and does not give space for main thread
+              // to complete the write operation when metadata table is enabled.
+              if (enableMetadata) {
+                Thread.sleep(2);
+              }
+            } catch (IOException e) {
+              throw new HoodieException("IOException thrown while archiving ", e);
+            } catch (InterruptedException e) {
+              throw new HoodieException("Should not have thrown InterruptedException ", e);
+            }
+            table.getMetaClient().reloadActiveTimeline();
+          }
+          return true;
         }
-        return true;
       }, executors));
     });
 

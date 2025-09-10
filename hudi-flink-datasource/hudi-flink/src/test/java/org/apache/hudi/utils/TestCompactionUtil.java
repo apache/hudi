@@ -63,6 +63,7 @@ public class TestCompactionUtil {
   private HoodieFlinkTable<?> table;
   private HoodieTableMetaClient metaClient;
   private Configuration conf;
+  private HoodieFlinkWriteClient writeClient;
 
   @TempDir
   File tempFile;
@@ -78,7 +79,8 @@ public class TestCompactionUtil {
 
     StreamerUtil.initTableIfNotExists(conf);
 
-    this.table = FlinkTables.createTable(conf);
+    this.writeClient = FlinkWriteClients.createWriteClient(conf);
+    this.table = FlinkTables.createTable(conf, writeClient.getTransactionManager());
     this.metaClient = table.getMetaClient();
 
     // initialize the metadata table path
