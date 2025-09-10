@@ -21,7 +21,6 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.avro.model.ArrayWrapper;
 import org.apache.hudi.common.util.DateTimeUtils;
-import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 
 import org.apache.avro.LogicalTypes;
@@ -125,7 +124,7 @@ public enum ValueType {
       return null;
     }
     if (val instanceof Collection) {
-      return OrderingValues.create(((Collection<?>) val).stream()
+      return new ArrayComparable(((Collection<?>) val).stream()
           .map(v -> standardizeJavaTypeAndPromote(v, meta))
           .toArray(Comparable[]::new));
     }
@@ -201,7 +200,7 @@ public enum ValueType {
       } else if (((GenericRecord) val).getSchema().getField("wrappedValues") != null) {
         GenericRecord genRec = (GenericRecord) val;
         Collection<Object> values = (Collection<Object>) genRec.get("wrappedValues");
-        return OrderingValues.create(values.stream().map(v -> this.unwrapValue(v, meta)).toArray(Comparable[]::new));
+        return new ArrayComparable(values.stream().map(v -> this.unwrapValue(v, meta)).toArray(Comparable[]::new));
       } else {
         throw new IllegalArgumentException(String.format(
             "should be %s, but got %s", 

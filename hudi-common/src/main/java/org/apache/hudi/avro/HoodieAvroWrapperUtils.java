@@ -343,7 +343,7 @@ public class HoodieAvroWrapperUtils {
 
   public static Comparable<?> unwrapArray(Object val, Function<Object, Comparable<?>> unwrapper) {
     ArrayWrapper arrayWrapper = (ArrayWrapper) val;
-    return OrderingValues.create(arrayWrapper.getWrappedValues().stream()
+    return new ArrayComparable(arrayWrapper.getWrappedValues().stream()
         .map(unwrapper::apply)
         .toArray(Comparable[]::new));
   }
