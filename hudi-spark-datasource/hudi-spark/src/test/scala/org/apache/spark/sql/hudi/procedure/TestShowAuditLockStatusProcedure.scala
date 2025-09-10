@@ -17,9 +17,6 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
-
 import java.io.File
 
 /**
@@ -44,7 +41,7 @@ class TestShowAuditLockStatusProcedure extends HoodieSparkProcedureTestBase {
   private def createTestTable(tmp: File, tableName: String): String = {
     spark.sql(
       s"""
-         |create table if not exists $tableName (
+         |create table $tableName (
          |  id int,
          |  name string,
          |  price double,
@@ -62,25 +59,17 @@ class TestShowAuditLockStatusProcedure extends HoodieSparkProcedureTestBase {
   }
 
   /**
-   * Parameterized test for showing audit status when audit is disabled (default state).
-   * Tests both table name and path parameter approaches.
+   * Test showing audit status when audit is disabled (default state) using table name.
    */
-  @ParameterizedTest(name = "Show disabled audit status with {0}")
-  @ValueSource(strings = Array("table", "path"))
-  def testShowAuditStatusDisabled(paramType: String): Unit = {
+  test("Test Show Audit Status - Disabled with Table Name") {
     withTempDir { tmp =>
-      val tableName = generateTableName + "_" + paramType
+      val tableName = generateTableName
       val tablePath = createTestTable(tmp, tableName)
 
-      val (paramName, paramValue, expectedReturn) = paramType match {
-        case "table" => ("table", tableName, tableName)
-        case "path" => ("path", tablePath, tablePath)
-      }
-
-      val result = spark.sql(s"""call show_audit_lock_status($paramName => '$paramValue')""").collect()
+      val result = spark.sql(s"""call show_audit_lock_status(table => '$tableName')""").collect()
 
       assertResult(1)(result.length)
-      assertResult(expectedReturn)(result.head.get(0)) // table/path name
+      assertResult(tableName)(result.head.get(0)) // table name
       assertResult(false)(result.head.get(1)) // audit_enabled
       assert(result.head.get(2).toString.contains("audit_enabled.json")) // config_path
       assert(result.head.get(3).toString.contains("audit")) // audit_folder_path
@@ -88,29 +77,61 @@ class TestShowAuditLockStatusProcedure extends HoodieSparkProcedureTestBase {
   }
 
   /**
-   * Parameterized test for showing audit status when audit is enabled.
-   * Tests both table name and path parameter approaches.
+   * Test showing audit status when audit is disabled (default state) using path.
    */
-  @ParameterizedTest(name = "Show enabled audit status with {0}")
-  @ValueSource(strings = Array("table", "path"))
-  def testShowAuditStatusEnabled(paramType: String): Unit = {
+  test("Test Show Audit Status - Disabled with Path") {
     withTempDir { tmp =>
-      val tableName = generateTableName + "_" + paramType
+      val tableName = generateTableName
       val tablePath = createTestTable(tmp, tableName)
 
-      val (paramName, paramValue, expectedReturn) = paramType match {
-        case "table" => ("table", tableName, tableName)
-        case "path" => ("path", tablePath, tablePath)
-      }
-
-      // First enable audit logging
-      spark.sql(s"""call set_audit_lock($paramName => '$paramValue', state => 'enabled')""")
-
-      // Then check the status
-      val result = spark.sql(s"""call show_audit_lock_status($paramName => '$paramValue')""").collect()
+      val result = spark.sql(s"""call show_audit_lock_status(path => '$tablePath')""").collect()
 
       assertResult(1)(result.length)
-      assertResult(expectedReturn)(result.head.get(0)) // table/path name
+      assertResult(tablePath)(result.head.get(0)) // path
+      assertResult(false)(result.head.get(1)) // audit_enabled
+      assert(result.head.get(2).toString.contains("audit_enabled.json")) // config_path
+      assert(result.head.get(3).toString.contains("audit")) // audit_folder_path
+    }
+  }
+
+  /**
+   * Test showing audit status when audit is enabled using table name.
+   */
+  test("Test Show Audit Status - Enabled with Table Name") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = createTestTable(tmp, tableName)
+
+      // First enable audit logging
+      spark.sql(s"""call set_audit_lock(table => '$tableName', state => 'enabled')""")
+
+      // Then check the status
+      val result = spark.sql(s"""call show_audit_lock_status(table => '$tableName')""").collect()
+
+      assertResult(1)(result.length)
+      assertResult(tableName)(result.head.get(0)) // table name
+      assertResult(true)(result.head.get(1)) // audit_enabled
+      assert(result.head.get(2).toString.contains("audit_enabled.json")) // config_path
+      assert(result.head.get(3).toString.contains("audit")) // audit_folder_path
+    }
+  }
+
+  /**
+   * Test showing audit status when audit is enabled using path.
+   */
+  test("Test Show Audit Status - Enabled with Path") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = createTestTable(tmp, tableName)
+
+      // First enable audit logging
+      spark.sql(s"""call set_audit_lock(path => '$tablePath', state => 'enabled')""")
+
+      // Then check the status
+      val result = spark.sql(s"""call show_audit_lock_status(path => '$tablePath')""").collect()
+
+      assertResult(1)(result.length)
+      assertResult(tablePath)(result.head.get(0)) // path
       assertResult(true)(result.head.get(1)) // audit_enabled
       assert(result.head.get(2).toString.contains("audit_enabled.json")) // config_path
       assert(result.head.get(3).toString.contains("audit")) // audit_folder_path
@@ -196,4 +217,5 @@ class TestShowAuditLockStatusProcedure extends HoodieSparkProcedureTestBase {
       assertResult("string")(schema.fields(3).dataType.typeName)
     }
   }
+
 }

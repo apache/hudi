@@ -17,9 +17,6 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
-
 import java.io.File
 
 /**
@@ -28,7 +25,6 @@ import java.io.File
  * This class contains comprehensive tests to verify the functionality of
  * the set_audit_lock procedure, including enabling/disabling audit logging,
  * parameter validation, and error handling scenarios.
- * Refactored to use parameterized tests for better code reuse.
  *
  * @author Apache Hudi
  * @since 1.1.0
@@ -45,7 +41,7 @@ class TestSetAuditLockProcedure extends HoodieSparkProcedureTestBase {
   private def createTestTable(tmp: File, tableName: String): String = {
     spark.sql(
       s"""
-         |create table if not exists $tableName (
+         |create table $tableName (
          |  id int,
          |  name string,
          |  price double,
@@ -63,50 +59,68 @@ class TestSetAuditLockProcedure extends HoodieSparkProcedureTestBase {
   }
 
   /**
-   * Parameterized test for enabling audit logging.
-   * Tests both table name and path parameter approaches.
+   * Test enabling audit logging using table name parameter.
    */
-  @ParameterizedTest(name = "Enable audit with {0}")
-  @ValueSource(strings = Array("table", "path"))
-  def testEnableAudit(paramType: String): Unit = {
+  test("Test Call set_audit_lock Procedure - Enable Audit with Table Name") {
     withTempDir { tmp =>
-      val tableName = generateTableName + "_" + paramType
+      val tableName = generateTableName
       val tablePath = createTestTable(tmp, tableName)
 
-      val (paramName, paramValue, expectedReturn) = paramType match {
-        case "table" => ("table", tableName, tableName)
-        case "path" => ("path", tablePath, tablePath)
-      }
-
-      val result = spark.sql(s"""call set_audit_lock($paramName => '$paramValue', state => 'enabled')""").collect()
+      val result = spark.sql(s"""call set_audit_lock(table => '$tableName', state => 'enabled')""").collect()
 
       assertResult(1)(result.length)
-      assertResult(expectedReturn)(result.head.get(0))
+      assertResult(tableName)(result.head.get(0))
       assertResult("enabled")(result.head.get(1))
       assert(result.head.get(2).toString.contains("successfully enabled"))
     }
   }
 
   /**
-   * Parameterized test for disabling audit logging.
-   * Tests both table name and path parameter approaches.
+   * Test enabling audit logging using path parameter.
    */
-  @ParameterizedTest(name = "Disable audit with {0}")
-  @ValueSource(strings = Array("table", "path"))
-  def testDisableAudit(paramType: String): Unit = {
+  test("Test Call set_audit_lock Procedure - Enable Audit with Path") {
     withTempDir { tmp =>
-      val tableName = generateTableName + "_" + paramType
+      val tableName = generateTableName
       val tablePath = createTestTable(tmp, tableName)
 
-      val (paramName, paramValue, expectedReturn) = paramType match {
-        case "table" => ("table", tableName, tableName)
-        case "path" => ("path", tablePath, tablePath)
-      }
-
-      val result = spark.sql(s"""call set_audit_lock($paramName => '$paramValue', state => 'disabled')""").collect()
+      val result = spark.sql(s"""call set_audit_lock(path => '$tablePath', state => 'enabled')""").collect()
 
       assertResult(1)(result.length)
-      assertResult(expectedReturn)(result.head.get(0))
+      assertResult(tablePath)(result.head.get(0))
+      assertResult("enabled")(result.head.get(1))
+      assert(result.head.get(2).toString.contains("successfully enabled"))
+    }
+  }
+
+  /**
+   * Test disabling audit logging using table name parameter.
+   */
+  test("Test Call set_audit_lock Procedure - Disable Audit with Table Name") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = createTestTable(tmp, tableName)
+
+      val result = spark.sql(s"""call set_audit_lock(table => '$tableName', state => 'disabled')""").collect()
+
+      assertResult(1)(result.length)
+      assertResult(tableName)(result.head.get(0))
+      assertResult("disabled")(result.head.get(1))
+      assert(result.head.get(2).toString.contains("successfully disabled"))
+    }
+  }
+
+  /**
+   * Test disabling audit logging using path parameter.
+   */
+  test("Test Call set_audit_lock Procedure - Disable Audit with Path") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = createTestTable(tmp, tableName)
+
+      val result = spark.sql(s"""call set_audit_lock(path => '$tablePath', state => 'disabled')""").collect()
+
+      assertResult(1)(result.length)
+      assertResult(tablePath)(result.head.get(0))
       assertResult("disabled")(result.head.get(1))
       assert(result.head.get(2).toString.contains("successfully disabled"))
     }
