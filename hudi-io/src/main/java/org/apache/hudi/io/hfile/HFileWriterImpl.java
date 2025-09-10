@@ -109,9 +109,16 @@ public class HFileWriterImpl implements HFileWriter {
     metaInfo.put(name, value);
   }
 
-  // Append a file info kv pair.
+  // Append a file info kv pair even old value exists.
   public void appendFileInfo(String name, byte[] value) {
     fileInfoBlock.add(name, value);
+  }
+
+  // This is mainly used to test the impact of certain file properties.
+  public void appendFileInfoIfNotExists(String name, byte[] value) {
+    if (!fileInfoBlock.containsKey(name)) {
+      fileInfoBlock.add(name, value);
+    }
   }
 
   @Override
@@ -216,7 +223,7 @@ public class HFileWriterImpl implements HFileWriter {
   private void initFileInfo() {
     fileInfoBlock.add(
         new String(MAX_MVCC_TS_KEY.getBytes(), StandardCharsets.UTF_8),
-        new byte[]{0});
+        toBytes(0L));
   }
 
   protected void finishFileInfo() {
@@ -246,12 +253,9 @@ public class HFileWriterImpl implements HFileWriter {
     // NOTE: To make MVCC usage consistent cross different table versions,
     // we should set following properties.
     // After table versions <= 8 are deprecated, MVCC byte can be removed from key-value pair.
-    fileInfoBlock.add(
+    appendFileInfoIfNotExists(
         new String(HFileInfo.KEY_VALUE_VERSION.getBytes(), StandardCharsets.UTF_8),
         toBytes(KEY_VALUE_VERSION_WITH_MVCC_TS));
-    fileInfoBlock.add(
-        new String(MAX_MVCC_TS_KEY.getBytes(), StandardCharsets.UTF_8),
-        toBytes(1L));
   }
 
   // Note: HFileReaderImpl assumes that:

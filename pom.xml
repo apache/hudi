@@ -414,10 +414,6 @@
                     <exclude>org.sl4fj:slf4j-jcl</exclude>
                     <exclude>log4j:log4j</exclude>
                     <exclude>ch.qos.logback:logback-classic</exclude>
-                    <!-- NOTE: We're banning any HBase deps -->
-                    <exclude>org.apache.hbase:hbase-common:*</exclude>
-                    <exclude>org.apache.hbase:hbase-client:*</exclude>
-                    <exclude>org.apache.hbase:hbase-server:*</exclude>
                     <!--To upgrade snappy because pre 1.1.8.2 does not work on m1 mac-->
                     <exclude>org.xerial.snappy:snappy-java:*</exclude>
                   </excludes>
