@@ -190,6 +190,13 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected void preWrite(String instantTime) {
     metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
+    // Every time `HFile` class is loaded in class loader, it'll create a static `MetricsIO` instance for region server IO and
+    // register a metric 'RegionServer,sub=IO' in `DefaultMetricsSystem#newSourceName`. There is no configuration to disable it.
+    // When the flink cluster is deployed as session mode and hudi flink bundle jar is summited with SQL or datastream job,
+    // multiple userCode context classloaders may register same region server metric which leads to validating exception in
+    // `DefaultMetricsSystem#newSourceName`. So here we set the init mode for hadoop metrics as `STANDBY` to disable metric
+    // registering for HFile writer.
+    System.setProperty("hadoop.metrics.init.mode", "STANDBY");
   }
 
   @Override
