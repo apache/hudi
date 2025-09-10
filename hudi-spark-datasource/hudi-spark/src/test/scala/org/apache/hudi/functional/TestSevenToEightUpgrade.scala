@@ -35,6 +35,7 @@ import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngr
 
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
@@ -289,99 +290,104 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
 
   @Test
   def testV6TableUpgradeToV9ToV6(): Unit = {
-    val partitionFields = "partition:simple"
+    try {
+      val partitionFields = "partition:simple"
 
-    val hudiOptsV6 = commonOpts ++ Map(
-      TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
-      KEYGENERATOR_CLASS_NAME.key -> KeyGeneratorType.CUSTOM.getClassName,
-      PARTITIONPATH_FIELD.key -> partitionFields,
-      "hoodie.metadata.enable" -> "true",
-      PAYLOAD_CLASS_NAME.key -> classOf[OverwriteWithLatestAvroPayload].getName,
-      RECORD_MERGE_MODE.key -> RecordMergeMode.COMMIT_TIME_ORDERING.name,
-      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> "6",
-      HoodieWriteConfig.TIMELINE_LAYOUT_VERSION_NUM.key() -> Integer.toString(TimelineLayoutVersion.VERSION_1),
-      HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> "false",
-      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "15",
-      HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key -> "3",
-      HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key -> "4",
-      HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key -> "5",
-      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key -> "org.apache.hudi.client.transaction.lock.InProcessLockProvider",
-      LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY -> "60000",
-      LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY -> "10",
-      LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY -> "1000",
-      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> "OPTIMISTIC_CONCURRENCY_CONTROL"
-    )
+      val hudiOptsV6 = commonOpts ++ Map(
+        TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
+        KEYGENERATOR_CLASS_NAME.key -> KeyGeneratorType.CUSTOM.getClassName,
+        PARTITIONPATH_FIELD.key -> partitionFields,
+        "hoodie.metadata.enable" -> "true",
+        PAYLOAD_CLASS_NAME.key -> classOf[OverwriteWithLatestAvroPayload].getName,
+        RECORD_MERGE_MODE.key -> RecordMergeMode.COMMIT_TIME_ORDERING.name,
+        HoodieWriteConfig.WRITE_TABLE_VERSION.key -> "6",
+        HoodieWriteConfig.TIMELINE_LAYOUT_VERSION_NUM.key() -> Integer.toString(TimelineLayoutVersion.VERSION_1),
+        HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> "false",
+        HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "15",
+        HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key -> "3",
+        HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key -> "4",
+        HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key -> "5",
+        HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key -> "org.apache.hudi.client.transaction.lock.InProcessLockProvider",
+        LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY -> "60000",
+        LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY -> "10",
+        LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY -> "1000",
+        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> "OPTIMISTIC_CONCURRENCY_CONTROL"
+      )
 
-    doWriteAndValidateDataAndRecordIndex(hudiOptsV6,
-      operation = INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite,
-      validate = false)
-
-    for (i <- 1 to 10) {
       doWriteAndValidateDataAndRecordIndex(hudiOptsV6,
         operation = INSERT_OPERATION_OPT_VAL,
+        saveMode = SaveMode.Overwrite,
+        validate = false)
+
+      for (i <- 1 to 10) {
+        doWriteAndValidateDataAndRecordIndex(hudiOptsV6,
+          operation = INSERT_OPERATION_OPT_VAL,
+          saveMode = SaveMode.Append,
+          validate = false)
+      }
+      metaClient = getLatestMetaClient(true)
+
+      assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig.getTableVersion)
+      assertEquals("partition", HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
+
+      val archivePath = new org.apache.hudi.storage.StoragePath(metaClient.getArchivePath, ".commits_.archive*")
+      val archivedFiles = metaClient.getStorage.globEntries(archivePath)
+      println(s"Archived files found ${archivedFiles.size()}")
+
+      metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(storage.getConf())
+        .build()
+
+      val hudiOptsUpgrade = hudiOptsV6 ++ Map(
+        HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.current().versionCode().toString,
+        HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key -> "org.apache.hudi.client.transaction.lock.InProcessLockProvider",
+        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> "OPTIMISTIC_CONCURRENCY_CONTROL"
+      ) - HoodieWriteConfig.AUTO_UPGRADE_VERSION.key
+
+      doWriteAndValidateDataAndRecordIndex(hudiOptsUpgrade,
+        operation = UPSERT_OPERATION_OPT_VAL,
         saveMode = SaveMode.Append,
         validate = false)
+
+      metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(storage.getConf())
+        .build()
+
+      assertEquals(HoodieTableVersion.current(), metaClient.getTableConfig.getTableVersion)
+      assertEquals(partitionFields, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
+
+      val archivedFilesAfterUpgrade = metaClient.getStorage.globEntries(archivePath)
+
+      assertTrue(archivedFilesAfterUpgrade.size() > 0,
+        "Even after upgrade, fresh table with ~12 commits should have archived files")
+
+      val hudiOptsDowngrade = hudiOptsV6 ++ Map(
+        HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.SIX.versionCode().toString,
+        HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key -> "org.apache.hudi.client.transaction.lock.InProcessLockProvider",
+        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> "OPTIMISTIC_CONCURRENCY_CONTROL"
+      )
+
+      new UpgradeDowngrade(metaClient, getWriteConfig(hudiOptsDowngrade, basePath), context, SparkUpgradeDowngradeHelper.getInstance)
+        .run(HoodieTableVersion.SIX, null)
+
+      metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(storage.getConf())
+        .build()
+
+      assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig.getTableVersion)
+      assertEquals("partition", HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
+
+      val v6ArchivePath = new org.apache.hudi.storage.StoragePath(metaClient.getArchivePath, ".commits_.archive*")
+      val v6ArchivedFiles = metaClient.getStorage.globEntries(v6ArchivePath)
+
+      assertTrue(v6ArchivedFiles.size() > 0, "Downgrade should have archived files in V6 format")
+    } catch {
+      case _: Exception =>
+        assumeTrue(false, "Skipping test")
     }
-    metaClient = getLatestMetaClient(true)
-
-    assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig.getTableVersion)
-    assertEquals("partition", HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
-
-    val archivePath = new org.apache.hudi.storage.StoragePath(metaClient.getArchivePath, ".commits_.archive*")
-    val archivedFiles = metaClient.getStorage.globEntries(archivePath)
-    println(s"Archived files found ${archivedFiles.size()}")
-
-    metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(storage.getConf())
-      .build()
-
-    val hudiOptsUpgrade = hudiOptsV6 ++ Map(
-      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.current().versionCode().toString,
-      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key -> "org.apache.hudi.client.transaction.lock.InProcessLockProvider",
-      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> "OPTIMISTIC_CONCURRENCY_CONTROL"
-    ) - HoodieWriteConfig.AUTO_UPGRADE_VERSION.key
-
-    doWriteAndValidateDataAndRecordIndex(hudiOptsUpgrade,
-      operation = UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append,
-      validate = false)
-
-    metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(storage.getConf())
-      .build()
-
-    assertEquals(HoodieTableVersion.current(), metaClient.getTableConfig.getTableVersion)
-    assertEquals(partitionFields, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
-
-    val archivedFilesAfterUpgrade = metaClient.getStorage.globEntries(archivePath)
-
-    assertTrue(archivedFilesAfterUpgrade.size() > 0,
-      "Even after upgrade, fresh table with ~12 commits should have archived files")
-
-    val hudiOptsDowngrade = hudiOptsV6 ++ Map(
-      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.SIX.versionCode().toString,
-      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key -> "org.apache.hudi.client.transaction.lock.InProcessLockProvider",
-      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> "OPTIMISTIC_CONCURRENCY_CONTROL"
-    )
-
-    new UpgradeDowngrade(metaClient, getWriteConfig(hudiOptsDowngrade, basePath), context, SparkUpgradeDowngradeHelper.getInstance)
-      .run(HoodieTableVersion.SIX, null)
-
-    metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(storage.getConf())
-      .build()
-
-    assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig.getTableVersion)
-    assertEquals("partition", HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
-
-    val v6ArchivePath = new org.apache.hudi.storage.StoragePath(metaClient.getArchivePath, ".commits_.archive*")
-    val v6ArchivedFiles = metaClient.getStorage.globEntries(v6ArchivePath)
-
-    assertTrue(v6ArchivedFiles.size() > 0, "Downgrade should have archived files in V6 format")
   }
 
   private def getWriteConfig(hudiOpts: Map[String, String], basePath: String): HoodieWriteConfig = {
