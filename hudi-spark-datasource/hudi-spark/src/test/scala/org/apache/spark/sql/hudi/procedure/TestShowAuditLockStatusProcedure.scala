@@ -64,7 +64,7 @@ class TestShowAuditLockStatusProcedure extends HoodieSparkProcedureTestBase {
   test("Test Show Audit Status - Disabled with Table Name") {
     withTempDir { tmp =>
       val tableName = generateTableName
-      val tablePath = createTestTable(tmp, tableName)
+      createTestTable(tmp, tableName)
 
       val result = spark.sql(s"""call show_audit_lock_status(table => '$tableName')""").collect()
 
@@ -100,7 +100,7 @@ class TestShowAuditLockStatusProcedure extends HoodieSparkProcedureTestBase {
   test("Test Show Audit Status - Enabled with Table Name") {
     withTempDir { tmp =>
       val tableName = generateTableName
-      val tablePath = createTestTable(tmp, tableName)
+      createTestTable(tmp, tableName)
 
       // First enable audit logging
       spark.sql(s"""call set_audit_lock(table => '$tableName', state => 'enabled')""")
@@ -188,7 +188,7 @@ class TestShowAuditLockStatusProcedure extends HoodieSparkProcedureTestBase {
     val nonExistentTable = "non_existent_table_" + System.currentTimeMillis()
     // This should not throw an exception but should handle gracefully
     checkExceptionContain(s"""call show_audit_lock_status(table => '$nonExistentTable')""")(
-      "cannot be found")
+      "not found")
   }
 
   /**
