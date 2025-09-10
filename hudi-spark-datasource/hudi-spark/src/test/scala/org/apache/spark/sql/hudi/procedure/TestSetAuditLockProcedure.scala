@@ -41,7 +41,7 @@ class TestSetAuditLockProcedure extends HoodieSparkProcedureTestBase {
   private def createTestTable(tmp: File, tableName: String): String = {
     spark.sql(
       s"""
-         |create table $tableName (
+         |create table if not exists $tableName (
          |  id int,
          |  name string,
          |  price double,
