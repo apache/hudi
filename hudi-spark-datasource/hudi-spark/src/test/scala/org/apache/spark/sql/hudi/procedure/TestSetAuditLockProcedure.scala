@@ -154,7 +154,7 @@ class TestSetAuditLockProcedure extends HoodieSparkProcedureTestBase {
 
       // Test missing both table and path parameters
       checkExceptionContain(s"""call set_audit_lock(state => 'enabled')""")(
-        "Either table or path parameter must be provided")
+        "Table name or table path must be given one")
 
       // Test missing state parameter
       checkExceptionContain(s"""call set_audit_lock(table => '$tableName')""")(

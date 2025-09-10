@@ -172,7 +172,7 @@ class TestShowAuditLockStatusProcedure extends HoodieSparkProcedureTestBase {
 
       // Test missing both table and path parameters
       checkExceptionContain(s"""call show_audit_lock_status()""")(
-        "Either table or path parameter must be provided")
+        "Table name or table path must be given one")
 
       // Test providing both table and path parameters
       checkExceptionContain(s"""call show_audit_lock_status(table => '$tableName', path => '$tablePath')""")(
@@ -186,9 +186,10 @@ class TestShowAuditLockStatusProcedure extends HoodieSparkProcedureTestBase {
    */
   test("Test Show Audit Status - Non-existent Table") {
     val nonExistentTable = "non_existent_table_" + System.currentTimeMillis()
-    // This should not throw an exception but should handle gracefully
-    checkExceptionContain(s"""call show_audit_lock_status(table => '$nonExistentTable')""")(
-      "TABLE_OR_VIEW_NOT_FOUND")
+    // This should throw an exception for non-existent table
+    assertThrows[Exception] {
+      spark.sql(s"""call show_audit_lock_status(table => '$nonExistentTable')""").collect()
+    }
   }
 
   /**

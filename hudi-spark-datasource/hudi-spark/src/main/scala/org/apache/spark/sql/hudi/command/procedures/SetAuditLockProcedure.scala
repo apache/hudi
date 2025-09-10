@@ -94,10 +94,7 @@ class SetAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
     val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
     val state = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String].toLowerCase
 
-    // Validate that either table or path is provided, but not both
-    if (tableName.isEmpty && tablePath.isEmpty) {
-      throw new IllegalArgumentException("Either table or path parameter must be provided")
-    }
+    // Validate that both table and path are not provided
     if (tableName.isDefined && tablePath.isDefined) {
       throw new IllegalArgumentException("Cannot specify both table and path parameters")
     }
@@ -107,6 +104,7 @@ class SetAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
       throw new IllegalArgumentException("State parameter must be 'enabled' or 'disabled'")
     }
 
+    // Get the base path using BaseProcedure helper (handles table/path validation)
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
 
