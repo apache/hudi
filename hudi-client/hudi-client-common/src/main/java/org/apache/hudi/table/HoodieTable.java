@@ -148,12 +148,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   private final InstantFileNameGenerator instantFileNameGenerator;
   private final InstantFileNameParser instantFileNameParser;
   private final boolean isMetadataTable;
-  private TransactionManager txnManager;
 
   private transient FileSystemViewManager viewManager;
   protected final transient HoodieEngineContext context;
+  private transient Option<TransactionManager> txnManager;
 
-  protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
+  protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, Option<TransactionManager> txnManager) {
     this.config = config;
     this.context = context;
     this.isMetadataTable = metaClient.isMetadataTable();
@@ -163,18 +163,11 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.metaClient = metaClient;
     this.viewManager = getViewManager();
     this.taskContextSupplier = context.getTaskContextSupplier();
-  }
-
-  public TransactionManager getTxnManager() {
-    if (null == txnManager) {
-      throw new HoodieException("TransactionManager is not initialized..");
-    }
-    return txnManager;
-  }
-
-  public HoodieTable setTxnManager(TransactionManager txnManager) {
     this.txnManager = txnManager;
-    return this;
+  }
+
+  public Option<TransactionManager> getTxnManager() {
+    return txnManager;
   }
 
   public boolean isMetadataTable() {

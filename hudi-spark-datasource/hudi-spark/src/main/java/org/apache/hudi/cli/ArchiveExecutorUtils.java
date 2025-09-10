@@ -29,6 +29,8 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -63,18 +65,27 @@ public final class ArchiveExecutorUtils {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata).build())
         .build();
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
-    HoodieSparkTable<HoodieAvroPayload> table = HoodieSparkTable.create(config, context);
-    // FIXME-vc: this is hacky
-    table.setTxnManager(new TransactionManager(config, table.getStorage()));
-    CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), config);
-    try {
-      HoodieTimelineArchiver<HoodieAvroPayload, HoodieData<HoodieRecord<HoodieAvroPayload>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> archiver =
-          TimelineArchivers.getInstance(table.getMetaClient().getTimelineLayoutVersion(), config, table);
-      archiver.archiveIfRequired(context, true);
-    } catch (IOException ioe) {
-      LOG.error("Failed to archive with IOException: {}", ioe.getMessage());
-      throw ioe;
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(context.getStorageConf().newInstance())
+        .setBasePath(config.getBasePath())
+        .setLoadActiveTimelineOnLoad(true)
+        .setConsistencyGuardConfig(config.getConsistencyGuardConfig())
+        .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
+        .setMetaserverConfig(config.getProps()).build();
+
+    try (TransactionManager transactionManager = new TransactionManager(config, metaClient.getStorage())) {
+      HoodieSparkTable<HoodieAvroPayload> table = HoodieSparkTable.create(config, context, metaClient, Option.of(transactionManager));
+      CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), config);
+      try {
+        HoodieTimelineArchiver<HoodieAvroPayload, HoodieData<HoodieRecord<HoodieAvroPayload>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> archiver =
+            TimelineArchivers.getInstance(table.getMetaClient().getTimelineLayoutVersion(), config, table);
+        archiver.archiveIfRequired(context, true);
+      } catch (IOException ioe) {
+        LOG.error("Failed to archive with IOException: {}", ioe.getMessage());
+        throw ioe;
+      }
     }
+
     return 0;
   }
 }

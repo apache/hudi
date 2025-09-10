@@ -85,7 +85,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
     this.config = config;
     this.table = table;
     this.metaClient = table.getMetaClient();
-    this.txnManager = table.getTxnManager();
+    this.txnManager = table.getTxnManager().get();
     this.timelineWriter = LSMTimelineWriter.getInstance(config, table);
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();

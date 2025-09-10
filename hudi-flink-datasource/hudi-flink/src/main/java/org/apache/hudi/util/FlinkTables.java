@@ -37,6 +37,7 @@ public class FlinkTables {
   }
 
   private static HoodieFlinkTable<?> createTableInternal(HoodieWriteConfig writeConfig, HoodieEngineContext context) {
+    // FIXME-vc: should this pass in txn manager or not?
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(writeConfig, context);
     CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), writeConfig);
     return table;

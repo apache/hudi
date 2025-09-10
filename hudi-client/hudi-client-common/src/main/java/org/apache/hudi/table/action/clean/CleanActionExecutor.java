@@ -64,7 +64,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
 
   public CleanActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
     super(context, config, table, instantTime);
-    this.txnManager = table.getTxnManager();
+    this.txnManager = table.getTxnManager().get();
   }
 
   private static boolean deleteFileAndGetResult(HoodieStorage storage, String deletePathStr) throws IOException {

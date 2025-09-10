@@ -49,7 +49,7 @@ public class HoodieJavaMergeOnReadTableCompactor<T>
     }
     HoodieInstant inflightInstant = table.getInstantGenerator().getCompactionInflightInstant(instantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
-      TransactionManager transactionManager = table.getTxnManager();
+      TransactionManager transactionManager = (TransactionManager) table.getTxnManager().get();
       table.rollbackInflightCompaction(inflightInstant, transactionManager);
       table.getMetaClient().reloadActiveTimeline();
     }

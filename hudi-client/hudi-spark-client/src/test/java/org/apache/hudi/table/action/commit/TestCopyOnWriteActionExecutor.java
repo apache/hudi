@@ -116,7 +116,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     String instantTime = makeNewCommitTime();
     HoodieWriteConfig config = makeHoodieClientConfig();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(config, context, metaClient);
 
     Pair<StoragePath, String> newPathWithWriteToken = jsc.parallelize(Arrays.asList(1)).map(x -> {
       HoodieRecord record = mock(HoodieRecord.class);
@@ -174,7 +174,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     String partitionPath = "2016/01/31";
-    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.createForReads(config, context, metaClient);
 
     // Get some records belong to the same partition (2016/01/31)
     List<HoodieRecord> records = new ArrayList<>();
@@ -296,7 +296,9 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     String firstCommitTime = makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(
+        config, context, metaClient, Option.of(writeClient.getTransactionManager()));
 
     // Get some records belong to the same partition (2016/01/31)
     HoodieRecord record1 = createSimpleRecord("8eb5b87a-1feh-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 12);
@@ -337,9 +339,12 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
   @Test
   public void testInsertRecords() {
     HoodieWriteConfig config = makeHoodieClientConfig();
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
     String instantTime = makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(
+        config, context, metaClient, Option.of(writeClient.getTransactionManager()));
 
     // Case 1:
     // 10 records for partition 1, 1 record for partition 2.
@@ -388,9 +393,11 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     HoodieWriteConfig config = makeHoodieClientConfigBuilder().withStorageConfig(HoodieStorageConfig.newBuilder()
         .parquetMaxFileSize(64 * 1024).hfileMaxFileSize(64 * 1024)
         .parquetBlockSize(64 * 1024).parquetPageSize(64 * 1024).build()).build();
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
     String instantTime = makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(
+        config, context, metaClient, Option.of(writeClient.getTransactionManager()));
 
     List<HoodieRecord> records = new ArrayList<>();
     // Approx 1150 records are written for block size of 64KB
@@ -425,9 +432,10 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
                 .withRemoteServerPort(timelineServicePort).build())
             .withStorageConfig(HoodieStorageConfig.newBuilder()
                 .parquetMaxFileSize(1000 * 1024).hfileMaxFileSize(1000 * 1024).build()).build();
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieSparkCopyOnWriteTable table =
-        (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(
+        config, context, metaClient, Option.of(writeClient.getTransactionManager()));
     String instantTime = "000";
     // Perform inserts of 100 records to test CreateHandle and BufferedExecutor
     final List<HoodieRecord> inserts = dataGen.generateInserts(instantTime, 100);
@@ -451,7 +459,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     long numRecordsInPartition =
         updates.stream().filter(u -> u.getPartitionPath().equals(partitionPath)).count();
     table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context,
-        HoodieTableMetaClient.reload(metaClient));
+        HoodieTableMetaClient.reload(metaClient), Option.of(writeClient.getTransactionManager()));
     BaseSparkCommitActionExecutor newActionExecutor =
         new SparkUpsertCommitActionExecutor(context, config, table,
             instantTime, context.parallelize(updates));
@@ -470,7 +478,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
     String instantTime = writeClient.startCommit();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(
+        config, context, metaClient, Option.of(writeClient.getTransactionManager()));
 
     // Insert new records
     final JavaRDD<HoodieRecord> inputRecords = generateTestRecordsForBulkInsert(jsc);
@@ -492,7 +501,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     // By default there is no format specified for partition metafile
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA).build();
-    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.createForReads(config, context, metaClient);
     assertFalse(table.getPartitionMetafileFormat().isPresent());
 
     if (partitionMetafileUseBaseFormat) {
@@ -502,7 +511,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
       initMetaClient(HoodieTableType.COPY_ON_WRITE, properties);
       metaClient = HoodieTableMetaClient.reload(metaClient);
       assertTrue(metaClient.getTableConfig().getPartitionMetafileFormat().isPresent());
-      table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+      table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.createForReads(config, context, metaClient);
       assertTrue(table.getPartitionMetafileFormat().isPresent());
     }
 

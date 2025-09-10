@@ -77,7 +77,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     FileCreateUtilsLegacy.createCommit(basePath, "001");
     FileCreateUtilsLegacy.createBaseFile(basePath, testPartitionPath, "001", "file1", fileSize);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.createForReads(config, context, metaClient);
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {testPartitionPath});
     List<HoodieRecord> insertRecords = dataGenerator.generateInserts("001", numInserts);
@@ -133,7 +133,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
 
     FileCreateUtilsLegacy.createCommit(basePath, "001");
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.createForReads(config, context, metaClient);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {testPartitionPath});
     List<HoodieRecord> insertRecords = dataGenerator.generateInserts("001", totalInsertNum);
 
@@ -255,7 +255,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     List<HoodieRecord> insertRecords = dataGenerator.generateInserts("004", 100);
     WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(insertRecords)));
 
-    HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
+    HoodieSparkTable table = HoodieSparkTable.createForReads(config, context, metaClient);
     SparkUpsertDeltaCommitPartitioner partitioner = new SparkUpsertDeltaCommitPartitioner(profile, context, table, config, WriteOperationType.UPSERT);
 
     assertEquals(1, partitioner.numPartitions(), "Should have 1 partitions");
@@ -295,7 +295,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     List<HoodieRecord> insertRecords = dataGenerator.generateInserts("004", 100);
     WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(insertRecords)));
 
-    HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
+    HoodieSparkTable table = HoodieSparkTable.createForReads(config, context, metaClient);
     // create UpsertPartitioner
     UpsertPartitioner partitioner = new UpsertPartitioner(profile, context, table, config, WriteOperationType.UPSERT);
 
@@ -333,7 +333,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     List<HoodieRecord> insertRecords = dataGenerator.generateInserts("004", 1);
     WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(insertRecords)));
 
-    HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
+    HoodieSparkTable table = HoodieSparkTable.createForReads(config, context, metaClient);
     SparkUpsertDeltaCommitPartitioner partitioner = new SparkUpsertDeltaCommitPartitioner(profile, context, table, config, WriteOperationType.UPSERT);
 
     assertEquals(1, partitioner.numPartitions(), "Should have 1 partitions");
@@ -373,7 +373,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
 
     HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(this.metaClient);
 
-    HoodieSparkTable<?> table = HoodieSparkTable.create(config, context, reloadedMetaClient);
+    HoodieSparkTable<?> table = HoodieSparkTable.createForReads(config, context, reloadedMetaClient);
 
     SparkUpsertDeltaCommitPartitioner<?> partitioner = new SparkUpsertDeltaCommitPartitioner<>(profile, context, table, config, WriteOperationType.UPSERT);
 

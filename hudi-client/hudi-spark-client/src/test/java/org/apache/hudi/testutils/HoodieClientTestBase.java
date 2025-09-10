@@ -81,8 +81,8 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
   }
 
   public HoodieSparkTable getHoodieTable(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
-    HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
-    table.setTxnManager(new TransactionManager(config, metaClient.getStorage()));
+    HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient,
+        Option.of(new TransactionManager(config, metaClient.getStorage())));
     ((SyncableFileSystemView) (table.getSliceView())).reset();
     return table;
   }
@@ -120,7 +120,8 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
       final HoodieIndex index = SparkHoodieIndexFactory.createIndex(writeConfig);
       List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords);
       final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
-      HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+      HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient,
+          Option.of(new TransactionManager(writeConfig, metaClient.getStorage())));
       JavaRDD<HoodieRecord> taggedRecords = tagLocation(index, context, context.getJavaSparkContext().parallelize(records, 1), table);
       return taggedRecords.collect();
     };
@@ -145,7 +146,8 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
       final HoodieIndex index = SparkHoodieIndexFactory.createIndex(writeConfig);
       List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords, partition);
       final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
-      HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+      HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient,
+          Option.of(new TransactionManager(writeConfig, metaClient.getStorage())));
       JavaRDD<HoodieRecord> taggedRecords = tagLocation(index, context, context.getJavaSparkContext().parallelize(records, 1), table);
       return taggedRecords.collect();
     };
@@ -170,7 +172,8 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
       final HoodieIndex index = SparkHoodieIndexFactory.createIndex(writeConfig);
       List<HoodieKey> records = keyGenFunction.apply(numRecords);
       final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
-      HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+      HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient,
+          Option.of(new TransactionManager(writeConfig, metaClient.getStorage())));
       JavaRDD<HoodieRecord> recordsToDelete = context.getJavaSparkContext().parallelize(records, 1)
           .map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload()));
       JavaRDD<HoodieRecord> taggedRecords = tagLocation(index, context, recordsToDelete, table);

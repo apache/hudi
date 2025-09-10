@@ -256,7 +256,7 @@ public class HoodieClusteringJob {
       Option<String> instantTime = Option.empty();
 
       if (cfg.retryLastFailedClusteringJob) {
-        HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(client.getConfig(), client.getEngineContext());
+        HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(client.getConfig(), client.getEngineContext(), client.getTransactionManager());
         client.validateAgainstTableProperties(table.getMetaClient().getTableConfig(), client.getConfig());
         Option<HoodieInstant> lastClusterOpt = table.getActiveTimeline().getLastPendingClusterInstant();
 

@@ -59,7 +59,7 @@ class DeleteMarkerProcedure extends BaseProcedure with ProcedureBuilder with Log
         tableName.asInstanceOf[Option[String]])
       val config = client.getConfig
       val context = client.getEngineContext
-      val table = HoodieSparkTable.create(config, context)
+      val table = HoodieSparkTable.createForReads(config, context)
       for (it <- instantTimes) {
         currentInstant = it
         WriteMarkersFactory.get(config.getMarkersType, table, it)

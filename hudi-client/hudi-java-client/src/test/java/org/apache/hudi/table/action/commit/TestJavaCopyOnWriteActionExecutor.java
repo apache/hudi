@@ -252,7 +252,9 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     String firstCommitTime = makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    HoodieJavaCopyOnWriteTable table = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(config, context, metaClient);
+    HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
+    HoodieJavaCopyOnWriteTable table = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(
+        config, context, metaClient, Option.of(writeClient.getTransactionManager()));
 
     // Get some records belong to the same partition (2016/01/31)
     List<HoodieRecord> records = new ArrayList<>();
@@ -295,7 +297,10 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     HoodieWriteConfig config = makeHoodieClientConfig();
     String instantTime = makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieJavaCopyOnWriteTable table = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(config, context, metaClient);
+
+    HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
+    HoodieJavaCopyOnWriteTable table = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(
+        config, context, metaClient, Option.of(writeClient.getTransactionManager()));
 
     // Case 1:
     // 10 records for partition 1, 1 record for partition 2.
@@ -348,7 +353,10 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
 
     String instantTime = makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieJavaCopyOnWriteTable table = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(config, context, metaClient);
+
+    HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
+    HoodieJavaCopyOnWriteTable table = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(
+        config, context, metaClient, Option.of(writeClient.getTransactionManager()));
 
     List<HoodieRecord> records = new ArrayList<>();
     // Approx 1150 records are written for block size of 64KB
@@ -386,7 +394,9 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
             .parquetMaxFileSize(1000 * 1024).hfileMaxFileSize(1000 * 1024).build())
         .build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    final HoodieJavaCopyOnWriteTable table = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(config, context, metaClient);
+    HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
+    final HoodieJavaCopyOnWriteTable table = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(
+        config, context, metaClient, Option.of(writeClient.getTransactionManager()));
     String instantTime = "000";
     // Perform inserts of 100 records to test CreateHandle and BufferedExecutor
     final List<HoodieRecord> inserts = dataGen.generateInserts(instantTime, 100);
@@ -403,7 +413,8 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
         .create(new StoragePath(Paths.get(basePath, ".hoodie/timeline", "000.commit").toString()))
         .close();
     //TODO : Find race condition that causes the timeline sometime to reflect 000.commit and sometimes not
-    final HoodieJavaCopyOnWriteTable reloadedTable = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(config, context, HoodieTableMetaClient.reload(metaClient));
+    final HoodieJavaCopyOnWriteTable reloadedTable = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(
+        config, context, HoodieTableMetaClient.reload(metaClient), Option.of(writeClient.getTransactionManager()));
 
     String partitionPath = writeStatus.getPartitionPath();
     final List<HoodieRecord> updates = dataGen.generateUpdatesWithHoodieAvroPayload(instantTime, inserts)

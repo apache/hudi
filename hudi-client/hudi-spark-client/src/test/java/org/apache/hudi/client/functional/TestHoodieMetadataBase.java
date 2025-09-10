@@ -293,11 +293,11 @@ public class TestHoodieMetadataBase extends HoodieSparkClientTestHarness {
   }
 
   protected void archiveDataTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) throws IOException {
-    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
-    // FIXME-vc: hacky
-    table.setTxnManager(new TransactionManager(writeConfig, table.getStorage()));
-    HoodieTimelineArchiver archiver = new TimelineArchiverV2(writeConfig, table);
-    archiver.archiveIfRequired(context);
+    try (TransactionManager txnManager = new TransactionManager(writeConfig, metaClient.getStorage())) {
+      HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient, Option.of(txnManager));
+      HoodieTimelineArchiver archiver = new TimelineArchiverV2(writeConfig, table);
+      archiver.archiveIfRequired(context);
+    }
   }
 
   protected void validateMetadata(HoodieTestTable testTable) throws IOException {

@@ -142,7 +142,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       metaClient = HoodieTableMetaClient.reload(metaClient);
       List<String> partitionPaths =
           FSUtils.getAllPartitionPaths(context, metaClient, config.getMetadataConfig());
-      HoodieSparkTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      HoodieSparkTable table = HoodieSparkTable.createForReads(getConfig(), context, metaClient);
       final BaseFileOnlyView view1 = table.getBaseFileOnlyView();
 
       List<HoodieBaseFile> dataFiles = partitionPaths.stream().flatMap(s -> {
@@ -166,7 +166,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       client.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      table = HoodieSparkTable.createForReads(getConfig(), context, metaClient);
       final BaseFileOnlyView view2 = table.getBaseFileOnlyView();
 
       dataFiles = partitionPaths.stream().flatMap(s -> view2.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
@@ -182,7 +182,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       client.restoreToSavepoint(savepoint.requestedTime());
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      table = HoodieSparkTable.createForReads(getConfig(), context, metaClient);
       final BaseFileOnlyView view3 = table.getBaseFileOnlyView();
       dataFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("002"))).collect(Collectors.toList());
       assertEquals(3, dataFiles.size(), "The data files for commit 002 be available");
@@ -211,7 +211,7 @@ public class TestClientRollback extends HoodieClientTestBase {
 
           //verify that we reuse the existing restore commit
           metaClient = HoodieTableMetaClient.reload(metaClient);
-          table = HoodieSparkTable.create(getConfig(), context, metaClient);
+          table = HoodieSparkTable.createForReads(getConfig(), context, metaClient);
           List<HoodieInstant> restoreInstants = table.getActiveTimeline().getRestoreTimeline().getInstants();
           assertEquals(1, restoreInstants.size());
           assertEquals(HoodieInstant.State.COMPLETED, restoreInstants.get(0).getState());
@@ -261,13 +261,13 @@ public class TestClientRollback extends HoodieClientTestBase {
 
       // rollback to savepoint 002
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieSparkTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      HoodieSparkTable table = HoodieSparkTable.createForReads(getConfig(), context, metaClient);
       HoodieInstant savepoint = table.getCompletedSavepointTimeline().lastInstant().get();
       client.restoreToSavepoint(savepoint.requestedTime());
 
       //verify that getSavepointToRestoreTimestampV1Schema is correct
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      table = HoodieSparkTable.createForReads(getConfig(), context, metaClient);
       HoodieRestorePlan plan = getRestorePlan(metaClient, table.getActiveTimeline().getRestoreTimeline().lastInstant().get());
       assertEquals("002", getSavepointToRestoreTimestampV1Schema(table, plan));
     }
@@ -325,7 +325,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       metaClient = HoodieTableMetaClient.reload(metaClient);
       List<String> partitionPaths =
           FSUtils.getAllPartitionPaths(context, metaClient, config.getMetadataConfig());
-      HoodieSparkTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      HoodieSparkTable table = HoodieSparkTable.createForReads(getConfig(), context, metaClient);
       final BaseFileOnlyView view1 = table.getBaseFileOnlyView();
 
       List<HoodieBaseFile> dataFiles = partitionPaths.stream().flatMap(s -> {
@@ -350,7 +350,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       assertNoWriteErrors(statusList);
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      table = HoodieSparkTable.createForReads(getConfig(), context, metaClient);
       final BaseFileOnlyView view2 = table.getBaseFileOnlyView();
 
       dataFiles = partitionPaths.stream().flatMap(s -> view2.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
@@ -361,7 +361,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       client.restoreToSavepoint(savepoint.requestedTime());
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      table = HoodieSparkTable.createForReads(getConfig(), context, metaClient);
       final BaseFileOnlyView view3 = table.getBaseFileOnlyView();
       dataFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("002"))).collect(Collectors.toList());
       assertEquals(3, dataFiles.size(), "The data files for commit 002 be available");

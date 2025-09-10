@@ -254,10 +254,11 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
   }
 
   protected void archiveDataTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) throws IOException {
-    HoodieTable table = HoodieJavaTable.create(writeConfig, context, metaClient);
-    table.setTxnManager(new TransactionManager(writeConfig, metaClient.getStorage()));
-    HoodieTimelineArchiver archiver = new TimelineArchiverV2(writeConfig, table);
-    archiver.archiveIfRequired(context);
+    try (TransactionManager txnManager = new TransactionManager(writeConfig, metaClient.getStorage())) {
+      HoodieTable table = HoodieJavaTable.create(writeConfig, context, metaClient, Option.of(txnManager));
+      HoodieTimelineArchiver archiver = new TimelineArchiverV2(writeConfig, table);
+      archiver.archiveIfRequired(context);
+    }
   }
 
   protected void validateMetadata(HoodieTestTable testTable) throws IOException {

@@ -85,7 +85,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -726,15 +725,19 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     });
   }
 
+  @FunctionalInterface
+  protected interface TriFunction<T, U, V, R> {
+    R apply(T t, U u, V v);
+  }
+
   protected HoodieTable createTableAndValidate(HoodieWriteConfig config,
-                                               BiFunction<HoodieWriteConfig,
-                                                   HoodieEngineContext, HoodieTable> createTableFn,
+                                               TriFunction<HoodieWriteConfig,
+                                                   HoodieEngineContext, TransactionManager, HoodieTable> createTableFn,
                                                boolean skipValidation) {
-    HoodieTable table = createTableFn.apply(config, context);
+    HoodieTable table = createTableFn.apply(config, context, txnManager);
     if (!skipValidation) {
       CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), config);
     }
-    table.setTxnManager(txnManager);
     return table;
   }
 

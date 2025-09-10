@@ -107,7 +107,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
@@ -365,10 +364,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   protected HoodieTable createTableAndValidate(HoodieWriteConfig writeConfig,
-                                               BiFunction<HoodieWriteConfig, HoodieEngineContext, HoodieTable> createTableFn) {
-    HoodieTable table = createTableFn.apply(writeConfig, context);
+                                               TriFunction<HoodieWriteConfig, HoodieEngineContext, TransactionManager, HoodieTable> createTableFn) {
+    HoodieTable table = createTableFn.apply(writeConfig, context, txnManager);
     CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), writeConfig);
-    table.setTxnManager(txnManager);
     return table;
   }
 
@@ -377,13 +375,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     R apply(T t, U u, V v);
   }
 
+  @FunctionalInterface
+  protected interface QuadFunction<T, U, V, W, R> {
+    R apply(T t, U u, V v, W w);
+  }
+
   protected HoodieTable createTableAndValidate(HoodieWriteConfig writeConfig,
                                                HoodieTableMetaClient metaClient,
-                                               TriFunction<HoodieWriteConfig, HoodieEngineContext,
-                                                   HoodieTableMetaClient, HoodieTable> createTableFn) {
-    HoodieTable table = createTableFn.apply(writeConfig, context, metaClient);
+                                               QuadFunction<HoodieWriteConfig, HoodieEngineContext,
+                                                   HoodieTableMetaClient, TransactionManager, HoodieTable> createTableFn) {
+    HoodieTable table = createTableFn.apply(writeConfig, context, metaClient, txnManager);
     CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), writeConfig);
-    table.setTxnManager(txnManager);
     return table;
   }
 

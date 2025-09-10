@@ -152,7 +152,7 @@ public class TestCleanActionExecutor {
     when(mockHoodieTable.getMetadataWriter("002")).thenReturn(Option.empty());
 
     TransactionManager mockTransactionManager = mock(TransactionManager.class);
-    when(mockHoodieTable.getTxnManager()).thenReturn(mockTransactionManager);
+    when(mockHoodieTable.getTxnManager()).thenReturn(Option.of(mockTransactionManager));
 
     CleanActionExecutor cleanActionExecutor = new CleanActionExecutor(context, config, mockHoodieTable, "002");
     if (failureType == CleanFailureType.TRUE_ON_DELETE) {

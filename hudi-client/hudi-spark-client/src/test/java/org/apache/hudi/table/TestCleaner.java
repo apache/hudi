@@ -162,7 +162,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
     HoodieTimeline timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient).getCommitAndReplaceTimeline();
     assertEquals(1, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(), "Expecting a single commit.");
     // Should have 100 records in table (check using Index), all in locations marked at commit
-    HoodieTable table = HoodieSparkTable.create(client.getConfig(), context, metaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(client.getConfig(), context, metaClient);
 
     // We no longer write empty cleaner plans when there is nothing to be cleaned.
     assertTrue(table.getCompletedCleanTimeline().empty());
@@ -235,7 +235,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
           generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateInserts);
       insertFirstBigBatchForClientCleanerTest(context, metaClient, client, recordInsertGenWrappedFunction, insertFn);
 
-      HoodieTable table = HoodieSparkTable.create(client.getConfig(), context, metaClient);
+      HoodieTable table = HoodieSparkTable.createForReads(client.getConfig(), context, metaClient);
       assertTrue(table.getCompletedCleanTimeline().empty());
 
       insertFirstFailedBigBatchForClientCleanerTest(context, client, recordInsertGenWrappedFunction, insertFn);
@@ -315,9 +315,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
       assertEquals(cleanPlan.getFilePathsToBeDeletedPerPartition().get(partition1).size(), 1);
       assertEquals(earliestInstantToRetain, cleanPlan.getEarliestInstantToRetain().getTimestamp(),
           "clean until " + earliestInstantToRetain);
-      HoodieTable table = HoodieSparkTable.create(writeConfig, context);
-      // FIXME-vc: hacky
-      table.setTxnManager(new TransactionManager(writeConfig, metaClient.getStorage()));
+      HoodieTable table = HoodieSparkTable.create(writeConfig, context, client.getTransactionManager());
       table.clean(context, instantTime);
 
       instantTime = client.startCommit();
@@ -390,9 +388,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
       assertEquals(cleanPlan.getFilePathsToBeDeletedPerPartition().get(HoodieTestDataGenerator.NO_PARTITION_PATH).size(), 1);
       String filePathToClean = cleanPlan.getFilePathsToBeDeletedPerPartition().get(HoodieTestDataGenerator.NO_PARTITION_PATH).get(0).getFilePath();
       // clean
-      HoodieTable table = HoodieSparkTable.create(writeConfig, context);
-      // FIXME-vc: hacky
-      table.setTxnManager(new TransactionManager(writeConfig, metaClient.getStorage()));
+      HoodieTable table = HoodieSparkTable.create(writeConfig, context, client.getTransactionManager());
       HoodieCleanMetadata cleanMetadata = table.clean(context, instantTime);
       // check the cleaned file
       assertEquals(cleanMetadata.getPartitionMetadata().get(HoodieTestDataGenerator.NO_PARTITION_PATH).getSuccessDeleteFiles().size(), 1);
@@ -510,7 +506,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
         generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateInserts);
     insertFirstBigBatchForClientCleanerTest(context, metaClient, client, recordInsertGenWrappedFunction, insertFn);
 
-    HoodieTable table = HoodieSparkTable.create(client.getConfig(), context, metaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(client.getConfig(), context, metaClient);
     assertTrue(table.getCompletedCleanTimeline().empty());
 
     insertFirstFailedBigBatchForClientCleanerTest(context, client, recordInsertGenWrappedFunction, insertFn);
@@ -886,17 +882,17 @@ public class TestCleaner extends HoodieCleanerTestBase {
             .withRemoteServerPort(timelineServicePort).build())
         .withPath(basePath).build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
-    // FIXME-vc: hacky
-    table.setTxnManager(new TransactionManager(config, metaClient.getStorage()));
-    table.getActiveTimeline().transitionRequestedToInflight(
-        INSTANT_GENERATOR.createNewInstant(State.REQUESTED, COMMIT_ACTION, "001"), Option.empty());
-    metaClient.reloadActiveTimeline();
-    HoodieInstant rollbackInstant = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, COMMIT_ACTION, "001");
-    table.scheduleRollback(context, "002", rollbackInstant, false, config.shouldRollbackUsingMarkers(), false);
-    table.rollback(context, "002", rollbackInstant, true, false);
-    final int numTempFilesAfter = testTable.listAllFilesInTempFolder().length;
-    assertEquals(0, numTempFilesAfter, "All temp files are deleted.");
+    try (TransactionManager txnManager = new TransactionManager(config, metaClient.getStorage())) {
+      HoodieTable table = HoodieSparkTable.create(config, context, metaClient, Option.of(txnManager));
+      table.getActiveTimeline().transitionRequestedToInflight(
+          INSTANT_GENERATOR.createNewInstant(State.REQUESTED, COMMIT_ACTION, "001"), Option.empty());
+      metaClient.reloadActiveTimeline();
+      HoodieInstant rollbackInstant = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, COMMIT_ACTION, "001");
+      table.scheduleRollback(context, "002", rollbackInstant, false, config.shouldRollbackUsingMarkers(), false);
+      table.rollback(context, "002", rollbackInstant, true, false);
+      final int numTempFilesAfter = testTable.listAllFilesInTempFolder().length;
+      assertEquals(0, numTempFilesAfter, "All temp files are deleted.");
+    }
   }
 
   /**
@@ -1143,23 +1139,24 @@ public class TestCleaner extends HoodieCleanerTestBase {
       testTable = tearDownTestTableAndReinit(testTable, config);
 
       // archive commit 1, 2
-      HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
-      // FIXME-vc: hacky
-      table.setTxnManager(new TransactionManager(config, metaClient.getStorage()));
-      new TimelineArchiverV2<>(config, table).archiveIfRequired(context, false);
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-      assertFalse(metaClient.getActiveTimeline().containsInstant("10"));
-      assertFalse(metaClient.getActiveTimeline().containsInstant("20"));
+      try (TransactionManager txnManager = new TransactionManager(config, metaClient.getStorage())) {
+        HoodieTable table = HoodieSparkTable.create(config, context, metaClient, Option.of(txnManager));
 
-      runCleaner(config);
-      assertFalse(testTable.baseFileExists(p1, "10", file1P1), "Clean old FileSlice in p1 by fallback to full clean");
-      assertFalse(testTable.baseFileExists(p1, "10", file2P1), "Clean old FileSlice in p1 by fallback to full clean");
-      assertFalse(testTable.baseFileExists(p2, "30", file3P2), "Clean old FileSlice in p2");
-      assertFalse(testTable.baseFileExists(p2, "30", file4P2), "Clean old FileSlice in p2");
-      assertTrue(testTable.baseFileExists(p1, "20", file1P1), "Latest FileSlice exists");
-      assertTrue(testTable.baseFileExists(p1, "20", file2P1), "Latest FileSlice exists");
-      assertTrue(testTable.baseFileExists(p2, "40", file3P2), "Latest FileSlice exists");
-      assertTrue(testTable.baseFileExists(p2, "40", file4P2), "Latest FileSlice exists");
+        new TimelineArchiverV2<>(config, table).archiveIfRequired(context, false);
+        metaClient = HoodieTableMetaClient.reload(metaClient);
+        assertFalse(metaClient.getActiveTimeline().containsInstant("10"));
+        assertFalse(metaClient.getActiveTimeline().containsInstant("20"));
+
+        runCleaner(config);
+        assertFalse(testTable.baseFileExists(p1, "10", file1P1), "Clean old FileSlice in p1 by fallback to full clean");
+        assertFalse(testTable.baseFileExists(p1, "10", file2P1), "Clean old FileSlice in p1 by fallback to full clean");
+        assertFalse(testTable.baseFileExists(p2, "30", file3P2), "Clean old FileSlice in p2");
+        assertFalse(testTable.baseFileExists(p2, "30", file4P2), "Clean old FileSlice in p2");
+        assertTrue(testTable.baseFileExists(p1, "20", file1P1), "Latest FileSlice exists");
+        assertTrue(testTable.baseFileExists(p1, "20", file2P1), "Latest FileSlice exists");
+        assertTrue(testTable.baseFileExists(p2, "40", file3P2), "Latest FileSlice exists");
+        assertTrue(testTable.baseFileExists(p2, "40", file4P2), "Latest FileSlice exists");
+      }
     } finally {
       testTable.close();
     }
@@ -1278,7 +1275,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
 
       // Test for safety
       final HoodieTableMetaClient newMetaClient = HoodieTableMetaClient.reload(metaClient);
-      final HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+      final HoodieTable hoodieTable = HoodieSparkTable.createForReads(config, context, metaClient);
 
       expFileIdToPendingCompaction.forEach((fileId, value) -> {
         String baseInstantForCompaction = fileIdToLatestInstantBeforeCompaction.get(fileId);

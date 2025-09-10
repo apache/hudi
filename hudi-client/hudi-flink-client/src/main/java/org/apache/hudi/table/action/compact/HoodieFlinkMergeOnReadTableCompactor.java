@@ -60,7 +60,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
         ? instantGenerator.getCompactionInflightInstant(instantTime)
         : instantGenerator.getLogCompactionInflightInstant(instantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
-      TransactionManager transactionManager = table.getTxnManager();
+      TransactionManager transactionManager = (TransactionManager) table.getTxnManager().get();
       table.rollbackInflightCompaction(inflightInstant, transactionManager);
       table.getMetaClient().reloadActiveTimeline();
     }

@@ -425,7 +425,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // Sync to metadata table
     metaClient.reloadActiveTimeline();
-    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(writeConfig, context, metaClient);
     Option metadataWriter = table.getMetadataWriter(instant1);
     validateMetadata(testTable, true);
 
@@ -443,7 +443,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieCommitMetadata hoodieCommitMetadata2 =
         doWriteOperationWithMeta(testTable, instant2, INSERT);
     metaClient.reloadActiveTimeline();
-    HoodieTable table2 = HoodieSparkTable.create(writeConfig2, context, metaClient);
+    HoodieTable table2 = HoodieSparkTable.createForReads(writeConfig2, context, metaClient);
     Option metadataWriter2 = table2.getMetadataWriter(instant2);
     assertFalse(metadataWriter2.isPresent());
 
@@ -465,7 +465,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     String instant3 = "0000003";
     HoodieCommitMetadata hoodieCommitMetadata3 = doWriteOperationWithMeta(testTable, instant3, INSERT);
     metaClient.reloadActiveTimeline();
-    HoodieTable table3 = HoodieSparkTable.create(writeConfig3, context, metaClient);
+    HoodieTable table3 = HoodieSparkTable.createForReads(writeConfig3, context, metaClient);
     Option metadataWriter3 = table3.getMetadataWriter(instant3);
     validateMetadata(testTable, true);
     assertTrue(metadataWriter3.isPresent());
@@ -848,7 +848,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieWriteConfig metadataTableWriteConfig = getMetadataWriteConfig(writeConfig);
     metadataMetaClient.reloadActiveTimeline();
 
-    HoodieTable table = HoodieSparkTable.create(metadataTableWriteConfig, context, metadataMetaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(metadataTableWriteConfig, context, metadataMetaClient);
     table.getHoodieView().sync();
     List<FileSlice> fileSlices = table.getSliceView().getLatestFileSlices("files").collect(Collectors.toList());
     HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
@@ -1308,7 +1308,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     final HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
     HoodieWriteConfig metadataTableWriteConfig = getMetadataWriteConfig(writeConfig);
     metadataMetaClient.reloadActiveTimeline();
-    final HoodieTable table = HoodieSparkTable.create(metadataTableWriteConfig, context, metadataMetaClient);
+    final HoodieTable table = HoodieSparkTable.createForReads(metadataTableWriteConfig, context, metadataMetaClient);
 
     // Compaction has not yet kicked in. Verify all the log files
     // for the metadata records persisted on disk as per the config.
@@ -3765,7 +3765,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       List<HoodieLogFile> logFiles = latestSlices.get(0).getLogFiles().collect(Collectors.toList());
       try {
         if (FILES.getPartitionPath().equals(partition)) {
-          HoodieTable table = HoodieSparkTable.create(config, engineContext);
+          HoodieTable table = HoodieSparkTable.createForReads(config, engineContext);
           verifyMetadataRawRecords(table, logFiles, false);
         }
         if (COLUMN_STATS.getPartitionPath().equals(partition)) {
@@ -3798,7 +3798,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertTrue(fsPartitions.equals(metadataPartitions), "Partitions should match");
 
     // Files within each partition should match
-    HoodieTable table = HoodieSparkTable.create(config, engineContext);
+    HoodieTable table = HoodieSparkTable.createForReads(config, engineContext);
     TableFileSystemView tableView = table.getHoodieView();
     List<String> fullPartitionPaths =
         fsPartitions.stream().map(partition -> basePath + "/" + partition)
