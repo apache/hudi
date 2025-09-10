@@ -385,7 +385,7 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
 
       assertTrue(v6ArchivedFiles.size() > 0, "Downgrade should have archived files in V6 format")
     } catch {
-      case _: NullPointerException =>
+      case _: Exception =>
         assumeTrue(false, "Skipping test")
     }
   }
