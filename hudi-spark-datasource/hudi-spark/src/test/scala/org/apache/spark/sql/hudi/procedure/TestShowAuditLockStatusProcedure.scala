@@ -188,7 +188,7 @@ class TestShowAuditLockStatusProcedure extends HoodieSparkProcedureTestBase {
     val nonExistentTable = "non_existent_table_" + System.currentTimeMillis()
     // This should not throw an exception but should handle gracefully
     checkExceptionContain(s"""call show_audit_lock_status(table => '$nonExistentTable')""")(
-      "not found")
+      "TABLE_OR_VIEW_NOT_FOUND")
   }
 
   /**
