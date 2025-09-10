@@ -423,7 +423,7 @@ public enum ValueType {
   public static String castToString(Object val) {
     if (val instanceof String) {
       return (String) val;
-    } else if (val instanceof Utf8) {
+    } else if (val instanceof Utf8 || val instanceof Boolean || val instanceof Integer || val instanceof Long || val instanceof Float || val instanceof Double) {
       return val.toString();
     } else if (val instanceof Binary) {
       return ((Binary) val).toStringUsingUTF8();
