@@ -1001,7 +1001,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       writeClient.commit(newCommitTime, statuses);
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable table = HoodieSparkTable.createForReads(config, context(), metaClient);
+      HoodieTable table = HoodieSparkTable.create(config, context(), metaClient, Option.of(writeClient.getTransactionManager()));
       table.getHoodieView().sync();
       TableFileSystemView.SliceView tableRTFileSystemView = table.getSliceView();
 

@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -35,6 +36,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -94,6 +97,7 @@ public class TestCleanActionExecutor {
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     storage = spy(HoodieStorageUtils.getStorage(CONF));
     when(metaClient.getStorage()).thenReturn(storage);
+    when(metaClient.getTableFormat()).thenReturn(new NativeTableFormat(TimelineLayoutVersion.CURR_LAYOUT_VERSION));
     when(mockHoodieTable.getStorage()).thenReturn(storage);
   }
 
@@ -153,6 +157,7 @@ public class TestCleanActionExecutor {
 
     TransactionManager mockTransactionManager = mock(TransactionManager.class);
     when(mockHoodieTable.getTxnManager()).thenReturn(Option.of(mockTransactionManager));
+    when(mockHoodieTable.getViewManager()).thenReturn(mock(FileSystemViewManager.class));
 
     CleanActionExecutor cleanActionExecutor = new CleanActionExecutor(context, config, mockHoodieTable, "002");
     if (failureType == CleanFailureType.TRUE_ON_DELETE) {
