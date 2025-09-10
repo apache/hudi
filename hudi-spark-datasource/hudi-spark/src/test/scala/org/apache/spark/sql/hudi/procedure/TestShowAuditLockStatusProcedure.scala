@@ -56,6 +56,8 @@ class TestShowAuditLockStatusProcedure extends HoodieSparkProcedureTestBase {
          |  orderingFields = 'ts'
          | )
        """.stripMargin)
+    // Insert data to initialize the Hudi metadata structure
+    spark.sql(s"insert into $tableName select 1, 'test', 10.0, 1000")
     s"${tmp.getCanonicalPath}/$tableName"
   }
 
@@ -67,7 +69,7 @@ class TestShowAuditLockStatusProcedure extends HoodieSparkProcedureTestBase {
   @ValueSource(strings = Array("table", "path"))
   def testShowAuditStatusDisabled(paramType: String): Unit = {
     withTempDir { tmp =>
-      val tableName = generateTableName
+      val tableName = generateTableName + "_" + paramType
       val tablePath = createTestTable(tmp, tableName)
 
       val (paramName, paramValue, expectedReturn) = paramType match {
@@ -93,7 +95,7 @@ class TestShowAuditLockStatusProcedure extends HoodieSparkProcedureTestBase {
   @ValueSource(strings = Array("table", "path"))
   def testShowAuditStatusEnabled(paramType: String): Unit = {
     withTempDir { tmp =>
-      val tableName = generateTableName
+      val tableName = generateTableName + "_" + paramType
       val tablePath = createTestTable(tmp, tableName)
 
       val (paramName, paramValue, expectedReturn) = paramType match {
