@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
-import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -82,8 +81,6 @@ public class TestCompactionUtil {
     this.table = FlinkTables.createTable(conf);
     this.metaClient = table.getMetaClient();
 
-    // FIXME-vc: this is hacky
-    table.setTxnManager(new TransactionManager(table.getConfig(), table.getStorage()));
     // initialize the metadata table path
     if (conf.get(FlinkOptions.METADATA_ENABLED)) {
       FlinkHoodieBackedTableMetadataWriter.create(table.getStorageConf(), table.getConfig(),

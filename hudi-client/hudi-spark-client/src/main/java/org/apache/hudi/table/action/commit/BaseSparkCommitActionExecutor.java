@@ -147,7 +147,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
           .map(Map.Entry::getValue)
           .collect(Collectors.toSet());
       pendingClusteringInstantsToRollback.forEach(instant -> {
-        TransactionManager transactionManager = table.getTxnManager();
+        TransactionManager transactionManager = table.getTxnManager().get();
         String commitTime = transactionManager.executeStateChangeWithInstant(requestedCommit -> {
           table.scheduleRollback(context, requestedCommit, instant, false, config.shouldRollbackUsingMarkers(), false);
           return requestedCommit;

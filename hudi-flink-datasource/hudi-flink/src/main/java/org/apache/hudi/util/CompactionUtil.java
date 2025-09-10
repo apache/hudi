@@ -196,7 +196,7 @@ public class CompactionUtil {
       int timeout = conf.get(FlinkOptions.COMPACTION_TIMEOUT_SECONDS);
       if (StreamerUtil.instantTimeDiffSeconds(currentTime, instant.requestedTime()) >= timeout) {
         LOG.info("Rollback the inflight compaction instant: {} for timeout({}s)", instant, timeout);
-        TransactionManager transactionManager = table.getTxnManager();
+        TransactionManager transactionManager = table.getTxnManager().get();
         table.rollbackInflightCompaction(instant, transactionManager);
         table.getMetaClient().reloadActiveTimeline();
       }

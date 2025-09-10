@@ -59,6 +59,6 @@ public class HoodieJavaTableServiceClient<T> extends BaseHoodieTableServiceClien
 
   @Override
   protected HoodieTable<?, List<HoodieRecord<T>>, ?, List<WriteStatus>> createTable(HoodieWriteConfig config, StorageConfiguration<?> storageConf, boolean skipValidation) {
-    return createTableAndValidate(config, HoodieJavaTable::create, skipValidation);
+    return createTableAndValidate(config, (c, ctx, txn) -> HoodieJavaTable.create(c, ctx, txn), skipValidation);
   }
 }

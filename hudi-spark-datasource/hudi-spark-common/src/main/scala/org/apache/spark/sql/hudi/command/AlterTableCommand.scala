@@ -275,7 +275,7 @@ object AlterTableCommand extends Logging {
     val instantTime = client.startCommit(commitActionType)
     client.setOperationType(WriteOperationType.ALTER_SCHEMA)
 
-    val hoodieTable = HoodieSparkTable.create(client.getConfig, client.getEngineContext)
+    val hoodieTable = HoodieSparkTable.createForReads(client.getConfig, client.getEngineContext)
     hoodieTable.validateSchema()
     val timeLine = hoodieTable.getActiveTimeline
     val instantGenerator = metaClient.getTimelineLayout.getInstantGenerator

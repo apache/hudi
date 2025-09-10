@@ -115,7 +115,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
 
   @Override
   protected HoodieTable<?, HoodieData<HoodieRecord<T>>, ?, HoodieData<WriteStatus>> createTable(HoodieWriteConfig config, StorageConfiguration<?> storageConf, boolean skipValidation) {
-    return createTableAndValidate(config, HoodieSparkTable::create, skipValidation);
+    return createTableAndValidate(config, (c, ctx, txn) -> HoodieSparkTable.create(c, ctx, txn), skipValidation);
   }
 
   @Override

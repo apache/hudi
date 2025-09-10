@@ -18,6 +18,7 @@
 
 package org.apache.hudi.spark.internal;
 
+import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -65,7 +66,8 @@ class TestHoodieBulkInsertDataInternalWriter extends
   void testDataInternalWriter(boolean sorted, boolean populateMetaFields) throws Exception {
     // init config and table
     HoodieWriteConfig cfg = getWriteConfig(populateMetaFields);
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(cfg);
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient, Option.of(writeClient.getTransactionManager()));
     // execute N rounds
     for (int i = 0; i < 2; i++) {
       String instantTime = "00" + i;
@@ -111,7 +113,8 @@ class TestHoodieBulkInsertDataInternalWriter extends
   void testGlobalFailure() throws Exception {
     // init config and table
     HoodieWriteConfig cfg = getWriteConfig(true);
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(cfg);
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient, Option.of(writeClient.getTransactionManager()));
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
 
     String instantTime = "001";

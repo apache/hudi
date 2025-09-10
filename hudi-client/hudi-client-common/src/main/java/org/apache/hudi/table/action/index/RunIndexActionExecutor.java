@@ -97,7 +97,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
 
   public RunIndexActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
     super(context, config, table, instantTime);
-    this.txnManager = table.getTxnManager();
+    this.txnManager = table.getTxnManager().get();
     if (config.getMetadataConfig().isMetricsEnabled()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(config.getMetricsConfig(), table.getStorage()));
     } else {

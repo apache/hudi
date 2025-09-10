@@ -97,7 +97,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     this.deleteInstants = deleteInstants;
     this.skipTimelinePublish = skipTimelinePublish;
     this.skipLocking = skipLocking;
-    this.txnManager = table.getTxnManager();
+    this.txnManager = table.getTxnManager().get();
   }
 
   /**

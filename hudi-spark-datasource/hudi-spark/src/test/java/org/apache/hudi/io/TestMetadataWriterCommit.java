@@ -85,7 +85,7 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
             .build())
         .build();
 
-    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(config, context, metaClient);
 
     // one round per partition
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
@@ -158,7 +158,6 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .build();
 
-    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
     // commit is needed to populate schema of the table. We use a different partition path in the commit below than what is used
     // for actual test
     config.setSchema(TRIP_EXAMPLE_SCHEMA);
@@ -217,7 +216,7 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
     HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder().setBasePath(metaClient.getMetaPath() + "/metadata").setConf(storageConf).build();
     // 3 bootstrapped MDT partitions - files, record index and secondary index
     assertEquals(3, mdtMetaClient.getActiveTimeline().filterCompletedInstants().countInstants());
-    table = HoodieSparkTable.create(config, context, metaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(config, context);
     dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
     // create a parquet file and obtain corresponding write status
     Pair<WriteStatus, List<HoodieRecord>> statusListPair = createParquetFile(config, table, partitionPath, fileId, instantTime, dataGenerator);

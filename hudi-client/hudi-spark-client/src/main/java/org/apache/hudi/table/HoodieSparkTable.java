@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -45,34 +46,51 @@ public abstract class HoodieSparkTable<T>
 
   private volatile boolean isMetadataTableExists = false;
 
-  protected HoodieSparkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
-    super(config, context, metaClient);
+  protected HoodieSparkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, Option<TransactionManager> txnManager) {
+    super(config, context, metaClient, txnManager);
   }
 
-  public static <T> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
-    HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder()
+  public static <T> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context, TransactionManager txnManager) {
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
             .setConf(context.getStorageConf().newInstance())
             .setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
             .setMetaserverConfig(config.getProps()).build();
-    return HoodieSparkTable.create(config, context, metaClient);
+    return HoodieSparkTable.create(config, context, metaClient, Option.of(txnManager));
+  }
+
+  /**
+   * Convenience method for read clients that don't need transaction management.
+   */
+  public static <T> HoodieSparkTable<T> createForReads(HoodieWriteConfig config, HoodieEngineContext context) {
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+            .setConf(context.getStorageConf().newInstance())
+            .setBasePath(config.getBasePath())
+            .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
+            .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
+            .setMetaserverConfig(config.getProps()).build();
+    return HoodieSparkTable.create(config, context, metaClient, Option.empty());
+  }
+
+  public static <T> HoodieSparkTable<T> createForReads(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
+    return HoodieSparkTable.create(config, context, metaClient, Option.empty());
   }
 
   public static <T> HoodieSparkTable<T> create(HoodieWriteConfig config,
                                                HoodieEngineContext context,
-                                               HoodieTableMetaClient metaClient) {
+                                               HoodieTableMetaClient metaClient,
+                                               Option<TransactionManager> txnManager) {
     HoodieSparkTable<T> hoodieSparkTable;
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
-        hoodieSparkTable = new HoodieSparkCopyOnWriteTable<>(config, context, metaClient);
+        hoodieSparkTable = new HoodieSparkCopyOnWriteTable<>(config, context, metaClient, txnManager);
         break;
       case MERGE_ON_READ:
         if (metaClient.isMetadataTable()) {
-          hoodieSparkTable = new HoodieSparkMergeOnReadMetadataTable<>(config, context, metaClient);
+          hoodieSparkTable = new HoodieSparkMergeOnReadMetadataTable<>(config, context, metaClient, txnManager);
         } else {
-          hoodieSparkTable = new HoodieSparkMergeOnReadTable<>(config, context, metaClient);
+          hoodieSparkTable = new HoodieSparkMergeOnReadTable<>(config, context, metaClient, txnManager);
         }
         break;
       default:

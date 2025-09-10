@@ -118,10 +118,7 @@ class RunRollbackInflightTableServiceProcedure extends BaseProcedure
 
   private def doRollbackOnInflightInstant(client: SparkRDDWriteClient[_], inflightInstant: HoodieInstant, isClustering: Boolean): Unit = {
     val tsClient = client.getTableServiceClient
-    val table = HoodieSparkTable.create(client.getConfig, client.getEngineContext)
-    // FIXME-vc: this is hacky
-    table.setTxnManager(client.getTransactionManager)
-
+    val table = HoodieSparkTable.create(client.getConfig, client.getEngineContext, client.getTransactionManager)
     val getPendingRollbackInstantFunc: java.util.function.Function[String, Option[HoodiePendingRollbackInfo]] =
       new java.util.function.Function[String, Option[HoodiePendingRollbackInfo]] {
         override def apply(commitToRollback: String): Option[HoodiePendingRollbackInfo] = {

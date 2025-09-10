@@ -180,7 +180,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config, StorageConfiguration<?> storageConf, boolean skipValidation) {
-    return createTableAndValidate(config, HoodieFlinkTable::create, skipValidation);
+    return createTableAndValidate(config, (c, ctx, txn) -> HoodieFlinkTable.create(c, ctx, txn), skipValidation);
   }
 
   /**

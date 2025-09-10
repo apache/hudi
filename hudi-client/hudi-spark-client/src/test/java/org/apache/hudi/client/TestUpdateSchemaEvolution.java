@@ -87,7 +87,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
   private WriteStatus prepareFirstRecordCommit(List<HoodieRecord> insertRecords) throws IOException {
     // Create a bunch of records with an old version of schema
     final HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.avsc");
-    final HoodieSparkTable table = HoodieSparkTable.create(config, context);
+    final HoodieSparkTable table = HoodieSparkTable.createForReads(config, context);
     final List<WriteStatus> statuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
       Map<String, HoodieRecord> insertRecordMap = insertRecords.stream()
           .collect(Collectors.toMap(r -> r.getRecordKey(), Function.identity()));
@@ -162,7 +162,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
     // Now try an update with an evolved schema
     // Evolved schema does not have guarantee on preserving the original field ordering
     final HoodieWriteConfig config = makeHoodieClientConfig("/exampleEvolvedSchema.avsc");
-    final HoodieSparkTable table = HoodieSparkTable.create(config, context);
+    final HoodieSparkTable table = HoodieSparkTable.createForReads(config, context);
     // New content with values for the newly added field
     String recordStr = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12,\"added_field\":1}";
@@ -178,7 +178,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
     // Now try an update with an evolved schema
     // Evolved schema does not have guarantee on preserving the original field ordering
     final HoodieWriteConfig config = makeHoodieClientConfig("/exampleEvolvedSchemaChangeOrder.avsc");
-    final HoodieSparkTable table = HoodieSparkTable.create(config, context);
+    final HoodieSparkTable table = HoodieSparkTable.createForReads(config, context);
     String recordStr = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:16:41.415Z\",\"added_field\":1,\"number\":12}";
     List<HoodieRecord> updateRecords = buildUpdateRecords(recordStr, insertResult.getFileId(), config.getSchema());
@@ -193,7 +193,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
     // Now try an update with an evolved schema
     // Evolved schema does not have guarantee on preserving the original field ordering
     final HoodieWriteConfig config = makeHoodieClientConfig("/exampleEvolvedSchemaDeleteColumn.avsc");
-    final HoodieSparkTable table = HoodieSparkTable.create(config, context);
+    final HoodieSparkTable table = HoodieSparkTable.createForReads(config, context);
     String recordStr = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:16:41.415Z\"}";
     List<HoodieRecord> updateRecords = buildUpdateRecords(recordStr, insertResult.getFileId(), config.getSchema());
@@ -207,7 +207,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
     // Now try an update with an evolved schema
     // Evolved schema does not have guarantee on preserving the original field ordering
     final HoodieWriteConfig config = makeHoodieClientConfig("/exampleEvolvedSchemaColumnRequire.avsc");
-    final HoodieSparkTable table = HoodieSparkTable.create(config, context);
+    final HoodieSparkTable table = HoodieSparkTable.createForReads(config, context);
     String recordStr = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12,\"added_field\":1}";
     List<HoodieRecord> updateRecords = buildUpdateRecords(recordStr, insertResult.getFileId(), config.getSchema());
@@ -222,7 +222,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
     // Now try an update with an evolved schema
     // Evolved schema does not have guarantee on preserving the original field ordering
     final HoodieWriteConfig config = makeHoodieClientConfig("/exampleEvolvedSchemaColumnType.avsc");
-    final HoodieSparkTable table = HoodieSparkTable.create(config, context);
+    final HoodieSparkTable table = HoodieSparkTable.createForReads(config, context);
     String recordStr = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":\"12\"}";
     List<HoodieRecord> updateRecords = buildUpdateRecords(recordStr, insertResult.getFileId(), config.getSchema());

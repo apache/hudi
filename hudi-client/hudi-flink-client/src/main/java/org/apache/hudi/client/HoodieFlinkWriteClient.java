@@ -109,12 +109,14 @@ public class HoodieFlinkWriteClient<T>
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config) {
-    return createTableAndValidate(config, HoodieFlinkTable::create);
+    return createTableAndValidate(config, (c, ctx, txn) -> HoodieFlinkTable.create(c, ctx, txn));
   }
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
-    return createTableAndValidate(config, metaClient, HoodieFlinkTable::create);
+    return createTableAndValidate(config, metaClient,
+        (cfg, ctx, mc, txn) -> HoodieFlinkTable.create(cfg, ctx, mc, Option.of(txn))
+    );
   }
 
   @Override
@@ -463,7 +465,7 @@ public class HoodieFlinkWriteClient<T>
   }
 
   public HoodieFlinkTable<T> getHoodieTable() {
-    return HoodieFlinkTable.create(config, context);
+    return HoodieFlinkTable.create(config, context, txnManager);
   }
 
   public Map<String, List<String>> getPartitionToReplacedFileIds(

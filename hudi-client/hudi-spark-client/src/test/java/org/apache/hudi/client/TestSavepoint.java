@@ -107,7 +107,7 @@ public class TestSavepoint extends HoodieClientTestBase {
       client.savepoint("user", "hoodie-savepoint-unit-test");
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieSparkTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      HoodieSparkTable table = HoodieSparkTable.createForReads(getConfig(), context, metaClient);
       HoodieTimeline savepointTimeline = table.getActiveTimeline().getSavePointTimeline();
       assertEquals(1, savepointTimeline.countInstants());
 

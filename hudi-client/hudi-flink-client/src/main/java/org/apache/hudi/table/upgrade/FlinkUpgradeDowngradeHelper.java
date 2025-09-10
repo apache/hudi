@@ -21,9 +21,11 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 
@@ -44,7 +46,8 @@ public class FlinkUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
 
   @Override
   public HoodieTable getTable(HoodieWriteConfig config, HoodieEngineContext context) {
-    return addTxnManager(HoodieFlinkTable.create(config, context));
+    TransactionManager txnManager = new TransactionManager(config, HoodieStorageUtils.getStorage(config.getBasePath(), context.getStorageConf()));
+    return HoodieFlinkTable.create(config, context, txnManager);
   }
 
   @Override

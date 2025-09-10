@@ -51,7 +51,7 @@ public class MergeOnReadRestoreActionExecutor<T, I, K, O>
         throw new IllegalArgumentException("invalid action name " + instantToRollback.getAction());
     }
 
-    TransactionManager transactionManager = table.getTxnManager();
+    TransactionManager transactionManager = table.getTxnManager().get();
     String newInstantTime = transactionManager.executeStateChangeWithInstant(instantTime -> {
       table.getMetaClient().reloadActiveTimeline();
       table.scheduleRollback(context, instantTime, instantToRollback, false, false, true);

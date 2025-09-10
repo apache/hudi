@@ -68,9 +68,11 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
   val skeletonSchema: StructType = HoodieSparkUtils.getMetaSchema
   private val basePath = metaClient.getBasePath
   // TODO : Figure out a valid HoodieWriteConfig
-  private val hoodieTable = HoodieSparkTable.create(HoodieWriteConfig.newBuilder().withPath(basePath.toString).build(),
+  private val hoodieTable = HoodieSparkTable.createForReads(
+    HoodieWriteConfig.newBuilder().withPath(basePath.toString).build(),
     new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
-    metaClient)
+    metaClient
+  )
 
   private val hollowCommitHandling: HollowCommitHandling = getHollowCommitHandling(optParams)
 

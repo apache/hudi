@@ -198,7 +198,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     HoodieWriteConfig mdtWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(cfg, HoodieFailedWritesCleaningPolicy.EAGER, HoodieTableVersion.EIGHT);
     HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder().setBasePath(mdtWriteConfig.getBasePath()).setConf(context.getStorageConf().newInstance()).build();
 
-    HoodieTable table = HoodieSparkTable.create(mdtWriteConfig, context, mdtMetaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(mdtWriteConfig, context, mdtMetaClient);
     String newCommitTime = InProcessTimeGenerator.createNewInstantTime();
     HoodieCreateHandle handle = new HoodieCreateHandle(mdtWriteConfig, newCommitTime, table, COLUMN_STATS.getPartitionPath(), "col-stats-00001-0", new PhoneyTaskContextSupplier());
 

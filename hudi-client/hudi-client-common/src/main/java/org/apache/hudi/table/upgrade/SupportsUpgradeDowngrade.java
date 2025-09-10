@@ -20,7 +20,6 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
-import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -47,6 +46,7 @@ public interface SupportsUpgradeDowngrade extends Serializable {
   BaseHoodieWriteClient getWriteClient(HoodieWriteConfig config, HoodieEngineContext context);
 
   default HoodieTable addTxnManager(HoodieTable table) {
-    return table.setTxnManager(new TransactionManager(table.getConfig(), table.getStorage()));
+    // FIME-vc: This method is deprecated - table should be created with TransactionManager passed directly
+    throw new UnsupportedOperationException("Use getTable(config, context) instead which creates table with TransactionManager");
   }
 }

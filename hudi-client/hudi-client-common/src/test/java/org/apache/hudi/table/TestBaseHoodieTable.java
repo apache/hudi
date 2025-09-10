@@ -43,7 +43,7 @@ import java.util.List;
 
 public class TestBaseHoodieTable extends HoodieTable {
   public TestBaseHoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
-    super(config, context, metaClient);
+    super(config, context, metaClient, Option.empty());
   }
 
   private int countOfScheduleRollbackFunctionCalls = 0;

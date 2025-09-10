@@ -46,7 +46,7 @@ public class CopyOnWriteRestoreActionExecutor<T, I, K, O>
         && !ClusteringUtils.isClusteringOrReplaceCommitAction(instantToRollback.getAction())) {
       throw new HoodieRollbackException("Unsupported action in rollback instant:" + instantToRollback);
     }
-    TransactionManager transactionManager = table.getTxnManager();
+    TransactionManager transactionManager = table.getTxnManager().get();
     String newInstantTime = transactionManager.executeStateChangeWithInstant(instantTime -> {
       table.getMetaClient().reloadActiveTimeline();
       table.scheduleRollback(context, instantTime, instantToRollback, false, false, true);

@@ -91,9 +91,6 @@ public class TestClusteringUtil {
     this.metaClient = table.getMetaClient();
     this.writeClient = FlinkWriteClients.createWriteClient(conf);
 
-    // FIXME-vc: this is hcky
-    this.table.setTxnManager(writeClient.getTransactionManager());
-
     // init the metadata table if it is enabled
     if (this.writeClient.getConfig().isMetadataTableEnabled()) {
       this.writeClient.initMetadataTable();
