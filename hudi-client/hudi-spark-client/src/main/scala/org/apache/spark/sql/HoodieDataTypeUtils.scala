@@ -39,22 +39,21 @@ object HoodieDataTypeUtils {
     StructType.fromString(jsonSchema)
 
   def canUseRowWriter(schema: Schema, conf: Configuration): Boolean = {
-    false
-//    if (conf.getBoolean(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, true)) {
-//      // if we can write lists with the old list structure, we can use row writer regardless of decimal precision
-//      true
-//    } else if (!HoodieAvroUtils.hasSmallPrecisionDecimalField(schema)) {
-//      true
-//    } else {
-//      // small precision decimals require the legacy write mode but lists and maps require the new write mode when
-//      // WRITE_OLD_LIST_STRUCTURE is false so we can only use row writer if one is present and the other is not
-//      if (HoodieAvroUtils.hasListOrMapField(schema)) {
-//        log.warn("Cannot use row writer due to presence of list or map with a small precision decimal field")
-//        false
-//      } else {
-//        true
-//      }
-//    }
+    if (conf.getBoolean(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, true)) {
+      // if we can write lists with the old list structure, we can use row writer regardless of decimal precision
+      true
+    } else if (!HoodieAvroUtils.hasSmallPrecisionDecimalField(schema)) {
+      true
+    } else {
+      // small precision decimals require the legacy write mode but lists and maps require the new write mode when
+      // WRITE_OLD_LIST_STRUCTURE is false so we can only use row writer if one is present and the other is not
+      if (HoodieAvroUtils.hasListOrMapField(schema)) {
+        log.warn("Cannot use row writer due to presence of list or map with a small precision decimal field")
+        false
+      } else {
+        true
+      }
+    }
   }
 
   /**
