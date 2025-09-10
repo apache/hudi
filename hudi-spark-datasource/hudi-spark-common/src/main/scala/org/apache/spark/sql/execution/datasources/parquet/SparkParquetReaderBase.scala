@@ -72,6 +72,10 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
     conf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP.key, true)
     // Using string value of this conf to preserve compatibility across spark versions.
     conf.setBoolean(SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key, false)
+    if (HoodieSparkUtils.gteqSpark3_4) {
+      // PARQUET_INFER_TIMESTAMP_NTZ_ENABLED is required from Spark 3.4.0 or above
+      conf.setBoolean("spark.sql.parquet.inferTimestampNTZ.enabled", true)
+    }
 
     ParquetWriteSupport.setSchema(requiredSchema, conf)
     doRead(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, conf)

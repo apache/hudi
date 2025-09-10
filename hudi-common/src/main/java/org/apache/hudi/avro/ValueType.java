@@ -121,6 +121,9 @@ public enum ValueType {
   }
 
   Comparable<?> standardizeJavaTypeAndPromote(Object val, ValueMetadata meta) {
+    if (val == null) {
+      return null;
+    }
     if (val instanceof Collection) {
       return OrderingValues.create(((Collection<?>) val).stream()
           .map(v -> standardizeJavaTypeAndPromote(v, meta))
@@ -130,10 +133,16 @@ public enum ValueType {
   }
 
   private Comparable<?> convertIntoPrimitive(Comparable<?> val, ValueMetadata meta) {
+    if (val == null) {
+      return null;
+    }
     return toPrimitive.apply(val, meta);
   }
 
   private Comparable<?> convertIntoComplex(Comparable<?> val, ValueMetadata meta) {
+    if (val == null) {
+      return null;
+    }
     return toComplex.apply(val, meta);
   }
 
@@ -187,7 +196,20 @@ public enum ValueType {
             val.getClass().getSimpleName()
         ));
       }
-      return standardizeJavaTypeAndPromote(HoodieAvroWrapperUtils.unwrapGenericRecord(val), meta);
+      if (((GenericRecord) val).getSchema().getField("value") != null) {
+        return standardizeJavaTypeAndPromote(HoodieAvroWrapperUtils.unwrapGenericRecord(val), meta);
+      } else if (((GenericRecord) val).getSchema().getField("wrappedValues") != null) {
+        GenericRecord genRec = (GenericRecord) val;
+        Collection<Object> values = (Collection<Object>) genRec.get("wrappedValues");
+        return OrderingValues.create(values.stream().map(v -> this.unwrapValue(v, meta)).toArray(Comparable[]::new));
+      } else {
+        throw new IllegalArgumentException(String.format(
+            "should be %s, but got %s", 
+            primitiveWrapperType.getWrapperClass().getSimpleName(),
+            val.getClass().getSimpleName()
+        ));
+      }
+      
     }
     return convertIntoComplex(primitiveWrapperType.unwrap(val), meta);
   }

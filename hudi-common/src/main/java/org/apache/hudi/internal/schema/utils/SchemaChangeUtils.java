@@ -84,25 +84,48 @@ public class SchemaChangeUtils {
         return dsr == Types.StringType.get();
       case DECIMAL:
       case DECIMAL_BYTES:
-        if (dsr.typeId() == Type.TypeID.DECIMAL || dsr.typeId() == Type.TypeID.DECIMAL_BYTES) {
-          Types.DecimalBase decimalSrc = (Types.DecimalBase)src;
-          Types.DecimalBase decimalDsr = (Types.DecimalBase)dsr;
-          if (decimalDsr.isWiderThan(decimalSrc)) {
-            return true;
-          }
-          if (decimalDsr.precision() >= decimalSrc.precision() && decimalDsr.scale() == decimalSrc.scale()) {
-            return true;
-          }
-        } else if (dsr.typeId() == Type.TypeID.STRING) {
-          return true;
-        }
-        break;
+        return isDecimalUpdateAllowInternal(src, dsr);
+      case DECIMAL_FIXED:
+        return isDecimalFixedUpdateAllowInternal(src, dsr);
       case STRING:
         return dsr == Types.DateType.get() || dsr.typeId() == Type.TypeID.DECIMAL || dsr == Types.BinaryType.get();
       default:
         return false;
     }
+  }
+
+  private static boolean isDecimalUpdateAllowInternal(Type src, Type dsr) {
+    if (dsr.typeId() == Type.TypeID.DECIMAL || dsr.typeId() == Type.TypeID.DECIMAL_BYTES) {
+      return isDecimalUpdateAllowInternalBase((Types.DecimalBase)src, (Types.DecimalBase)dsr);
+    } else if (dsr.typeId() == Type.TypeID.STRING) {
+      return true;
+    }
     return false;
+  }
+
+  private static boolean isDecimalUpdateAllowInternalBase(Types.DecimalBase  src, Types.DecimalBase  dsr) {
+    if (dsr.isWiderThan(src)) {
+      return true;
+    }
+    if (dsr.precision() >= src.precision() && dsr.scale() == src.scale()) {
+      return true;
+    }
+    return false;
+  }
+
+  private static boolean isDecimalFixedUpdateAllowInternal(Type src, Type dsr) {
+    if (!(src instanceof Types.DecimalBase)) {
+      return false;
+    }
+
+    if (src.typeId() == Type.TypeID.DECIMAL_FIXED) {
+      Types.DecimalTypeFixed decimalSrc = (Types.DecimalTypeFixed)src;
+      Types.DecimalTypeFixed decimalDsr = (Types.DecimalTypeFixed)dsr;
+      if (decimalSrc.getFixedSize() > decimalDsr.getFixedSize()) {
+        return false;
+      }
+    }
+    return isDecimalUpdateAllowInternalBase((Types.DecimalBase)src, (Types.DecimalBase)dsr);
   }
 
   /**

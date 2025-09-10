@@ -207,48 +207,7 @@
             ]
           }
         ]
-      },
-      {
-          "name": "timeMicroField",
-          "type": {
-              "type": "long",
-              "logicalType": "time-micros"
-          }
-      },
-      {
-          "name": "timeMillisField",
-          "type": {
-              "type": "int",
-              "logicalType": "time-millis"
-          }
-      },
-      {
-          "name": "timestampMicrosField",
-          "type": {
-              "type": "long",
-              "logicalType": "timestamp-micros"
-          }
-      },
-      {
-          "name": "timestampMillisField",
-          "type": {
-              "type": "long",
-              "logicalType": "timestamp-millis"
-          }
-    },
-    {
-          "name": "localTimestampMicrosField",
-          "type": {
-              "type": "long",
-              "logicalType": "local-timestamp-micros"
-          }
-    },
-    {
-          "name": "localTimestampMillisField",
-          "type": {
-              "type": "long",
-              "logicalType": "local-timestamp-millis"
-          }
+      }
     }
   ]
 }
