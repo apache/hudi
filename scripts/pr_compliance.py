@@ -694,11 +694,62 @@ def test_body():
     return tests_passed
 
 
+def test_has_github_issue_link():
+    """Test the _has_github_issue_link method"""
+    print("Running _has_github_issue_link tests...")
+    tests_passed = True
+
+    # Helper function to test a specific body text
+    def run_issue_link_test(test_name, body, expected_result):
+        validator = make_default_validator(body, debug=False)
+        actual_result = validator._has_github_issue_link()
+        if actual_result == expected_result:
+            print(f"✓ {test_name}: PASS")
+            return True
+        else:
+            print(f"✗ {test_name}: FAIL - Expected {expected_result}, got {actual_result}")
+            return False
+
+    # Test positive cases
+    tests_passed = run_issue_link_test("fixes #123", "fixes #123", True) and tests_passed
+    tests_passed = run_issue_link_test("Fixes #456", "Fixes #456", True) and tests_passed
+    tests_passed = run_issue_link_test("resolves #789", "resolves #789", True) and tests_passed
+    tests_passed = run_issue_link_test("closes #101", "closes #101", True) and tests_passed
+    tests_passed = run_issue_link_test("fixes #123 link", "fixes https://github.com/apache/hudi/issues/123",
+                                       True) and tests_passed
+    tests_passed = run_issue_link_test("resolves #789 link", "resolves https://github.com/apache/hudi/issues/789",
+                                       True) and tests_passed
+    tests_passed = run_issue_link_test("closes #101 link", "closes https://github.com/apache/hudi/issues/101",
+                                       True) and tests_passed
+    tests_passed = run_issue_link_test("fix for #202", "fix for #202", True) and tests_passed
+    tests_passed = run_issue_link_test("GitHub URL", "https://github.com/apache/hudi/issues/123", True) and tests_passed
+    tests_passed = run_issue_link_test("fixes with URL", "fixes https://github.com/apache/hudi/issues/456",
+                                       True) and tests_passed
+
+    # Test negative cases
+    tests_passed = run_issue_link_test("no issue link", "This PR adds a feature", False) and tests_passed
+    tests_passed = run_issue_link_test("fixes without #", "fixes issue 123", False) and tests_passed
+    tests_passed = run_issue_link_test("wrong repo URL", "https://github.com/other/repo/issues/123",
+                                       False) and tests_passed
+    tests_passed = run_issue_link_test("pull request URL", "https://github.com/apache/hudi/pull/123",
+                                       False) and tests_passed
+
+    print("*****")
+    if tests_passed:
+        print("All _has_github_issue_link tests passed")
+    else:
+        print("Some _has_github_issue_link tests failed")
+    print("*****")
+
+    return tests_passed
+
+
 if __name__ == '__main__':
     if len(sys.argv) > 1:
         title_tests = test_title()
         body_tests = test_body()
-        if title_tests and body_tests:
+        issue_link_tests = test_has_github_issue_link()
+        if title_tests and body_tests and issue_link_tests:
             exit(0)
         else:
             exit(-1)
