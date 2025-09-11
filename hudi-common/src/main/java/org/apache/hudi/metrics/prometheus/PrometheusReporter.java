@@ -148,28 +148,30 @@ public class PrometheusReporter extends MetricsReporter {
 
   @Override
   public void stop() {
-    if (stopped.get()) {
-      LOG.debug("PrometheusReporter.stop() called for port {} but already stopped", serverPort);
-      return;
-    }
-    
-    try {
-      synchronized (PrometheusReporter.class) {
-        stopped.set(true);
-        LOG.debug("PrometheusReporter.stop() called for port {}", serverPort);
-        unregisterMetricExports();
-        removeFromExportsTracking();
-        
-        int newReferenceCount = decrementReferenceCount();
-        if (newReferenceCount <= 0) {
-          cleanupServer(serverPort);
-        } else {
-          LOG.debug("Prometheus server on port {} still has {} references, keeping server alive", 
-                   serverPort, newReferenceCount);
+    if (!stopped.getAndSet(true)) {
+      try {
+        synchronized (PrometheusReporter.class) {
+          LOG.debug("PrometheusReporter.stop() called for port {}", serverPort);
+          PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(serverPort);
+          if (serverState == null) {
+            LOG.warn("No server state found for port {} during stop()", serverPort);
+            return;
+          }
+          
+          unregisterMetricExports();
+          removeFromExportsTracking(serverState);
+          
+          int newReferenceCount = decrementReferenceCount(serverState);
+          if (newReferenceCount <= 0) {
+            cleanupServer(serverPort);
+          } else {
+            LOG.debug("Prometheus server on port {} still has {} references, keeping server alive", 
+                     serverPort, newReferenceCount);
+          }
         }
+      } catch (Exception e) {
+        LOG.error("Error in PrometheusReporter.stop() for port {}", serverPort, e);
       }
-    } catch (Exception e) {
-      LOG.error("Error in PrometheusReporter.stop() for port {}", serverPort, e);
     }
   }
 
@@ -184,24 +186,15 @@ public class PrometheusReporter extends MetricsReporter {
     }
   }
 
-  private void removeFromExportsTracking() {
-    PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(serverPort);
-    if (serverState != null) {
-      serverState.getExports().remove(metricExports);
-    }
+  private void removeFromExportsTracking(PrometheusServerState serverState) {
+    serverState.getExports().remove(metricExports);
   }
 
-  private int decrementReferenceCount() {
-    PrometheusServerState serverState = PORT_TO_SERVER_STATE.get(serverPort);
-    if (serverState != null) {
-      int newCount = serverState.getReferenceCount().decrementAndGet();
-      LOG.debug("Unregistered PrometheusReporter for port {}, reference count: {}", 
-               serverPort, newCount);
-      return newCount;
-    } else {
-      LOG.warn("No server state found for port {} during stop()", serverPort);
-      return 0;
-    }
+  private int decrementReferenceCount(PrometheusServerState serverState) {
+    int newCount = serverState.getReferenceCount().decrementAndGet();
+    LOG.debug("Unregistered PrometheusReporter for port {}, reference count: {}", 
+             serverPort, newCount);
+    return newCount;
   }
 
   private static synchronized void cleanupServer(int serverPort) {
