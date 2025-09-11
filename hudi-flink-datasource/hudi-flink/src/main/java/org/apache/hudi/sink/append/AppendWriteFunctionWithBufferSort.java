@@ -117,21 +117,30 @@ public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T>
     super.snapshotState();
   }
 
+  @Override
+  public void endInput() {
+    try {
+      sortAndSend();
+    } catch (IOException e) {
+      LOG.error("Fail to sort and flush data in buffer during snapshot state.", e);
+      throw new FlinkRuntimeException(e);
+    }
+    super.endInput();
+  }
+
   /**
-   *  For append writing, the flushing can be triggered with two conditions:
-   *  1. Checkpoint trigger. in which current remaining data in buffer are flushed and committed.
+   *  For append writing, the flushing can be triggered with the following conditions:
+   *  1. Checkpoint trigger, in which the current remaining data in buffer are flushed and committed.
    *  2. Binary buffer is full.
-   *
-   *  set the size of buffer as the max size of parquet file, e.g., PARQUET_MAX_FILE_SIZE, to keep aligned
-   *  with current behavior considering the file's size / quantity.
-   *
-   * @throws IOException
+   *  3. `endInput` is called for pipelines with a bounded source.
    */
   private void sortAndSend() throws IOException {
+    if (buffer.isEmpty()) {
+      return;
+    }
     if (this.writerHelper == null) {
       initWriterHelper();
     }
-
     sort(buffer);
     Iterator<BinaryRowData> iterator =
             new MutableIteratorWrapperIterator<>(
