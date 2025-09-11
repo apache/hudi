@@ -1,27 +1,30 @@
+### Problem Statement
+
+<!-- Describe the issue or motivation behind this change. What problem does this solve? -->
+
 ### Change Logs
 
-_Describe context and summary for this change. Highlight if any code was copied._
+<!-- Describe context and summary for this change. Highlight if any code was copied. -->
 
 ### Impact
 
-_Describe any public API or user-facing feature change or any performance impact._
+<!-- Describe any public API or user-facing feature change or any performance impact. -->
 
-### Risk level (write none, low medium or high below)
+### Risk Level
 
-_If medium or high, explain what verification was done to mitigate the risks._
+<!-- Write none, low, medium or high. If medium or high, explain what verification was done to mitigate the risks. -->
 
 ### Documentation Update
 
-_Describe any necessary documentation update if there is any new feature, config, or user-facing change. If not, put "none"._
+<!-- Describe any necessary documentation update if there is any new feature, config, or user-facing change. If not, put "none".
 
-- _The config description must be updated if new configs are added or the default value of the configs are changed_
-- _Any new feature or user-facing change requires updating the Hudi website. Please create a Jira ticket, attach the
-  ticket number here and follow the [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make
-  changes to the website._
+- The config description must be updated if new configs are added or the default value of the configs are changed.
+- Any new feature or user-facing change requires updating the Hudi website. Please follow the 
+  [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make changes to the website. -->
 
 ### Contributor's checklist
 
 - [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)
-- [ ] Change Logs and Impact were stated clearly
+- [ ] Problem Statement, Change Logs and Impact are written clearly
 - [ ] Adequate tests were added if applicable
 - [ ] CI passed

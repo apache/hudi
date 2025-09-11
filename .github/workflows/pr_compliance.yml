@@ -1,10 +1,14 @@
-name: validate pr
+name: PR Compliance
 on:
   pull_request:
     types: [opened, edited, reopened, synchronize]
     branches:
       - master
       - branch-0.x
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') }}
 
 jobs:
   validate-pr:
@@ -17,6 +21,3 @@ jobs:
       - uses: actions/setup-python@v3
       - name: run script
         run: python3 scripts/pr_compliance.py
-
-
-
