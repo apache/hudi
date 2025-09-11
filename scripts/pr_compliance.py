@@ -15,11 +15,12 @@
 # limitations under the License.
 #
 
-import re
-import os
-import sys
 import inspect
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #  
+import os
+import re
+import sys
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #  _____ _ _   _       __     __    _ _     _       _   _                 #
 # |_   _(_) |_| | ___  \ \   / /_ _| (_) __| | __ _| |_(_) ___  _ __      #  
 #   | | | | __| |/ _ \  \ \ / / _` | | |/ _` |/ _` | __| |/ _ \| '_ \     #
@@ -28,10 +29,43 @@ import inspect
 #                                                                         # 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #                                                                 
 
+# Allowed PR title prefixes - can be updated to add/remove prefixes as needed
+ALLOWED_PREFIXES = [
+    r"\[HUDI-[0-9]{1,}\]",  # HUDI JIRA issue format
+    r"\[MINOR\]",  # Minor changes
+    r"\(feat\)",  # A new feature
+    r"\(fix\)",  # A bug fix
+    r"\(docs\)",  # Documentation changes only
+    r"\(style\)",  # Code style, formatting, or lint-only changes (no logic impact)
+    r"\(refactor\)",  # Code changes that neither fix a bug nor add a feature (e.g., cleanups, restructuring)
+    r"\(perf\)",  # Performance improvements
+    r"\(test\)",  # Adding or correcting tests
+    r"\(chore\)",  # Tooling, build system, CI/CD, or maintenance tasks
+    r"\(improvement\)",  # Enhancements to existing functionality (aligns with past JIRA usage)
+    r"\(blocker\)",  # Critical issues that block a release (rare, reserved use)
+    r"\(security\)",  # Security-related fixes or improvements
+    r"\(breaking\)"  # Use alongside others (e.g., (feat) or (refactor)) to indicate a breaking change
+]
 
 #validator for titles
 def validate_title(title: str):
-    return len(re.findall(r'(\[HUDI\-[0-9]{1,}\]|\[MINOR\])',title)) == 1
+    # Create regex pattern from allowed prefixes (without capture groups to avoid tuples)
+    pattern = r'(?:' + '|'.join(ALLOWED_PREFIXES) + r')'
+    matches = re.findall(pattern, title)
+
+    # Allow exactly one prefix, OR allow combinations with (breaking)
+    if len(matches) == 1:
+        # Don't allow standalone (breaking) 
+        return "(breaking)" not in matches
+    elif len(matches) == 2:
+        # Check if one of the matches is (breaking) and the other is (feat) or (refactor)
+        has_breaking = "(breaking)" in matches
+        has_feat = "(feat)" in matches
+        has_refactor = "(refactor)" in matches
+
+        return has_breaking and (has_feat or has_refactor)
+
+    return False
 
 #runs an individual title test
 #
@@ -65,6 +99,23 @@ def test_title():
     test_return = run_title_test("minor in middle", " my [MINOR] fake pr", True) and test_return
     test_return = run_title_test("minor at end", " my fake pr [MINOR]", True) and test_return
 
+    # test new prefixes without JIRA issue
+    test_return = run_title_test("feat prefix", "(feat) add new feature", True) and test_return
+    test_return = run_title_test("feat prefix with breaking change", "(feat)(breaking) add new feature",
+                                 True) and test_return
+    test_return = run_title_test("fix prefix", "(fix) fix bug", True) and test_return
+    test_return = run_title_test("docs prefix", "(docs) update documentation", True) and test_return
+    test_return = run_title_test("style prefix", "(style) formatting changes", True) and test_return
+    test_return = run_title_test("refactor prefix", "(refactor) code refactoring", True) and test_return
+    test_return = run_title_test("refactor prefix with breaking change", "(refactor)(breaking) code refactoring",
+                                 True) and test_return
+    test_return = run_title_test("perf prefix", "(perf) performance improvement", True) and test_return
+    test_return = run_title_test("test prefix", "(test) add tests", True) and test_return
+    test_return = run_title_test("chore prefix", "(chore) maintenance task", True) and test_return
+    test_return = run_title_test("improvement prefix", "(improvement) enhance feature", True) and test_return
+    test_return = run_title_test("blocker prefix", "(blocker) critical issue", True) and test_return
+    test_return = run_title_test("security prefix", "(security) security fix", True) and test_return
+
     #test that more than 4 nums is also ok
     test_return = run_title_test("more than 4 nums in issue", "[HUDI-12345] my fake pr", True) and test_return
 
@@ -77,17 +128,34 @@ def test_title():
     #no brackets not ok
     test_return = run_title_test("no brackets around issue", "HUDI-1234 my fake pr", False) and test_return
     test_return = run_title_test("no brackets around minor", "MINOR my fake pr", False) and test_return
+    test_return = run_title_test("no brackets around feat", "feat my fake pr", False) and test_return
     
     #lowercase not ok
     test_return = run_title_test("lowercase hudi", "[hudi-1234] my fake pr", False) and test_return
     test_return = run_title_test("lowercase minor", "[minor] my fake pr", False) and test_return
-    
+
+    # invalid prefix not ok
+    test_return = run_title_test("invalid prefix", "[invalid] my fake pr", False) and test_return
+    test_return = run_title_test("invalid prefix", "[feat] my fake pr", False) and test_return
+    test_return = run_title_test("invalid prefix", "(invalid) my fake pr", False) and test_return
+    test_return = run_title_test("no independent breaking label", "(breaking) breaking change", False) and test_return
+    test_return = run_title_test("no prefix", "my fake pr", False) and test_return
+
     #duplicate not ok
     test_return = run_title_test("duplicate issue", "[HUDI-1324][HUDI-1324] my fake pr", False) and test_return
     test_return = run_title_test("duplicate minor", "[MINOR] my fake pr [MINOR]", False) and test_return
-    
-    #hudi and minor not ok
+    test_return = run_title_test("duplicate feat", "(feat) my fake pr (feat)", False) and test_return
+
+    # multiple different prefixes not ok (except allowed breaking combinations)
     test_return = run_title_test("issue and minor", "[HUDI-1324] my [MINOR]fake pr", False) and test_return
+    test_return = run_title_test("feat and fix", "(feat) my (fix) fake pr", False) and test_return
+    test_return = run_title_test("breaking with fix", "(fix)(breaking) fix with breaking change", False) and test_return
+    test_return = run_title_test("breaking with docs", "(docs)(breaking) docs with breaking change",
+                                 False) and test_return
+    test_return = run_title_test("three prefixes", "(feat)(refactor)(breaking) too many prefixes",
+                                 False) and test_return
+    test_return = run_title_test("three prefixes", "(feat)(breaking)(breaking) too many prefixes",
+                                 False) and test_return
     print("*****")
     if test_return:
         print("All title tests passed")
@@ -355,7 +423,7 @@ class ValidateBody:
             self.section = ParseSection(data=data, sections=self.sections, debug=self.debug)
 
     #Returns true if the body complies with the validation rules else false
-    def validate(self):
+    def validate(self, pr_title=None):
         #instantiate self.section since it starts null
         self.nextSection()
 
@@ -372,6 +440,12 @@ class ValidateBody:
             if o == Outcomes.ERROR:
                 return False
             elif o == Outcomes.SUCCESS:
+                # Check for GitHub issue link requirement for fix PRs
+                if pr_title and "(fix)" in pr_title:
+                    if not self._has_github_issue_link():
+                        self.section.error("", "",
+                                           "Fix PRs must include a GitHub issue link (e.g., fixes #1234, resolves #1234, or direct GitHub issue URL)")
+                        return False
                 return True
             elif o == Outcomes.NEXTSECTION:
                 self.nextSection()
@@ -385,33 +459,54 @@ class ValidateBody:
             return False
         self.section.error("","", "Please make sure you have filled out the template correctly. You can find a blank template in /.github/PULL_REQUEST_TEMPLATE.md")
         return False
+
+    # Check if body contains GitHub issue link
+    def _has_github_issue_link(self):
+        # Look for GitHub issue patterns:
+        # - fixes #123, resolves #123, closes #123
+        # - https://github.com/owner/repo/issues/123
+        # - Fix for #123, Fixes #123, etc.
+        issue_patterns = [
+            r'(?i)(fix(?:es|ed)?|resolv(?:es?|ed?)|clos(?:es?|ed?))\s+#\d+',  # fixes #123
+            r'(?i)(fix(?:es|ed)?|resolv(?:es?|ed?)|clos(?:es?|ed?))\s+https://github\.com/[^/]+/[^/]+/issues/\d+',
+            # fixes https://github.com/owner/repo/issues/123
+            r'https://github\.com/[^/]+/[^/]+/issues/\d+',  # https://github.com/owner/repo/issues/123
+            r'(?i)fix\s+for\s+#\d+'  # fix for #123
+        ]
+
+        for pattern in issue_patterns:
+            if re.search(pattern, self.body):
+                return True
+        return False
         
 #Generate the validator for the current template.
 #needs to be manually updated
 def make_default_validator(body, debug=False):
+    problemStatement = ParseSectionData("PROBLEM_STATEMENT",
+                                        "### Problem Statement",
+                                        {"<!-- Describe the issue or motivation behind this change. What problem does this solve? -->"})
     changelogs = ParseSectionData("CHANGE_LOGS",
         "### Change Logs",
-        {"_Describe context and summary for this change. Highlight if any code was copied._"})
+        {"<!-- Describe context and summary for this change. Highlight if any code was copied. -->"})
     impact = ParseSectionData("IMPACT",
         "### Impact",
-        {"_Describe any public API or user-facing feature change or any performance impact._"})
+        {"<!-- Describe any public API or user-facing feature change or any performance impact. -->"})
     risklevel = RiskLevelData("RISK_LEVEL",
-        "### Risk level",
-        {"_If medium or high, explain what verification was done to mitigate the risks._"})
+        "### Risk Level",
+        {"<!-- Write none, low, medium or high. If medium or high, explain what verification was done to mitigate the risks. -->"})
     docsUpdate = ParseSectionData("DOCUMENTATION_UPDATE",
         "### Documentation Update",
-        {"_Describe any necessary documentation update if there is any new feature, config, or user-facing change_",
+        {"<!-- Describe any necessary documentation update if there is any new feature, config, or user-facing change. If not, put \"none\".",
         "",
-        "- _The config description must be updated if new configs are added or the default value of the configs are changed. If not, put \"none\"._",
-        "- _Any new feature or user-facing change requires updating the Hudi website. Please create a Jira ticket, attach the",
-        "  ticket number here and follow the [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make",
-        "  changes to the website._"})
+        "- The config description must be updated if new configs are added or the default value of the configs are changed.",
+        "- Any new feature or user-facing change requires updating the Hudi website. Please follow the",
+        "  [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make changes to the website. -->"})
     checklist = ParseSectionData("CHECKLIST",
         "### Contributor's checklist",
         {})
-    parseSections = ParseSections([changelogs, impact, risklevel, docsUpdate, checklist])
+    parseSections = ParseSections([problemStatement, changelogs, impact, risklevel, docsUpdate, checklist])
 
-    return ValidateBody(body, "CHANGE_LOGS", parseSections, debug)
+    return ValidateBody(body, "PROBLEM_STATEMENT", parseSections, debug)
 
 
 #takes a list of strings and returns a string of those lines separated by \n
@@ -424,9 +519,10 @@ def joinLines(lines):
 # body: str - the body to parse
 # isTrue: bool - True if the body complies with our validation rules
 # debug: bool - True if we want to print debug information
-def run_test(name: str, body: str, isTrue: bool, debug: bool):
+# title: str - the PR title (optional, for fix PR validation)
+def run_test(name: str, body: str, isTrue: bool, debug: bool, title: str = None):
     validator = make_default_validator(body, debug)
-    if isTrue != validator.validate():
+    if isTrue != validator.validate(title):
         print(f"{name} - FAILED")
         return False
     print(f"{name} - PASSED")
@@ -444,10 +540,20 @@ def build_body(sections):
 def test_body():
     DEBUG_MESSAGES = False
     #Create sections that we will combine to create bodies to test validation on
+    template_problem_statement = [
+        "### Problem Statement",
+        "",
+        "<!-- Describe the issue or motivation behind this change. What problem does this solve? -->",
+        ""
+    ]
+
+    good_problem_statement = template_problem_statement.copy()
+    good_problem_statement[1] = "problem statement description"
+
     template_changelogs = [
          "### Change Logs",
         "",
-        "_Describe context and summary for this change. Highlight if any code was copied._",
+        "<!-- Describe context and summary for this change. Highlight if any code was copied. -->",
         ""
     ]
 
@@ -457,7 +563,7 @@ def test_body():
     template_impact = [
         "### Impact",
         "",
-        "_Describe any public API or user-facing feature change or any performance impact._",
+        "<!-- Describe any public API or user-facing feature change or any performance impact. -->",
         ""
     ]
 
@@ -465,9 +571,9 @@ def test_body():
     good_impact[1] = "impact description"
 
     template_risklevel = [
-        "### Risk level (write none, low medium or high below)",
+        "### Risk Level",
         "",
-        "_If medium or high, explain what verification was done to mitigate the risks._",
+        "<!-- Write none, low, medium or high. If medium or high, explain what verification was done to mitigate the risks. -->",
         ""
     ]
 
@@ -477,12 +583,11 @@ def test_body():
     template_docs_update = [
         "### Documentation Update",
         "",
-        "_Describe any necessary documentation update if there is any new feature, config, or user-facing change_",
+        "<!-- Describe any necessary documentation update if there is any new feature, config, or user-facing change. If not, put \"none\".",
         "",
-        "- _The config description must be updated if new configs are added or the default value of the configs are changed. If not, put \"none\"._",
-        "- _Any new feature or user-facing change requires updating the Hudi website. Please create a Jira ticket, attach the",
-        "  ticket number here and follow the [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make",
-        "  changes to the website._",
+        "- The config description must be updated if new configs are added or the default value of the configs are changed.",
+        "- Any new feature or user-facing change requires updating the Hudi website. Please follow the",
+        "  [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make changes to the website. -->",
         ""
     ]
 
@@ -493,16 +598,18 @@ def test_body():
         "### Contributor's checklist",
         "",
         "- [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)",
-        "- [ ] Change Logs and Impact were stated clearly",
+        "- [ ] Problem Statement, Change Logs and Impact are written clearly",
         "- [ ] Adequate tests were added if applicable",
         "- [ ] CI passed"
     ]
 
-    #list of sections that when combined form a valid body
-    good_sections = [good_changelogs, good_impact, good_risklevel, good_docs_update, template_checklist]
+    # list of sections that when combined from a valid body
+    good_sections = [good_problem_statement, good_changelogs, good_impact, good_risklevel, good_docs_update,
+                     template_checklist]
 
-    #list of sections that when combined form the template
-    template_sections = [template_changelogs, template_impact, template_risklevel, template_docs_update, template_checklist]
+    # list of sections that when combined from the template
+    template_sections = [template_problem_statement, template_changelogs, template_impact, template_risklevel,
+                         template_docs_update, template_checklist]
 
     tests_passed = True
     #Test section not filled out
@@ -545,6 +652,35 @@ def test_body():
     #Test good body:
     tests_passed = run_test("good documentation", build_body(good_sections), True, DEBUG_MESSAGES) and tests_passed
 
+    # Test fix PR issue link requirement
+    fix_changelogs_with_issue = good_changelogs.copy()
+    fix_changelogs_with_issue[1] = "Fixed bug. Fixes #123"
+    fix_sections_with_issue = [good_problem_statement, fix_changelogs_with_issue, good_impact, good_risklevel,
+                               good_docs_update,
+                               template_checklist]
+    tests_passed = run_test("fix PR with issue link", build_body(fix_sections_with_issue), True, DEBUG_MESSAGES,
+                            "(fix) fix bug") and tests_passed
+
+    fix_changelogs_with_github_url = good_changelogs.copy()
+    fix_changelogs_with_github_url[1] = "Fixed bug. See https://github.com/apache/hudi/issues/123"
+    fix_sections_with_github_url = [good_problem_statement, fix_changelogs_with_github_url, good_impact, good_risklevel,
+                                    good_docs_update,
+                                    template_checklist]
+    tests_passed = run_test("fix PR with GitHub URL", build_body(fix_sections_with_github_url), True, DEBUG_MESSAGES,
+                            "(fix) fix bug") and tests_passed
+
+    fix_changelogs_without_issue = good_changelogs.copy()
+    fix_changelogs_without_issue[1] = "Fixed bug without issue reference"
+    fix_sections_without_issue = [good_problem_statement, fix_changelogs_without_issue, good_impact, good_risklevel,
+                                  good_docs_update,
+                                  template_checklist]
+    tests_passed = run_test("fix PR without issue link", build_body(fix_sections_without_issue), False, DEBUG_MESSAGES,
+                            "(fix) fix bug") and tests_passed
+
+    # Non-fix PRs should not require issue links
+    tests_passed = run_test("feat PR without issue link", build_body(good_sections), True, DEBUG_MESSAGES,
+                            "(feat) new feature") and tests_passed
+
     print("*****")
     if tests_passed:
         print("All body tests passed")
@@ -581,6 +717,6 @@ if __name__ == '__main__':
         exit(-1)
 
     validator = make_default_validator(body,True)
-    if not validator.validate():
+    if not validator.validate(title):
         exit(-1)
     exit(0)

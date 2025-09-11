@@ -1,13 +1,18 @@
-name: Update Pr Compliance
+name: Update PR Compliance
 
 on:
   pull_request:
     types: [opened, edited, reopened, synchronize]
     branches:
       - master
+      - branch-0.x
     paths:
       - scripts/pr_compliance.py
-  
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') }}
+
 jobs:
   run-tests:
     runs-on: ubuntu-latest
