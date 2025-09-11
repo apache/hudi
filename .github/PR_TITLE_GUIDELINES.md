@@ -67,6 +67,12 @@ feat(flink): add bucket index implementation on Flink
 fix(index): fix index update logic
 ```
 
+For PRs that have a corresponding task in JIRA, put the JIRA number in the scope:
+
+```
+feat(HUDI-1234): add a new feature
+```
+
 ## Breaking Changes
 
 For breaking changes, add an exclamation mark after the type/scope:
