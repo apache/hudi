@@ -10,7 +10,7 @@ on:
       - scripts/pr_compliance.py
 
 concurrency:
-  group: ${{ github.ref }}
+  group: update-pr-compliance-${{ github.ref }}
   cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') }}
 
 jobs:
