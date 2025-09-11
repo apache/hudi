@@ -299,7 +299,7 @@ class ValidateBody:
                 return False
             elif o == Outcomes.SUCCESS:
                 # Check for GitHub issue link requirement for fix PRs
-                if pr_title and (pr_title.startswith("fix:") or pr_title.startswith("fix(") or "(fix)" in pr_title):
+                if pr_title and (pr_title.startswith("fix:") or pr_title.startswith("fix(") in pr_title):
                     if not self._has_github_issue_link():
                         self.section.error("", "",
                                            "Fix PRs must include a GitHub issue link (e.g., fixes #1234, resolves #1234, or direct GitHub issue URL)")
@@ -519,22 +519,19 @@ def test_body():
     fix_sections_with_issue = [good_problem_statement, fix_changelogs_with_issue, good_impact, good_risklevel,
                                good_docs_update,
                                template_checklist]
-    tests_passed = run_test("fix PR with issue link (old format)", build_body(fix_sections_with_issue), True,
-                            DEBUG_MESSAGES,
-                            "(fix) fix bug") and tests_passed
-    tests_passed = run_test("fix PR with issue link (new format)", build_body(fix_sections_with_issue), True,
+    tests_passed = run_test("fix PR with issue link", build_body(fix_sections_with_issue), True,
                             DEBUG_MESSAGES,
                             "fix: fix bug") and tests_passed
+    tests_passed = run_test("fix PR with scope and issue link", build_body(fix_sections_with_issue), True,
+                            DEBUG_MESSAGES,
+                            "fix(index): fix bug") and tests_passed
 
     fix_changelogs_with_github_url = good_changelogs.copy()
     fix_changelogs_with_github_url[1] = "Fixed bug. See https://github.com/apache/hudi/issues/123"
     fix_sections_with_github_url = [good_problem_statement, fix_changelogs_with_github_url, good_impact, good_risklevel,
                                     good_docs_update,
                                     template_checklist]
-    tests_passed = run_test("fix PR with GitHub URL (old format)", build_body(fix_sections_with_github_url), True,
-                            DEBUG_MESSAGES,
-                            "(fix) fix bug") and tests_passed
-    tests_passed = run_test("fix PR with GitHub URL (new format)", build_body(fix_sections_with_github_url), True,
+    tests_passed = run_test("fix PR with GitHub URL", build_body(fix_sections_with_github_url), True,
                             DEBUG_MESSAGES,
                             "fix: fix bug") and tests_passed
 
@@ -543,10 +540,7 @@ def test_body():
     fix_sections_without_issue = [good_problem_statement, fix_changelogs_without_issue, good_impact, good_risklevel,
                                   good_docs_update,
                                   template_checklist]
-    tests_passed = run_test("fix PR without issue link (old format)", build_body(fix_sections_without_issue), False,
-                            DEBUG_MESSAGES,
-                            "(fix) fix bug") and tests_passed
-    tests_passed = run_test("fix PR without issue link (new format)", build_body(fix_sections_without_issue), False,
+    tests_passed = run_test("fix PR without issue link", build_body(fix_sections_without_issue), False,
                             DEBUG_MESSAGES,
                             "fix: fix bug") and tests_passed
 
