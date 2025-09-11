@@ -152,8 +152,7 @@ module.exports = {
                 'faq_storage',
                 'faq_integrations',
             ],
-        },
-        'privacy',
+        }
     ],
     quick_links: [
         {
