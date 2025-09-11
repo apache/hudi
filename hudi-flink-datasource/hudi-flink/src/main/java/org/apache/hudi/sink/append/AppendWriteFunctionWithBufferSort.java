@@ -18,25 +18,26 @@
 
 package org.apache.hudi.sink.append;
 
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
+import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
+import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
+import org.apache.hudi.sink.utils.BufferUtils;
+import org.apache.hudi.util.MutableIteratorWrapperIterator;
+
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.operators.sort.QuickSort;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.planner.codegen.sort.SortCodeGenerator;
 import org.apache.flink.table.runtime.generated.GeneratedNormalizedKeyComputer;
 import org.apache.flink.table.runtime.generated.GeneratedRecordComparator;
 import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
-import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
-
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
-import org.apache.flink.util.FlinkRuntimeException;
-import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
-import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
-import org.apache.hudi.sink.utils.BufferUtils;
-import org.apache.flink.runtime.operators.sort.QuickSort;
-import org.apache.hudi.util.MutableIteratorWrapperIterator;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -83,6 +84,7 @@ public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T>
             memorySegmentPool,
             keyComputer.newInstance(Thread.currentThread().getContextClassLoader()),
             recordComparator.newInstance(Thread.currentThread().getContextClassLoader()));
+    LOG.info("{} is initialized successfully.", getClass().getSimpleName());
   }
 
   @Override
@@ -97,7 +99,7 @@ public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T>
       // 3. write the row again
       success = buffer.write(data);
       if (!success) {
-        throw new RuntimeException("Buffer is too small to hold a single record.");
+        throw new HoodieException("Buffer is too small to hold a single record.");
       }
     }
 
@@ -111,8 +113,7 @@ public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T>
     try {
       sortAndSend();
     } catch (IOException e) {
-      LOG.error("Fail to sort and flush data in buffer during snapshot state.", e);
-      throw new FlinkRuntimeException(e);
+      throw new HoodieException("Fail to sort and flush data in buffer during snapshot state.", e);
     }
     super.snapshotState();
   }
@@ -122,17 +123,16 @@ public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T>
     try {
       sortAndSend();
     } catch (IOException e) {
-      LOG.error("Fail to sort and flush data in buffer during snapshot state.", e);
-      throw new FlinkRuntimeException(e);
+      throw new HoodieException("Fail to sort and flush data in buffer during endInput.", e);
     }
     super.endInput();
   }
 
   /**
-   *  For append writing, the flushing can be triggered with the following conditions:
-   *  1. Checkpoint trigger, in which the current remaining data in buffer are flushed and committed.
-   *  2. Binary buffer is full.
-   *  3. `endInput` is called for pipelines with a bounded source.
+   * For append writing, the flushing can be triggered with the following conditions:
+   * 1. Checkpoint trigger, in which the current remaining data in buffer are flushed and committed.
+   * 2. Binary buffer is full.
+   * 3. `endInput` is called for pipelines with a bounded source.
    */
   private void sortAndSend() throws IOException {
     if (buffer.isEmpty()) {
