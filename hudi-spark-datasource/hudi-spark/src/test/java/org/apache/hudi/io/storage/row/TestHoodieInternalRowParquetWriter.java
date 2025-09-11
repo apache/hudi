@@ -135,7 +135,7 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
         writeConfig.getBloomFilterFPP(),
         writeConfig.getDynamicBloomFilterMaxNumEntries(),
         writeConfig.getBloomFilterType());
-    return HoodieRowParquetWriteSupport.getHoodieRowParquetWriteSupport(hadoopConf,
+    return HoodieRowParquetWriteSupport.getHoodieRowParquetWriteSupport(hadoopConf, SparkDatasetTestUtils.STRUCT_TYPE,
         AvroConversionUtils.convertStructTypeToAvroSchema(SparkDatasetTestUtils.STRUCT_TYPE, "record"), Option.of(filter), writeConfig);
   }
 }

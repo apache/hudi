@@ -109,11 +109,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         Math.min(clusteringPlan.getInputGroups().size(), writeConfig.getClusteringMaxParallelism()),
         new CustomizedThreadFactory("clustering-job-group", true));
     try {
-      boolean canUseRowWriter = getWriteConfig().getBooleanOrDefault("hoodie.datasource.write.row.writer.enable", true)
-          && HoodieDataTypeUtils.canUseRowWriter(schema, engineContext.hadoopConfiguration());
-      if (canUseRowWriter) {
-        HoodieDataTypeUtils.tryOverrideParquetWriteLegacyFormatProperty(writeConfig.getProps(), schema);
-      }
+      boolean canUseRowWriter = getWriteConfig().getBooleanOrDefault("hoodie.datasource.write.row.writer.enable", true);
       // execute clustering for each group async and collect WriteStatus
       Stream<HoodieData<WriteStatus>> writeStatusesStream = FutureUtils.allOf(
               clusteringPlan.getInputGroups().stream()

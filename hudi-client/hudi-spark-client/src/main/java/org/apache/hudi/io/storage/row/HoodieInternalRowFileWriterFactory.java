@@ -30,6 +30,7 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 
@@ -54,11 +55,12 @@ public class HoodieInternalRowFileWriterFactory {
   public static HoodieInternalRowFileWriter getInternalRowFileWriter(StoragePath path,
                                                                      HoodieTable hoodieTable,
                                                                      HoodieWriteConfig writeConfig,
-                                                                     Schema schema)
+                                                                     StructType schema,
+                                                                     Schema avroSchema)
       throws IOException {
     final String extension = FSUtils.getFileExtension(path.getName());
     if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetInternalRowFileWriter(path, hoodieTable, writeConfig, schema, tryInstantiateBloomFilter(writeConfig));
+      return newParquetInternalRowFileWriter(path, hoodieTable, writeConfig, schema, avroSchema, tryInstantiateBloomFilter(writeConfig));
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
@@ -66,12 +68,13 @@ public class HoodieInternalRowFileWriterFactory {
   private static HoodieInternalRowFileWriter newParquetInternalRowFileWriter(StoragePath path,
                                                                              HoodieTable table,
                                                                              HoodieWriteConfig writeConfig,
-                                                                             Schema schema,
+                                                                             StructType schema,
+                                                                             Schema avroSchema,
                                                                              Option<BloomFilter> bloomFilterOpt
   )
       throws IOException {
     HoodieRowParquetWriteSupport writeSupport = HoodieRowParquetWriteSupport
-        .getHoodieRowParquetWriteSupport((Configuration) table.getStorageConf().unwrap(), schema, bloomFilterOpt, writeConfig);
+        .getHoodieRowParquetWriteSupport((Configuration) table.getStorageConf().unwrap(), schema, avroSchema, bloomFilterOpt, writeConfig);
 
     return new HoodieInternalRowParquetWriter(
         path,

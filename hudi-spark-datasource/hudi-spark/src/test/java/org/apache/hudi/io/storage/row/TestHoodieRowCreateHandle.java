@@ -97,7 +97,8 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
       String instantTime = "000";
 
       HoodieRowCreateHandle handle = new HoodieRowCreateHandle(table, config, partitionPath, fileId, instantTime,
-          RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), AvroConversionUtils.convertStructTypeToAvroSchema(SparkDatasetTestUtils.STRUCT_TYPE, "record"));
+          RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE,
+          AvroConversionUtils.convertStructTypeToAvroSchema(SparkDatasetTestUtils.STRUCT_TYPE, "record"));
       int size = 10 + RANDOM.nextInt(1000);
       // Generate inputs
       Dataset<Row> inputRows = SparkDatasetTestUtils.getRandomRows(sqlContext, size, partitionPath, false);
@@ -134,7 +135,7 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
     String instantTime = "000";
 
     HoodieRowCreateHandle handle =
-        new HoodieRowCreateHandle(table, cfg, partitionPath, fileId, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(),
+        new HoodieRowCreateHandle(table, cfg, partitionPath, fileId, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE,
             AvroConversionUtils.convertStructTypeToAvroSchema(SparkDatasetTestUtils.STRUCT_TYPE, "record"));
     int size = 10 + RANDOM.nextInt(1000);
     int totalFailures = 5;

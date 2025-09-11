@@ -29,10 +29,13 @@ import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.io.api.RecordConsumer;
+import org.apache.parquet.schema.MessageType;
+import org.apache.spark.SparkBuildInfo;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.SpecializedGetters;
@@ -43,12 +46,21 @@ import org.apache.spark.sql.execution.datasources.DataSourceUtils;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetWriteSupport;
 import org.apache.spark.sql.internal.LegacyBehaviorPolicy;
 import org.apache.spark.sql.internal.SQLConf;
+import org.apache.spark.sql.types.ArrayType;
+import org.apache.spark.sql.types.DataType;
+import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.sql.types.DecimalType;
+import org.apache.spark.sql.types.MapType;
+import org.apache.spark.sql.types.StructType;
+import org.apache.spark.sql.types.TimestampNTZType;
 import org.apache.spark.unsafe.types.UTF8String;
+import org.apache.spark.util.VersionUtils;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.IntStream;
 
 import scala.Enumeration;
 import scala.Function1;
@@ -59,7 +71,7 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_FIELD_ID
 /**
  * Hoodie Write Support for directly writing Row to Parquet.
  */
-public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
+public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
 
   private static final Schema MAP_KEY_SCHEMA = Schema.create(Schema.Type.STRING);
   private static final String MAP_REPEATED_NAME = "key_value";
@@ -76,7 +88,7 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
   private final ValueWriter[] rootFieldWriters;
   private final Schema avroSchema;
 
-  public HoodieRowParquetWriteSupport(Configuration conf, Schema avroSchema, Option<BloomFilter> bloomFilterOpt, HoodieConfig config) {
+  public HoodieRowParquetWriteSupport(Configuration conf, StructType schema, Schema avroSchema, Option<BloomFilter> bloomFilterOpt, HoodieConfig config) {
     Configuration hadoopConf = new Configuration(conf);
     String writeLegacyFormatEnabled = config.getStringOrDefault(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED, "false");
     hadoopConf.set("spark.sql.parquet.writeLegacyFormat", writeLegacyFormatEnabled);
@@ -84,17 +96,30 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
     hadoopConf.set("spark.sql.parquet.fieldId.write.enabled", config.getStringOrDefault(PARQUET_FIELD_ID_WRITE_ENABLED));
     this.writeLegacyListFormat = Boolean.parseBoolean(writeLegacyFormatEnabled)
         || Boolean.parseBoolean(config.getStringOrDefault(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false"));
-    setSchema(HoodieInternalRowUtils.getCachedSchema(avroSchema), hadoopConf);
+    ParquetWriteSupport.setSchema(HoodieInternalRowUtils.getCachedSchema(avroSchema), hadoopConf);
     this.avroSchema = avroSchema;
-    this.rootFieldWriters = avroSchema.getFields().stream()
-        .map(field -> makeWriter(field.schema()))
-        .toArray(ValueWriter[]::new);
+    this.rootFieldWriters = IntStream.range(0, avroSchema.getFields().size()).mapToObj(i -> {
+      Schema.Field field = avroSchema.getFields().get(i);
+      return makeWriter(field.schema(), schema.fields()[i].dataType());
+    }).toArray(ValueWriter[]::new);
     this.hadoopConf = hadoopConf;
     this.bloomFilterWriteSupportOpt = bloomFilterOpt.map(HoodieBloomFilterRowWriteSupport::new);
   }
 
   public Configuration getHadoopConf() {
     return hadoopConf;
+  }
+
+  @Override
+  public WriteContext init(Configuration configuration) {
+    Map<String, String> metadata = new HashMap<>();
+    metadata.put("org.apache.spark.version", VersionUtils.shortVersion(SparkBuildInfo.spark_version()));
+    if (datetimeRebaseMode == LegacyBehaviorPolicy.LEGACY()) {
+      metadata.put("org.apache.spark.legacyDateTime", "");
+      metadata.put("org.apache.spark.timeZone", SQLConf.get().sessionLocalTimeZone());
+    }
+    MessageType messageType = new AvroSchemaConverter(configuration).convert(avroSchema);
+    return new WriteContext(messageType, metadata);
   }
 
   @Override
@@ -154,8 +179,8 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
     }
   }
 
-  private ValueWriter makeWriter(Schema schema) {
-    Schema resolvedSchema = resolveNullableSchema(schema);
+  private ValueWriter makeWriter(Schema avroSchema, DataType dataType) {
+    Schema resolvedSchema = resolveNullableSchema(avroSchema);
     Schema.Type type = resolvedSchema.getType();
     LogicalType logicalType = resolvedSchema.getLogicalType();
     switch (type) {
@@ -176,7 +201,8 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
             return (row, ordinal) -> recordConsumer.addLong((long) timestampRebaseFunction.apply(row.getLong(ordinal)));
           } else if (logicalType.getName().equals(LogicalTypes.localTimestampMicros().getName())) {
             return (row, ordinal) -> recordConsumer.addLong(row.getLong(ordinal));
-          } else if (logicalType.getName().equals(LogicalTypes.localTimestampMillis().getName())) {
+          } else if (logicalType.getName().equals(LogicalTypes.localTimestampMillis().getName()) && dataType instanceof TimestampNTZType) {
+            // only go through conversion if spark data type is TimestampNTZType
             return (row, ordinal) -> recordConsumer.addLong(DateTimeUtils.microsToMillis(row.getLong(ordinal)));
           }
         }
@@ -209,14 +235,15 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
         return (row, ordinal) -> recordConsumer.addBinary(
             Binary.fromReusedByteArray(row.getBinary(ordinal)));
       case RECORD:
-        ValueWriter[] fieldWriters = resolvedSchema.getFields().stream()
-            .map(field -> makeWriter(field.schema()))
-            .toArray(ValueWriter[]::new);
+        ValueWriter[] fieldWriters = IntStream.range(0, resolvedSchema.getFields().size()).mapToObj(i -> {
+          Schema.Field field = resolvedSchema.getFields().get(i);
+          return makeWriter(field.schema(), ((StructType) dataType).fields()[i].dataType());
+        }).toArray(ValueWriter[]::new);
 
         return (row, ordinal) ->
           consumeGroup(() -> writeFields(row.getStruct(ordinal, resolvedSchema.getFields().size()), resolvedSchema, fieldWriters));
       case ARRAY:
-        ValueWriter elementWriter = makeWriter(resolvedSchema.getElementType());
+        ValueWriter elementWriter = makeWriter(resolvedSchema.getElementType(), ((ArrayType) dataType).elementType());
         if (!writeLegacyListFormat) {
           return threeLevelArrayWriter("list", "element", elementWriter);
         } else if (resolvedSchema.getElementType().isNullable()) {
@@ -225,8 +252,8 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
           return twoLevelArrayWriter("array", elementWriter);
         }
       case MAP:
-        ValueWriter keyWriter = makeWriter(MAP_KEY_SCHEMA);
-        ValueWriter valueWriter = makeWriter(resolvedSchema.getValueType());
+        ValueWriter keyWriter = makeWriter(MAP_KEY_SCHEMA, DataTypes.StringType);
+        ValueWriter valueWriter = makeWriter(resolvedSchema.getValueType(), ((MapType) dataType).valueType());
         return (row, ordinal) -> {
           MapData mapData = row.getMap(ordinal);
           ArrayData keyArray = mapData.keyArray();
@@ -308,12 +335,12 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
     }
   }
 
-  public static HoodieRowParquetWriteSupport getHoodieRowParquetWriteSupport(Configuration conf, Schema schema,
+  public static HoodieRowParquetWriteSupport getHoodieRowParquetWriteSupport(Configuration conf, StructType schema, Schema avroSchema,
                                                                              Option<BloomFilter> bloomFilterOpt, HoodieConfig config) {
     return (HoodieRowParquetWriteSupport) ReflectionUtils.loadClass(
         config.getStringOrDefault(HoodieStorageConfig.HOODIE_PARQUET_SPARK_ROW_WRITE_SUPPORT_CLASS),
-        new Class<?>[] {Configuration.class, Schema.class, Option.class, HoodieConfig.class},
-        conf, schema, bloomFilterOpt, config);
+        new Class<?>[] {Configuration.class, StructType.class, Schema.class, Option.class, HoodieConfig.class},
+        conf, schema, avroSchema, bloomFilterOpt, config);
   }
 
 }
