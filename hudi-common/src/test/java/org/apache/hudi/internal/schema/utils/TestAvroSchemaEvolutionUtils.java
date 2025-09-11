@@ -35,7 +35,6 @@ import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -97,7 +96,7 @@ public class TestAvroSchemaEvolutionUtils {
         Types.UUIDType.get(),
         Types.FixedType.getFixed(12),
         Types.BinaryType.get(),
-        Types.DecimalTypeFixed.get(9, 4, 4)
+        Types.DecimalType.get(9, 4)
     };
 
     for (int i = 0; i < primitiveTypes.length; i++) {
@@ -123,7 +122,7 @@ public class TestAvroSchemaEvolutionUtils {
         Types.Field.get(9, "uuid", Types.UUIDType.get()),
         Types.Field.get(10, "fixed", Types.FixedType.getFixed(10)),
         Types.Field.get(11, "binary", Types.BinaryType.get()),
-        Types.Field.get(12, "decimal", Types.DecimalTypeFixed.get(10, 2, 5))
+        Types.Field.get(12, "decimal", Types.DecimalType.get(10, 2))
     }));
 
     Schema schema = create("t1",
@@ -274,7 +273,6 @@ public class TestAvroSchemaEvolutionUtils {
    * enum => String
    */
   @Test
-  @Disabled
   public void testReWriteRecordWithTypeChanged() {
     String enumSchema = "{\"type\":\"enum\",\"name\":\"Enum\",\"namespace\":\"org.apache.hudi.internal.schema.utils.TestAvroSchemaEvolutionUtils$\",\"symbols\":[\"ENUM1\",\"ENUM2\"]}";
     Schema avroSchema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"h0_record\",\"namespace\":\"hoodie.h0\",\"fields\""
@@ -344,11 +342,11 @@ public class TestAvroSchemaEvolutionUtils {
         .updateColumnType("col2", Types.DoubleType.get())
         .updateColumnType("col21", Types.StringType.get())
         .updateColumnType("col3", Types.StringType.get())
-        .updateColumnType("col31", Types.DecimalTypeBytes.get(18, 9))
-        .updateColumnType("col4", Types.DecimalTypeFixed.get(18, 9, 5))
+        .updateColumnType("col31", Types.DecimalType.get(18, 9))
+        .updateColumnType("col4", Types.DecimalType.get(18, 9))
         .updateColumnType("col41", Types.StringType.get())
         .updateColumnType("col5", Types.DateType.get())
-        .updateColumnType("col51", Types.DecimalTypeBytes.get(18, 9))
+        .updateColumnType("col51", Types.DecimalType.get(18, 9))
         .updateColumnType("col6", Types.StringType.get())
         .updateColumnType("enum", Types.StringType.get());
     InternalSchema newSchema = SchemaChangeUtils.applyTableChanges2Schema(internalSchema, updateChange);
