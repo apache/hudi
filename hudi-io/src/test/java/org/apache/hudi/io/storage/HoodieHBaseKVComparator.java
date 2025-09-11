@@ -19,59 +19,11 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hadoop.hbase.Cell;
-import org.apache.hadoop.hbase.CellComparator;
+import org.apache.hadoop.hbase.CellComparatorImpl;
 
-import java.util.Comparator;
-
-public class HoodieHBaseKVComparator implements CellComparator {
-  @Override
-  public int compare(Cell leftCell, Cell rightCell) {
-    return 0;
-  }
-
-  @Override
-  public int compare(Cell leftCell, Cell rightCell, boolean ignoreSequenceid) {
-    return 0;
-  }
-
-  @Override
-  public int compareRows(Cell leftCell, Cell rightCell) {
-    return 0;
-  }
-
-  @Override
-  public int compareRows(Cell cell, byte[] bytes, int offset, int length) {
-    return 0;
-  }
-
-  @Override
-  public int compareWithoutRow(Cell leftCell, Cell rightCell) {
-    return 0;
-  }
-
-  @Override
-  public int compareFamilies(Cell leftCell, Cell rightCell) {
-    return 0;
-  }
-
-  @Override
-  public int compareQualifiers(Cell leftCell, Cell rightCell) {
-    return 0;
-  }
-
-  @Override
-  public int compareTimestamps(Cell leftCell, Cell rightCell) {
-    return 0;
-  }
-
-  @Override
-  public int compareTimestamps(long leftCellts, long rightCellts) {
-    return 0;
-  }
-
-  @Override
-  public Comparator getSimpleComparator() {
-    return null;
-  }
+/**
+ * This class is used by HBase HFile reader to read HFiles written by Hudi
+ * along with this comparator class
+ */
+public class HoodieHBaseKVComparator extends CellComparatorImpl {
 }
