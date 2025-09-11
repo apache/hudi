@@ -7,7 +7,7 @@ on:
       - branch-0.x
 
 concurrency:
-  group: ${{ github.ref }}
+  group: pr-compliance-${{ github.ref }}
   cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') }}
 
 jobs:
