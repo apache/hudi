@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -35,7 +36,6 @@ import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.io.api.RecordConsumer;
 import org.apache.parquet.schema.MessageType;
-import org.apache.spark.SparkBuildInfo;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.SpecializedGetters;
@@ -113,7 +113,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   @Override
   public WriteContext init(Configuration configuration) {
     Map<String, String> metadata = new HashMap<>();
-    metadata.put("org.apache.spark.version", VersionUtils.shortVersion(SparkBuildInfo.spark_version()));
+    metadata.put("org.apache.spark.version", VersionUtils.shortVersion(HoodieSparkUtils.getSparkVersion()));
     if (datetimeRebaseMode == LegacyBehaviorPolicy.LEGACY()) {
       metadata.put("org.apache.spark.legacyDateTime", "");
       metadata.put("org.apache.spark.timeZone", SQLConf.get().sessionLocalTimeZone());

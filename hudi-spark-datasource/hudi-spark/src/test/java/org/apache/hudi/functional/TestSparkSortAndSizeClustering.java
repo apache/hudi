@@ -51,6 +51,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.Type;
 import org.apache.spark.api.java.JavaRDD;
@@ -181,7 +182,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     }
   }
 
-  // Validate that clustering produces decimals in legacy format and lists in newer format
+  // Validate that clustering produces decimals in legacy format and lists in newer format. Assert that the unit is correct on the timestamps
   private void validateTypesAfterClustering(List<HoodieWriteStat> writeStats) {
     writeStats.stream().map(writeStat -> new StoragePath(metaClient.getBasePath(), writeStat.getPath())).forEach(writtenPath -> {
       MessageType schema = ParquetUtils.readMetadata(storage, writtenPath)
@@ -193,6 +194,10 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
       int arrayFieldIndex = schema.getFieldIndex("array_field");
       Type arrayType = schema.getFields().get(arrayFieldIndex);
       assertEquals("list", arrayType.asGroupType().getFields().get(0).getName());
+      int timeMillisField = schema.getFieldIndex("timestamp_millis_field");
+      assertEquals(LogicalTypeAnnotation.TimeUnit.MILLIS, ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) schema.getFields().get(timeMillisField).getLogicalTypeAnnotation()).getUnit());
+      int timeMicrosField = schema.getFieldIndex("timestamp_micros_nullable_field");
+      assertEquals(LogicalTypeAnnotation.TimeUnit.MICROS, ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) schema.getFields().get(timeMicrosField).getLogicalTypeAnnotation()).getUnit());
     });
   }
 
