@@ -15,7 +15,31 @@ jobs:
   validate-pr-title:
     runs-on: ubuntu-latest
     steps:
-      - name: Validate PR title based on Conventional Commits spec
+      - name: Check for legacy PR title format using JIRA or MINOR
+        id: check-legacy-format
+        run: |
+          title="${{ github.event.pull_request.title }}"
+          echo "Checking PR title: $title"
+          
+          # Check for HUDI JIRA format: [HUDI-1234] description
+          if [[ "$title" =~ ^\[HUDI-[0-9]+\]\ .+ ]]; then
+            echo "✅ Title matches HUDI JIRA format"
+            echo "skip_conventional=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check for MINOR format: [MINOR] description
+          if [[ "$title" =~ ^\[MINOR\]\ .+ ]]; then
+            echo "✅ Title matches MINOR format"
+            echo "skip_conventional=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "Title does not match JIRA/MINOR format, will validate as conventional commit"
+          echo "skip_conventional=false" >> $GITHUB_OUTPUT
+
+      - name: Validate PR title with Conventional Commits spec
+        if: steps.check-legacy-format.outputs.skip_conventional == 'false'
         uses: amannn/action-semantic-pull-request@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -28,7 +52,6 @@ jobs:
             refactor
             perf
             test
-            ci
             chore
             improvement
             blocker
@@ -44,6 +67,5 @@ jobs:
             bot
             ignore-semantic-pull-request
           validateSingleCommit: false
-          # Custom header pattern to allow both conventional commits and HUDI/MINOR formats
-          headerPattern: '^(?:(\w*)(?:\(([^)]*)\))?!?: (.*)|(\[(HUDI-\d+|MINOR)\])(.*))$'
+          headerPattern: '^(\w+)(?:\(([^)]*)\))?!?: (.+)$'
           headerPatternCorrespondence: type,scope,subject
