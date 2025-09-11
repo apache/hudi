@@ -1,0 +1,18 @@
+{
+  "type": "record",
+  "name": "PrimitiveType",
+  "fields": [
+    {
+      "name": "intField",
+      "type": "int"
+    },
+    {
+      "name": "nullField",
+      "type": "null"
+    },
+    {
+      "name": "nullFieldV2",
+      "type": ["null", "long", "null"]
+    }
+  ]
+}
