@@ -2054,7 +2054,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   }
 
   @Test
-  def testClusteringWithRowWriterEnabledAndDisable(): Unit = { // TODO use complicated schema here with initial commit in spark write client? or new test case?
+  def testClusteringWithRowWriterEnabledAndDisable(): Unit = {
     val optsWithCluster = Map(
       INLINE_CLUSTERING_ENABLE.key() -> "true",
       "hoodie.clustering.inline.max.commits" -> "2",
