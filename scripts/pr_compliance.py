@@ -464,13 +464,16 @@ class ValidateBody:
     def _has_github_issue_link(self):
         # Look for GitHub issue patterns:
         # - fixes #123, resolves #123, closes #123
-        # - https://github.com/owner/repo/issues/123
-        # - Fix for #123, Fixes #123, etc.
+        # - fixes https://github.com/apache/hudi/issues/123
+        # - resolves https://github.com/apache/hudi/issues/123
+        # - closes https://github.com/apache/hudi/issues/123
+        # - https://github.com/apache/hudi/issues/123
+        # - fix for #123, etc.
         issue_patterns = [
             r'(?i)(fix(?:es|ed)?|resolv(?:es?|ed?)|clos(?:es?|ed?))\s+#\d+',  # fixes #123
-            r'(?i)(fix(?:es|ed)?|resolv(?:es?|ed?)|clos(?:es?|ed?))\s+https://github\.com/[^/]+/[^/]+/issues/\d+',
-            # fixes https://github.com/owner/repo/issues/123
-            r'https://github\.com/[^/]+/[^/]+/issues/\d+',  # https://github.com/owner/repo/issues/123
+            r'(?i)(fix(?:es|ed)?|resolv(?:es?|ed?)|clos(?:es?|ed?))\s+https://github\.com/apache/hudi/issues/\d+',
+            # fixes https://github.com/apache/hudi/issues/123
+            r'https://github\.com/apache/hudi/issues/\d+',  # https://github.com/apache/hudi/issues/123
             r'(?i)fix\s+for\s+#\d+'  # fix for #123
         ]
 
