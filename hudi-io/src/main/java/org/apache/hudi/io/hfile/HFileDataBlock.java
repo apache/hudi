@@ -38,6 +38,10 @@ import static org.apache.hudi.io.hfile.KeyValue.KEY_OFFSET;
  * Represents a {@link HFileBlockType#DATA} block.
  */
 public class HFileDataBlock extends HFileBlock {
+  private static final int KEY_LENGTH_LENGTH = SIZEOF_INT16;
+  private static final int COLUMN_FAMILY_LENGTH = SIZEOF_BYTE;
+  private static final int VERSION_TIMESTAMP_LENGTH = SIZEOF_INT64;
+  private static final int KEY_TYPE_LENGTH = SIZEOF_BYTE;
   // Hudi does not use HFile MVCC timestamp version so the version
   // is always 0, thus the byte length of the version is always 1.
   // This assumption is also validated when parsing {@link HFileInfo},
@@ -207,7 +211,7 @@ public class HFileDataBlock extends HFileBlock {
       // Length of key + length of a short variable indicating length of key.
       // Note that 10 extra bytes are required by hbase reader.
       // That is: 1 byte for column family length, 8 bytes for timestamp, 1 bytes for key type.
-      dataBuf.putInt(kv.key.length + SIZEOF_INT16 + SIZEOF_BYTE + SIZEOF_INT64 + SIZEOF_BYTE);
+      dataBuf.putInt(kv.key.length + KEY_LENGTH_LENGTH + COLUMN_FAMILY_LENGTH + VERSION_TIMESTAMP_LENGTH + KEY_TYPE_LENGTH);
       // Length of value.
       dataBuf.putInt(kv.value.length);
       // Key content length.
