@@ -560,7 +560,7 @@ object ColumnStatsIndexSupport {
         value match {
           case buffer: ByteBuffer =>
             if (valueMetadata.getValueType.equals(ValueType.DECIMAL)) {
-              val decimalMetadata = valueMetadata.asInstanceOf[ValueMetadata.DecimalMetadata]
+              val decimalMetadata = valueMetadata.asInstanceOf[ValueMetadata.DecimalValueMetadata]
               convertBytesToBigDecimal(buffer.array(), decimalMetadata.getPrecision, decimalMetadata.getScale)
             } else if (valueMetadata.getValueType.equals(ValueType.V1)) {
               val logicalType = DecimalWrapper.SCHEMA$.getField("value").schema().getLogicalType

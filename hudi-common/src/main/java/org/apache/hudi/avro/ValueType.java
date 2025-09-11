@@ -463,7 +463,7 @@ public enum ValueType {
   }
 
   public static BigDecimal castToDecimal(Object val, ValueMetadata meta) {
-    ValueMetadata.DecimalMetadata decimalMetadata = (ValueMetadata.DecimalMetadata) meta;
+    ValueMetadata.DecimalValueMetadata decimalMetadata = (ValueMetadata.DecimalValueMetadata) meta;
     int precision = decimalMetadata.getPrecision();
     int scale = decimalMetadata.getScale();
     if (val instanceof BigDecimal) {

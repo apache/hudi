@@ -20,6 +20,7 @@
 package org.apache.hudi.avro;
 
 import org.apache.hudi.avro.model.HoodieValueTypeInfo;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 
 import org.apache.avro.LogicalTypes;
@@ -38,7 +39,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_
 public class ValueMetadata implements Serializable {
   private final ValueType valueType;
 
-  private ValueMetadata(ValueType valueType) {
+  protected ValueMetadata(ValueType valueType) {
     this.valueType = valueType;
   }
 
@@ -95,15 +96,31 @@ public class ValueMetadata implements Serializable {
 
   public static final ValueMetadata NULL_METADATA = new ValueMetadata(ValueType.NULL);
 
-  public static class DecimalMetadata extends ValueMetadata {
+  public interface DecimalValueMetadata {
+
+    int getPrecision();
+
+    int getScale();
+
+    static String encodeData(DecimalValueMetadata decimalValueMetadata) {
+      return String.format("%d,%d", decimalValueMetadata.getPrecision(), decimalValueMetadata.getScale());
+    }
+
+    static Pair<Integer, Integer> decodeData(String data) {
+      //TODO: decide if we want to store things in a better way
+      String[] splits = data.split(",");
+      return Pair.of(Integer.parseInt(splits[0]), Integer.parseInt(splits[1]));
+    }
+  }
+
+  protected static class DecimalMetadata extends ValueMetadata implements DecimalValueMetadata {
 
     public static DecimalMetadata create(String additionalInfo) {
       if (additionalInfo == null) {
         throw new IllegalArgumentException("additionalInfo cannot be null");
       }
-      //TODO: decide if we want to store things in a better way
-      String[] splits = additionalInfo.split(",");
-      return new DecimalMetadata(Integer.parseInt(splits[0]), Integer.parseInt(splits[1]));
+      Pair<Integer, Integer> data = DecimalValueMetadata.decodeData(additionalInfo);
+      return new DecimalMetadata(data.getLeft(), data.getRight());
     }
 
     public static DecimalMetadata create(LogicalTypes.Decimal decimal) {
@@ -112,6 +129,10 @@ public class ValueMetadata implements Serializable {
 
     public static DecimalMetadata create(PrimitiveType primitiveType) {
       return new DecimalMetadata(LogicalTypeTokenParser.getPrecision(primitiveType), LogicalTypeTokenParser.getScale(primitiveType));
+    }
+
+    public static DecimalMetadata create(int precision, int scale) {
+      return new DecimalMetadata(precision, scale);
     }
 
     private final int precision;
@@ -123,17 +144,19 @@ public class ValueMetadata implements Serializable {
       this.scale = scale;
     }
 
+    @Override
     public int getPrecision() {
       return precision;
     }
 
+    @Override
     public int getScale() {
       return scale;
     }
 
     @Override
     public String getAdditionalInfo() {
-      return String.format("%d,%d", precision, scale);
+      return DecimalValueMetadata.encodeData(this);
     }
   }
 
