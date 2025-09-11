@@ -1,0 +1,49 @@
+name: PR Title Validation
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches:
+      - master
+      - branch-0.x
+
+concurrency:
+  group: pr-title-validation-${{ github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') }}
+
+jobs:
+  validate-pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR title based on Conventional Commits spec
+        uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            chore
+            improvement
+            blocker
+            security
+          requireScope: false
+          # Disable subject case validation to be more permissive
+          subjectPattern: ^.+$
+          subjectPatternError: |
+            The subject "{subject}" found in the pull request title "{title}"
+            is empty. Please provide a meaningful description.
+          # Allow ignoring certain labels
+          ignoreLabels: |
+            bot
+            ignore-semantic-pull-request
+          # Validate header format
+          validateSingleCommit: false
+          # Custom header pattern for conventional commits
+          headerPattern: '^(\w*)(?:\(([^)]*)\))?!?: (.*)$'
+          headerPatternCorrespondence: type,scope,subject
