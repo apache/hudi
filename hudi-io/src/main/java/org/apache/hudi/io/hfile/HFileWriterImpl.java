@@ -109,16 +109,9 @@ public class HFileWriterImpl implements HFileWriter {
     metaInfo.put(name, value);
   }
 
-  // Append a file info kv pair even old value exists.
+  // Append a file info kv pair.
   public void appendFileInfo(String name, byte[] value) {
     fileInfoBlock.add(name, value);
-  }
-
-  // This is mainly used to test the impact of certain file properties.
-  public void appendFileInfoIfNotExists(String name, byte[] value) {
-    if (!fileInfoBlock.containsKey(name)) {
-      fileInfoBlock.add(name, value);
-    }
   }
 
   @Override
@@ -241,7 +234,7 @@ public class HFileWriterImpl implements HFileWriter {
         toBytes(avgKeyLen));
     fileInfoBlock.add(
         new String(HFileInfo.FILE_CREATION_TIME_TS.getBytes(), StandardCharsets.UTF_8),
-        toBytes(context.getFileCreateTime()));
+        toBytes(context.getFileCreationTime()));
 
     // Average value length.
     int avgValueLen = totalNumberOfRecords == 0
@@ -250,10 +243,9 @@ public class HFileWriterImpl implements HFileWriter {
         new String(HFileInfo.AVG_VALUE_LEN.getBytes(), StandardCharsets.UTF_8),
         toBytes(avgValueLen));
 
-    // NOTE: To make MVCC usage consistent cross different table versions,
-    // we should set following properties.
-    // After table versions <= 8 are deprecated, MVCC byte can be removed from key-value pair.
-    appendFileInfoIfNotExists(
+    // NOTE: Set this property to make sure the key value and MVCC timestamp
+    // pairs are properly decoded
+    appendFileInfo(
         new String(HFileInfo.KEY_VALUE_VERSION.getBytes(), StandardCharsets.UTF_8),
         toBytes(KEY_VALUE_VERSION_WITH_MVCC_TS));
   }

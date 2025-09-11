@@ -31,17 +31,17 @@ public class HFileContext {
   private final HoodieCompressor compressor;
   private final ChecksumType checksumType;
   private final int blockSize;
-  private final long fileCreateTime;
+  private final long fileCreationTime;
 
   private HFileContext(CompressionCodec compressionCodec,
                        int blockSize,
                        ChecksumType checksumType,
-                       long fileCreateTime) {
+                       long fileCreationTime) {
     this.compressionCodec = compressionCodec;
     this.compressor = HoodieCompressorFactory.getCompressor(compressionCodec);
     this.blockSize = blockSize;
     this.checksumType = checksumType;
-    this.fileCreateTime = fileCreateTime;
+    this.fileCreationTime = fileCreationTime;
   }
 
   CompressionCodec getCompressionCodec() {
@@ -60,8 +60,8 @@ public class HFileContext {
     return checksumType;
   }
 
-  long getFileCreateTime() {
-    return fileCreateTime;
+  long getFileCreationTime() {
+    return fileCreationTime;
   }
 
   public static Builder builder() {
@@ -72,7 +72,7 @@ public class HFileContext {
     private CompressionCodec compressionCodec = CompressionCodec.NONE;
     private int blockSize = 1024 * 1024;
     private ChecksumType checksumType = ChecksumType.NULL;
-    private long fileCreateTime = System.currentTimeMillis();
+    private long fileCreationTime = System.currentTimeMillis();
 
     public Builder blockSize(int blockSize) {
       this.blockSize = blockSize;
@@ -89,13 +89,13 @@ public class HFileContext {
       return this;
     }
 
-    public Builder fileCreateTime(long fileCreateTime) {
-      this.fileCreateTime = fileCreateTime;
+    public Builder fileCreationTime(long fileCreationTime) {
+      this.fileCreationTime = fileCreationTime;
       return this;
     }
 
     public HFileContext build() {
-      return new HFileContext(compressionCodec, blockSize, checksumType, fileCreateTime);
+      return new HFileContext(compressionCodec, blockSize, checksumType, fileCreationTime);
     }
   }
 }

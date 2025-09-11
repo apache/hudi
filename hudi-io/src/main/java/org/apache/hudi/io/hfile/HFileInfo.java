@@ -46,16 +46,16 @@ public class HFileInfo {
   private final Map<UTF8StringKey, byte[]> infoMap;
   private final long fileCreationTime;
   private final Option<Key> lastKey;
-  // This is set to trigger the constant MVCC 0,
-  // such that table version 6 and >=8 can have
-  // the same behavior.
-  private final long maxMvccTs;
 
   public HFileInfo(Map<UTF8StringKey, byte[]> infoMap) {
     this.infoMap = infoMap;
     this.fileCreationTime = parseFileCreationTime();
     this.lastKey = parseLastKey();
-    this.maxMvccTs = parseMaxMvccTs();
+    if (parseMaxMvccTs() > 0) {
+      // The HFile written by Hudi does not contain MVCC timestamps.
+      // Parsing MVCC timestamps is not supported.
+      throw new UnsupportedOperationException("HFiles with MVCC timestamps are not supported");
+    }
   }
 
   public long getFileCreationTime() {

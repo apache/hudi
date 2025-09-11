@@ -75,7 +75,7 @@ class TestHFileWriter {
   @Test
   void testSameKeyLocation() throws IOException {
     // 50 bytes for data part limit.
-    HFileContext context = new HFileContext.Builder().blockSize(100).build();
+    HFileContext context = new HFileContext.Builder().blockSize(50).build();
     String testFile = TEST_FILE;
     try (DataOutputStream outputStream =
              new DataOutputStream(Files.newOutputStream(Paths.get(testFile)));
@@ -101,18 +101,16 @@ class TestHFileWriter {
       reader.initializeMetadata();
       assertEquals(20, reader.getNumKeyValueEntries());
       HFileTrailer trailer = reader.getTrailer();
-      assertEquals(4, trailer.getDataIndexCount());
+      assertEquals(6, trailer.getDataIndexCount());
       int i = 0;
       for (Key key : reader.getDataBlockIndexMap().keySet()) {
-        String expectedKey = String.format("key%02d", i);
-        String actualKey = key.getContentInString();
         assertArrayEquals(
             String.format("key%02d", i).getBytes(),
             key.getContentInString().getBytes());
         if (i == 0) {
           i++;
         } else {
-          i += 4;
+          i += 2;
         }
       }
     }
