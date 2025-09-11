@@ -20,151 +20,9 @@ import os
 import re
 import sys
 
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-#  _____ _ _   _       __     __    _ _     _       _   _                 #
-# |_   _(_) |_| | ___  \ \   / /_ _| (_) __| | __ _| |_(_) ___  _ __      #  
-#   | | | | __| |/ _ \  \ \ / / _` | | |/ _` |/ _` | __| |/ _ \| '_ \     #
-#   | | | | |_| |  __/   \ V / (_| | | | (_| | (_| | |_| | (_) | | | |    #
-#   |_| |_|\__|_|\___|    \_/ \__,_|_|_|\__,_|\__,_|\__|_|\___/|_| |_|    #
-#                                                                         # 
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #                                                                 
 
-# Allowed PR title prefixes - can be updated to add/remove prefixes as needed
-ALLOWED_PREFIXES = [
-    r"\[HUDI-[0-9]{1,}\]",  # HUDI JIRA issue format
-    r"\[MINOR\]",  # Minor changes
-    r"\(feat\)",  # A new feature
-    r"\(fix\)",  # A bug fix
-    r"\(docs\)",  # Documentation changes only
-    r"\(style\)",  # Code style, formatting, or lint-only changes (no logic impact)
-    r"\(refactor\)",  # Code changes that neither fix a bug nor add a feature (e.g., cleanups, restructuring)
-    r"\(perf\)",  # Performance improvements
-    r"\(test\)",  # Adding or correcting tests
-    r"\(chore\)",  # Tooling, build system, CI/CD, or maintenance tasks
-    r"\(improvement\)",  # Enhancements to existing functionality (aligns with past JIRA usage)
-    r"\(blocker\)",  # Critical issues that block a release (rare, reserved use)
-    r"\(security\)",  # Security-related fixes or improvements
-    r"\(breaking\)"  # Use alongside others (e.g., (feat) or (refactor)) to indicate a breaking change
-]
-
-#validator for titles
-def validate_title(title: str):
-    # Create regex pattern from allowed prefixes (without capture groups to avoid tuples)
-    pattern = r'(?:' + '|'.join(ALLOWED_PREFIXES) + r')'
-    matches = re.findall(pattern, title)
-
-    # Allow exactly one prefix, OR allow combinations with (breaking)
-    if len(matches) == 1:
-        # Don't allow standalone (breaking) 
-        return "(breaking)" not in matches
-    elif len(matches) == 2:
-        # Check if one of the matches is (breaking) and the other is (feat) or (refactor)
-        has_breaking = "(breaking)" in matches
-        has_feat = "(feat)" in matches
-        has_refactor = "(refactor)" in matches
-
-        return has_breaking and (has_feat or has_refactor)
-
-    return False
-
-#runs an individual title test
-#
-#   PARAMS
-# name: str - the name of the test
-# title: str - the title to test
-# isTrue: bool - is the title valid
-#
-#   RETURN
-# bool - True if the test passed, False if it failed
-def run_title_test(name: str, title: str, isTrue: bool):
-    if isTrue != validate_title(title):
-        print(f"{name} - FAILED")
-        return False
-    print(f"{name} - PASSED")
-    return True
-
-#tests for title validation
-#
-#   RETURN
-# bool - True if all tests passed, False if any tests fail
-def test_title():
-    test_return = True
-    #test that position doesn't matter for issue
-    test_return = run_title_test("issue at front", "[HUDI-1324] my fake pr", True) and test_return
-    test_return =  run_title_test("issue in middle", " my [HUDI-1324] fake pr", True) and test_return
-    test_return =  run_title_test("issue at end", " my fake pr [HUDI-1324]", True)  and test_return
-
-    #test position doesn't matter for minor
-    test_return = run_title_test("minor at front", "[MINOR] my fake pr", True) and test_return
-    test_return = run_title_test("minor in middle", " my [MINOR] fake pr", True) and test_return
-    test_return = run_title_test("minor at end", " my fake pr [MINOR]", True) and test_return
-
-    # test new prefixes without JIRA issue
-    test_return = run_title_test("feat prefix", "(feat) add new feature", True) and test_return
-    test_return = run_title_test("feat prefix with breaking change", "(feat)(breaking) add new feature",
-                                 True) and test_return
-    test_return = run_title_test("fix prefix", "(fix) fix bug", True) and test_return
-    test_return = run_title_test("docs prefix", "(docs) update documentation", True) and test_return
-    test_return = run_title_test("style prefix", "(style) formatting changes", True) and test_return
-    test_return = run_title_test("refactor prefix", "(refactor) code refactoring", True) and test_return
-    test_return = run_title_test("refactor prefix with breaking change", "(refactor)(breaking) code refactoring",
-                                 True) and test_return
-    test_return = run_title_test("perf prefix", "(perf) performance improvement", True) and test_return
-    test_return = run_title_test("test prefix", "(test) add tests", True) and test_return
-    test_return = run_title_test("chore prefix", "(chore) maintenance task", True) and test_return
-    test_return = run_title_test("improvement prefix", "(improvement) enhance feature", True) and test_return
-    test_return = run_title_test("blocker prefix", "(blocker) critical issue", True) and test_return
-    test_return = run_title_test("security prefix", "(security) security fix", True) and test_return
-
-    #test that more than 4 nums is also ok
-    test_return = run_title_test("more than 4 nums in issue", "[HUDI-12345] my fake pr", True) and test_return
-
-    #test that 1 nums is also ok
-    test_return = run_title_test("1 num in issue", "[HUDI-1] my fake pr", True) and test_return
-
-    #no nums not ok
-    test_return = run_title_test("no nums in issue", "[HUDI-] my fake pr", False) and test_return
-
-    #no brackets not ok
-    test_return = run_title_test("no brackets around issue", "HUDI-1234 my fake pr", False) and test_return
-    test_return = run_title_test("no brackets around minor", "MINOR my fake pr", False) and test_return
-    test_return = run_title_test("no brackets around feat", "feat my fake pr", False) and test_return
-    
-    #lowercase not ok
-    test_return = run_title_test("lowercase hudi", "[hudi-1234] my fake pr", False) and test_return
-    test_return = run_title_test("lowercase minor", "[minor] my fake pr", False) and test_return
-
-    # invalid prefix not ok
-    test_return = run_title_test("invalid prefix", "[invalid] my fake pr", False) and test_return
-    test_return = run_title_test("invalid prefix", "[feat] my fake pr", False) and test_return
-    test_return = run_title_test("invalid prefix", "(invalid) my fake pr", False) and test_return
-    test_return = run_title_test("no independent breaking label", "(breaking) breaking change", False) and test_return
-    test_return = run_title_test("no prefix", "my fake pr", False) and test_return
-
-    #duplicate not ok
-    test_return = run_title_test("duplicate issue", "[HUDI-1324][HUDI-1324] my fake pr", False) and test_return
-    test_return = run_title_test("duplicate minor", "[MINOR] my fake pr [MINOR]", False) and test_return
-    test_return = run_title_test("duplicate feat", "(feat) my fake pr (feat)", False) and test_return
-
-    # multiple different prefixes not ok (except allowed breaking combinations)
-    test_return = run_title_test("issue and minor", "[HUDI-1324] my [MINOR]fake pr", False) and test_return
-    test_return = run_title_test("feat and fix", "(feat) my (fix) fake pr", False) and test_return
-    test_return = run_title_test("breaking with fix", "(fix)(breaking) fix with breaking change", False) and test_return
-    test_return = run_title_test("breaking with docs", "(docs)(breaking) docs with breaking change",
-                                 False) and test_return
-    test_return = run_title_test("three prefixes", "(feat)(refactor)(breaking) too many prefixes",
-                                 False) and test_return
-    test_return = run_title_test("three prefixes", "(feat)(breaking)(breaking) too many prefixes",
-                                 False) and test_return
-    print("*****")
-    if test_return:
-        print("All title tests passed")
-    else:
-        print("Some title tests failed")
-    print("*****")
-
-    return test_return
-
+# PR titles are now validated by the separate GitHub Action workflow
+# This script only validates PR body content and GitHub issue links for fix PRs
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #  ____            _        __     __    _ _     _       _   _                #
@@ -441,7 +299,7 @@ class ValidateBody:
                 return False
             elif o == Outcomes.SUCCESS:
                 # Check for GitHub issue link requirement for fix PRs
-                if pr_title and "(fix)" in pr_title:
+                if pr_title and (pr_title.startswith("fix:") or pr_title.startswith("fix(") or "(fix)" in pr_title):
                     if not self._has_github_issue_link():
                         self.section.error("", "",
                                            "Fix PRs must include a GitHub issue link (e.g., fixes #1234, resolves #1234, or direct GitHub issue URL)")
@@ -661,28 +519,40 @@ def test_body():
     fix_sections_with_issue = [good_problem_statement, fix_changelogs_with_issue, good_impact, good_risklevel,
                                good_docs_update,
                                template_checklist]
-    tests_passed = run_test("fix PR with issue link", build_body(fix_sections_with_issue), True, DEBUG_MESSAGES,
+    tests_passed = run_test("fix PR with issue link (old format)", build_body(fix_sections_with_issue), True,
+                            DEBUG_MESSAGES,
                             "(fix) fix bug") and tests_passed
+    tests_passed = run_test("fix PR with issue link (new format)", build_body(fix_sections_with_issue), True,
+                            DEBUG_MESSAGES,
+                            "fix: fix bug") and tests_passed
 
     fix_changelogs_with_github_url = good_changelogs.copy()
     fix_changelogs_with_github_url[1] = "Fixed bug. See https://github.com/apache/hudi/issues/123"
     fix_sections_with_github_url = [good_problem_statement, fix_changelogs_with_github_url, good_impact, good_risklevel,
                                     good_docs_update,
                                     template_checklist]
-    tests_passed = run_test("fix PR with GitHub URL", build_body(fix_sections_with_github_url), True, DEBUG_MESSAGES,
+    tests_passed = run_test("fix PR with GitHub URL (old format)", build_body(fix_sections_with_github_url), True,
+                            DEBUG_MESSAGES,
                             "(fix) fix bug") and tests_passed
+    tests_passed = run_test("fix PR with GitHub URL (new format)", build_body(fix_sections_with_github_url), True,
+                            DEBUG_MESSAGES,
+                            "fix: fix bug") and tests_passed
 
     fix_changelogs_without_issue = good_changelogs.copy()
     fix_changelogs_without_issue[1] = "Fixed bug without issue reference"
     fix_sections_without_issue = [good_problem_statement, fix_changelogs_without_issue, good_impact, good_risklevel,
                                   good_docs_update,
                                   template_checklist]
-    tests_passed = run_test("fix PR without issue link", build_body(fix_sections_without_issue), False, DEBUG_MESSAGES,
+    tests_passed = run_test("fix PR without issue link (old format)", build_body(fix_sections_without_issue), False,
+                            DEBUG_MESSAGES,
                             "(fix) fix bug") and tests_passed
+    tests_passed = run_test("fix PR without issue link (new format)", build_body(fix_sections_without_issue), False,
+                            DEBUG_MESSAGES,
+                            "fix: fix bug") and tests_passed
 
     # Non-fix PRs should not require issue links
     tests_passed = run_test("feat PR without issue link", build_body(good_sections), True, DEBUG_MESSAGES,
-                            "(feat) new feature") and tests_passed
+                            "feat: new feature") and tests_passed
 
     print("*****")
     if tests_passed:
@@ -746,10 +616,9 @@ def test_has_github_issue_link():
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
-        title_tests = test_title()
         body_tests = test_body()
         issue_link_tests = test_has_github_issue_link()
-        if title_tests and body_tests and issue_link_tests:
+        if body_tests and issue_link_tests:
             exit(0)
         else:
             exit(-1)
@@ -762,15 +631,11 @@ if __name__ == '__main__':
         print("no title")
         exit(-1)
 
-    if not validate_title(title):
-        print("invalid title")
-        exit(-1)
-
     if body is None:
         print("no pr body")
         exit(-1)
 
-    validator = make_default_validator(body,True)
+    validator = make_default_validator(body, True)
     if not validator.validate(title):
         exit(-1)
     exit(0)

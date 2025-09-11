@@ -28,6 +28,7 @@ jobs:
             refactor
             perf
             test
+            ci
             chore
             improvement
             blocker
