@@ -102,6 +102,7 @@ module.exports = {
         id: "learn",
         path: "learn",
         routeBasePath: "learn",
+        sidebarPath: require.resolve("./sidebarsLearn.js"),
         showLastUpdateAuthor: false,
         showLastUpdateTime: false,
       },
@@ -184,7 +185,7 @@ module.exports = {
             },
             {
               label: "Talks",
-              to: "talks",
+              to: "/learn/talks",
             },
             {
               label: "Video Guides",
@@ -196,11 +197,11 @@ module.exports = {
             },
             {
               label: "Tech Specs",
-              href: "/tech-specs",
+              href: "/learn/tech-specs",
             },
             {
               label: "Tech Specs 1.0",
-              href: "/tech-specs-1point0",
+              href: "/learn/tech-specs-1point0",
             },
             {
               label: "Technical Wiki",
