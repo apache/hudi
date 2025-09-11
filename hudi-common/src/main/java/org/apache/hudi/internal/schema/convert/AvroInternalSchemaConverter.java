@@ -587,17 +587,7 @@ public class AvroInternalSchemaConverter {
         return Schema.createFixed(name, null, null, fixed.getFixedSize());
       }
 
-      case DECIMAL: {
-        Types.DecimalType decimal = (Types.DecimalType) primitive;
-        // NOTE: All schemas corresponding to Avro's type [[FIXED]] are generated
-        //       with the "fixed" name to stay compatible w/ [[SchemaConverters]]
-        String name = recordName + AVRO_NAME_DELIMITER + "fixed";
-        Schema fixedSchema = Schema.createFixed(name,
-            null, null, computeMinBytesForPrecision(decimal.precision()));
-        return LogicalTypes.decimal(decimal.precision(), decimal.scale())
-            .addToSchema(fixedSchema);
-      }
-
+      case DECIMAL:
       case DECIMAL_FIXED: {
         Types.DecimalTypeFixed decimal = (Types.DecimalTypeFixed) primitive;
         // NOTE: All schemas corresponding to Avro's type [[FIXED]] are generated
@@ -619,17 +609,5 @@ public class AvroInternalSchemaConverter {
         throw new UnsupportedOperationException(
                 "Unsupported type ID: " + primitive.typeId());
     }
-  }
-
-  /**
-   * Return the minimum number of bytes needed to store a decimal with a give 'precision'.
-   * reference from Spark release 3.1 .
-   */
-  private static int computeMinBytesForPrecision(int precision) {
-    int numBytes = 1;
-    while (Math.pow(2.0, 8 * numBytes - 1) < Math.pow(10.0, precision)) {
-      numBytes += 1;
-    }
-    return numBytes;
   }
 }

@@ -314,8 +314,8 @@ public class Types {
      * can be casted into `this` safely without losing any precision or range.
      */
     public boolean isWiderThan(PrimitiveType other) {
-      if (other instanceof DecimalType)  {
-        DecimalType dt = (DecimalType) other;
+      if (other instanceof DecimalBase)  {
+        DecimalBase dt = (DecimalBase) other;
         return (precision - scale) >= (dt.precision - dt.scale) && scale > dt.scale;
       }
       if (other instanceof IntType) {
@@ -329,8 +329,8 @@ public class Types {
      * can be casted into `other` safely without losing any precision or range.
      */
     public boolean isTighterThan(PrimitiveType other) {
-      if (other instanceof DecimalType)  {
-        DecimalType dt = (DecimalType) other;
+      if (other instanceof DecimalBase)  {
+        DecimalBase dt = (DecimalBase) other;
         return (precision - scale) <= (dt.precision - dt.scale) && scale <= dt.scale;
       }
       if (other instanceof IntType) {
@@ -371,13 +371,25 @@ public class Types {
   /**
    * Decimal primitive type.
    */
-  public static class DecimalType extends DecimalBase {
+  public static class DecimalType extends DecimalTypeFixed {
     public static DecimalType get(int precision, int scale) {
       return new DecimalType(precision, scale);
     }
 
+    /**
+     * Return the minimum number of bytes needed to store a decimal with a give 'precision'.
+     * reference from Spark release 3.1 .
+     */
+    private static int computeMinBytesForDecimalPrecision(int precision) {
+      int numBytes = 1;
+      while (Math.pow(2.0, 8 * numBytes - 1) < Math.pow(10.0, precision)) {
+        numBytes += 1;
+      }
+      return numBytes;
+    }
+
     private DecimalType(int precision, int scale) {
-      super(precision, scale);
+      super(precision, scale, computeMinBytesForDecimalPrecision(precision));
     }
 
     @Override
