@@ -39,8 +39,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
+import org.apache.avro.Schema;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -89,9 +89,9 @@ public class HoodieRowCreateHandle implements Serializable {
                                int taskPartitionId,
                                long taskId,
                                long taskEpochId,
-                               StructType structType) {
+                               Schema schema) {
     this(table, writeConfig, partitionPath, fileId, instantTime, taskPartitionId, taskId, taskEpochId,
-        structType, false);
+        schema, false);
   }
 
   public HoodieRowCreateHandle(HoodieTable table,
@@ -102,7 +102,7 @@ public class HoodieRowCreateHandle implements Serializable {
                                int taskPartitionId,
                                long taskId,
                                long taskEpochId,
-                               StructType structType,
+                               Schema schema,
                                boolean shouldPreserveHoodieMetadata) {
     this.partitionPath = partitionPath;
     this.table = table;
@@ -143,7 +143,7 @@ public class HoodieRowCreateHandle implements Serializable {
 
       createMarkerFile(partitionPath, fileName, instantTime, table, writeConfig);
 
-      this.fileWriter = HoodieInternalRowFileWriterFactory.getInternalRowFileWriter(path, table, writeConfig, structType);
+      this.fileWriter = HoodieInternalRowFileWriterFactory.getInternalRowFileWriter(path, table, writeConfig, schema);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize file writer for path " + path, e);
     }

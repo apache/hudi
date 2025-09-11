@@ -91,7 +91,7 @@ public class ConsistentBucketBulkInsertDataInternalWriterHelper extends BucketBu
 
     // Always create new base file for bulk_insert
     return new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, fileId,
-        instantTime, taskPartitionId, taskId, taskEpochId, structType, shouldPreserveHoodieMetadata);
+        instantTime, taskPartitionId, taskId, taskEpochId, schema, shouldPreserveHoodieMetadata);
   }
 
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {

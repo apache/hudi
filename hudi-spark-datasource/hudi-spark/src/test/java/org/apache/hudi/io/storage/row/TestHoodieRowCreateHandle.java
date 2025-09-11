@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -96,7 +97,7 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
       String instantTime = "000";
 
       HoodieRowCreateHandle handle = new HoodieRowCreateHandle(table, config, partitionPath, fileId, instantTime,
-          RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
+          RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), AvroConversionUtils.convertStructTypeToAvroSchema(SparkDatasetTestUtils.STRUCT_TYPE, "record"));
       int size = 10 + RANDOM.nextInt(1000);
       // Generate inputs
       Dataset<Row> inputRows = SparkDatasetTestUtils.getRandomRows(sqlContext, size, partitionPath, false);
@@ -133,7 +134,8 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
     String instantTime = "000";
 
     HoodieRowCreateHandle handle =
-        new HoodieRowCreateHandle(table, cfg, partitionPath, fileId, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
+        new HoodieRowCreateHandle(table, cfg, partitionPath, fileId, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(),
+            AvroConversionUtils.convertStructTypeToAvroSchema(SparkDatasetTestUtils.STRUCT_TYPE, "record"));
     int size = 10 + RANDOM.nextInt(1000);
     int totalFailures = 5;
     // Generate first batch of valid rows

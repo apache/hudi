@@ -37,8 +37,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.spark.sql.HoodieDataTypeUtils;
-import org.apache.spark.sql.HoodieInternalRowUtils;
-import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -120,7 +118,6 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
   private static HoodieRowParquetWriteSupport getHoodieRowParquetWriteSupport(StorageConfiguration<?> conf, Schema schema,
                                                                               HoodieConfig config, boolean enableBloomFilter) {
     Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
-    return HoodieRowParquetWriteSupport.getHoodieRowParquetWriteSupport(conf.unwrapAs(Configuration.class), structType, filter, config);
+    return HoodieRowParquetWriteSupport.getHoodieRowParquetWriteSupport(conf.unwrapAs(Configuration.class), schema, filter, config);
   }
 }

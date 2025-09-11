@@ -114,7 +114,7 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
       String partitionPath = String.valueOf(fileId.getLeft());
       LOG.info("Creating new file for partition path {}", partitionPath);
       HoodieRowCreateHandle rowCreateHandle = new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, getNextBucketFileId(bucketId),
-          instantTime, taskPartitionId, taskId, taskEpochId, structType, shouldPreserveHoodieMetadata);
+          instantTime, taskPartitionId, taskId, taskEpochId, schema, shouldPreserveHoodieMetadata);
       handles.put(fileId, rowCreateHandle);
     }
     return handles.get(fileId);

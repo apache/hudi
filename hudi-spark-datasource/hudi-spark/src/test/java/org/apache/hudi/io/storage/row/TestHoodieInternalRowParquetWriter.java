@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -135,6 +136,6 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
         writeConfig.getDynamicBloomFilterMaxNumEntries(),
         writeConfig.getBloomFilterType());
     return HoodieRowParquetWriteSupport.getHoodieRowParquetWriteSupport(hadoopConf,
-        SparkDatasetTestUtils.STRUCT_TYPE, Option.of(filter), writeConfig);
+        AvroConversionUtils.convertStructTypeToAvroSchema(SparkDatasetTestUtils.STRUCT_TYPE, "record"), Option.of(filter), writeConfig);
   }
 }
