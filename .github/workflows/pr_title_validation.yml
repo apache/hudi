@@ -43,8 +43,7 @@ jobs:
           ignoreLabels: |
             bot
             ignore-semantic-pull-request
-          # Validate header format
           validateSingleCommit: false
-          # Custom header pattern for conventional commits
-          headerPattern: '^(\w*)(?:\(([^)]*)\))?!?: (.*)$'
+          # Custom header pattern to allow both conventional commits and HUDI/MINOR formats
+          headerPattern: '^(?:(\w*)(?:\(([^)]*)\))?!?: (.*)|(\[(HUDI-\d+|MINOR)\])(.*))$'
           headerPatternCorrespondence: type,scope,subject
