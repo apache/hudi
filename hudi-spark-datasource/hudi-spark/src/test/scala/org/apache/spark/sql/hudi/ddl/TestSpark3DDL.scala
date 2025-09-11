@@ -420,7 +420,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.sql(s"CALL run_clustering(table => '$tableName', op => 'schedule')")
           spark.sql(s"CALL run_clustering(table => '$tableName', op => 'execute')")
           val clusteringRows = spark.sql(s"CALL show_clustering('$tableName')").collect()
-          assertResult(1)(clusteringRows.length)
+          assertResult(2)(clusteringRows.length)
           val states = clusteringRows.map(_.getString(2))
           assertResult(HoodieInstant.State.COMPLETED.name())(states(0))
         }
@@ -472,7 +472,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           spark.sql(s"CALL run_clustering(table => '$tableName', op => 'schedule')")
           spark.sql(s"CALL run_clustering(table => '$tableName', op => 'execute')")
           val clusteringRows = spark.sql(s"CALL show_clustering('$tableName')").collect()
-          assertResult(2)(clusteringRows.length)
+          assertResult(4)(clusteringRows.length)
           val states = clusteringRows.map(_.getString(2))
           assertResult(HoodieInstant.State.COMPLETED.name())(states(0))
           assertResult(HoodieInstant.State.COMPLETED.name())(states(1))

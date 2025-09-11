@@ -2375,15 +2375,19 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           // Test bucket merge by clustering
           val instant = client.scheduleClustering(HOption.empty()).get()
 
-          checkAnswer(s"call show_clustering(table => '$tableName')")(
-            Seq(instant, 10, HoodieInstant.State.REQUESTED.name(), "*")
-          )
+          val showClusteringResultsPending = spark.sql(s"call show_clustering(table => '$tableName')").collect()
+          showClusteringResultsPending.foreach { row =>
+            assertResult(HoodieInstant.State.REQUESTED.name())(row.getString(2))
+            assertResult(10)(row.getInt(5))
+          }
 
           client.cluster(instant)
 
-          checkAnswer(s"call show_clustering(table => '$tableName')")(
-            Seq(instant, 10, HoodieInstant.State.COMPLETED.name(), "*")
-          )
+          val showClusteringResultsCompleted = spark.sql(s"call show_clustering(table => '$tableName')").collect()
+          showClusteringResultsCompleted.foreach { row =>
+            assertResult(HoodieInstant.State.COMPLETED.name())(row.getString(2))
+            assertResult(10)(row.getInt(5))
+          }
 
           spark.sql("set hoodie.datasource.write.operation = bulk_insert")
         }

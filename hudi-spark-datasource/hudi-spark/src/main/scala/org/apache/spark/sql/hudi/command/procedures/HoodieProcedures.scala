@@ -42,7 +42,6 @@ object HoodieProcedures {
       ,(RunClusteringProcedure.NAME, RunClusteringProcedure.builder)
       ,(ShowClusteringProcedure.NAME, ShowClusteringProcedure.builder)
       ,(ShowCommitsProcedure.NAME, ShowCommitsProcedure.builder)
-      ,(ShowCommitsMetadataProcedure.NAME, ShowCommitsMetadataProcedure.builder)
       ,(ShowArchivedCommitsProcedure.NAME, ShowArchivedCommitsProcedure.builder)
       ,(ShowArchivedCommitsMetadataProcedure.NAME, ShowArchivedCommitsMetadataProcedure.builder)
       ,(ShowCommitFilesProcedure.NAME, ShowCommitFilesProcedure.builder)
@@ -52,7 +51,6 @@ object HoodieProcedures {
       ,(ShowSavepointsProcedure.NAME, ShowSavepointsProcedure.builder)
       ,(DeleteMarkerProcedure.NAME, DeleteMarkerProcedure.builder)
       ,(ShowRollbacksProcedure.NAME, ShowRollbacksProcedure.builder)
-      ,(ShowRollbackDetailProcedure.NAME, ShowRollbackDetailProcedure.builder)
       ,(RunRollbackInflightTableServiceProcedure.NAME, RunRollbackInflightTableServiceProcedure.builder)
       ,(ExportInstantsProcedure.NAME, ExportInstantsProcedure.builder)
       ,(ShowAllFileSystemViewProcedure.NAME, ShowAllFileSystemViewProcedure.builder)
@@ -98,8 +96,6 @@ object HoodieProcedures {
       ,(TruncateTableProcedure.NAME, TruncateTableProcedure.builder)
       ,(PartitionBucketIndexManager.NAME, PartitionBucketIndexManager.builder)
       ,(ShowCleansProcedure.NAME, ShowCleansProcedure.builder)
-      ,(ShowCleansPartitionMetadataProcedure.NAME, ShowCleansPartitionMetadataProcedure.builder)
-      ,(ShowCleansPlanProcedure.NAME, ShowCleansPlanProcedure.builder)
     )
   }
 }
