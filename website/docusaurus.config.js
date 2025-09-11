@@ -590,6 +590,7 @@ module.exports = {
       "data-consent-screen-accept-button-text": "Allow tracking",
       "data-query-input-placeholder-text-color": "rgb(41, 85, 122)",
       "data-submit-query-button-bg-color": "#000",
+      "data-user-analytics-cookie-enabled": "false",
       async: true,
     }
   ],
