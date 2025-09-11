@@ -160,9 +160,10 @@ class TestSetAuditLockProcedure extends HoodieSparkProcedureTestBase {
       checkExceptionContain(s"""call set_audit_lock(table => '$tableName')""")(
         "Argument: state is required")
 
-      // Test providing both table and path parameters
-      checkExceptionContain(s"""call set_audit_lock(table => '$tableName', path => '$tablePath', state => 'enabled')""")(
-        "Cannot specify both table and path parameters")
+      // Test providing both table and path parameters - should work fine (uses table parameter)
+      val result = spark.sql(s"""call set_audit_lock(table => '$tableName', path => '$tablePath', state => 'enabled')""").collect()
+      assertResult(1)(result.length)
+      assertResult(tableName)(result.head.getString(0))
     }
   }
 }

@@ -174,9 +174,10 @@ class TestShowAuditLockStatusProcedure extends HoodieSparkProcedureTestBase {
       checkExceptionContain(s"""call show_audit_lock_status()""")(
         "Table name or table path must be given one")
 
-      // Test providing both table and path parameters
-      checkExceptionContain(s"""call show_audit_lock_status(table => '$tableName', path => '$tablePath')""")(
-        "Cannot specify both table and path parameters")
+      // Test providing both table and path parameters - should work fine (uses table parameter)
+      val result = spark.sql(s"""call show_audit_lock_status(table => '$tableName', path => '$tablePath')""").collect()
+      assertResult(1)(result.length)
+      assertResult(tableName)(result.head.getString(0))
     }
   }
 
