@@ -82,6 +82,10 @@ public class HFileFileInfoBlock extends HFileBlock {
     fileInfoToWrite.put(name, value);
   }
 
+  public boolean containsKey(String name) {
+    return fileInfoToWrite.containsKey(name);
+  }
+
   @Override
   public ByteBuffer getUncompressedBlockDataToWrite() {
     ByteBuffer buff = ByteBuffer.allocate(context.getBlockSize() * 2);

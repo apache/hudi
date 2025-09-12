@@ -31,28 +31,27 @@ public class HFileInfo {
   private static final String RESERVED_PREFIX = "hfile.";
   static final UTF8StringKey LAST_KEY =
       new UTF8StringKey(RESERVED_PREFIX + "LASTKEY");
-  private static final UTF8StringKey FILE_CREATION_TIME_TS =
+  static final UTF8StringKey FILE_CREATION_TIME_TS =
       new UTF8StringKey(RESERVED_PREFIX + "CREATE_TIME_TS");
-  private static final UTF8StringKey KEY_VALUE_VERSION =
+  static final UTF8StringKey KEY_VALUE_VERSION =
       new UTF8StringKey("KEY_VALUE_VERSION");
   static final UTF8StringKey MAX_MVCC_TS_KEY =
       new UTF8StringKey("MAX_MEMSTORE_TS_KEY");
-
-  private static final int KEY_VALUE_VERSION_WITH_MVCC_TS = 1;
+  static final UTF8StringKey AVG_KEY_LEN =
+      new UTF8StringKey(RESERVED_PREFIX + "AVG_KEY_LEN");
+  static final UTF8StringKey AVG_VALUE_LEN =
+      new UTF8StringKey(RESERVED_PREFIX + "AVG_VALUE_LEN");
+  static final int KEY_VALUE_VERSION_WITH_MVCC_TS = 1;
 
   private final Map<UTF8StringKey, byte[]> infoMap;
   private final long fileCreationTime;
   private final Option<Key> lastKey;
-  private final long maxMvccTs;
-  private final boolean containsMvccTs;
 
   public HFileInfo(Map<UTF8StringKey, byte[]> infoMap) {
     this.infoMap = infoMap;
     this.fileCreationTime = parseFileCreationTime();
     this.lastKey = parseLastKey();
-    this.maxMvccTs = parseMaxMvccTs();
-    this.containsMvccTs = maxMvccTs > 0;
-    if (containsMvccTs) {
+    if (parseMaxMvccTs() > 0) {
       // The HFile written by Hudi does not contain MVCC timestamps.
       // Parsing MVCC timestamps is not supported.
       throw new UnsupportedOperationException("HFiles with MVCC timestamps are not supported");
