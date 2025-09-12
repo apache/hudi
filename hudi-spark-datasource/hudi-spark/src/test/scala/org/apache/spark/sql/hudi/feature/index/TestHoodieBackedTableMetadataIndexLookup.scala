@@ -224,7 +224,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     // Verify the table version
     metaClient.reload()
     jsc = new JavaSparkContext(spark.sparkContext)
-    val sqlContext = new SQLContext(spark)
+    val sqlContext = SQLContext.getOrCreate(jsc)
     context = new HoodieSparkEngineContext(jsc, sqlContext)
     hoodieBackedTableMetadata = new HoodieBackedTableMetadata(
       context, metaClient.getStorage, writeConfig.getMetadataConfig, basePath, true)
@@ -320,7 +320,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
 
     // Case 6: Use parallelized RDD
     jsc = new JavaSparkContext(spark.sparkContext)
-    context = new HoodieSparkEngineContext(jsc, new SQLContext(spark))
+    context = new HoodieSparkEngineContext(jsc, SQLContext.getOrCreate(jsc))
     val rddKeys = HoodieJavaRDD.of(List("a1", "a2", "a$").asJava, context, 2)
     val rddResult = hoodieBackedTableMetadata.readRecordIndexLocationsWithKeys(rddKeys)
     val rddResultKeys = rddResult.map(_.getKey()).collectAsList().asScala.toSet

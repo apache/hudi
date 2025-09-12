@@ -245,7 +245,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
    * testcase may invoke this specifically to clean up in case of repeated test runs.
    */
   @AfterAll
-  public static synchronized void resetSpark() {
+  public static synchronized void resetSpark() throws IOException {
     if (spark != null) {
       spark.close();
       spark = null;

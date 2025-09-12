@@ -79,6 +79,7 @@
                   <include>org.apache.hudi:hudi-spark-common_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
                   <include>org.apache.hudi:${hudi.spark.module}_${scala.binary.version}</include>
+                  <include>org.apache.hudi:${hudi.spark.common.module}</include>
                   <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-hive-sync</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
@@ -445,6 +446,10 @@
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>ch.qos.logback</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
 
@@ -456,6 +461,10 @@
       <exclusions>
         <exclusion>
           <groupId>org.pentaho</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>ch.qos.logback</groupId>
           <artifactId>*</artifactId>
         </exclusion>
       </exclusions>
@@ -490,6 +499,10 @@
         </exclusion>
         <exclusion>
           <groupId>org.pentaho</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>ch.qos.logback</groupId>
           <artifactId>*</artifactId>
         </exclusion>
       </exclusions>
