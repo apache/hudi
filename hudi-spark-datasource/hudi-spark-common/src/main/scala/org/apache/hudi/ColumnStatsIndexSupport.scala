@@ -21,9 +21,9 @@ import org.apache.hudi.ColumnStatsIndexSupport._
 import org.apache.hudi.HoodieCatalystUtils.{withPersistedData, withPersistedDataset}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.{ValueMetadata, ValueType}
-import org.apache.hudi.avro.HoodieAvroUtils.convertBytesToBigDecimal
 import org.apache.hudi.avro.ValueMetadata.getValueMetadata
 import org.apache.hudi.avro.model._
+import org.apache.hudi.client.utils.SparkMetadataWriterUtils.SparkValueMetadata
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
 import org.apache.hudi.common.function.SerializableFunction
@@ -33,7 +33,7 @@ import org.apache.hudi.common.util.BinaryUtil.toBytes
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection
 import org.apache.hudi.data.HoodieJavaRDD
-import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieIndexVersion, HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.util.JFunction
 
@@ -264,8 +264,9 @@ class ColumnStatsIndexSupport(spark: SparkSession,
           val colName = r.getColumnName
           val colType = sortedTargetColDataTypeMap(colName).dataType
 
-          val minValue = deserialize(tryUnpackValueWrapper(minValueWrapper), colType, getValueMetadata(r.getValueType))
-          val maxValue = deserialize(tryUnpackValueWrapper(maxValueWrapper), colType, getValueMetadata(r.getValueType))
+          val valueMetadata = getValueMetadata(r.getValueType)
+          val minValue = extractColStatsValue(minValueWrapper, colType, valueMetadata)
+          val maxValue = extractColStatsValue(maxValueWrapper, colType, valueMetadata)
 
           // Update min-/max-value structs w/ unwrapped values in-place
           r.setMinValue(minValue)
@@ -447,6 +448,21 @@ object ColumnStatsIndexSupport {
   @inline def composeColumnStatStructType(col: String, statName: String, dataType: DataType) =
     StructField(formatColName(col, statName), dataType, nullable = true, Metadata.empty)
 
+  def extractColStatsValue(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata): Any = {
+    valueMetadata.getValueType match {
+      case ValueType.V1 => extractWrapperValueV1(valueWrapper, dataType)
+      case _ => extractColStatsValueV2(valueWrapper, dataType, valueMetadata)
+    }
+  }
+
+  private def extractColStatsValueV2(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata): Any = {
+   SparkValueMetadata.convertJavaTypeToSparkType(SparkValueMetadata.getValueMetadata(dataType, HoodieIndexVersion.V2)
+      .standardizeJavaTypeAndPromote(valueMetadata.unwrapValue(valueWrapper)))
+  }
+
+  def extractWrapperValueV1(valueWrapper: AnyRef, dataType: DataType): Any =
+    deserialize(tryUnpackValueWrapper(valueWrapper), dataType)
+
   def tryUnpackValueWrapper(valueWrapper: AnyRef): Any = {
     valueWrapper match {
       case w: BooleanWrapper => w.getValue
@@ -470,88 +486,21 @@ object ColumnStatsIndexSupport {
 
   val decConv = new DecimalConversion()
 
-  def deserialize(value: Any, dataType: DataType, valueMetadata: ValueMetadata): Any = {
-    // dataType is from the table schema. The value doesn't necessarily match the schema
+  def deserialize(value: Any, dataType: DataType): Any = {
     dataType match {
       // NOTE: Since we can't rely on Avro's "date", and "timestamp-micros" logical-types, we're
       //       manually encoding corresponding values as int and long w/in the Column Stats Index and
       //       here we have to decode those back into corresponding logical representation.
-      case TimestampType =>
-        if (valueMetadata.getValueType.equals(ValueType.V1)) {
-          DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
-        } else if (valueMetadata.getValueType.equals(ValueType.TIME_MICROS)) {
-          // TODO: not sure what type it's supposed to be after looking at avro serde
-          value
-        } else if (valueMetadata.getValueType.equals(ValueType.TIMESTAMP_MILLIS)) {
-          DateTimeUtils.toJavaTimestamp(DateTimeUtils.millisToMicros(value.asInstanceOf[Long]))
-        } else if (valueMetadata.getValueType.equals(ValueType.TIMESTAMP_MICROS)) {
-          DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
-        } else {
-          throw new UnsupportedOperationException(s"Cannot deserialize value for LongType: unexpected type ${valueMetadata.getValueType.name()}")
-        }
-
+      case TimestampType => DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
       case DateType => DateTimeUtils.toJavaDate(value.asInstanceOf[Int])
       // Standard types
-      case StringType =>
-        if (valueMetadata.getValueType.equals(ValueType.V1)
-          || valueMetadata.getValueType.equals(ValueType.STRING)
-          || valueMetadata.getValueType.equals(ValueType.UUID)) {
-          value
-        } else {
-          throw new UnsupportedOperationException(s"Cannot deserialize value for StringType: unexpected type ${valueMetadata.getValueType.name()}")
-        }
-
-      case BooleanType =>
-        if (valueMetadata.getValueType.equals(ValueType.V1)
-          || valueMetadata.getValueType.equals(ValueType.BOOLEAN)) {
-          value
-        } else {
-          throw new UnsupportedOperationException(s"Cannot deserialize value for BooleanType: unexpected type ${valueMetadata.getValueType.name()}")
-        }
-
+      case StringType => value
+      case BooleanType => value
       // Numeric types
-      case FloatType =>
-        if (valueMetadata.getValueType.equals(ValueType.V1)
-          || valueMetadata.getValueType.equals(ValueType.FLOAT)) {
-          value
-        } else if (valueMetadata.getValueType.equals(ValueType.LONG)) {
-          value.asInstanceOf[Long].toFloat
-        } else if (valueMetadata.getValueType.equals(ValueType.INT)) {
-          value.asInstanceOf[Int].toFloat
-        } else {
-          throw new UnsupportedOperationException(s"Cannot deserialize value for FloatType: unexpected type ${valueMetadata.getValueType.name()}")
-        }
-      case DoubleType =>
-        if (valueMetadata.getValueType.equals(ValueType.V1)
-          || valueMetadata.getValueType.equals(ValueType.DOUBLE)) {
-          value
-        } else if (valueMetadata.getValueType.equals(ValueType.FLOAT)) {
-          value.asInstanceOf[Float].toString.toDouble
-        } else if (valueMetadata.getValueType.equals(ValueType.LONG)) {
-          value.asInstanceOf[Long].toDouble
-        } else if (valueMetadata.getValueType.equals(ValueType.INT)) {
-         value.asInstanceOf[Int].toDouble
-        } else {
-          throw new UnsupportedOperationException(s"Cannot deserialize value for DoubleType: unexpected type ${valueMetadata.getValueType.name()}")
-        }
-      case LongType =>
-        if (valueMetadata.getValueType.equals(ValueType.V1)
-          || valueMetadata.getValueType.equals(ValueType.LONG)) {
-          value
-        } else if (valueMetadata.getValueType.equals(ValueType.INT)) {
-          value.asInstanceOf[Int].toLong
-        } else {
-          throw new UnsupportedOperationException(s"Cannot deserialize value for LongType: unexpected type ${valueMetadata.getValueType.name()}")
-        }
-
-      case IntegerType =>
-        if (valueMetadata.getValueType.equals(ValueType.V1)
-          || valueMetadata.getValueType.equals(ValueType.INT)) {
-          value
-        } else {
-          throw new UnsupportedOperationException(s"Cannot deserialize value for IntegerType: unexpected type ${valueMetadata.getValueType.name()}")
-        }
-
+      case FloatType => value
+      case DoubleType => value
+      case LongType => value
+      case IntegerType => value
       // NOTE: All integral types of size less than Int are encoded as Ints in MT
       case ShortType => value.asInstanceOf[Int].toShort
       case ByteType => value.asInstanceOf[Int].toByte
@@ -559,15 +508,8 @@ object ColumnStatsIndexSupport {
       case dt: DecimalType =>
         value match {
           case buffer: ByteBuffer =>
-            if (valueMetadata.getValueType.equals(ValueType.DECIMAL)) {
-              val decimalMetadata = valueMetadata.asInstanceOf[ValueMetadata.DecimalValueMetadata]
-              convertBytesToBigDecimal(buffer.array(), decimalMetadata.getPrecision, decimalMetadata.getScale)
-            } else if (valueMetadata.getValueType.equals(ValueType.V1)) {
-              val logicalType = DecimalWrapper.SCHEMA$.getField("value").schema().getLogicalType
-              decConv.fromBytes(buffer, null, logicalType).setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
-            } else {
-              throw new UnsupportedOperationException(s"Cannot deserialize value for DecimalType: unexpected type ${valueMetadata.getValueType.name()}")
-            }
+            val logicalType = DecimalWrapper.SCHEMA$.getField("value").schema().getLogicalType
+            decConv.fromBytes(buffer, null, logicalType).setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
           case bd: BigDecimal =>
             // Scala BigDecimal: convert to java.math.BigDecimal and enforce the scale
             bd.bigDecimal.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
@@ -582,20 +524,8 @@ object ColumnStatsIndexSupport {
           case other => other
         }
 
-      case a: Any =>
-        if (HoodieSparkUtils.gteqSpark3_4 && a.getClass.getName.contains("TimestampNTZType")) {
-          if (valueMetadata.getValueType.equals(ValueType.LOCAL_TIMESTAMP_MILLIS)) {
-            // might need to do something for local as well
-            DateTimeUtils.microsToLocalDateTime(DateTimeUtils.millisToMicros(value.asInstanceOf[Long]))
-          } else if (valueMetadata.getValueType.equals(ValueType.LOCAL_TIMESTAMP_MICROS)) {
-            // todo fix local issue if needed
-            DateTimeUtils.microsToLocalDateTime(value.asInstanceOf[Long])
-          } else {
-            throw new UnsupportedOperationException(s"Cannot deserialize value for LongType: unexpected type ${valueMetadata.getValueType.name()}")
-          }
-        } else {
-          throw new UnsupportedOperationException(s"Data type for the statistic value is not recognized $dataType")
-        }
+      case _ =>
+        throw new UnsupportedOperationException(s"Data type for the statistic value is not recognized $dataType")
     }
   }
 }

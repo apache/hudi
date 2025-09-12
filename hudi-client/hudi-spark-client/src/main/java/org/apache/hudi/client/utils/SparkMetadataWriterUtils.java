@@ -78,7 +78,6 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.catalyst.util.DateTimeUtils;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.BinaryType;
@@ -107,6 +106,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.sql.Date;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -185,16 +187,12 @@ public class SparkMetadataWriterUtils {
             functions.max(columnToIndex).alias(COLUMN_STATS_FIELD_MAX_VALUE),
             functions.count(columnToIndex).alias(COLUMN_STATS_FIELD_VALUE_COUNT));
 
-    int baseAggregatePosition = SparkMetadataWriterUtils.getExpressionIndexColumnNames().length;
-    if (dataset.schema().apply(baseAggregatePosition + 1).dataType() != dataset.schema().apply(baseAggregatePosition + 2).dataType()) {
-      throw new HoodieException("Column stats data types do not match for min and max");
-    }
-    SparkValueMetadata valueMetadata = SparkValueMetadata.getValueMetadata(dataset.schema().apply(baseAggregatePosition + 1).dataType(), indexVersion);
-
     // Generate column stat records using the aggregated data
+    SparkValueMetadata valueMetadata = getValueMetadataFromColumnRangeDataset(columnRangeMetadataDataset, indexVersion);
     HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> rangeMetadataHoodieJavaRDD = HoodieJavaRDD.of(columnRangeMetadataDataset.javaRDD())
         .flatMapToPair((SerializableFunction<Row, Iterator<? extends Pair<String, HoodieColumnRangeMetadata<Comparable>>>>)
             row -> {
+              int baseAggregatePosition = SparkMetadataWriterUtils.getExpressionIndexColumnNames().length;
               long nullCount = row.getLong(baseAggregatePosition);
               Comparable minValue = valueMetadata.convertSparkToJava(row.get(baseAggregatePosition + 1));
               Comparable maxValue = valueMetadata.convertSparkToJava(row.get(baseAggregatePosition + 2));
@@ -238,7 +236,17 @@ public class SparkMetadataWriterUtils {
         : new ExpressionIndexComputationMetadata(colStatRecords);
   }
 
-  private static class SparkValueMetadata extends ValueMetadata {
+  private static SparkValueMetadata getValueMetadataFromColumnRangeDataset(Dataset<Row> dataset, HoodieIndexVersion indexVersion) {
+    int baseAggregatePosition = SparkMetadataWriterUtils.getExpressionIndexColumnNames().length;
+    DataType minDataType = dataset.schema().apply(baseAggregatePosition + 1).dataType();
+    DataType maxDataType = dataset.schema().apply(baseAggregatePosition + 2).dataType();
+    if (minDataType != maxDataType) {
+      throw new HoodieException(String.format("Column stats data types do not match for min (%s) and max (%s)", minDataType, maxDataType));
+    }
+    return SparkValueMetadata.getValueMetadata(minDataType, indexVersion);
+  }
+
+  public static class SparkValueMetadata extends ValueMetadata {
 
     private static class SparkV1EmptyMetadata extends SparkValueMetadata {
       private static final SparkV1EmptyMetadata V_1_EMPTY_METADATA = new SparkV1EmptyMetadata();
@@ -324,7 +332,7 @@ public class SparkMetadataWriterUtils {
         case DECIMAL:
           return ((Decimal) value).toJavaBigDecimal();
         case DATE:
-          return DateTimeUtils.toJavaDate((Integer) value);
+          return (Date) value;
         case TIMESTAMP_MICROS:
           return ValueType.castToTimestampMicros(value, this);
         case LOCAL_TIMESTAMP_MICROS:
@@ -402,6 +410,13 @@ public class SparkMetadataWriterUtils {
       } else {
         throw new IllegalArgumentException("Unsupported data type: " + dataType);
       }
+    }
+
+    public static Object convertJavaTypeToSparkType(Comparable<?> javaVal) {
+      if (javaVal instanceof Instant) {
+        return Timestamp.from((Instant) javaVal);
+      }
+      return javaVal;
     }
   }
 

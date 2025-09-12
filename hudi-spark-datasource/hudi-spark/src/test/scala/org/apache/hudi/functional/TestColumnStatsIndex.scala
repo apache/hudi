@@ -22,7 +22,6 @@ import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, PARTITIONPATH_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
-import org.apache.hudi.avro.ValueMetadata
 import org.apache.hudi.avro.model.DecimalWrapper
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
@@ -52,7 +51,7 @@ import org.apache.spark.sql.types._
 import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
+import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource}
 
 import java.math.{BigDecimal => JBigDecimal}
 import java.nio.ByteBuffer
@@ -506,7 +505,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(value = Array("6", "8"))
+  @MethodSource(Array("testMORDeleteBlocksParams"))
   def testMORDeleteBlocks(tableVersion: Int): Unit = {
     val tableType: HoodieTableType = HoodieTableType.MERGE_ON_READ
     val partitionCol = "c8"
@@ -1109,9 +1108,21 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       assertTrue(unwrapped.isInstanceOf[ByteBuffer], "Expected a ByteBuffer")
     }
     // Deserialize into a java.math.BigDecimal.
-    val deserialized = ColumnStatsIndexSupport.deserialize(unwrapped, dt, ValueMetadata.V1EmptyMetadata.get)
+    val deserialized = ColumnStatsIndexSupport.deserialize(unwrapped, dt)
     assertTrue(deserialized.isInstanceOf[JBigDecimal], "Deserialized value should be a java.math.BigDecimal")
     assertEquals(expected, deserialized.asInstanceOf[JBigDecimal],
       s"Decimal value from $description does not match")
+  }
+}
+
+object TestColumnStatsIndex {
+  def testMORDeleteBlocksParams: java.util.stream.Stream[Arguments] = {
+    val currentVersionCode = HoodieTableVersion.current().versionCode().toString
+    java.util.stream.Stream.of(Seq(
+      Arguments.arguments("6"),
+      Arguments.arguments("8"),
+      Arguments.arguments(currentVersionCode)
+    )
+      : _*)
   }
 }

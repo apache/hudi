@@ -19,13 +19,15 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.ColumnStatsIndexSupport.{composeColumnStatStructType, deserialize, tryUnpackValueWrapper}
+import org.apache.hudi.ColumnStatsIndexSupport.{composeColumnStatStructType, extractWrapperValueV1}
 import org.apache.hudi.ExpressionIndexSupport._
 import org.apache.hudi.HoodieCatalystUtils.{withPersistedData, withPersistedDataset}
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.RecordLevelIndexSupport.filterQueryWithRecordKey
+import org.apache.hudi.avro.{ValueMetadata, ValueType}
 import org.apache.hudi.avro.ValueMetadata.getValueMetadata
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
+import org.apache.hudi.client.utils.SparkMetadataWriterUtils.SparkValueMetadata
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
@@ -261,8 +263,9 @@ class ExpressionIndexSupport(spark: SparkSession,
           val colName = r.getColumnName
           val colType = tableSchemaFieldMap(colName).dataType
 
-          val minValue = deserialize(tryUnpackValueWrapper(minValueWrapper), colType, getValueMetadata(r.getValueType))
-          val maxValue = deserialize(tryUnpackValueWrapper(maxValueWrapper), colType, getValueMetadata(r.getValueType))
+          val valueMetadata = getValueMetadata(r.getValueType)
+          val minValue = extractExpressionIndexValue(minValueWrapper, colType, valueMetadata)
+          val maxValue = extractExpressionIndexValue(maxValueWrapper, colType, valueMetadata)
 
           // Update min-/max-value structs w/ unwrapped values in-place
           r.setMinValue(minValue)
@@ -613,6 +616,18 @@ class ExpressionIndexSupport(spark: SparkSession,
 }
 
 object ExpressionIndexSupport {
+
+  def extractExpressionIndexValue(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata): Any = {
+    valueMetadata.getValueType match {
+      case ValueType.V1 => extractWrapperValueV1(valueWrapper, dataType)
+      case _ => extractExpressionIndexValueV2(valueWrapper, valueMetadata)
+    }
+  }
+
+  private def extractExpressionIndexValueV2(valueWrapper: AnyRef, valueMetadata: ValueMetadata): Any = {
+    SparkValueMetadata.convertJavaTypeToSparkType(valueMetadata.unwrapValue(valueWrapper))
+  }
+
   val INDEX_NAME = "EXPRESSION"
   /**
    * Target Column Stats Index columns which internally are mapped onto fields of the corresponding
