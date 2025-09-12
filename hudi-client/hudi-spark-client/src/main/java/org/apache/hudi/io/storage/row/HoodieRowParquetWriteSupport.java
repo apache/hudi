@@ -118,7 +118,9 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       metadata.put("org.apache.spark.legacyDateTime", "");
       metadata.put("org.apache.spark.timeZone", SQLConf.get().sessionLocalTimeZone());
     }
-    MessageType messageType = new AvroSchemaConverter(configuration).convert(avroSchema);
+    Configuration configurationCopy = new Configuration(configuration);
+    configurationCopy.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, Boolean.toString(writeLegacyListFormat));
+    MessageType messageType = new AvroSchemaConverter(configurationCopy).convert(avroSchema);
     return new WriteContext(messageType, metadata);
   }
 
