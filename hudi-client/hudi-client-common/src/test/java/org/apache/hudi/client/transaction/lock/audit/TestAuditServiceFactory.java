@@ -24,7 +24,6 @@ import org.apache.hudi.common.util.Option;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -94,15 +93,13 @@ public class TestAuditServiceFactory {
     // Mock writeObject method to return true for audit file writes
     when(mockStorageLockClient.writeObject(anyString(), anyString()))
         .thenReturn(true);
-
     Option<AuditService> result = AuditServiceFactory.createLockProviderAuditService(
         ownerId, basePath, mockStorageLockClient,
         System.currentTimeMillis(),
         timestamp -> timestamp + 10000, // lockExpirationFunction
         () -> true); // lockHeldSupplier
 
-    // Should return empty audit service as the service is not added yet.
-    assertFalse(result.isPresent());
+    assertTrue(result.isPresent());
     verify(mockStorageLockClient).readObject(expectedPath, true);
   }
 
