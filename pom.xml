@@ -411,13 +411,13 @@
                     <exclude>org.sl4fj:slf4j-simple</exclude>
                     <exclude>org.sl4fj:slf4j-jdk14</exclude>
                     <exclude>org.sl4fj:slf4j-nop</exclude>
-                    <exclude>org.sl4fj:slf4j-jcl:*:*</exclude>
-                    <!-- NOTE: We're banning any HBase deps --> 1Code has comments. Press enter to view.
+                    <exclude>org.sl4fj:slf4j-jcl</exclude>
+                    <exclude>log4j:log4j</exclude>
+                    <exclude>ch.qos.logback:logback-classic</exclude>
+                    <!-- NOTE: We're banning any HBase deps -->
                     <exclude>org.apache.hbase:hbase-common:*:*:compile</exclude>
                     <exclude>org.apache.hbase:hbase-client:*:*:compile</exclude>
                     <exclude>org.apache.hbase:hbase-server:*:*:compile</exclude>
-                    <exclude>log4j:log4j</exclude>
-                    <exclude>ch.qos.logback:logback-classic</exclude>
                     <!--To upgrade snappy because pre 1.1.8.2 does not work on m1 mac-->
                     <exclude>org.xerial.snappy:snappy-java:*</exclude>
                   </excludes>
