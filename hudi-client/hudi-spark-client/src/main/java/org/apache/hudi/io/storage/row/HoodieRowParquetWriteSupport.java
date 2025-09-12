@@ -212,6 +212,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       case DOUBLE:
         return (row, ordinal) -> recordConsumer.addDouble(row.getDouble(ordinal));
       case STRING:
+      case ENUM:
         return (row, ordinal) -> recordConsumer.addBinary(
             Binary.fromReusedByteArray(row.getUTF8String(ordinal).getBytes()));
       case BYTES:

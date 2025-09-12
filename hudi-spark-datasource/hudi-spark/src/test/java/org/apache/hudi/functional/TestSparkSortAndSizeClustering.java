@@ -237,6 +237,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     Schema schema = getSchema();
     Schema decimalSchema = schema.getField("decimal_field").schema();
     Schema nestedSchema = AvroSchemaUtils.resolveNullableSchema(schema.getField("nested_record").schema());
+    Schema enumSchema = AvroSchemaUtils.resolveNullableSchema(schema.getField("enum_field").schema());
     Random random = new Random(0);
     return IntStream.range(0, count)
         .mapToObj(i -> {
@@ -269,6 +270,11 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
           record.put("timestamp_micros_nullable_field", random.nextBoolean() ? null : ts * 1000);
           record.put("timestamp_local_millis_nullable_field", random.nextBoolean() ? null : ts);
           record.put("timestamp_local_micros_field", ts * 1000);
+          record.put("enum_field", new GenericData.EnumSymbol(
+              enumSchema,
+              enumSchema
+                  .getEnumSymbols()
+                  .get(random.nextInt(enumSchema.getEnumSymbols().size()))));
           return new HoodieAvroIndexedRecord(new HoodieKey(key, partition), record, ts);
         })
         .collect(Collectors.toList());

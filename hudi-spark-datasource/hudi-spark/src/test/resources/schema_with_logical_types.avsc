@@ -169,6 +169,18 @@
           "type": "long",
           "logicalType": "local-timestamp-micros"
         }
+    },
+    {
+      "name": "enum_field",
+      "type": {
+        "type": "enum",
+        "name": "SampleEnum",
+        "symbols": [
+          "FIRST",
+          "SECOND"
+        ]
+      },
+      "default": "FIRST"
     }
   ]
 }
