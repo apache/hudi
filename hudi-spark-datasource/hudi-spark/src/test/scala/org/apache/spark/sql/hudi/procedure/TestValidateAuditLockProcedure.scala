@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService
+
 import org.apache.spark.sql.Row
 
 import java.io.File
@@ -106,18 +107,18 @@ class TestValidateAuditLockProcedure extends HoodieSparkProcedureTestBase {
   private def createAuditFiles(tablePath: String, scenarios: List[TransactionScenario]): Unit = {
     val auditFolderPath = StorageLockProviderAuditService.getAuditFolderPath(tablePath)
     val auditDir = Paths.get(auditFolderPath)
-    
+
     // Create audit directory if it doesn't exist
     if (!Files.exists(auditDir)) {
       Files.createDirectories(auditDir)
     }
-    
+
     scenarios.foreach { scenario =>
       val filePath = auditDir.resolve(scenario.filename)
       val jsonLines = scenario.records.map { record =>
         s"""{"ownerId":"${record.ownerId}","transactionStartTime":${record.transactionStartTime},"timestamp":${record.timestamp},"state":"${record.state}","lockExpiration":${record.lockExpiration},"lockHeld":${record.lockHeld}}"""
       }.mkString("\n")
-      
+
       Files.write(filePath, jsonLines.getBytes())
     }
   }
@@ -129,29 +130,29 @@ class TestValidateAuditLockProcedure extends HoodieSparkProcedureTestBase {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = createTestTable(tmp, tableName)
-      
+
       // Generate test data
       val transactionScenarios = scenario.scenarioGenerator()
       val expectedResult = scenario.expectedResultGenerator()
-      
+
       // Create audit files
       createAuditFiles(tablePath, transactionScenarios)
-      
+
       // Run validation
       val result = spark.sql(s"""call validate_audit_lock(table => '$tableName')""").collect()
-      
+
       // Verify results
       assertResult(1)(result.length)
-      
+
       val row = result.head
       assertResult(tableName)(row.getString(0))
       assertResult(expectedResult.validationResult)(row.getString(1))
       assertResult(expectedResult.transactionsValidated)(row.getInt(2))
       assertResult(expectedResult.issuesFound)(row.getInt(3))
-      
+
       val details = row.getString(4)
       expectedResult.detailsContains.foreach { expectedSubstring =>
-        assert(details.contains(expectedSubstring), 
+        assert(details.contains(expectedSubstring),
           s"Details '$details' should contain '$expectedSubstring'")
       }
     }
@@ -192,7 +193,7 @@ class TestValidateAuditLockProcedure extends HoodieSparkProcedureTestBase {
         detailsContains = List("successfully")
       )
     )
-    
+
     runValidationScenario(scenario)
   }
 
@@ -203,9 +204,9 @@ class TestValidateAuditLockProcedure extends HoodieSparkProcedureTestBase {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = createTestTable(tmp, tableName)
-      
+
       val baseTime = 1000000L
-      
+
       // Create single audit file without END record
       val scenarios = List(
         TransactionScenario(
@@ -215,12 +216,12 @@ class TestValidateAuditLockProcedure extends HoodieSparkProcedureTestBase {
           )
         )
       )
-      
+
       createAuditFiles(tablePath, scenarios)
-      
+
       val result = spark.sql(s"""call validate_audit_lock(table => '$tableName')""").collect()
       val row = result.head
-      
+
       // This should be WARNING only since there's no overlap possible with just one transaction
       assertResult("WARNING")(row.getString(1))
       assertResult(1)(row.getInt(2)) // transactions_validated
@@ -235,9 +236,9 @@ class TestValidateAuditLockProcedure extends HoodieSparkProcedureTestBase {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = createTestTable(tmp, tableName)
-      
+
       val baseTime = 1000000L
-      
+
       // Create two transactions: one unclosed, one complete, no overlap
       val scenarios = List(
         TransactionScenario(
@@ -255,14 +256,14 @@ class TestValidateAuditLockProcedure extends HoodieSparkProcedureTestBase {
           )
         )
       )
-      
+
       createAuditFiles(tablePath, scenarios)
-      
+
       val result = spark.sql(s"""call validate_audit_lock(table => '$tableName')""").collect()
       val row = result.head
-      
+
       println(s"DEBUG - Result: ${row.getString(1)}, Issues: ${row.getInt(3)}, Details: ${row.getString(4)}")
-      
+
       assertResult("WARNING")(row.getString(1))
       assertResult(2)(row.getInt(2)) // transactions_validated
       assertResult(1)(row.getInt(3)) // issues_found - only the unclosed transaction
@@ -304,7 +305,7 @@ class TestValidateAuditLockProcedure extends HoodieSparkProcedureTestBase {
         detailsContains = List("[ERROR]", "owner1.jsonl", "overlaps with", "owner2.jsonl")
       )
     )
-    
+
     runValidationScenario(scenario)
   }
 
@@ -340,7 +341,7 @@ class TestValidateAuditLockProcedure extends HoodieSparkProcedureTestBase {
         detailsContains = List("[ERROR]", "[WARNING]", "overlaps with", "did not end gracefully")
       )
     )
-    
+
     runValidationScenario(scenario)
   }
 
@@ -378,7 +379,7 @@ class TestValidateAuditLockProcedure extends HoodieSparkProcedureTestBase {
         detailsContains = List("successfully")
       )
     )
-    
+
     runValidationScenario(scenario)
   }
 
@@ -413,7 +414,7 @@ class TestValidateAuditLockProcedure extends HoodieSparkProcedureTestBase {
    */
   test("Test Parameter Validation - Non-existent Table") {
     val nonExistentTable = "non_existent_table"
-    
+
     intercept[Exception] {
       spark.sql(s"""call validate_audit_lock(table => '$nonExistentTable')""")
     }
@@ -424,7 +425,7 @@ class TestValidateAuditLockProcedure extends HoodieSparkProcedureTestBase {
    */
   test("Test Parameter Validation - Invalid Path") {
     val invalidPath = "/non/existent/path"
-    
+
     intercept[Exception] {
       spark.sql(s"""call validate_audit_lock(path => '$invalidPath')""")
     }

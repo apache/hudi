@@ -65,7 +65,7 @@ class TestCleanupAuditLockProcedure extends HoodieSparkProcedureTestBase {
 
   /**
    * Helper method to create test audit files with specified ages.
-   * 
+   *
    * @param tablePath The base path of the table
    * @param filenames List of filenames to create
    * @param ageDaysAgo How many days ago to set the modification time
@@ -73,15 +73,15 @@ class TestCleanupAuditLockProcedure extends HoodieSparkProcedureTestBase {
   private def createTestAuditFiles(tablePath: String, filenames: List[String], ageDaysAgo: Int): Unit = {
     val auditFolderPath = StorageLockProviderAuditService.getAuditFolderPath(tablePath)
     val auditDir = Paths.get(auditFolderPath)
-    
+
     // Create audit directory if it doesn't exist
     if (!Files.exists(auditDir)) {
       Files.createDirectories(auditDir)
     }
-    
+
     // Create test audit files with specified modification time
     val targetTime = System.currentTimeMillis() - (ageDaysAgo * 24L * 60L * 60L * 1000L)
-    
+
     filenames.foreach { filename =>
       val filePath = auditDir.resolve(filename)
       val content = s"""{"ownerId":"test","transactionStartTime":${System.currentTimeMillis()},"timestamp":${System.currentTimeMillis()},"state":"START","lockExpiration":${System.currentTimeMillis() + 60000},"lockHeld":true}"""
@@ -97,7 +97,7 @@ class TestCleanupAuditLockProcedure extends HoodieSparkProcedureTestBase {
   private def countAuditFiles(tablePath: String): Int = {
     val auditFolderPath = StorageLockProviderAuditService.getAuditFolderPath(tablePath)
     val auditDir = Paths.get(auditFolderPath)
-    
+
     if (Files.exists(auditDir)) {
       Files.list(auditDir)
         .filter(_.toString.endsWith(".jsonl"))
@@ -115,7 +115,7 @@ class TestCleanupAuditLockProcedure extends HoodieSparkProcedureTestBase {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = createTestTable(tmp, tableName)
-      
+
       // Create some old audit files (10 days old)
       createTestAuditFiles(tablePath, List("old1.jsonl", "old2.jsonl"), ageDaysAgo = 10)
       // Create some recent audit files (2 days old)
@@ -129,7 +129,7 @@ class TestCleanupAuditLockProcedure extends HoodieSparkProcedureTestBase {
       assertResult(true)(result.head.get(2)) // dry_run = true
       assertResult(7)(result.head.get(3)) // age_days = 7
       assert(result.head.get(4).toString.contains("Dry run"))
-      
+
       // Verify files still exist (dry run shouldn't delete)
       assertResult(3)(countAuditFiles(tablePath))
     }
@@ -142,7 +142,7 @@ class TestCleanupAuditLockProcedure extends HoodieSparkProcedureTestBase {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = createTestTable(tmp, tableName)
-      
+
       // Create some old audit files (10 days old)
       createTestAuditFiles(tablePath, List("old1.jsonl", "old2.jsonl"), ageDaysAgo = 10)
       // Create some recent audit files (2 days old)
@@ -156,7 +156,7 @@ class TestCleanupAuditLockProcedure extends HoodieSparkProcedureTestBase {
       assertResult(false)(result.head.get(2)) // dry_run = false
       assertResult(7)(result.head.get(3)) // age_days = 7
       assert(result.head.get(4).toString.contains("Successfully deleted"))
-      
+
       // Verify only recent file remains
       assertResult(1)(countAuditFiles(tablePath))
     }
@@ -169,7 +169,7 @@ class TestCleanupAuditLockProcedure extends HoodieSparkProcedureTestBase {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = createTestTable(tmp, tableName)
-      
+
       // Create some old audit files (10 days old) - should be deleted with default 7 days
       createTestAuditFiles(tablePath, List("old1.jsonl"), ageDaysAgo = 10)
       // Create some recent audit files (3 days old) - should be kept
@@ -182,7 +182,7 @@ class TestCleanupAuditLockProcedure extends HoodieSparkProcedureTestBase {
       assertResult(1)(result.head.get(1)) // Should delete 1 old file
       assertResult(false)(result.head.get(2)) // dry_run defaults to false
       assertResult(7)(result.head.get(3)) // age_days defaults to 7
-      
+
       // Verify only recent file remains
       assertResult(1)(countAuditFiles(tablePath))
     }
@@ -213,7 +213,7 @@ class TestCleanupAuditLockProcedure extends HoodieSparkProcedureTestBase {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = createTestTable(tmp, tableName)
-      
+
       // Create only recent audit files (2 days old)
       createTestAuditFiles(tablePath, List("recent1.jsonl", "recent2.jsonl"), ageDaysAgo = 2)
 
@@ -223,7 +223,7 @@ class TestCleanupAuditLockProcedure extends HoodieSparkProcedureTestBase {
       assertResult(tableName)(result.head.get(0))
       assertResult(0)(result.head.get(1)) // No old files to delete
       assert(result.head.get(4).toString.contains("No audit files older than 7 days found"))
-      
+
       // Verify all files remain
       assertResult(2)(countAuditFiles(tablePath))
     }
@@ -274,7 +274,7 @@ class TestCleanupAuditLockProcedure extends HoodieSparkProcedureTestBase {
    */
   test("Test Call cleanup_audit_lock Procedure - Non-existent Table") {
     val nonExistentTable = "non_existent_table"
-    
+
     intercept[Exception] {
       spark.sql(s"""call cleanup_audit_lock(table => '$nonExistentTable')""")
     }
@@ -285,7 +285,7 @@ class TestCleanupAuditLockProcedure extends HoodieSparkProcedureTestBase {
    */
   test("Test Call cleanup_audit_lock Procedure - Invalid Path") {
     val invalidPath = "/non/existent/path"
-    
+
     intercept[Exception] {
       spark.sql(s"""call cleanup_audit_lock(path => '$invalidPath')""")
     }

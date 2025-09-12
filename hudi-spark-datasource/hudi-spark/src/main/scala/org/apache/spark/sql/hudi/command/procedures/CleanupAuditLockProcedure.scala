@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService
 import org.apache.hudi.storage.StoragePath
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
@@ -105,54 +106,56 @@ class CleanupAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
     try {
       val auditFolderPath = new StoragePath(StorageLockProviderAuditService.getAuditFolderPath(basePath))
       val storage = metaClient.getStorage
-      
+
       // Check if audit folder exists
       if (!storage.exists(auditFolderPath)) {
         val message = "No audit folder found - nothing to cleanup"
-        return Seq(Row(displayName, 0, dryRun, ageDays, message))
-      }
-      
-      // Calculate cutoff timestamp (ageDays ago)
-      val cutoffTime = System.currentTimeMillis() - (ageDays * 24 * 60 * 60 * 1000L)
-      
-      // List all files in audit folder and filter by modification time
-      val allFiles = storage.listDirectEntries(auditFolderPath).asScala
-      val auditFiles = allFiles.filter(pathInfo => pathInfo.isFile && pathInfo.getPath.getName.endsWith(".jsonl"))
-      val oldFiles = auditFiles.filter(_.getModificationTime < cutoffTime)
-      
-      if (oldFiles.isEmpty) {
-        val message = s"No audit files older than $ageDays days found"
-        return Seq(Row(displayName, 0, dryRun, ageDays, message))
-      }
-      
-      val fileCount = oldFiles.size
-      
-      if (dryRun) {
-        val message = s"Dry run: Would delete $fileCount audit files older than $ageDays days"
-        Seq(Row(displayName, fileCount, dryRun, ageDays, message))
+        Seq(Row(displayName, 0, dryRun, ageDays, message))
       } else {
-        // Actually delete the files
-        var deletedCount = 0
-        var failedCount = 0
-        
-        oldFiles.foreach { pathInfo =>
-          try {
-            storage.deleteFile(pathInfo.getPath)
-            deletedCount += 1
-          } catch {
-            case e: Exception =>
-              failedCount += 1
-              // Log the error but continue with other files
+
+        // Calculate cutoff timestamp (ageDays ago)
+        val cutoffTime = System.currentTimeMillis() - (ageDays * 24 * 60 * 60 * 1000L)
+
+        // List all files in audit folder and filter by modification time
+        val allFiles = storage.listDirectEntries(auditFolderPath).asScala
+        val auditFiles = allFiles.filter(pathInfo => pathInfo.isFile && pathInfo.getPath.getName.endsWith(".jsonl"))
+        val oldFiles = auditFiles.filter(_.getModificationTime < cutoffTime)
+
+        if (oldFiles.isEmpty) {
+          val message = s"No audit files older than $ageDays days found"
+          Seq(Row(displayName, 0, dryRun, ageDays, message))
+        } else {
+
+          val fileCount = oldFiles.size
+
+          if (dryRun) {
+            val message = s"Dry run: Would delete $fileCount audit files older than $ageDays days"
+            Seq(Row(displayName, fileCount, dryRun, ageDays, message))
+          } else {
+            // Actually delete the files
+            var deletedCount = 0
+            var failedCount = 0
+
+            oldFiles.foreach { pathInfo =>
+              try {
+                storage.deleteFile(pathInfo.getPath)
+                deletedCount += 1
+              } catch {
+                case e: Exception =>
+                  failedCount += 1
+                  // Log the error but continue with other files
+              }
+            }
+
+            val message = if (failedCount == 0) {
+              s"Successfully deleted $deletedCount audit files older than $ageDays days"
+            } else {
+              s"Deleted $deletedCount audit files, failed to delete $failedCount files"
+            }
+
+            Seq(Row(displayName, deletedCount, dryRun, ageDays, message))
           }
         }
-        
-        val message = if (failedCount == 0) {
-          s"Successfully deleted $deletedCount audit files older than $ageDays days"
-        } else {
-          s"Deleted $deletedCount audit files, failed to delete $failedCount files"
-        }
-        
-        Seq(Row(displayName, deletedCount, dryRun, ageDays, message))
       }
     } catch {
       case e: Exception =>
@@ -168,6 +171,7 @@ class CleanupAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
    */
   override def build: Procedure = new CleanupAuditLockProcedure()
 }
+
 
 /**
  * Companion object for CleanupAuditLockProcedure containing constants and factory methods.
