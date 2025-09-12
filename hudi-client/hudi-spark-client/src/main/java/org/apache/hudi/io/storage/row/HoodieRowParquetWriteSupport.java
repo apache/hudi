@@ -20,6 +20,7 @@ package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkAdapterSupport;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -107,7 +108,13 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     this.writeLegacyListFormat = Boolean.parseBoolean(writeLegacyFormatEnabled)
         || Boolean.parseBoolean(config.getStringOrDefault(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false"));
     this.avroSchema = SerDeHelper.fromJson(config.getInternalSchema()).map(internalSchema -> AvroInternalSchemaConverter.convert(internalSchema, "spark_schema"))
-        .orElseGet(() -> new Schema.Parser().parse(config.getWriteSchema()));
+        .orElseGet(() -> {
+          Schema parsedSchema = new Schema.Parser().parse(config.getWriteSchema());
+          if (config.populateMetaFields()) {
+            return HoodieAvroUtils.addMetadataFields(parsedSchema, config.allowOperationMetadataField());
+          }
+          return parsedSchema;
+        });
     ParquetWriteSupport.setSchema(HoodieInternalRowUtils.getCachedSchema(avroSchema), hadoopConf);
     this.rootFieldWriters = getFieldWriters(schema, avroSchema);
     this.hadoopConf = hadoopConf;
@@ -358,7 +365,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
                                                                              Option<BloomFilter> bloomFilterOpt, HoodieConfig config) {
     return (HoodieRowParquetWriteSupport) ReflectionUtils.loadClass(
         config.getStringOrDefault(HoodieStorageConfig.HOODIE_PARQUET_SPARK_ROW_WRITE_SUPPORT_CLASS),
-        new Class<?>[] {Configuration.class, StructType.class, Option.class, HoodieConfig.class},
+        new Class<?>[] {Configuration.class, StructType.class, Option.class, HoodieWriteConfig.class},
         conf, structType, bloomFilterOpt, config);
   }
 
