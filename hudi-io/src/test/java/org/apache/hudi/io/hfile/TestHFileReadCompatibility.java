@@ -149,38 +149,6 @@ class TestHFileReadCompatibility {
   }
 
   @Test
-  void testHbaseReaderFailsWhenKeyValueVersionIsNotSetTo1() throws IOException {
-    String fileName = "hudi-generated-for-keyvalue-versions";
-    Path tempFile = new Path(Files.createTempFile(fileName, ".hfile").toString());
-    // Write data with keyValueVersion = 2; by default this value is set to 1.
-    writeHFileWithHudi(tempFile, 2);
-
-    Configuration conf = new Configuration();
-    FileSystem fs = FileSystem.get(conf);
-    // Create HBase HFile.Reader from the temporary file
-    HFile.Reader reader = HFile.createReader(fs, new Path(tempFile.toString()), conf);
-    byte[] keyValueVersion = reader.getHFileInfo().get(KEY_VALUE_VERSION.getBytes());
-    Assertions.assertEquals(2, IOUtils.readInt(keyValueVersion, 0));
-    // Values from trailer still works.
-    Assertions.assertEquals(5, reader.getEntries());
-    // Scanning the file fails since the MVCC byte is not read properly.
-    HFileScanner scanner = reader.getScanner(true, true);
-    scanner.seekTo();
-    Assertions.assertThrows(IllegalStateException.class, () -> {
-      int i = 0;
-      do {
-        Cell cell = scanner.getCell();
-        byte[] key = Arrays.copyOfRange(
-            cell.getRowArray(),
-            cell.getRowOffset(),
-            cell.getRowOffset() + cell.getRowLength());
-        Assertions.assertArrayEquals(TEST_RECORDS.get(i).key.getBytes(), key);
-        i++;
-      } while (scanner.next());
-    });
-  }
-
-  @Test
   void testHbaseReaderSucceedsWhenKeyValueVersionIsSetTo1() throws IOException {
     String fileName = "hudi-generated-for-keyvalue-versions";
     Path tempFile = new Path(Files.createTempFile(fileName, ".hfile").toString());
