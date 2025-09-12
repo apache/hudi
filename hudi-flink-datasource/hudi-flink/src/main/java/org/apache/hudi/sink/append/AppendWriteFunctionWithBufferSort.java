@@ -20,6 +20,7 @@ package org.apache.hudi.sink.append;
 
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
@@ -113,7 +114,7 @@ public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T>
     try {
       sortAndSend();
     } catch (IOException e) {
-      throw new HoodieException("Fail to sort and flush data in buffer during snapshot state.", e);
+      throw new HoodieIOException("Fail to sort and flush data in buffer during snapshot state.", e);
     }
     super.snapshotState();
   }
@@ -123,7 +124,7 @@ public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T>
     try {
       sortAndSend();
     } catch (IOException e) {
-      throw new HoodieException("Fail to sort and flush data in buffer during endInput.", e);
+      throw new HoodieIOException("Fail to sort and flush data in buffer during endInput.", e);
     }
     super.endInput();
   }
