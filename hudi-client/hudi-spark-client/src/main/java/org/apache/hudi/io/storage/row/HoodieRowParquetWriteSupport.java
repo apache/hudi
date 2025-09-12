@@ -69,7 +69,14 @@ import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_FIELD_ID_WRITE_ENABLED;
 
 /**
- * Hoodie Write Support for directly writing Row to Parquet.
+ * Hoodie Write Support for directly writing Row to Parquet and adding the Hudi bloom index to the file metadata.
+ * The implementation is adapted from Spark's {@link org.apache.spark.sql.execution.datasources.parquet.ParquetWriteSupport} but has the following major differences:
+ * <ul>
+ *   <li>Decimals are always written with the legacy format to ensure compatibility with parquet-avro and other readers</li>
+ *   <li>Writing 2-level or 3-level lists is configurable with either the Hudi option, hoodie.parquet.writelegacyformat.enabled, or the parquet-avro option, parquet.avro.write-old-list-structure
+ *   to ensure consistency across writer paths.</li>
+ *   <li>The scale of the timestamps is determined by the Hudi writer schema instead of relying on Spark configuration</li>
+ * </ul>
  */
 public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
 
@@ -98,12 +105,21 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
         || Boolean.parseBoolean(config.getStringOrDefault(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false"));
     ParquetWriteSupport.setSchema(HoodieInternalRowUtils.getCachedSchema(avroSchema), hadoopConf);
     this.avroSchema = avroSchema;
-    this.rootFieldWriters = IntStream.range(0, avroSchema.getFields().size()).mapToObj(i -> {
-      Schema.Field field = avroSchema.getFields().get(i);
-      return makeWriter(field.schema(), schema.fields()[i].dataType());
-    }).toArray(ValueWriter[]::new);
+    this.rootFieldWriters = getFieldWriters(schema, avroSchema);
     this.hadoopConf = hadoopConf;
     this.bloomFilterWriteSupportOpt = bloomFilterOpt.map(HoodieBloomFilterRowWriteSupport::new);
+  }
+
+  private ValueWriter[] getFieldWriters(StructType schema, Schema avroSchema) {
+    Map<String, Integer> fieldNameToIndex = new HashMap<>();
+    for (int i = 0; i < schema.fields().length; i++) {
+      fieldNameToIndex.put(schema.fields()[i].name(), i);
+    }
+    return IntStream.range(0, avroSchema.getFields().size()).mapToObj(i -> {
+      Schema.Field field = avroSchema.getFields().get(i);
+      Integer structIndex = fieldNameToIndex.get(field.name());
+      return makeWriter(field.schema(), schema.fields()[structIndex].dataType());
+    }).toArray(ValueWriter[]::new);
   }
 
   public Configuration getHadoopConf() {
@@ -238,11 +254,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
         return (row, ordinal) -> recordConsumer.addBinary(
             Binary.fromReusedByteArray(row.getBinary(ordinal)));
       case RECORD:
-        ValueWriter[] fieldWriters = IntStream.range(0, resolvedSchema.getFields().size()).mapToObj(i -> {
-          Schema.Field field = resolvedSchema.getFields().get(i);
-          return makeWriter(field.schema(), ((StructType) dataType).fields()[i].dataType());
-        }).toArray(ValueWriter[]::new);
-
+        ValueWriter[] fieldWriters = getFieldWriters(((StructType) dataType), resolvedSchema);
         return (row, ordinal) ->
           consumeGroup(() -> writeFields(row.getStruct(ordinal, resolvedSchema.getFields().size()), resolvedSchema, fieldWriters));
       case ARRAY:
