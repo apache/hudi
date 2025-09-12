@@ -71,13 +71,6 @@ public abstract class KeyGenerator implements KeyGeneratorInterface {
    * @return the record key
    */
   public static String constructRecordKey(String[] recordKeyFields, BiFunction<String, Integer, String> recordValueFunction) {
-    if (recordKeyFields.length == 1) {
-      String recordKeyValue = recordValueFunction.apply(recordKeyFields[0], 0);
-      if (recordKeyValue == null) {
-        throw new HoodieKeyException("recordKey cannot be null");
-      }
-      return recordKeyValue;
-    }
     boolean keyIsNullEmpty = true;
     StringBuilder recordKey = new StringBuilder();
     for (int i = 0; i < recordKeyFields.length; i++) {

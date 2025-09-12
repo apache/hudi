@@ -7,13 +7,14 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.keygen;
@@ -27,24 +28,22 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
-import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.unsafe.types.UTF8String;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
-public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
+class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
   /**
    * Method to create props used for common cases.
@@ -140,41 +139,41 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  public void testSimpleKeyGeneratorWithKeyGeneratorClass() throws IOException {
+  void testSimpleKeyGeneratorWithKeyGeneratorClass() {
     testSimpleKeyGenerator(getPropertiesForSimpleKeyGen(true));
   }
 
   @Test
-  public void testSimpleKeyGeneratorWithKeyGeneratorType() throws IOException {
+  void testSimpleKeyGeneratorWithKeyGeneratorType() {
     testSimpleKeyGenerator(getPropertiesForSimpleKeyGen(false));
   }
 
-  public void testSimpleKeyGenerator(TypedProperties props) throws IOException {
+  public void testSimpleKeyGenerator(TypedProperties props) {
     BuiltinKeyGenerator keyGenerator =
         (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
-    GenericRecord record = getRecord();
-    HoodieKey key = keyGenerator.getKey(record);
-    Assertions.assertEquals("key1", key.getRecordKey());
-    Assertions.assertEquals("timestamp=4357686", key.getPartitionPath());
-    Row row = KeyGeneratorTestUtilities.getRow(record);
-    Assertions.assertEquals("key1", keyGenerator.getRecordKey(row));
-    Assertions.assertEquals("timestamp=4357686", keyGenerator.getPartitionPath(row));
+    GenericRecord avroRecord = getRecord();
+    HoodieKey key = keyGenerator.getKey(avroRecord);
+    assertEquals("key1", key.getRecordKey());
+    assertEquals("timestamp=4357686", key.getPartitionPath());
+    Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
+    assertEquals("key1", keyGenerator.getRecordKey(row));
+    assertEquals("timestamp=4357686", keyGenerator.getPartitionPath(row));
     InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
-    Assertions.assertEquals(UTF8String.fromString("timestamp=4357686"), keyGenerator.getPartitionPath(internalRow, row.schema()));
+    assertEquals(UTF8String.fromString("timestamp=4357686"), keyGenerator.getPartitionPath(internalRow, row.schema()));
   }
 
   @Test
-  public void testTimestampBasedKeyGeneratorWithKeyGeneratorClass() throws IOException {
+  void testTimestampBasedKeyGeneratorWithKeyGeneratorClass() {
     testTimestampBasedKeyGenerator(getPropertiesForTimestampBasedKeyGen(true));
   }
 
   @Test
-  public void testTimestampBasedKeyGeneratorWithKeyGeneratorType() throws IOException {
+  void testTimestampBasedKeyGeneratorWithKeyGeneratorType() {
     testTimestampBasedKeyGenerator(getPropertiesForTimestampBasedKeyGen(false));
   }
 
   @Test
-  public void testCustomKeyGeneratorPartitionType() {
+  void testCustomKeyGeneratorPartitionType() {
     HoodieTableConfig tableConfig = new HoodieTableConfig();
     tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS.key(), "random:simple,ts_ms:timestamp");
     Object[] partitionTypes = CustomAvroKeyGenerator.getPartitionTypes(tableConfig).toArray();
@@ -184,7 +183,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  public void testCustomKeyGeneratorTimestampFieldsAPI() {
+  void testCustomKeyGeneratorTimestampFieldsAPI() {
     HoodieTableConfig tableConfig = new HoodieTableConfig();
     tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS.key(), "simple1:simple,ts1:timestamp,ts2:timestamp");
     Object[] timestampFields = CustomAvroKeyGenerator.getTimestampFields(tableConfig).get().toArray();
@@ -202,54 +201,54 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
     assertEquals(0, timestampFields.length);
   }
 
-  public void testTimestampBasedKeyGenerator(TypedProperties props) throws IOException {
+  public void testTimestampBasedKeyGenerator(TypedProperties props) {
     BuiltinKeyGenerator keyGenerator =
         (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
-    GenericRecord record = getRecord();
-    HoodieKey key = keyGenerator.getKey(record);
-    Assertions.assertEquals("key1", key.getRecordKey());
-    Assertions.assertEquals("ts_ms=20200321", key.getPartitionPath());
-    Row row = KeyGeneratorTestUtilities.getRow(record);
-    Assertions.assertEquals("key1", keyGenerator.getRecordKey(row));
-    Assertions.assertEquals("ts_ms=20200321", keyGenerator.getPartitionPath(row));
+    GenericRecord avroRecord = getRecord();
+    HoodieKey key = keyGenerator.getKey(avroRecord);
+    assertEquals("key1", key.getRecordKey());
+    assertEquals("ts_ms=20200321", key.getPartitionPath());
+    Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
+    assertEquals("key1", keyGenerator.getRecordKey(row));
+    assertEquals("ts_ms=20200321", keyGenerator.getPartitionPath(row));
     InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
-    Assertions.assertEquals(UTF8String.fromString("ts_ms=20200321"), keyGenerator.getPartitionPath(internalRow, row.schema()));
+    assertEquals(UTF8String.fromString("ts_ms=20200321"), keyGenerator.getPartitionPath(internalRow, row.schema()));
   }
 
   @Test
-  public void testNonPartitionedKeyGeneratorWithKeyGeneratorClass() throws IOException {
+  void testNonPartitionedKeyGeneratorWithKeyGeneratorClass() {
     testNonPartitionedKeyGenerator(getPropertiesForNonPartitionedKeyGen(true));
   }
 
   @Test
-  public void testNonPartitionedKeyGeneratorWithKeyGeneratorType() throws IOException {
+  void testNonPartitionedKeyGeneratorWithKeyGeneratorType() {
     testNonPartitionedKeyGenerator(getPropertiesForNonPartitionedKeyGen(false));
   }
 
-  public void testNonPartitionedKeyGenerator(TypedProperties props) throws IOException {
+  public void testNonPartitionedKeyGenerator(TypedProperties props) {
     BuiltinKeyGenerator keyGenerator =
         (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
-    GenericRecord record = getRecord();
-    HoodieKey key = keyGenerator.getKey(record);
-    Assertions.assertEquals(key.getRecordKey(), "key1");
+    GenericRecord avroRecord = getRecord();
+    HoodieKey key = keyGenerator.getKey(avroRecord);
+    assertEquals("key1", key.getRecordKey());
     assertTrue(key.getPartitionPath().isEmpty());
-    Row row = KeyGeneratorTestUtilities.getRow(record);
-    Assertions.assertEquals(keyGenerator.getRecordKey(row), "key1");
+    Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
+    assertEquals("key1", keyGenerator.getRecordKey(row));
     assertTrue(keyGenerator.getPartitionPath(row).isEmpty());
 
     InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
-    Assertions.assertEquals(0, keyGenerator.getPartitionPath(internalRow, row.schema()).numBytes());
+    assertEquals(0, keyGenerator.getPartitionPath(internalRow, row.schema()).numBytes());
   }
 
   @Test
-  public void testInvalidPartitionKeyTypeWithKeyGeneratorClass() {
+  void testInvalidPartitionKeyTypeWithKeyGeneratorClass() {
     testInvalidPartitionKeyType(getInvalidPartitionKeyTypeProps(true));
   }
 
   @Test
-  public void testInvalidPartitionKeyTypeWithKeyGeneratorType() {
+  void testInvalidPartitionKeyTypeWithKeyGeneratorType() {
     testInvalidPartitionKeyType(getInvalidPartitionKeyTypeProps(false));
   }
 
@@ -259,7 +258,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
           (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
       keyGenerator.getKey(getRecord());
-      Assertions.fail("should fail when invalid PartitionKeyType is provided!");
+      fail("should fail when invalid PartitionKeyType is provided!");
     } catch (Exception e) {
       assertTrue(getNestedConstructorErrorCause(e).getMessage().contains("No enum constant org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType.DUMMY"));
     }
@@ -268,22 +267,22 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
       BuiltinKeyGenerator keyGenerator =
           (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
-      GenericRecord record = getRecord();
-      Row row = KeyGeneratorTestUtilities.getRow(record);
+      GenericRecord avroRecord = getRecord();
+      Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
       keyGenerator.getPartitionPath(row);
-      Assertions.fail("should fail when invalid PartitionKeyType is provided!");
+      fail("should fail when invalid PartitionKeyType is provided!");
     } catch (Exception e) {
       assertTrue(getNestedConstructorErrorCause(e).getMessage().contains("No enum constant org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType.DUMMY"));
     }
   }
 
   @Test
-  public void testNoRecordKeyFieldPropWithKeyGeneratorClass() {
+  void testNoRecordKeyFieldPropWithKeyGeneratorClass() {
     testNoRecordKeyFieldProp(true);
   }
 
   @Test
-  public void testNoRecordKeyFieldPropWithKeyGeneratorType() {
+  void testNoRecordKeyFieldPropWithKeyGeneratorType() {
     testNoRecordKeyFieldProp(false);
   }
 
@@ -293,7 +292,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
       BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(propsWithoutRecordKeyFieldProps);
 
       keyGenerator.getKey(getRecord());
-      Assertions.fail("should fail when record key field is not provided!");
+      fail("should fail when record key field is not provided!");
     } catch (Exception e) {
       if (useKeyGeneratorClassName) {
         // "Property hoodie.datasource.write.recordkey.field not found" exception cause CustomKeyGenerator init fail
@@ -308,10 +307,10 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
     try {
       BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(propsWithoutRecordKeyFieldProps);
 
-      GenericRecord record = getRecord();
-      Row row = KeyGeneratorTestUtilities.getRow(record);
+      GenericRecord avroRecord = getRecord();
+      Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
       keyGenerator.getRecordKey(row);
-      Assertions.fail("should fail when record key field is not provided!");
+      fail("should fail when record key field is not provided!");
     } catch (Exception e) {
       if (useKeyGeneratorClassName) {
         // "Property hoodie.datasource.write.recordkey.field not found" exception cause CustomKeyGenerator init fail
@@ -324,12 +323,12 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  public void testPartitionFieldsInImproperFormatWithKeyGeneratorClass() {
+  void testPartitionFieldsInImproperFormatWithKeyGeneratorClass() {
     testPartitionFieldsInImproperFormat(getImproperPartitionFieldFormatProp(true));
   }
 
   @Test
-  public void testPartitionFieldsInImproperFormatWithKeyGeneratorType() {
+  void testPartitionFieldsInImproperFormatWithKeyGeneratorType() {
     testPartitionFieldsInImproperFormat(getImproperPartitionFieldFormatProp(false));
   }
 
@@ -339,7 +338,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
           (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
       keyGenerator.getKey(getRecord());
-      Assertions.fail("should fail when partition key field is provided in improper format!");
+      fail("should fail when partition key field is provided in improper format!");
     } catch (Exception e) {
       assertTrue(getNestedConstructorErrorCause(e).getMessage().contains("Unable to find field names for partition path in proper format"));
     }
@@ -348,67 +347,67 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
       BuiltinKeyGenerator keyGenerator =
           (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
-      GenericRecord record = getRecord();
-      Row row = KeyGeneratorTestUtilities.getRow(record);
+      GenericRecord avroRecord = getRecord();
+      Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
       keyGenerator.getPartitionPath(row);
-      Assertions.fail("should fail when partition key field is provided in improper format!");
+      fail("should fail when partition key field is provided in improper format!");
     } catch (Exception e) {
       assertTrue(getNestedConstructorErrorCause(e).getMessage().contains("Unable to find field names for partition path in proper format"));
     }
   }
 
   @Test
-  public void testComplexRecordKeyWithSimplePartitionPathWithKeyGeneratorClass() throws IOException {
+  void testComplexRecordKeyWithSimplePartitionPathWithKeyGeneratorClass() {
     testComplexRecordKeyWithSimplePartitionPath(getComplexRecordKeyWithSimplePartitionProps(true));
   }
 
   @Test
-  public void testComplexRecordKeyWithSimplePartitionPathWithKeyGeneratorType() throws IOException {
+  void testComplexRecordKeyWithSimplePartitionPathWithKeyGeneratorType() {
     testComplexRecordKeyWithSimplePartitionPath(getComplexRecordKeyWithSimplePartitionProps(false));
   }
 
-  public void testComplexRecordKeyWithSimplePartitionPath(TypedProperties props) throws IOException {
+  public void testComplexRecordKeyWithSimplePartitionPath(TypedProperties props) {
     BuiltinKeyGenerator keyGenerator =
         (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
-    GenericRecord record = getRecord();
-    HoodieKey key = keyGenerator.getKey(record);
-    Assertions.assertEquals("_row_key:key1,pii_col:pi", key.getRecordKey());
-    Assertions.assertEquals("timestamp=4357686", key.getPartitionPath());
+    GenericRecord avroRecord = getRecord();
+    HoodieKey key = keyGenerator.getKey(avroRecord);
+    assertEquals("_row_key:key1,pii_col:pi", key.getRecordKey());
+    assertEquals("timestamp=4357686", key.getPartitionPath());
 
-    Row row = KeyGeneratorTestUtilities.getRow(record);
-    Assertions.assertEquals("_row_key:key1,pii_col:pi", keyGenerator.getRecordKey(row));
-    Assertions.assertEquals("timestamp=4357686", keyGenerator.getPartitionPath(row));
+    Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
+    assertEquals("_row_key:key1,pii_col:pi", keyGenerator.getRecordKey(row));
+    assertEquals("timestamp=4357686", keyGenerator.getPartitionPath(row));
 
     InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
-    Assertions.assertEquals(UTF8String.fromString("timestamp=4357686"), keyGenerator.getPartitionPath(internalRow, row.schema()));
+    assertEquals(UTF8String.fromString("timestamp=4357686"), keyGenerator.getPartitionPath(internalRow, row.schema()));
   }
 
   @Test
-  public void testComplexRecordKeysWithComplexPartitionPathWithKeyGeneratorClass() throws IOException {
+  void testComplexRecordKeysWithComplexPartitionPathWithKeyGeneratorClass() {
     testComplexRecordKeysWithComplexPartitionPath(getComplexRecordKeyAndPartitionPathProps(true));
   }
 
   @Test
-  public void testComplexRecordKeysWithComplexPartitionPathWithKeyGeneratorType() throws IOException {
+  void testComplexRecordKeysWithComplexPartitionPathWithKeyGeneratorType() {
     testComplexRecordKeysWithComplexPartitionPath(getComplexRecordKeyAndPartitionPathProps(false));
   }
 
-  public void testComplexRecordKeysWithComplexPartitionPath(TypedProperties props) throws IOException {
+  public void testComplexRecordKeysWithComplexPartitionPath(TypedProperties props) {
     BuiltinKeyGenerator keyGenerator =
         (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
-    GenericRecord record = getRecord();
-    HoodieKey key = keyGenerator.getKey(record);
-    Assertions.assertEquals("_row_key:key1,pii_col:pi", key.getRecordKey());
-    Assertions.assertEquals("timestamp=4357686/ts_ms=20200321", key.getPartitionPath());
+    GenericRecord avroRecord = getRecord();
+    HoodieKey key = keyGenerator.getKey(avroRecord);
+    assertEquals("_row_key:key1,pii_col:pi", key.getRecordKey());
+    assertEquals("timestamp=4357686/ts_ms=20200321", key.getPartitionPath());
 
-    Row row = KeyGeneratorTestUtilities.getRow(record);
-    Assertions.assertEquals("_row_key:key1,pii_col:pi", keyGenerator.getRecordKey(row));
-    Assertions.assertEquals("timestamp=4357686/ts_ms=20200321", keyGenerator.getPartitionPath(row));
+    Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
+    assertEquals("_row_key:key1,pii_col:pi", keyGenerator.getRecordKey(row));
+    assertEquals("timestamp=4357686/ts_ms=20200321", keyGenerator.getPartitionPath(row));
 
     InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
-    Assertions.assertEquals(UTF8String.fromString("timestamp=4357686/ts_ms=20200321"), keyGenerator.getPartitionPath(internalRow, row.schema()));
+    assertEquals(UTF8String.fromString("timestamp=4357686/ts_ms=20200321"), keyGenerator.getPartitionPath(internalRow, row.schema()));
   }
 
   private static Throwable getNestedConstructorErrorCause(Exception e) {

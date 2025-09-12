@@ -150,4 +150,20 @@ public enum KeyGeneratorType {
     }
     return null;
   }
+
+  public static boolean isComplexKeyGenerator(HoodieConfig config) {
+    KeyGeneratorType keyGeneratorType;
+    if (config.contains(KEY_GENERATOR_TYPE)) {
+      keyGeneratorType = KeyGeneratorType.valueOf(config.getString(KEY_GENERATOR_TYPE));
+    } else if (config.contains(KEY_GENERATOR_CLASS_NAME)) {
+      try {
+        keyGeneratorType = fromClassName(config.getString(KEY_GENERATOR_CLASS_NAME));
+      } catch (IllegalArgumentException e) {
+        return false;
+      }
+    } else {
+      return false;
+    }
+    return keyGeneratorType == COMPLEX || keyGeneratorType == COMPLEX_AVRO;
+  }
 }

@@ -21,6 +21,7 @@ package org.apache.hudi.keygen;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -331,5 +332,23 @@ public class KeyGenUtils {
     return !props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
         || props.getProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).equals(StringUtils.EMPTY_STRING);
     // spark-sql sets record key config to empty string for update, and couple of other statements.
+  }
+
+  public static boolean isComplexKeyGeneratorWithSingleRecordKeyField(HoodieTableConfig tableConfig) {
+    Option<String[]> recordKeyFields = tableConfig.getRecordKeyFields();
+    return KeyGeneratorType.isComplexKeyGenerator(tableConfig)
+        && recordKeyFields.isPresent() && recordKeyFields.get().length == 1;
+  }
+
+  public static String getComplexKeygenErrorMessage(String operation) {
+    return "This table uses the complex key generator with a single record "
+        + "key field. If the table is written with Hudi 0.14.1, 0.15.0, 1.0.0, 1.0.1, or 1.0.2 "
+        + "release before, the table may potentially contain duplicates due to a breaking "
+        + "change in the key encoding in the _hoodie_record_key meta field (HUDI-7001) which "
+        + "is crucial for upserts. Please take action based on the details on the deployment "
+        + "guide (https://hudi.apache.org/docs/deployment#complex-key-generator) "
+        + "before resuming the " + operation + " to the this table. If you're certain "
+        + "that the table is not affected by the key encoding change, set "
+        + "`hoodie.write.complex.keygen.validation.enable=false` to skip this validation.";
   }
 }
