@@ -21,14 +21,14 @@ package org.apache.spark.sql.hudi.feature.index
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.data.{HoodieListData, HoodiePairData}
+import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.engine.EngineType
 import org.apache.hudi.common.model.HoodieRecordLocation
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.util.HoodieDataUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.data.{HoodieJavaPairRDD, HoodieJavaRDD}
+import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
 
@@ -263,14 +263,14 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     cleanUpCachedRDDs()
 
     // Case 1: Empty input
-    val emptyResultRDD = hoodieBackedTableMetadata.readRecordIndexLocationsWithKeys(HoodieListData.eager(List.empty[String].asJava))
+    val emptyResultRDD = hoodieBackedTableMetadata.readRecordIndexKeysAndLocations(HoodieListData.eager(List.empty[String].asJava))
     val emptyResult = emptyResultRDD.collectAsList()
     assert(emptyResult.isEmpty, "Empty input should return empty result")
     emptyResultRDD.unpersistWithDependencies()
 
     // Case 2: All existing keys including those with $ characters
     val allKeys = HoodieListData.eager(List("a1", "a2", "a$", "$a", "a$a", "$$").asJava)
-    val allResultRDD = hoodieBackedTableMetadata.readRecordIndexLocationsWithKeys(allKeys)
+    val allResultRDD = hoodieBackedTableMetadata.readRecordIndexKeysAndLocations(allKeys)
     val allResult = allResultRDD.collectAsList().asScala
     allResultRDD.unpersistWithDependencies()
     // Validate keys including special characters
@@ -297,14 +297,14 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
 
     // Case 3: Non-existing keys, some matches the prefix of the existing records.
     val nonExistKeys = HoodieListData.eager(List("", "a", "a100", "200", "$", "a$$", "$$a", "$a$").asJava)
-    val nonExistResultRDD = hoodieBackedTableMetadata.readRecordIndexLocationsWithKeys(nonExistKeys)
+    val nonExistResultRDD = hoodieBackedTableMetadata.readRecordIndexKeysAndLocations(nonExistKeys)
     val nonExistResult = nonExistResultRDD.collectAsList().asScala
     assert(nonExistResult.isEmpty, "Non-existing keys should return empty result")
     nonExistResultRDD.unpersistWithDependencies()
 
     // Case 4: Mix of existing and non-existing keys
     val mixedKeys = HoodieListData.eager(List("a1", "a100", "a2", "a200").asJava)
-    val mixedResultRDD = hoodieBackedTableMetadata.readRecordIndexLocationsWithKeys(mixedKeys)
+    val mixedResultRDD = hoodieBackedTableMetadata.readRecordIndexKeysAndLocations(mixedKeys)
     val mixedResult = mixedResultRDD.collectAsList().asScala
     val mixedResultKeys = mixedResult.map(_.getKey()).toSet
     assert(mixedResultKeys == Set("a1", "a2"), "Should only return existing keys")
@@ -312,7 +312,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
 
     // Case 5: Duplicate keys including those with $ characters
     val dupKeys = HoodieListData.eager(List("a1", "a1", "a2", "a2", "a$", "a$", "$a", "a$a", "a$a", "$a", "$$", "$$").asJava)
-    val dupResultRDD = hoodieBackedTableMetadata.readRecordIndexLocationsWithKeys(dupKeys)
+    val dupResultRDD = hoodieBackedTableMetadata.readRecordIndexKeysAndLocations(dupKeys)
     val dupResult = dupResultRDD.collectAsList().asScala
     val dupResultKeys = dupResult.map(_.getKey()).toSet
     assert(dupResultKeys == Set("a1", "a2", "a$", "$a", "a$a", "$$"), "Should deduplicate keys including those with $")
@@ -322,7 +322,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     jsc = new JavaSparkContext(spark.sparkContext)
     context = new HoodieSparkEngineContext(jsc, new SQLContext(spark))
     val rddKeys = HoodieJavaRDD.of(List("a1", "a2", "a$").asJava, context, 2)
-    val rddResult = hoodieBackedTableMetadata.readRecordIndexLocationsWithKeys(rddKeys)
+    val rddResult = hoodieBackedTableMetadata.readRecordIndexKeysAndLocations(rddKeys)
     val rddResultKeys = rddResult.map(_.getKey()).collectAsList().asScala.toSet
     assert(rddResultKeys == Set("a1", "a2", "a$"), "Should deduplicate keys including those with $")
     rddResult.unpersistWithDependencies()

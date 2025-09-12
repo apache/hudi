@@ -23,8 +23,23 @@ import java.util.Objects;
 
 /**
  * Represents a record index key that requires no encoding (identity encoding).
+ * <p>
+ * The RECORD_INDEX partition stores the mapping from record keys to their locations
+ * (file groups) in the data table. This enables fast lookups of records by their keys
+ * without scanning all files.
+ * <p>
+ * Raw key format: The record key itself (no transformation)
+ * <p>
+ * Examples:
+ * - For record with key "user123": key = "user123"
+ * - For record with key "order_456_2023": key = "order_456_2023"
+ * <p>
+ * The value associated with this key contains the location information including:
+ * - Partition path where the record exists
+ * - FileId of the file group containing the record
+ * - Instant time when the record was last written
  */
-public class RecordIndexRawKey implements RawKey {
+public class RecordIndexRawKey implements MetadataRawKey {
   private final String recordKey;
 
   public RecordIndexRawKey(String recordKey) {
@@ -37,7 +52,7 @@ public class RecordIndexRawKey implements RawKey {
     return recordKey;
   }
 
-  public String getRecordKey() {
+  public String recordKey() {
     return recordKey;
   }
 

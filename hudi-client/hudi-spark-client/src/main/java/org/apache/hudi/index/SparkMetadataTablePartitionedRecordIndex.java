@@ -33,9 +33,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.metadata.BucketizedMetadataTableFileGroupIndexParser;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.metadata.BucketizedMetadataTableFileGroupIndexParser;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -131,7 +131,7 @@ public class SparkMetadataTablePartitionedRecordIndex extends SparkMetadataTable
       // recordIndexInfo object only contains records that are present in record_index.
       assert partitionName[0] != null || keysToLookup.isEmpty();
       Map<String, HoodieRecordGlobalLocation> recordIndexInfo =
-          hoodieTable.getMetadataTable().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup), Option.ofNullable(partitionName[0]))
+          hoodieTable.getMetadataTable().readRecordIndexKeysAndLocations(HoodieListData.eager(keysToLookup), Option.ofNullable(partitionName[0]))
               .collectAsList().stream().collect(HashMap::new, (map, pair) -> map.put(pair.getKey(), pair.getValue()), HashMap::putAll);
       return recordIndexInfo.entrySet().stream()
           .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
