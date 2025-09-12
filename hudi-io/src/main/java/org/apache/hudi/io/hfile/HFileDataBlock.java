@@ -47,6 +47,9 @@ public class HFileDataBlock extends HFileBlock {
   // This assumption is also validated when parsing {@link HFileInfo},
   // i.e., the maximum MVCC timestamp in a HFile must be 0.
   private static final long ZERO_TS_VERSION_BYTE_LENGTH = 1;
+  // Hudi does not set version timestamp for key value pairs,
+  // so the latest timestamp is used.
+  private static final long LATEST_TIMESTAMP = Long.MAX_VALUE;
 
   // End offset of content in the block, relative to the start of the start of the block
   protected final int uncompressedContentEndRelativeOffset;
@@ -221,8 +224,8 @@ public class HFileDataBlock extends HFileBlock {
       // Column family length: constant 0.
       dataBuf.put((byte)0);
       // Column qualifier: assume 0 bits.
-      // Timestamp: constant 0.
-      dataBuf.putLong(0L);
+      // Timestamp: using the latest.
+      dataBuf.putLong(LATEST_TIMESTAMP);
       // Key type: constant Put (4) in Hudi.
       // Minimum((byte) 0), Put((byte) 4), Delete((byte) 8),
       // DeleteFamilyVersion((byte) 10), DeleteColumn((byte) 12),
