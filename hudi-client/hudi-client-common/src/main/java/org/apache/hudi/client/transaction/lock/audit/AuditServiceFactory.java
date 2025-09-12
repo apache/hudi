@@ -20,7 +20,6 @@ package org.apache.hudi.client.transaction.lock.audit;
 
 import org.apache.hudi.client.transaction.lock.StorageLockClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,12 +36,12 @@ import java.util.function.Supplier;
 public class AuditServiceFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(AuditServiceFactory.class);
-  private static final String AUDIT_CONFIG_FILE_NAME = "audit_enabled.json";
-  private static final String STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD = "STORAGE_LOCK_AUDIT_SERVICE_ENABLED";
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   /**
    * Creates a lock provider audit service instance by checking the audit configuration file.
+   * This method reads the audit configuration to determine if auditing is enabled.
+   * If auditing is enabled, it returns a StorageLockProviderAuditService instance.
    *
    * @param ownerId The owner ID for the lock provider
    * @param basePath The base path of the Hudi table
@@ -63,13 +62,21 @@ public class AuditServiceFactory {
     if (!isAuditEnabled(basePath, storageLockClient)) {
       return Option.empty();
     }
-
-    // No-op, will add in a follow up
-    return Option.empty();
+    
+    return Option.of(new StorageLockProviderAuditService(
+        basePath,
+        ownerId,
+        transactionStartTime,
+        storageLockClient,
+        lockExpirationFunction,
+        lockHeldSupplier));
   }
 
   /**
    * Checks if audit is enabled by reading the audit configuration file.
+   * This method looks for the audit configuration file at the expected location
+   * and parses it to determine if auditing is enabled. Returns false if the
+   * configuration file doesn't exist or cannot be read.
    *
    * @param basePath The base path of the Hudi table
    * @param storageLockClient The storage lock client to use for reading configuration
@@ -77,9 +84,8 @@ public class AuditServiceFactory {
    */
   private static boolean isAuditEnabled(String basePath, StorageLockClient storageLockClient) {
     try {
-      // Construct the audit config path using the same lock folder as the lock file
-      String lockFolderPath = StorageLockClient.getLockFolderPath(basePath);
-      String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, AUDIT_CONFIG_FILE_NAME);
+      // Construct the audit config path using the utility method
+      String auditConfigPath = StorageLockProviderAuditService.getAuditConfigPath(basePath);
 
       LOG.debug("Checking for audit configuration at: {}", auditConfigPath);
 
@@ -90,7 +96,7 @@ public class AuditServiceFactory {
       if (jsonContent.isPresent()) {
         LOG.debug("Audit configuration file found, parsing content");
         JsonNode rootNode = OBJECT_MAPPER.readTree(jsonContent.get());
-        JsonNode enabledNode = rootNode.get(STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD);
+        JsonNode enabledNode = rootNode.get(StorageLockProviderAuditService.STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD);
 
         boolean isEnabled = enabledNode != null && enabledNode.asBoolean(false);
 
