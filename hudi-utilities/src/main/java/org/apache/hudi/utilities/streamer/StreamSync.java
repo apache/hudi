@@ -803,17 +803,16 @@ public class StreamSync implements Serializable, Closeable {
       WriteClientWriteResult writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
       Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
       JavaRDD<WriteStatus> writeStatusRDD = writeClientWriteResult.getWriteStatusRDD();
-      String errorTableInstantTime = instantTime;
       Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt = Option.empty();
       if (errorTableWriter.isPresent() && isErrorTableWriteUnificationEnabled) {
-        errorTableWriteStatusRDDOpt = errorTableWriter.map(w -> w.upsert(errorTableInstantTime, instantTime, getLatestCommittedInstant()));
+        errorTableWriteStatusRDDOpt = errorTableWriter.map(w -> w.upsert(instantTime, getLatestCommittedInstant()));
       }
 
       Map<String, String> checkpointCommitMetadata = extractCheckpointMetadata(inputBatch, props, writeClient.getConfig().getWriteVersion().versionCode(), cfg);
       AtomicLong totalSuccessfulRecords = new AtomicLong(0);
       Option<String> latestCommittedInstant = getLatestCommittedInstant();
       WriteStatusValidator writeStatusValidator = new HoodieStreamerWriteStatusValidator(cfg.commitOnErrors, instantTime,
-          cfg, errorTableWriter, errorTableWriteStatusRDDOpt, errorWriteFailureStrategy, isErrorTableWriteUnificationEnabled, errorTableInstantTime, writeClient, latestCommittedInstant,
+          cfg, errorTableWriter, errorTableWriteStatusRDDOpt, errorWriteFailureStrategy, isErrorTableWriteUnificationEnabled, writeClient, latestCommittedInstant,
           totalSuccessfulRecords);
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
 
@@ -1311,7 +1310,6 @@ public class StreamSync implements Serializable, Closeable {
     private final Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt;
     private final HoodieErrorTableConfig.ErrorWriteFailureStrategy errorWriteFailureStrategy;
     private final boolean isErrorTableWriteUnificationEnabled;
-    private final String errorTableInstantTime;
     private final SparkRDDWriteClient writeClient;
     private final Option<String> latestCommittedInstant;
     private final AtomicLong totalSuccessfulRecords;
@@ -1323,7 +1321,6 @@ public class StreamSync implements Serializable, Closeable {
                                        Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt,
                                        HoodieErrorTableConfig.ErrorWriteFailureStrategy errorWriteFailureStrategy,
                                        boolean isErrorTableWriteUnificationEnabled,
-                                       String errorTableInstantTime,
                                        SparkRDDWriteClient writeClient,
                                        Option<String> latestCommittedInstant,
                                        AtomicLong totalSuccessfulRecords) {
@@ -1334,7 +1331,6 @@ public class StreamSync implements Serializable, Closeable {
       this.errorTableWriteStatusRDDOpt = errorTableWriteStatusRDDOpt;
       this.errorWriteFailureStrategy = errorWriteFailureStrategy;
       this.isErrorTableWriteUnificationEnabled = isErrorTableWriteUnificationEnabled;
-      this.errorTableInstantTime = errorTableInstantTime;
       this.writeClient = writeClient;
       this.latestCommittedInstant = latestCommittedInstant;
       this.totalSuccessfulRecords = totalSuccessfulRecords;
@@ -1368,7 +1364,7 @@ public class StreamSync implements Serializable, Closeable {
         boolean errorTableSuccess = true;
         // Commit the error events triggered so far to the error table
         if (isErrorTableWriteUnificationEnabled && errorTableWriteStatusRDDOpt.isPresent()) {
-          errorTableSuccess = errorTableWriter.get().commit(errorTableInstantTime, errorTableWriteStatusRDDOpt.get());
+          errorTableSuccess = errorTableWriter.get().commit(errorTableWriteStatusRDDOpt.get());
         } else if (!isErrorTableWriteUnificationEnabled) {
           errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, latestCommittedInstant);
         }

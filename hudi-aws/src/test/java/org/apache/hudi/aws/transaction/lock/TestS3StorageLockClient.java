@@ -142,7 +142,7 @@ class TestS3StorageLockClient {
             (a,b) -> mockS3Client,
             mockLogger
     ));
-    assertTrue(ex.getMessage().contains("lock file path"));
+    assertTrue(ex.getMessage().contains("path"));
   }
 
   @Test

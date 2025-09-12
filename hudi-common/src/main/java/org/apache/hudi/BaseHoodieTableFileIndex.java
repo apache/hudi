@@ -216,6 +216,13 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     return queryType;
   }
 
+  /**
+   * Returns the configuration properties
+   */
+  public HoodieMetadataConfig getMetadataConfig() {
+    return metadataConfig;
+  }
+
   protected String[] getPartitionColumns() {
     return partitionColumns;
   }

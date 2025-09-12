@@ -72,6 +72,8 @@ public class WriteStatMerger {
     merged.setCdcStats(getMergedCdcStats(stat1.getCdcStats(), stat2.getCdcStats()));
     // prev commit
     merged.setPrevCommit(stat2.getPrevCommit());
+    // prev base file
+    merged.setPrevBaseFile(stat1.getPrevBaseFile());
 
     merged.setNumWrites(stat2.getNumWrites() + stat1.getNumWrites());
     merged.setNumDeletes(stat2.getNumDeletes() + stat1.getNumDeletes());
@@ -103,7 +105,7 @@ public class WriteStatMerger {
     // event time
     merged.setMinEventTime(minLong(stat1.getMinEventTime(), stat2.getMinEventTime()));
     merged.setMaxEventTime(maxLong(stat1.getMaxEventTime(), stat2.getMaxEventTime()));
-    return stat2;
+    return merged;
   }
 
   private static HoodieWriteStat.RuntimeStats getMergedRuntimeStats(

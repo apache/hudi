@@ -412,6 +412,45 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test Call run_clustering Procedure With Partition Pruning Regex") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts bigint,
+             |  sex string,
+             |  addr string
+             |) using hudi
+             | options (
+             |  primaryKey ='id',
+             |  type = '$tableType',
+             |  preCombineField = 'ts'
+             | )
+             | partitioned by(sex, addr)
+             | location '$basePath'
+       """.stripMargin)
+        val fs = new Path(basePath).getFileSystem(spark.sessionState.newHadoopConf())
+        // Test partition pruning with single predicate
+        var resultA: Array[Seq[Any]] = Array.empty
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 's1', 'addr1')")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001, 's2', 'addr1')")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 's1', 'addr2')")
+        // clustering table with partition predicate
+        resultA = spark.sql(s"call run_clustering(table => '$tableName', partition_regex_pattern => 'sex=s1/.*', order => 'ts', show_involved_partition => true)")
+          .collect()
+          .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3)))
+        assertResult(1)(resultA.length)
+        assertResult("sex=s1/addr=addr1,sex=s1/addr=addr2")(resultA(0)(3))
+      }
+    }
+  }
+
   test("Test Call run_clustering Procedure with specific instants") {
     withTempDir { tmp =>
       val tableName = generateTableName

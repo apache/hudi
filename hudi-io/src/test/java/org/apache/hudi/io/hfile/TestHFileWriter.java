@@ -41,6 +41,9 @@ import java.util.Arrays;
 
 import static org.apache.hudi.io.hfile.HFileBlockType.DATA;
 import static org.apache.hudi.io.hfile.HFileBlockType.TRAILER;
+import static org.apache.hudi.io.hfile.HFileInfo.AVG_KEY_LEN;
+import static org.apache.hudi.io.hfile.HFileInfo.AVG_VALUE_LEN;
+import static org.apache.hudi.io.hfile.HFileInfo.KEY_VALUE_VERSION;
 import static org.apache.hudi.io.hfile.HFileInfo.LAST_KEY;
 import static org.apache.hudi.io.hfile.HFileInfo.MAX_MVCC_TS_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -72,7 +75,7 @@ class TestHFileWriter {
   @Test
   void testSameKeyLocation() throws IOException {
     // 50 bytes for data part limit.
-    HFileContext context = new HFileContext.Builder().blockSize(50).build();
+    HFileContext context = new HFileContext.Builder().blockSize(100).build();
     String testFile = TEST_FILE;
     try (DataOutputStream outputStream =
              new DataOutputStream(Files.newOutputStream(Paths.get(testFile)));
@@ -98,7 +101,7 @@ class TestHFileWriter {
       reader.initializeMetadata();
       assertEquals(20, reader.getNumKeyValueEntries());
       HFileTrailer trailer = reader.getTrailer();
-      assertEquals(6, trailer.getDataIndexCount());
+      assertEquals(4, trailer.getDataIndexCount());
       int i = 0;
       for (Key key : reader.getDataBlockIndexMap().keySet()) {
         assertArrayEquals(
@@ -107,7 +110,7 @@ class TestHFileWriter {
         if (i == 0) {
           i++;
         } else {
-          i += 2;
+          i += 4;
         }
       }
     }
@@ -116,7 +119,7 @@ class TestHFileWriter {
   @Test
   void testUniqueKeyLocation() throws IOException {
     // 50 bytes for data part limit.
-    HFileContext context = new HFileContext.Builder().blockSize(50).build();
+    HFileContext context = new HFileContext.Builder().blockSize(100).build();
     String testFile = TEST_FILE;
     try (DataOutputStream outputStream =
              new DataOutputStream(Files.newOutputStream(Paths.get(testFile)));
@@ -138,7 +141,7 @@ class TestHFileWriter {
       reader.initializeMetadata();
       assertEquals(50, reader.getNumKeyValueEntries());
       HFileTrailer trailer = reader.getTrailer();
-      assertEquals(25, trailer.getDataIndexCount());
+      assertEquals(13, trailer.getDataIndexCount());
       reader.seekTo();
       for (int i = 0; i < 50; i++) {
         KeyValue kv = reader.getKeyValue().get();
@@ -171,7 +174,7 @@ class TestHFileWriter {
   private static void validateHFileSize() throws IOException {
     Path path = Paths.get(TEST_FILE);
     long actualSize = Files.size(path);
-    long expectedSize = 4366L;
+    long expectedSize = 4521;
     assertEquals(expectedSize, actualSize);
   }
 
@@ -193,7 +196,11 @@ class TestHFileWriter {
       reader.initializeMetadata();
       assertEquals(3, reader.getNumKeyValueEntries());
       assertTrue(reader.getMetaInfo(LAST_KEY).isPresent());
-      assertEquals(1, reader.getMetaInfo(MAX_MVCC_TS_KEY).get().length);
+      assertEquals(4, reader.getMetaInfo(AVG_KEY_LEN).get().length);
+      assertEquals(4, reader.getMetaInfo(AVG_VALUE_LEN).get().length);
+      assertEquals(8, reader.getMetaInfo(MAX_MVCC_TS_KEY).get().length);
+      assertEquals(1,
+          ByteBuffer.wrap(reader.getMetaInfo(KEY_VALUE_VERSION).get()).getInt());
     }
   }
 
@@ -244,7 +251,7 @@ class TestHFileWriter {
 
     byte[] key = new byte[keyLen];
     buf.get(key);
-    byte[] keyContent = Arrays.copyOfRange(key, 2, key.length);
+    byte[] keyContent = Arrays.copyOfRange(key, 2, key.length - 10);
     assertArrayEquals(expectedKey.getBytes(StandardCharsets.UTF_8), keyContent);
 
     byte[] value = new byte[valLen];

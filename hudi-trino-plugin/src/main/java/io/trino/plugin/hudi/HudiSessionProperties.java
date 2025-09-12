@@ -64,6 +64,7 @@ public class HudiSessionProperties
     static final String QUERY_PARTITION_FILTER_REQUIRED = "query_partition_filter_required";
     private static final String IGNORE_ABSENT_PARTITIONS = "ignore_absent_partitions";
     static final String DYNAMIC_FILTERING_WAIT_TIMEOUT = "dynamic_filtering_wait_timeout";
+    static final String RESOLVE_COLUMN_NAME_CASING_ENABLED = "resolve_column_name_casing_enabled";
 
     // Internal configuration for debugging and testing
     static final String RECORD_LEVEL_INDEX_ENABLED = "record_level_index_enabled";
@@ -73,6 +74,7 @@ public class HudiSessionProperties
     static final String COLUMN_STATS_WAIT_TIMEOUT = "column_stats_wait_timeout";
     static final String RECORD_INDEX_WAIT_TIMEOUT = "record_index_wait_timeout";
     static final String SECONDARY_INDEX_WAIT_TIMEOUT = "secondary_index_wait_timeout";
+    static final String METADATA_PARTITION_LISTING_ENABLED = "metadata_partition_listing_enabled";
 
     private final List<PropertyMetadata<?>> sessionProperties;
 
@@ -238,7 +240,17 @@ public class HudiSessionProperties
                         DYNAMIC_FILTERING_WAIT_TIMEOUT,
                         "Duration to wait for completion of dynamic filters during split generation",
                         hudiConfig.getDynamicFilteringWaitTimeout(),
-                        false));
+                        false),
+                booleanProperty(
+                        METADATA_PARTITION_LISTING_ENABLED,
+                        "Enable metadata table based partition listing",
+                        hudiConfig.isMetadataPartitionListingEnabled(),
+                        false),
+                booleanProperty(
+                        RESOLVE_COLUMN_NAME_CASING_ENABLED,
+                        "Enable resolve column name casing",
+                        hudiConfig.isResolveColumnNameCasingEnabled(),
+                        true));
     }
 
     @Override
@@ -373,6 +385,11 @@ public class HudiSessionProperties
         return !isRecordLevelIndexEnabled(session) && !isSecondaryIndexEnabled(session) && !isColumnStatsIndexEnabled(session);
     }
 
+    public static boolean isResolveColumnNameCasingEnabled(ConnectorSession session)
+    {
+        return session.getProperty(RESOLVE_COLUMN_NAME_CASING_ENABLED, Boolean.class);
+    }
+
     public static Duration getDynamicFilteringWaitTimeout(ConnectorSession session)
     {
         return session.getProperty(DYNAMIC_FILTERING_WAIT_TIMEOUT, Duration.class);
@@ -391,5 +408,10 @@ public class HudiSessionProperties
     public static Duration getSecondaryIndexWaitTimeout(ConnectorSession session)
     {
         return session.getProperty(SECONDARY_INDEX_WAIT_TIMEOUT, Duration.class);
+    }
+
+    public static boolean isMetadataPartitionListingEnabled(ConnectorSession session)
+    {
+        return session.getProperty(METADATA_PARTITION_LISTING_ENABLED, Boolean.class);
     }
 }

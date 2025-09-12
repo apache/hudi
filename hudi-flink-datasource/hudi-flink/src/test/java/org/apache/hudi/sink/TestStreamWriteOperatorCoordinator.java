@@ -21,6 +21,7 @@ package org.apache.hudi.sink;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -150,7 +151,10 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @Test
-  public void testEventReset() {
+  public void testEventReset() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    coordinator = createCoordinator(conf, 2);
     CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
     String instant = requestInstantTime(0);
@@ -172,12 +176,16 @@ public class TestStreamWriteOperatorCoordinator {
     OperatorEvent event3 = createOperatorEvent(0, 0, instant, "par1", false, false, 0.1);
     coordinator.handleEventFromOperator(0, event3);
     assertThat("Multiple events of same instant should be merged",
-        coordinator.getEventBuffer()[0].getWriteStatuses().size(), is(2));
+        coordinator.getEventBuffer()[0].getWriteStatuses().size(), is(1));
 
-    OperatorEvent event4 = createOperatorEvent(0, 1, "002", "par1", false, false, 0.1);
+    long nextCkpId = 1;
+    coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(nextCkpId));
+    OperatorEvent event4 = createOperatorEvent(0, nextCkpId, "002", "par1", false, false, 0.1);
     coordinator.handleEventFromOperator(0, event4);
-    assertThat("The new event should not override the old event",
-        coordinator.getEventBuffer()[0].getWriteStatuses().size(), is(2));
+    assertThat("First instant is not committed yet, new event should not override the old event",
+        coordinator.getEventBuffer(0)[0].getWriteStatuses().size(), is(1));
+    assertThat("Second instant should have one newly added write status",
+        coordinator.getEventBuffer(1)[0].getWriteStatuses().size(), is(1));
   }
 
   @Test
@@ -565,6 +573,7 @@ public class TestStreamWriteOperatorCoordinator {
     StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(conf, coordinatorContext);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
+    coordinator.setInstantRequestExecutor(new MockCoordinatorExecutor(coordinatorContext));
     return coordinator;
   }
 

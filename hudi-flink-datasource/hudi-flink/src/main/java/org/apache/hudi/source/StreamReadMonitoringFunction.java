@@ -252,7 +252,6 @@ public class StreamReadMonitoringFunction
     }
 
     List<MergeOnReadInputSplit> inputSplits = result.getInputSplits();
-    LOG.info("Table {} : Read {} inputsplits for current instant", conf.get(FlinkOptions.TABLE_NAME), inputSplits.size());
     int endIndex = Math.min(splitsLimit, inputSplits.size());
     for (int index = 0; index < endIndex; index++) {
       context.collect(inputSplits.get(index));
@@ -266,14 +265,14 @@ public class StreamReadMonitoringFunction
     this.issuedInstant = result.getEndInstant();
     this.issuedOffset = result.getOffset();
     int sentSplits = totalSplits - remainingSplits.size();
-    double sentPercent = totalSplits == 0 ? 0 : (1 - remainingSplits.size() / (double) totalSplits) * 100;
+    double sentPercentage = totalSplits == 0 ? 0 : (1 - remainingSplits.size() / (double) totalSplits) * 100;
     LOG.info("\n"
             + "------------------------------------------------------------\n"
             + "---------- table: {}\n"
             + "---------- consumed to instant: {}\n"
-            + "---------- total sent {} inputsplits out of {}, percent is {}%\n"
+            + "---------- sent {} inputsplits out of {}, percentage is {}%\n"
             + "------------------------------------------------------------",
-        conf.get(FlinkOptions.TABLE_NAME), this.issuedInstant, sentSplits, totalSplits, sentPercent);
+        conf.get(FlinkOptions.TABLE_NAME), this.issuedInstant, sentSplits, totalSplits, sentPercentage);
     if (result.isEmpty()) {
       LOG.warn("No new files to read for current run.");
     }

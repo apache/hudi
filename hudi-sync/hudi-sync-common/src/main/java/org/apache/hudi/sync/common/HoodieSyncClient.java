@@ -48,7 +48,9 @@ import java.util.Objects;
 import java.util.Set;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_USE_FILE_LISTING_FROM_METADATA;
 
 public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, AutoCloseable {
@@ -86,6 +88,14 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
 
   public HoodieTableMetaClient getMetaClient() {
     return metaClient;
+  }
+
+  public String getTableName() {
+    return config.getString(META_SYNC_TABLE_NAME);
+  }
+
+  public String getDatabaseName() {
+    return config.getString(META_SYNC_DATABASE_NAME);
   }
 
   /**
@@ -209,11 +219,14 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
 
-      if (droppedPartitionsOnStorage.contains(storagePartition)) {
-        events.add(PartitionEvent.newPartitionDropEvent(storagePartition));
-      } else {
-        if (!storagePartitionValues.isEmpty()) {
-          String storageValue = String.join(", ", storagePartitionValues);
+      if (!storagePartitionValues.isEmpty()) {
+        String storageValue = String.join(", ", storagePartitionValues);
+        if (droppedPartitionsOnStorage.contains(storagePartition)) {
+          if (paths.containsKey(storageValue)) {
+            // Add partition drop event only if it exists in the metastore
+            events.add(PartitionEvent.newPartitionDropEvent(storagePartition));
+          }
+        } else {
           if (!paths.containsKey(storageValue)) {
             events.add(PartitionEvent.newPartitionAddEvent(storagePartition));
           } else if (!paths.get(storageValue).equals(fullStoragePartitionPath)) {
