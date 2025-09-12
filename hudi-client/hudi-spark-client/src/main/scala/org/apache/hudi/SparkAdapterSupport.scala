@@ -43,6 +43,4 @@ object SparkAdapterSupport {
     getClass.getClassLoader.loadClass(adapterClass)
       .newInstance().asInstanceOf[SparkAdapter]
   }
-
-  def getSparkAdapter: SparkAdapter = sparkAdapter
 }

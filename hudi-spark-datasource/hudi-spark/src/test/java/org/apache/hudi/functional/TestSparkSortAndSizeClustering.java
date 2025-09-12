@@ -137,7 +137,8 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
 
     int numRecords = 1000;
     long ts = System.currentTimeMillis();
-    writeData(numRecords, true, ts);
+    List<WriteStatus> initialWriteStats = writeData(numRecords, true, ts);
+    validateTypes(initialWriteStats.stream().map(WriteStatus::getStat).collect(Collectors.toList()));
 
     String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
     HoodieClusteringPlan plan = ClusteringUtils.getClusteringPlan(
@@ -155,13 +156,16 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
 
     List<Row> rows = readRecords();
     assertEquals(numRecords, rows.size());
-    validateTypesAfterClustering(writeStats);
+    validateTypes(writeStats);
     validateDateAndTimestampFields(rows, ts);
   }
 
   private void validateDateAndTimestampFields(List<Row> rows, long ts) {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSchema(), false);
     Timestamp timestamp = new Timestamp(ts);
+    // sanity check date field is within expected range
+    Date startDate = Date.valueOf(LocalDate.now().minusDays(3));
+    Date endDate = Date.valueOf(LocalDate.now().plusDays(1));
     int dateFieldIndex = schema.getField("date_nullable_field").pos();
     int tsMillisFieldIndex = schema.getField("timestamp_millis_field").pos();
     int tsMicrosNullableFieldIndex = schema.getField("timestamp_micros_nullable_field").pos();
@@ -174,6 +178,8 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
       }
       if (!row.isNullAt(dateFieldIndex)) {
         assertTrue(row.get(dateFieldIndex) instanceof Date);
+        Date actualDate = (Date) row.get(dateFieldIndex);
+        assertTrue(actualDate.compareTo(startDate) > 0 && actualDate.compareTo(endDate) < 0);
       }
       if (!row.isNullAt(tsLocalMillisFieldIndex)) {
         assertEquals(ts, row.get(tsLocalMillisFieldIndex));
@@ -183,7 +189,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
   }
 
   // Validate that clustering produces decimals in legacy format and lists in newer format. Assert that the unit is correct on the timestamps
-  private void validateTypesAfterClustering(List<HoodieWriteStat> writeStats) {
+  private void validateTypes(List<HoodieWriteStat> writeStats) {
     writeStats.stream().map(writeStat -> new StoragePath(metaClient.getBasePath(), writeStat.getPath())).forEach(writtenPath -> {
       MessageType schema = ParquetUtils.readMetadata(storage, writtenPath)
           .getFileMetaData().getSchema();
@@ -191,6 +197,9 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
       Type decimalType = schema.getFields().get(decimalFieldIndex);
       assertEquals("DECIMAL", decimalType.getOriginalType().toString());
       assertEquals("FIXED_LEN_BYTE_ARRAY", decimalType.asPrimitiveType().getPrimitiveTypeName().toString());
+      LogicalTypeAnnotation.DecimalLogicalTypeAnnotation decimalLogicalTypeAnnotation = ((LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) decimalType.getLogicalTypeAnnotation());
+      assertEquals(10, decimalLogicalTypeAnnotation.getPrecision());
+      assertEquals(6, decimalLogicalTypeAnnotation.getScale());
       int arrayFieldIndex = schema.getFieldIndex("array_field");
       Type arrayType = schema.getFields().get(arrayFieldIndex);
       assertEquals("list", arrayType.asGroupType().getFields().get(0).getName());

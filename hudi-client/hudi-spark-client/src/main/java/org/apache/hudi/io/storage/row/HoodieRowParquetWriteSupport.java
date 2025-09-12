@@ -19,15 +19,15 @@
 package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.HoodieSparkUtils;
-import org.apache.hudi.SparkAdapterSupport;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 
@@ -71,6 +71,9 @@ import scala.Function1;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_FIELD_ID_WRITE_ENABLED;
+import static org.apache.hudi.config.HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD;
+import static org.apache.hudi.config.HoodieWriteConfig.AVRO_SCHEMA_STRING;
+import static org.apache.hudi.config.HoodieWriteConfig.INTERNAL_SCHEMA_STRING;
 
 /**
  * Hoodie Write Support for directly writing Row to Parquet and adding the Hudi bloom index to the file metadata.
@@ -91,7 +94,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   private final Configuration hadoopConf;
   private final Option<HoodieBloomFilterWriteSupport<UTF8String>> bloomFilterWriteSupportOpt;
   private final byte[] decimalBuffer = new byte[Decimal.minBytesForPrecision()[DecimalType.MAX_PRECISION()]];
-  private final Enumeration.Value datetimeRebaseMode = (Enumeration.Value) SparkAdapterSupport.getSparkAdapter().getDateTimeRebaseMode();
+  private final Enumeration.Value datetimeRebaseMode = (Enumeration.Value) SparkAdapterSupport$.MODULE$.sparkAdapter().getDateTimeRebaseMode();
   private final Function1<Object, Object> dateRebaseFunction = DataSourceUtils.createDateRebaseFuncInWrite(datetimeRebaseMode, "Parquet");
   private final Function1<Object, Object> timestampRebaseFunction = DataSourceUtils.createTimestampRebaseFuncInWrite(datetimeRebaseMode, "Parquet");
   private RecordConsumer recordConsumer;
@@ -99,7 +102,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   private final ValueWriter[] rootFieldWriters;
   private final Schema avroSchema;
 
-  public HoodieRowParquetWriteSupport(Configuration conf, StructType schema, Option<BloomFilter> bloomFilterOpt, HoodieWriteConfig config) {
+  public HoodieRowParquetWriteSupport(Configuration conf, StructType schema, Option<BloomFilter> bloomFilterOpt, HoodieConfig config) {
     Configuration hadoopConf = new Configuration(conf);
     String writeLegacyFormatEnabled = config.getStringOrDefault(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED, "false");
     hadoopConf.set("spark.sql.parquet.writeLegacyFormat", writeLegacyFormatEnabled);
@@ -107,11 +110,11 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     hadoopConf.set("spark.sql.parquet.fieldId.write.enabled", config.getStringOrDefault(PARQUET_FIELD_ID_WRITE_ENABLED));
     this.writeLegacyListFormat = Boolean.parseBoolean(writeLegacyFormatEnabled)
         || Boolean.parseBoolean(config.getStringOrDefault(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false"));
-    this.avroSchema = SerDeHelper.fromJson(config.getInternalSchema()).map(internalSchema -> AvroInternalSchemaConverter.convert(internalSchema, "spark_schema"))
+    this.avroSchema = SerDeHelper.fromJson(config.getString(INTERNAL_SCHEMA_STRING)).map(internalSchema -> AvroInternalSchemaConverter.convert(internalSchema, "spark_schema"))
         .orElseGet(() -> {
-          Schema parsedSchema = new Schema.Parser().parse(config.getWriteSchema());
-          if (config.populateMetaFields()) {
-            return HoodieAvroUtils.addMetadataFields(parsedSchema, config.allowOperationMetadataField());
+          Schema parsedSchema = new Schema.Parser().parse(config.getString(AVRO_SCHEMA_STRING));
+          if (config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)) {
+            return HoodieAvroUtils.addMetadataFields(parsedSchema, config.getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD));
           }
           return parsedSchema;
         });
@@ -141,7 +144,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   public WriteContext init(Configuration configuration) {
     Map<String, String> metadata = new HashMap<>();
     metadata.put("org.apache.spark.version", VersionUtils.shortVersion(HoodieSparkUtils.getSparkVersion()));
-    if (SparkAdapterSupport.getSparkAdapter().isLegacyBehaviorPolicy(datetimeRebaseMode)) {
+    if (SparkAdapterSupport$.MODULE$.sparkAdapter().isLegacyBehaviorPolicy(datetimeRebaseMode)) {
       metadata.put("org.apache.spark.legacyDateTime", "");
       metadata.put("org.apache.spark.timeZone", SQLConf.get().sessionLocalTimeZone());
     }
@@ -365,7 +368,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
                                                                              Option<BloomFilter> bloomFilterOpt, HoodieConfig config) {
     return (HoodieRowParquetWriteSupport) ReflectionUtils.loadClass(
         config.getStringOrDefault(HoodieStorageConfig.HOODIE_PARQUET_SPARK_ROW_WRITE_SUPPORT_CLASS),
-        new Class<?>[] {Configuration.class, StructType.class, Option.class, HoodieWriteConfig.class},
+        new Class<?>[] {Configuration.class, StructType.class, Option.class, HoodieConfig.class},
         conf, structType, bloomFilterOpt, config);
   }
 
