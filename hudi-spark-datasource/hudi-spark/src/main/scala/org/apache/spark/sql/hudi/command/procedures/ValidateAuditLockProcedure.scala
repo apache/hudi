@@ -210,17 +210,17 @@ class ValidateAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
           None
         }
 
-        TransactionWindow(
+        Some(TransactionWindow(
         ownerId = ownerId,
         transactionStartTime = transactionStartTime,
         startTimestamp = startTimestamp,
         endTimestamp = endTimestamp,
         lastExpirationTime = lastExpirationTime,
           filename = filename
-        )
+        ))
       }
     } match {
-      case Success(window) => Some(window)
+      case Success(window) => window
       case Failure(_) => None // Skip corrupted files
     }
   }

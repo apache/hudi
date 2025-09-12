@@ -333,8 +333,8 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
         () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
         () -> assertNotNull(result.toString()),
         () -> assertTrue(result.toString().contains("Lock audit disabled successfully")),
-        () -> assertTrue(result.toString().contains("Audit files cleaned up at:") ||
-                        result.toString().contains("Some audit files may not have been cleaned up")));
+        () -> assertTrue(result.toString().contains("Audit files cleaned up at:")
+                        || result.toString().contains("Some audit files may not have been cleaned up")));
   }
 
   /**
@@ -387,9 +387,9 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
         () -> assertNotNull(result.toString()),
         () -> assertTrue(result.toString().contains("Lock audit disabled successfully")),
         // Should handle the case where no files exist to clean up
-        () -> assertTrue(result.toString().contains("Audit files cleaned up at:") ||
-                        result.toString().contains("No audit files") ||
-                        result.toString().contains("nothing to cleanup")));
+        () -> assertTrue(result.toString().contains("Audit files cleaned up at:")
+                        || result.toString().contains("No audit files")
+                        || result.toString().contains("nothing to cleanup")));
   }
 
   /**
