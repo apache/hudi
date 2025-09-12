@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -719,6 +720,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     when(tableConfig.getMetadataPartitions()).thenReturn(new HashSet<>(Collections.singleton("expr_index_idx_ts")));
+    when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
 
     // Build metadata config
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true)

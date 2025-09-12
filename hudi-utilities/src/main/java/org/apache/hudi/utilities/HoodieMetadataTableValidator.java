@@ -145,6 +145,7 @@ import static org.apache.hudi.common.util.StringUtils.toStringWithThreshold;
 import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFactory;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.META_COL_SET_TO_INDEX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getLocationFromRecordIndexInfo;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getLogFileColumnRangeMetadata;
@@ -1917,7 +1918,7 @@ public class HoodieMetadataTableValidator implements Serializable {
             .collect(Collectors.toList());
       } else {
         FileFormatUtils formatUtils = HoodieIOFactory.getIOFactory(metaClient.getStorage()).getFileFormatUtils(HoodieFileFormat.PARQUET);
-        HoodieIndexVersion indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(partitionPath, metaClient);
+        HoodieIndexVersion indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, metaClient);
         return (List<HoodieColumnRangeMetadata<Comparable>>) fileNames.stream().flatMap(filename -> {
           if (filename.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
             return formatUtils.readColumnStatsFromMetadata(
