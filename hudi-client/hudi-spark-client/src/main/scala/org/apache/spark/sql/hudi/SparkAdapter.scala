@@ -21,6 +21,7 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
+
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.api.java.JavaSparkContext
@@ -255,4 +256,8 @@ trait SparkAdapter extends Serializable {
    * @return
    */
   def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
+
+  def getDateTimeRebaseMode(): Object
+
+  def isLegacyBehaviorPolicy(value: Object): Boolean
 }

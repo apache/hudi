@@ -19,6 +19,7 @@
 package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.HoodieSparkUtils;
+import org.apache.hudi.SparkAdapterSupport;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -44,7 +45,6 @@ import org.apache.spark.sql.catalyst.util.DateTimeUtils;
 import org.apache.spark.sql.catalyst.util.MapData;
 import org.apache.spark.sql.execution.datasources.DataSourceUtils;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetWriteSupport;
-import org.apache.spark.sql.internal.LegacyBehaviorPolicy;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.DataType;
@@ -80,7 +80,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   private final Configuration hadoopConf;
   private final Option<HoodieBloomFilterWriteSupport<UTF8String>> bloomFilterWriteSupportOpt;
   private final byte[] decimalBuffer = new byte[Decimal.minBytesForPrecision()[DecimalType.MAX_PRECISION()]];
-  private final Enumeration.Value datetimeRebaseMode = LegacyBehaviorPolicy.withName(SQLConf.get().getConf(SQLConf.PARQUET_REBASE_MODE_IN_WRITE()));
+  private final Enumeration.Value datetimeRebaseMode = (Enumeration.Value) SparkAdapterSupport.getSparkAdapter().getDateTimeRebaseMode();
   private final Function1<Object, Object> dateRebaseFunction = DataSourceUtils.createDateRebaseFuncInWrite(datetimeRebaseMode, "Parquet");
   private final Function1<Object, Object> timestampRebaseFunction = DataSourceUtils.createTimestampRebaseFuncInWrite(datetimeRebaseMode, "Parquet");
   private RecordConsumer recordConsumer;
@@ -114,7 +114,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   public WriteContext init(Configuration configuration) {
     Map<String, String> metadata = new HashMap<>();
     metadata.put("org.apache.spark.version", VersionUtils.shortVersion(HoodieSparkUtils.getSparkVersion()));
-    if (datetimeRebaseMode == LegacyBehaviorPolicy.LEGACY()) {
+    if (SparkAdapterSupport.getSparkAdapter().isLegacyBehaviorPolicy(datetimeRebaseMode)) {
       metadata.put("org.apache.spark.legacyDateTime", "");
       metadata.put("org.apache.spark.timeZone", SQLConf.get().sessionLocalTimeZone());
     }
