@@ -1469,7 +1469,7 @@ public class HoodieAvroUtils {
     } else if (schema.getTypes().size() == 1) {
       actualSchema = schema.getTypes().get(0);
     } else if (data == null) {
-      return schema;
+      throw new HoodieAvroSchemaException("Union is malformed: " + schema);
     } else {
       // deal complex union. this should not happen in hoodie,
       // since flink/spark do not write this type.
