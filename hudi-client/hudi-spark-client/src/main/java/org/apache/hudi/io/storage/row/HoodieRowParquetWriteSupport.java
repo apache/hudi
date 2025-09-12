@@ -26,6 +26,9 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
 
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
@@ -95,7 +98,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   private final ValueWriter[] rootFieldWriters;
   private final Schema avroSchema;
 
-  public HoodieRowParquetWriteSupport(Configuration conf, StructType schema, Schema avroSchema, Option<BloomFilter> bloomFilterOpt, HoodieConfig config) {
+  public HoodieRowParquetWriteSupport(Configuration conf, StructType schema, Option<BloomFilter> bloomFilterOpt, HoodieWriteConfig config) {
     Configuration hadoopConf = new Configuration(conf);
     String writeLegacyFormatEnabled = config.getStringOrDefault(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED, "false");
     hadoopConf.set("spark.sql.parquet.writeLegacyFormat", writeLegacyFormatEnabled);
@@ -103,8 +106,9 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     hadoopConf.set("spark.sql.parquet.fieldId.write.enabled", config.getStringOrDefault(PARQUET_FIELD_ID_WRITE_ENABLED));
     this.writeLegacyListFormat = Boolean.parseBoolean(writeLegacyFormatEnabled)
         || Boolean.parseBoolean(config.getStringOrDefault(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false"));
+    this.avroSchema = SerDeHelper.fromJson(config.getInternalSchema()).map(internalSchema -> AvroInternalSchemaConverter.convert(internalSchema, "spark_schema"))
+        .orElseGet(() -> new Schema.Parser().parse(config.getWriteSchema()));
     ParquetWriteSupport.setSchema(HoodieInternalRowUtils.getCachedSchema(avroSchema), hadoopConf);
-    this.avroSchema = avroSchema;
     this.rootFieldWriters = getFieldWriters(schema, avroSchema);
     this.hadoopConf = hadoopConf;
     this.bloomFilterWriteSupportOpt = bloomFilterOpt.map(HoodieBloomFilterRowWriteSupport::new);
@@ -350,12 +354,12 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     }
   }
 
-  public static HoodieRowParquetWriteSupport getHoodieRowParquetWriteSupport(Configuration conf, StructType schema, Schema avroSchema,
+  public static HoodieRowParquetWriteSupport getHoodieRowParquetWriteSupport(Configuration conf, StructType structType,
                                                                              Option<BloomFilter> bloomFilterOpt, HoodieConfig config) {
     return (HoodieRowParquetWriteSupport) ReflectionUtils.loadClass(
         config.getStringOrDefault(HoodieStorageConfig.HOODIE_PARQUET_SPARK_ROW_WRITE_SUPPORT_CLASS),
-        new Class<?>[] {Configuration.class, StructType.class, Schema.class, Option.class, HoodieConfig.class},
-        conf, schema, avroSchema, bloomFilterOpt, config);
+        new Class<?>[] {Configuration.class, StructType.class, Option.class, HoodieConfig.class},
+        conf, structType, bloomFilterOpt, config);
   }
 
 }

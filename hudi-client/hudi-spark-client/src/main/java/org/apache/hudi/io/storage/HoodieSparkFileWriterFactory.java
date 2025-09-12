@@ -108,6 +108,6 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
                                                                               HoodieConfig config, boolean enableBloomFilter) {
     Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
     StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
-    return HoodieRowParquetWriteSupport.getHoodieRowParquetWriteSupport(conf.unwrapAs(Configuration.class), structType, schema, filter, config);
+    return HoodieRowParquetWriteSupport.getHoodieRowParquetWriteSupport(conf.unwrapAs(Configuration.class), structType, filter, config);
   }
 }

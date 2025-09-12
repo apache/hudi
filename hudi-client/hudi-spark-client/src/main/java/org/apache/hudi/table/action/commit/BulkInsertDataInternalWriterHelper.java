@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.HoodieDatasetBulkInsertHelper;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
@@ -31,7 +30,6 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.JavaScalaConverters;
 
-import org.apache.avro.Schema;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
@@ -63,7 +61,6 @@ public class BulkInsertDataInternalWriterHelper {
   protected final HoodieTable hoodieTable;
   protected final HoodieWriteConfig writeConfig;
   protected final StructType structType;
-  protected final Schema schema;
   protected final Boolean arePartitionRecordsSorted;
   protected final List<WriteStatus> writeStatusList = new ArrayList<>();
   protected final String fileIdPrefix;
@@ -99,7 +96,6 @@ public class BulkInsertDataInternalWriterHelper {
     this.taskId = taskId;
     this.taskEpochId = taskEpochId;
     this.structType = structType;
-    this.schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getWriteSchema()), writeConfig.allowOperationMetadataField());
     this.populateMetaFields = populateMetaFields;
     this.shouldPreserveHoodieMetadata = shouldPreserveHoodieMetadata;
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
@@ -220,7 +216,7 @@ public class BulkInsertDataInternalWriterHelper {
 
   private HoodieRowCreateHandle createHandle(String partitionPath) {
     return new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
-        instantTime, taskPartitionId, taskId, taskEpochId, structType, schema, shouldPreserveHoodieMetadata);
+        instantTime, taskPartitionId, taskId, taskEpochId, structType, shouldPreserveHoodieMetadata);
   }
 
   protected String getNextFileId() {
