@@ -76,7 +76,7 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
    * @return the combined value
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  default T preCombine(T oldValue, Schema schema, Properties properties) {
+  default T preCombine(T oldValue, Schema schema, Properties properties) throws IOException {
     return preCombine(oldValue, properties);
   }
 
