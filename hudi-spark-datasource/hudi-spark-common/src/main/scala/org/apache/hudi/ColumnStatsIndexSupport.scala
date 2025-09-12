@@ -456,8 +456,15 @@ object ColumnStatsIndexSupport {
   }
 
   private def extractColStatsValueV2(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata): Any = {
-   SparkValueMetadata.convertJavaTypeToSparkType(SparkValueMetadata.getValueMetadata(dataType, HoodieIndexVersion.V2)
+    val colStatsValue = SparkValueMetadata.convertJavaTypeToSparkType(SparkValueMetadata.getValueMetadata(dataType, HoodieIndexVersion.V2)
       .standardizeJavaTypeAndPromote(valueMetadata.unwrapValue(valueWrapper)))
+    // TODO: should this be done here? Should we handle this with adding more value types?
+    // TODO: should this logic be in convertJavaTypeToSparkType?
+    dataType match {
+      case ShortType => colStatsValue.asInstanceOf[Int].toShort
+      case ByteType => colStatsValue.asInstanceOf[Int].toByte
+      case _ => colStatsValue
+    }
   }
 
   def extractWrapperValueV1(valueWrapper: AnyRef, dataType: DataType): Any =

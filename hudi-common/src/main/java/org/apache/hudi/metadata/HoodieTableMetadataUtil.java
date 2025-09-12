@@ -1755,8 +1755,7 @@ public class HoodieTableMetadataUtil {
     } catch (Exception e) {
       // NOTE: In case reading column range metadata from individual file failed,
       //       we simply fall back, in lieu of failing the whole task
-      LOG.error("Failed to fetch column range metadata for: {}", partitionPathFileName);
-      return Collections.emptyList();
+      throw new HoodieMetadataException("failed", e);
     }
   }
 
