@@ -176,7 +176,7 @@ class ParseSection:
         if self.found:
             #since we have already found the identifier, this means that we have
             #found a duplicate of the identifier
-            self.error(line, lineno, f"Duplicate {self.data.name} section found")
+            self.error(line, lineno, f"Duplicate {self.data.identifier} section found")
             return Outcomes.ERROR
         self.found = True
         return Outcomes.CONTINUE
@@ -186,9 +186,9 @@ class ParseSection:
             if self.nextSection() != "END" and self.sections.sections[self.nextSection()].identify(line):
                 #we found the next identifier but haven't found a description
                 #yet for this section
-                return f"Section {self.data.name} is missing a description"
+                return f"Section {self.data.identifier} is missing a description"
             #we found a section other than the next section
-            return f"Section {self.data.name} should be followed by section {self.data.nextSection}"
+            return f"Section {self.data.identifier} should be followed by section {self.data.nextSection}"
 
         #section identifier has not been found yet
         sectionFound = self.sections.getSectionName(line)
@@ -201,10 +201,10 @@ class ParseSection:
             return f"Duplicate {self.data.prevSection} section found"
          
         if self.data.prevSection == "START":
-            return f"Section {self.data.name} should be the first section"
+            return f"Section {self.data.identifier} should be the first section"
         if sectionFound == self.data.nextSection:
-            return f"Missing section {self.data.name} between {self.data.prevSection} and {self.data.nextSection}"
-        return f"Section {self.data.name} was expected after section {self.data.prevSection}"
+            return f"Missing section {self.data.identifier} between {self.data.prevSection} and {self.data.nextSection}"
+        return f"Section {self.data.identifier} was expected after section {self.data.prevSection}"
     
     #Decides the outcome state by processing line
     def validateLine(self,line,lineno):
@@ -311,9 +311,9 @@ class ValidateBody:
         #body does not comply
         if self.section.data.nextSection == "END":
             if self.section.found:
-                self.section.error("","",f"Section {self.section.data.name} is missing a description")
+                self.section.error("", "", f"Section {self.section.data.identifier} is missing a description")
                 return False
-            self.section.error("","",f"Missing section {self.section.data.name} at the end")
+            self.section.error("", "", f"Missing section {self.section.data.identifier} at the end")
             return False
         self.section.error("","", "Please make sure you have filled out the template correctly. You can find a blank template in /.github/PULL_REQUEST_TEMPLATE.md")
         return False
