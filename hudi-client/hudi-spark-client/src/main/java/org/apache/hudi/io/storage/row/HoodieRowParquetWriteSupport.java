@@ -25,7 +25,6 @@ import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
@@ -35,18 +34,21 @@ import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.io.api.RecordConsumer;
+import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.Type;
+import org.apache.parquet.schema.Types;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.SpecializedGetters;
 import org.apache.spark.sql.catalyst.util.ArrayData;
 import org.apache.spark.sql.catalyst.util.DateTimeUtils;
 import org.apache.spark.sql.catalyst.util.MapData;
 import org.apache.spark.sql.execution.datasources.DataSourceUtils;
+import org.apache.spark.sql.execution.datasources.parquet.ParquetUtils;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetWriteSupport;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.types.ArrayType;
@@ -55,8 +57,9 @@ import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.sql.types.DecimalType;
 import org.apache.spark.sql.types.MapType;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
-import org.apache.spark.sql.types.TimestampNTZType;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.apache.spark.util.VersionUtils;
 
@@ -74,6 +77,16 @@ import static org.apache.hudi.config.HoodieWriteConfig.ALLOW_OPERATION_METADATA_
 import static org.apache.hudi.config.HoodieWriteConfig.AVRO_SCHEMA_STRING;
 import static org.apache.hudi.config.HoodieWriteConfig.INTERNAL_SCHEMA_STRING;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE;
+import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
+import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BOOLEAN;
+import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.DOUBLE;
+import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY;
+import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.FLOAT;
+import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT32;
+import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT64;
+import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
+import static org.apache.parquet.schema.Type.Repetition.REPEATED;
+import static org.apache.parquet.schema.Type.Repetition.REQUIRED;
 
 /**
  * Hoodie Write Support for directly writing Row to Parquet and adding the Hudi bloom index to the file metadata.
@@ -91,6 +104,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   private static final String MAP_REPEATED_NAME = "key_value";
   private static final String MAP_KEY_NAME = "key";
   private static final String MAP_VALUE_NAME = "value";
+
   private final Configuration hadoopConf;
   private final Option<HoodieBloomFilterWriteSupport<UTF8String>> bloomFilterWriteSupportOpt;
   private final byte[] decimalBuffer = new byte[Decimal.minBytesForPrecision()[DecimalType.MAX_PRECISION()]];
@@ -101,6 +115,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   private final boolean writeLegacyListFormat;
   private final ValueWriter[] rootFieldWriters;
   private final Schema avroSchema;
+  private final StructType structType;
 
   public HoodieRowParquetWriteSupport(Configuration conf, StructType structType, Option<BloomFilter> bloomFilterOpt, HoodieConfig config) {
     Configuration hadoopConf = new Configuration(conf);
@@ -110,14 +125,13 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     hadoopConf.set("spark.sql.parquet.fieldId.write.enabled", config.getStringOrDefault(PARQUET_FIELD_ID_WRITE_ENABLED));
     this.writeLegacyListFormat = Boolean.parseBoolean(writeLegacyFormatEnabled)
         || Boolean.parseBoolean(config.getStringOrDefault(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false"));
+    this.structType = structType;
+    // The avro schema is used to determine the precision for timestamps
     this.avroSchema = SerDeHelper.fromJson(config.getString(INTERNAL_SCHEMA_STRING)).map(internalSchema -> AvroInternalSchemaConverter.convert(internalSchema, "spark_schema"))
         .orElseGet(() -> {
           String schemaString = Option.ofNullable(config.getString(WRITE_SCHEMA_OVERRIDE)).orElseGet(() -> config.getString(AVRO_SCHEMA_STRING));
           Schema parsedSchema = new Schema.Parser().parse(schemaString);
-          if (config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)) {
-            return HoodieAvroUtils.addMetadataFields(parsedSchema, config.getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD));
-          }
-          return parsedSchema;
+          return HoodieAvroUtils.addMetadataFields(parsedSchema, config.getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD));
         });
     ParquetWriteSupport.setSchema(structType, hadoopConf);
     this.rootFieldWriters = getFieldWriters(structType, avroSchema);
@@ -126,13 +140,9 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   }
 
   private ValueWriter[] getFieldWriters(StructType schema, Schema avroSchema) {
-    Map<String, Integer> fieldNameToIndex = new HashMap<>();
-    for (int i = 0; i < schema.fields().length; i++) {
-      fieldNameToIndex.put(schema.fields()[i].name(), i);
-    }
-    return avroSchema.getFields().stream().map(field -> {
-      Integer structIndex = fieldNameToIndex.get(field.name());
-      return makeWriter(field.schema(), schema.fields()[structIndex].dataType());
+    return Arrays.stream(schema.fields()).map(field -> {
+      Schema.Field avroField = avroSchema.getField(field.name());
+      return makeWriter(avroField == null ? null : avroField.schema(), field.dataType());
     }).toArray(ValueWriter[]::new);
   }
 
@@ -150,7 +160,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     }
     Configuration configurationCopy = new Configuration(configuration);
     configurationCopy.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, Boolean.toString(writeLegacyListFormat));
-    MessageType messageType = new AvroSchemaConverter(configurationCopy).convert(avroSchema);
+    MessageType messageType = convert(structType, avroSchema);
     return new WriteContext(messageType, metadata);
   }
 
@@ -161,7 +171,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
 
   @Override
   public void write(InternalRow row) {
-    consumeMessage(() -> writeFields(row, avroSchema, rootFieldWriters));
+    consumeMessage(() -> writeFields(row, structType, rootFieldWriters));
   }
 
   @Override
@@ -201,118 +211,119 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     recordConsumer.endField(field, index);
   }
 
-  private void writeFields(InternalRow row, Schema schema, ValueWriter[] fieldWriters) {
+  private void writeFields(InternalRow row, StructType schema, ValueWriter[] fieldWriters) {
     for (int i = 0; i < fieldWriters.length; i++) {
       int index = i;
       if (!row.isNullAt(i)) {
-        Schema.Field field = schema.getFields().get(index);
+        StructField field = schema.fields()[i];
         consumeField(field.name(), index, () -> fieldWriters[index].write(row, index));
       }
     }
   }
 
   private ValueWriter makeWriter(Schema avroSchema, DataType dataType) {
-    Schema resolvedSchema = resolveNullableSchema(avroSchema);
-    Schema.Type type = resolvedSchema.getType();
-    LogicalType logicalType = resolvedSchema.getLogicalType();
-    switch (type) {
-      case BOOLEAN:
-        return (row, ordinal) -> recordConsumer.addBoolean(row.getBoolean(ordinal));
-      case INT:
-        if (logicalType != null) {
-          if (logicalType.getName().equals(LogicalTypes.date().getName())) {
-            return (row, ordinal) -> recordConsumer.addInteger((Integer) dateRebaseFunction.apply(row.getInt(ordinal)));
-          }
-        }
-        return (row, ordinal) -> recordConsumer.addInteger(row.getInt(ordinal));
-      case LONG:
-        if (logicalType != null) {
-          if (logicalType.getName().equals(LogicalTypes.timestampMillis().getName())) {
-            return (row, ordinal) -> recordConsumer.addLong(DateTimeUtils.microsToMillis((long) timestampRebaseFunction.apply(row.getLong(ordinal))));
-          } else if (logicalType.getName().equals(LogicalTypes.timestampMicros().getName())) {
-            return (row, ordinal) -> recordConsumer.addLong((long) timestampRebaseFunction.apply(row.getLong(ordinal)));
-          } else if (logicalType.getName().equals(LogicalTypes.localTimestampMicros().getName())) {
-            return (row, ordinal) -> recordConsumer.addLong(row.getLong(ordinal));
-          } else if (logicalType.getName().equals(LogicalTypes.localTimestampMillis().getName()) && dataType instanceof TimestampNTZType) {
-            // only go through conversion if spark data type is TimestampNTZType
-            return (row, ordinal) -> recordConsumer.addLong(DateTimeUtils.microsToMillis(row.getLong(ordinal)));
-          }
-        }
-        return (row, ordinal) -> recordConsumer.addLong(row.getLong(ordinal));
-      case FLOAT:
-        return (row, ordinal) -> recordConsumer.addFloat(row.getFloat(ordinal));
-      case DOUBLE:
-        return (row, ordinal) -> recordConsumer.addDouble(row.getDouble(ordinal));
-      case STRING:
-      case ENUM:
-        return (row, ordinal) -> recordConsumer.addBinary(
-            Binary.fromReusedByteArray(row.getUTF8String(ordinal).getBytes()));
-      case BYTES:
-      case FIXED:
-        if (logicalType != null && logicalType.getName().equals("decimal")) {
-          return (row, ordinal) -> {
-            int precision = ((LogicalTypes.Decimal) logicalType).getPrecision();
-            int scale = ((LogicalTypes.Decimal) logicalType).getScale();
-            byte[] bytes = row.getDecimal(ordinal, precision, scale).toJavaBigDecimal().unscaledValue().toByteArray();
-            int numBytes = Decimal.minBytesForPrecision()[precision];
-            byte[] fixedLengthBytes;
-            if (bytes.length == numBytes) {
-              // If the length of the underlying byte array of the unscaled `BigInteger` happens to be
-              // `numBytes`, just reuse it, so that we don't bother copying it to `decimalBuffer`.
-              fixedLengthBytes = bytes;
-            } else {
-              // Otherwise, the length must be less than `numBytes`.  In this case we copy contents of
-              // the underlying bytes with padding sign bytes to `decimalBuffer` to form the result
-              // fixed-length byte array.
-              byte signByte = (bytes[0] < 0) ? (byte) -1 : (byte) 0;
-              Arrays.fill(decimalBuffer, 0, numBytes - bytes.length, signByte);
-              System.arraycopy(bytes, 0, decimalBuffer, numBytes - bytes.length, bytes.length);
-              fixedLengthBytes = decimalBuffer;
-            }
+    Schema resolvedSchema = avroSchema == null ? null : resolveNullableSchema(avroSchema);
+    LogicalType logicalType = resolvedSchema != null ? resolvedSchema.getLogicalType() : null;
 
-            recordConsumer.addBinary(Binary.fromReusedByteArray(fixedLengthBytes, 0, numBytes));
-          };
-        }
-        return (row, ordinal) -> recordConsumer.addBinary(
-            Binary.fromReusedByteArray(row.getBinary(ordinal)));
-      case RECORD:
-        ValueWriter[] fieldWriters = getFieldWriters(((StructType) dataType), resolvedSchema);
-        return (row, ordinal) ->
-          consumeGroup(() -> writeFields(row.getStruct(ordinal, resolvedSchema.getFields().size()), resolvedSchema, fieldWriters));
-      case ARRAY:
-        ValueWriter elementWriter = makeWriter(resolvedSchema.getElementType(), ((ArrayType) dataType).elementType());
-        if (!writeLegacyListFormat) {
-          return threeLevelArrayWriter("list", "element", elementWriter);
-        } else if (resolvedSchema.getElementType().isNullable()) {
-          return threeLevelArrayWriter("bag", "array", elementWriter);
+    if (dataType == DataTypes.BooleanType) {
+      return (row, ordinal) -> recordConsumer.addBoolean(row.getBoolean(ordinal));
+    } else if (dataType == DataTypes.DateType) {
+      return (row, ordinal) -> recordConsumer.addInteger((Integer) dateRebaseFunction.apply(row.getInt(ordinal)));
+    } else if (dataType == DataTypes.ShortType) {
+      return (row, ordinal) -> recordConsumer.addInteger(row.getShort(ordinal));
+    } else if (dataType == DataTypes.IntegerType) {
+      return (row, ordinal) -> recordConsumer.addInteger(row.getInt(ordinal));
+    } else if (dataType == DataTypes.LongType) {
+      return (row, ordinal) -> recordConsumer.addLong(row.getLong(ordinal));
+    } else if (dataType == DataTypes.TimestampType) {
+      if (logicalType == null || logicalType.getName().equals(LogicalTypes.timestampMicros().getName())) {
+        return (row, ordinal) -> recordConsumer.addLong((long) timestampRebaseFunction.apply(row.getLong(ordinal)));
+      } else if (logicalType.getName().equals(LogicalTypes.timestampMillis().getName())) {
+        return (row, ordinal) -> recordConsumer.addLong(DateTimeUtils.microsToMillis((long) timestampRebaseFunction.apply(row.getLong(ordinal))));
+      } else {
+        throw new UnsupportedOperationException("Unsupported timestamp type: " + logicalType);
+      }
+    } else if (dataType == DataTypes.TimestampNTZType) {
+      if (logicalType == null || logicalType.getName().equals(LogicalTypes.localTimestampMicros().getName())) {
+        return (row, ordinal) -> recordConsumer.addLong(row.getLong(ordinal));
+      } else if (logicalType.getName().equals(LogicalTypes.localTimestampMillis().getName())) {
+        return (row, ordinal) -> recordConsumer.addLong(DateTimeUtils.microsToMillis(row.getLong(ordinal)));
+      } else {
+        throw new UnsupportedOperationException("Unsupported timestamp type: " + logicalType);
+      }
+    } else if (dataType == DataTypes.FloatType) {
+      return (row, ordinal) -> recordConsumer.addFloat(row.getFloat(ordinal));
+    } else if (dataType == DataTypes.DoubleType) {
+      return (row, ordinal) -> recordConsumer.addDouble(row.getDouble(ordinal));
+    } else if (dataType == DataTypes.StringType) {
+      return (row, ordinal) -> recordConsumer.addBinary(
+          Binary.fromReusedByteArray(row.getUTF8String(ordinal).getBytes()));
+    } else if (dataType == DataTypes.BinaryType) {
+      return (row, ordinal) -> recordConsumer.addBinary(
+          Binary.fromReusedByteArray(row.getBinary(ordinal)));
+    } else if (dataType instanceof DecimalType) {
+      return (row, ordinal) -> {
+        int precision = ((DecimalType) dataType).precision();
+        int scale = ((DecimalType) dataType).scale();
+        byte[] bytes = row.getDecimal(ordinal, precision, scale).toJavaBigDecimal().unscaledValue().toByteArray();
+        int numBytes = Decimal.minBytesForPrecision()[precision];
+        byte[] fixedLengthBytes;
+        if (bytes.length == numBytes) {
+          // If the length of the underlying byte array of the unscaled `BigInteger` happens to be
+          // `numBytes`, just reuse it, so that we don't bother copying it to `decimalBuffer`.
+          fixedLengthBytes = bytes;
         } else {
-          return twoLevelArrayWriter("array", elementWriter);
+          // Otherwise, the length must be less than `numBytes`.  In this case we copy contents of
+          // the underlying bytes with padding sign bytes to `decimalBuffer` to form the result
+          // fixed-length byte array.
+          byte signByte = (bytes[0] < 0) ? (byte) -1 : (byte) 0;
+          Arrays.fill(decimalBuffer, 0, numBytes - bytes.length, signByte);
+          System.arraycopy(bytes, 0, decimalBuffer, numBytes - bytes.length, bytes.length);
+          fixedLengthBytes = decimalBuffer;
         }
-      case MAP:
-        ValueWriter keyWriter = makeWriter(MAP_KEY_SCHEMA, DataTypes.StringType);
-        ValueWriter valueWriter = makeWriter(resolvedSchema.getValueType(), ((MapType) dataType).valueType());
-        return (row, ordinal) -> {
-          MapData mapData = row.getMap(ordinal);
-          ArrayData keyArray = mapData.keyArray();
-          ArrayData valueArray = mapData.valueArray();
-          consumeGroup(() -> {
-            if (mapData.numElements() > 0) {
-              consumeField(MAP_REPEATED_NAME, 0, () -> {
-                for (int i = 0; i < mapData.numElements(); i++) {
-                  int index = i;
-                  consumeGroup(() -> {
-                    consumeField(MAP_KEY_NAME, 0, () -> keyWriter.write(keyArray, index));
-                    if (!valueArray.isNullAt(index)) {
-                      consumeField(MAP_VALUE_NAME, 1, () -> valueWriter.write(valueArray, index));
-                    }
-                  });
-                }
-              });
-            }
-          });
-        };
-      default:
-        throw new UnsupportedOperationException("Unsupported type: " + type);
+        recordConsumer.addBinary(Binary.fromReusedByteArray(fixedLengthBytes, 0, numBytes));
+      };
+    } else if (dataType instanceof ArrayType) {
+      ValueWriter elementWriter = makeWriter(resolvedSchema == null ? null : resolvedSchema.getElementType(), ((ArrayType) dataType).elementType());
+      if (!writeLegacyListFormat) {
+        return threeLevelArrayWriter("list", "element", elementWriter);
+      } else if (((ArrayType) dataType).containsNull()) {
+        return threeLevelArrayWriter("bag", "array", elementWriter);
+      } else {
+        return twoLevelArrayWriter("array", elementWriter);
+      }
+    } else if (dataType instanceof MapType) {
+      ValueWriter keyWriter = makeWriter(MAP_KEY_SCHEMA, DataTypes.StringType);
+      ValueWriter valueWriter = makeWriter(resolvedSchema == null ? null : resolvedSchema.getValueType(), ((MapType) dataType).valueType());
+      return (row, ordinal) -> {
+        MapData mapData = row.getMap(ordinal);
+        ArrayData keyArray = mapData.keyArray();
+        ArrayData valueArray = mapData.valueArray();
+        consumeGroup(() -> {
+          if (mapData.numElements() > 0) {
+            consumeField(MAP_REPEATED_NAME, 0, () -> {
+              for (int i = 0; i < mapData.numElements(); i++) {
+                int index = i;
+                consumeGroup(() -> {
+                  consumeField(MAP_KEY_NAME, 0, () -> keyWriter.write(keyArray, index));
+                  if (!valueArray.isNullAt(index)) {
+                    consumeField(MAP_VALUE_NAME, 1, () -> valueWriter.write(valueArray, index));
+                  }
+                });
+              }
+            });
+          }
+        });
+      };
+    } else if (dataType instanceof StructType) {
+      StructType structType = (StructType) dataType;
+      ValueWriter[] fieldWriters = getFieldWriters(structType, resolvedSchema);
+      return (row, ordinal) -> {
+        InternalRow struct = row.getStruct(ordinal, fieldWriters.length);
+        consumeGroup(() -> writeFields(struct, structType, fieldWriters));
+      };
+    } else {
+      throw new UnsupportedOperationException("Unsupported type: " + dataType);
     }
   }
 
@@ -378,4 +389,125 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
         conf, structType, bloomFilterOpt, config);
   }
 
+  /**
+   * Constructs the Parquet schema based on the given Spark schema and Avro schema.
+   * The Avro schema is used to determine the precision of timestamps.
+   * @param structType Spark StructType
+   * @param avroSchema Avro schema
+   * @return Parquet MessageType with field ids propagated from Spark StructType if available
+   */
+  private MessageType convert(StructType structType, Schema avroSchema) {
+    return Types.buildMessage()
+        .addFields(Arrays.stream(structType.fields()).map(field -> {
+          Schema.Field avroField = avroSchema.getField(field.name());
+          Type.Repetition repetition = field.nullable() ? OPTIONAL : REQUIRED;
+          Type type = convertField(avroField == null ? null : avroField.schema(), field, repetition);
+          if (ParquetUtils.hasFieldId(field)) {
+            return type.withId(ParquetUtils.getFieldId(field));
+          }
+          return type;
+        }).toArray(Type[]::new))
+        .named("spark_schema");
+  }
+
+  private Type convertField(Schema avroFieldSchema, StructField structField, Type.Repetition repetition) {
+    Schema resolvedSchema = avroFieldSchema == null ? null : resolveNullableSchema(avroFieldSchema);
+    LogicalType logicalType = resolvedSchema != null ? resolvedSchema.getLogicalType() : null;
+
+    DataType dataType = structField.dataType();
+    if (dataType == DataTypes.BooleanType) {
+      return Types.primitive(BOOLEAN, repetition).named(structField.name());
+    } else if (dataType == DataTypes.DateType) {
+      return Types.primitive(INT32, repetition)
+          .as(LogicalTypeAnnotation.dateType()).named(structField.name());
+    } else if (dataType == DataTypes.ShortType) {
+      return Types.primitive(INT32, repetition)
+          .as(LogicalTypeAnnotation.intType(16, true)).named(structField.name());
+    } else if (dataType == DataTypes.IntegerType) {
+      return Types.primitive(INT32, repetition).named(structField.name());
+    } else if (dataType == DataTypes.LongType) {
+      return Types.primitive(INT64, repetition).named(structField.name());
+    } else if (dataType == DataTypes.TimestampType) {
+      if (logicalType == null || logicalType.getName().equals(LogicalTypes.timestampMicros().getName())) {
+        return Types.primitive(INT64, repetition)
+            .as(LogicalTypeAnnotation.timestampType(true, LogicalTypeAnnotation.TimeUnit.MICROS)).named(structField.name());
+      } else if (logicalType.getName().equals(LogicalTypes.timestampMillis().getName())) {
+        return Types.primitive(INT64, repetition)
+            .as(LogicalTypeAnnotation.timestampType(true, LogicalTypeAnnotation.TimeUnit.MILLIS)).named(structField.name());
+      } else {
+        throw new UnsupportedOperationException("Unsupported timestamp type: " + logicalType);
+      }
+    } else if (dataType == DataTypes.TimestampNTZType) {
+      if (logicalType == null || logicalType.getName().equals(LogicalTypes.localTimestampMicros().getName())) {
+        return Types.primitive(INT64, repetition)
+            .as(LogicalTypeAnnotation.timestampType(false, LogicalTypeAnnotation.TimeUnit.MICROS)).named(structField.name());
+      } else if (logicalType.getName().equals(LogicalTypes.localTimestampMillis().getName())) {
+        return Types.primitive(INT64, repetition)
+            .as(LogicalTypeAnnotation.timestampType(false, LogicalTypeAnnotation.TimeUnit.MICROS)).named(structField.name());
+      } else {
+        throw new UnsupportedOperationException("Unsupported timestamp type: " + logicalType);
+      }
+    } else if (dataType == DataTypes.FloatType) {
+      return Types.primitive(FLOAT, repetition).named(structField.name());
+    } else if (dataType == DataTypes.DoubleType) {
+      return Types.primitive(DOUBLE, repetition).named(structField.name());
+    } else if (dataType == DataTypes.StringType) {
+      return Types.primitive(BINARY, repetition)
+          .as(LogicalTypeAnnotation.stringType()).named(structField.name());
+    } else if (dataType == DataTypes.BinaryType) {
+      return Types.primitive(BINARY, repetition).named(structField.name());
+    } else if (dataType instanceof DecimalType) {
+      int precision = ((DecimalType) dataType).precision();
+      int scale = ((DecimalType) dataType).scale();
+      return Types
+          .primitive(FIXED_LEN_BYTE_ARRAY, repetition)
+          .as(LogicalTypeAnnotation.decimalType(scale, precision))
+          .length(Decimal.minBytesForPrecision()[precision])
+          .named(structField.name());
+    } else if (dataType instanceof ArrayType) {
+      ArrayType arrayType = (ArrayType) dataType;
+      DataType elementType = arrayType.elementType();
+      Schema avroElementSchema = resolvedSchema.getElementType();
+      if (!writeLegacyListFormat) {
+        return Types
+            .buildGroup(repetition).as(LogicalTypeAnnotation.listType())
+            .addField(
+                Types.repeatedGroup()
+                    .addField(convertField(avroElementSchema, new StructField("element", elementType, arrayType.containsNull(), Metadata.empty()),
+                        arrayType.containsNull() ? OPTIONAL : REQUIRED))
+                    .named("list"))
+            .named(structField.name());
+      } else if ((arrayType.containsNull())) {
+        return Types
+            .buildGroup(repetition).as(LogicalTypeAnnotation.listType())
+            .addField(Types
+                .buildGroup(REPEATED)
+                // "array" is the name chosen by parquet-hive (1.7.0 and prior version)
+                .addField(convertField(avroElementSchema, new StructField("array", elementType, true, Metadata.empty()), OPTIONAL))
+                .named("bag"))
+            .named(structField.name());
+      } else {
+        return Types
+            .buildGroup(repetition).as(LogicalTypeAnnotation.listType())
+            // "array" is the name chosen by parquet-avro (1.7.0 and prior version)
+            .addField(convertField(avroElementSchema, new StructField("array", elementType, false, Metadata.empty()), REPEATED))
+            .named(structField.name());
+      }
+    } else if (dataType instanceof MapType) {
+      Schema avroValueSchema = resolvedSchema == null ? null : resolvedSchema.getValueType();
+      MapType mapType = (MapType) dataType;
+      return Types
+          .buildGroup(repetition).as(LogicalTypeAnnotation.mapType())
+          .addField(
+              Types
+                  .repeatedGroup()
+                  .addField(convertField(MAP_KEY_SCHEMA, new StructField(MAP_KEY_NAME, DataTypes.StringType, false, Metadata.empty()), REQUIRED))
+                  .addField(convertField(avroValueSchema, new StructField(MAP_VALUE_NAME, mapType.valueType(), mapType.valueContainsNull(), Metadata.empty()),
+                      mapType.valueContainsNull() ? OPTIONAL : REQUIRED))
+                  .named(MAP_REPEATED_NAME))
+          .named(structField.name());
+    } else {
+      throw new UnsupportedOperationException("Unsupported type: " + dataType);
+    }
+  }
 }
