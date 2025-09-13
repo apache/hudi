@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.MercifulJsonConverterTestBase;
 import org.apache.hudi.avro.ValueType;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -402,22 +403,39 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
   @MethodSource("timestampGoodCaseProvider")
   void timestampLogicalTypeGoodCaseTest(
       Long expectedMicroSecOfDay, Object timeMilli, Object timeMicro) throws IOException {
-    // Example inputs
-    long microSecOfDay = expectedMicroSecOfDay;
-    long milliSecOfDay = expectedMicroSecOfDay / 1000;
+    // TODO: Remove this when we get rid of spark3.3. TimestampNTZ needs this config
+    //  to be set to true to work.
+    boolean isSpark33 = HoodieSparkUtils.isSpark3_3();
+    String propertyValue = null;
+    if (isSpark33) {
+      propertyValue = System.getProperty("spark.testing");
+    }
+    try {
+      // Example inputs
+      long microSecOfDay = expectedMicroSecOfDay;
+      long milliSecOfDay = expectedMicroSecOfDay / 1000;
 
-    // Define the schema for the date logical type
-    Schema schema = SchemaTestUtil.getSchema(TIMESTAMP_AVRO_FILE_PATH);
+      // Define the schema for the date logical type
+      Schema schema = SchemaTestUtil.getSchema(TIMESTAMP_AVRO_FILE_PATH);
 
-    Map<String, Object> data = new HashMap<>();
-    data.put("timestampMillisField", timeMilli);
-    data.put("timestampMicrosField", timeMicro);
-    String json = MAPPER.writeValueAsString(data);
+      Map<String, Object> data = new HashMap<>();
+      data.put("timestampMillisField", timeMilli);
+      data.put("timestampMicrosField", timeMicro);
+      String json = MAPPER.writeValueAsString(data);
 
-    Row rec = RowFactory.create(new Timestamp(milliSecOfDay), new Timestamp(microSecOfDay / 1000));
-    Row actualRow = CONVERTER.convertToRow(json, schema);
-    validateSchemaCompatibility(Collections.singletonList(actualRow), schema);
-    assertEquals(rec, actualRow);
+      Row rec = RowFactory.create(new Timestamp(milliSecOfDay), new Timestamp(microSecOfDay / 1000));
+      Row actualRow = CONVERTER.convertToRow(json, schema);
+      validateSchemaCompatibility(Collections.singletonList(actualRow), schema);
+      assertEquals(rec, actualRow);
+    } finally {
+      if (isSpark33) {
+        if (propertyValue == null) {
+          System.clearProperty("spark.testing");
+        } else {
+          System.setProperty("spark.testing", propertyValue);
+        }
+      }
+    }
   }
 
   @ParameterizedTest
