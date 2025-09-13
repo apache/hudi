@@ -260,4 +260,6 @@ trait SparkAdapter extends Serializable {
   def getDateTimeRebaseMode(): Object
 
   def isLegacyBehaviorPolicy(value: Object): Boolean
+
+  def isTimestampNTZType(dataType: DataType): Boolean
 }
