@@ -40,6 +40,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -122,7 +123,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     testTable.forCommit("001")
         .withLogMarkerFile("000", "partA", f0, IOType.APPEND, 1);
 
-    HoodieTable hoodieTable = HoodieSparkTable.create(getConfig(), context, metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.createForReads(getConfig(), context, metaClient);
     List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfig(),
         "002").getRollbackRequests(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"));
     assertEquals(1, rollbackRequests.size());
@@ -140,7 +141,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     testTable.forCommit("001")
         .withLogMarkerFile("partA", f0, testIOType);
 
-    HoodieTable hoodieTable = HoodieSparkTable.create(getConfig(), context, metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.createForReads(getConfig(), context, metaClient);
     List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfig(),
         "002").getRollbackRequests(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001"));
     assertEquals(1, rollbackRequests.size());
@@ -167,7 +168,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
         .withMarkerFile("partA", f2, IOType.CREATE);
 
     // when
-    HoodieTable hoodieTable = HoodieSparkTable.create(getConfigBuilder().build(), context, metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.createForReads(getConfigBuilder().build(), context, metaClient);
     List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfig(),
         "002").getRollbackRequests(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"));
 
@@ -254,7 +255,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
 
     writeStatuses.collect();
 
-    HoodieTable hoodieTable = HoodieSparkTable.create(getConfigBuilder().build(), context, metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.createForReads(getConfigBuilder().build(), context, metaClient);
     List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfigBuilder().build(),
         "002").getRollbackRequests(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001"));
 
@@ -280,7 +281,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     writeStatuses = writeClient.upsert(jsc.parallelize(records, 1), newCommitTime);
     writeStatuses.collect();
 
-    HoodieTable hoodieTable = HoodieSparkTable.create(writeClient.getConfig(), context, metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.createForReads(writeClient.getConfig(), context, metaClient);
     List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, writeClient.getConfig(),
         "003").getRollbackRequests(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "002"));
 
@@ -299,7 +300,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     testTable.forCommit("001")
         .withLogMarkerFile("000", "partA", f0, IOType.APPEND, 1);
 
-    HoodieTable hoodieTable = HoodieSparkTable.create(getConfig(), context, metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.createForReads(getConfig(), context, metaClient);
 
     DirectWriteMarkers writeMarkers = mock(DirectWriteMarkers.class);
     initMocks(this);
@@ -355,7 +356,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     metaClient.reloadActiveTimeline();
     HoodieWriteConfig writeConfig = getConfig();
     writeConfig.setValue(ROLLBACK_PARALLELISM_VALUE, String.valueOf(logVersions.length));
-    HoodieTable hoodieTable = HoodieSparkTable.create(getConfig(), context, metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.createForReads(getConfig(), context, metaClient);
 
     DirectWriteMarkers writeMarkers = mock(DirectWriteMarkers.class);
     MockitoAnnotations.openMocks(this);
@@ -374,7 +375,9 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     EmbeddedTimelineService timelineServer =
         EmbeddedTimelineServerHelper.createEmbeddedTimelineService(context, writeConfig);
     writeConfig.setViewStorageConfig(timelineServer.getRemoteFileSystemViewConfig(writeConfig));
-    hoodieTable = HoodieSparkTable.create(writeConfig, context, metaClient);
+
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(getConfig());
+    hoodieTable = HoodieSparkTable.create(writeConfig, context, metaClient, Option.of(writeClient.getTransactionManager()));
     MergeOnReadRollbackActionExecutor rollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         context, writeConfig, hoodieTable, "004", instantToRollback, true, false);
     List<HoodieRollbackStat> rollbackStats = rollbackActionExecutor.doRollbackAndGetStats(rollbackPlan);

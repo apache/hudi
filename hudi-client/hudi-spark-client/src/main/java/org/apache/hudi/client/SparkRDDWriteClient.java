@@ -79,7 +79,7 @@ public class SparkRDDWriteClient<T> extends
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, SparkUpgradeDowngradeHelper.getInstance());
-    this.tableServiceClient = new SparkRDDTableServiceClient<T>(context, writeConfig, getTimelineServer());
+    this.tableServiceClient = new SparkRDDTableServiceClient<T>(context, writeConfig, getTimelineServer(), getTransactionManager());
   }
 
   @Override
@@ -168,18 +168,20 @@ public class SparkRDDWriteClient<T> extends
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config) {
-    return createTableAndValidate(config, HoodieSparkTable::create);
+    return createTableAndValidate(config, (cfg, ctx, txn) -> HoodieSparkTable.create(cfg, ctx, txn));
   }
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
-    return createTableAndValidate(config, metaClient, HoodieSparkTable::create);
+    return createTableAndValidate(config, metaClient,
+        (cfg, ctx, mc, txn) -> HoodieSparkTable.create(cfg, ctx, mc, Option.of(txn))
+    );
   }
 
   @Override
   public JavaRDD<HoodieRecord<T>> filterExists(JavaRDD<HoodieRecord<T>> hoodieRecords) {
     // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieSparkTable<T> table = HoodieSparkTable.create(config, context);
+    HoodieSparkTable<T> table = HoodieSparkTable.create(config, context, txnManager);
     Timer.Context indexTimer = metrics.getIndexCtx();
     JavaRDD<HoodieRecord<T>> recordsWithLocation = HoodieJavaRDD.getJavaRDD(
         getIndex().tagLocation(HoodieJavaRDD.of(hoodieRecords), context, table));

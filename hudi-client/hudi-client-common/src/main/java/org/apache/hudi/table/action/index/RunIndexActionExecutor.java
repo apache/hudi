@@ -97,7 +97,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
 
   public RunIndexActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
     super(context, config, table, instantTime);
-    this.txnManager = new TransactionManager(config, table.getStorage());
+    this.txnManager = table.getTxnManager().get();
     if (config.getMetadataConfig().isMetricsEnabled()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(config.getMetricsConfig(), table.getStorage()));
     } else {
@@ -269,8 +269,8 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
       txnManager.beginStateChange(Option.of(indexInstant), Option.empty());
       updateMetadataPartitionsTableConfig(table.getMetaClient(),
           finalIndexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toSet()));
-      table.getActiveTimeline().saveAsComplete(false, instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, INDEXING_ACTION, indexInstant.requestedTime()),
-          Option.of(indexCommitMetadata));
+      table.getActiveTimeline().saveAsComplete(instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, INDEXING_ACTION, indexInstant.requestedTime()),
+          Option.of(indexCommitMetadata), txnManager.generateInstantTime());
     } finally {
       txnManager.endStateChange(Option.of(indexInstant));
     }

@@ -145,7 +145,7 @@ public class TestUtils {
 
   public static void saveInstantAsComplete(HoodieTableMetaClient metaClient, HoodieInstant instant, HoodieCommitMetadata metadata) {
     metaClient.getActiveTimeline().saveAsComplete(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instant.getAction(), instant.requestedTime()),
-        Option.of(metadata));
+        Option.of(metadata), WriteClientTestUtils.createNewInstantTime());
   }
 
   public static String amendCompletionTimeToLatest(HoodieTableMetaClient metaClient, java.nio.file.Path sourcePath, String instantTime) throws IOException {

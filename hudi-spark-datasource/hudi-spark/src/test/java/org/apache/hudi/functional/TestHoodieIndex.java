@@ -213,7 +213,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     JavaRDD<HoodieRecord> writtenRecords = jsc.parallelize(records, 1);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.createForReads(config, context, metaClient);
 
     // Test tagLocation without any entries in index
     JavaRDD<HoodieRecord> javaRDD = tagLocation(index, writtenRecords, hoodieTable);
@@ -235,7 +235,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     writeClient.commit(newCommitTime, writeStatusRdd);
     // Now tagLocation for these records, index should tag them correctly
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    hoodieTable = HoodieSparkTable.createForReads(config, context, metaClient);
     javaRDD = tagLocation(index, writtenRecords, hoodieTable);
     Map<String, String> recordKeyToPartitionPathMap = new HashMap();
     List<HoodieRecord> hoodieRecords = writtenRecords.collect();
@@ -261,7 +261,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // Rollback the last commit
     writeClient.rollback(newCommitTime);
 
-    hoodieTable = HoodieSparkTable.create(config, context);
+    hoodieTable = HoodieSparkTable.createForReads(config, context);
     // Now tagLocation for these records, hbaseIndex should not tag them since it was a rolled
     // back commit
     javaRDD = tagLocation(index, writtenRecords, hoodieTable);
@@ -278,7 +278,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.createForReads(config, context, metaClient);
 
     // Test tagLocation without any entries in index
     JavaRDD<HoodieRecord> javaRDD = tagLocation(index, writeRecords, hoodieTable);
@@ -304,7 +304,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     deleteMetadataPartition(metaClient.getBasePath(), context, COLUMN_STATS.getPartitionPath());
 
     // Now tagLocation for these records, they should be tagged correctly despite column_stats being enabled but not present
-    hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    hoodieTable = HoodieSparkTable.createForReads(config, context, metaClient);
     javaRDD = tagLocation(index, writeRecords, hoodieTable);
     Map<String, String> recordKeyToPartitionPathMap = new HashMap();
     List<HoodieRecord> hoodieRecords = writeRecords.collect();
@@ -333,7 +333,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     List<HoodieRecord> records = getInserts();
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
-    HoodieSparkTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    HoodieSparkTable hoodieTable = HoodieSparkTable.createForReads(config, context, metaClient);
 
     String newCommitTime = writeClient.startCommit();
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
@@ -353,7 +353,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     writeClient.commit(newCommitTime, writeStatues);
     // Now tagLocation for these records, hbaseIndex should tag them correctly
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    hoodieTable = HoodieSparkTable.createForReads(config, context, metaClient);
     JavaRDD<HoodieRecord> javaRDD = tagLocation(index, writeRecords, hoodieTable);
 
     Map<String, String> recordKeyToPartitionPathMap = new HashMap();
@@ -406,7 +406,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     String newCommitTime = writeClient.startCommit();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     writeClient.upsert(recordRDD, newCommitTime);
-    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.createForReads(config, context, metaClient);
 
     JavaRDD<HoodieRecord> taggedRecordRDD = tagLocation(index, recordRDD, hoodieTable);
 
@@ -449,7 +449,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
 
     // We do the tag again
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    hoodieTable = HoodieSparkTable.createForReads(config, context, metaClient);
 
     taggedRecordRDD = tagLocation(index, recordRDD, hoodieTable);
     List<HoodieRecord> records = taggedRecordRDD.collect();
@@ -580,7 +580,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
 
     // Now tagLocation for these records, index should tag them correctly
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.createForReads(config, context, metaClient);
     JavaRDD<HoodieRecord> javaRDD = tagLocation(hoodieTable.getIndex(), writeRecords, hoodieTable);
     Map<String, String> recordKeyToPartitionPathMap = new HashMap<>();
     List<HoodieRecord> hoodieRecords = writeRecords.collect();
@@ -610,7 +610,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
 
     // Deleted records should not be found in the index
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    hoodieTable = HoodieSparkTable.createForReads(config, context, metaClient);
     javaRDD = tagLocation(hoodieTable.getIndex(), jsc.parallelize(records.subList(0, numDeletes)), hoodieTable);
     assertEquals(0, javaRDD.filter(HoodieRecord::isCurrentLocationKnown).collect().size());
     assertEquals(numDeletes, javaRDD.map(record -> record.getKey().getRecordKey()).distinct().count());

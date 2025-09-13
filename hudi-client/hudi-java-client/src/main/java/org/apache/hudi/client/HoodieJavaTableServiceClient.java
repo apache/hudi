@@ -19,6 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -36,8 +37,9 @@ public class HoodieJavaTableServiceClient<T> extends BaseHoodieTableServiceClien
 
   protected HoodieJavaTableServiceClient(HoodieEngineContext context,
                                          HoodieWriteConfig clientConfig,
-                                         Option<EmbeddedTimelineService> timelineService) {
-    super(context, clientConfig, timelineService);
+                                         Option<EmbeddedTimelineService> timelineService,
+                                         TransactionManager transactionManager) {
+    super(context, clientConfig, timelineService, transactionManager);
   }
 
   @Override
@@ -57,6 +59,6 @@ public class HoodieJavaTableServiceClient<T> extends BaseHoodieTableServiceClien
 
   @Override
   protected HoodieTable<?, List<HoodieRecord<T>>, ?, List<WriteStatus>> createTable(HoodieWriteConfig config, StorageConfiguration<?> storageConf, boolean skipValidation) {
-    return createTableAndValidate(config, HoodieJavaTable::create, skipValidation);
+    return createTableAndValidate(config, (c, ctx, txn) -> HoodieJavaTable.create(c, ctx, txn), skipValidation);
   }
 }

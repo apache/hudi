@@ -204,7 +204,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     assertEquals(fsPartitions, metadataPartitions, "Partitions should match");
 
     // Files within each partition should match
-    HoodieTable table = HoodieSparkTable.create(writeConfig, context);
+    HoodieTable table = HoodieSparkTable.createForReads(writeConfig, context);
     TableFileSystemView tableView = table.getHoodieView();
     List<String> fullPartitionPaths =
         fsPartitions.stream().map(partition -> basePath + "/" + partition)
@@ -297,7 +297,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     final HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
     HoodieWriteConfig metadataTableWriteConfig = getMetadataWriteConfig(writeConfig);
     metadataMetaClient.reloadActiveTimeline();
-    final HoodieTable table = HoodieSparkTable.create(metadataTableWriteConfig, context, metadataMetaClient);
+    final HoodieTable table = HoodieSparkTable.createForReads(metadataTableWriteConfig, context, metadataMetaClient);
 
     // Compaction has not yet kicked in. Verify all the log files
     // for the metadata records persisted on disk as per the config.

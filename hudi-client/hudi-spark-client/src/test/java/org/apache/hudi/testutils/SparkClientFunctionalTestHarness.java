@@ -294,7 +294,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
         reloadedMetaClient.getStorage(),
         new StoragePath(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
 
-    HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), reloadedMetaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.createForReads(cfg, context());
 
     Option<HoodieInstant> deltaCommit =
         reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();

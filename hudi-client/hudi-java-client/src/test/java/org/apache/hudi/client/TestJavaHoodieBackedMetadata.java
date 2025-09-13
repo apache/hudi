@@ -1728,7 +1728,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       Future future = executors.submit(() -> {
         List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 100, dataGen.getPartitionPaths()[index]);
         HoodieJavaWriteClient localWriteClient = writeClients[index];
-        WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
+        WriteClientTestUtils.startCommitWithTime(localWriteClient, newCommitTime);
         List<WriteStatus> writeStatuses = localWriteClient.insert(records, newCommitTime);
         localWriteClient.commit(newCommitTime, writeStatuses);
         assertNoWriteErrors(writeStatuses);

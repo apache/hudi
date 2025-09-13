@@ -121,7 +121,7 @@ public class TestMergeHandle extends BaseTestHandle {
 
     // init config and table
     HoodieWriteConfig config = getHoodieWriteConfigBuilder().build();
-    HoodieSparkTable.create(config, new HoodieLocalEngineContext(storageConf), metaClient);
+    HoodieSparkTable.createForReads(config, new HoodieLocalEngineContext(storageConf), metaClient);
 
     // one round per partition
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
@@ -135,7 +135,7 @@ public class TestMergeHandle extends BaseTestHandle {
     client.commit(instantTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkCopyOnWriteTable.create(config, context, metaClient);
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkCopyOnWriteTable.createForReads(config, context, metaClient);
     HoodieFileGroup fileGroup = table.getFileSystemView().getAllFileGroups(partitionPath).collect(Collectors.toList()).get(0);
     String fileId = fileGroup.getFileGroupId().getFileId();
 
@@ -215,7 +215,7 @@ public class TestMergeHandle extends BaseTestHandle {
 
     // init config and table
     HoodieWriteConfig config = getHoodieWriteConfigBuilder().build();
-    HoodieSparkTable.create(config, new HoodieLocalEngineContext(storageConf), metaClient);
+    HoodieSparkTable.createForReads(config, new HoodieLocalEngineContext(storageConf), metaClient);
 
     // one round per partition
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
@@ -229,7 +229,7 @@ public class TestMergeHandle extends BaseTestHandle {
     client.commit(instantTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkCopyOnWriteTable.create(config, context, metaClient);
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkCopyOnWriteTable.createForReads(config, context, metaClient);
     HoodieFileGroup fileGroup = table.getFileSystemView().getAllFileGroups(partitionPath).collect(Collectors.toList()).get(0);
     String fileId = fileGroup.getFileGroupId().getFileId();
 
@@ -332,7 +332,7 @@ public class TestMergeHandle extends BaseTestHandle {
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     String commit1 = metaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants().getInstants().get(0).requestedTime();
-    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkCopyOnWriteTable.create(config, context, metaClient);
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkCopyOnWriteTable.createForReads(config, context, metaClient);
     HoodieFileGroup fileGroup = table.getFileSystemView().getAllFileGroups(partitionPath).collect(Collectors.toList()).get(0);
     String fileId = fileGroup.getFileGroupId().getFileId();
 

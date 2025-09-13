@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -58,8 +59,9 @@ public class HoodieFlinkMergeOnReadTable<T>
   HoodieFlinkMergeOnReadTable(
       HoodieWriteConfig config,
       HoodieEngineContext context,
-      HoodieTableMetaClient metaClient) {
-    super(config, context, metaClient);
+      HoodieTableMetaClient metaClient,
+      Option<TransactionManager> txnManager) {
+    super(config, context, metaClient, txnManager);
   }
 
   @Override
