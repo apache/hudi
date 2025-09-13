@@ -246,6 +246,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     // of the dataset, and therefore we rely on low-level RDD API to avoid incurring encoding/decoding
     // penalty of the [[Dataset]], since it's required to adhere to its schema at all times, while
     // RDDs are not;
+    val useJava8api = spark.sessionState.conf.datetimeJava8ApiEnabled
     val transposedRows: HoodieData[Row] = colStatsRecords
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       .filter(JFunction.toJavaSerializableFunction(r => sortedTargetColumnsSet.contains(r.getColumnName)))
@@ -265,8 +266,8 @@ class ColumnStatsIndexSupport(spark: SparkSession,
           val colType = sortedTargetColDataTypeMap(colName).dataType
 
           val valueMetadata = getValueMetadata(r.getValueType)
-          val minValue = extractColStatsValue(minValueWrapper, colType, valueMetadata)
-          val maxValue = extractColStatsValue(maxValueWrapper, colType, valueMetadata)
+          val minValue = extractColStatsValue(minValueWrapper, colType, valueMetadata, useJava8api)
+          val maxValue = extractColStatsValue(maxValueWrapper, colType, valueMetadata, useJava8api)
 
           // Update min-/max-value structs w/ unwrapped values in-place
           r.setMinValue(minValue)
@@ -448,16 +449,16 @@ object ColumnStatsIndexSupport {
   @inline def composeColumnStatStructType(col: String, statName: String, dataType: DataType) =
     StructField(formatColName(col, statName), dataType, nullable = true, Metadata.empty)
 
-  def extractColStatsValue(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata): Any = {
+  def extractColStatsValue(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata, useJava8api: Boolean): Any = {
     valueMetadata.getValueType match {
       case ValueType.V1 => extractWrapperValueV1(valueWrapper, dataType)
-      case _ => extractColStatsValueV2(valueWrapper, dataType, valueMetadata)
+      case _ => extractColStatsValueV2(valueWrapper, dataType, valueMetadata, useJava8api)
     }
   }
 
-  private def extractColStatsValueV2(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata): Any = {
+  private def extractColStatsValueV2(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata, useJava8api: Boolean): Any = {
     val colStatsValue = SparkValueMetadata.convertJavaTypeToSparkType(SparkValueMetadata.getValueMetadata(dataType, HoodieIndexVersion.V2)
-      .standardizeJavaTypeAndPromote(valueMetadata.unwrapValue(valueWrapper)))
+      .standardizeJavaTypeAndPromote(valueMetadata.unwrapValue(valueWrapper)), useJava8api)
     // TODO: should this be done here? Should we handle this with adding more value types?
     // TODO: should this logic be in convertJavaTypeToSparkType?
     dataType match {

@@ -245,6 +245,7 @@ class ExpressionIndexSupport(spark: SparkSession,
     // of the dataset, and therefore we rely on low-level RDD API to avoid incurring encoding/decoding
     // penalty of the [[Dataset]], since it's required to adhere to its schema at all times, while
     // RDDs are not;
+    val useJava8api = spark.sessionState.conf.datetimeJava8ApiEnabled
     val transposedRows: HoodieData[Row] = colStatsRecords
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       .filter(JFunction.toJavaSerializableFunction(r => sortedTargetColumnsSet.contains(r.getColumnName)))
@@ -264,8 +265,8 @@ class ExpressionIndexSupport(spark: SparkSession,
           val colType = tableSchemaFieldMap(colName).dataType
 
           val valueMetadata = getValueMetadata(r.getValueType)
-          val minValue = extractExpressionIndexValue(minValueWrapper, colType, valueMetadata)
-          val maxValue = extractExpressionIndexValue(maxValueWrapper, colType, valueMetadata)
+          val minValue = extractExpressionIndexValue(minValueWrapper, colType, valueMetadata, useJava8api)
+          val maxValue = extractExpressionIndexValue(maxValueWrapper, colType, valueMetadata, useJava8api)
 
           // Update min-/max-value structs w/ unwrapped values in-place
           r.setMinValue(minValue)
@@ -617,15 +618,15 @@ class ExpressionIndexSupport(spark: SparkSession,
 
 object ExpressionIndexSupport {
 
-  def extractExpressionIndexValue(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata): Any = {
+  def extractExpressionIndexValue(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata, useJava8api: Boolean): Any = {
     valueMetadata.getValueType match {
       case ValueType.V1 => extractWrapperValueV1(valueWrapper, dataType)
-      case _ => extractExpressionIndexValueV2(valueWrapper, valueMetadata)
+      case _ => extractExpressionIndexValueV2(valueWrapper, valueMetadata, useJava8api)
     }
   }
 
-  private def extractExpressionIndexValueV2(valueWrapper: AnyRef, valueMetadata: ValueMetadata): Any = {
-    SparkValueMetadata.convertJavaTypeToSparkType(valueMetadata.unwrapValue(valueWrapper))
+  private def extractExpressionIndexValueV2(valueWrapper: AnyRef, valueMetadata: ValueMetadata, useJava8api: Boolean): Any = {
+    SparkValueMetadata.convertJavaTypeToSparkType(valueMetadata.unwrapValue(valueWrapper), useJava8api)
   }
 
   val INDEX_NAME = "EXPRESSION"

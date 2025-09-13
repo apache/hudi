@@ -109,6 +109,7 @@ import java.nio.ByteBuffer;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -332,7 +333,7 @@ public class SparkMetadataWriterUtils {
         case DECIMAL:
           return ((Decimal) value).toJavaBigDecimal();
         case DATE:
-          return (Date) value;
+          return ValueType.castToDate(value, this);
         case TIMESTAMP_MICROS:
           return ValueType.castToTimestampMicros(value, this);
         case LOCAL_TIMESTAMP_MICROS:
@@ -412,9 +413,13 @@ public class SparkMetadataWriterUtils {
       }
     }
 
-    public static Object convertJavaTypeToSparkType(Comparable<?> javaVal) {
-      if (javaVal instanceof Instant) {
-        return Timestamp.from((Instant) javaVal);
+    public static Object convertJavaTypeToSparkType(Comparable<?> javaVal, boolean useJava8api) {
+      if (!useJava8api) {
+        if (javaVal instanceof Instant) {
+          return Timestamp.from((Instant) javaVal);
+        } else if (javaVal instanceof LocalDate) {
+          return Date.valueOf((LocalDate) javaVal);
+        }
       }
       return javaVal;
     }
