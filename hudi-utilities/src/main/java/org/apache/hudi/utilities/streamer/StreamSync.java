@@ -116,7 +116,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.HoodieDataTypeUtils;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
@@ -614,7 +613,7 @@ public class StreamSync implements Serializable, Closeable {
   boolean canUseRowWriter(Schema targetSchema) {
     // enable row writer only when operation is BULK_INSERT, and source is ROW type and if row writer is not explicitly disabled.
     boolean rowWriterEnabled = isRowWriterEnabled();
-    return rowWriterEnabled && targetSchema != null && HoodieDataTypeUtils.canUseRowWriter(targetSchema, conf);
+    return rowWriterEnabled && targetSchema != null;
   }
 
   @VisibleForTesting
