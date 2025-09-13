@@ -55,8 +55,6 @@ trait SparkAdapter extends Serializable {
    */
   def isColumnarBatchRow(r: InternalRow): Boolean
 
-  def isTimestampNTZType(dataType: DataType): Boolean
-
   def getParquetReadSupport(storage: HoodieStorage,
                             messageSchema: org.apache.hudi.common.util.Option[MessageType]):
   org.apache.parquet.hadoop.api.ReadSupport[_]
@@ -249,4 +247,10 @@ trait SparkAdapter extends Serializable {
     // Default implementation delegates to CatalystPlanUtils (for Spark < 3.5)
     getCatalystPlanUtils.resolveOutputColumns(tableName, expected, query, byName, conf)
   }
+
+  def getDateTimeRebaseMode(): Object
+
+  def isLegacyBehaviorPolicy(value: Object): Boolean
+
+  def isTimestampNTZType(dataType: DataType): Boolean
 }

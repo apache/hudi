@@ -33,8 +33,8 @@ import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.ParquetReadSupport
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
-import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+import org.apache.spark.sql.types.{DataType, StructType}
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.sql.{HoodieInternalRowUtils, HoodieSpark3CatalogUtils, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
@@ -127,4 +127,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
       HoodieInternalRowUtils.getCachedSchema(requestedSchema)
     )
   }
+
+  // Older Spark 3.x versions do not have TimestampNTZType
+  override def isTimestampNTZType(dataType: DataType): Boolean = false
 }
