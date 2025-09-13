@@ -3376,6 +3376,45 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertRecordCount(950, tableBasePath, sqlContext);
   }
 
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  void testDeltaSyncWithAutoKeyGenAndImmutableOperations(HoodieTableType tableType) throws Exception {
+    PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum;
+    int parquetRecordsCount = 10;
+    HoodieTestDataGenerator dataGenerator = prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
+    TypedProperties extraProps = new TypedProperties();
+    extraProps.setProperty("hoodie.datasource.write.table.type", tableType.name());
+    extraProps.setProperty("hoodie.datasource.compaction.async.enable", "false");
+    extraProps.setProperty("hoodie.write.record.merge.mode", "COMMIT_TIME_ORDERING");
+    extraProps.setProperty("hoodie.clean.commits.retained", "5");
+    extraProps.setProperty("hoodie.keep.max.commits", "3");
+    extraProps.setProperty("hoodie.keep.min.commits", "2");
+    extraProps.setProperty("hoodie.clustering.inline", "true");
+    extraProps.setProperty("hoodie.clustering.inline.max.commits", "2");
+    prepareParquetDFSSource(false, false, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
+        PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps, true);
+    String tableBasePath = basePath + "test_parquet_table" + testNum;
+    HoodieDeltaStreamer.Config deltaCfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
+        null, PROPS_FILENAME_TEST_PARQUET, false,
+        false, 100000, false, null, tableType.name(), "timestamp", null);
+    deltaCfg.retryLastPendingInlineCompactionJob = false;
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(deltaCfg, jsc);
+
+    for (int i = 0; i < 30; i++) {
+      deltaStreamer.sync();
+      assertRecordCount(parquetRecordsCount + i * 5, tableBasePath, sqlContext);
+      prepareParquetDFSUpdates(5, PARQUET_SOURCE_ROOT, (i + 3) + ".parquet", false, null, null, dataGenerator, "001");
+      deltaStreamer.sync();
+    }
+
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setStorage(storage).setBasePath(tableBasePath).build();
+    assertTrue(metaClient.getTableConfig().getRecordKeyFields().isEmpty());
+    assertRecordCount(160, tableBasePath, sqlContext);
+    assertFalse(metaClient.getActiveTimeline().getCleanerTimeline().getInstants().isEmpty());
+    assertFalse(metaClient.getArchivedTimeline().getInstants().isEmpty());
+    assertFalse(metaClient.getActiveTimeline().getCompletedReplaceTimeline().getInstants().isEmpty());
+  }
+
   private Set<String> getAllFileIDsInTable(String tableBasePath, Option<String> partition) {
     HoodieTableMetaClient metaClient = createMetaClient(jsc, tableBasePath);
     final HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, metaClient.getCommitsAndCompactionTimeline());
