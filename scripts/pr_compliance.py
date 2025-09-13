@@ -299,7 +299,7 @@ class ValidateBody:
                 return False
             elif o == Outcomes.SUCCESS:
                 # Check for GitHub issue link requirement for fix PRs
-                if pr_title and (pr_title.startswith("fix:") or pr_title.startswith("fix(") in pr_title):
+                if pr_title and (pr_title.startswith("fix:") or pr_title.startswith("fix(")):
                     if not self._has_github_issue_link():
                         self.section.error("", "",
                                            "Fix PRs must include a GitHub issue link (e.g., fixes #1234, resolves #1234, or direct GitHub issue URL)")
