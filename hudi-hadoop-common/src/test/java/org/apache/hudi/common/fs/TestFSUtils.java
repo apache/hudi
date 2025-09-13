@@ -369,7 +369,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String instantTime = "20160501010101";
     String partitionStr = "2016/05/01";
     int taskPartitionId = 456;
-    String writeToken = "456";
+    String writeToken = "4-5-6";
     String fileId = "Id123";
     int version = 1;
     final String LOG_STR = "log";
