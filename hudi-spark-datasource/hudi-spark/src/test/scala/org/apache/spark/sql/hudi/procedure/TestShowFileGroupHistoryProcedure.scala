@@ -685,6 +685,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
            | type = 'cow',
            | preCombineField = 'ts',
            | 'hoodie.table.version' = '6',
+           | 'hoodie.write.table.version' = '6',
            | 'hoodie.clustering.inline' = 'false',
            | 'hoodie.clustering.schedule.inline' = 'false'
            |)
@@ -720,7 +721,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
 
       val fileInfoBefore = spark.sql(
         s"""
-           |select _hoodie_file_name, _hoodie_partition_path 
+           |select _hoodie_file_name, _hoodie_partition_path
            |from $tableName
            |where created_date = date '2025-01-01'
            |limit 1
@@ -757,7 +758,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
 
       assert(historyAfterRun.nonEmpty, "Should have history entries after clustering")
 
-      val replacedEntries = historyAfterRun.filter(_.getAs[Boolean]("was_replaced") == true)
+      val replacedEntries = historyAfterRun.filter(_.getAs[Boolean]("was_replaced"))
       val replacedByEntries = commitsAfterClustering.filter(_.getAs[String]("action") == "replacecommit")
       assert(replacedEntries.length == 2, "All these entries should be marked as replaced after clustering in this file group")
       assert(replacedByEntries.length >= 1, "All these entries should be marked as replaced after clustering in this file group")

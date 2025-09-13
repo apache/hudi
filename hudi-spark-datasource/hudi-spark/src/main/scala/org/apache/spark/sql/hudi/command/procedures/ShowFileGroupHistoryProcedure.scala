@@ -216,14 +216,14 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
 
     val activeEntries = new util.ArrayList[HistoryEntry]()
     val activeTimeline = metaClient.getActiveTimeline
-    ShowFileHistoryProcedureUtils.processTimeline(activeTimeline, fileGroupId, partition, "ACTIVE", activeEntries, limit, startTime, endTime)
+    ShowFileHistoryProcedureUtils.processWriteTimeline(activeTimeline, fileGroupId, partition, "ACTIVE", activeEntries, limit, startTime, endTime)
 
     val archivedEntries = new util.ArrayList[HistoryEntry]()
     if (showArchived) {
       try {
         val archivedTimeline = metaClient.getArchivedTimeline.reload()
         archivedTimeline.loadCompletedInstantDetailsInMemory()
-        ShowFileHistoryProcedureUtils.processTimeline(archivedTimeline, fileGroupId, partition, "ARCHIVED", archivedEntries, limit, startTime, endTime)
+        ShowFileHistoryProcedureUtils.processWriteTimeline(archivedTimeline, fileGroupId, partition, "ARCHIVED", archivedEntries, limit, startTime, endTime)
       } catch {
         case e: Exception =>
           log.warn(s"Failed to process archived timeline: ${e.getMessage}")

@@ -120,14 +120,14 @@ object ShowFileHistoryProcedureUtils extends Logging {
     }
   }
 
-  def processTimeline(timeline: HoodieTimeline,
-                      fileGroupId: String,
-                      targetPartition: Option[String],
-                      timelineType: String,
-                      entries: util.ArrayList[HistoryEntry],
-                      limit: Int,
-                      startTime: String,
-                      endTime: String): Unit = {
+  def processWriteTimeline(timeline: HoodieTimeline,
+                           fileGroupId: String,
+                           targetPartition: Option[String],
+                           timelineType: String,
+                           entries: util.ArrayList[HistoryEntry],
+                           limit: Int,
+                           startTime: String,
+                           endTime: String): Unit = {
 
     val writeTimeline = timeline.getWriteTimeline
     val instants = writeTimeline.getInstants.asScala.toSeq

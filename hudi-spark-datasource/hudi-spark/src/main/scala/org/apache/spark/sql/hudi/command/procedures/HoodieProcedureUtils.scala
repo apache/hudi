@@ -21,12 +21,14 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
+
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.hudi.command.procedures.ShowFileHistoryProcedureUtils.log
 
 import java.time.LocalDate
 import java.time.format.{DateTimeFormatter, DateTimeParseException}
 import java.util
+
 import scala.collection.JavaConverters._
 
 object HoodieProcedureUtils {
@@ -131,7 +133,7 @@ object HoodieProcedureUtils {
   }
 
   def normalizeTimeFormat(timeInput: String, isEndTime: Boolean = false): String = {
-    if (timeInput.isEmpty) return timeInput
+    if (timeInput.isEmpty) timeInput
     if (timeInput.matches("^\\d{17}$")) {
       timeInput
     } else if (timeInput.matches("^\\d{14}$")) {
