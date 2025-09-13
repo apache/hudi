@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.avro.MercifulJsonConverterTestBase;
+import org.apache.hudi.avro.ValueType;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.utilities.exception.HoodieJsonToRowConversionException;
 
@@ -318,10 +319,10 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
     if (groundTruthRow == null) {
       return;
     }
-    Row rec = RowFactory.create(java.sql.Date.valueOf(groundTruthRow));
+    Row rec = RowFactory.create(java.sql.Date.valueOf(groundTruthRow).toLocalDate());
     Row realRow = CONVERTER.convertToRow(json, schema);
     validateSchemaCompatibility(Collections.singletonList(realRow), schema);
-    assertEquals(rec.getDate(0).toString(), realRow.getDate(0).toString());
+    assertEquals(rec.getLocalDate(0).toString(), realRow.getLocalDate(0).toString());
   }
 
   /**
@@ -367,7 +368,7 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
     data.put("localTimestampMicrosField", timeMicro);
     String json = MAPPER.writeValueAsString(data);
 
-    Row rec = RowFactory.create(milliSecOfDay, microSecOfDay);
+    Row rec = RowFactory.create(ValueType.castToLocalTimestampMillis(milliSecOfDay, null), ValueType.castToLocalTimestampMicros(microSecOfDay, null));
     Row actualRow = CONVERTER.convertToRow(json, schema);
     validateSchemaCompatibility(Collections.singletonList(actualRow), schema);
     assertEquals(rec, actualRow);

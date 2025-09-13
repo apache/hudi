@@ -37,7 +37,6 @@ import java.math.BigInteger;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
-import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -74,7 +73,7 @@ public enum ValueType {
       ValueType::castToDecimal, ValueType::toDecimal, ValueType::fromDecimal),
   UUID(UUID.class, HoodieAvroWrapperUtils.PrimitiveWrapperType.STRING,
       ValueType::castToUUID, ValueType::toUUID, ValueType::fromUUID),
-  DATE(Date.class, HoodieAvroWrapperUtils.PrimitiveWrapperType.INT,
+  DATE(LocalDate.class, HoodieAvroWrapperUtils.PrimitiveWrapperType.INT,
       ValueType::castToDate, ValueType::toDate, ValueType::fromDate),
   TIME_MILLIS(LocalTime.class, HoodieAvroWrapperUtils.PrimitiveWrapperType.INT,
       ValueType::castToTimeMillis, ValueType::toTimeMillis, ValueType::fromTimeMillis),
@@ -495,11 +494,13 @@ public enum ValueType {
     }
   }
 
-  public static Date castToDate(Object val, ValueMetadata meta) {
-    if (val instanceof java.sql.Date) {
-      return (java.sql.Date) val;
+  public static LocalDate castToDate(Object val, ValueMetadata meta) {
+    if (val instanceof LocalDate) {
+      return (LocalDate) val;
+    } else if (val instanceof java.sql.Date) {
+      return ((java.sql.Date) val).toLocalDate();
     } else if (val instanceof Integer) {
-      return java.sql.Date.valueOf(LocalDate.ofEpochDay((Integer) val));
+      return LocalDate.ofEpochDay((Integer) val);
     } else {
       throw new UnsupportedOperationException("Unable to convert date: " + val.getClass());
     }
@@ -608,12 +609,12 @@ public enum ValueType {
     return ((UUID) val).toString();
   }
 
-  public static java.sql.Date toDate(Comparable<?> val, ValueMetadata meta) {
-    return java.sql.Date.valueOf(LocalDate.ofEpochDay((Integer) val));
+  public static LocalDate toDate(Comparable<?> val, ValueMetadata meta) {
+    return LocalDate.ofEpochDay((Integer) val);
   }
 
   public static Integer fromDate(Comparable<?> val, ValueMetadata meta) {
-    return ((Long) ((java.sql.Date) val).toLocalDate().toEpochDay()).intValue();
+    return ((Long) ((LocalDate) val).toEpochDay()).intValue();
   }
 
   public static LocalTime toTimeMillis(Comparable<?> val, ValueMetadata meta) {

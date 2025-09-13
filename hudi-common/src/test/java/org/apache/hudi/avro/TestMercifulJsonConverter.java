@@ -39,6 +39,7 @@ import java.math.MathContext;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
@@ -251,7 +252,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     // Define the schema for the date logical type
     Schema schema = SchemaTestUtil.getSchemaFromResourceFilePath(DATE_AVRO_FILE_PATH);
     GenericRecord record = new GenericData.Record(schema);
-    record.put("dateField", groundTruth);
+    record.put("dateField", LocalDate.ofEpochDay(groundTruth));
 
     Map<String, Object> data = new HashMap<>();
     data.put("dateField", dateInput);
@@ -299,8 +300,8 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     // Define the schema for the date logical type
     Schema schema = SchemaTestUtil.getSchemaFromResourceFilePath(LOCAL_TIME_AVRO_FILE_PATH);
     GenericRecord record = new GenericData.Record(schema);
-    record.put("localTimestampMillisField", milliSecOfDay);
-    record.put("localTimestampMicrosField", microSecOfDay);
+    record.put("localTimestampMillisField", ValueType.castToLocalTimestampMillis(milliSecOfDay, null));
+    record.put("localTimestampMicrosField", ValueType.castToLocalTimestampMicros(microSecOfDay, null));
 
     Map<String, Object> data = new HashMap<>();
     data.put("localTimestampMillisField", timeMilli);

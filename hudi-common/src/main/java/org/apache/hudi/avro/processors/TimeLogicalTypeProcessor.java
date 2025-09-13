@@ -48,8 +48,6 @@ import static java.time.format.DateTimeFormatter.ISO_LOCAL_TIME;
  */
 public abstract class TimeLogicalTypeProcessor extends JsonFieldProcessor {
 
-  protected static final LocalDateTime LOCAL_UNIX_EPOCH = LocalDateTime.of(1970, 1, 1, 0, 0, 0, 0);
-
   // Logical type the processor is handling.
   private final AvroLogicalTypeEnum logicalTypeEnum;
 

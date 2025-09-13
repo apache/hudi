@@ -19,12 +19,12 @@
 package org.apache.hudi.avro.processors;
 
 import org.apache.hudi.avro.AvroLogicalTypeEnum;
+import org.apache.hudi.avro.ValueType;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoField;
 
 /**
  * Processor for TimeMicro logical type.
@@ -40,6 +40,24 @@ public class LocalTimestampMicroLogicalTypeProcessor extends TimeLogicalTypeProc
     return convertCommon(
         new Parser.LongParser() {
           @Override
+          public Pair<Boolean, Object> handleNumberValue(Number value) {
+            Pair<Boolean, Object> result = super.handleNumberValue(value);
+            if (result.getLeft()) {
+              return Pair.of(true, ValueType.castToLocalTimestampMicros(result.getRight(), null));
+            }
+            return result;
+          }
+
+          @Override
+          public Pair<Boolean, Object> handleStringNumber(String value) {
+            Pair<Boolean, Object> result = super.handleStringNumber(value);
+            if (result.getLeft()) {
+              return Pair.of(true, ValueType.castToLocalTimestampMicros(result.getRight(), null));
+            }
+            return result;
+          }
+
+          @Override
           public Pair<Boolean, Object> handleStringValue(String value) {
             if (!isWellFormedDateTime(value)) {
               return Pair.of(false, null);
@@ -48,11 +66,7 @@ public class LocalTimestampMicroLogicalTypeProcessor extends TimeLogicalTypeProc
             if (!result.getLeft()) {
               return Pair.of(false, null);
             }
-            LocalDateTime time = result.getRight();
-
-            // Calculate the difference in milliseconds
-            long diffInMicros = LOCAL_UNIX_EPOCH.until(time, ChronoField.MICRO_OF_SECOND.getBaseUnit());
-            return Pair.of(true, diffInMicros);
+            return Pair.of(true, result.getRight());
           }
         },
         value, schema);

@@ -53,7 +53,6 @@ import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -361,6 +360,25 @@ public class MercifulJsonConverter {
         Object value, String name, Schema schema) {
       return convertCommon(
           new Parser.IntParser() {
+
+            @Override
+            public Pair<Boolean, Object> handleNumberValue(Number value) {
+              Pair<Boolean, Object> result = super.handleNumberValue(value);
+              if (result.getLeft()) {
+                return Pair.of(true, LocalDate.ofEpochDay((Integer) result.getRight()));
+              }
+              return result;
+            }
+
+            @Override
+            public Pair<Boolean, Object> handleStringNumber(String value) {
+              Pair<Boolean, Object> result = super.handleStringNumber(value);
+              if (result.getLeft()) {
+                return Pair.of(true, LocalDate.ofEpochDay((Integer) result.getRight()));
+              }
+              return result;
+            }
+
             @Override
             public Pair<Boolean, Object> handleStringValue(String value) {
               if (!isWellFormedDateTime(value)) {
@@ -370,9 +388,7 @@ public class MercifulJsonConverter {
               if (!result.getLeft()) {
                 return Pair.of(false, null);
               }
-              LocalDate date = result.getRight();
-              int daysSinceEpoch = (int) ChronoUnit.DAYS.between(LocalDate.ofEpochDay(0), date);
-              return Pair.of(true, daysSinceEpoch);
+              return Pair.of(true, result.getRight());
             }
           },
           value, schema);
