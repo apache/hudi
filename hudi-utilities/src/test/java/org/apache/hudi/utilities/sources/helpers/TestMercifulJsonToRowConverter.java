@@ -346,6 +346,33 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
 
   private static final String LOCAL_TIME_AVRO_FILE_PATH = "/local-timestamp-logical-type.avsc";
 
+  @FunctionalInterface
+  private interface ThrowingRunnable {
+    void run() throws Exception;
+  }
+
+  void timestampNTZCompatibility(ThrowingRunnable r) throws Exception {
+    // TODO: Remove this when we get rid of spark3.3. TimestampNTZ needs this config
+    //  to be set to true to work.
+    boolean isSpark33 = HoodieSparkUtils.isSpark3_3();
+    String propertyValue = null;
+    if (isSpark33) {
+      propertyValue = System.getProperty("spark.testing");
+      System.setProperty("spark.testing", "true");
+    }
+    try {
+      r.run();
+    } finally {
+      if (isSpark33) {
+        if (propertyValue == null) {
+          System.clearProperty("spark.testing");
+        } else {
+          System.setProperty("spark.testing", propertyValue);
+        }
+      }
+    }
+  }
+
   /**
    * Covered case:
    * Avro Logical Type: localTimestampMillisField & localTimestampMillisField
@@ -356,23 +383,25 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
   @ParameterizedTest
   @MethodSource("localTimestampGoodCaseProvider")
   void localTimestampLogicalTypeGoodCaseTest(
-      Long expectedMicroSecOfDay, Object timeMilli, Object timeMicro) throws IOException {
-    // Example inputs
-    long microSecOfDay = expectedMicroSecOfDay;
-    long milliSecOfDay = expectedMicroSecOfDay / 1000; // Represents 12h 30 min since the start of the day
+      Long expectedMicroSecOfDay, Object timeMilli, Object timeMicro) throws Exception {
+    timestampNTZCompatibility(() -> {
+      // Example inputs
+      long microSecOfDay = expectedMicroSecOfDay;
+      long milliSecOfDay = expectedMicroSecOfDay / 1000; // Represents 12h 30 min since the start of the day
 
-    // Define the schema for the date logical type
-    Schema schema = SchemaTestUtil.getSchema(LOCAL_TIME_AVRO_FILE_PATH);
+      // Define the schema for the date logical type
+      Schema schema = SchemaTestUtil.getSchema(LOCAL_TIME_AVRO_FILE_PATH);
 
-    Map<String, Object> data = new HashMap<>();
-    data.put("localTimestampMillisField", timeMilli);
-    data.put("localTimestampMicrosField", timeMicro);
-    String json = MAPPER.writeValueAsString(data);
+      Map<String, Object> data = new HashMap<>();
+      data.put("localTimestampMillisField", timeMilli);
+      data.put("localTimestampMicrosField", timeMicro);
+      String json = MAPPER.writeValueAsString(data);
 
-    Row rec = RowFactory.create(ValueType.castToLocalTimestampMillis(milliSecOfDay, null), ValueType.castToLocalTimestampMicros(microSecOfDay, null));
-    Row actualRow = CONVERTER.convertToRow(json, schema);
-    validateSchemaCompatibility(Collections.singletonList(actualRow), schema);
-    assertEquals(rec, actualRow);
+      Row rec = RowFactory.create(ValueType.castToLocalTimestampMillis(milliSecOfDay, null), ValueType.castToLocalTimestampMicros(microSecOfDay, null));
+      Row actualRow = CONVERTER.convertToRow(json, schema);
+      validateSchemaCompatibility(Collections.singletonList(actualRow), schema);
+      assertEquals(rec, actualRow);
+    });
   }
 
   @ParameterizedTest
@@ -403,39 +432,22 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
   @MethodSource("timestampGoodCaseProvider")
   void timestampLogicalTypeGoodCaseTest(
       Long expectedMicroSecOfDay, Object timeMilli, Object timeMicro) throws IOException {
-    // TODO: Remove this when we get rid of spark3.3. TimestampNTZ needs this config
-    //  to be set to true to work.
-    boolean isSpark33 = HoodieSparkUtils.isSpark3_3();
-    String propertyValue = null;
-    if (isSpark33) {
-      propertyValue = System.getProperty("spark.testing");
-    }
-    try {
-      // Example inputs
-      long microSecOfDay = expectedMicroSecOfDay;
-      long milliSecOfDay = expectedMicroSecOfDay / 1000;
+    // Example inputs
+    long microSecOfDay = expectedMicroSecOfDay;
+    long milliSecOfDay = expectedMicroSecOfDay / 1000;
 
-      // Define the schema for the date logical type
-      Schema schema = SchemaTestUtil.getSchema(TIMESTAMP_AVRO_FILE_PATH);
+    // Define the schema for the date logical type
+    Schema schema = SchemaTestUtil.getSchema(TIMESTAMP_AVRO_FILE_PATH);
 
-      Map<String, Object> data = new HashMap<>();
-      data.put("timestampMillisField", timeMilli);
-      data.put("timestampMicrosField", timeMicro);
-      String json = MAPPER.writeValueAsString(data);
+    Map<String, Object> data = new HashMap<>();
+    data.put("timestampMillisField", timeMilli);
+    data.put("timestampMicrosField", timeMicro);
+    String json = MAPPER.writeValueAsString(data);
 
-      Row rec = RowFactory.create(new Timestamp(milliSecOfDay), new Timestamp(microSecOfDay / 1000));
-      Row actualRow = CONVERTER.convertToRow(json, schema);
-      validateSchemaCompatibility(Collections.singletonList(actualRow), schema);
-      assertEquals(rec, actualRow);
-    } finally {
-      if (isSpark33) {
-        if (propertyValue == null) {
-          System.clearProperty("spark.testing");
-        } else {
-          System.setProperty("spark.testing", propertyValue);
-        }
-      }
-    }
+    Row rec = RowFactory.create(new Timestamp(milliSecOfDay), new Timestamp(microSecOfDay / 1000));
+    Row actualRow = CONVERTER.convertToRow(json, schema);
+    validateSchemaCompatibility(Collections.singletonList(actualRow), schema);
+    assertEquals(rec, actualRow);
   }
 
   @ParameterizedTest
