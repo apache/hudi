@@ -299,8 +299,8 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     // Define the schema for the date logical type
     Schema schema = SchemaTestUtil.getSchemaFromResourceFilePath(LOCAL_TIME_AVRO_FILE_PATH);
     GenericRecord record = new GenericData.Record(schema);
-    record.put("localTimestampMillisField", ValueType.castToLocalTimestampMillis(milliSecOfDay, null));
-    record.put("localTimestampMicrosField", ValueType.castToLocalTimestampMicros(microSecOfDay, null));
+    record.put("localTimestampMillisField", milliSecOfDay);
+    record.put("localTimestampMicrosField", microSecOfDay);
 
     Map<String, Object> data = new HashMap<>();
     data.put("localTimestampMillisField", timeMilli);

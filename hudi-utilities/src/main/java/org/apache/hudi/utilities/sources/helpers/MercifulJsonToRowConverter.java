@@ -19,12 +19,15 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.avro.ValueType;
 import org.apache.hudi.avro.processors.DateLogicalTypeProcessor;
 import org.apache.hudi.avro.processors.DecimalLogicalTypeProcessor;
 import org.apache.hudi.avro.processors.DurationLogicalTypeProcessor;
 import org.apache.hudi.avro.processors.EnumTypeProcessor;
 import org.apache.hudi.avro.processors.FixedTypeProcessor;
 import org.apache.hudi.avro.processors.JsonFieldProcessor;
+import org.apache.hudi.avro.processors.LocalTimestampMicroLogicalTypeProcessor;
+import org.apache.hudi.avro.processors.LocalTimestampMilliLogicalTypeProcessor;
 import org.apache.hudi.avro.processors.Parser;
 import org.apache.hudi.avro.processors.TimestampMicroLogicalTypeProcessor;
 import org.apache.hudi.avro.processors.TimestampMilliLogicalTypeProcessor;
@@ -46,6 +49,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -245,6 +249,16 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
     return new TimestampMicroToRowLogicalTypeProcessor();
   }
 
+  @Override
+  protected JsonFieldProcessor generateLocalTimeStampMicroLogicalTypeHandler() {
+    return new LocalTimestampMicroToRowLogicalTypeProcessor();
+  }
+
+  @Override
+  protected JsonFieldProcessor generateLocalTimeStampMilliLogicalTypeHandler() {
+    return new LocalTimestampMilliToRowLogicalTypeProcessor();
+  }
+
   private static class TimestampMicroToRowLogicalTypeProcessor extends TimestampMicroLogicalTypeProcessor {
     @Override
     public Pair<Boolean, Object> convert(
@@ -265,6 +279,87 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
         return Pair.of(true, new Timestamp(((Long) result.getRight()) / 1000));
       }
       return Pair.of(false, null);
+    }
+  }
+
+  private static class LocalTimestampMicroToRowLogicalTypeProcessor extends LocalTimestampMicroLogicalTypeProcessor {
+
+    @Override
+    public Pair<Boolean, Object> convert(
+        Object value, String name, Schema schema) {
+      return convertCommon(
+          new Parser.LongParser() {
+            @Override
+            public Pair<Boolean, Object> handleNumberValue(Number value) {
+              Pair<Boolean, Object> result = super.handleNumberValue(value);
+              if (result.getLeft()) {
+                return Pair.of(true, ValueType.castToLocalTimestampMicros(result.getRight(), null));
+              }
+              return result;
+            }
+
+            @Override
+            public Pair<Boolean, Object> handleStringNumber(String value) {
+              Pair<Boolean, Object> result = super.handleStringNumber(value);
+              if (result.getLeft()) {
+                return Pair.of(true, ValueType.castToLocalTimestampMicros(result.getRight(), null));
+              }
+              return result;
+            }
+
+            @Override
+            public Pair<Boolean, Object> handleStringValue(String value) {
+              if (!isWellFormedDateTime(value)) {
+                return Pair.of(false, null);
+              }
+              Pair<Boolean, LocalDateTime> result = convertToLocalDateTime(value);
+              if (!result.getLeft()) {
+                return Pair.of(false, null);
+              }
+              return Pair.of(true, result.getRight());
+            }
+          },
+          value, schema);
+    }
+  }
+
+  private static class LocalTimestampMilliToRowLogicalTypeProcessor extends LocalTimestampMilliLogicalTypeProcessor {
+    @Override
+    public Pair<Boolean, Object> convert(
+        Object value, String name, Schema schema) {
+      return convertCommon(
+          new Parser.LongParser() {
+            @Override
+            public Pair<Boolean, Object> handleNumberValue(Number value) {
+              Pair<Boolean, Object> result = super.handleNumberValue(value);
+              if (result.getLeft()) {
+                return Pair.of(true, ValueType.castToLocalTimestampMillis(result.getRight(), null));
+              }
+              return result;
+            }
+
+            @Override
+            public Pair<Boolean, Object> handleStringNumber(String value) {
+              Pair<Boolean, Object> result = super.handleStringNumber(value);
+              if (result.getLeft()) {
+                return Pair.of(true, ValueType.castToLocalTimestampMillis(result.getRight(), null));
+              }
+              return result;
+            }
+            
+            @Override
+            public Pair<Boolean, Object> handleStringValue(String value) {
+              if (!isWellFormedDateTime(value)) {
+                return Pair.of(false, null);
+              }
+              Pair<Boolean, LocalDateTime> result = convertToLocalDateTime(value);
+              if (!result.getLeft()) {
+                return Pair.of(false, null);
+              }
+              return Pair.of(true, result.getRight());
+            }
+          },
+          value, schema);
     }
   }
 
