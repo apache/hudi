@@ -103,11 +103,21 @@ object ShowFileHistoryProcedureUtils extends Logging {
   }
 
   def determineOperationType(writeStat: HoodieWriteStat): String = {
-    if (writeStat.getNumInserts > 0 && writeStat.getNumUpdateWrites == 0) "INSERT"
-    else if (writeStat.getNumInserts == 0 && writeStat.getNumUpdateWrites > 0) "UPDATE"
-    else if (writeStat.getNumInserts > 0 && writeStat.getNumUpdateWrites > 0) "UPSERT"
-    else if (writeStat.getNumDeletes > 0) "DELETE"
-    else "UNKNOWN"
+    val hasInserts = writeStat.getNumInserts > 0
+    val hasUpdates = writeStat.getNumUpdateWrites > 0
+    val hasDeletes = writeStat.getNumDeletes > 0
+
+    val operations = Seq(
+      if (hasInserts) Some("INSERT") else None,
+      if (hasUpdates) Some("UPDATE") else None,
+      if (hasDeletes) Some("DELETE") else None
+    ).flatten
+
+    if (operations.nonEmpty) {
+      operations.mkString("_AND_")
+    } else {
+      "UNKNOWN"
+    }
   }
 
   def processTimeline(timeline: HoodieTimeline,
@@ -254,36 +264,57 @@ object ShowFileHistoryProcedureUtils extends Logging {
     )
   }
 
-  def checkForDeletionsAndReplacements(metaClient: HoodieTableMetaClient,
-                                       fileGroupId: String,
-                                       targetPartition: Option[String],
-                                       showArchived: Boolean): (Map[String, DeletionInfo], Map[String, ReplacementInfo]) = {
+  def checkForDeletions(metaClient: HoodieTableMetaClient,
+                        fileGroupId: String,
+                        targetPartition: Option[String],
+                        showArchived: Boolean): Map[String, DeletionInfo] = {
 
     val deletions = scala.collection.mutable.Map[String, DeletionInfo]()
-    val replacements = scala.collection.mutable.Map[String, ReplacementInfo]()
 
-    checkDeletionsAndReplacementsInTimeline(metaClient.getActiveTimeline, fileGroupId, targetPartition, "ACTIVE", deletions, replacements)
+    checkDeletionsInTimeline(metaClient.getActiveTimeline, fileGroupId, targetPartition, "ACTIVE", deletions)
 
     if (showArchived) {
       try {
         val archivedTimeline = metaClient.getArchivedTimeline.reload()
         archivedTimeline.loadCompletedInstantDetailsInMemory()
-        checkDeletionsAndReplacementsInTimeline(archivedTimeline, fileGroupId, targetPartition, "ARCHIVED", deletions, replacements)
+        checkDeletionsInTimeline(archivedTimeline, fileGroupId, targetPartition, "ARCHIVED", deletions)
       } catch {
         case e: Exception =>
           log.warn(s"Failed to check deletions in archived timeline: ${e.getMessage}")
       }
     }
 
-    (deletions.toMap, replacements.toMap)
+    deletions.toMap
   }
 
-  def checkDeletionsAndReplacementsInTimeline(timeline: HoodieTimeline,
-                                              fileGroupId: String,
-                                              targetPartition: Option[String],
-                                              timelineType: String,
-                                              deletions: scala.collection.mutable.Map[String, DeletionInfo],
-                                              replacements: scala.collection.mutable.Map[String, ReplacementInfo]): Unit = {
+  def checkForReplacements(metaClient: HoodieTableMetaClient,
+                          fileGroupId: String,
+                          targetPartition: Option[String],
+                          showArchived: Boolean): Map[String, ReplacementInfo] = {
+
+    val replacements = scala.collection.mutable.Map[String, ReplacementInfo]()
+
+    checkReplacementsInTimeline(metaClient.getActiveTimeline, fileGroupId, targetPartition, "ACTIVE", replacements)
+
+    if (showArchived) {
+      try {
+        val archivedTimeline = metaClient.getArchivedTimeline.reload()
+        archivedTimeline.loadCompletedInstantDetailsInMemory()
+        checkReplacementsInTimeline(archivedTimeline, fileGroupId, targetPartition, "ARCHIVED", replacements)
+      } catch {
+        case e: Exception =>
+          log.warn(s"Failed to check replacements in archived timeline: ${e.getMessage}")
+      }
+    }
+
+    replacements.toMap
+  }
+
+  private def checkDeletionsInTimeline(timeline: HoodieTimeline,
+                                       fileGroupId: String,
+                                       targetPartition: Option[String],
+                                       timelineType: String,
+                                       deletions: scala.collection.mutable.Map[String, DeletionInfo]): Unit = {
 
     val cleanInstants = timeline.getCleanerTimeline.getInstants.iterator().asScala
     for (instant <- cleanInstants) {
@@ -330,6 +361,13 @@ object ShowFileHistoryProcedureUtils extends Logging {
           log.warn(s"Failed to process rollback instant ${instant.requestedTime}: ${e.getMessage}")
       }
     }
+  }
+
+  private def checkReplacementsInTimeline(timeline: HoodieTimeline,
+                                          fileGroupId: String,
+                                          targetPartition: Option[String],
+                                          timelineType: String,
+                                          replacements: scala.collection.mutable.Map[String, ReplacementInfo]): Unit = {
 
     val replacementInstants = timeline.getCommitsAndCompactionTimeline.getInstants.iterator().asScala
     for (instant <- replacementInstants) {

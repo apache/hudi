@@ -43,8 +43,9 @@ import scala.collection.JavaConverters._
  * - `showArchived`: Optional. Whether to include archived timeline data (default: false)
  * - `limit`: Optional. Maximum number of history entries to return (default: 20)
  * - `filter`: Optional. SQL expression to filter results (default: empty string)
- * - `startTime`: Optional. Start timestamp for filtering results (format: yyyyMMddHHmmss)
- * - `endTime`: Optional. End timestamp for filtering results (format: yyyyMMddHHmmss)
+ * - `startTime`: Optional. Start timestamp for filtering results (supported formats: yyyyMMddHHMMssmm, yyyyMMddHHmmss, yyyy-MM-dd, yyyy/MM/dd, yyyyMMdd)
+ * - `endTime`: Optional. End timestamp for filtering results (supported formats: yyyyMMddHHMMssmm, yyyyMMddHHmmss, yyyy-MM-dd, yyyy/MM/dd, yyyyMMdd)
+ * - `verbose` : Optional. Whether to include detailed statistics (default: false)
  *
  * == Output Schema ==
  * - `instant_time`: Timestamp when the operation was performed
@@ -120,6 +121,30 @@ import scala.collection.JavaConverters._
  *   fileGroupId => 'abc123',
  *   filter => "operation_type = 'INSERT'"
  * )
+ *
+ * -- Filter by date range using yyyy-MM-dd format
+ * CALL show_file_group_history(
+ *   table => 'hudi_table_1',
+ *   fileGroupId => 'abc123',
+ *   startTime => '2024-01-01',
+ *   endTime => '2024-12-31'
+ * )
+ *
+ * -- Filter by date range using yyyy/MM/dd format
+ * CALL show_file_group_history(
+ *   table => 'hudi_table_1',
+ *   fileGroupId => 'abc123',
+ *   startTime => '2024/01/01',
+ *   endTime => '2024/12/31'
+ * )
+ *
+ * -- Filter by date range using yyyyMMdd format
+ * CALL show_file_group_history(
+ *   table => 'hudi_table_1',
+ *   fileGroupId => 'abc123',
+ *   startTime => '20240101',
+ *   endTime => '20241231'
+ * )
  * }}}
  *
  * @see [[ShowFileHistoryProcedureUtils]] for underlying utility methods
@@ -167,7 +192,10 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
     val basePath = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
 
-    val fileGroupHistory = collectFileGroupHistory(metaClient, fileGroupId, partition, showArchived, limit, startTime, endTime)
+    val normalizedStartTime = HoodieProcedureUtils.normalizeTimeFormat(startTime)
+    val normalizedEndTime = HoodieProcedureUtils.normalizeTimeFormat(endTime, isEndTime = true)
+
+    val fileGroupHistory = collectFileGroupHistory(metaClient, fileGroupId, partition, showArchived, limit, normalizedStartTime, normalizedEndTime)
 
     if (filter != null && filter.trim.nonEmpty) {
       HoodieProcedureFilterUtils.evaluateFilter(fileGroupHistory, filter, outputType, sparkSession)
@@ -212,7 +240,9 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
       sortedEntries.take(limit)
     }
 
-    val (deletionInfo, replacementInfo) = ShowFileHistoryProcedureUtils.checkForDeletionsAndReplacements(metaClient, fileGroupId, partition, showArchived)
+    val deletionInfo = ShowFileHistoryProcedureUtils.checkForDeletions(metaClient, fileGroupId, partition, showArchived)
+
+    val replacementInfo = ShowFileHistoryProcedureUtils.checkForReplacements(metaClient, fileGroupId, partition, showArchived)
 
     val rows = finalEntries.map { entry =>
       val deletion = deletionInfo.get(entry.fileName)

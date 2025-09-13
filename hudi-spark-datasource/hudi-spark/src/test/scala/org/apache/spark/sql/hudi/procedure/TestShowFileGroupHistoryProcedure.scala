@@ -503,6 +503,267 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test show_file_group_history - with time range filtering in different formats") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tableLocation = tmp.getCanonicalPath
+      if (HoodieSparkUtils.isSpark3_4) {
+        spark.sql("set spark.sql.defaultColumn.enabled = false")
+      }
+      spark.sql(
+        s"""
+           |create table $tableName (
+           | id int,
+           | name string,
+           | price double,
+           | ts long
+           |) using hudi
+           | location '$tableLocation'
+           | tblproperties (
+           | primaryKey = 'id',
+           | type = 'cow',
+           | preCombineField = 'ts'
+           |)
+           |""".stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 20, 2000)")
+      spark.sql(s"update $tableName set price = 15 where id = 1")
+
+      val fileInfo = spark.sql(s"select _hoodie_file_name from $tableName where id = 1 limit 1").collect()
+      val fileName = fileInfo.head.getString(0)
+      val fileGroupId = fileName.split("_")(0)
+
+      val allCommitsDf = spark.sql(s"call show_commits(table => '$tableName')")
+      allCommitsDf.show(false)
+      val allCommits = allCommitsDf.collect()
+      val sortedCommits = allCommits.sortBy(_.getString(0))
+      val firstCommit = sortedCommits.head.getString(0)
+      val lastCommit = sortedCommits.last.getString(0)
+
+      val firstCommitDate = firstCommit.substring(0, 8)
+      val lastCommitDate = lastCommit.substring(0, 8)
+
+      val formattedStartDate = s"${firstCommitDate.substring(0, 4)}-${firstCommitDate.substring(4, 6)}-${firstCommitDate.substring(6, 8)}"
+      val formattedEndDate = s"${lastCommitDate.substring(0, 4)}-${lastCommitDate.substring(4, 6)}-${lastCommitDate.substring(6, 8)}"
+
+      val yyyyMMddHHMMssmmHistoryDf = spark.sql(
+        s"""call show_file_group_history(
+           |  table => '$tableName',
+           |  fileGroupId => '$fileGroupId',
+           |  startTime => '$firstCommit',
+           |  endTime => '$lastCommit'
+           |)""".stripMargin)
+      yyyyMMddHHMMssmmHistoryDf.show(false)
+      val yyyyMMddHHMMssmmHistory = yyyyMMddHHMMssmmHistoryDf.collect()
+
+      val firstCommit14 = firstCommit.substring(0, 14)
+      val lastCommit14 = lastCommit.substring(0, 14)
+      val yyyyMMddHHmmssHistoryDf = spark.sql(
+        s"""call show_file_group_history(
+           |  table => '$tableName',
+           |  fileGroupId => '$fileGroupId',
+           |  startTime => '$firstCommit14',
+           |  endTime => '$lastCommit14'
+           |)""".stripMargin)
+      yyyyMMddHHmmssHistoryDf.show(false)
+      val yyyyMMddHHmmssHistory = yyyyMMddHHmmssHistoryDf.collect()
+
+      val yyyyMMddHistoryDf = spark.sql(
+        s"""call show_file_group_history(
+           |  table => '$tableName',
+           |  fileGroupId => '$fileGroupId',
+           |  startTime => '$firstCommitDate',
+           |  endTime => '$lastCommitDate'
+           |)""".stripMargin)
+      yyyyMMddHistoryDf.show(false)
+      val yyyyMMddHistory = yyyyMMddHistoryDf.collect()
+
+      val yyyyMMddDashHistoryDf = spark.sql(
+        s"""call show_file_group_history(
+           |  table => '$tableName',
+           |  fileGroupId => '$fileGroupId',
+           |  startTime => '$formattedStartDate',
+           |  endTime => '$formattedEndDate'
+           |)""".stripMargin)
+      yyyyMMddDashHistoryDf.show(false)
+      val yyyyMMddDashHistory = yyyyMMddDashHistoryDf.collect()
+
+      val slashFormattedStartDate = formattedStartDate.replace("-", "/")
+      val slashFormattedEndDate = formattedEndDate.replace("-", "/")
+      val yyyyMMddSlashHistoryDf = spark.sql(
+        s"""call show_file_group_history(
+           |  table => '$tableName',
+           |  fileGroupId => '$fileGroupId',
+           |  startTime => '$slashFormattedStartDate',
+           |  endTime => '$slashFormattedEndDate'
+           |)""".stripMargin)
+      yyyyMMddSlashHistoryDf.show(false)
+      val yyyyMMddSlashHistory = yyyyMMddSlashHistoryDf.collect()
+
+      assert(yyyyMMddHHMMssmmHistory.length == 3, "Should find history entries with yyyyMMddHHMMssmm format")
+      assert(yyyyMMddHHmmssHistory.length == 2, "Should find history entries with yyyyMMddHHmmss format")
+      assert(yyyyMMddHistory.length == 3, "Should find history entries with yyyyMMdd format")
+      assert(yyyyMMddDashHistory.length == 3, "Should find history entries with yyyy-MM-dd format")
+      assert(yyyyMMddSlashHistory.length == 3, "Should find history entries with yyyy/MM/dd format")
+
+      assert(yyyyMMddHistory.length == yyyyMMddDashHistory.length,
+        "All date formats should return the same number of results")
+      assert(yyyyMMddHistory.length == yyyyMMddSlashHistory.length,
+        "All date formats should return the same number of results")
+      assert(yyyyMMddHHMMssmmHistory.length - 1 == yyyyMMddHHmmssHistory.length,
+        "All date formats should return the same number of results")
+    }
+  }
+
+  test("Test show_file_group_history - with invalid date formats") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tableLocation = tmp.getCanonicalPath
+      if (HoodieSparkUtils.isSpark3_4) {
+        spark.sql("set spark.sql.defaultColumn.enabled = false")
+      }
+      spark.sql(
+        s"""
+           |create table $tableName (
+           | id int,
+           | name string,
+           | price double,
+           | ts long
+           |) using hudi
+           | location '$tableLocation'
+           | tblproperties (
+           | primaryKey = 'id',
+           | type = 'cow',
+           | preCombineField = 'ts'
+           |)
+           |""".stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 20, 2000)")
+
+      val fileInfo = spark.sql(s"select _hoodie_file_name from $tableName where id = 1 limit 1").collect()
+      val fileName = fileInfo.head.getString(0)
+      val fileGroupId = fileName.split("_")(0)
+
+      val exception = intercept[Exception] {
+        spark.sql(
+          s"""call show_file_group_history(
+             |  table => '$tableName',
+             |  fileGroupId => '$fileGroupId',
+             |  startTime => 'invalid-date',
+             |  endTime => 'another-invalid-date'
+             |)""".stripMargin).collect()
+      }
+
+      assert(exception.getMessage.contains("Unsupported time format"),
+        s"Should throw exception for invalid date format, got: ${exception.getMessage}")
+    }
+  }
+
+  test("Test show_file_group_history - v6 table operations") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tableLocation = tmp.getCanonicalPath
+      if (HoodieSparkUtils.isSpark3_4) {
+        spark.sql("set spark.sql.defaultColumn.enabled = false")
+      }
+      spark.sql(
+        s"""
+           |create table $tableName (
+           | id int,
+           | name string,
+           | category string,
+           | price double,
+           | created_date date,
+           | ts long
+           |) using hudi
+           | location '$tableLocation'
+           | partitioned by (created_date)
+           | tblproperties (
+           | primaryKey = 'id',
+           | type = 'cow',
+           | preCombineField = 'ts',
+           | 'hoodie.table.version' = '6',
+           | 'hoodie.clustering.inline' = 'false',
+           | 'hoodie.clustering.schedule.inline' = 'false'
+           |)
+           |""".stripMargin)
+
+      spark.sql(
+        s"""
+           |insert into $tableName (id, name, category, price, created_date, ts) values
+           | (1, 'product_a', 'electronics', 100.0, date '2025-01-01', 1000),
+           | (2, 'product_b', 'electronics', 200.0, date '2025-01-01', 2000),
+           | (3, 'product_c', 'books', 50.0, date '2025-01-01', 3000)
+           |""".stripMargin)
+
+      spark.sql(
+        s"""
+           |merge into $tableName target
+           |using (
+           | select 2 as id, 'product_b_updated' as name, 'electronics' as category, 220.0 as price, date '2025-01-01' as created_date, 8000L as ts
+           | union all
+           | select 8 as id, 'product_h' as name, 'sports' as category, 120.0 as price, date '2025-01-01' as created_date, 9000L as ts
+           |) source on target.id = source.id
+           |when matched then update set *
+           |when not matched then insert *
+           |""".stripMargin)
+
+      spark.sql(
+        s"""
+           |insert overwrite table $tableName partition (created_date = date '2025-01-02')
+           |values
+           | (9, 'product_i', 'fashion', 80.0, 10000L),
+           | (10, 'product_j', 'fashion', 90.0, 11000L)
+           |""".stripMargin)
+
+      val fileInfoBefore = spark.sql(
+        s"""
+           |select _hoodie_file_name, _hoodie_partition_path 
+           |from $tableName
+           |where created_date = date '2025-01-01'
+           |limit 1
+           |""".stripMargin).collect()
+
+      assert(fileInfoBefore.nonEmpty, "Should have files before clustering")
+      val fileNameBefore = fileInfoBefore.head.getString(0)
+      val fileGroupId = fileNameBefore.split("_")(0)
+      val partitionPath = fileInfoBefore.head.getString(1)
+
+      val historyBeforeDf = spark.sql(
+        s"""call show_file_group_history(
+           |  table => '$tableName',
+           |  fileGroupId => '$fileGroupId',
+           |  partition => '$partitionPath'
+           |)""".stripMargin)
+      historyBeforeDf.show(false)
+
+      val scheduleResult = spark.sql(s"""call run_clustering(table => '$tableName', predicate => 'created_date = date "2025-01-01"')""")
+      scheduleResult.show(false)
+
+      val commitsAfterClusteringDf = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""")
+      commitsAfterClusteringDf.show(false)
+      val commitsAfterClustering = commitsAfterClusteringDf.collect()
+
+      val historyAfterRunDf = spark.sql(
+        s"""call show_file_group_history(
+           |  table => '$tableName',
+           |  fileGroupId => '$fileGroupId',
+           |  partition => '$partitionPath'
+           |)""".stripMargin)
+      historyAfterRunDf.show(false)
+      val historyAfterRun = historyAfterRunDf.collect()
+
+      assert(historyAfterRun.nonEmpty, "Should have history entries after clustering")
+
+      val replacedEntries = historyAfterRun.filter(_.getAs[Boolean]("was_replaced") == true)
+      val replacedByEntries = commitsAfterClustering.filter(_.getAs[String]("action") == "replacecommit")
+      assert(replacedEntries.length == 2, "All these entries should be marked as replaced after clustering in this file group")
+      assert(replacedByEntries.length >= 1, "All these entries should be marked as replaced after clustering in this file group")
+    }
+  }
+
   test("Test show_file_group_history - with numeric and complex filters") {
     withTempDir { tmp =>
       val tableName = generateTableName
