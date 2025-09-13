@@ -333,8 +333,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase with Spar
     initMetaClient(tableType)
     val dataGen = new HoodieTestDataGenerator()
     val inserts = dataGen.generateInserts("001", 5)
-    val latestBatch = recordsToStrings(inserts).asScala.toSeq
-    val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch, 1))
+    val latestBatchDf = toDataset(spark, inserts)
     val insertDf = latestBatchDf.withColumn("data_partition_path", lit("partition1")).union(latestBatchDf.withColumn("data_partition_path", lit("partition2")))
     val options = Map(HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
@@ -354,8 +353,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase with Spar
     assertEquals(10, spark.read.format("hudi").load(basePath).count())
 
     val updates =  dataGen.generateUniqueUpdates("002", 3)
-    val nextBatch = recordsToStrings(updates).asScala.toSeq
-    val nextBatchDf = spark.read.json(spark.sparkContext.parallelize(nextBatch, 1))
+    val nextBatchDf = toDataset(spark, updates)
     val updateDf = nextBatchDf.withColumn("data_partition_path", lit("partition1"))
     updateDf.write.format("hudi")
       .options(options)
@@ -369,8 +367,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase with Spar
 
     if (failAndDoRollback) {
       val updatesToFail =  dataGen.generateUniqueUpdates("003", 3)
-      val batchToFail = recordsToStrings(updatesToFail).asScala.toSeq
-      val batchToFailDf = spark.read.json(spark.sparkContext.parallelize(batchToFail, 1))
+      val batchToFailDf = toDataset(spark, updatesToFail)
       val failDf = batchToFailDf.withColumn("data_partition_path", lit("partition1")).union(batchToFailDf.withColumn("data_partition_path", lit("partition3")))
       failDf.write.format("hudi")
         .options(options)

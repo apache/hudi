@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 
@@ -55,12 +56,14 @@ import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.DayTimeIntervalType;
 import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.sql.types.DecimalType;
 import org.apache.spark.sql.types.MapType;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.sql.types.YearMonthIntervalType;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.apache.spark.util.VersionUtils;
 
@@ -142,7 +145,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
 
   private ValueWriter[] getFieldWriters(StructType schema, Schema avroSchema) {
     return Arrays.stream(schema.fields()).map(field -> {
-      Schema.Field avroField = avroSchema.getField(field.name());
+      Schema.Field avroField = avroSchema == null ? null : avroSchema.getField(field.name());
       return makeWriter(avroField == null ? null : avroField.schema(), field.dataType());
     }).toArray(ValueWriter[]::new);
   }
@@ -216,8 +219,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     for (int i = 0; i < row.numFields(); i++) {
       int index = i;
       if (!row.isNullAt(i)) {
-        StructField field = schema.fields()[i];
-        consumeField(field.name(), index, () -> fieldWriters[index].write(row, index));
+        consumeField(schema.fields()[i].name(), index, () -> fieldWriters[index].write(row, index));
       }
     }
   }
@@ -232,9 +234,9 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       return (row, ordinal) -> recordConsumer.addInteger((Integer) dateRebaseFunction.apply(row.getInt(ordinal)));
     } else if (dataType == DataTypes.ShortType) {
       return (row, ordinal) -> recordConsumer.addInteger(row.getShort(ordinal));
-    } else if (dataType == DataTypes.IntegerType) {
+    } else if (dataType == DataTypes.IntegerType || dataType instanceof YearMonthIntervalType) {
       return (row, ordinal) -> recordConsumer.addInteger(row.getInt(ordinal));
-    } else if (dataType == DataTypes.LongType) {
+    } else if (dataType == DataTypes.LongType || dataType instanceof DayTimeIntervalType) {
       return (row, ordinal) -> recordConsumer.addLong(row.getLong(ordinal));
     } else if (dataType == DataTypes.TimestampType) {
       if (logicalType == null || logicalType.getName().equals(LogicalTypes.timestampMicros().getName())) {
@@ -242,7 +244,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       } else if (logicalType.getName().equals(LogicalTypes.timestampMillis().getName())) {
         return (row, ordinal) -> recordConsumer.addLong(DateTimeUtils.microsToMillis((long) timestampRebaseFunction.apply(row.getLong(ordinal))));
       } else {
-        throw new UnsupportedOperationException("Unsupported timestamp type: " + logicalType);
+        throw new UnsupportedOperationException("Unsupported Avro logical type for TimestampType: " + logicalType);
       }
     } else if (SparkAdapterSupport$.MODULE$.sparkAdapter().isTimestampNTZType(dataType)) {
       if (logicalType == null || logicalType.getName().equals(LogicalTypes.localTimestampMicros().getName())) {
@@ -250,7 +252,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       } else if (logicalType.getName().equals(LogicalTypes.localTimestampMillis().getName())) {
         return (row, ordinal) -> recordConsumer.addLong(DateTimeUtils.microsToMillis(row.getLong(ordinal)));
       } else {
-        throw new UnsupportedOperationException("Unsupported timestamp type: " + logicalType);
+        throw new UnsupportedOperationException("Unsupported Avro logical type for TimestampNTZType: " + logicalType);
       }
     } else if (dataType == DataTypes.FloatType) {
       return (row, ordinal) -> recordConsumer.addFloat(row.getFloat(ordinal));
@@ -265,6 +267,8 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     } else if (dataType instanceof DecimalType) {
       return (row, ordinal) -> {
         int precision = ((DecimalType) dataType).precision();
+        ValidationUtils.checkArgument(precision <= DecimalType.MAX_PRECISION(),
+            () -> String.format("Decimal precision %s exceeds max precision %s", precision, DecimalType.MAX_PRECISION()));
         int scale = ((DecimalType) dataType).scale();
         byte[] bytes = row.getDecimal(ordinal, precision, scale).toJavaBigDecimal().unscaledValue().toByteArray();
         int numBytes = Decimal.minBytesForPrecision()[precision];
@@ -427,9 +431,9 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     } else if (dataType == DataTypes.ShortType) {
       return Types.primitive(INT32, repetition)
           .as(LogicalTypeAnnotation.intType(16, true)).named(structField.name());
-    } else if (dataType == DataTypes.IntegerType) {
+    } else if (dataType == DataTypes.IntegerType || dataType instanceof YearMonthIntervalType) {
       return Types.primitive(INT32, repetition).named(structField.name());
-    } else if (dataType == DataTypes.LongType) {
+    } else if (dataType == DataTypes.LongType || dataType instanceof DayTimeIntervalType) {
       return Types.primitive(INT64, repetition).named(structField.name());
     } else if (dataType == DataTypes.TimestampType) {
       if (logicalType == null || logicalType.getName().equals(LogicalTypes.timestampMicros().getName())) {
