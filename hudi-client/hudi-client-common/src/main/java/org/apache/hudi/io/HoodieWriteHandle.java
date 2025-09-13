@@ -80,6 +80,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
    */
   protected final Schema writeSchema;
   protected final Schema writeSchemaWithMetaFields;
+  protected final boolean hasOperationMetaField;
   protected final HoodieRecordMerger recordMerger;
 
   protected HoodieTimer timer;
@@ -116,7 +117,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.partitionPath = partitionPath;
     this.fileId = fileId;
     this.writeSchema = AvroSchemaCache.intern(overriddenSchema.orElseGet(() -> getWriteSchema(config)));
-    this.writeSchemaWithMetaFields = AvroSchemaCache.intern(HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField()));
+    this.hasOperationMetaField = config.allowOperationMetadataField();
+    this.writeSchemaWithMetaFields = AvroSchemaCache.intern(HoodieAvroUtils.addMetadataFields(writeSchema, hasOperationMetaField));
     this.timer = HoodieTimer.start();
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.taskContextSupplier = taskContextSupplier;
