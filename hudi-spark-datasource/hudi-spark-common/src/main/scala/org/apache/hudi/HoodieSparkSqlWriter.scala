@@ -172,11 +172,6 @@ object HoodieSparkSqlWriter {
       optsWithoutSchema
     }
 
-    if (writerSchema.isPresent) {
-      // Auto set the value of "hoodie.parquet.writelegacyformat.enabled"
-      tryOverrideParquetWriteLegacyFormatProperty(opts, convertAvroSchemaToStructType(writerSchema.get))
-    }
-
     DataSourceUtils.createHoodieConfig(writerSchemaStr, basePath, tblName, opts)
   }
 }
