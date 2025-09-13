@@ -441,7 +441,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       } else {
         throw new UnsupportedOperationException("Unsupported timestamp type: " + logicalType);
       }
-    } else if (dataType == DataTypes.TimestampNTZType) {
+    } else if (SparkAdapterSupport$.MODULE$.sparkAdapter().isTimestampNTZType(dataType)) {
       if (logicalType == null || logicalType.getName().equals(LogicalTypes.localTimestampMicros().getName())) {
         return Types.primitive(INT64, repetition)
             .as(LogicalTypeAnnotation.timestampType(false, LogicalTypeAnnotation.TimeUnit.MICROS)).named(structField.name());
