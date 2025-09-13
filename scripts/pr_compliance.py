@@ -15,88 +15,14 @@
 # limitations under the License.
 #
 
-import re
-import os
-import sys
 import inspect
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #  
-#  _____ _ _   _       __     __    _ _     _       _   _                 #
-# |_   _(_) |_| | ___  \ \   / /_ _| (_) __| | __ _| |_(_) ___  _ __      #  
-#   | | | | __| |/ _ \  \ \ / / _` | | |/ _` |/ _` | __| |/ _ \| '_ \     #
-#   | | | | |_| |  __/   \ V / (_| | | | (_| | (_| | |_| | (_) | | | |    #
-#   |_| |_|\__|_|\___|    \_/ \__,_|_|_|\__,_|\__,_|\__|_|\___/|_| |_|    #
-#                                                                         # 
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #                                                                 
+import os
+import re
+import sys
 
 
-#validator for titles
-def validate_title(title: str):
-    return len(re.findall(r'(\[HUDI\-[0-9]{1,}\]|\[MINOR\])',title)) == 1
-
-#runs an individual title test
-#
-#   PARAMS
-# name: str - the name of the test
-# title: str - the title to test
-# isTrue: bool - is the title valid
-#
-#   RETURN
-# bool - True if the test passed, False if it failed
-def run_title_test(name: str, title: str, isTrue: bool):
-    if isTrue != validate_title(title):
-        print(f"{name} - FAILED")
-        return False
-    print(f"{name} - PASSED")
-    return True
-
-#tests for title validation
-#
-#   RETURN
-# bool - True if all tests passed, False if any tests fail
-def test_title():
-    test_return = True
-    #test that position doesn't matter for issue
-    test_return = run_title_test("issue at front", "[HUDI-1324] my fake pr", True) and test_return
-    test_return =  run_title_test("issue in middle", " my [HUDI-1324] fake pr", True) and test_return
-    test_return =  run_title_test("issue at end", " my fake pr [HUDI-1324]", True)  and test_return
-
-    #test position doesn't matter for minor
-    test_return = run_title_test("minor at front", "[MINOR] my fake pr", True) and test_return
-    test_return = run_title_test("minor in middle", " my [MINOR] fake pr", True) and test_return
-    test_return = run_title_test("minor at end", " my fake pr [MINOR]", True) and test_return
-
-    #test that more than 4 nums is also ok
-    test_return = run_title_test("more than 4 nums in issue", "[HUDI-12345] my fake pr", True) and test_return
-
-    #test that 1 nums is also ok
-    test_return = run_title_test("1 num in issue", "[HUDI-1] my fake pr", True) and test_return
-
-    #no nums not ok
-    test_return = run_title_test("no nums in issue", "[HUDI-] my fake pr", False) and test_return
-
-    #no brackets not ok
-    test_return = run_title_test("no brackets around issue", "HUDI-1234 my fake pr", False) and test_return
-    test_return = run_title_test("no brackets around minor", "MINOR my fake pr", False) and test_return
-    
-    #lowercase not ok
-    test_return = run_title_test("lowercase hudi", "[hudi-1234] my fake pr", False) and test_return
-    test_return = run_title_test("lowercase minor", "[minor] my fake pr", False) and test_return
-    
-    #duplicate not ok
-    test_return = run_title_test("duplicate issue", "[HUDI-1324][HUDI-1324] my fake pr", False) and test_return
-    test_return = run_title_test("duplicate minor", "[MINOR] my fake pr [MINOR]", False) and test_return
-    
-    #hudi and minor not ok
-    test_return = run_title_test("issue and minor", "[HUDI-1324] my [MINOR]fake pr", False) and test_return
-    print("*****")
-    if test_return:
-        print("All title tests passed")
-    else:
-        print("Some title tests failed")
-    print("*****")
-
-    return test_return
-
+# PR titles are now validated by the separate GitHub Action workflow
+# This script only validates PR body content and GitHub issue links for fix PRs
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #  ____            _        __     __    _ _     _       _   _                #
@@ -355,7 +281,7 @@ class ValidateBody:
             self.section = ParseSection(data=data, sections=self.sections, debug=self.debug)
 
     #Returns true if the body complies with the validation rules else false
-    def validate(self):
+    def validate(self, pr_title=None):
         #instantiate self.section since it starts null
         self.nextSection()
 
@@ -372,6 +298,12 @@ class ValidateBody:
             if o == Outcomes.ERROR:
                 return False
             elif o == Outcomes.SUCCESS:
+                # Check for GitHub issue link requirement for fix PRs
+                if pr_title and (pr_title.startswith("fix:") or pr_title.startswith("fix(") in pr_title):
+                    if not self._has_github_issue_link():
+                        self.section.error("", "",
+                                           "Fix PRs must include a GitHub issue link (e.g., fixes #1234, resolves #1234, or direct GitHub issue URL)")
+                        return False
                 return True
             elif o == Outcomes.NEXTSECTION:
                 self.nextSection()
@@ -385,33 +317,57 @@ class ValidateBody:
             return False
         self.section.error("","", "Please make sure you have filled out the template correctly. You can find a blank template in /.github/PULL_REQUEST_TEMPLATE.md")
         return False
+
+    # Check if body contains GitHub issue link
+    def _has_github_issue_link(self):
+        # Look for GitHub issue patterns:
+        # - fixes #123, resolves #123, closes #123
+        # - fixes https://github.com/apache/hudi/issues/123
+        # - resolves https://github.com/apache/hudi/issues/123
+        # - closes https://github.com/apache/hudi/issues/123
+        # - https://github.com/apache/hudi/issues/123
+        # - fix for #123, etc.
+        issue_patterns = [
+            r'(?i)(fix(?:es|ed)?|resolv(?:es?|ed?)|clos(?:es?|ed?))\s+#\d+',  # fixes #123
+            r'(?i)(fix(?:es|ed)?|resolv(?:es?|ed?)|clos(?:es?|ed?))\s+https://github\.com/apache/hudi/issues/\d+',
+            # fixes https://github.com/apache/hudi/issues/123
+            r'https://github\.com/apache/hudi/issues/\d+',  # https://github.com/apache/hudi/issues/123
+            r'(?i)fix\s+for\s+#\d+'  # fix for #123
+        ]
+
+        for pattern in issue_patterns:
+            if re.search(pattern, self.body):
+                return True
+        return False
         
 #Generate the validator for the current template.
 #needs to be manually updated
 def make_default_validator(body, debug=False):
+    problemStatement = ParseSectionData("PROBLEM_STATEMENT",
+                                        "### Problem Statement",
+                                        {"<!-- Describe the issue or motivation behind this change. What problem does this solve? -->"})
     changelogs = ParseSectionData("CHANGE_LOGS",
         "### Change Logs",
-        {"_Describe context and summary for this change. Highlight if any code was copied._"})
+        {"<!-- Describe context and summary for this change. Highlight if any code was copied. -->"})
     impact = ParseSectionData("IMPACT",
         "### Impact",
-        {"_Describe any public API or user-facing feature change or any performance impact._"})
+        {"<!-- Describe any public API or user-facing feature change or any performance impact. -->"})
     risklevel = RiskLevelData("RISK_LEVEL",
-        "### Risk level",
-        {"_If medium or high, explain what verification was done to mitigate the risks._"})
+        "### Risk Level",
+        {"<!-- Write none, low, medium or high. If medium or high, explain what verification was done to mitigate the risks. -->"})
     docsUpdate = ParseSectionData("DOCUMENTATION_UPDATE",
         "### Documentation Update",
-        {"_Describe any necessary documentation update if there is any new feature, config, or user-facing change_",
+        {"<!-- Describe any necessary documentation update if there is any new feature, config, or user-facing change. If not, put \"none\".",
         "",
-        "- _The config description must be updated if new configs are added or the default value of the configs are changed. If not, put \"none\"._",
-        "- _Any new feature or user-facing change requires updating the Hudi website. Please create a Jira ticket, attach the",
-        "  ticket number here and follow the [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make",
-        "  changes to the website._"})
+        "- The config description must be updated if new configs are added or the default value of the configs are changed.",
+        "- Any new feature or user-facing change requires updating the Hudi website. Please follow the",
+        "  [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make changes to the website. -->"})
     checklist = ParseSectionData("CHECKLIST",
         "### Contributor's checklist",
         {})
-    parseSections = ParseSections([changelogs, impact, risklevel, docsUpdate, checklist])
+    parseSections = ParseSections([problemStatement, changelogs, impact, risklevel, docsUpdate, checklist])
 
-    return ValidateBody(body, "CHANGE_LOGS", parseSections, debug)
+    return ValidateBody(body, "PROBLEM_STATEMENT", parseSections, debug)
 
 
 #takes a list of strings and returns a string of those lines separated by \n
@@ -424,9 +380,10 @@ def joinLines(lines):
 # body: str - the body to parse
 # isTrue: bool - True if the body complies with our validation rules
 # debug: bool - True if we want to print debug information
-def run_test(name: str, body: str, isTrue: bool, debug: bool):
+# title: str - the PR title (optional, for fix PR validation)
+def run_test(name: str, body: str, isTrue: bool, debug: bool, title: str = None):
     validator = make_default_validator(body, debug)
-    if isTrue != validator.validate():
+    if isTrue != validator.validate(title):
         print(f"{name} - FAILED")
         return False
     print(f"{name} - PASSED")
@@ -444,10 +401,20 @@ def build_body(sections):
 def test_body():
     DEBUG_MESSAGES = False
     #Create sections that we will combine to create bodies to test validation on
+    template_problem_statement = [
+        "### Problem Statement",
+        "",
+        "<!-- Describe the issue or motivation behind this change. What problem does this solve? -->",
+        ""
+    ]
+
+    good_problem_statement = template_problem_statement.copy()
+    good_problem_statement[1] = "problem statement description"
+
     template_changelogs = [
          "### Change Logs",
         "",
-        "_Describe context and summary for this change. Highlight if any code was copied._",
+        "<!-- Describe context and summary for this change. Highlight if any code was copied. -->",
         ""
     ]
 
@@ -457,7 +424,7 @@ def test_body():
     template_impact = [
         "### Impact",
         "",
-        "_Describe any public API or user-facing feature change or any performance impact._",
+        "<!-- Describe any public API or user-facing feature change or any performance impact. -->",
         ""
     ]
 
@@ -465,9 +432,9 @@ def test_body():
     good_impact[1] = "impact description"
 
     template_risklevel = [
-        "### Risk level (write none, low medium or high below)",
+        "### Risk Level",
         "",
-        "_If medium or high, explain what verification was done to mitigate the risks._",
+        "<!-- Write none, low, medium or high. If medium or high, explain what verification was done to mitigate the risks. -->",
         ""
     ]
 
@@ -477,12 +444,11 @@ def test_body():
     template_docs_update = [
         "### Documentation Update",
         "",
-        "_Describe any necessary documentation update if there is any new feature, config, or user-facing change_",
+        "<!-- Describe any necessary documentation update if there is any new feature, config, or user-facing change. If not, put \"none\".",
         "",
-        "- _The config description must be updated if new configs are added or the default value of the configs are changed. If not, put \"none\"._",
-        "- _Any new feature or user-facing change requires updating the Hudi website. Please create a Jira ticket, attach the",
-        "  ticket number here and follow the [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make",
-        "  changes to the website._",
+        "- The config description must be updated if new configs are added or the default value of the configs are changed.",
+        "- Any new feature or user-facing change requires updating the Hudi website. Please follow the",
+        "  [instruction](https://hudi.apache.org/contribute/developer-setup#website) to make changes to the website. -->",
         ""
     ]
 
@@ -493,16 +459,18 @@ def test_body():
         "### Contributor's checklist",
         "",
         "- [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)",
-        "- [ ] Change Logs and Impact were stated clearly",
+        "- [ ] Problem Statement, Change Logs and Impact are written clearly",
         "- [ ] Adequate tests were added if applicable",
         "- [ ] CI passed"
     ]
 
-    #list of sections that when combined form a valid body
-    good_sections = [good_changelogs, good_impact, good_risklevel, good_docs_update, template_checklist]
+    # list of sections that when combined from a valid body
+    good_sections = [good_problem_statement, good_changelogs, good_impact, good_risklevel, good_docs_update,
+                     template_checklist]
 
-    #list of sections that when combined form the template
-    template_sections = [template_changelogs, template_impact, template_risklevel, template_docs_update, template_checklist]
+    # list of sections that when combined from the template
+    template_sections = [template_problem_statement, template_changelogs, template_impact, template_risklevel,
+                         template_docs_update, template_checklist]
 
     tests_passed = True
     #Test section not filled out
@@ -545,6 +513,41 @@ def test_body():
     #Test good body:
     tests_passed = run_test("good documentation", build_body(good_sections), True, DEBUG_MESSAGES) and tests_passed
 
+    # Test fix PR issue link requirement
+    fix_changelogs_with_issue = good_changelogs.copy()
+    fix_changelogs_with_issue[1] = "Fixed bug. Fixes #123"
+    fix_sections_with_issue = [good_problem_statement, fix_changelogs_with_issue, good_impact, good_risklevel,
+                               good_docs_update,
+                               template_checklist]
+    tests_passed = run_test("fix PR with issue link", build_body(fix_sections_with_issue), True,
+                            DEBUG_MESSAGES,
+                            "fix: fix bug") and tests_passed
+    tests_passed = run_test("fix PR with scope and issue link", build_body(fix_sections_with_issue), True,
+                            DEBUG_MESSAGES,
+                            "fix(index): fix bug") and tests_passed
+
+    fix_changelogs_with_github_url = good_changelogs.copy()
+    fix_changelogs_with_github_url[1] = "Fixed bug. See https://github.com/apache/hudi/issues/123"
+    fix_sections_with_github_url = [good_problem_statement, fix_changelogs_with_github_url, good_impact, good_risklevel,
+                                    good_docs_update,
+                                    template_checklist]
+    tests_passed = run_test("fix PR with GitHub URL", build_body(fix_sections_with_github_url), True,
+                            DEBUG_MESSAGES,
+                            "fix: fix bug") and tests_passed
+
+    fix_changelogs_without_issue = good_changelogs.copy()
+    fix_changelogs_without_issue[1] = "Fixed bug without issue reference"
+    fix_sections_without_issue = [good_problem_statement, fix_changelogs_without_issue, good_impact, good_risklevel,
+                                  good_docs_update,
+                                  template_checklist]
+    tests_passed = run_test("fix PR without issue link", build_body(fix_sections_without_issue), False,
+                            DEBUG_MESSAGES,
+                            "fix: fix bug") and tests_passed
+
+    # Non-fix PRs should not require issue links
+    tests_passed = run_test("feat PR without issue link", build_body(good_sections), True, DEBUG_MESSAGES,
+                            "feat: new feature") and tests_passed
+
     print("*****")
     if tests_passed:
         print("All body tests passed")
@@ -555,11 +558,61 @@ def test_body():
     return tests_passed
 
 
+def test_has_github_issue_link():
+    """Test the _has_github_issue_link method"""
+    print("Running _has_github_issue_link tests...")
+    tests_passed = True
+
+    # Helper function to test a specific body text
+    def run_issue_link_test(test_name, body, expected_result):
+        validator = make_default_validator(body, debug=False)
+        actual_result = validator._has_github_issue_link()
+        if actual_result == expected_result:
+            print(f"✓ {test_name}: PASS")
+            return True
+        else:
+            print(f"✗ {test_name}: FAIL - Expected {expected_result}, got {actual_result}")
+            return False
+
+    # Test positive cases
+    tests_passed = run_issue_link_test("fixes #123", "fixes #123", True) and tests_passed
+    tests_passed = run_issue_link_test("Fixes #456", "Fixes #456", True) and tests_passed
+    tests_passed = run_issue_link_test("resolves #789", "resolves #789", True) and tests_passed
+    tests_passed = run_issue_link_test("closes #101", "closes #101", True) and tests_passed
+    tests_passed = run_issue_link_test("fixes #123 link", "fixes https://github.com/apache/hudi/issues/123",
+                                       True) and tests_passed
+    tests_passed = run_issue_link_test("resolves #789 link", "resolves https://github.com/apache/hudi/issues/789",
+                                       True) and tests_passed
+    tests_passed = run_issue_link_test("closes #101 link", "closes https://github.com/apache/hudi/issues/101",
+                                       True) and tests_passed
+    tests_passed = run_issue_link_test("fix for #202", "fix for #202", True) and tests_passed
+    tests_passed = run_issue_link_test("GitHub URL", "https://github.com/apache/hudi/issues/123", True) and tests_passed
+    tests_passed = run_issue_link_test("fixes with URL", "fixes https://github.com/apache/hudi/issues/456",
+                                       True) and tests_passed
+
+    # Test negative cases
+    tests_passed = run_issue_link_test("no issue link", "This PR adds a feature", False) and tests_passed
+    tests_passed = run_issue_link_test("fixes without #", "fixes issue 123", False) and tests_passed
+    tests_passed = run_issue_link_test("wrong repo URL", "https://github.com/other/repo/issues/123",
+                                       False) and tests_passed
+    tests_passed = run_issue_link_test("pull request URL", "https://github.com/apache/hudi/pull/123",
+                                       False) and tests_passed
+
+    print("*****")
+    if tests_passed:
+        print("All _has_github_issue_link tests passed")
+    else:
+        print("Some _has_github_issue_link tests failed")
+    print("*****")
+
+    return tests_passed
+
+
 if __name__ == '__main__':
     if len(sys.argv) > 1:
-        title_tests = test_title()
         body_tests = test_body()
-        if title_tests and body_tests:
+        issue_link_tests = test_has_github_issue_link()
+        if body_tests and issue_link_tests:
             exit(0)
         else:
             exit(-1)
@@ -572,15 +625,11 @@ if __name__ == '__main__':
         print("no title")
         exit(-1)
 
-    if not validate_title(title):
-        print("invalid title")
-        exit(-1)
-
     if body is None:
         print("no pr body")
         exit(-1)
 
-    validator = make_default_validator(body,True)
-    if not validator.validate():
+    validator = make_default_validator(body, True)
+    if not validator.validate(title):
         exit(-1)
     exit(0)
