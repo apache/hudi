@@ -193,6 +193,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     writeStats.stream().map(writeStat -> new StoragePath(metaClient.getBasePath(), writeStat.getPath())).forEach(writtenPath -> {
       MessageType schema = ParquetUtils.readMetadata(storage, writtenPath)
           .getFileMetaData().getSchema();
+      // validate decimal field
       int decimalFieldIndex = schema.getFieldIndex("decimal_field");
       Type decimalType = schema.getFields().get(decimalFieldIndex);
       assertEquals("DECIMAL", decimalType.getOriginalType().toString());
@@ -200,13 +201,30 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
       LogicalTypeAnnotation.DecimalLogicalTypeAnnotation decimalLogicalTypeAnnotation = ((LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) decimalType.getLogicalTypeAnnotation());
       assertEquals(10, decimalLogicalTypeAnnotation.getPrecision());
       assertEquals(6, decimalLogicalTypeAnnotation.getScale());
+      // validate array field
       int arrayFieldIndex = schema.getFieldIndex("array_field");
       Type arrayType = schema.getFields().get(arrayFieldIndex);
       assertEquals("list", arrayType.asGroupType().getFields().get(0).getName());
+      // validate timestamp field scale
       int timeMillisField = schema.getFieldIndex("timestamp_millis_field");
       assertEquals(LogicalTypeAnnotation.TimeUnit.MILLIS, ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) schema.getFields().get(timeMillisField).getLogicalTypeAnnotation()).getUnit());
       int timeMicrosField = schema.getFieldIndex("timestamp_micros_nullable_field");
       assertEquals(LogicalTypeAnnotation.TimeUnit.MICROS, ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) schema.getFields().get(timeMicrosField).getLogicalTypeAnnotation()).getUnit());
+      // check nested timestamp field scale in record, array and map
+      Type nestedFieldType = schema.getFields().get(schema.getFieldIndex("nested_record"));
+      int nestedTimeMillisField = nestedFieldType.asGroupType().getFieldIndex("nested_timestamp_millis_field");
+      assertEquals(LogicalTypeAnnotation.TimeUnit.MILLIS,
+          ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) nestedFieldType.asGroupType().getFields().get(nestedTimeMillisField).getLogicalTypeAnnotation()).getUnit());
+      Type arrayFieldType = schema.getFields().get(schema.getFieldIndex("array_field"));
+      Type arrayElement = arrayFieldType.asGroupType().getFields().get(0).asGroupType().getFields().get(0);
+      int arrayElementTimeMillisField = arrayElement.asGroupType().getFieldIndex("nested_timestamp_millis_field");
+      assertEquals(LogicalTypeAnnotation.TimeUnit.MILLIS,
+          ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) arrayElement.asGroupType().getFields().get(arrayElementTimeMillisField).getLogicalTypeAnnotation()).getUnit());
+      Type mapValueType = schema.getFields().get(schema.getFieldIndex("nullable_map_field")).asGroupType().getFields().get(0)
+          .asGroupType().getFields().get(1);
+      int mapValueTimeMillisField = mapValueType.asGroupType().getFieldIndex("nested_timestamp_millis_field");
+      assertEquals(LogicalTypeAnnotation.TimeUnit.MILLIS,
+          ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) mapValueType.asGroupType().getFields().get(mapValueTimeMillisField).getLogicalTypeAnnotation()).getUnit());
     });
   }
 
@@ -266,6 +284,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
           GenericRecord nestedRecord = new GenericData.Record(nestedSchema);
           nestedRecord.put("nested_int", random.nextInt());
           nestedRecord.put("nested_string", "nested_" + instant);
+          nestedRecord.put("nested_timestamp_millis_field", ts);
           record.put("nested_record", nestedRecord);
           record.put("array_field", Collections.singletonList(nestedRecord));
           record.put("nullable_map_field", Collections.singletonMap("key_" + instant, nestedRecord));

@@ -99,6 +99,14 @@
             {
               "name": "nested_string",
               "type": "string"
+            },
+            {
+              "name": "nested_timestamp_millis_field",
+              "type":
+              {
+                "type": "long",
+                "logicalType": "timestamp-millis"
+              }
             }
           ]
         }

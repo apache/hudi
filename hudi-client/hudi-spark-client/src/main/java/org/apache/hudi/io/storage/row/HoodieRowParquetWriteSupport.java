@@ -38,6 +38,7 @@ import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.io.api.RecordConsumer;
+import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.Type;
@@ -111,11 +112,11 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   private final Enumeration.Value datetimeRebaseMode = (Enumeration.Value) SparkAdapterSupport$.MODULE$.sparkAdapter().getDateTimeRebaseMode();
   private final Function1<Object, Object> dateRebaseFunction = DataSourceUtils.createDateRebaseFuncInWrite(datetimeRebaseMode, "Parquet");
   private final Function1<Object, Object> timestampRebaseFunction = DataSourceUtils.createTimestampRebaseFuncInWrite(datetimeRebaseMode, "Parquet");
-  private RecordConsumer recordConsumer;
   private final boolean writeLegacyListFormat;
   private final ValueWriter[] rootFieldWriters;
   private final Schema avroSchema;
   private final StructType structType;
+  private RecordConsumer recordConsumer;
 
   public HoodieRowParquetWriteSupport(Configuration conf, StructType structType, Option<BloomFilter> bloomFilterOpt, HoodieConfig config) {
     Configuration hadoopConf = new Configuration(conf);
@@ -212,7 +213,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   }
 
   private void writeFields(InternalRow row, StructType schema, ValueWriter[] fieldWriters) {
-    for (int i = 0; i < fieldWriters.length; i++) {
+    for (int i = 0; i < row.numFields(); i++) {
       int index = i;
       if (!row.isNullAt(i)) {
         StructField field = schema.fields()[i];
@@ -400,14 +401,17 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     return Types.buildMessage()
         .addFields(Arrays.stream(structType.fields()).map(field -> {
           Schema.Field avroField = avroSchema.getField(field.name());
-          Type.Repetition repetition = field.nullable() ? OPTIONAL : REQUIRED;
-          Type type = convertField(avroField == null ? null : avroField.schema(), field, repetition);
-          if (ParquetUtils.hasFieldId(field)) {
-            return type.withId(ParquetUtils.getFieldId(field));
-          }
-          return type;
+          return convertField(avroField == null ? null : avroField.schema(), field);
         }).toArray(Type[]::new))
         .named("spark_schema");
+  }
+
+  private Type convertField(Schema avroFieldSchema, StructField structField) {
+    Type type = convertField(avroFieldSchema, structField, structField.nullable() ? OPTIONAL : REQUIRED);
+    if (ParquetUtils.hasFieldId(structField)) {
+      return type.withId(ParquetUtils.getFieldId(structField));
+    }
+    return type;
   }
 
   private Type convertField(Schema avroFieldSchema, StructField structField, Type.Repetition repetition) {
@@ -473,8 +477,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
             .buildGroup(repetition).as(LogicalTypeAnnotation.listType())
             .addField(
                 Types.repeatedGroup()
-                    .addField(convertField(avroElementSchema, new StructField("element", elementType, arrayType.containsNull(), Metadata.empty()),
-                        arrayType.containsNull() ? OPTIONAL : REQUIRED))
+                    .addField(convertField(avroElementSchema, new StructField("element", elementType, arrayType.containsNull(), Metadata.empty())))
                     .named("list"))
             .named(structField.name());
       } else if ((arrayType.containsNull())) {
@@ -483,7 +486,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
             .addField(Types
                 .buildGroup(REPEATED)
                 // "array" is the name chosen by parquet-hive (1.7.0 and prior version)
-                .addField(convertField(avroElementSchema, new StructField("array", elementType, true, Metadata.empty()), OPTIONAL))
+                .addField(convertField(avroElementSchema, new StructField("array", elementType, true, Metadata.empty())))
                 .named("bag"))
             .named(structField.name());
       } else {
@@ -501,11 +504,17 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
           .addField(
               Types
                   .repeatedGroup()
-                  .addField(convertField(MAP_KEY_SCHEMA, new StructField(MAP_KEY_NAME, DataTypes.StringType, false, Metadata.empty()), REQUIRED))
-                  .addField(convertField(avroValueSchema, new StructField(MAP_VALUE_NAME, mapType.valueType(), mapType.valueContainsNull(), Metadata.empty()),
-                      mapType.valueContainsNull() ? OPTIONAL : REQUIRED))
+                  .addField(convertField(MAP_KEY_SCHEMA, new StructField(MAP_KEY_NAME, DataTypes.StringType, false, Metadata.empty())))
+                  .addField(convertField(avroValueSchema, new StructField(MAP_VALUE_NAME, mapType.valueType(), mapType.valueContainsNull(), Metadata.empty())))
                   .named(MAP_REPEATED_NAME))
           .named(structField.name());
+    } else if (dataType instanceof StructType) {
+      Types.GroupBuilder<GroupType> groupBuilder = Types.buildGroup(repetition);
+      Arrays.stream(((StructType) dataType).fields()).forEach(field -> {
+        Schema.Field avroField = resolvedSchema == null ? null : resolvedSchema.getField(field.name());
+        groupBuilder.addField(convertField(avroField == null ? null : avroField.schema(), field));
+      });
+      return groupBuilder.named(structField.name());
     } else {
       throw new UnsupportedOperationException("Unsupported type: " + dataType);
     }
