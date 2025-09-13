@@ -231,14 +231,8 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
     }
 
     val allEntries = (activeEntries.asScala ++ archivedEntries.asScala).toList
-    val sortedEntries = allEntries
+    val finalEntries = allEntries
       .sortBy(_.instantTime)(Ordering[String].reverse)
-
-    val finalEntries = if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
-      sortedEntries
-    } else {
-      sortedEntries.take(limit)
-    }
 
     val deletionInfo = ShowFileHistoryProcedureUtils.checkForDeletions(metaClient, fileGroupId, partition, showArchived)
 

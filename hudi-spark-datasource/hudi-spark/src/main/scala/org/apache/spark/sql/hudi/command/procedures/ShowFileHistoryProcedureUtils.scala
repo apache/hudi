@@ -130,14 +130,22 @@ object ShowFileHistoryProcedureUtils extends Logging {
                            endTime: String): Unit = {
 
     val writeTimeline = timeline.getWriteTimeline
-    val instants = writeTimeline.getInstants.asScala.toSeq
-      .filter { instant =>
+    val allInstants = writeTimeline.getInstants.asScala.toSeq
+      .sortWith((a, b) => a.requestedTime() > b.requestedTime())
+
+    val filteredInstants = if (startTime.nonEmpty && endTime.nonEmpty) {
+      allInstants.filter { instant =>
         val instantTime = instant.requestedTime()
-        val withinStartTime = if (startTime.nonEmpty) instantTime >= startTime else true
-        val withinEndTime = if (endTime.nonEmpty) instantTime <= endTime else true
-        withinStartTime && withinEndTime
+        instantTime >= startTime && instantTime <= endTime
       }
-    val filteredInstants = instants.sortWith((a, b) => a.requestedTime() > b.requestedTime())
+    } else if (startTime.nonEmpty) {
+      allInstants.filter { instant =>
+        val instantTime = instant.requestedTime()
+        instantTime >= startTime
+      }
+    } else {
+      allInstants
+    }
 
     if (startTime.nonEmpty && endTime.nonEmpty) {
       for (instant <- filteredInstants) {

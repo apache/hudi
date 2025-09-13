@@ -133,8 +133,10 @@ object HoodieProcedureUtils {
   }
 
   def normalizeTimeFormat(timeInput: String, isEndTime: Boolean = false): String = {
-    if (timeInput.isEmpty) timeInput
-    if (timeInput.matches("^\\d{17}$")) {
+    if (timeInput.isEmpty) {
+      timeInput
+    }
+    else if (timeInput.matches("^\\d{17}$")) {
       timeInput
     } else if (timeInput.matches("^\\d{14}$")) {
       timeInput + "000"
