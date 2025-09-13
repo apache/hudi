@@ -41,7 +41,6 @@ import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.io.api.RecordConsumer;
 import org.apache.parquet.schema.MessageType;
-import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.SpecializedGetters;
 import org.apache.spark.sql.catalyst.util.ArrayData;
@@ -61,10 +60,10 @@ import org.apache.spark.sql.types.TimestampNTZType;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.apache.spark.util.VersionUtils;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.IntStream;
 
 import scala.Enumeration;
 import scala.Function1;
@@ -74,6 +73,7 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_FIELD_ID
 import static org.apache.hudi.config.HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD;
 import static org.apache.hudi.config.HoodieWriteConfig.AVRO_SCHEMA_STRING;
 import static org.apache.hudi.config.HoodieWriteConfig.INTERNAL_SCHEMA_STRING;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE;
 
 /**
  * Hoodie Write Support for directly writing Row to Parquet and adding the Hudi bloom index to the file metadata.
@@ -102,7 +102,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   private final ValueWriter[] rootFieldWriters;
   private final Schema avroSchema;
 
-  public HoodieRowParquetWriteSupport(Configuration conf, StructType schema, Option<BloomFilter> bloomFilterOpt, HoodieConfig config) {
+  public HoodieRowParquetWriteSupport(Configuration conf, StructType structType, Option<BloomFilter> bloomFilterOpt, HoodieConfig config) {
     Configuration hadoopConf = new Configuration(conf);
     String writeLegacyFormatEnabled = config.getStringOrDefault(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED, "false");
     hadoopConf.set("spark.sql.parquet.writeLegacyFormat", writeLegacyFormatEnabled);
@@ -112,14 +112,15 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
         || Boolean.parseBoolean(config.getStringOrDefault(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false"));
     this.avroSchema = SerDeHelper.fromJson(config.getString(INTERNAL_SCHEMA_STRING)).map(internalSchema -> AvroInternalSchemaConverter.convert(internalSchema, "spark_schema"))
         .orElseGet(() -> {
-          Schema parsedSchema = new Schema.Parser().parse(config.getString(AVRO_SCHEMA_STRING));
+          String schemaString = Option.ofNullable(config.getString(WRITE_SCHEMA_OVERRIDE)).orElseGet(() -> config.getString(AVRO_SCHEMA_STRING));
+          Schema parsedSchema = new Schema.Parser().parse(schemaString);
           if (config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)) {
             return HoodieAvroUtils.addMetadataFields(parsedSchema, config.getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD));
           }
           return parsedSchema;
         });
-    ParquetWriteSupport.setSchema(HoodieInternalRowUtils.getCachedSchema(avroSchema), hadoopConf);
-    this.rootFieldWriters = getFieldWriters(schema, avroSchema);
+    ParquetWriteSupport.setSchema(structType, hadoopConf);
+    this.rootFieldWriters = getFieldWriters(structType, avroSchema);
     this.hadoopConf = hadoopConf;
     this.bloomFilterWriteSupportOpt = bloomFilterOpt.map(HoodieBloomFilterRowWriteSupport::new);
   }
@@ -129,8 +130,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     for (int i = 0; i < schema.fields().length; i++) {
       fieldNameToIndex.put(schema.fields()[i].name(), i);
     }
-    return IntStream.range(0, avroSchema.getFields().size()).mapToObj(i -> {
-      Schema.Field field = avroSchema.getFields().get(i);
+    return avroSchema.getFields().stream().map(field -> {
       Integer structIndex = fieldNameToIndex.get(field.name());
       return makeWriter(field.schema(), schema.fields()[structIndex].dataType());
     }).toArray(ValueWriter[]::new);
@@ -253,16 +253,24 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
           return (row, ordinal) -> {
             int precision = ((LogicalTypes.Decimal) logicalType).getPrecision();
             int scale = ((LogicalTypes.Decimal) logicalType).getScale();
-            long unscaled = row.getDecimal(ordinal, precision, scale).toUnscaledLong();
-            int i = 0;
+            byte[] bytes = row.getDecimal(ordinal, precision, scale).toJavaBigDecimal().unscaledValue().toByteArray();
             int numBytes = Decimal.minBytesForPrecision()[precision];
-            int shift = 8 * (numBytes - 1);
-            while (i < numBytes) {
-              decimalBuffer[i] = (byte) ((unscaled >> shift) & 0xFF);
-              i += 1;
-              shift -= 8;
+            byte[] fixedLengthBytes;
+            if (bytes.length == numBytes) {
+              // If the length of the underlying byte array of the unscaled `BigInteger` happens to be
+              // `numBytes`, just reuse it, so that we don't bother copying it to `decimalBuffer`.
+              fixedLengthBytes = bytes;
+            } else {
+              // Otherwise, the length must be less than `numBytes`.  In this case we copy contents of
+              // the underlying bytes with padding sign bytes to `decimalBuffer` to form the result
+              // fixed-length byte array.
+              byte signByte = (bytes[0] < 0) ? (byte) -1 : (byte) 0;
+              Arrays.fill(decimalBuffer, 0, numBytes - bytes.length, signByte);
+              System.arraycopy(bytes, 0, decimalBuffer, numBytes - bytes.length, bytes.length);
+              fixedLengthBytes = decimalBuffer;
             }
-            recordConsumer.addBinary(Binary.fromReusedByteArray(decimalBuffer, 0, numBytes));
+
+            recordConsumer.addBinary(Binary.fromReusedByteArray(fixedLengthBytes, 0, numBytes));
           };
         }
         return (row, ordinal) -> recordConsumer.addBinary(
@@ -293,9 +301,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
                 for (int i = 0; i < mapData.numElements(); i++) {
                   int index = i;
                   consumeGroup(() -> {
-                    if (!keyArray.isNullAt(index)) {
-                      consumeField(MAP_KEY_NAME, 0, () -> keyWriter.write(keyArray, index));
-                    }
+                    consumeField(MAP_KEY_NAME, 0, () -> keyWriter.write(keyArray, index));
                     if (!valueArray.isNullAt(index)) {
                       consumeField(MAP_VALUE_NAME, 1, () -> valueWriter.write(valueArray, index));
                     }
