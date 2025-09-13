@@ -67,5 +67,5 @@ jobs:
             bot
             ignore-semantic-pull-request
           validateSingleCommit: false
-          headerPattern: '^(\w+)(?:\(([^)]*)\))?!?: (.+)$'
+          headerPattern: '^(\w+)(?:\(([^)]+)\))?!?: (.+)$'
           headerPatternCorrespondence: type,scope,subject
