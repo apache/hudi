@@ -35,7 +35,7 @@ import org.apache.spark.sql.execution.{QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.storage.StorageLevel
 
@@ -108,4 +108,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   }
 
   def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
+
+  // Older Spark 3.x versions do not have TimestampNTZType
+  override def isTimestampNTZType(dataType: DataType): Boolean = false
 }
