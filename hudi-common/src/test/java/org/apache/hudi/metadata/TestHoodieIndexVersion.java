@@ -49,11 +49,11 @@ public class TestHoodieIndexVersion {
         Arguments.of("RECORD_INDEX", HoodieTableVersion.EIGHT, "record_index", HoodieIndexVersion.V1),
         Arguments.of("RECORD_INDEX", HoodieTableVersion.NINE, "record_index", HoodieIndexVersion.V1),
         Arguments.of("COLUMN_STATS", HoodieTableVersion.EIGHT, "column_stats", HoodieIndexVersion.V1),
-        Arguments.of("COLUMN_STATS", HoodieTableVersion.NINE, "column_stats", HoodieIndexVersion.V1),
+        Arguments.of("COLUMN_STATS", HoodieTableVersion.NINE, "column_stats", HoodieIndexVersion.V2),
         Arguments.of("BLOOM_FILTERS", HoodieTableVersion.EIGHT, "bloom_filters", HoodieIndexVersion.V1),
         Arguments.of("BLOOM_FILTERS", HoodieTableVersion.NINE, "bloom_filters", HoodieIndexVersion.V1),
         Arguments.of("BLOOM_FILTERS", HoodieTableVersion.EIGHT, "expr_index_idx1", HoodieIndexVersion.V1),
-        Arguments.of("BLOOM_FILTERS", HoodieTableVersion.NINE, "expr_index_idx1", HoodieIndexVersion.V1),
+        Arguments.of("BLOOM_FILTERS", HoodieTableVersion.NINE, "expr_index_idx1", HoodieIndexVersion.V2),
         Arguments.of("BLOOM_FILTERS", HoodieTableVersion.EIGHT, "secondary_index_idx1", HoodieIndexVersion.V1),
         Arguments.of("BLOOM_FILTERS", HoodieTableVersion.NINE, "secondary_index_idx1", HoodieIndexVersion.V2),
         Arguments.of("FILES", HoodieTableVersion.EIGHT, "files", HoodieIndexVersion.V1),
@@ -61,7 +61,7 @@ public class TestHoodieIndexVersion {
         Arguments.of("EXPRESSION INDEX", HoodieTableVersion.EIGHT, "files", HoodieIndexVersion.V1),
         Arguments.of("EXPRESSION INDEX", HoodieTableVersion.NINE, "files", HoodieIndexVersion.V1),
         Arguments.of("PARTITION_STATS", HoodieTableVersion.EIGHT, "partition_stats", HoodieIndexVersion.V1),
-        Arguments.of("PARTITION_STATS", HoodieTableVersion.NINE, "partition_stats", HoodieIndexVersion.V1)
+        Arguments.of("PARTITION_STATS", HoodieTableVersion.NINE, "partition_stats", HoodieIndexVersion.V2)
     );
   }
 

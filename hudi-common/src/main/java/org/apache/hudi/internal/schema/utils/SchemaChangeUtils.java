@@ -72,36 +72,57 @@ public class SchemaChangeUtils {
     switch (src.typeId()) {
       case INT:
         return dsr == Types.LongType.get() || dsr == Types.FloatType.get()
-            || dsr == Types.DoubleType.get() || dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL;
+            || dsr == Types.DoubleType.get() || dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL || dsr.typeId() == Type.TypeID.DECIMAL_FIXED;
       case LONG:
-        return dsr == Types.FloatType.get() || dsr == Types.DoubleType.get() || dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL;
+        return dsr == Types.FloatType.get() || dsr == Types.DoubleType.get() || dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL || dsr.typeId() == Type.TypeID.DECIMAL_FIXED;
       case FLOAT:
-        return dsr == Types.DoubleType.get() || dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL;
+        return dsr == Types.DoubleType.get() || dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL || dsr.typeId() == Type.TypeID.DECIMAL_FIXED;
       case DOUBLE:
-        return dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL;
+        return dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL || dsr.typeId() == Type.TypeID.DECIMAL_FIXED;
       case DATE:
       case BINARY:
         return dsr == Types.StringType.get();
+      case DECIMAL_BYTES:
+        return isDecimalBytesUpdateAllowInternal(src, dsr);
       case DECIMAL:
-        if (dsr.typeId() == Type.TypeID.DECIMAL) {
-          Types.DecimalType decimalSrc = (Types.DecimalType)src;
-          Types.DecimalType decimalDsr = (Types.DecimalType)dsr;
-          if (decimalDsr.isWiderThan(decimalSrc)) {
-            return true;
-          }
-          if (decimalDsr.precision() >= decimalSrc.precision() && decimalDsr.scale() == decimalSrc.scale()) {
-            return true;
-          }
-        } else if (dsr.typeId() == Type.TypeID.STRING) {
-          return true;
-        }
-        break;
+      case DECIMAL_FIXED:
+        return isDecimalFixedUpdateAllowInternal(src, dsr);
       case STRING:
-        return dsr == Types.DateType.get() || dsr.typeId() == Type.TypeID.DECIMAL || dsr == Types.BinaryType.get();
+        return dsr == Types.DateType.get() || dsr.typeId() == Type.TypeID.DECIMAL || dsr.typeId() == Type.TypeID.DECIMAL_FIXED || dsr == Types.BinaryType.get();
       default:
         return false;
     }
+  }
+
+  private static boolean isDecimalBytesUpdateAllowInternal(Type src, Type dsr) {
+    if (dsr.typeId() == Type.TypeID.DECIMAL_BYTES || dsr.typeId() == Type.TypeID.DECIMAL_FIXED || dsr.typeId() == Type.TypeID.DECIMAL) {
+      return isDecimalUpdateAllowInternalBase((Types.DecimalBase)src, (Types.DecimalBase)dsr);
+    }
+    return dsr.typeId() == Type.TypeID.STRING;
+  }
+
+  private static boolean isDecimalUpdateAllowInternalBase(Types.DecimalBase  src, Types.DecimalBase  dsr) {
+    if (dsr.isWiderThan(src)) {
+      return true;
+    }
+    if (dsr.precision() >= src.precision() && dsr.scale() == src.scale()) {
+      return true;
+    }
     return false;
+  }
+
+  private static boolean isDecimalFixedUpdateAllowInternal(Type src, Type dsr) {
+    if (dsr instanceof Types.DecimalBase) {
+      if (dsr.typeId() == Type.TypeID.DECIMAL_FIXED || dsr.typeId() == Type.TypeID.DECIMAL) {
+        Types.DecimalTypeFixed decimalSrc = (Types.DecimalTypeFixed)src;
+        Types.DecimalTypeFixed decimalDsr = (Types.DecimalTypeFixed)dsr;
+        if (decimalSrc.getFixedSize() > decimalDsr.getFixedSize()) {
+          return false;
+        }
+      }
+      return isDecimalUpdateAllowInternalBase((Types.DecimalBase)src, (Types.DecimalBase)dsr);
+    }
+    return dsr.typeId() == Type.TypeID.STRING;
   }
 
   /**

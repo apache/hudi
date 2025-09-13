@@ -22,10 +22,12 @@ package org.apache.spark.sql.hudi.feature.index
 import org.apache.hudi.{DataSourceReadOptions, ExpressionIndexSupport, HoodieFileIndex, HoodieSparkUtils}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
+import org.apache.hudi.avro.ValueType
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkMetadataWriterUtils
+import org.apache.hudi.client.utils.SparkMetadataWriterUtils.SparkValueMetadata
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
@@ -1167,7 +1169,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         spark.sql(s"create index idx_to_date on $tableName using column_stats(date) options(expr='to_date', format='yyyy-MM-dd')")
         metaClient = HoodieTableMetaClient.reload(metaClient)
         val toDate = resolveExpr(spark, unapply(functions.to_date(functions.col("date"), "yyyy-MM-dd")).get, tableSchema)
-        dataFilter = EqualTo(toDate, lit(18230).expr)
+        dataFilter = EqualTo(toDate, lit(ValueType.toDate(18230, null)).expr)
         verifyPartitionPruning(opts, Seq(), Seq(dataFilter), metaClient, isDataSkippingExpected = true)
         spark.sql(s"drop index idx_to_date on $tableName")
       }
@@ -1527,14 +1529,14 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         spark.sql(s"create index idx_to_date on $tableName using column_stats(date) options(expr='to_date', format='yyyy-MM-dd')")
         metaClient = HoodieTableMetaClient.reload(metaClient)
         val toDate = resolveExpr(spark, unapply(functions.to_date(functions.col("date"), "yyyy-MM-dd")).get, tableSchema)
-        dataFilter = EqualTo(toDate, lit(18596).expr)
+        dataFilter = EqualTo(toDate, lit(ValueType.toDate(18596, null)).expr)
         verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
         spark.sql(s"drop index idx_to_date on $tableName")
 
         spark.sql(s"create index idx_to_date_default on $tableName using column_stats(date) options(expr='to_date')")
         metaClient = HoodieTableMetaClient.reload(metaClient)
         val toDateDefault = resolveExpr(spark, unapply(functions.to_date(functions.col("date"))).get, tableSchema)
-        dataFilter = EqualTo(toDateDefault, lit(18596).expr)
+        dataFilter = EqualTo(toDateDefault, lit(ValueType.toDate(18596, null)).expr)
         verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
         spark.sql(s"drop index idx_to_date_default on $tableName")
 
@@ -1548,28 +1550,28 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         spark.sql(s"create index idx_to_timestamp_default on $tableName using column_stats(date) options(expr='to_timestamp')")
         metaClient = HoodieTableMetaClient.reload(metaClient)
         val toTimestampDefault = resolveExpr(spark, unapply(functions.to_timestamp(functions.col("date"))).get, tableSchema)
-        dataFilter = EqualTo(toTimestampDefault, lit(1732924800000000L).expr)
+        dataFilter = EqualTo(toTimestampDefault, lit(SparkValueMetadata.convertJavaTypeToSparkType(ValueType.toTimestampMicros(1732924800000000L, null))).expr)
         verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
         spark.sql(s"drop index idx_to_timestamp_default on $tableName")
 
         spark.sql(s"create index idx_to_timestamp on $tableName using column_stats(date) options(expr='to_timestamp', format='yyyy-MM-dd')")
         metaClient = HoodieTableMetaClient.reload(metaClient)
         val toTimestamp = resolveExpr(spark, unapply(functions.to_timestamp(functions.col("date"), "yyyy-MM-dd")).get, tableSchema)
-        dataFilter = EqualTo(toTimestamp, lit(1732924800000000L).expr)
+        dataFilter = EqualTo(toTimestamp, lit(SparkValueMetadata.convertJavaTypeToSparkType(ValueType.toTimestampMicros(1732924800000000L, null))).expr)
         verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
         spark.sql(s"drop index idx_to_timestamp on $tableName")
 
         spark.sql(s"create index idx_date_add on $tableName using column_stats(date) options(expr='date_add', days='10')")
         metaClient = HoodieTableMetaClient.reload(metaClient)
         val dateAdd = resolveExpr(spark, unapply(functions.date_add(functions.col("date"), 10)).get, tableSchema)
-        dataFilter = EqualTo(dateAdd, lit(18606).expr)
+        dataFilter = EqualTo(dateAdd, lit(ValueType.toDate(18606, null)).expr)
         verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
         spark.sql(s"drop index idx_date_add on $tableName")
 
         spark.sql(s"create index idx_date_sub on $tableName using column_stats(date) options(expr='date_sub', days='10')")
         metaClient = HoodieTableMetaClient.reload(metaClient)
         val dateSub = resolveExpr(spark, unapply(functions.date_sub(functions.col("date"), 10)).get, tableSchema)
-        dataFilter = EqualTo(dateSub, lit(18586).expr)
+        dataFilter = EqualTo(dateSub, lit(ValueType.toDate(18586, null)).expr)
         verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
         spark.sql(s"drop index idx_date_sub on $tableName")
       }

@@ -19,19 +19,21 @@ package org.apache.hudi
 
 import org.apache.hudi.ColumnStatsIndexSupport._
 import org.apache.hudi.HoodieCatalystUtils.{withPersistedData, withPersistedDataset}
-import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
+import org.apache.hudi.HoodieConversionUtils.toScalaOption
+import org.apache.hudi.avro.{ValueMetadata, ValueType}
+import org.apache.hudi.avro.ValueMetadata.getValueMetadata
 import org.apache.hudi.avro.model._
+import org.apache.hudi.client.utils.SparkMetadataWriterUtils.SparkValueMetadata
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
-import org.apache.hudi.common.function.{SerializableFunction, SerializableFunctionUnchecked}
-import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
+import org.apache.hudi.common.function.SerializableFunction
+import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.BinaryUtil.toBytes
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection
-import org.apache.hudi.common.util.hash.{ColumnIndexID, PartitionIndexID}
 import org.apache.hudi.data.HoodieJavaRDD
-import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieIndexVersion, HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.util.JFunction
 
@@ -262,8 +264,9 @@ class ColumnStatsIndexSupport(spark: SparkSession,
           val colName = r.getColumnName
           val colType = sortedTargetColDataTypeMap(colName).dataType
 
-          val minValue = deserialize(tryUnpackValueWrapper(minValueWrapper), colType)
-          val maxValue = deserialize(tryUnpackValueWrapper(maxValueWrapper), colType)
+          val valueMetadata = getValueMetadata(r.getValueType)
+          val minValue = extractColStatsValue(minValueWrapper, colType, valueMetadata)
+          val maxValue = extractColStatsValue(maxValueWrapper, colType, valueMetadata)
 
           // Update min-/max-value structs w/ unwrapped values in-place
           r.setMinValue(minValue)
@@ -444,6 +447,28 @@ object ColumnStatsIndexSupport {
 
   @inline def composeColumnStatStructType(col: String, statName: String, dataType: DataType) =
     StructField(formatColName(col, statName), dataType, nullable = true, Metadata.empty)
+
+  def extractColStatsValue(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata): Any = {
+    valueMetadata.getValueType match {
+      case ValueType.V1 => extractWrapperValueV1(valueWrapper, dataType)
+      case _ => extractColStatsValueV2(valueWrapper, dataType, valueMetadata)
+    }
+  }
+
+  private def extractColStatsValueV2(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata): Any = {
+    val colStatsValue = SparkValueMetadata.convertJavaTypeToSparkType(SparkValueMetadata.getValueMetadata(dataType, HoodieIndexVersion.V2)
+      .standardizeJavaTypeAndPromote(valueMetadata.unwrapValue(valueWrapper)))
+    // TODO: should this be done here? Should we handle this with adding more value types?
+    // TODO: should this logic be in convertJavaTypeToSparkType?
+    dataType match {
+      case ShortType => colStatsValue.asInstanceOf[Int].toShort
+      case ByteType => colStatsValue.asInstanceOf[Int].toByte
+      case _ => colStatsValue
+    }
+  }
+
+  def extractWrapperValueV1(valueWrapper: AnyRef, dataType: DataType): Any =
+    deserialize(tryUnpackValueWrapper(valueWrapper), dataType)
 
   def tryUnpackValueWrapper(valueWrapper: AnyRef): Any = {
     valueWrapper match {

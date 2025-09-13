@@ -21,7 +21,10 @@ package org.apache.hudi.client.utils;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.ValueMetadata;
+import org.apache.hudi.avro.ValueType;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.avro.model.HoodieValueTypeInfo;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -47,6 +50,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -58,6 +62,7 @@ import org.apache.hudi.index.expression.HoodieExpressionIndex;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePath;
@@ -74,15 +79,36 @@ import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.functions;
+import org.apache.spark.sql.types.ArrayType;
+import org.apache.spark.sql.types.BinaryType;
+import org.apache.spark.sql.types.BooleanType;
+import org.apache.spark.sql.types.ByteType;
+import org.apache.spark.sql.types.CharType;
+import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.DateType;
+import org.apache.spark.sql.types.Decimal;
+import org.apache.spark.sql.types.DecimalType;
+import org.apache.spark.sql.types.DoubleType;
+import org.apache.spark.sql.types.FloatType;
+import org.apache.spark.sql.types.IntegerType;
+import org.apache.spark.sql.types.LongType;
 import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.NullType;
+import org.apache.spark.sql.types.ShortType;
+import org.apache.spark.sql.types.StringType;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.sql.types.TimestampType;
+import org.apache.spark.sql.types.VarcharType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.sql.Date;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -150,7 +176,8 @@ public class SparkMetadataWriterUtils {
 
   @SuppressWarnings("checkstyle:LineLength")
   public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingColumnStats(Dataset<Row> dataset, HoodieExpressionIndex<Column, Column> expressionIndex, String columnToIndex,
-                                                                                             Option<Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt) {
+                                                                                             Option<Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt,
+                                                                                             HoodieIndexVersion indexVersion) {
     // Aggregate col stats related data for the column to index
     Dataset<Row> columnRangeMetadataDataset = dataset
         .select(columnToIndex, SparkMetadataWriterUtils.getExpressionIndexColumnNames())
@@ -159,14 +186,16 @@ public class SparkMetadataWriterUtils {
             functions.min(columnToIndex).alias(COLUMN_STATS_FIELD_MIN_VALUE),
             functions.max(columnToIndex).alias(COLUMN_STATS_FIELD_MAX_VALUE),
             functions.count(columnToIndex).alias(COLUMN_STATS_FIELD_VALUE_COUNT));
+
     // Generate column stat records using the aggregated data
+    SparkValueMetadata valueMetadata = getValueMetadataFromColumnRangeDataset(columnRangeMetadataDataset, indexVersion);
     HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> rangeMetadataHoodieJavaRDD = HoodieJavaRDD.of(columnRangeMetadataDataset.javaRDD())
         .flatMapToPair((SerializableFunction<Row, Iterator<? extends Pair<String, HoodieColumnRangeMetadata<Comparable>>>>)
             row -> {
               int baseAggregatePosition = SparkMetadataWriterUtils.getExpressionIndexColumnNames().length;
               long nullCount = row.getLong(baseAggregatePosition);
-              Comparable minValue = (Comparable) row.get(baseAggregatePosition + 1);
-              Comparable maxValue = (Comparable) row.get(baseAggregatePosition + 2);
+              Comparable minValue = valueMetadata.convertSparkToJava(row.get(baseAggregatePosition + 1));
+              Comparable maxValue = valueMetadata.convertSparkToJava(row.get(baseAggregatePosition + 2));
               long valueCount = row.getLong(baseAggregatePosition + 3);
 
               String partitionName = row.getString(0);
@@ -183,7 +212,8 @@ public class SparkMetadataWriterUtils {
                   nullCount,
                   valueCount,
                   totalFileSize,
-                  totalUncompressedSize
+                  totalUncompressedSize,
+                  valueMetadata
               );
               return Collections.singletonList(Pair.of(partitionName, rangeMetadata)).iterator();
             });
@@ -204,6 +234,190 @@ public class SparkMetadataWriterUtils {
     return partitionRecordsFunctionOpt.isPresent()
         ? new ExpressionIndexComputationMetadata(colStatRecords, partitionStatRecordsOpt)
         : new ExpressionIndexComputationMetadata(colStatRecords);
+  }
+
+  private static SparkValueMetadata getValueMetadataFromColumnRangeDataset(Dataset<Row> dataset, HoodieIndexVersion indexVersion) {
+    int baseAggregatePosition = SparkMetadataWriterUtils.getExpressionIndexColumnNames().length;
+    DataType minDataType = dataset.schema().apply(baseAggregatePosition + 1).dataType();
+    DataType maxDataType = dataset.schema().apply(baseAggregatePosition + 2).dataType();
+    if (minDataType != maxDataType) {
+      throw new HoodieException(String.format("Column stats data types do not match for min (%s) and max (%s)", minDataType, maxDataType));
+    }
+    return SparkValueMetadata.getValueMetadata(minDataType, indexVersion);
+  }
+
+  public static class SparkValueMetadata extends ValueMetadata {
+
+    private static class SparkV1EmptyMetadata extends SparkValueMetadata {
+      private static final SparkV1EmptyMetadata V_1_EMPTY_METADATA = new SparkV1EmptyMetadata();
+      public static SparkV1EmptyMetadata get() {
+        return V_1_EMPTY_METADATA;
+      }
+
+      private SparkV1EmptyMetadata() {
+        super(ValueType.V1, null);
+      }
+
+      @Override
+      public HoodieValueTypeInfo getValueTypeInfo() {
+        return null;
+      }
+    }
+
+    private static class SparkDecimalMetadata extends SparkValueMetadata implements ValueMetadata.DecimalValueMetadata {
+
+      private final int precision;
+      private final int scale;
+
+      protected SparkDecimalMetadata(DecimalType decimalType) {
+        super(ValueType.DECIMAL, decimalType);
+        this.precision = decimalType.precision();
+        this.scale = decimalType.scale();
+      }
+
+      @Override
+      public int getPrecision() {
+        return precision;
+      }
+
+      @Override
+      public int getScale() {
+        return scale;
+      }
+
+      @Override
+      public String getAdditionalInfo() {
+        return DecimalValueMetadata.encodeData(this);
+      }
+    }
+
+    public Comparable convertSparkToJava(Object value) {
+      return convertSparkToJava(value, true);
+    }
+
+    private Comparable convertSparkToJava(Object value, boolean rootLevel) {
+      if (value == null) {
+        return null;
+      }
+
+      if (value instanceof org.apache.spark.sql.catalyst.util.ArrayData) {
+        if (rootLevel) {
+          return new ArrayComparable(Arrays.stream(((org.apache.spark.sql.catalyst.util.ArrayData) value)
+                  .toObjectArray(((org.apache.spark.sql.types.ArrayType) dataType).elementType()))
+              .map(v -> convertSparkToJava(v, false)).toArray(Comparable[]::new));
+        } else {
+          throw new IllegalArgumentException("array of arrays not supported");
+        }
+      }
+
+      switch (getValueType()) {
+        case V1:
+          return (Comparable) value;
+        case NULL:
+          return null;
+        case BOOLEAN:
+          return (Boolean) value;
+        case INT:
+          return (Integer) value;
+        case LONG:
+          return (Long) value;
+        case FLOAT:
+          return (Float) value;
+        case DOUBLE:
+          return (Double) value;
+        case STRING:
+          return (String) value;
+        case BYTES:
+          return ValueType.castToBytes(value);
+        case DECIMAL:
+          return ((Decimal) value).toJavaBigDecimal();
+        case DATE:
+          return (Date) value;
+        case TIMESTAMP_MICROS:
+          return ValueType.castToTimestampMicros(value, this);
+        case LOCAL_TIMESTAMP_MICROS:
+          return ValueType.castToLocalTimestampMicros(value, this);
+        case FIXED:
+        case UUID:
+        case TIME_MILLIS:
+        case TIME_MICROS:
+        case TIMESTAMP_MILLIS:
+        case TIMESTAMP_NANOS:
+        case LOCAL_TIMESTAMP_MILLIS:
+        case LOCAL_TIMESTAMP_NANOS:
+        default:
+          throw new IllegalStateException("Spark value metadata for expression index should never be " + getValueType().name());
+      }
+    }
+
+    private final DataType dataType;
+
+    protected SparkValueMetadata(ValueType valueType, DataType dataType) {
+      super(valueType);
+      this.dataType = dataType;
+    }
+
+    public static SparkValueMetadata getValueMetadata(DataType dataType, HoodieIndexVersion indexVersion) {
+      if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
+        return SparkV1EmptyMetadata.get();
+      }
+      if (dataType == null) {
+        return new SparkValueMetadata(ValueType.NULL, null);
+      }
+      ValueType valueType = fromDataType(dataType);
+      if (valueType == ValueType.DECIMAL) {
+        return new SparkDecimalMetadata((DecimalType) dataType);
+      } else {
+        return new SparkValueMetadata(valueType, dataType);
+      }
+    }
+
+    private static ValueType fromDataType(DataType dataType) {
+      return fromDataType(dataType, true);
+    }
+
+    private static ValueType fromDataType(DataType dataType, boolean root) {
+      if (dataType instanceof NullType) {
+        return ValueType.NULL;
+      } else if (dataType instanceof BooleanType) {
+        return ValueType.BOOLEAN;
+      } else if (dataType instanceof IntegerType || dataType instanceof ShortType || dataType instanceof ByteType) {
+        return ValueType.INT;
+      } else if (dataType instanceof LongType) {
+        return ValueType.LONG;
+      } else if (dataType instanceof FloatType) {
+        return ValueType.FLOAT;
+      } else if (dataType instanceof DoubleType) {
+        return ValueType.DOUBLE;
+      } else if (dataType instanceof StringType || dataType instanceof CharType || dataType instanceof VarcharType) {
+        return ValueType.STRING;
+      }  else if (dataType instanceof TimestampType) {
+        return ValueType.TIMESTAMP_MICROS;
+      }  else if (dataType instanceof DecimalType) {
+        return ValueType.DECIMAL;
+      } else if (dataType instanceof DateType) {
+        return ValueType.DATE;
+      } else if (dataType instanceof BinaryType) {
+        return ValueType.BYTES;
+      } else if (dataType instanceof ArrayType) {
+        if (root) {
+          return fromDataType(((ArrayType) dataType).elementType(), false);
+        } else {
+          throw new IllegalArgumentException("Array of Array is not supported");
+        }
+      } else if (dataType.getClass().getName().contains("TimestampNTZType")) {
+        return ValueType.LOCAL_TIMESTAMP_MICROS;
+      } else {
+        throw new IllegalArgumentException("Unsupported data type: " + dataType);
+      }
+    }
+
+    public static Object convertJavaTypeToSparkType(Comparable<?> javaVal) {
+      if (javaVal instanceof Instant) {
+        return Timestamp.from((Instant) javaVal);
+      }
+      return javaVal;
+    }
   }
 
   public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingBloomFilter(
@@ -291,7 +505,7 @@ public class SparkMetadataWriterUtils {
 
     // Generate expression index records
     if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
-      return getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex, partitionRecordsFunctionOpt);
+      return getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex, partitionRecordsFunctionOpt, indexDefinition.getVersion());
     } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
       return getExpressionIndexRecordsUsingBloomFilter(
           rowDataset, columnToIndex, dataWriteConfig.getStorageConfig(), instantTime, indexDefinition);
@@ -359,6 +573,7 @@ public class SparkMetadataWriterUtils {
     // We fetch stored Expression index records for these latest files and return HoodiePairData of partition name and list of column range metadata of these files
 
     // Step 1: Validate that partition stats is supported for the column data type
+    HoodieIndexVersion indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(indexPartition, dataMetaClient);
     HoodieIndexDefinition indexDefinition = HoodieTableMetadataUtil.getHoodieIndexDefinition(indexPartition, dataMetaClient);
     List<String> columnsToIndex = Collections.singletonList(indexDefinition.getSourceFields().get(0));
     try {
@@ -377,7 +592,7 @@ public class SparkMetadataWriterUtils {
       // filter for supported types
       final List<String> validColumnsToIndex = columnsToIndexSchemaMap.stream()
           .filter(colSchemaPair -> HoodieTableMetadataUtil.SUPPORTED_META_FIELDS_PARTITION_STATS.contains(colSchemaPair.getKey())
-              || HoodieTableMetadataUtil.isColumnTypeSupported(colSchemaPair.getValue(), recordTypeOpt))
+              || HoodieTableMetadataUtil.isColumnTypeSupported(colSchemaPair.getValue(), recordTypeOpt, indexVersion))
           .map(entry -> entry.getKey())
           .collect(Collectors.toList());
       if (validColumnsToIndex.isEmpty()) {

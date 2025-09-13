@@ -40,6 +40,9 @@ public class Comparators {
           put(Types.DateType.get(), Comparator.naturalOrder());
           put(Types.TimeType.get(), Comparator.naturalOrder());
           put(Types.TimestampType.get(), Comparator.naturalOrder());
+          put(Types.TimestampMillisType.get(), Comparator.naturalOrder());
+          put(Types.LocalTimestampMillisType.get(), Comparator.naturalOrder());
+          put(Types.LocalTimestampMicrosType.get(), Comparator.naturalOrder());
           put(Types.StringType.get(), Comparator.naturalOrder());
           put(Types.UUIDType.get(), Comparator.naturalOrder());
         }

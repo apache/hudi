@@ -43,9 +43,8 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
     HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c7","c8")
 
   @ParameterizedTest
-  @MethodSource(Array("testMetadataColumnStatsIndexParamsInMemory"))
+  @MethodSource(Array("testMetadataPartitionStatsIndexParamsInMemory"))
   def testMetadataPSISimple(testCase: ColumnStatsTestCase): Unit = {
-
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
@@ -57,6 +56,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString,
       RECORDKEY_FIELD.key -> "c1",
       HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> "c8",
@@ -73,7 +73,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testMetadataColumnStatsIndexParamsInMemory"))
+  @MethodSource(Array("testMetadataPartitionStatsIndexParamsInMemory"))
   def testMetadataColumnStatsIndex(testCase: ColumnStatsTestCase): Unit = {
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
@@ -86,6 +86,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString,
       RECORDKEY_FIELD.key -> "c1",
       HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> "c8",
@@ -180,7 +181,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testMetadataColumnStatsIndexParamsInMemory"))
+  @MethodSource(Array("testMetadataPartitionStatsIndexParamsInMemory"))
   def testMetadataColumnStatsIndexInitializationWithUpserts(testCase: ColumnStatsTestCase): Unit = {
     val partitionCol : String = "c8"
     val metadataOpts = Map(
@@ -194,6 +195,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       "hoodie.upsert.shuffle.parallelism" -> "1",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString,
       RECORDKEY_FIELD.key -> "c1",
       HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key -> partitionCol,
@@ -292,7 +294,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testMetadataColumnStatsIndexParamsInMemory"))
+  @MethodSource(Array("testMetadataPartitionStatsIndexParamsInMemory"))
   def testMetadataColumnStatsIndexInitializationWithRollbacks(testCase: ColumnStatsTestCase): Unit = {
     val partitionCol : String ="c8"
     val metadataOpts = Map(
@@ -305,6 +307,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       "hoodie.upsert.shuffle.parallelism" -> "1",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString,
       RECORDKEY_FIELD.key -> "c1",
       HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> partitionCol,
