@@ -37,6 +37,7 @@ import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
@@ -937,6 +938,9 @@ public class TestHoodieAvroUtils {
     assertTrue(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(SCHEMA_WITH_DECIMAL_FIELD)));
     assertFalse(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES_STR)));
     assertFalse(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(EXAMPLE_SCHEMA)));
+    Schema unionSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.DOUBLE)));
+    assertThrows(HoodieAvroSchemaException.class,
+        () -> HoodieAvroUtils.hasSmallPrecisionDecimalField(unionSchema));
   }
 
   public static Stream<Arguments> getSchemaForFieldParams() {
