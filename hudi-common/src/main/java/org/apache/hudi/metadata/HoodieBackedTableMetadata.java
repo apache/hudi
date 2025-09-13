@@ -23,6 +23,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
@@ -853,7 +854,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   /**
-   * Derive necessary properties for FG reader.
+   * Derive necessary properties for FG reader with HFile block caching enabled.
+   * HFile block caching is enabled for all MDT partitions regardless of global configuration
+   * to avoid rescanning the HFiles and improve performance of MDT-based operations.
    */
   TypedProperties buildFileGroupReaderProperties(HoodieMetadataConfig metadataConfig) {
     HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder()
@@ -871,6 +874,18 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     props.setProperty(
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         Boolean.toString(commonConfig.isBitCaskDiskMapCompressionEnabled()));
+
+    // Enable HFile block caching for all MDT partitions regardless of the configuration to avoid rescanning the HFiles for better performance
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), "true");
+    if (!props.containsKey(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key())) {
+      props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(), 
+          HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.defaultValue().toString());
+    }
+    if (!props.containsKey(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key())) {
+      props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(), 
+          HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.defaultValue().toString());
+    }
+
     return props;
   }
 }

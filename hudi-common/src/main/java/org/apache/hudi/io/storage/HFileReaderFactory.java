@@ -20,13 +20,16 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.hash.MurmurHash;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.hfile.CachingHFileReaderImpl;
 import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.HFileReaderImpl;
 import org.apache.hudi.storage.HoodieStorage;
@@ -42,6 +45,7 @@ public class HFileReaderFactory {
 
   private final HoodieStorage storage;
   private final HoodieMetadataConfig metadataConfig;
+  private final TypedProperties properties;
   private final Either<StoragePath, byte[]> fileSource;
 
   public HFileReaderFactory(HoodieStorage storage,
@@ -49,13 +53,38 @@ public class HFileReaderFactory {
                             Either<StoragePath, byte[]> fileSource) {
     this.storage = storage;
     this.metadataConfig = HoodieMetadataConfig.newBuilder().withProperties(properties).build();
+    this.properties = properties;
     this.fileSource = fileSource;
   }
 
   public HFileReader createHFileReader() throws IOException {
     final long fileSize = determineFileSize();
     final SeekableDataInputStream inputStream = createInputStream(fileSize);
+    
+    if (shouldEnableBlockCaching()) {
+      int blockCacheSize = properties.getInteger(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(), 
+          HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.defaultValue());
+      int cacheTtlMinutes = properties.getInteger(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(),
+          HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.defaultValue());
+      String filePath = getFilePath();
+      return new CachingHFileReaderImpl(inputStream, fileSize, filePath, blockCacheSize, cacheTtlMinutes);
+    }
+    
     return new HFileReaderImpl(inputStream, fileSize);
+  }
+
+  private boolean shouldEnableBlockCaching() {
+    return properties.getBoolean(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(),
+        HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.defaultValue());
+  }
+
+  private String getFilePath() {
+    if (fileSource.isLeft()) {
+      return fileSource.asLeft().toString();
+    }
+    // For byte array content, use a hash-based identifier
+    int murmurHash = MurmurHash.getInstance().hash(fileSource.asRight());
+    return String.valueOf(murmurHash);
   }
 
   private long determineFileSize() throws IOException {
