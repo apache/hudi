@@ -39,11 +39,18 @@ import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 /**
@@ -58,8 +65,14 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T> {
+  private static final Logger LOG = LoggerFactory.getLogger(AppendWriteFunctionWithBufferSort.class);
+
   private final long writeBufferSize;
-  private transient BinaryInMemorySortBuffer buffer;
+  private transient BinaryInMemorySortBuffer activeBuffer;
+  private transient BinaryInMemorySortBuffer backgroundBuffer;
+  private transient ExecutorService asyncWriteExecutor;
+  private transient AtomicReference<CompletableFuture<Void>> asyncWriteTask;
+  private transient AtomicBoolean isBackgroundBufferBeingProcessed;
 
   public AppendWriteFunctionWithBufferSort(Configuration config, RowType rowType) {
     super(config, rowType);
@@ -79,38 +92,52 @@ public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T>
     GeneratedNormalizedKeyComputer keyComputer = codeGenerator.generateNormalizedKeyComputer("SortComputer");
     GeneratedRecordComparator recordComparator = codeGenerator.generateRecordComparator("SortComparator");
     MemorySegmentPool memorySegmentPool = MemorySegmentPoolFactory.createMemorySegmentPool(config);
-    this.buffer = BufferUtils.createBuffer(rowType,
+
+    this.activeBuffer = BufferUtils.createBuffer(rowType,
             memorySegmentPool,
             keyComputer.newInstance(Thread.currentThread().getContextClassLoader()),
             recordComparator.newInstance(Thread.currentThread().getContextClassLoader()));
-    log.info("{} is initialized successfully.", getClass().getSimpleName());
+    this.backgroundBuffer = BufferUtils.createBuffer(rowType,
+            memorySegmentPool,
+            keyComputer.newInstance(Thread.currentThread().getContextClassLoader()),
+            recordComparator.newInstance(Thread.currentThread().getContextClassLoader()));
+
+    this.asyncWriteExecutor = Executors.newSingleThreadExecutor(r -> {
+      Thread t = new Thread(r, "async-write-thread");
+      t.setDaemon(true);
+      return t;
+    });
+    this.asyncWriteTask = new AtomicReference<>(null);
+    this.isBackgroundBufferBeingProcessed = new AtomicBoolean(false);
+
+    LOG.info("{} is initialized successfully with double buffer.", getClass().getSimpleName());
   }
 
   @Override
   public void processElement(T value, Context ctx, Collector<RowData> out) throws Exception {
     RowData data = (RowData) value;
 
-    // 1.try to write data into memory pool
-    boolean success = buffer.write(data);
+    // try to write data into active buffer
+    boolean success = activeBuffer.write(data);
     if (!success) {
-      // 2. flushes the bucket if the memory pool is full
-      sortAndSend();
-      // 3. write the row again
-      success = buffer.write(data);
+      swapAndFlushAsync();
+      // write the row again to the new active buffer
+      success = activeBuffer.write(data);
       if (!success) {
         throw new HoodieException("Buffer is too small to hold a single record.");
       }
     }
 
-    if (buffer.size() >= writeBufferSize) {
-      sortAndSend();
+    if (activeBuffer.size() >= writeBufferSize) {
+      swapAndFlushAsync();
     }
   }
 
   @Override
   public void snapshotState() {
     try {
-      sortAndSend();
+      waitForAsyncWriteCompletion();
+      sortAndSend(activeBuffer);
     } catch (IOException e) {
       throw new HoodieIOException("Fail to sort and flush data in buffer during snapshot state.", e);
     }
@@ -120,11 +147,58 @@ public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T>
   @Override
   public void endInput() {
     try {
-      sortAndSend();
+      waitForAsyncWriteCompletion();
+      sortAndSend(activeBuffer);
     } catch (IOException e) {
       throw new HoodieIOException("Fail to sort and flush data in buffer during endInput.", e);
     }
     super.endInput();
+  }
+
+  /**
+   * Swaps the active and background buffers and triggers async flush of the background buffer.
+   */
+  private void swapAndFlushAsync() throws IOException {
+    waitForAsyncWriteCompletion();
+
+    // Swap buffers
+    BinaryInMemorySortBuffer temp = activeBuffer;
+    activeBuffer = backgroundBuffer;
+    backgroundBuffer = temp;
+
+    // Start async processing of the background buffer
+    if (!backgroundBuffer.isEmpty()) {
+      isBackgroundBufferBeingProcessed.set(true);
+      CompletableFuture<Void> newTask = CompletableFuture.runAsync(() -> {
+        try {
+          sortAndSend(backgroundBuffer);
+        } catch (IOException e) {
+          LOG.error("Error during async write", e);
+          throw new RuntimeException(e);
+        } finally {
+          isBackgroundBufferBeingProcessed.set(false);
+        }
+      }, asyncWriteExecutor);
+      asyncWriteTask.set(newTask);
+    }
+  }
+
+  /**
+   * Waits for any ongoing async write operation to complete.
+   */
+  private void waitForAsyncWriteCompletion() {
+    try {
+      if (isBackgroundBufferBeingProcessed.get()) {
+        CompletableFuture<Void> currentTask = asyncWriteTask.get();
+        if (currentTask != null) {
+          currentTask.join();
+          asyncWriteTask.set(null);
+        }
+      }
+    } catch (Exception e) {
+      LOG.error("Error waiting for async write completion", e);
+      throw new RuntimeException(e);
+    }
   }
 
   /**
@@ -133,7 +207,7 @@ public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T>
    * 2. Binary buffer is full.
    * 3. `endInput` is called for pipelines with a bounded source.
    */
-  private void sortAndSend() throws IOException {
+  private void sortAndSend(BinaryInMemorySortBuffer buffer) throws IOException {
     if (buffer.isEmpty()) {
       return;
     }
@@ -152,5 +226,16 @@ public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T>
 
   private static void sort(BinaryInMemorySortBuffer dataBuffer) {
     new QuickSort().sort(dataBuffer);
+  }
+
+  @Override
+  public void close() throws Exception {
+    try {
+      if (asyncWriteExecutor != null && !asyncWriteExecutor.isShutdown()) {
+        asyncWriteExecutor.shutdown();
+      }
+    } finally {
+      super.close();
+    }
   }
 }
