@@ -671,7 +671,7 @@ public class TestHudiSmokeTest
         Session session = SessionBuilder.from(getSession())
                 .withMdtEnabled(true)
                 .withColStatsIndexEnabled(true)
-                .withColumnStatsTimeout("1s")
+                .withColumnStatsTimeout("10s")
                 .withRecordLevelIndexEnabled(false)
                 .withSecondaryIndexEnabled(false)
                 .withPartitionStatsIndexEnabled(false)
@@ -691,7 +691,7 @@ public class TestHudiSmokeTest
         Session session = SessionBuilder.from(getSession())
                 .withMdtEnabled(true)
                 .withColStatsIndexEnabled(true)
-                .withColumnStatsTimeout("1s")
+                .withColumnStatsTimeout("10s")
                 .withRecordLevelIndexEnabled(false)
                 .withSecondaryIndexEnabled(false)
                 .withPartitionStatsIndexEnabled(false)
@@ -723,7 +723,7 @@ public class TestHudiSmokeTest
         Session session = SessionBuilder.from(getSession())
                 .withMdtEnabled(true)
                 .withColStatsIndexEnabled(true)
-                .withColumnStatsTimeout("5s")
+                .withColumnStatsTimeout("10s")
                 .withRecordLevelIndexEnabled(false)
                 .withSecondaryIndexEnabled(false)
                 .withPartitionStatsIndexEnabled(false)
@@ -748,7 +748,7 @@ public class TestHudiSmokeTest
                 .withMdtEnabled(true)
                 .withColStatsIndexEnabled(false)
                 .withRecordLevelIndexEnabled(true)
-                .withRecordIndexTimeout("1s")
+                .withRecordIndexTimeout("10s")
                 .withSecondaryIndexEnabled(false)
                 .withPartitionStatsIndexEnabled(false)
                 .build();
@@ -772,7 +772,7 @@ public class TestHudiSmokeTest
                 .withMdtEnabled(true)
                 .withColStatsIndexEnabled(false)
                 .withRecordLevelIndexEnabled(true)
-                .withRecordIndexTimeout("1s")
+                .withRecordIndexTimeout("10s")
                 .withSecondaryIndexEnabled(false)
                 .withPartitionStatsIndexEnabled(false)
                 .build();
@@ -801,7 +801,7 @@ public class TestHudiSmokeTest
                 .withRecordLevelIndexEnabled(true)
                 .withSecondaryIndexEnabled(false)
                 .withPartitionStatsIndexEnabled(false)
-                .withColumnStatsTimeout("1s")
+                .withColumnStatsTimeout("10s")
                 .build();
         MaterializedResult totalRes = getQueryRunner().execute(session, "SELECT * FROM " + table);
         MaterializedResult prunedRes = getQueryRunner().execute(session, "SELECT * FROM " + table

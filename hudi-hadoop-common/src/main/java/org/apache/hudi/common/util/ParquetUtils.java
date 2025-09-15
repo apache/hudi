@@ -414,6 +414,7 @@ public class ParquetUtils extends FileFormatUtils {
     config.setValue(PARQUET_BLOCK_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_BLOCK_SIZE));
     config.setValue(PARQUET_PAGE_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_PAGE_SIZE));
     config.setValue(PARQUET_MAX_FILE_SIZE.key(), String.valueOf(1024 * 1024 * 1024));
+    config.setValue("hoodie.avro.schema", writerSchema.toString());
     HoodieRecord.HoodieRecordType recordType = records.iterator().next().getRecordType();
     try (HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(
         HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType)) {

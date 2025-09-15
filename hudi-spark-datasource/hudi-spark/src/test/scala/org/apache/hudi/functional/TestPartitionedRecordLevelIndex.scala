@@ -19,7 +19,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.{DataSourceWriteOptions, SparkDatasetMixin}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -52,7 +52,7 @@ import scala.collection.JavaConverters
 import scala.collection.JavaConverters._
 
 @Tag("functional")
-class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
+class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMixin {
   private class testPartitionedRecordLevelIndexHolder {
     var bulkRecordKeys: java.util.List[String] = null
     var options: Map[String, String] = null
@@ -63,8 +63,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
   def testPartitionedRecordLevelIndex(tableType: HoodieTableType, streamingWriteEnabled: Boolean, holder: testPartitionedRecordLevelIndexHolder): Unit = {
     val dataGen = new HoodieTestDataGenerator();
     val inserts = dataGen.generateInserts("001", 5)
-    val latestBatch = recordsToStrings(inserts).asScala.toSeq
-    val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch, 1))
+    val latestBatchDf = toDataset(spark, inserts)
     val insertDf = latestBatchDf.withColumn("data_partition_path", lit("partition1")).union(latestBatchDf.withColumn("data_partition_path", lit("partition2")))
     val options = Map(HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
@@ -102,8 +101,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
     val updates =  dataGen.generateUniqueUpdates("002", 3)
     val lowerOrderingValue = 1L
     updates.addAll(dataGen.generateUniqueDeleteRecords("002", 2, lowerOrderingValue))
-    val nextBatch = recordsToStrings(updates).asScala.toSeq
-    val nextBatchDf = spark.read.json(spark.sparkContext.parallelize(nextBatch, 1))
+    val nextBatchDf = toDataset(spark, updates)
     val updateDf = nextBatchDf.withColumn("data_partition_path", lit("partition1"))
 
     updateDf.write.format("hudi")
@@ -121,8 +119,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
     validateDFWithLocations(df, partition2Locations, "partition2")
 
     val newInserts =  dataGen.generateInserts("003", 3)
-    val newInsertBatch = recordsToStrings(newInserts).asScala.toSeq
-    val newInsertBatchDf = spark.read.json(spark.sparkContext.parallelize(newInsertBatch, 1))
+    val newInsertBatchDf = toDataset(spark, newInserts)
     val newInsertDf = newInsertBatchDf.withColumn("data_partition_path", lit("partition2")).union(newInsertBatchDf.withColumn("data_partition_path", lit("partition3")))
     newInsertDf.write.format("hudi")
       .options(options)
@@ -149,8 +146,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
     assertEquals(3, partition3Locations.size)
     validateDFWithLocations(df, partition3Locations, "partition3")
 
-    val newDeletesBatch = recordsToStrings(newDeletes).asScala.toSeq
-    val newDeletesBatchDf = spark.read.json(spark.sparkContext.parallelize(newDeletesBatch, 1))
+    val newDeletesBatchDf = toDataset(spark, newDeletes)
     val newDeletesDf = newDeletesBatchDf.withColumn("data_partition_path", lit("partition1"))
     newDeletesDf.write.format("hudi")
       .options(options)
@@ -179,8 +175,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
     validateDFWithLocations(df, partition3Locations, "partition3")
 
     val bulkInserts = dataGen.generateInserts("005", 5)
-    val bulkInsertBatch = recordsToStrings(bulkInserts).asScala.toSeq
-    val bulkInsertDf = spark.read.json(spark.sparkContext.parallelize(bulkInsertBatch, 1))
+    val bulkInsertDf = toDataset(spark, bulkInserts)
     val bulkInsertPartitionedDf = bulkInsertDf.withColumn("data_partition_path", lit("partition0"))
 
     // Use bulk_insert operation explicitly
@@ -338,8 +333,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
     initMetaClient(tableType)
     val dataGen = new HoodieTestDataGenerator()
     val inserts = dataGen.generateInserts("001", 5)
-    val latestBatch = recordsToStrings(inserts).asScala.toSeq
-    val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch, 1))
+    val latestBatchDf = toDataset(spark, inserts)
     val insertDf = latestBatchDf.withColumn("data_partition_path", lit("partition1")).union(latestBatchDf.withColumn("data_partition_path", lit("partition2")))
     val options = Map(HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
@@ -359,8 +353,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
     assertEquals(10, spark.read.format("hudi").load(basePath).count())
 
     val updates =  dataGen.generateUniqueUpdates("002", 3)
-    val nextBatch = recordsToStrings(updates).asScala.toSeq
-    val nextBatchDf = spark.read.json(spark.sparkContext.parallelize(nextBatch, 1))
+    val nextBatchDf = toDataset(spark, updates)
     val updateDf = nextBatchDf.withColumn("data_partition_path", lit("partition1"))
     updateDf.write.format("hudi")
       .options(options)
@@ -374,8 +367,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
 
     if (failAndDoRollback) {
       val updatesToFail =  dataGen.generateUniqueUpdates("003", 3)
-      val batchToFail = recordsToStrings(updatesToFail).asScala.toSeq
-      val batchToFailDf = spark.read.json(spark.sparkContext.parallelize(batchToFail, 1))
+      val batchToFailDf = toDataset(spark, updatesToFail)
       val failDf = batchToFailDf.withColumn("data_partition_path", lit("partition1")).union(batchToFailDf.withColumn("data_partition_path", lit("partition3")))
       failDf.write.format("hudi")
         .options(options)

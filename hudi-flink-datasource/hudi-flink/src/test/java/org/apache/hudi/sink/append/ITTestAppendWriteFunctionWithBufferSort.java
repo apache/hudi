@@ -36,6 +36,8 @@ import org.apache.flink.table.data.TimestampData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.sql.Timestamp;
@@ -90,11 +92,12 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
 
     // Verify all data was written
     List<GenericRecord> actualData = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 1);
-    assertEquals(100, actualData.size());
+    assertEquals(150, actualData.size());
   }
 
-  @Test
-  public void testBufferFlushOnCheckpoint() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testBufferFlush(boolean flushOnCheckpoint) throws Exception {
     // Create test data
     List<RowData> inputData = Arrays.asList(
         createRowData("uuid1", "Bob", 30, "1970-01-01 00:00:01.123", "p1"),
@@ -102,11 +105,15 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     );
 
     // Write the data and wait for timer
-    TestWriteBase.TestHarness.instance()
-        .preparePipeline(tempFile, conf)
-        .consume(inputData)
-        .checkpoint(1)
-        .endInput();
+    TestHarness testHarness =
+        TestWriteBase.TestHarness.instance()
+            .preparePipeline(tempFile, conf)
+            .consume(inputData);
+    if (flushOnCheckpoint) {
+      testHarness.checkpoint(1);
+    } else {
+      testHarness.endInput();
+    }
 
     // Verify data was written
     List<GenericRecord> actualData = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 1);
@@ -134,7 +141,7 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
 
     // Verify all data was written
     List<GenericRecord> actualData = TestData.readAllData(new File(conf.get(FlinkOptions.PATH)), rowType, 1);
-    assertEquals(1198, actualData.size());
+    assertEquals(2000, actualData.size());
   }
 
   @Test
