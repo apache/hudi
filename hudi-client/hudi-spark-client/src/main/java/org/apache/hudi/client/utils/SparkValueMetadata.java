@@ -19,6 +19,7 @@
 
 package org.apache.hudi.client.utils;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.ValueMetadata;
 import org.apache.hudi.avro.ValueType;
 import org.apache.hudi.avro.model.HoodieValueTypeInfo;
@@ -111,7 +112,7 @@ public class SparkValueMetadata extends ValueMetadata {
       } else {
         throw new IllegalArgumentException("Array of Array is not supported");
       }
-    } else if (dataType.getClass().getName().contains("TimestampNTZType")) {
+    } else if (SparkAdapterSupport$.MODULE$.sparkAdapter().isTimestampNTZType(dataType)) {
       return ValueType.LOCAL_TIMESTAMP_MICROS;
     } else {
       throw new IllegalArgumentException("Unsupported data type: " + dataType);
