@@ -99,7 +99,7 @@ spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:1.0.1 
 Users are recommended to set this config to reduce Kryo serialization overhead
 
 ```
---conf 'spark.kryo.registrator=org.apache.spark.HoodieKryoRegistrar'
+--conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 :::
 
