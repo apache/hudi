@@ -318,8 +318,7 @@ public class TestHoodieAvroUtils {
     metaFields.add(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
     metaFields.add(HoodieRecord.FILENAME_METADATA_FIELD);
 
-    GenericRecord rec1 = new JoinedGenericRecord(rec, new HashMap<>(metaFields.size()),
-        metaFields, new Schema.Parser().parse(EXAMPLE_SCHEMA_WITH_META_FIELDS));
+    GenericRecord rec1 = new JoinedGenericRecord(rec, metaFields, new Schema.Parser().parse(EXAMPLE_SCHEMA_WITH_META_FIELDS));
     assertNull(rec1.get("_hoodie_commit_time"));
     assertNull(rec1.get("_hoodie_record_key"));
 

@@ -117,8 +117,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.partitionPath = partitionPath;
     this.fileId = fileId;
     this.writeSchema = AvroSchemaCache.intern(overriddenSchema.orElseGet(() -> getWriteSchema(config)));
-    this.hasOperationMetaField = config.allowOperationMetadataField();
-    this.writeSchemaWithMetaFields = AvroSchemaCache.intern(HoodieAvroUtils.addMetadataFields(writeSchema, hasOperationMetaField));
+    this.writeSchemaWithMetaFields = AvroSchemaCache.intern(HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField()));
+    this.hasOperationMetaField = writeSchemaWithMetaFields.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null;
     this.timer = HoodieTimer.start();
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.taskContextSupplier = taskContextSupplier;

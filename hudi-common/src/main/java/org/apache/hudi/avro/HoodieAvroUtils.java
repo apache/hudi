@@ -973,49 +973,6 @@ public class HoodieAvroUtils {
     return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.emptyMap());
   }
 
-  public static GenericRecord rewriteRecordWithPrependedMetaFieldsOptimized(IndexedRecord oldRecord, Schema newSchema, int oldFieldCount, int metaFieldCount) {
-    // Fast path: direct positional copy with offset using pre-calculated values
-    GenericData.Record newRecord = new GenericData.Record(newSchema);
-    // Single loop: directly copy original fields to offset positions
-    // Meta fields are already initialized to null by GenericData.Record constructor
-    for (int i = 0; i < oldFieldCount; i++) {
-      newRecord.put(i + metaFieldCount, oldRecord.get(i));
-    }
-    return newRecord;
-  }
-
-  public static GenericRecord rewriteRecordOld(GenericRecord oldRecord, Schema newSchema) {
-    GenericRecord newRecord = new GenericData.Record(newSchema);
-    boolean isSpecificRecord = oldRecord instanceof SpecificRecordBase;
-    for (Schema.Field f : newSchema.getFields()) {
-      if (!isSpecificRecord) {
-        copyOldValueOrSetDefault(oldRecord, newRecord, f);
-      } else if (!isMetadataField(f.name())) {
-        copyOldValueOrSetDefault(oldRecord, newRecord, f);
-      }
-    }
-    if (!GenericData.get().validate(newSchema, newRecord)) {
-      throw new SchemaCompatibilityException(
-          "Unable to validate the rewritten record " + oldRecord + " against schema " + newSchema);
-    }
-    return newRecord;
-  }
-
-  private static void copyOldValueOrSetDefault(GenericRecord oldRecord, GenericRecord newRecord, Schema.Field f) {
-    // cache the result of oldRecord.get() to save CPU expensive hash lookup
-    Schema oldSchema = oldRecord.getSchema();
-    Object fieldValue = oldSchema.getField(f.name()) == null ? null : oldRecord.get(f.name());
-    if (fieldValue == null) {
-      if (f.defaultVal() instanceof JsonProperties.Null) {
-        newRecord.put(f.name(), null);
-      } else {
-        newRecord.put(f.name(), f.defaultVal());
-      }
-    } else {
-      newRecord.put(f.name(), fieldValue);
-    }
-  }
-
   /**
    * Given a avro record with a given schema, rewrites it into the new schema while setting fields only from the new schema.
    * support deep rewrite for nested record.
