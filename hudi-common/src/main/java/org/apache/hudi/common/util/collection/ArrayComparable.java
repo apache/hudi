@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.util.collection;
 
-import org.apache.hudi.common.util.ValidationUtils;
-
 import org.jetbrains.annotations.NotNull;
 
 import java.io.Serializable;
@@ -67,14 +65,16 @@ public class ArrayComparable implements Comparable<ArrayComparable>, Serializabl
 
   @Override
   public int compareTo(ArrayComparable otherOrderingValue) {
-    ValidationUtils.checkArgument(values.length == otherOrderingValue.values.length, "The values should be of the same size");
-    for (int i = 0; i < values.length; i++) {
+    int minLength = Math.min(values.length, otherOrderingValue.values.length);
+    // Compare elements up to the shorter array's length
+    for (int i = 0; i < minLength; i++) {
       int comparingValue = values[i].compareTo(otherOrderingValue.values[i]);
       if (comparingValue != 0) {
         return comparingValue;
       }
     }
-    return 0;
+    // If all compared elements are equal, the shorter array comes first
+    return Integer.compare(values.length, otherOrderingValue.values.length);
   }
 
   @Override
