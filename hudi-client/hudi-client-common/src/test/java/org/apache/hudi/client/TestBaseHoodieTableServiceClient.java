@@ -113,10 +113,10 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
       when(firstTable.clean(any(), eq(cleanInstantTime))).thenReturn(null);
     }
 
-    TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Arrays.asList(firstTable, secondTable).iterator(), Option.empty(), expectedRollbackInfo,
-        createTransactionManager(Collections.singletonList(cleanInstantTime)));
-    tableServiceClient.clean(Option.empty(), false);
-    tableServiceClient.close();
+    try (TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Arrays.asList(firstTable, secondTable).iterator(), Option.empty(), expectedRollbackInfo,
+        createTransactionManager(Collections.singletonList(cleanInstantTime)))) {
+      tableServiceClient.clean(Option.empty(), false);
+    }
   }
 
   @Test
@@ -149,11 +149,11 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     HoodieCleanMetadata metadata = new HoodieCleanMetadata();
     when(firstTable.clean(any(), eq(cleanInstantTime))).thenReturn(metadata);
 
-    TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Collections.singletonList(firstTable).iterator(), Option.empty(), expectedRollbackInfo,
-        createTransactionManager(Collections.emptyList()));
-    assertSame(metadata, tableServiceClient.clean(Option.empty(), true));
-    verify(mockMetaClient).reloadActiveTimeline();
-    tableServiceClient.close();
+    try (TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Collections.singletonList(firstTable).iterator(), Option.empty(), expectedRollbackInfo,
+        createTransactionManager(Collections.emptyList()))) {
+      assertSame(metadata, tableServiceClient.clean(Option.empty(), true));
+      verify(mockMetaClient).reloadActiveTimeline();
+    }
   }
 
   @ParameterizedTest
@@ -194,16 +194,16 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
       metadata = null;
     }
 
-    TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Collections.singletonList(mockTable).iterator(), Option.empty(), expectedRollbackInfo,
-        createTransactionManager(Collections.singletonList(cleanInstantTime)));
-    assertEquals(metadata, tableServiceClient.clean(Option.empty(), true));
-    if (generatesPlan) {
-      verify(mockMetaClient).reloadActiveTimeline();
-    } else {
-      verify(mockMetaClient, never()).reloadActiveTimeline();
-      verify(mockTable, never()).clean(any(), any());
+    try (TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Collections.singletonList(mockTable).iterator(), Option.empty(), expectedRollbackInfo,
+        createTransactionManager(Collections.singletonList(cleanInstantTime)))) {
+      assertEquals(metadata, tableServiceClient.clean(Option.empty(), true));
+      if (generatesPlan) {
+        verify(mockMetaClient).reloadActiveTimeline();
+      } else {
+        verify(mockMetaClient, never()).reloadActiveTimeline();
+        verify(mockTable, never()).clean(any(), any());
+      }
     }
-    tableServiceClient.close();
   }
 
   @Test
@@ -244,11 +244,11 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     HoodieCleanMetadata metadata = new HoodieCleanMetadata();
     when(mockTable.clean(any(), eq(cleanInstantTime))).thenReturn(metadata);
 
-    TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Collections.singletonList(mockTable).iterator(), Option.empty(), expectedRollbackInfo,
-        createTransactionManager(Collections.singletonList(cleanInstantTime)));
-    assertEquals(metadata, tableServiceClient.clean(Option.empty(), true));
-    verify(mockMetaClient).reloadActiveTimeline();
-    tableServiceClient.close();
+    try (TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Collections.singletonList(mockTable).iterator(), Option.empty(), expectedRollbackInfo,
+        createTransactionManager(Collections.singletonList(cleanInstantTime)))) {
+      assertEquals(metadata, tableServiceClient.clean(Option.empty(), true));
+      verify(mockMetaClient).reloadActiveTimeline();
+    }
   }
 
   private static class TestTableServiceClient extends BaseHoodieTableServiceClient<String, String, String> {

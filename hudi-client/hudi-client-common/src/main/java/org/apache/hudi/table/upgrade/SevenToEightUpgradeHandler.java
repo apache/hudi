@@ -19,6 +19,7 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.LegacyArchivedMetaEntryReader;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
@@ -83,9 +84,9 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
 
   @Override
   public UpgradeDowngrade.TableConfigChangeSet upgrade(HoodieWriteConfig config,
-                                                                         HoodieEngineContext context,
-                                                                         String instantTime,
-                                                                         SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+                                                       HoodieEngineContext context,
+                                                       String instantTime,
+                                                       SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
@@ -133,7 +134,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     }
 
     upgradeToLSMTimeline(table, context, config);
-
+    table.getTxnManager().ifPresent(obj -> ((TransactionManager) obj).close());
     return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, Collections.emptySet());
   }
 

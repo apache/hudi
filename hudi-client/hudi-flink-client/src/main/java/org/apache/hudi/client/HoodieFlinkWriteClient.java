@@ -109,7 +109,7 @@ public class HoodieFlinkWriteClient<T>
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config) {
-    return createTableAndValidate(config, (c, ctx, txn) -> HoodieFlinkTable.create(c, ctx, txn));
+    return createTableAndValidate(config, HoodieFlinkTable::create);
   }
 
   @Override

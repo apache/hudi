@@ -44,9 +44,4 @@ public interface SupportsUpgradeDowngrade extends Serializable {
   String getPartitionColumns(HoodieWriteConfig config);
 
   BaseHoodieWriteClient getWriteClient(HoodieWriteConfig config, HoodieEngineContext context);
-
-  default HoodieTable addTxnManager(HoodieTable table) {
-    // FIME-vc: This method is deprecated - table should be created with TransactionManager passed directly
-    throw new UnsupportedOperationException("Use getTable(config, context) instead which creates table with TransactionManager");
-  }
 }

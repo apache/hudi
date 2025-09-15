@@ -46,9 +46,8 @@ public class JavaUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
 
   @Override
   public HoodieTable getTable(HoodieWriteConfig config, HoodieEngineContext context) {
-    try (TransactionManager txnManager = new TransactionManager(config, HoodieStorageUtils.getStorage(config.getBasePath(), context.getStorageConf()))) {
-      return HoodieJavaTable.create(config, context, txnManager);
-    }
+    TransactionManager txnManager = new TransactionManager(config, HoodieStorageUtils.getStorage(config.getBasePath(), context.getStorageConf()));
+    return HoodieJavaTable.create(config, context, txnManager);
   }
 
   @Override

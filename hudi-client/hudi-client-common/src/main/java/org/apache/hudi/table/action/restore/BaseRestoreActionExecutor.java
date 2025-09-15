@@ -156,6 +156,7 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
     try {
       this.txnManager.beginStateChange(Option.of(restoreInflightInstant), Option.empty());
       writeTableMetadata(restoreMetadata);
+      // FIXME-vc: check this against master again..
       TableFormatCompletionAction formatCompletionAction = restoreCompletedInstant -> table.getMetaClient().getTableFormat()
           .restore(restoreCompletedInstant, table.getContext(), table.getMetaClient(), table.getViewManager());
       table.getActiveTimeline().saveAsComplete(restoreInflightInstant, Option.of(restoreMetadata), txnManager.generateInstantTime(), formatCompletionAction);

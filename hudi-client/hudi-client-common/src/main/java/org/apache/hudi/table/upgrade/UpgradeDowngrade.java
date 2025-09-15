@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -281,6 +282,7 @@ public class UpgradeDowngrade {
           throw new HoodieException("Failed to close MDT writer for table " + table.getConfig().getBasePath());
         }
       });
+      table.getTxnManager().ifPresent(obj -> ((TransactionManager) obj).close());
     }
   }
 
@@ -400,13 +402,15 @@ public class UpgradeDowngrade {
           ? HoodieTableVersion.SIX
           : metaClient.getTableConfig().getTableVersion();
 
+      HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
       UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
-          upgradeDowngradeHelper.getTable(config, context),
+          table,
           context,
           config,
           upgradeDowngradeHelper,
           HoodieTableType.MERGE_ON_READ.equals(metaClient.getTableType()),
           tableVersion);
+      table.getTxnManager().ifPresent(obj -> ((TransactionManager) obj).close());
     }
   }
 }

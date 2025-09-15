@@ -732,8 +732,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    */
   public void rollbackInflightLogCompaction(HoodieInstant inflightInstant, Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc,
                                             TransactionManager transactionManager) {
-    Option<String> existingCommitTime = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime()).map(entry
-        -> entry.getRollbackInstant().requestedTime());
+    Option<String> existingCommitTime = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime())
+        .map(entry -> entry.getRollbackInstant().requestedTime());
     final String rollbackInstantTime = transactionManager.executeStateChangeWithInstant(existingCommitTime, commitTime -> {
       scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(), false);
       return commitTime;

@@ -20,6 +20,7 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.client.timeline.TimelineArchivers;
 import org.apache.hudi.client.timeline.versioning.v1.TimelineArchiverV1;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -140,6 +141,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
       downgradeMetadataPartitions(context, metaClient.getStorage(), metaClient, tablePropsToAdd);
       UpgradeDowngradeUtils.updateMetadataTableVersion(context, HoodieTableVersion.SEVEN, metaClient);
     }
+    table.getTxnManager().ifPresent(obj -> ((TransactionManager) obj).close());
     return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, tablePropsToRemove);
   }
 

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -60,6 +61,7 @@ public class SixToFiveDowngradeHandler implements DowngradeHandler {
         .ifPresent(v -> updatedTableProps.put(TABLE_METADATA_PARTITIONS, v));
     Option.ofNullable(tableConfig.getString(TABLE_METADATA_PARTITIONS_INFLIGHT))
         .ifPresent(v -> updatedTableProps.put(TABLE_METADATA_PARTITIONS_INFLIGHT, v));
+    table.getTxnManager().ifPresent(obj -> ((TransactionManager) obj).close());
     return new UpgradeDowngrade.TableConfigChangeSet(updatedTableProps, Collections.emptySet());
   }
 

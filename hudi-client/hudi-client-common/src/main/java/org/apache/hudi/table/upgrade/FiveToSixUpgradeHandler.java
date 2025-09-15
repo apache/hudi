@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -49,9 +50,8 @@ public class FiveToSixUpgradeHandler implements UpgradeHandler {
                                                                          String instantTime,
                                                                          SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
-
     deleteCompactionRequestedFileFromAuxiliaryFolder(table);
-
+    table.getTxnManager().ifPresent(obj -> ((TransactionManager) obj).close());
     return new UpgradeDowngrade.TableConfigChangeSet();
   }
 

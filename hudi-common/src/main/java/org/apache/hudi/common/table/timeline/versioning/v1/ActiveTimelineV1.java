@@ -364,6 +364,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   }
 
   @Override
+  // FIXME-vc: check all these API changes..
   public HoodieInstant transitionCompactionInflightToComplete(HoodieInstant inflightInstant, HoodieCommitMetadata metadata, String completionInstant) {
     // Lock is not honored in 0.x mode.
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
