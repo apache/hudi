@@ -478,9 +478,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
             initializeFilegroupsAndCommit(partitionType, COLUMN_STATS.getPartitionPath(), fileGroupCountAndRecordsPair, instantTimeForPartition, colStatsColumnsAndRecord.getKey());
             break;
           case RECORD_INDEX:
-            boolean isPartitioned = dataWriteConfig.isPartitionedRecordIndexEnabled();
-            createRecordIndexDefinition(dataMetaClient, Collections.singletonMap(HoodieRecordIndex.IS_PARTITIONED_OPTION, String.valueOf(isPartitioned)));
-            initializeFilegroupsAndCommitToRecordIndexPartition(instantTimeForPartition, lazyLatestMergedPartitionFileSliceList, isPartitioned);
+            boolean isPartitionedRLI = dataWriteConfig.isPartitionedRecordIndexEnabled();
+            initializeFilegroupsAndCommitToRecordIndexPartition(instantTimeForPartition, lazyLatestMergedPartitionFileSliceList, isPartitionedRLI);
             break;
           case EXPRESSION_INDEX:
             Set<String> expressionIndexPartitionsToInit = getExpressionIndexPartitionsToInit(partitionType, dataWriteConfig.getMetadataConfig(), dataMetaClient);
@@ -742,8 +741,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   private void initializeFilegroupsAndCommitToRecordIndexPartition(String commitTimeForPartition,
-                                                                   Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList, boolean isPartitioned) throws IOException {
-    if (isPartitioned) {
+                                                                   Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList, boolean isPartitionedRLI) throws IOException {
+    createRecordIndexDefinition(dataMetaClient, Collections.singletonMap(HoodieRecordIndex.IS_PARTITIONED_OPTION, String.valueOf(isPartitionedRLI)));
+    if (isPartitionedRLI) {
       initializeFilegroupsAndCommitToPartitionedRecordIndexPartition(commitTimeForPartition, lazyLatestMergedPartitionFileSliceList);
     } else {
       initializeFilegroupsAndCommit(RECORD_INDEX, RECORD_INDEX.getPartitionPath(),

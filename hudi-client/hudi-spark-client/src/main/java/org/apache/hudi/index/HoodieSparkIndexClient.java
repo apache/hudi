@@ -115,9 +115,9 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
       throw new HoodieMetadataIndexException("Index already exists: " + userIndexName);
     }
 
-    Map<String, String> overrideOpts = new HashMap<>();
+    Map<String, String> overrideOpts = Collections.emptyMap();
     if (HoodieRecordIndex.isPartitioned(options)) {
-      overrideOpts.put(HoodieMetadataConfig.PARTITIONED_RECORD_INDEX_ENABLE_PROP.key(), "true");
+      overrideOpts = Collections.singletonMap(HoodieMetadataConfig.PARTITIONED_RECORD_INDEX_ENABLE_PROP.key(), "true");
     }
     HoodieIndexVersion version = HoodieIndexVersion.getCurrentVersion(metaClient.getTableConfig().getTableVersion(), MetadataPartitionType.RECORD_INDEX);
     LOG.info("Creating index {} using version {}", fullIndexName, version);
@@ -150,7 +150,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
         .withVersion(existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, metaClient))
         .withIndexOptions(Collections.EMPTY_MAP)
         .build();
-    LOG.info("Registering Or Updating the index " + PARTITION_NAME_COLUMN_STATS);
+    LOG.info("Registering or updating index: {} of type: {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
     register(metaClient, indexDefinition);
   }
 
@@ -159,7 +159,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     HoodieIndexDefinition indexDefinition = HoodieIndexUtils.getSecondaryOrExpressionIndexDefinition(metaClient, userIndexName, indexType, columns, options, tableProperties);
     if (!metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()
         || !metaClient.getIndexForMetadataPartition(indexDefinition.getIndexName()).isPresent()) {
-      LOG.info("Index definition is not present. Registering the index first");
+      LOG.info("Index definition is not present. Registering index: {} of type: {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
       register(metaClient, indexDefinition);
     }
 
@@ -206,7 +206,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
   }
 
   private SparkRDDWriteClient getWriteClient(HoodieTableMetaClient metaClient, Option<HoodieIndexDefinition> indexDefinitionOpt,
-                                             Option<String> indexTypeOpt, Map<String, String> overrideConfigs) {
+                                             Option<String> indexTypeOpt, Map<String, String> configs) {
     try {
       TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
       String schemaStr = schemaUtil.getTableAvroSchema(false).toString();
@@ -220,7 +220,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
           .withEmbeddedTimelineServerEnabled(false)
           .withSchema(schemaStr)
           .withEngineType(EngineType.SPARK)
-          .withProps(overrideConfigs)
+          .withProps(configs)
           .build();
       return new SparkRDDWriteClient(engineContextOpt.get(), localWriteConfig, Option.empty());
     } catch (Exception e) {

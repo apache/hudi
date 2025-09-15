@@ -26,11 +26,10 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.HoodieDataUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.index.record.HoodieRecordIndex
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 
 import org.apache.spark.sql._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import scala.collection.{mutable, JavaConverters}
 import scala.collection.JavaConverters._
