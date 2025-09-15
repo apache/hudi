@@ -2,11 +2,31 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2025-07-21T00:00:00.000Z</updated>
+    <updated>2025-08-29T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Building a RAG-based AI Recommender (2/2)]]></title>
+        <id>https://hudi.apache.org/blog/2025/08/29/building-a-rag-based-ai-recommender-2</id>
+        <link href="https://hudi.apache.org/blog/2025/08/29/building-a-rag-based-ai-recommender-2"/>
+        <updated>2025-08-29T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blog.datumagic.ai/p/building-a-rag-based-ai-recommender-147">here</a></span>]]></content>
+        <author>
+            <name>Shiyan Xu</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="Apache Hudi" term="Apache Hudi"/>
+        <category label="AI" term="AI"/>
+        <category label="RAG" term="RAG"/>
+        <category label="Artificial Intelligence" term="Artificial Intelligence"/>
+        <category label="data lakehouse" term="data lakehouse"/>
+        <category label="Lakehouse" term="Lakehouse"/>
+        <category label="use-case" term="use-case"/>
+        <category label="datumagic" term="datumagic"/>
+    </entry>
     <entry>
         <title type="html"><![CDATA[A Deep Dive on Merge-on-Read (MoR) in Lakehouse Table Formats]]></title>
         <id>https://hudi.apache.org/blog/2025/07/21/mor-comparison</id>
@@ -485,6 +505,23 @@
         <category label="apache spark" term="apache spark"/>
     </entry>
     <entry>
+        <title type="html"><![CDATA[Optimizing Apache Hudi Workflows: Automation for Clustering, Resizing & Concurrency]]></title>
+        <id>https://hudi.apache.org/blog/2025/06/13/Optimizing-Apache-Hudi-Workflows-Automation-for-Clustering-Resizing-Concurrency</id>
+        <link href="https://hudi.apache.org/blog/2025/06/13/Optimizing-Apache-Hudi-Workflows-Automation-for-Clustering-Resizing-Concurrency"/>
+        <updated>2025-06-13T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blog.datumagic.ai/p/apache-hudi-does-xyz-110">here</a></span>]]></content>
+        <author>
+            <name>Halodoc, Apache Hudi</name>
+        </author>
+        <category label="hudi" term="hudi"/>
+        <category label="blog" term="blog"/>
+        <category label="halodoc" term="halodoc"/>
+        <category label="data lake" term="data lake"/>
+        <category label="lakehouse" term="lakehouse"/>
+        <category label="apache hudi" term="apache hudi"/>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[Exploring Apache Hudi’s New Log-Structured Merge (LSM) Timeline]]></title>
         <id>https://hudi.apache.org/blog/2025/05/29/lsm-timeline</id>
         <link href="https://hudi.apache.org/blog/2025/05/29/lsm-timeline"/>
@@ -944,36 +981,5 @@
         <category label="Delta Lake" term="Delta Lake"/>
         <category label="Clustering" term="Clustering"/>
         <category label="Z-order" term="Z-order"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Data Deduplication Strategies in an Open Lakehouse Architecture]]></title>
-        <id>https://hudi.apache.org/blog/2025/03/26/dedupe</id>
-        <link href="https://hudi.apache.org/blog/2025/03/26/dedupe"/>
-        <updated>2025-03-26T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.onehouse.ai/blog/data-deduplication-strategies-in-an-open-lakehouse-architecture">here</a></span>]]></content>
-        <author>
-            <name>Dipankar Mazumdar, Aditya Goenka</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="Apache Iceberg" term="Apache Iceberg"/>
-        <category label="Delta Lake" term="Delta Lake"/>
-        <category label="Deduplication" term="Deduplication"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[From Transactional Bottlenecks to Lightning-Fast Analytics]]></title>
-        <id>https://hudi.apache.org/blog/2025/03/26/uptycs</id>
-        <link href="https://hudi.apache.org/blog/2025/03/26/uptycs"/>
-        <updated>2025-03-26T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/allthatscales/from-transactional-bottlenecks-to-lightning-fast-analytics-74e0d3fff1c0">here</a></span>]]></content>
-        <author>
-            <name>Akash, Anudeep, Rohan</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="CDC" term="CDC"/>
-        <category label="Debezium" term="Debezium"/>
     </entry>
 </feed>
