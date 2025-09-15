@@ -157,6 +157,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.time.Instant;
@@ -793,43 +795,56 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
   }
 
-  @Disabled
-  public void testBackwardsCompatibility() throws Exception {
-    String basePath = "/tmp/hudi_trips_logical_types_json_v6/";
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
+  public void testBackwardsCompatibility(HoodieTableVersion version) throws Exception {
+    if (zookeeperTestService != null) {
+      zookeeperTestService.stop();
+      zookeeperTestService = null;
+    }
+    String dirName = "colstats-upgrade-test-v" + version.versionCode();
+    String dataPath = basePath + "/" + dirName;
+    java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
+    HoodieTestUtils.extractZipToDirectory("col-stats/" + dirName + ".zip", zipOutput, getClass());
+    String tableBasePath = zipOutput.resolve("trips_logical_types_json").toString();
+
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
-        HoodieTestUtils.createMetaClient(storage, basePath));
+        HoodieTestUtils.createMetaClient(storage, tableBasePath));
     Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
     Map<String, String> hudiOpts = new HashMap<>();
     hudiOpts.put("hoodie.datasource.write.recordkey.field", "id");
-    logicalAssertions(tableSchema, basePath, hudiOpts, HoodieTableVersion.SIX.versionCode());
+    logicalAssertions(tableSchema, tableBasePath, hudiOpts, version.versionCode());
 
-    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(basePath, WriteOperationType.UPSERT, Collections.emptyList(),
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.emptyList(),
         "placeholder", false, true, false, null, HoodieTableType.MERGE_ON_READ.name());
-    cfg.propsFilePath = "/tmp/colstats-upgrade-test/hudi.properties";
+    cfg.propsFilePath = zipOutput + "/hudi.properties";
     cfg.schemaProviderClassName = "org.apache.hudi.utilities.schema.FilebasedSchemaProvider";
     cfg.sourceOrderingFields = "timestamp";
     cfg.sourceClassName = "org.apache.hudi.utilities.sources.JsonDFSSource";
     cfg.targetTableName = "trips_logical_types_json";
-    cfg.configs.add("hoodie.streamer.source.dfs.root=file:///tmp/colstats-upgrade-test/data/data_6/");
-    cfg.configs.add(String.format(("%s=%s"), HoodieWriteConfig.WRITE_TABLE_VERSION.key(), HoodieTableVersion.SIX.versionCode()));
+    cfg.configs.add("hoodie.streamer.source.dfs.root=" + zipOutput + "/data/data_6/");
+    cfg.configs.add(String.format(("%s=%s"), HoodieWriteConfig.WRITE_TABLE_VERSION.key(), version.versionCode()));
     cfg.configs.add(String.format(("%s=%s"), HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "100"));
+    cfg.forceDisableCompaction = true;
+    cfg.sourceLimit = 100_000;
+    cfg.ignoreCheckpoint = "12345";
     new HoodieDeltaStreamer(cfg, jsc).sync();
-    logicalAssertions(tableSchema, basePath, hudiOpts, HoodieTableVersion.SIX.versionCode());
+    logicalAssertions(tableSchema, tableBasePath, hudiOpts, version.versionCode());
   }
 
   private void logicalAssertions(Schema tableSchema, String tableBasePath, Map<String, String> hudiOpts, int tableVersion) {
-    if (tableVersion > 6) {
+    if (tableVersion > 8) {
       assertEquals("timestamp-millis", tableSchema.getField("ts_millis").schema().getLogicalType().getName());
     }
     assertEquals("timestamp-micros", tableSchema.getField("ts_micros").schema().getLogicalType().getName());
-    if (tableVersion > 6 && !HoodieSparkUtils.isSpark3_3()) {
+    if (tableVersion > 8 && !HoodieSparkUtils.isSpark3_3()) {
       assertEquals("local-timestamp-millis", tableSchema.getField("local_ts_millis").schema().getLogicalType().getName());
       assertEquals("local-timestamp-micros", tableSchema.getField("local_ts_micros").schema().getLogicalType().getName());
     }
 
     assertEquals("date", tableSchema.getField("event_date").schema().getLogicalType().getName());
 
-    if (tableVersion > 6) {
+    if (tableVersion > 8) {
       assertEquals("bytes", tableSchema.getField("dec_plain_large").schema().getType().getName());
       assertEquals("decimal", tableSchema.getField("dec_plain_large").schema().getLogicalType().getName());
       assertEquals(20, ((LogicalTypes.Decimal) tableSchema.getField("dec_plain_large").schema().getLogicalType()).getPrecision());
@@ -859,7 +874,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       tolerance = totalCount / 4;
     }
 
-    if (tableVersion > 6) {
+    if (tableVersion > 8) {
       assertHalfSplit(df, "ts_millis > timestamp('2020-01-01 00:00:00Z')", expectedHalf, tolerance, "ts_millis > threshold");
       assertHalfSplit(df, "ts_millis < timestamp('2020-01-01 00:00:00Z')", expectedHalf, tolerance, "ts_millis < threshold");
       assertBoundaryCounts(df, "ts_millis > timestamp('2020-01-01 00:00:00.001Z')", "ts_millis <= timestamp('2020-01-01 00:00:00.001Z')", totalCount);
@@ -871,7 +886,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertBoundaryCounts(df, "ts_micros > timestamp('2020-06-01 12:00:00.000001Z')", "ts_micros <= timestamp('2020-06-01 12:00:00.000001Z')", totalCount);
     assertBoundaryCounts(df, "ts_micros < timestamp('2020-06-01 11:59:59.999999Z')", "ts_micros >= timestamp('2020-06-01 11:59:59.999999Z')", totalCount);
 
-    if (tableVersion > 6 && !HoodieSparkUtils.isSpark3_3()) {
+    if (tableVersion > 8 && !HoodieSparkUtils.isSpark3_3()) {
       assertHalfSplit(df, "local_ts_millis > CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)", expectedHalf, tolerance, "local_ts_millis > threshold");
       assertHalfSplit(df, "local_ts_millis < CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)", expectedHalf, tolerance, "local_ts_millis < threshold");
       assertBoundaryCounts(df, "local_ts_millis > CAST('2015-05-20 12:34:56.001' AS TIMESTAMP_NTZ)", "local_ts_millis <= CAST('2015-05-20 12:34:56.001' AS TIMESTAMP_NTZ)", totalCount);
@@ -889,7 +904,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertBoundaryCounts(df, "event_date > date('2000-01-02')", "event_date <= date('2000-01-02')", totalCount);
     assertBoundaryCounts(df, "event_date < date('1999-12-31')", "event_date >= date('1999-12-31')", totalCount);
 
-    if (tableVersion > 6) {
+    if (tableVersion > 8) {
       assertHalfSplit(df, "dec_plain_large < 1234567890.0987654321", expectedHalf, tolerance, "dec_plain_large < threshold");
       assertHalfSplit(df, "dec_plain_large > 1234567890.0987654321", expectedHalf, tolerance, "dec_plain_large > threshold");
       assertBoundaryCounts(df, "dec_plain_large < 1234567890.0987654320", "dec_plain_large >= 1234567890.0987654320", totalCount);
