@@ -2,11 +2,24 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/cn/videos</id>
     <title>Apache Hudi Blog</title>
-    <updated>2025-06-16T00:00:00.000Z</updated>
+    <updated>2025-08-11T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/cn/videos"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/cn/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Redefining Open Lakehouse Architecture with Apache Hudi 1.0]]></title>
+        <id>https://hudi.apache.org/cn/videos/2025/08/11/redefining-open-lakehouse-architecture-1.x</id>
+        <link href="https://hudi.apache.org/cn/videos/2025/08/11/redefining-open-lakehouse-architecture-1.x"/>
+        <updated>2025-08-11T00:00:00.000Z</updated>
+        <author>
+            <name>Dipankar Mazumdar</name>
+        </author>
+        <category label="hudi" term="hudi"/>
+        <category label="data lake" term="data lake"/>
+        <category label="lakehouse" term="lakehouse"/>
+        <category label="apache hudi" term="apache hudi"/>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Apache Hudi does XYZ (1/10): File pruning with multi-modal index]]></title>
         <id>https://hudi.apache.org/cn/videos/2025/06/16/apache-hudi-does-xyz-110</id>
@@ -282,22 +295,5 @@
         <category label="scd2" term="scd2"/>
         <category label="hudi streamer" term="hudi streamer"/>
         <category label="deltastreamer" term="deltastreamer"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Hudi Streamer implementing Slowly Changing Dimension Type 2 and Query Real Time Trino | Hands on]]></title>
-        <id>https://hudi.apache.org/cn/videos/2024/05/22/hudi-streamer-implementing-slowly-changing-dimension-type-2-and-query-real-time-trino</id>
-        <link href="https://hudi.apache.org/cn/videos/2024/05/22/hudi-streamer-implementing-slowly-changing-dimension-type-2-and-query-real-time-trino"/>
-        <updated>2024-05-22T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-        <category label="guide" term="guide"/>
-        <category label="beginner" term="beginner"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="slowly changing dimension type 2" term="slowly changing dimension type 2"/>
-        <category label="scd2" term="scd2"/>
-        <category label="hudi streamer" term="hudi streamer"/>
-        <category label="deltastreamer" term="deltastreamer"/>
-        <category label="trino" term="trino"/>
     </entry>
 </feed>
