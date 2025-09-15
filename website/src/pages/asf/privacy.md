@@ -22,5 +22,3 @@ We use the gathered information to help us make our site more useful to visitors
 By using this website, you consent to the collection of this data in the manner and for the purpose described above.
 
 The Hudi development community welcomes your questions or comments regarding this Privacy Policy. Send them to dev@hudi.apache.org
-
-
