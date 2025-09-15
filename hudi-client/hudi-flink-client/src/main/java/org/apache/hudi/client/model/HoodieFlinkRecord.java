@@ -187,7 +187,8 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
+  public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props,
+                                        boolean hasOperationMetaField) {
     int metaFieldSize = targetSchema.getFields().size() - recordSchema.getFields().size();
     GenericRowData metaRow = new GenericRowData(metaFieldSize);
     String[] metaVals = metadataValues.getValues();

@@ -18,7 +18,8 @@
 
 package org.apache.spark.sql.execution.benchmark
 
-import org.apache.avro.generic.IndexedRecord
+import org.apache.hudi.AvroConversionUtils
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.client.WriteStatus
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
@@ -31,14 +32,17 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.io.HoodieCreateHandle
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
-import org.apache.hudi.table.{HoodieSparkTable, HoodieTable}
-import org.apache.hudi.{AvroConversionUtils, HoodieSparkUtils}
-import org.apache.spark.hudi.benchmark.{HoodieBenchmark, HoodieBenchmarkBase}
-import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
+import org.apache.hudi.table.HoodieSparkTable
+import org.apache.hudi.table.HoodieTable
 
-import java.util.stream.Collectors
+import org.apache.avro.generic.IndexedRecord
+import org.apache.spark.hudi.benchmark.{HoodieBenchmark, HoodieBenchmarkBase}
+import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
+import org.apache.spark.sql.types._
+
 import java.util.{Properties, UUID}
+import java.util.stream.Collectors
+
 import scala.util.Random
 
 object CreateHandleBenchmark extends HoodieBenchmarkBase {
@@ -48,7 +52,7 @@ object CreateHandleBenchmark extends HoodieBenchmarkBase {
     .builder()
     .master("local[1]")
     .config("spark.driver.memory", "8G")
-    .config("spark.serializer","org.apache.spark.serializer.KryoSerializer")
+    .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
     .appName(this.getClass.getCanonicalName)
     .getOrCreate()
 
@@ -116,7 +120,7 @@ object CreateHandleBenchmark extends HoodieBenchmarkBase {
     spark.sparkContext.getConf.registerAvroSchemas(avroSchema)
 
     df.write.format("hudi").option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "key")
-      .option(HoodieMetadataConfig.ENABLE.key(),"false")
+      .option(HoodieMetadataConfig.ENABLE.key(), "false")
       .option(HoodieTableConfig.NAME.key(), "tbl_name").mode(SaveMode.Overwrite).save("/tmp/sample_test_table")
     val dummpProps = new Properties()
     val avroRecords: java.util.List[HoodieRecord[_]] = HoodieSparkUtils.createRdd(df, "struct_name", "name_space",
