@@ -202,10 +202,6 @@ module.exports = {
               label: "Tech Specs 1.0",
               href: "/tech-specs-1point0",
             },
-           /* {
-              label: "Technical Wiki",
-              href: "https://cwiki.apache.org/confluence/display/HUDI",
-            }, */
           ],
         },
         {
