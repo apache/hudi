@@ -46,8 +46,9 @@ public class SparkUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
 
   @Override
   public HoodieTable getTable(HoodieWriteConfig config, HoodieEngineContext context) {
-    TransactionManager txnManager = new TransactionManager(config, HoodieStorageUtils.getStorage(config.getBasePath(), context.getStorageConf()));
-    return HoodieSparkTable.create(config, context, txnManager);
+    try (TransactionManager txnManager = new TransactionManager(config, HoodieStorageUtils.getStorage(config.getBasePath(), context.getStorageConf()))) {
+      return HoodieSparkTable.create(config, context, txnManager);
+    }
   }
 
   @Override

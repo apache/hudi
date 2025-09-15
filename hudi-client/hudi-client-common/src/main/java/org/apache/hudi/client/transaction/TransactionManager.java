@@ -185,7 +185,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
 
   @Override
   public void close() {
-    if (isLockRequired) {
+    if (lockManager != null) {
       lockManager.close();
       LOG.info("Transaction manager closed");
     }
