@@ -20,6 +20,8 @@
 package org.apache.hudi.sync.datahub.config;
 
 import datahub.client.rest.RestEmitter;
+import datahub.shaded.org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
+import datahub.shaded.org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManagerBuilder;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.sync.datahub.HoodieDataHubSyncException;
 import org.apache.http.ssl.SSLContextBuilder;
@@ -80,7 +82,16 @@ public class TlsEnabledDataHubEmitterSupplier implements DataHubEmitterSupplier 
           LOG.info("Configuring TLS for DataHub connection");
           SSLContext sslContext = createSSLContext(caCertPath, keystorePath, keystorePassword, truststorePath, truststorePassword);
           
-          builder.customizeHttpAsyncClient(httpClientBuilder -> httpClientBuilder.setSSLContext(sslContext));
+          builder.customizeHttpAsyncClient(httpClientBuilder -> {
+            ClientTlsStrategyBuilder tlsStrategyBuilder = ClientTlsStrategyBuilder.create();
+            tlsStrategyBuilder.setSslContext(sslContext);
+
+            PoolingAsyncClientConnectionManagerBuilder connectionManagerBuilder =
+                PoolingAsyncClientConnectionManagerBuilder.create();
+            connectionManagerBuilder.setTlsStrategy(tlsStrategyBuilder.build());
+
+            httpClientBuilder.setConnectionManager(connectionManagerBuilder.build());
+          });
           LOG.info("Successfully configured TLS for DataHub connection");
         }
       });

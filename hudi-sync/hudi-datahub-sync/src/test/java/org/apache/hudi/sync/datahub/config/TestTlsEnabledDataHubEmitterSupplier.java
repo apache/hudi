@@ -54,7 +54,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
     props.setProperty(META_SYNC_DATAHUB_EMITTER_SERVER.key(), "https://datahub.example.com:8080");
     props.setProperty(META_SYNC_DATAHUB_EMITTER_TOKEN.key(), "test-token");
     
-    TypedProperties typedProps = new TypedProperties(props);
+    TypedProperties typedProps = new TypedProperties();
+    TypedProperties.putAll(typedProps, props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
     
     RestEmitter emitter = supplier.get();
@@ -70,7 +71,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
     props.setProperty(META_SYNC_DATAHUB_EMITTER_SERVER.key(), "https://datahub.example.com:8080");
     props.setProperty(META_SYNC_DATAHUB_TLS_CA_CERT_PATH.key(), caCertPath.toString());
     
-    TypedProperties typedProps = new TypedProperties(props);
+    TypedProperties typedProps = new TypedProperties();
+    TypedProperties.putAll(typedProps, props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
     
     RestEmitter emitter = supplier.get();
@@ -82,7 +84,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
     Properties props = new Properties();
     // No server URL provided
     
-    TypedProperties typedProps = new TypedProperties(props);
+    TypedProperties typedProps = new TypedProperties();
+    TypedProperties.putAll(typedProps, props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
     
     assertThrows(HoodieDataHubSyncException.class, supplier::get,
@@ -95,7 +98,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
     props.setProperty(META_SYNC_DATAHUB_EMITTER_SERVER.key(), "https://datahub.example.com:8080");
     props.setProperty(META_SYNC_DATAHUB_TLS_CA_CERT_PATH.key(), "/non/existent/path/cert.pem");
     
-    TypedProperties typedProps = new TypedProperties(props);
+    TypedProperties typedProps = new TypedProperties();
+    TypedProperties.putAll(typedProps, props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
     
     // Should throw exception when CA cert path is invalid
@@ -112,7 +116,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
     props.setProperty(META_SYNC_DATAHUB_TLS_KEYSTORE_PATH.key(), keystorePath.toString());
     props.setProperty(META_SYNC_DATAHUB_TLS_KEYSTORE_PASSWORD.key(), "testpass");
     
-    TypedProperties typedProps = new TypedProperties(props);
+    TypedProperties typedProps = new TypedProperties();
+    TypedProperties.putAll(typedProps, props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
     
     RestEmitter emitter = supplier.get();
@@ -128,7 +133,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
     props.setProperty(META_SYNC_DATAHUB_TLS_TRUSTSTORE_PATH.key(), truststorePath.toString());
     props.setProperty(META_SYNC_DATAHUB_TLS_TRUSTSTORE_PASSWORD.key(), "testpass");
     
-    TypedProperties typedProps = new TypedProperties(props);
+    TypedProperties typedProps = new TypedProperties();
+    TypedProperties.putAll(typedProps, props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
     
     RestEmitter emitter = supplier.get();
@@ -147,7 +153,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
     props.setProperty(META_SYNC_DATAHUB_TLS_TRUSTSTORE_PATH.key(), truststorePath.toString());
     props.setProperty(META_SYNC_DATAHUB_TLS_TRUSTSTORE_PASSWORD.key(), "testpass");
     
-    TypedProperties typedProps = new TypedProperties(props);
+    TypedProperties typedProps = new TypedProperties();
+    TypedProperties.putAll(typedProps, props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
     
     RestEmitter emitter = supplier.get();
@@ -164,7 +171,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
     props.setProperty(META_SYNC_DATAHUB_TLS_KEYSTORE_PATH.key(), keystorePath.toString());
     // No password provided - should work with warning
     
-    TypedProperties typedProps = new TypedProperties(props);
+    TypedProperties typedProps = new TypedProperties();
+    TypedProperties.putAll(typedProps, props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
     
     RestEmitter emitter = supplier.get();
@@ -178,7 +186,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
     props.setProperty(META_SYNC_DATAHUB_TLS_KEYSTORE_PATH.key(), "/non/existent/keystore.p12");
     props.setProperty(META_SYNC_DATAHUB_TLS_KEYSTORE_PASSWORD.key(), "testpass");
     
-    TypedProperties typedProps = new TypedProperties(props);
+    TypedProperties typedProps = new TypedProperties();
+    TypedProperties.putAll(typedProps, props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
     
     assertThrows(HoodieDataHubSyncException.class, supplier::get,
@@ -205,7 +214,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
     props.setProperty(META_SYNC_DATAHUB_TLS_KEYSTORE_PATH.key(), keystorePath.toString());
     props.setProperty(META_SYNC_DATAHUB_TLS_KEYSTORE_PASSWORD.key(), "wrongpassword");
     
-    TypedProperties typedProps = new TypedProperties(props);
+    TypedProperties typedProps = new TypedProperties();
+    TypedProperties.putAll(typedProps, props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
     
     assertThrows(HoodieDataHubSyncException.class, supplier::get,
@@ -221,7 +231,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
     props.setProperty(META_SYNC_DATAHUB_TLS_TRUSTSTORE_PATH.key(), truststorePath.toString());
     props.setProperty(META_SYNC_DATAHUB_TLS_TRUSTSTORE_PASSWORD.key(), "wrongpassword");
     
-    TypedProperties typedProps = new TypedProperties(props);
+    TypedProperties typedProps = new TypedProperties();
+    TypedProperties.putAll(typedProps, props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
     
     assertThrows(HoodieDataHubSyncException.class, supplier::get,
@@ -238,7 +249,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
     props.setProperty(META_SYNC_DATAHUB_TLS_TRUSTSTORE_PATH.key(), truststorePath.toString());
     // No password provided - should work with warning
     
-    TypedProperties typedProps = new TypedProperties(props);
+    TypedProperties typedProps = new TypedProperties();
+    TypedProperties.putAll(typedProps, props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
     
     RestEmitter emitter = supplier.get();
@@ -257,7 +269,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
     props.setProperty(META_SYNC_DATAHUB_TLS_TRUSTSTORE_PATH.key(), truststorePath.toString());
     props.setProperty(META_SYNC_DATAHUB_TLS_TRUSTSTORE_PASSWORD.key(), "testpass");
     
-    TypedProperties typedProps = new TypedProperties(props);
+    TypedProperties typedProps = new TypedProperties();
+    TypedProperties.putAll(typedProps, props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
     
     RestEmitter emitter = supplier.get();
@@ -271,7 +284,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
     props.setProperty(META_SYNC_DATAHUB_TLS_CA_CERT_PATH.key(), ""); // Empty string
     props.setProperty(META_SYNC_DATAHUB_TLS_KEYSTORE_PATH.key(), ""); // Empty string
     
-    TypedProperties typedProps = new TypedProperties(props);
+    TypedProperties typedProps = new TypedProperties();
+    TypedProperties.putAll(typedProps, props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
     
     // Should work without TLS configuration when paths are empty
@@ -286,7 +300,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
     props.setProperty(META_SYNC_DATAHUB_TLS_TRUSTSTORE_PATH.key(), "/non/existent/truststore.p12");
     props.setProperty(META_SYNC_DATAHUB_TLS_TRUSTSTORE_PASSWORD.key(), "testpass");
     
-    TypedProperties typedProps = new TypedProperties(props);
+    TypedProperties typedProps = new TypedProperties();
+    TypedProperties.putAll(typedProps, props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
     
     assertThrows(HoodieDataHubSyncException.class, supplier::get,
@@ -304,7 +319,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
     props.setProperty(META_SYNC_DATAHUB_TLS_KEYSTORE_PATH.key(), invalidKeystorePath.toString());
     props.setProperty(META_SYNC_DATAHUB_TLS_KEYSTORE_PASSWORD.key(), "testpass");
     
-    TypedProperties typedProps = new TypedProperties(props);
+    TypedProperties typedProps = new TypedProperties();
+    TypedProperties.putAll(typedProps, props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
     
     assertThrows(HoodieDataHubSyncException.class, supplier::get,
@@ -322,7 +338,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
     props.setProperty(META_SYNC_DATAHUB_TLS_TRUSTSTORE_PATH.key(), invalidTruststorePath.toString());
     props.setProperty(META_SYNC_DATAHUB_TLS_TRUSTSTORE_PASSWORD.key(), "testpass");
     
-    TypedProperties typedProps = new TypedProperties(props);
+    TypedProperties typedProps = new TypedProperties();
+    TypedProperties.putAll(typedProps, props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
     
     assertThrows(HoodieDataHubSyncException.class, supplier::get,
