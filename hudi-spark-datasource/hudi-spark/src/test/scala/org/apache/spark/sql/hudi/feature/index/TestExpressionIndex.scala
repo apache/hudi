@@ -27,7 +27,7 @@ import org.apache.hudi.avro.model.HoodieMetadataBloomFilter
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkMetadataWriterUtils
-import org.apache.hudi.client.utils.SparkMetadataWriterUtils.SparkValueMetadata
+import org.apache.hudi.client.utils.SparkValueMetadata
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
