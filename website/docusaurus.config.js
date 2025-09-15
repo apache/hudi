@@ -228,10 +228,6 @@ module.exports = {
               label: "Report Issues",
               to: "/contribute/report-security-issues",
             },
-           /* {
-              label: "Report Issues",
-              href: "https://issues.apache.org/jira/projects/HUDI/summary",
-            }, */
           ],
         },
         {
