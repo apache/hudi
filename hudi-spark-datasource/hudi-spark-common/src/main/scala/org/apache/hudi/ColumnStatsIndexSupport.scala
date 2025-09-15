@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.{ValueMetadata, ValueType}
 import org.apache.hudi.avro.ValueMetadata.getValueMetadata
 import org.apache.hudi.avro.model._
-import org.apache.hudi.client.utils.SparkMetadataWriterUtils.SparkValueMetadata
+import org.apache.hudi.client.utils.SparkValueMetadata
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
 import org.apache.hudi.common.function.SerializableFunction

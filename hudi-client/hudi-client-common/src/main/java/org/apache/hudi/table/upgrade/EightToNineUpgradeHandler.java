@@ -255,7 +255,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
           if (idxDef.getVersion() == null || idxDef.getVersion().lowerThan(HoodieIndexVersion.V2)) {
             idxDef.getSourceFields().stream().filter(field -> {
               Option<Schema> schema = AvroSchemaUtils.findNestedFieldSchema(tableSchema, field);
-              if (schema.isEmpty()) {
+              if (schema.isPresent()) {
                 return schema.get().getLogicalType() != null || schema.get().getType() == Schema.Type.FIXED;
               }
               return false;

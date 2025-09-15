@@ -944,6 +944,18 @@ jobs:
     strategy:
       matrix:
         include:
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.20'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.13.1'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.1'
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.19'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.13.1'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.1'
           - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink1.18'
             flinkAvroVersion: '1.11.4'
