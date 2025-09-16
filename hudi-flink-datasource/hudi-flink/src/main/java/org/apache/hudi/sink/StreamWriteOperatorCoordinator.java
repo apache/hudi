@@ -39,6 +39,7 @@ import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.meta.CkpMetadataFactory;
+import org.apache.hudi.sink.utils.ExplicitClassloaderThreadFactory;
 import org.apache.hudi.sink.utils.HiveSyncContext;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -70,6 +71,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ThreadFactory;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
@@ -194,12 +196,13 @@ public class StreamWriteOperatorCoordinator
     // the write client must create after the table creation
     this.writeClient = FlinkWriteClients.createWriteClient(conf);
     this.ckpMetadata = initCkpMetadata(writeClient.getConfig(), this.conf);
-    initMetadataTable(this.writeClient);
     this.tableState = TableState.create(conf);
     // start the executor
     this.executor = NonThrownExecutor.builder(LOG)
         .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
+        .threadFactory(getThreadFactory("meta-event-handle"))
         .waitForTasksFinish(true).build();
+    initMetadataTable(this.writeClient);
     // start the executor if required
     if (tableState.syncHive) {
       initHiveSync();
@@ -208,6 +211,10 @@ public class StreamWriteOperatorCoordinator
     if (OptionsResolver.isMultiWriter(conf)) {
       initClientIds(conf);
     }
+  }
+
+  private ThreadFactory getThreadFactory(String threadName) {
+    return new ExplicitClassloaderThreadFactory(threadName, context.getUserCodeClassloader());
   }
 
   @Override
@@ -254,9 +261,6 @@ public class StreamWriteOperatorCoordinator
   public void notifyCheckpointComplete(long checkpointId) {
     executor.execute(
         () -> {
-          // The executor thread inherits the classloader of the #notifyCheckpointComplete
-          // caller, which is a AppClassLoader.
-          Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
           // for streaming mode, commits the ever received events anyway,
           // the stream write task snapshot and flush the data buffer synchronously in sequence,
           // so a successful checkpoint subsumes the old one(follows the checkpoint subsuming contract)
@@ -322,7 +326,10 @@ public class StreamWriteOperatorCoordinator
   // -------------------------------------------------------------------------
 
   private void initHiveSync() {
-    this.hiveSyncExecutor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
+    this.hiveSyncExecutor = NonThrownExecutor.builder(LOG)
+        .threadFactory(getThreadFactory("hive-sync"))
+        .waitForTasksFinish(true)
+        .build();
     this.hiveSyncContext = HiveSyncContext.create(conf, this.storageConf);
   }
 
@@ -348,8 +355,8 @@ public class StreamWriteOperatorCoordinator
     }
   }
 
-  private static void initMetadataTable(HoodieFlinkWriteClient<?> writeClient) {
-    writeClient.initMetadataTable();
+  private void initMetadataTable(HoodieFlinkWriteClient<?> writeClient) {
+    this.executor.executeSync(writeClient::initMetadataTable, "Init metadata table client");
   }
 
   private static CkpMetadata initCkpMetadata(HoodieWriteConfig writeConfig, Configuration conf) throws IOException {
@@ -467,9 +474,6 @@ public class StreamWriteOperatorCoordinator
       // start to commit the instant.
       boolean committed = commitInstant(this.instant);
       if (committed) {
-        // The executor thread inherits the classloader of the #handleEventFromOperator
-        // caller, which is a AppClassLoader.
-        Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
         // sync Hive synchronously if it is enabled in batch mode.
         syncHive();
         // schedules the compaction or clustering if it is enabled in batch execution mode
