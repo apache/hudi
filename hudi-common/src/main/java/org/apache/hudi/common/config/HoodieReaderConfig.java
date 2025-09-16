@@ -92,7 +92,7 @@ public class HoodieReaderConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> HFILE_BLOCK_CACHE_ENABLED = ConfigProperty
       .key("hoodie.hfile.block.cache.enabled")
-      .defaultValue(false)
+      .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.1.0")
       .withDocumentation("Enable HFile block-level caching for metadata files. This caches frequently "
