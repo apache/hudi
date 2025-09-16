@@ -89,4 +89,32 @@ public class HoodieReaderConfig extends HoodieConfig {
       "hoodie.write.record.merge.custom.implementation.classes";
   public static final String RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY =
       "hoodie.datasource.write.record.merger.impls";
+
+  public static final ConfigProperty<Boolean> HFILE_BLOCK_CACHE_ENABLED = ConfigProperty
+      .key("hoodie.hfile.block.cache.enabled")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Enable HFile block-level caching for metadata files. This caches frequently "
+          + "accessed HFile blocks in memory to reduce I/O operations during metadata queries. "
+          + "Improves performance for workloads with repeated metadata access patterns.");
+
+  public static final ConfigProperty<Integer> HFILE_BLOCK_CACHE_SIZE = ConfigProperty
+      .key("hoodie.hfile.block.cache.size")
+      .defaultValue(100)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Maximum number of HFile blocks to cache in memory per metadata file reader. "
+          + "Higher values improve cache hit rates but consume more memory. "
+          + "Only effective when hfile.block.cache.enabled is true.");
+
+  public static final ConfigProperty<Integer> HFILE_BLOCK_CACHE_TTL_MINUTES = ConfigProperty
+      .key("hoodie.hfile.block.cache.ttl.minutes")
+      .defaultValue(60)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Time-to-live (TTL) in minutes for cached HFile blocks. Blocks are evicted "
+          + "from the cache after this duration to prevent memory leaks. "
+          + "Only effective when hfile.block.cache.enabled is true.");
+
 }
