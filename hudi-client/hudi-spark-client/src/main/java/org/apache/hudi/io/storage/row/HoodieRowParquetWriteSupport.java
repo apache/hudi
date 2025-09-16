@@ -475,7 +475,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     } else if (dataType instanceof ArrayType) {
       ArrayType arrayType = (ArrayType) dataType;
       DataType elementType = arrayType.elementType();
-      Schema avroElementSchema = resolvedSchema.getElementType();
+      Schema avroElementSchema = resolvedSchema == null ? null : resolvedSchema.getElementType();
       if (!writeLegacyListFormat) {
         return Types
             .buildGroup(repetition).as(LogicalTypeAnnotation.listType())
