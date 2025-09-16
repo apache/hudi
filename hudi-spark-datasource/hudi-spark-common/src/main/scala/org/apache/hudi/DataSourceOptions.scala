@@ -418,6 +418,9 @@ object DataSourceWriteOptions {
    */
   val ORDERING_FIELDS = HoodieWriteConfig.PRECOMBINE_FIELD_NAME
 
+  // for b/w compatibility
+  val PRECOMBINE_FIELD = HoodieWriteConfig.PRECOMBINE_FIELD_NAME
+
   /**
    * Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.
    * This will render any value set for `PRECOMBINE_FIELD_OPT_VAL` in-effective
