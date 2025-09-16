@@ -44,7 +44,8 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
   def commonOpts: Map[String, String] = Map(
     PARTITIONPATH_FIELD.key -> "partition",
     HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
-    HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "15"
+    HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "15",
+    "hoodie.hfile.block.cache.enabled" -> "true"
   ) ++ baseOpts ++ metadataOpts
 
   val secondaryIndexOpts: Map[String, String] = Map(
