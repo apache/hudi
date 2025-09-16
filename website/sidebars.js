@@ -138,20 +138,6 @@ module.exports = {
                     ],
                 },
             ],
-        },
-        {
-            type: 'category',
-            label: 'Frequently Asked Questions(FAQs)',
-            items: [
-                'faq',
-                'faq_general',
-                'faq_design_and_concepts',
-                'faq_writing_tables',
-                'faq_reading_tables',
-                'faq_table_services',
-                'faq_storage',
-                'faq_integrations',
-            ],
         }
     ],
     quick_links: [
