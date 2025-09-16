@@ -49,6 +49,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestIncrementalQueries extends SparkClientFunctionalTestHarness {
@@ -71,7 +72,7 @@ class TestIncrementalQueries extends SparkClientFunctionalTestHarness {
             instant, tableVersion.equals("6") ? instant.requestedTime() : instant.getCompletionTime()))
         .collect(Collectors.toList());
 
-    // Run incremental query: last two commits are within the range.
+    // Run incremental query for CASE 1: last two commits are within the range.
     // Make sure the records from the second commit are included.
     // This avoids the differences between different versions. That is,
     // the range type of table version 6 is open_close, but that of > 6 is close_close by default.
@@ -80,7 +81,6 @@ class TestIncrementalQueries extends SparkClientFunctionalTestHarness {
         .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
         .option(DataSourceReadOptions.START_COMMIT().key(), startTimestamp)
         .option(DataSourceReadOptions.END_COMMIT().key(), sortedInstants.get(2).getRight()).load(path);
-    List<Row> rows = result.collectAsList();
     // Only records from the last two commits should be returned.
     assertEquals(3,
         result.filter(new Column("_hoodie_commit_time")
@@ -88,60 +88,53 @@ class TestIncrementalQueries extends SparkClientFunctionalTestHarness {
                     sortedInstants.get(1).getLeft().requestedTime(),
                     sortedInstants.get(2).getLeft().requestedTime()))
             .count());
-  }
+    assertFalse(
+        result.filter(new Column("_hoodie_commit_time")
+                .isin(
+                    sortedInstants.get(1).getLeft().requestedTime(),
+                    sortedInstants.get(2).getLeft().requestedTime()))
+            .isEmpty());
 
-  @ParameterizedTest
-  @CsvSource({
-      "6,COPY_ON_WRITE", "8,COPY_ON_WRITE", "9,COPY_ON_WRITE",
-      "6,MERGE_ON_READ", "8,MERGE_ON_READ", "9,MERGE_ON_READ"})
-  void testIncrementalQueryWithMultiCommitsInSameFileAndLargeStartTime(String tableVersion, String tableType) {
-    String path = basePath();
-    Map<String, String> hudiOptions = createWriteOption(tableVersion, tableType);
-    StructType schema = createTableSchema();
-    writeData(hudiOptions, path, tableVersion, tableType, schema);
-    HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setBasePath(path).setConf(storageConf()).build();
-    List<Pair<HoodieInstant, String>> sortedInstants = metaClient.getActiveTimeline().getInstants()
-        .stream()
-        .map(instant -> Pair.of(
-            instant, tableVersion.equals("6") ? instant.requestedTime() : instant.getCompletionTime()))
-        .collect(Collectors.toList());
-
-    // Run incremental query: start time is larger than the newest instant.
-    String startTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(2).getRight()) + 100);
+    // Run incremental query for CASE 2: start time is larger than the newest instant.
+    // That is, no instances would fall into this range.
+    startTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(2).getRight()) + 100);
     String endTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(2).getRight()) + 200);
-    Dataset<Row> result = spark().read().format("org.apache.hudi")
+    result = spark().read().format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
         .option(DataSourceReadOptions.START_COMMIT().key(), startTimestamp)
         .option(DataSourceReadOptions.END_COMMIT().key(), endTimestamp).load(path);
     assertTrue(result.collectAsList().isEmpty());
-  }
 
-  @ParameterizedTest
-  @CsvSource({
-      "6,COPY_ON_WRITE", "8,COPY_ON_WRITE", "9,COPY_ON_WRITE",
-      "6,MERGE_ON_READ", "8,MERGE_ON_READ", "9,MERGE_ON_READ"})
-  void testIncrementalQueryWithMultiCommitsInSameFileAndSmallEndTime(String tableVersion, String tableType) {
-    String path = basePath();
-    Map<String, String> hudiOptions = createWriteOption(tableVersion, tableType);
-    StructType schema = createTableSchema();
-    writeData(hudiOptions, path, tableVersion, tableType, schema);
-    HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setBasePath(path).setConf(storageConf()).build();
-    List<Pair<HoodieInstant, String>> sortedInstants = metaClient.getActiveTimeline().getInstants()
-        .stream()
-        .map(instant -> Pair.of(
-            instant, tableVersion.equals("6") ? instant.requestedTime() : instant.getCompletionTime()))
-        .collect(Collectors.toList());
-
-    // Run incremental query: end time is smaller than the oldest instant.
-    String startTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(0).getRight()) - 200);
-    String endTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(0).getRight()) - 100);
-    Dataset<Row> result = spark().read().format("org.apache.hudi")
+    // Run incremental query for CASE 3: start time is larger than the newest instant.
+    // That is, no instances would fall into this range.
+    startTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(0).getRight()) - 200);
+    endTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(0).getRight()) - 100);
+    result = spark().read().format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
         .option(DataSourceReadOptions.START_COMMIT().key(), startTimestamp)
         .option(DataSourceReadOptions.END_COMMIT().key(), endTimestamp).load(path);
     assertTrue(result.collectAsList().isEmpty());
+
+    // Run incremental query for CASE 4: start time is the second instant + 1, end time is the last instant - 1.
+    // That is, no instances would fall into this range.
+    startTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(1).getRight()) + 1);
+    endTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(2).getRight()) - 1);
+    result = spark().read().format("org.apache.hudi")
+        .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
+        .option(DataSourceReadOptions.START_COMMIT().key(), startTimestamp)
+        .option(DataSourceReadOptions.END_COMMIT().key(), endTimestamp).load(path);
+    assertTrue(result.collectAsList().isEmpty());
+
+    // Run incremental query for CASE 5: start time is the second instant + 1, end time is the last instant.
+    // That is, the last instant would fall into this range.
+    startTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(1).getRight()) + 1);
+    endTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(2).getRight()));
+    result = spark().read().format("org.apache.hudi")
+        .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
+        .option(DataSourceReadOptions.START_COMMIT().key(), startTimestamp)
+        .option(DataSourceReadOptions.END_COMMIT().key(), endTimestamp).load(path);
+    assertEquals(1, result.filter(new Column("_hoodie_commit_time")
+        .isin(sortedInstants.get(2).getLeft().requestedTime())).count());
   }
 
   private Map<String, String> createWriteOption(String tableVersion, String tableType) {
