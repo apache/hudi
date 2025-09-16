@@ -581,8 +581,8 @@ public class LockAuditingCommand {
         TransactionWindow otherWindow = sortedWindows.get(j);
         long otherStart = otherWindow.startTimestamp;
         
-        // Check if windows overlap and current transaction didn't end gracefully
-        if (otherStart < currentEnd && !currentWindow.endTimestamp.isPresent()) {
+        // Check if windows overlap
+        if (otherStart < currentEnd) {
           errors.add(String.format("[ERROR] %s => overlaps with %s",
               currentWindow.filename, otherWindow.filename));
         }
