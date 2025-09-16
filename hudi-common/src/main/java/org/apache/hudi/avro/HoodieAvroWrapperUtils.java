@@ -188,7 +188,10 @@ public class HoodieAvroWrapperUtils {
     } else if (avroValueWrapper instanceof StringWrapper) {
       return unwrapString(avroValueWrapper);
     } else if (avroValueWrapper instanceof ArrayWrapper) {
-      return unwrapArray(avroValueWrapper, HoodieAvroWrapperUtils::unwrapAvroValueWrapper);
+      ArrayWrapper arrayWrapper = (ArrayWrapper) avroValueWrapper;
+      return OrderingValues.create(arrayWrapper.getWrappedValues().stream()
+          .map(HoodieAvroWrapperUtils::unwrapAvroValueWrapper)
+          .toArray(Comparable[]::new));
     } else if (avroValueWrapper instanceof GenericRecord) {
       return unwrapGenericRecord(avroValueWrapper);
     } else {
@@ -255,19 +258,19 @@ public class HoodieAvroWrapperUtils {
       this.wrapperClass = wrapperClass;
     }
 
-    Class<?> getClazz() {
+    public Class<?> getClazz() {
       return clazz;
     }
 
-    Object wrap(Comparable<?> value) {
+    public Object wrap(Comparable<?> value) {
       return wrapper.apply(value);
     }
 
-    Comparable<?> unwrap(Object value) {
+    public Comparable<?> unwrap(Object value) {
       return unwrapper.apply(value);
     }
 
-    Class<?> getWrapperClass() {
+    public Class<?> getWrapperClass() {
       return wrapperClass;
     }
   }
@@ -339,13 +342,6 @@ public class HoodieAvroWrapperUtils {
 
   private static Comparable<?> unwrapBytes(Object val) {
     return ((BytesWrapper) val).getValue();
-  }
-
-  public static Comparable<?> unwrapArray(Object val, Function<Object, Comparable<?>> unwrapper) {
-    ArrayWrapper arrayWrapper = (ArrayWrapper) val;
-    return new ArrayComparable(arrayWrapper.getWrappedValues().stream()
-        .map(unwrapper::apply)
-        .toArray(Comparable[]::new));
   }
 
   // NOTE: This branch could be hit b/c Avro records could be reconstructed

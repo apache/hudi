@@ -19,7 +19,6 @@
 package org.apache.hudi.io.log.block;
 
 import org.apache.hudi.avro.AvroSchemaCache;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
@@ -30,6 +29,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.storage.ColumnRangeMetadataProvider;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.avro.Schema;

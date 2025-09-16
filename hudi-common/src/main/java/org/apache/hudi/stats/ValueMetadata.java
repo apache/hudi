@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.avro;
+package org.apache.hudi.stats;
 
 import org.apache.hudi.avro.model.HoodieValueTypeInfo;
 import org.apache.hudi.common.util.collection.Pair;
@@ -90,6 +90,7 @@ public class ValueMetadata implements Serializable {
 
     @Override
     public HoodieValueTypeInfo getValueTypeInfo() {
+      // V1 should never be persisted to the MDT. It is only for in memory
       return null;
     }
   }

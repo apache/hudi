@@ -18,13 +18,10 @@
 
 package org.apache.hudi.common.util.collection;
 
-import org.jetbrains.annotations.NotNull;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
@@ -37,7 +34,7 @@ import java.util.function.Function;
  *
  * @see org.apache.hudi.common.util.OrderingValues
  */
-public class ArrayComparable implements Comparable<ArrayComparable>, Serializable, Collection {
+public class ArrayComparable implements Comparable<ArrayComparable>, Serializable {
   private static final long serialVersionUID = 1L;
 
   private final Comparable[] values;
@@ -65,86 +62,14 @@ public class ArrayComparable implements Comparable<ArrayComparable>, Serializabl
 
   @Override
   public int compareTo(ArrayComparable otherOrderingValue) {
-    int minLength = Math.min(values.length, otherOrderingValue.values.length);
-    // Compare elements up to the shorter array's length
-    for (int i = 0; i < minLength; i++) {
+    ValidationUtils.checkArgument(values.length == otherOrderingValue.values.length, "The values should be of the same size");
+    for (int i = 0; i < values.length; i++) {
       int comparingValue = values[i].compareTo(otherOrderingValue.values[i]);
       if (comparingValue != 0) {
         return comparingValue;
       }
     }
-    // If all compared elements are equal, the shorter array comes first
-    return Integer.compare(values.length, otherOrderingValue.values.length);
-  }
-
-  @Override
-  public int size() {
-    return values.length;
-  }
-
-  @Override
-  public boolean isEmpty() {
-    return size() == 0;
-  }
-
-  @Override
-  public boolean contains(Object o) {
-    for (Comparable value : values) {
-      if (value.equals(o)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  @Override
-  public @NotNull Iterator iterator() {
-    return Arrays.stream(values).iterator();
-  }
-
-  @Override
-  public @NotNull Object[] toArray() {
-    return values;
-  }
-
-  @Override
-  public boolean add(Object o) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public boolean remove(Object o) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public boolean addAll(@NotNull Collection c) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void clear() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public boolean retainAll(@NotNull Collection c) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public boolean removeAll(@NotNull Collection c) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public boolean containsAll(@NotNull Collection c) {
-    return new HashSet<>(Arrays.asList(values)).containsAll(c);
-  }
-
-  @Override
-  public @NotNull Object[] toArray(@NotNull Object[] a) {
-    return values;
+    return 0;
   }
 
   @Override

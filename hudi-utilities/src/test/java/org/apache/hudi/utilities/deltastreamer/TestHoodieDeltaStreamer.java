@@ -110,6 +110,7 @@ import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.sources.SqlSource;
 import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.sources.TestParquetDFSSourceEmptyBatch;
+import org.apache.hudi.utilities.sources.helpers.TestMercifulJsonToRowConverter;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy;
 import org.apache.hudi.utilities.streamer.StreamSync;
@@ -798,38 +799,40 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @ParameterizedTest
   @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
   public void testBackwardsCompatibility(HoodieTableVersion version) throws Exception {
-    if (zookeeperTestService != null) {
-      zookeeperTestService.stop();
-      zookeeperTestService = null;
-    }
-    String dirName = "colstats-upgrade-test-v" + version.versionCode();
-    String dataPath = basePath + "/" + dirName;
-    java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
-    HoodieTestUtils.extractZipToDirectory("col-stats/" + dirName + ".zip", zipOutput, getClass());
-    String tableBasePath = zipOutput.resolve("trips_logical_types_json").toString();
+    TestMercifulJsonToRowConverter.timestampNTZCompatibility(() -> {
+      if (zookeeperTestService != null) {
+        zookeeperTestService.stop();
+        zookeeperTestService = null;
+      }
+      String dirName = "colstats-upgrade-test-v" + version.versionCode();
+      String dataPath = basePath + "/" + dirName;
+      java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
+      HoodieTestUtils.extractZipToDirectory("col-stats/" + dirName + ".zip", zipOutput, getClass());
+      String tableBasePath = zipOutput.resolve("trips_logical_types_json").toString();
 
-    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
-        HoodieTestUtils.createMetaClient(storage, tableBasePath));
-    Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
-    Map<String, String> hudiOpts = new HashMap<>();
-    hudiOpts.put("hoodie.datasource.write.recordkey.field", "id");
-    logicalAssertions(tableSchema, tableBasePath, hudiOpts, version.versionCode());
+      TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
+          HoodieTestUtils.createMetaClient(storage, tableBasePath));
+      Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
+      Map<String, String> hudiOpts = new HashMap<>();
+      hudiOpts.put("hoodie.datasource.write.recordkey.field", "id");
+      logicalAssertions(tableSchema, tableBasePath, hudiOpts, version.versionCode());
 
-    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.emptyList(),
-        "placeholder", false, true, false, null, HoodieTableType.MERGE_ON_READ.name());
-    cfg.propsFilePath = zipOutput + "/hudi.properties";
-    cfg.schemaProviderClassName = "org.apache.hudi.utilities.schema.FilebasedSchemaProvider";
-    cfg.sourceOrderingFields = "timestamp";
-    cfg.sourceClassName = "org.apache.hudi.utilities.sources.JsonDFSSource";
-    cfg.targetTableName = "trips_logical_types_json";
-    cfg.configs.add("hoodie.streamer.source.dfs.root=" + zipOutput + "/data/data_6/");
-    cfg.configs.add(String.format(("%s=%s"), HoodieWriteConfig.WRITE_TABLE_VERSION.key(), version.versionCode()));
-    cfg.configs.add(String.format(("%s=%s"), HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "100"));
-    cfg.forceDisableCompaction = true;
-    cfg.sourceLimit = 100_000;
-    cfg.ignoreCheckpoint = "12345";
-    new HoodieDeltaStreamer(cfg, jsc).sync();
-    logicalAssertions(tableSchema, tableBasePath, hudiOpts, version.versionCode());
+      HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.emptyList(),
+          "placeholder", false, true, false, null, HoodieTableType.MERGE_ON_READ.name());
+      cfg.propsFilePath = zipOutput + "/hudi.properties";
+      cfg.schemaProviderClassName = "org.apache.hudi.utilities.schema.FilebasedSchemaProvider";
+      cfg.sourceOrderingFields = "timestamp";
+      cfg.sourceClassName = "org.apache.hudi.utilities.sources.JsonDFSSource";
+      cfg.targetTableName = "trips_logical_types_json";
+      cfg.configs.add("hoodie.streamer.source.dfs.root=" + zipOutput + "/data/data_6/");
+      cfg.configs.add(String.format(("%s=%s"), HoodieWriteConfig.WRITE_TABLE_VERSION.key(), version.versionCode()));
+      cfg.configs.add(String.format(("%s=%s"), HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "100"));
+      cfg.forceDisableCompaction = true;
+      cfg.sourceLimit = 100_000;
+      cfg.ignoreCheckpoint = "12345";
+      new HoodieDeltaStreamer(cfg, jsc).sync();
+      logicalAssertions(tableSchema, tableBasePath, hudiOpts, version.versionCode());
+    });
   }
 
   private void logicalAssertions(Schema tableSchema, String tableBasePath, Map<String, String> hudiOpts, int tableVersion) {

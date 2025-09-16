@@ -20,10 +20,7 @@ package org.apache.hudi
 import org.apache.hudi.ColumnStatsIndexSupport._
 import org.apache.hudi.HoodieCatalystUtils.{withPersistedData, withPersistedDataset}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.avro.{ValueMetadata, ValueType}
-import org.apache.hudi.avro.ValueMetadata.getValueMetadata
 import org.apache.hudi.avro.model._
-import org.apache.hudi.client.utils.SparkValueMetadata
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
 import org.apache.hudi.common.function.SerializableFunction
@@ -35,6 +32,8 @@ import org.apache.hudi.common.util.collection
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieIndexVersion, HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
+import org.apache.hudi.stats.{SparkValueMetadata, ValueMetadata, ValueType}
+import org.apache.hudi.stats.ValueMetadata.getValueMetadata
 import org.apache.hudi.util.JFunction
 
 import org.apache.avro.Conversions.DecimalConversion

@@ -17,11 +17,11 @@
  * under the License.
  */
 
-package org.apache.hudi.avro;
+package org.apache.hudi.stats;
 
-import org.apache.hudi.avro.model.ArrayWrapper;
+import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.avro.HoodieAvroWrapperUtils;
 import org.apache.hudi.common.util.DateTimeUtils;
-import org.apache.hudi.common.util.collection.ArrayComparable;
 
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -43,7 +43,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
-import java.util.Collection;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.BiFunction;
@@ -122,11 +121,6 @@ public enum ValueType {
     if (val == null) {
       return null;
     }
-    if (val instanceof Collection) {
-      return new ArrayComparable(((Collection<?>) val).stream()
-          .map(v -> standardizeJavaTypeAndPromote(v, meta))
-          .toArray(Comparable[]::new));
-    }
     return standardize.apply(val, meta);
   }
 
@@ -149,16 +143,12 @@ public enum ValueType {
       return;
     }
 
-    if (val instanceof Collection) {
-      ((Collection) val).forEach(this::validate);
-    } else {
-      if (!internalType.isInstance(val)) {
-        throw new IllegalArgumentException(String.format(
-            "should be %s, but got %s",
-            internalType.getSimpleName(),
-            val.getClass().getSimpleName()
-        ));
-      }
+    if (!internalType.isInstance(val)) {
+      throw new IllegalArgumentException(String.format(
+          "should be %s, but got %s",
+          internalType.getSimpleName(),
+          val.getClass().getSimpleName()
+      ));
     }
   }
 
@@ -170,8 +160,12 @@ public enum ValueType {
     if (val == null) {
       return null;
     }
-    if (val instanceof ArrayComparable) {
-      return HoodieAvroWrapperUtils.wrapArray(val, v -> wrapValue(v, meta));
+    if (!this.internalType.isInstance(val)) {
+      throw new IllegalArgumentException(String.format(
+          "should be %s, but got %s",
+          this.internalType.getSimpleName(),
+          val.getClass().getSimpleName()
+      ));
     }
     return primitiveWrapperType.wrap(convertIntoPrimitive(val, meta));
   }
@@ -184,22 +178,16 @@ public enum ValueType {
     if (val == null) {
       return null;
     }
-    if (val instanceof ArrayWrapper) {
-      return HoodieAvroWrapperUtils.unwrapArray(val, v -> unwrapValue(v, meta));
-    } else if (!primitiveWrapperType.getWrapperClass().isInstance(val)) {
+
+    if (!primitiveWrapperType.getWrapperClass().isInstance(val)) {
       if (!(val instanceof GenericRecord)) {
         throw new IllegalArgumentException(String.format(
             "should be %s, but got %s",
             primitiveWrapperType.getWrapperClass().getSimpleName(),
             val.getClass().getSimpleName()
         ));
-      }
-      if (((GenericRecord) val).getSchema().getField("value") != null) {
+      } else if (((GenericRecord) val).getSchema().getField("value") != null) {
         return standardizeJavaTypeAndPromote(HoodieAvroWrapperUtils.unwrapGenericRecord(val), meta);
-      } else if (((GenericRecord) val).getSchema().getField("wrappedValues") != null) {
-        GenericRecord genRec = (GenericRecord) val;
-        Collection<Object> values = (Collection<Object>) genRec.get("wrappedValues");
-        return new ArrayComparable(values.stream().map(v -> this.unwrapValue(v, meta)).toArray(Comparable[]::new));
       } else {
         throw new IllegalArgumentException(String.format(
             "should be %s, but got %s", 
@@ -207,7 +195,6 @@ public enum ValueType {
             val.getClass().getSimpleName()
         ));
       }
-      
     }
     return convertIntoComplex(primitiveWrapperType.unwrap(val), meta);
   }
@@ -317,12 +304,8 @@ public enum ValueType {
         throw new IllegalArgumentException("Unsupported logical type for Fixed: " + schema.getLogicalType());
       case UNION:
         return fromSchema(AvroSchemaUtils.resolveNullableSchema(schema));
-      case ARRAY:
-        return fromSchema(schema.getElementType());
       default:
-        // TODO: decide if we want to throw or return NONE
         throw new IllegalArgumentException("Unsupported type: " + schema.getType());
-        //return ValueType.NONE;
     }
   }
 

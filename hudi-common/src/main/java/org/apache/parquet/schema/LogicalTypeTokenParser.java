@@ -19,7 +19,7 @@
 
 package org.apache.parquet.schema;
 
-import org.apache.hudi.avro.ValueType;
+import org.apache.hudi.stats.ValueType;
 
 public class LogicalTypeTokenParser {
 

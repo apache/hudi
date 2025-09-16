@@ -21,7 +21,6 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.ConvertingGenericData;
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.ValueMetadata;
 import org.apache.hudi.avro.model.BooleanWrapper;
 import org.apache.hudi.avro.model.DateWrapper;
 import org.apache.hudi.avro.model.DoubleWrapper;
@@ -59,7 +58,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -110,6 +108,8 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -161,7 +161,6 @@ import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.projectSchema;
-import static org.apache.hudi.avro.ValueMetadata.getValueMetadata;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
@@ -191,6 +190,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP
 import static org.apache.hudi.metadata.MetadataPartitionType.fromPartitionPath;
 import static org.apache.hudi.metadata.MetadataPartitionType.isNewExpressionIndexDefinitionRequired;
 import static org.apache.hudi.metadata.MetadataPartitionType.isNewSecondaryIndexDefinitionRequired;
+import static org.apache.hudi.stats.ValueMetadata.getValueMetadata;
 
 /**
  * A utility to convert timeline information to metadata table records.
@@ -2003,7 +2003,7 @@ public class HoodieTableMetadataUtil {
     if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
       return isColumnTypeSupportedV1(schemaToCheck, recordType);
     }
-    return isColumnTypeSupportedV2(schemaToCheck, true);
+    return isColumnTypeSupportedV2(schemaToCheck);
   }
 
   private static boolean isColumnTypeSupportedV1(Schema schema, Option<HoodieRecordType> recordType) {
@@ -2026,16 +2026,10 @@ public class HoodieTableMetadataUtil {
         && schema.getType() != Schema.Type.ENUM && schema.getType() != Schema.Type.BYTES && schema.getType() != Schema.Type.FIXED;
   }
 
-  private static boolean isColumnTypeSupportedV2(Schema schema, boolean topLevel) {
+  private static boolean isColumnTypeSupportedV2(Schema schema) {
     // Check for precision and scale if the schema has a logical decimal type.
-    if (schema.getType() == Schema.Type.ARRAY) {
-      if (topLevel) {
-        return isColumnTypeSupportedV2(resolveNullableSchema(schema.getElementType()), false);
-      } else {
-        return false;
-      }
-    }
-    return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.MAP && schema.getType() != Schema.Type.ENUM;
+    return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.MAP
+        && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.ENUM;
   }
 
   public static Set<String> getInflightMetadataPartitions(HoodieTableConfig tableConfig) {

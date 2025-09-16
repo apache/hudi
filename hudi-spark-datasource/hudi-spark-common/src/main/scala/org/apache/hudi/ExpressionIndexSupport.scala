@@ -24,10 +24,7 @@ import org.apache.hudi.ExpressionIndexSupport._
 import org.apache.hudi.HoodieCatalystUtils.{withPersistedData, withPersistedDataset}
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.RecordLevelIndexSupport.filterQueryWithRecordKey
-import org.apache.hudi.avro.{ValueMetadata, ValueType}
-import org.apache.hudi.avro.ValueMetadata.getValueMetadata
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
-import org.apache.hudi.client.utils.SparkValueMetadata
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
@@ -37,6 +34,8 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.index.expression.HoodieExpressionIndex
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.stats.{SparkValueMetadata, ValueMetadata, ValueType}
+import org.apache.hudi.stats.ValueMetadata.getValueMetadata
 import org.apache.hudi.util.JFunction
 
 import org.apache.spark.sql.{Column, DataFrame, Row, SparkSession}

@@ -35,7 +35,6 @@ import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -61,6 +60,9 @@ import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.stats.SparkValueMetadata;
+import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.JavaScalaConverters;
 
@@ -164,14 +166,14 @@ public class SparkMetadataWriterUtils {
             functions.count(columnToIndex).alias(COLUMN_STATS_FIELD_VALUE_COUNT));
 
     // Generate column stat records using the aggregated data
-    SparkValueMetadata valueMetadata = getValueMetadataFromColumnRangeDataset(columnRangeMetadataDataset, indexVersion);
+    ValueMetadata valueMetadata = getValueMetadataFromColumnRangeDataset(columnRangeMetadataDataset, indexVersion);
     HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> rangeMetadataHoodieJavaRDD = HoodieJavaRDD.of(columnRangeMetadataDataset.javaRDD())
         .flatMapToPair((SerializableFunction<Row, Iterator<? extends Pair<String, HoodieColumnRangeMetadata<Comparable>>>>)
             row -> {
               int baseAggregatePosition = SparkMetadataWriterUtils.getExpressionIndexColumnNames().length;
               long nullCount = row.getLong(baseAggregatePosition);
-              Comparable minValue = valueMetadata.convertSparkToJava(row.get(baseAggregatePosition + 1));
-              Comparable maxValue = valueMetadata.convertSparkToJava(row.get(baseAggregatePosition + 2));
+              Comparable minValue = SparkValueMetadata.convertSparkToJava(valueMetadata, row.get(baseAggregatePosition + 1));
+              Comparable maxValue = SparkValueMetadata.convertSparkToJava(valueMetadata, row.get(baseAggregatePosition + 2));
               long valueCount = row.getLong(baseAggregatePosition + 3);
 
               String partitionName = row.getString(0);
@@ -212,7 +214,7 @@ public class SparkMetadataWriterUtils {
         : new ExpressionIndexComputationMetadata(colStatRecords);
   }
 
-  private static SparkValueMetadata getValueMetadataFromColumnRangeDataset(Dataset<Row> dataset, HoodieIndexVersion indexVersion) {
+  private static ValueMetadata getValueMetadataFromColumnRangeDataset(Dataset<Row> dataset, HoodieIndexVersion indexVersion) {
     int baseAggregatePosition = SparkMetadataWriterUtils.getExpressionIndexColumnNames().length;
     DataType minDataType = dataset.schema().apply(baseAggregatePosition + 1).dataType();
     DataType maxDataType = dataset.schema().apply(baseAggregatePosition + 2).dataType();

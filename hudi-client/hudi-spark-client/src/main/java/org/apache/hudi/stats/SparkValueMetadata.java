@@ -17,16 +17,11 @@
  * under the License.
  */
 
-package org.apache.hudi.client.utils;
+package org.apache.hudi.stats;
 
 import org.apache.hudi.SparkAdapterSupport$;
-import org.apache.hudi.avro.ValueMetadata;
-import org.apache.hudi.avro.ValueType;
-import org.apache.hudi.avro.model.HoodieValueTypeInfo;
-import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 
-import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.BinaryType;
 import org.apache.spark.sql.types.BooleanType;
 import org.apache.spark.sql.types.ByteType;
@@ -49,41 +44,31 @@ import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.Arrays;
 
-public class SparkValueMetadata extends ValueMetadata {
+public abstract class SparkValueMetadata extends ValueMetadata {
 
-  private final DataType dataType;
-
-  protected SparkValueMetadata(ValueType valueType, DataType dataType) {
-    super(valueType);
-    this.dataType = dataType;
+  private SparkValueMetadata() {
+    super(null);
+    throw new IllegalStateException("This constructor should never be called");
   }
 
-  public Comparable convertSparkToJava(Object value) {
-    return convertSparkToJava(value, true);
-  }
-
-  public static SparkValueMetadata getValueMetadata(DataType dataType, HoodieIndexVersion indexVersion) {
+  public static ValueMetadata getValueMetadata(DataType dataType, HoodieIndexVersion indexVersion) {
     if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
-      return SparkV1EmptyMetadata.get();
+      return ValueMetadata.V1EmptyMetadata.get();
     }
     if (dataType == null) {
-      return new SparkValueMetadata(ValueType.NULL, null);
+      return ValueMetadata.NULL_METADATA;
     }
+
     ValueType valueType = fromDataType(dataType);
     if (valueType == ValueType.DECIMAL) {
-      return new SparkDecimalMetadata((DecimalType) dataType);
+      return ValueMetadata.DecimalMetadata.create(((DecimalType) dataType).precision(), ((DecimalType) dataType).scale());
     } else {
-      return new SparkValueMetadata(valueType, dataType);
+      return new ValueMetadata(valueType);
     }
   }
 
   private static ValueType fromDataType(DataType dataType) {
-    return fromDataType(dataType, true);
-  }
-
-  private static ValueType fromDataType(DataType dataType, boolean root) {
     if (dataType instanceof NullType) {
       return ValueType.NULL;
     } else if (dataType instanceof BooleanType) {
@@ -106,12 +91,6 @@ public class SparkValueMetadata extends ValueMetadata {
       return ValueType.DATE;
     } else if (dataType instanceof BinaryType) {
       return ValueType.BYTES;
-    } else if (dataType instanceof ArrayType) {
-      if (root) {
-        return fromDataType(((ArrayType) dataType).elementType(), false);
-      } else {
-        throw new IllegalArgumentException("Array of Array is not supported");
-      }
     } else if (SparkAdapterSupport$.MODULE$.sparkAdapter().isTimestampNTZType(dataType)) {
       return ValueType.LOCAL_TIMESTAMP_MICROS;
     } else {
@@ -119,65 +98,12 @@ public class SparkValueMetadata extends ValueMetadata {
     }
   }
 
-  private static class SparkV1EmptyMetadata extends SparkValueMetadata {
-    private static final SparkV1EmptyMetadata V_1_EMPTY_METADATA = new SparkV1EmptyMetadata();
-    public static SparkV1EmptyMetadata get() {
-      return V_1_EMPTY_METADATA;
-    }
-
-    private SparkV1EmptyMetadata() {
-      super(ValueType.V1, null);
-    }
-
-    @Override
-    public HoodieValueTypeInfo getValueTypeInfo() {
-      return null;
-    }
-  }
-
-  private static class SparkDecimalMetadata extends SparkValueMetadata implements ValueMetadata.DecimalValueMetadata {
-
-    private final int precision;
-    private final int scale;
-
-    protected SparkDecimalMetadata(DecimalType decimalType) {
-      super(ValueType.DECIMAL, decimalType);
-      this.precision = decimalType.precision();
-      this.scale = decimalType.scale();
-    }
-
-    @Override
-    public int getPrecision() {
-      return precision;
-    }
-
-    @Override
-    public int getScale() {
-      return scale;
-    }
-
-    @Override
-    public String getAdditionalInfo() {
-      return DecimalValueMetadata.encodeData(this);
-    }
-  }
-
-  private Comparable convertSparkToJava(Object value, boolean rootLevel) {
+  public static Comparable convertSparkToJava(ValueMetadata valueMetadata, Object value) {
     if (value == null) {
       return null;
     }
 
-    if (value instanceof org.apache.spark.sql.catalyst.util.ArrayData) {
-      if (rootLevel) {
-        return new ArrayComparable(Arrays.stream(((org.apache.spark.sql.catalyst.util.ArrayData) value)
-                .toObjectArray(((org.apache.spark.sql.types.ArrayType) dataType).elementType()))
-            .map(v -> convertSparkToJava(v, false)).toArray(Comparable[]::new));
-      } else {
-        throw new IllegalArgumentException("array of arrays not supported");
-      }
-    }
-
-    switch (getValueType()) {
+    switch (valueMetadata.getValueType()) {
       case V1:
         return (Comparable) value;
       case NULL:
@@ -199,11 +125,11 @@ public class SparkValueMetadata extends ValueMetadata {
       case DECIMAL:
         return ((Decimal) value).toJavaBigDecimal();
       case DATE:
-        return ValueType.castToDate(value, this);
+        return ValueType.castToDate(value, valueMetadata);
       case TIMESTAMP_MICROS:
-        return ValueType.castToTimestampMicros(value, this);
+        return ValueType.castToTimestampMicros(value, valueMetadata);
       case LOCAL_TIMESTAMP_MICROS:
-        return ValueType.castToLocalTimestampMicros(value, this);
+        return ValueType.castToLocalTimestampMicros(value, valueMetadata);
       case FIXED:
       case UUID:
       case TIME_MILLIS:
@@ -213,7 +139,7 @@ public class SparkValueMetadata extends ValueMetadata {
       case LOCAL_TIMESTAMP_MILLIS:
       case LOCAL_TIMESTAMP_NANOS:
       default:
-        throw new IllegalStateException("Spark value metadata for expression index should never be " + getValueType().name());
+        throw new IllegalStateException("Spark value metadata for expression index should never be " + valueMetadata.getValueType().name());
     }
   }
 

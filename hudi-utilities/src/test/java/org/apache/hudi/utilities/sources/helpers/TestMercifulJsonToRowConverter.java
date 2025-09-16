@@ -21,8 +21,8 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.MercifulJsonConverterTestBase;
-import org.apache.hudi.avro.ValueType;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.stats.ValueType;
 import org.apache.hudi.utilities.exception.HoodieJsonToRowConversionException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -62,7 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
+public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final MercifulJsonToRowConverter CONVERTER = new MercifulJsonToRowConverter(true, "__");
 
@@ -347,11 +347,11 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
   private static final String LOCAL_TIME_AVRO_FILE_PATH = "/local-timestamp-logical-type.avsc";
 
   @FunctionalInterface
-  private interface ThrowingRunnable {
+  public interface ThrowingRunnable {
     void run() throws Exception;
   }
 
-  void timestampNTZCompatibility(ThrowingRunnable r) throws Exception {
+  public static void timestampNTZCompatibility(ThrowingRunnable r) throws Exception {
     // TODO: Remove this when we get rid of spark3.3. TimestampNTZ needs this config
     //  to be set to true to work.
     boolean isSpark33 = HoodieSparkUtils.isSpark3_3();

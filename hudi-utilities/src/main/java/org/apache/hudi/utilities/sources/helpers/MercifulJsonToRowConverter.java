@@ -19,7 +19,6 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
-import org.apache.hudi.avro.ValueType;
 import org.apache.hudi.avro.processors.DateLogicalTypeProcessor;
 import org.apache.hudi.avro.processors.DecimalLogicalTypeProcessor;
 import org.apache.hudi.avro.processors.DurationLogicalTypeProcessor;
@@ -33,6 +32,7 @@ import org.apache.hudi.avro.processors.TimestampMicroLogicalTypeProcessor;
 import org.apache.hudi.avro.processors.TimestampMilliLogicalTypeProcessor;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.stats.ValueType;
 import org.apache.hudi.utilities.exception.HoodieJsonToRowConversionException;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;

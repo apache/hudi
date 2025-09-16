@@ -18,14 +18,10 @@
 
 package org.apache.hudi.util;
 
-import org.apache.hudi.common.util.collection.ArrayComparable;
-
-import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
-import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.TimestampType;
@@ -104,18 +100,6 @@ public class RowDataUtils {
         }
       case DECIMAL:
         return fieldVal -> ((DecimalData) fieldVal).toBigDecimal();
-      case ARRAY:
-        LogicalType elementType = ((ArrayType) logicalType).getElementType();
-        ArrayData.ElementGetter elementGetter = ArrayData.createElementGetter(elementType);
-        Function<Object, Object> elementFunc = javaValFunc(elementType, utcTimezone);
-        return fieldVal -> {
-          ArrayData arrayData = (ArrayData) fieldVal;
-          Comparable[] values = new Comparable[arrayData.size()];
-          for (int i = 0; i < arrayData.size(); i++) {
-            values[i] = (Comparable<?>) elementFunc.apply(elementGetter.getElementOrNull(arrayData, i));
-          }
-          return new ArrayComparable(values);
-        };
       default:
         return fieldVal -> fieldVal;
     }

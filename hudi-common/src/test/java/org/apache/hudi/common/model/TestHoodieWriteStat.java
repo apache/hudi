@@ -18,12 +18,13 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.avro.ValueMetadata;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.util.Utf8;

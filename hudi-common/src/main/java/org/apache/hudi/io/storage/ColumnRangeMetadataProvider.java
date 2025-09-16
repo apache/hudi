@@ -18,8 +18,8 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 
 import java.util.Map;
 

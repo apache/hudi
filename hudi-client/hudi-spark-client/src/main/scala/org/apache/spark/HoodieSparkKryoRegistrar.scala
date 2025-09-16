@@ -21,7 +21,6 @@ package org.apache.spark
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.{HoodieKey, HoodieSparkRecord}
 import org.apache.hudi.common.util.HoodieCommonKryoRegistrar
-import org.apache.hudi.common.util.collection.ArrayComparable
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.io.HoodieKeyLookupResult
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
@@ -71,8 +70,6 @@ class HoodieSparkKryoRegistrar extends HoodieCommonKryoRegistrar with KryoRegist
     kryo.register(classOf[HoodieSparkMergeOnReadTable[_]])
     kryo.register(classOf[HoodieKeyLookupResult])
 
-    kryo.register(classOf[ArrayComparable], new ArrayComparableSerializer)
-
     // NOTE: This entry is used for [[SerializableConfiguration]] before since
     //       Hadoop's configuration is not a serializable object by itself, and hence
     //       we're relying on [[SerializableConfiguration]] wrapper to work it around.
@@ -104,24 +101,6 @@ class HoodieSparkKryoRegistrar extends HoodieCommonKryoRegistrar with KryoRegist
       val recordKey = input.readString()
       val partitionPath = input.readString()
       new HoodieKey(recordKey, partitionPath)
-    }
-  }
-
-  // Custom serializer that treats ArrayComparable as just an array of Comparables
-  class ArrayComparableSerializer extends Serializer[ArrayComparable] with Serializable {
-    override def write(kryo: Kryo, output: Output, obj: ArrayComparable): Unit = {
-      val values = obj.toArray.asInstanceOf[Array[Comparable[_]]]
-      output.writeInt(values.length, true)
-      values.foreach(v => kryo.writeClassAndObject(output, v))
-    }
-
-    override def read(kryo: Kryo, input: Input, cls: Class[ArrayComparable]): ArrayComparable = {
-      val len = input.readInt(true)
-      val values = Array.ofDim[Comparable[_]](len)
-      for (i <- 0 until len) {
-        values(i) = kryo.readClassAndObject(input).asInstanceOf[Comparable[_]]
-      }
-      new ArrayComparable(values)
     }
   }
 }

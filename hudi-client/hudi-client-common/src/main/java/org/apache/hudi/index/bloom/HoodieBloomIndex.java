@@ -19,7 +19,6 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.hudi.avro.ValueMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
@@ -38,6 +37,7 @@ import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieRangeInfoHandle;
+import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.table.HoodieTable;
 
 import org.slf4j.Logger;
