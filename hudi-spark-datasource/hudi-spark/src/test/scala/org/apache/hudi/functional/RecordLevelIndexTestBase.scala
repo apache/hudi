@@ -45,7 +45,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     PARTITIONPATH_FIELD.key -> "partition",
     HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
     HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "15",
-    "hoodie.metadata.hfile.block.cache.enabled" -> "true"
+    "hoodie.hfile.block.cache.enabled" -> "true"
   ) ++ baseOpts ++ metadataOpts
 
   val secondaryIndexOpts: Map[String, String] = Map(
