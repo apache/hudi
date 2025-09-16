@@ -22,6 +22,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -62,10 +63,10 @@ public class HFileReaderFactory {
     final SeekableDataInputStream inputStream = createInputStream(fileSize);
     
     if (shouldEnableBlockCaching()) {
-      int blockCacheSize = properties.getInteger(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(), 
-          HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.defaultValue());
-      int cacheTtlMinutes = properties.getInteger(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(),
-          HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.defaultValue());
+      int blockCacheSize = ConfigUtils.getIntWithAltKeys(
+          properties, HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE);
+      int cacheTtlMinutes = ConfigUtils.getIntWithAltKeys(
+          properties, HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES);
       String filePath = getFilePath();
       return new CachingHFileReaderImpl(inputStream, fileSize, filePath, blockCacheSize, cacheTtlMinutes);
     }
@@ -74,8 +75,7 @@ public class HFileReaderFactory {
   }
 
   private boolean shouldEnableBlockCaching() {
-    return properties.getBoolean(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(),
-        HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.defaultValue());
+    return ConfigUtils.getBooleanWithAltKeys(properties, HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED);
   }
 
   private String getFilePath() {

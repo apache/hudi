@@ -49,7 +49,6 @@ import org.apache.hudi.common.table.read.buffer.FileGroupRecordBufferLoader;
 import org.apache.hudi.common.table.read.buffer.ReusableFileGroupRecordBufferLoader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -881,20 +880,19 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         Boolean.toString(commonConfig.isBitCaskDiskMapCompressionEnabled()));
     if (shouldReuse) {
       setHFileBlockCacheProps(props);
+    } else {
+      props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(),
+          metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED));
     }
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(),
+        metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE));
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(),
+        metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES));
     return props;
   }
 
   private void setHFileBlockCacheProps(Properties props) {
     // Enable HFile block caching for resue and full scan usage
     props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), "true");
-    if (!ConfigUtils.containsConfigProperty(props, HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE)) {
-      props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(),
-          HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.defaultValue().toString());
-    }
-    if (!ConfigUtils.containsConfigProperty(props, HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES)) {
-      props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(),
-          HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.defaultValue().toString());
-    }
   }
 }
