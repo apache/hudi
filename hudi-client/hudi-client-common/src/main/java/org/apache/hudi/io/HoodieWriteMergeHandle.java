@@ -309,7 +309,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     }
     try {
       if (combineRecord.isPresent() && !combineRecord.get().isDelete(schema, config.getProps()) && !isDelete) {
-        // CASE (1): Flush the merged record.
+        // Flush the merged record.
         HoodieKey hoodieKey = newRecord.getKey();
         if (isSecondaryIndexStatsStreamingWritesEnabled) {
           SecondaryIndexStreamingTracker.trackSecondaryIndexStats(hoodieKey, combineRecord, oldRecord, false, writeStatus,
