@@ -463,7 +463,7 @@ module.exports = {
             },
             {
               label: "Privacy",
-              to: "https://privacy.apache.org/policies/privacy-policy-public.html",
+              to: "/asf/privacy",
             },
             {
               label: "Telemetry",
