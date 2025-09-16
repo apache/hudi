@@ -23,6 +23,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.HoodieTableVersion
 import org.apache.hudi.keygen.KeyGenerator
 import org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
@@ -174,57 +175,65 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
       var recordKeyQueries: List[Expression] = List.empty
       var compositeRecordKeys: List[String] = List.empty
       val recordKeyOpt = getRecordKeyConfig
-      val isComplexRecordKey = {
-        val fieldCount = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0)
-        // Consider as complex if:
-        // 1. Multiple fields (> 1), OR
-        // 2. Using complex key generator with single record key field
-        fieldCount > 1 || isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig)
-      }
-      recordKeyOpt.foreach { recordKeysArray =>
-        // Handle composite record keys
-        breakable {
-          // Iterate configured record keys and fetch literals for every record key
-          for (recordKey <- recordKeysArray) {
-            var recordKeys: List[String] = List.empty
-            for (query <- queryFilters) {
-              {
-                RecordLevelIndexSupport.filterQueryWithRecordKey(query, Option.apply(recordKey),
-                  if (isComplexRecordKey) {
-                    RecordLevelIndexSupport.getComplexKeyLiteralGenerator()
-                  } else {
-                    RecordLevelIndexSupport.getSimpleLiteralGenerator()
-                  }
-                ).foreach {
-                  case (exp: Expression, recKeys: List[String]) =>
-                    recordKeys = recordKeys ++ recKeys
-                    recordKeyQueries = recordKeyQueries :+ exp
-                }
-              }
-            }
+      val fieldCount = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0)
 
-            if (recordKeys.isEmpty) {
-              // No literals found for the record key, therefore filtering can not be performed
-              recordKeyQueries = List.empty
-              compositeRecordKeys = List.empty
-              break()
-            } else if (!isComplexRecordKey || compositeRecordKeys.isEmpty) {
-              compositeRecordKeys = recordKeys
-            } else {
-              // Combine literals for this configured record key with literals for the other configured record keys
-              // If there are two literals for rk1, rk2, rk3 each. A total of 8 combinations will be generated
-              var tempCompositeRecordKeys: List[String] = List.empty
-              for (compRecKey <- compositeRecordKeys) {
-                for (recKey <- recordKeys) {
-                  tempCompositeRecordKeys = tempCompositeRecordKeys :+ (compRecKey + KeyGenerator.DEFAULT_RECORD_KEY_PARTS_SEPARATOR + recKey)
+      // For tables with version < 9, single record key field, and using complex key generator,
+      // avoid using the index due to ambiguity in record key encoding
+      val tableVersion = metaClient.getTableConfig.getTableVersion
+      val shouldSkipIndex = tableVersion.lesserThan(HoodieTableVersion.NINE) &&
+          fieldCount == 1 &&
+          isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig)
+
+      if (shouldSkipIndex) {
+        // Avoid using the index for this case
+        (List.empty, List.empty)
+      } else {
+        val isComplexRecordKey = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0) > 1
+        recordKeyOpt.foreach { recordKeysArray =>
+          // Handle composite record keys
+          breakable {
+            // Iterate configured record keys and fetch literals for every record key
+            for (recordKey <- recordKeysArray) {
+              var recordKeys: List[String] = List.empty
+              for (query <- queryFilters) {
+                {
+                  RecordLevelIndexSupport.filterQueryWithRecordKey(query, Option.apply(recordKey),
+                    if (isComplexRecordKey) {
+                      RecordLevelIndexSupport.getComplexKeyLiteralGenerator()
+                    } else {
+                      RecordLevelIndexSupport.getSimpleLiteralGenerator()
+                    }
+                  ).foreach {
+                    case (exp: Expression, recKeys: List[String]) =>
+                      recordKeys = recordKeys ++ recKeys
+                      recordKeyQueries = recordKeyQueries :+ exp
+                  }
                 }
               }
-              compositeRecordKeys = tempCompositeRecordKeys
+
+              if (recordKeys.isEmpty) {
+                // No literals found for the record key, therefore filtering can not be performed
+                recordKeyQueries = List.empty
+                compositeRecordKeys = List.empty
+                break()
+              } else if (!isComplexRecordKey || compositeRecordKeys.isEmpty) {
+                compositeRecordKeys = recordKeys
+              } else {
+                // Combine literals for this configured record key with literals for the other configured record keys
+                // If there are two literals for rk1, rk2, rk3 each. A total of 8 combinations will be generated
+                var tempCompositeRecordKeys: List[String] = List.empty
+                for (compRecKey <- compositeRecordKeys) {
+                  for (recKey <- recordKeys) {
+                    tempCompositeRecordKeys = tempCompositeRecordKeys :+ (compRecKey + KeyGenerator.DEFAULT_RECORD_KEY_PARTS_SEPARATOR + recKey)
+                  }
+                }
+                compositeRecordKeys = tempCompositeRecordKeys
+              }
             }
           }
         }
+        (recordKeyQueries, compositeRecordKeys)
       }
-      (recordKeyQueries, compositeRecordKeys)
     }
   }
 

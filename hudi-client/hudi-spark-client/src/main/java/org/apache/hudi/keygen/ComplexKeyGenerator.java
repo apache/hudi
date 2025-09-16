@@ -18,6 +18,7 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -31,6 +32,7 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 
 /**
  * Key generator prefixing field names before corresponding record-key parts.
@@ -52,8 +54,14 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
         .filter(s -> !s.isEmpty())
         .collect(Collectors.toList());
     this.complexAvroKeyGenerator = new ComplexAvroKeyGenerator(props);
-    this.encodeSingleKeyFieldName = ConfigUtils.getBooleanWithAltKeys(
-        props, COMPLEX_KEYGEN_OLD_ENCODING);
+    // Get table version
+    Integer tableVersionCode = ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION);
+    HoodieTableVersion tableVersion = HoodieTableVersion.fromVersionCode(tableVersionCode);
+
+    // encodeSingleKeyFieldName = true means we INCLUDE the field name (old encoding)
+    // encodeSingleKeyFieldName = false means we DON'T include field name for single key (new encoding)
+    this.encodeSingleKeyFieldName = tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)
+        || ConfigUtils.getBooleanWithAltKeys(props, COMPLEX_KEYGEN_OLD_ENCODING);
   }
 
   @Override

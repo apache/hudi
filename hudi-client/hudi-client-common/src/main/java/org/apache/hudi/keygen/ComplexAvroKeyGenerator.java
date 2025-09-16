@@ -19,6 +19,7 @@ package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -28,6 +29,7 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 
 /**
  * Avro complex key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
@@ -43,9 +45,16 @@ public class ComplexAvroKeyGenerator extends BaseKeyGenerator {
         .map(String::trim)
         .filter(s -> !s.isEmpty())
         .collect(Collectors.toList());
-    this.recordKeyFunction = ConfigUtils.getBooleanWithAltKeys(props, COMPLEX_KEYGEN_OLD_ENCODING)
-        ? record -> KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames(), isConsistentLogicalTimestampEnabled())
-        : this::getRecordKeyWithoutKeyFieldNameOnSingleKeyField;
+    // Get table version
+    Integer tableVersionCode = ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION);
+    HoodieTableVersion tableVersion = HoodieTableVersion.fromVersionCode(tableVersionCode);
+    // Determine which encoding to use
+    boolean useNewEncodingForSingleKey = tableVersion.lesserThan(HoodieTableVersion.NINE)
+        && !ConfigUtils.getBooleanWithAltKeys(props, COMPLEX_KEYGEN_OLD_ENCODING);
+    // Set the record key function
+    this.recordKeyFunction = useNewEncodingForSingleKey
+        ? this::getRecordKeyWithoutKeyFieldNameOnSingleKeyField
+        : record -> KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames(), isConsistentLogicalTimestampEnabled());
   }
 
   @Override

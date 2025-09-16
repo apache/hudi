@@ -1018,12 +1018,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
     }
-    HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)
-        && config.enableComplexKeygenValidation()
-        && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
-      throw new HoodieException(getComplexKeygenErrorMessage("ingestion"));
-    }
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites(metaClient));
 
@@ -1439,7 +1433,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         throw new HoodieException("Only simple, non-partitioned or complex key generator are supported when meta-fields are disabled. Used: " + keyGenClass);
       }
     }
-
+    // if current table version is less than NINE, then need to inform user about key encoding
+    if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)
+            && config.enableComplexKeygenValidation()
+            && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
+      throw new HoodieException(getComplexKeygenErrorMessage("ingestion"));
+    }
     //Check to make sure it's not a COW table with consistent hashing bucket index
     if (tableConfig.getTableType() == HoodieTableType.COPY_ON_WRITE) {
       HoodieIndex.IndexType indexType = writeConfig.getIndexType();
