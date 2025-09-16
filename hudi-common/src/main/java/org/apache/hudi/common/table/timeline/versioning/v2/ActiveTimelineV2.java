@@ -813,8 +813,8 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
         .filter(instant -> instant.getState() == HoodieInstant.State.COMPLETED)
         .filter(instant -> {
           String instantTime = instant.requestedTime();
-          return (startTs == null || instantTime.compareTo(startTs) >= 0) &&
-                 (endTs == null || instantTime.compareTo(endTs) <= 0);
+          return (startTs == null || instantTime.compareTo(startTs) >= 0)
+              && (endTs == null || instantTime.compareTo(endTs) <= 0);
         });
 
     // Pre-load metadata for filtered instants to optimize subsequent access
