@@ -91,6 +91,40 @@ public class LockAuditingCommand {
   }
 
   /**
+   * Holds cleanup operation results.
+   */
+  static class CleanupResult {
+    final boolean success;
+    final int deletedCount;
+    final int failedCount;
+    final int totalFiles;
+    final String message;
+    final boolean isDryRun;
+
+    CleanupResult(boolean success, int deletedCount, int failedCount, int totalFiles, String message, boolean isDryRun) {
+      this.success = success;
+      this.deletedCount = deletedCount;
+      this.failedCount = failedCount;
+      this.totalFiles = totalFiles;
+      this.message = message;
+      this.isDryRun = isDryRun;
+    }
+
+    boolean hasErrors() {
+      return failedCount > 0;
+    }
+
+    boolean hasFiles() {
+      return totalFiles > 0;
+    }
+
+    @Override
+    public String toString() {
+      return message;
+    }
+  }
+
+  /**
    * Enables lock audit logging for the currently connected Hudi table.
    * This command creates or updates the audit configuration file to enable
    * audit logging for storage lock operations.
@@ -169,12 +203,14 @@ public class LockAuditingCommand {
       if (keepAuditFiles) {
         message += String.format("\nExisting audit files preserved at: %s", StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath));
       } else {
-        // Call the cleanup method to prune 7 days of old files
-        String cleanupResult = performAuditCleanup(false, 7);
-        if (cleanupResult.contains("Successfully deleted") || cleanupResult.contains("No audit files")) {
+        // Call the cleanup method to prune all old files
+        CleanupResult cleanupResult = performAuditCleanup(false, 0);
+        if (cleanupResult.success && cleanupResult.deletedCount > 0) {
           message += String.format("\nAudit files cleaned up at: %s", StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath));
+        } else if (cleanupResult.success && cleanupResult.deletedCount == 0) {
+          message += String.format("\nNo audit files to clean up at: %s", StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath));
         } else {
-          message += String.format("\nWarning: Some audit files may not have been cleaned up: %s", cleanupResult);
+          message += String.format("\nWarning: Some audit files may not have been cleaned up: %s", cleanupResult.message);
         }
       }
       
@@ -351,24 +387,25 @@ public class LockAuditingCommand {
       return "Error: ageDays must be a positive integer.";
     }
 
-    return performAuditCleanup(dryRun, ageDays);
+    return performAuditCleanup(dryRun, ageDays).toString();
   }
 
   /**
    * Internal method to perform audit cleanup. Used by both the CLI command and disable method.
-   * 
+   *
    * @param dryRun Whether to perform a dry run (preview changes without deletion)
    * @param ageDays Number of days to keep audit files (0 means delete all)
-   * @return Status message indicating files cleaned or to be cleaned
+   * @return CleanupResult containing cleanup operation details
    */
-  private String performAuditCleanup(boolean dryRun, int ageDays) {
+  private CleanupResult performAuditCleanup(boolean dryRun, int ageDays) {
     try {
       String auditFolderPath = StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath);
       StoragePath auditFolder = new StoragePath(auditFolderPath);
       
       // Check if audit folder exists
       if (!HoodieCLI.storage.exists(auditFolder)) {
-        return "No audit folder found - nothing to cleanup.";
+        String message = "No audit folder found - nothing to cleanup.";
+        return new CleanupResult(true, 0, 0, 0, message, dryRun);
       }
       
       // Calculate cutoff timestamp (ageDays ago)
@@ -390,13 +427,15 @@ public class LockAuditingCommand {
       }
       
       if (oldFiles.isEmpty()) {
-        return String.format("No audit files older than %d days found.", ageDays);
+        String message = String.format("No audit files older than %d days found.", ageDays);
+        return new CleanupResult(true, 0, 0, auditFiles.size(), message, dryRun);
       }
       
       int fileCount = oldFiles.size();
       
       if (dryRun) {
-        return String.format("Dry run: Would delete %d audit files older than %d days.", fileCount, ageDays);
+        String message = String.format("Dry run: Would delete %d audit files older than %d days.", fileCount, ageDays);
+        return new CleanupResult(true, 0, 0, fileCount, message, dryRun);
       } else {
         // Actually delete the files
         int deletedCount = 0;
@@ -413,15 +452,18 @@ public class LockAuditingCommand {
         }
         
         if (failedCount == 0) {
-          return String.format("Successfully deleted %d audit files older than %d days.", deletedCount, ageDays);
+          String message = String.format("Successfully deleted %d audit files older than %d days.", deletedCount, ageDays);
+          return new CleanupResult(true, deletedCount, failedCount, fileCount, message, dryRun);
         } else {
-          return String.format("Deleted %d audit files, failed to delete %d files.", deletedCount, failedCount);
+          String message = String.format("Deleted %d audit files, failed to delete %d files.", deletedCount, failedCount);
+          return new CleanupResult(false, deletedCount, failedCount, fileCount, message, dryRun);
         }
       }
       
     } catch (Exception e) {
       LOG.error("Error cleaning up audit locks", e);
-      return String.format("Failed to cleanup audit locks: %s", e.getMessage());
+      String message = String.format("Failed to cleanup audit locks: %s", e.getMessage());
+      return new CleanupResult(false, 0, 0, 0, message, dryRun);
     }
   }
 
@@ -539,16 +581,10 @@ public class LockAuditingCommand {
         TransactionWindow otherWindow = sortedWindows.get(j);
         long otherStart = otherWindow.startTimestamp;
         
-        // Check if windows overlap
-        if (otherStart < currentEnd) {
-          // There's an overlap - check if current transaction ended properly before the other started
-          if (currentWindow.endTimestamp.isPresent() && currentWindow.endTimestamp.get() <= otherStart) {
-            // Transaction ended properly before the other started - no issue
-          } else {
-            // Either no END timestamp or END timestamp is after other transaction started
-            errors.add(String.format("[ERROR] %s => overlaps with %s", 
-                currentWindow.filename, otherWindow.filename));
-          }
+        // Check if windows overlap and current transaction didn't end gracefully
+        if (otherStart < currentEnd && !currentWindow.endTimestamp.isPresent()) {
+          errors.add(String.format("[ERROR] %s => overlaps with %s",
+              currentWindow.filename, otherWindow.filename));
         }
       }
     }
