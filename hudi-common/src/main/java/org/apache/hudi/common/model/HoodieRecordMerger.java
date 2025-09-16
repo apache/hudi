@@ -126,28 +126,6 @@ public interface HoodieRecordMerger extends Serializable {
   }
 
   /**
-   * In some cases a business logic does some checks before flushing a merged record to the disk.
-   * This method does the check, and when false is returned, it means the merged record should not
-   * be flushed.
-   *
-   * @param record the merged record.
-   * @param schema the schema of the merged record.
-   * @return a boolean variable to indicate if the merged record should be returned or not.
-   *
-   * <p> This interface is experimental and might be evolved in the future.
-   **/
-  default boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) throws IOException {
-    return true;
-  }
-
-  /**
-   * Merges two records with the same key in full outer merge fashion i.e. all fields from both records are included.
-   */
-  default List<Pair<HoodieRecord, Schema>> fullOuterMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    throw new UnsupportedOperationException("Full outer merging logic is not implemented by " + this.getClass().getName());
-  }
-
-  /**
    * If false, whenever we have log files, we will need to read all columns
    * If true, mor merging can be done without all columns. The columns required can be configured
    * by overriding getMandatoryFieldsForMerging
