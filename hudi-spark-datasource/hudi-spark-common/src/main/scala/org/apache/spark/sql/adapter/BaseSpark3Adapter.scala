@@ -110,5 +110,8 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
 
   // Older Spark 3.x versions do not have TimestampNTZType
-  override def isTimestampNTZType(dataType: DataType): Boolean = false
+  override def isTimestampNTZType(dataType: DataType): Boolean = {
+    // TimestampNTZType$ but don't want to rule out possibility of TimestampNTZType
+    dataType.getClass.getSimpleName.startsWith("TimestampNTZType")
+  }
 }
