@@ -78,6 +78,10 @@ public class ValueMetadata implements Serializable {
     this.getValueType().validate(maxVal);
   }
 
+  public boolean isV1() {
+    return this.getValueType() == ValueType.V1;
+  }
+
   public static class V1EmptyMetadata extends ValueMetadata {
     private static final V1EmptyMetadata V_1_EMPTY_METADATA = new V1EmptyMetadata();
     public static V1EmptyMetadata get() {

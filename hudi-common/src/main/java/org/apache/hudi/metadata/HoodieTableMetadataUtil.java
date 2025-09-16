@@ -241,6 +241,19 @@ public class HoodieTableMetadataUtil {
         .contains(HoodieTableMetadataUtil.PARTITION_NAME_FILES);
   }
 
+  // Helper class to calculate column stats
+  private static class ColumnStats {
+    Object minValue;
+    Object maxValue;
+    long nullCount;
+    long valueCount;
+    final ValueMetadata valueMetadata;
+
+    ColumnStats(ValueMetadata valueMetadata) {
+      this.valueMetadata = valueMetadata;
+    }
+  }
+
   /**
    * Collects {@link HoodieColumnRangeMetadata} for the provided collection of records, pretending
    * as if provided records have been persisted w/in given {@code filePath}
@@ -259,16 +272,7 @@ public class HoodieTableMetadataUtil {
       Schema recordSchema,
       StorageConfiguration<?> storageConfig,
       HoodieIndexVersion indexVersion) {
-    // Helper class to calculate column stats
-    class ColumnStats {
-      Object minValue;
-      Object maxValue;
-      long nullCount;
-      long valueCount;
-    }
-
     HashMap<String, ColumnStats> allColumnStats = new HashMap<>();
-
     final Properties properties = new Properties();
     properties.setProperty(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(),
         storageConfig.getString(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
@@ -280,29 +284,8 @@ public class HoodieTableMetadataUtil {
       targetFields.forEach(fieldNameFieldPair -> {
         String fieldName = fieldNameFieldPair.getKey();
         Schema fieldSchema = resolveNullableSchema(fieldNameFieldPair.getValue().schema());
-        ValueMetadata valueMetadata = getValueMetadata(fieldSchema, indexVersion);
-        ColumnStats colStats = allColumnStats.computeIfAbsent(fieldName, ignored -> new ColumnStats());
-        Object fieldValue;
-        if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
-          if (record.getRecordType() == HoodieRecordType.AVRO) {
-            fieldValue = HoodieAvroUtils.getRecordColumnValues(record, new String[]{fieldName}, recordSchema, false)[0];
-            if (fieldValue != null && fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
-              fieldValue = java.sql.Date.valueOf(fieldValue.toString());
-            }
-
-          } else if (record.getRecordType() == HoodieRecordType.SPARK) {
-            fieldValue = record.getColumnValues(recordSchema, new String[]{fieldName}, false)[0];
-            if (fieldValue != null && fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
-              fieldValue = java.sql.Date.valueOf(LocalDate.ofEpochDay((Integer) fieldValue).toString());
-            }
-          } else if (record.getRecordType() == HoodieRecordType.FLINK) {
-            fieldValue = record.getColumnValueAsJava(recordSchema, fieldName, properties);
-          } else {
-            throw new HoodieException(String.format("Unknown record type: %s", record.getRecordType()));
-          }
-        } else {
-          fieldValue = valueMetadata.standardizeJavaTypeAndPromote(record.getColumnValueAsJava(recordSchema, fieldName, properties));
-        }
+        ColumnStats colStats = allColumnStats.computeIfAbsent(fieldName, ignored -> new ColumnStats(getValueMetadata(fieldSchema, indexVersion)));
+        Object fieldValue = collectColumnRangeFieldValue(record, colStats.valueMetadata, fieldName, fieldSchema, recordSchema, properties);
 
         colStats.valueCount++;
         if (fieldValue != null && isColumnTypeSupported(fieldSchema, Option.of(record.getRecordType()), indexVersion)) {
@@ -321,47 +304,90 @@ public class HoodieTableMetadataUtil {
       });
     });
 
-    Stream<HoodieColumnRangeMetadata<Comparable>> hoodieColumnRangeMetadataStream =
-        targetFields.stream().map(fieldNameFieldPair -> {
-          String fieldName = fieldNameFieldPair.getKey();
-          Schema fieldSchema = fieldNameFieldPair.getValue().schema();
-          ColumnStats colStats = allColumnStats.get(fieldName);
-          if (colStats == null) {
-            return  HoodieColumnRangeMetadata.createEmpty(filePath, fieldName, indexVersion);
-          } else if (indexVersion.greaterThanOrEquals(HoodieIndexVersion.V2)) {
-            return HoodieColumnRangeMetadata.<Comparable>create(
-                filePath,
-                fieldName,
-                (Comparable) colStats.minValue,
-                (Comparable) colStats.maxValue,
-                colStats.nullCount,
-                colStats.valueCount,
-                // NOTE: Size and compressed size statistics are set to 0 to make sure we're not
-                //       mixing up those provided by Parquet with the ones from other encodings,
-                //       since those are not directly comparable
-                0L,
-                0L,
-                getValueMetadata(fieldSchema, indexVersion)
-            );
-          } else {
-            return HoodieColumnRangeMetadata.<Comparable>create(
-                filePath,
-                fieldName,
-                coerceToComparable(fieldSchema, colStats.minValue),
-                coerceToComparable(fieldSchema, colStats.maxValue),
-                colStats.nullCount,
-                colStats.valueCount,
-                // NOTE: Size and compressed size statistics are set to 0 to make sure we're not
-                //       mixing up those provided by Parquet with the ones from other encodings,
-                //       since those are not directly comparable
-                0L,
-                0L,
-                ValueMetadata.V1EmptyMetadata.get()
-            );
-          }
-        });
-    return hoodieColumnRangeMetadataStream.collect(
-        Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, Function.identity()));
+    return targetFields.stream().map(fieldNameFieldPair -> {
+      String fieldName = fieldNameFieldPair.getKey();
+      Schema fieldSchema = fieldNameFieldPair.getValue().schema();
+      ColumnStats colStats = allColumnStats.get(fieldName);
+      return colStatsToColRangeMetadata(fieldName, fieldSchema, colStats, filePath, indexVersion);
+    }).collect(Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, Function.identity()));
+  }
+
+  private static Object collectColumnRangeFieldValue(HoodieRecord record, ValueMetadata valueMetadata, String fieldName, Schema fieldSchema, Schema recordSchema, Properties properties) {
+    if (valueMetadata.isV1()) {
+      return collectColumnRangeFieldValueV1(record, fieldName, fieldSchema, recordSchema, properties);
+    } else {
+      return collectColumnRangeFieldValueV2(record, valueMetadata, fieldName, recordSchema, properties);
+    }
+  }
+
+  private static Object collectColumnRangeFieldValueV1(HoodieRecord record, String fieldName, Schema fieldSchema, Schema recordSchema, Properties properties) {
+    Object fieldValue;
+    if (record.getRecordType() == HoodieRecordType.AVRO) {
+      fieldValue = HoodieAvroUtils.getRecordColumnValues(record, new String[]{fieldName}, recordSchema, false)[0];
+      if (fieldValue != null && fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
+        fieldValue = java.sql.Date.valueOf(fieldValue.toString());
+      }
+
+    } else if (record.getRecordType() == HoodieRecordType.SPARK) {
+      fieldValue = record.getColumnValues(recordSchema, new String[]{fieldName}, false)[0];
+      if (fieldValue != null && fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
+        fieldValue = java.sql.Date.valueOf(LocalDate.ofEpochDay((Integer) fieldValue).toString());
+      }
+    } else if (record.getRecordType() == HoodieRecordType.FLINK) {
+      fieldValue = record.getColumnValueAsJava(recordSchema, fieldName, properties);
+    } else {
+      throw new HoodieException(String.format("Unknown record type: %s", record.getRecordType()));
+    }
+    return fieldValue;
+  }
+
+  private static Comparable<?> collectColumnRangeFieldValueV2(HoodieRecord record, ValueMetadata valueMetadata, String fieldName, Schema recordSchema, Properties properties) {
+    return valueMetadata.standardizeJavaTypeAndPromote(record.getColumnValueAsJava(recordSchema, fieldName, properties));
+  }
+
+  private static HoodieColumnRangeMetadata<Comparable> colStatsToColRangeMetadata(String fieldName, Schema fieldSchema, ColumnStats colStats,
+                                                                                  String filePath, HoodieIndexVersion indexVersion) {
+    if (colStats == null) {
+      return HoodieColumnRangeMetadata.createEmpty(filePath, fieldName, indexVersion);
+    } else if (colStats.valueMetadata.isV1()) {
+      return colStatsToColRangeMetadataV1(fieldName, fieldSchema, colStats, filePath);
+    } else {
+      return colStatsToColRangeMetadataV2(fieldName, colStats, filePath);
+    }
+  }
+
+  private static HoodieColumnRangeMetadata<Comparable> colStatsToColRangeMetadataV1(String fieldName, Schema fieldSchema, ColumnStats colStats, String filePath) {
+    return HoodieColumnRangeMetadata.<Comparable>create(
+        filePath,
+        fieldName,
+        coerceToComparable(fieldSchema, colStats.minValue),
+        coerceToComparable(fieldSchema, colStats.maxValue),
+        colStats.nullCount,
+        colStats.valueCount,
+        // NOTE: Size and compressed size statistics are set to 0 to make sure we're not
+        //       mixing up those provided by Parquet with the ones from other encodings,
+        //       since those are not directly comparable
+        0L,
+        0L,
+        ValueMetadata.V1EmptyMetadata.get()
+    );
+  }
+
+  private static HoodieColumnRangeMetadata<Comparable> colStatsToColRangeMetadataV2(String fieldName, ColumnStats colStats, String filePath) {
+    return HoodieColumnRangeMetadata.create(
+        filePath,
+        fieldName,
+        (Comparable) colStats.minValue,
+        (Comparable) colStats.maxValue,
+        colStats.nullCount,
+        colStats.valueCount,
+        // NOTE: Size and compressed size statistics are set to 0 to make sure we're not
+        //       mixing up those provided by Parquet with the ones from other encodings,
+        //       since those are not directly comparable
+        0L,
+        0L,
+        colStats.valueMetadata
+    );
   }
 
   public static Option<String> getColumnStatsValueAsString(Object statsValue) {
