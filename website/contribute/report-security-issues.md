@@ -6,9 +6,9 @@ toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
-## Reporting HUDI JIRA Issues
+## Reporting HUDI Issues
 
-If you encounter a bug, performance issue, or unexpected behavior while using Apache Hudi, please report it by creating a JIRA ticket on the [Apache Hudi JIRA](https://issues.apache.org/jira/projects/HUDI/summary). Be sure to include a clear summary, steps to reproduce the issue, expected vs. actual behavior, relevant logs, configurations, and your Hudi and Spark versions. The more context you provide, the easier it is for the community to diagnose and address the problem efficiently.
+If you encounter a bug, performance issue, or unexpected behavior while using Apache Hudi, please report it by creating a [Github Issues](https://github.com/apache/hudi/issues). Be sure to include a clear summary, steps to reproduce the issue, expected vs. actual behavior, relevant logs, configurations, and your Hudi and Spark versions. The more context you provide, the easier it is for the community to diagnose and address the problem efficiently.
 
 ## Reporting Security Issues
 
