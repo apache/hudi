@@ -52,7 +52,7 @@ case class HistoryEntry(instantTime: String,
                         columnStatsAvailable: Boolean
                        )
 
-case class DeletionInfo(action: String, instant: String, timelineType: String)
+case class DeletionInfo(action: String, instant: String, timelineType: String, deleteStatus: String = "SUCCESS")
 
 case class ReplacementInfo(action: String, instant: String, timelineType: String)
 
@@ -77,6 +77,7 @@ object ShowFileHistoryProcedureUtils extends Logging {
     StructField("was_deleted", DataTypes.BooleanType, nullable = true, Metadata.empty),
     StructField("delete_action", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("delete_instant", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("delete_status", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("was_replaced", DataTypes.BooleanType, nullable = true, Metadata.empty),
     StructField("replace_action", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("replace_instant", DataTypes.StringType, nullable = true, Metadata.empty),
@@ -131,7 +132,6 @@ object ShowFileHistoryProcedureUtils extends Logging {
 
     val writeTimeline = timeline.getWriteTimeline
     val allInstants = writeTimeline.getInstants.asScala.toSeq
-      .sortWith((a, b) => a.requestedTime() > b.requestedTime())
 
     val filteredInstants = if (startTime.nonEmpty && endTime.nonEmpty) {
       allInstants.filter { instant =>
@@ -296,9 +296,9 @@ object ShowFileHistoryProcedureUtils extends Logging {
   }
 
   def checkForReplacements(metaClient: HoodieTableMetaClient,
-                          fileGroupId: String,
-                          targetPartition: Option[String],
-                          showArchived: Boolean): Map[String, ReplacementInfo] = {
+                           fileGroupId: String,
+                           targetPartition: Option[String],
+                           showArchived: Boolean): Map[String, ReplacementInfo] = {
 
     val replacements = scala.collection.mutable.Map[String, ReplacementInfo]()
 
@@ -334,11 +334,21 @@ object ShowFileHistoryProcedureUtils extends Logging {
           for {
             partitionPath <- partitionsToCheck
             partitionMetadata <- Option(cleanMetadata.getPartitionMetadata.get(partitionPath))
-            deletedFile <- partitionMetadata.getSuccessDeleteFiles.asScala
-            if matchesDeletedFileGroup(deletedFile, fileGroupId)
           } {
-            val deletedFileName = extractActualFileName(deletedFile)
-            deletions(deletedFileName) = DeletionInfo(HoodieTimeline.CLEAN_ACTION, instant.requestedTime, timelineType)
+            for {
+              deletedFile <- partitionMetadata.getSuccessDeleteFiles.asScala
+              if matchesDeletedFileGroup(deletedFile, fileGroupId)
+            } {
+              val deletedFileName = extractActualFileName(deletedFile)
+              deletions(deletedFileName) = DeletionInfo(HoodieTimeline.CLEAN_ACTION, instant.requestedTime, timelineType, "SUCCESS")
+            }
+            for {
+              failedDeleteFile <- partitionMetadata.getFailedDeleteFiles.asScala
+              if matchesDeletedFileGroup(failedDeleteFile, fileGroupId)
+            } {
+              val failedDeleteFileName = extractActualFileName(failedDeleteFile)
+              deletions(failedDeleteFileName) = DeletionInfo(HoodieTimeline.CLEAN_ACTION, instant.requestedTime, timelineType, "FAILED")
+            }
           }
         }
       } catch {
@@ -357,11 +367,21 @@ object ShowFileHistoryProcedureUtils extends Logging {
           for {
             partitionPath <- partitionsToCheck
             partitionMetadata <- Option(rollbackMetadata.getPartitionMetadata.get(partitionPath))
-            deletedFile <- partitionMetadata.getSuccessDeleteFiles.asScala
-            if matchesDeletedFileGroup(deletedFile, fileGroupId)
           } {
-            val deletedFileName = extractActualFileName(deletedFile)
-            deletions(deletedFileName) = DeletionInfo(HoodieTimeline.ROLLBACK_ACTION, instant.requestedTime, timelineType)
+            for {
+              deletedFile <- partitionMetadata.getSuccessDeleteFiles.asScala
+              if matchesDeletedFileGroup(deletedFile, fileGroupId)
+            } {
+              val deletedFileName = extractActualFileName(deletedFile)
+              deletions(deletedFileName) = DeletionInfo(HoodieTimeline.ROLLBACK_ACTION, instant.requestedTime, timelineType, "SUCCESS")
+            }
+            for {
+              failedDeleteFile <- partitionMetadata.getFailedDeleteFiles.asScala
+              if matchesDeletedFileGroup(failedDeleteFile, fileGroupId)
+            } {
+              val failedDeleteFileName = extractActualFileName(failedDeleteFile)
+              deletions(failedDeleteFileName) = DeletionInfo(HoodieTimeline.ROLLBACK_ACTION, instant.requestedTime, timelineType, "FAILED")
+            }
           }
         }
       } catch {

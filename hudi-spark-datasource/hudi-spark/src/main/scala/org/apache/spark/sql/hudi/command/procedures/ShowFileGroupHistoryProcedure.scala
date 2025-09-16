@@ -66,6 +66,7 @@ import scala.collection.JavaConverters._
  * - `was_deleted`: Whether the file was deleted in a subsequent operation
  * - `delete_action`: Action that caused the deletion (clean, rollback, etc.)
  * - `delete_instant`: Timestamp when the deletion occurred
+ * - `delete_status`: Status of the deletion attempt (SUCCESS, FAILED)
  * - `is_replaced`: Whether the file was replaced in a subsequent operation
  * - `replace_action`: Action that caused the replacement (compaction, clustering, etc.)
  * - `replace_instant`: Timestamp when the replacement occurred
@@ -222,7 +223,13 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
     if (showArchived) {
       try {
         val archivedTimeline = metaClient.getArchivedTimeline.reload()
-        archivedTimeline.loadCompletedInstantDetailsInMemory()
+        if (startTime.nonEmpty && endTime.nonEmpty) {
+          archivedTimeline.loadCompletedInstantDetailsInMemory(startTime, endTime)
+          archivedTimeline.loadCompactionDetailsInMemory(startTime, endTime)
+        } else {
+          archivedTimeline.loadCompletedInstantDetailsInMemory(limit)
+          archivedTimeline.loadCompactionDetailsInMemory(limit)
+        }
         ShowFileHistoryProcedureUtils.processWriteTimeline(archivedTimeline, fileGroupId, partition, "ARCHIVED", archivedEntries, limit, startTime, endTime)
       } catch {
         case e: Exception =>
@@ -230,9 +237,18 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
       }
     }
 
-    val allEntries = (activeEntries.asScala ++ archivedEntries.asScala).toList
-    val finalEntries = allEntries
-      .sortBy(_.instantTime)(Ordering[String].reverse)
+    val finalEntries = (activeEntries.asScala ++ archivedEntries.asScala).toList
+      .sortWith((a, b) => {
+        val timePriorityOrder = a.instantTime.compareTo(b.instantTime)
+        if (timePriorityOrder != 0) {
+          timePriorityOrder > 0
+        } else {
+          val statePriorityOrder = Map("COMPLETED" -> 3, "INFLIGHT" -> 2, "REQUESTED" -> 1)
+          val priority1 = statePriorityOrder.getOrElse(a.state, 0)
+          val priority2 = statePriorityOrder.getOrElse(b.state, 0)
+          priority1 > priority2
+        }
+      })
 
     val deletionInfo = ShowFileHistoryProcedureUtils.checkForDeletions(metaClient, fileGroupId, partition, showArchived)
 
@@ -263,6 +279,7 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
         deletion.isDefined,
         deletion.map(_.action).orNull,
         deletion.map(_.instant).orNull,
+        deletion.map(_.deleteStatus).orNull,
         replacement.isDefined,
         replacement.map(_.action).orNull,
         replacement.map(_.instant).orNull,

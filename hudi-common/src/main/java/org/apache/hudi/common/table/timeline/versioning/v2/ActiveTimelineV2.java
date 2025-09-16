@@ -804,4 +804,36 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   public boolean isEmpty(HoodieInstant instant) {
     return TimelineUtils.isEmpty(metaClient, instant);
   }
+
+  @Override
+  public void loadCompletedInstantDetailsInMemory(String startTs, String endTs) {
+    // For active timeline, we filter the existing instants by time range
+    // and reload timeline metadata for those instants only
+    Stream<HoodieInstant> filteredInstants = getInstantsAsStream()
+        .filter(instant -> instant.getState() == HoodieInstant.State.COMPLETED)
+        .filter(instant -> {
+          String instantTime = instant.requestedTime();
+          return (startTs == null || instantTime.compareTo(startTs) >= 0) &&
+                 (endTs == null || instantTime.compareTo(endTs) <= 0);
+        });
+
+    // Pre-load metadata for filtered instants to optimize subsequent access
+    filteredInstants.forEach(instant -> {
+      // This triggers metadata loading and caching
+      getInstantDetails(instant);
+    });
+  }
+
+  @Override
+  public void loadCompletedInstantDetailsInMemory(int limit) {
+    // For active timeline, limit the number of recent completed instants loaded
+    getInstantsAsStream()
+        .filter(instant -> instant.getState() == HoodieInstant.State.COMPLETED)
+        .sorted(Comparator.comparing(HoodieInstant::requestedTime).reversed()) // Most recent first
+        .limit(limit)
+        .forEach(instant -> {
+          // This triggers metadata loading and caching
+          getInstantDetails(instant);
+        });
+  }
 }

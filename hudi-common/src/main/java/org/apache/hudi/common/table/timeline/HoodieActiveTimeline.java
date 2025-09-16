@@ -437,4 +437,19 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @return
    */
   Set<String> getValidExtensions();
+
+  /**
+   * Load completed instant details in memory with time range filter.
+   *
+   * @param startTs Start timestamp (inclusive)
+   * @param endTs   End timestamp (inclusive)
+   */
+  void loadCompletedInstantDetailsInMemory(String startTs, String endTs);
+
+  /**
+   * Load completed instant details in memory with limit.
+   *
+   * @param limit Maximum number of recent instants to load
+   */
+  void loadCompletedInstantDetailsInMemory(int limit);
 }

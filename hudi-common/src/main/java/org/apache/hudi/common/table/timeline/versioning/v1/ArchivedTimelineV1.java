@@ -219,6 +219,34 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
   }
 
   @Override
+  public void loadCompactionDetailsInMemory(int limit) {
+    loadInstantsWithLimit(limit, true,
+        record -> {
+          Object action = record.get(ACTION_STATE);
+          return record.get(ACTION_TYPE_KEY).toString().equals(HoodieTimeline.COMPACTION_ACTION)
+              && (action == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT.toString().equals(action.toString()));
+        });
+  }
+
+  @Override
+  public void loadCompletedInstantDetailsInMemory(String startTs, String endTs) {
+    loadInstants(new ClosedClosedTimeRangeFilter(startTs, endTs), null, true,
+        record -> {
+          Object action = record.get(ACTION_STATE);
+          return action == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED.toString().equals(action.toString());
+        });
+  }
+
+  @Override
+  public void loadCompletedInstantDetailsInMemory(int limit) {
+    loadInstantsWithLimit(limit, true,
+        record -> {
+          Object action = record.get(ACTION_STATE);
+          return action == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED.toString().equals(action.toString());
+        });
+  }
+
+  @Override
   public void clearInstantDetailsFromMemory(String instantTime) {
     this.readCommits.remove(instantTime);
   }
@@ -249,6 +277,12 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
         .stream().flatMap(Collection::stream).sorted().collect(Collectors.toList());
   }
 
+  private void loadInstantsWithLimit(int limit, boolean loadInstantDetails, Function<GenericRecord, Boolean> commitsFilter) {
+    InstantsLoaderWithLimit loader = new InstantsLoaderWithLimit(loadInstantDetails, limit);
+    timelineLoader.loadInstants(
+        metaClient, null, Option.empty(), LoadMode.PLAN, commitsFilter, loader);
+  }
+
   /**
    * Callback to read instant details.
    */
@@ -266,6 +300,39 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
       if (instant.isPresent()) {
         instantsInRange.computeIfAbsent(instant.get().requestedTime(), s -> new ArrayList<>())
             .add(instant.get());
+      }
+    }
+
+    public Map<String, List<HoodieInstant>> getInstantsInRangeCollected() {
+      return instantsInRange;
+    }
+  }
+
+  public class InstantsLoaderWithLimit implements BiConsumer<String, GenericRecord> {
+    private final Map<String, List<HoodieInstant>> instantsInRange = new ConcurrentHashMap<>();
+    private final boolean loadInstantDetails;
+    private final int limit;
+    private volatile int loadedCount = 0;
+
+    private InstantsLoaderWithLimit(boolean loadInstantDetails, int limit) {
+      this.loadInstantDetails = loadInstantDetails;
+      this.limit = limit;
+    }
+
+    @Override
+    public void accept(String instantTime, GenericRecord record) {
+      if (loadedCount >= limit) {
+        return;
+      }
+      Option<HoodieInstant> instant = readCommit(instantTime, record, loadInstantDetails, null);
+      if (instant.isPresent()) {
+        synchronized (this) {
+          if (loadedCount < limit) {
+            instantsInRange.computeIfAbsent(instant.get().requestedTime(), s -> new ArrayList<>())
+                .add(instant.get());
+            loadedCount++;
+          }
+        }
       }
     }
 

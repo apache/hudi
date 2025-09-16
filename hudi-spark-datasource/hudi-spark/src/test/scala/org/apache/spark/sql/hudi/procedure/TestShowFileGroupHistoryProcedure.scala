@@ -68,7 +68,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       assert(historyResult.length == 2, "Should show 2 history entries for file group")
 
       val headRow = historyResult.head
-      assert(headRow.length == 27, "Should have 27 columns in result")
+      assert(headRow.length == 28, "Should have 27 columns in result")
       assert(headRow.getString(2).equals("commit"), "Action should be commit here")
       assert(headRow.getString(7) == "INSERT", "Operation type should be INSERT here")
       assert(headRow.getLong(8) == 2, "Small file handling logic coming into play, should have 2 files here")
@@ -498,7 +498,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
         }
 
         assert(oldBaseFileEntries.length > 0, "Should have old file entries in history")
-        assert(oldBaseFileEntries.last.getString(19).equals("compaction"), s"replace_action should be compaction, got: ${oldBaseFileEntries.last.getString(19)}")
+        assert(oldBaseFileEntries.last.getString(20).equals("compaction"), s"replace_action should be compaction, got: ${oldBaseFileEntries.last.getString(20)}")
       }
     }
   }
@@ -921,7 +921,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
         currentHistoryDf.show(false)
         assert(currentHistoryDf.collect().head.getString(2).equals("replacecommit"), s"Should have replacecommit action for file group $currentFileGroupId")
       }
-      assert(originalHistoryAfterClustering.head.getString(19).equals("clustering"), s"replace_action should be clustering, got: ${originalHistoryAfterClustering.head.getString(19)}")
+      assert(originalHistoryAfterClustering.head.getString(20).equals("clustering"), s"replace_action should be clustering, got: ${originalHistoryAfterClustering.head.getString(20)}")
     }
   }
 }
