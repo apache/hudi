@@ -415,7 +415,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
     } else {
       // rewrite the record to include metadata fields in schema, and the values will be set later.
-      record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps(), hasOperationMetaField);
+      record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
       fileWriter.writeWithMetadata(key, record, writeSchemaWithMetaFields);
     }
   }

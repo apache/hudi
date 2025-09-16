@@ -18,6 +18,8 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.common.model.HoodieRecord;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
@@ -34,10 +36,12 @@ public class JoinedGenericRecord implements GenericRecord {
   private final List<String> metaFieldNames;
   private final Schema schema;
 
-  public JoinedGenericRecord(GenericRecord dataRecord, List<String> metaFieldNames, Schema schema) {
+  public JoinedGenericRecord(GenericRecord dataRecord, int metaFieldsSize, Schema schema) {
     this.dataRecord = dataRecord;
-    this.metaFields = new HashMap<>(metaFieldNames.size());
-    this.metaFieldNames = metaFieldNames;
+    this.metaFields = new HashMap<>(metaFieldsSize);
+    this.metaFieldNames = metaFieldsSize == HoodieRecord.HOODIE_META_COLUMNS.size()
+        ? HoodieRecord.HOODIE_META_COLUMNS
+        : HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION_LIST;
     this.schema = schema;
   }
 

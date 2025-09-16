@@ -310,15 +310,7 @@ public class TestHoodieAvroUtils {
     rec.put("pii_col", "val2");
     rec.put("timestamp", 3.5);
 
-    int totalMetaFields = 5;
-    List<String> metaFields = new ArrayList<>(totalMetaFields);
-    metaFields.add(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
-    metaFields.add(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD);
-    metaFields.add(HoodieRecord.RECORD_KEY_METADATA_FIELD);
-    metaFields.add(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
-    metaFields.add(HoodieRecord.FILENAME_METADATA_FIELD);
-
-    GenericRecord rec1 = new JoinedGenericRecord(rec, metaFields, new Schema.Parser().parse(EXAMPLE_SCHEMA_WITH_META_FIELDS));
+    GenericRecord rec1 = new JoinedGenericRecord(rec, 5, new Schema.Parser().parse(EXAMPLE_SCHEMA_WITH_META_FIELDS));
     assertNull(rec1.get("_hoodie_commit_time"));
     assertNull(rec1.get("_hoodie_record_key"));
 

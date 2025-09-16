@@ -265,7 +265,7 @@ public class TestHoodieCreateHandle extends HoodieCommonTestHarness {
 
     // Stub the prependMetaFields method to throw exception
     doThrow(new RuntimeException("Test exception"))
-      .when(spyRecord).prependMetaFields(any(), any(), any(), any(), any());
+      .when(spyRecord).prependMetaFields(any(), any(), any(), any());
 
     assertDoesNotThrow(() ->
         createHandle.doWrite(spyRecord, TEST_SCHEMA, new TypedProperties()));

@@ -474,8 +474,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    *
    * NOTE: This operation is idempotent
    */
-  public abstract HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props,
-                                                 boolean hasOperationMetaField);
+  public abstract HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props);
 
   /**
    * Update a specific metadata field with given value.

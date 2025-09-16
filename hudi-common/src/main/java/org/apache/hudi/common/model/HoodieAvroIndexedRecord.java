@@ -40,7 +40,6 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -197,12 +196,10 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props,
-                                        boolean hasOperationMetaField) {
+  public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
     decodeRecord(recordSchema);
-    List<String> metaFields = hasOperationMetaField ? HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION_LIST : HoodieRecord.HOODIE_META_COLUMNS;
-    GenericRecord newAvroRecord = new JoinedGenericRecord((GenericRecord) data,
-        metaFields, targetSchema);
+    int metaFieldSize = targetSchema.getFields().size() - recordSchema.getFields().size();
+    GenericRecord newAvroRecord = new JoinedGenericRecord((GenericRecord) data, metaFieldSize, targetSchema);
     updateMetadataValuesInternal(newAvroRecord, metadataValues);
     HoodieAvroIndexedRecord newRecord = new HoodieAvroIndexedRecord(key, newAvroRecord, operation, metaData, orderingValue);
     newRecord.setNewLocation(this.newLocation);

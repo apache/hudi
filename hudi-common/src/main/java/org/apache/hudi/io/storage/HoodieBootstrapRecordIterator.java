@@ -69,7 +69,7 @@ public abstract class HoodieBootstrapRecordIterator<T> implements ClosableIterat
             .setCommitSeqno(skeletonRecord.getRecordKey(schema, HoodieRecord.COMMIT_SEQNO_METADATA_FIELD))
             .setRecordKey(skeletonRecord.getRecordKey(schema, HoodieRecord.RECORD_KEY_METADATA_FIELD))
             .setPartitionPath(skeletonRecord.getRecordKey(schema, HoodieRecord.PARTITION_PATH_METADATA_FIELD))
-            .setFileName(skeletonRecord.getRecordKey(schema, HoodieRecord.FILENAME_METADATA_FIELD)), null, false);
+            .setFileName(skeletonRecord.getRecordKey(schema, HoodieRecord.FILENAME_METADATA_FIELD)), null);
     if (partitionFields.isPresent()) {
       for (int i = 0; i < partitionValues.length; i++) {
         int position = schema.getField(partitionFields.get()[i]).pos();
