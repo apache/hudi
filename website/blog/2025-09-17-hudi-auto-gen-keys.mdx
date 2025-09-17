@@ -23,7 +23,10 @@ Apache Hudi was the first lakehouse storage project to introduce the notion of r
 * Hudi implements [merge modes](https://hudi.apache.org/blog/2025/03/03/record-mergers-in-hudi/), standardizing record-merging semantics to handle requirements such as unordered events, duplicate records, and custom merge logic.  
 * By materializing record keys along with other [record-level meta-fields](https://www.onehouse.ai/blog/hudi-metafields-demystified), Hudi unlocks features such as efficient [change data capture (CDC)](https://hudi.apache.org/blog/2024/07/30/data-lake-cdc/) that serves record-level change streams, near-infinite history for time-travel queries, and the [clustering table service](https://hudi.apache.org/docs/clustering) that can significantly optimize file sizes.
 
-![Replicating operational databases to a Hudi lakehouse using CDC](/assets/images/blog/2025-09-17-hudi-auto-gen-keys/2025-09-17-hudi-auto-gen-keys.fig1.jpg)
+<figure>
+![](/assets/images/blog/2025-09-17-hudi-auto-gen-keys/2025-09-17-hudi-auto-gen-keys.fig1.jpg)
+<figcaption>Replicating operational databases to a Hudi lakehouse using CDC</figcaption>
+</figure>
 
 Append-only writes are very common in the data lakehouse, such as ingesting application logs streamed continuously from numerous servers or capturing clickstream events from user interactions on a website. Even for this kind of scenario, having record keys is beneficial in scenarios like concurrently running data-fixing backfill writers (e.g., a GDPR deletion process) with ongoing writers to the same table. Without record keys, engineers typically had to coordinate the backfill to run on different partitions than the active writes to avoid conflicts. With record keys and the support provided by Hudi’s [concurrency control](https://hudi.apache.org/docs/concurrency_control) and merge modes, this restriction can be lifted, with Hudi handling the concurrent writes properly.
 
@@ -33,7 +36,10 @@ Given the advantages of supporting record keys, Hudi required users to set one o
 
 With the release of version 0.14 (this is actually old news), Hudi has introduced automatic record key generation, a feature designed to simplify the user experience with append-only writes. This enhancement eliminates the mandatory requirement to specify record key fields for every write operation.
 
-![Hudi's auto key generation for append-only writes](/assets/images/blog/2025-09-17-hudi-auto-gen-keys/2025-09-17-hudi-auto-gen-keys.fig2.jpg)
+<figure>
+![](/assets/images/blog/2025-09-17-hudi-auto-gen-keys/2025-09-17-hudi-auto-gen-keys.fig2.jpg)
+<figcaption>Hudi's auto key generation for append-only writes</figcaption>
+</figure>
 
 Now, to perform append-only writes, you can simply omit the `primaryKey` property in `CREATE TABLE` statements (see the example below) or skip setting the `hoodie.datasource.write.recordkey.field` or `hoodie.table.recordkey.fields` configurations.
 
