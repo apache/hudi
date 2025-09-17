@@ -1,9 +1,12 @@
 
-blank_issues_enabled: false
+blank_issues_enabled: true
 contact_links:
   - name: FAQ
-    url: https://cwiki.apache.org/confluence/display/HUDI/FAQ
-    about: Do checkout frequently asked questions before filing an issue.
-  - name: Hudi Issue Tracker
+    url: https://hudi.apache.org/docs/faq
+    about: Checkout frequently asked questions before filing an issue.
+  - name: Questions
+    url: https://github.com/apache/hudi/discussions
+    about: Ask questions or start discussion here (OR) join the Hudi Slack
+  - name: Bug report
     url: https://issues.apache.org/jira/projects/HUDI
     about: If you have triaged this as a bug, then file an issue directly.
