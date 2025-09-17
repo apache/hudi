@@ -116,7 +116,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.HoodieDataTypeUtils;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
@@ -614,7 +613,7 @@ public class StreamSync implements Serializable, Closeable {
   boolean canUseRowWriter(Schema targetSchema) {
     // enable row writer only when operation is BULK_INSERT, and source is ROW type and if row writer is not explicitly disabled.
     boolean rowWriterEnabled = isRowWriterEnabled();
-    return rowWriterEnabled && targetSchema != null && HoodieDataTypeUtils.canUseRowWriter(targetSchema, conf);
+    return rowWriterEnabled && targetSchema != null;
   }
 
   @VisibleForTesting
@@ -803,7 +802,6 @@ public class StreamSync implements Serializable, Closeable {
       WriteClientWriteResult writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
       Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
       JavaRDD<WriteStatus> writeStatusRDD = writeClientWriteResult.getWriteStatusRDD();
-      String errorTableInstantTime = instantTime;
       Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt = Option.empty();
       if (errorTableWriter.isPresent() && isErrorTableWriteUnificationEnabled) {
         errorTableWriteStatusRDDOpt = errorTableWriter.map(w -> w.upsert(instantTime, getLatestCommittedInstant()));
@@ -813,7 +811,7 @@ public class StreamSync implements Serializable, Closeable {
       AtomicLong totalSuccessfulRecords = new AtomicLong(0);
       Option<String> latestCommittedInstant = getLatestCommittedInstant();
       WriteStatusValidator writeStatusValidator = new HoodieStreamerWriteStatusValidator(cfg.commitOnErrors, instantTime,
-          cfg, errorTableWriter, errorTableWriteStatusRDDOpt, errorWriteFailureStrategy, isErrorTableWriteUnificationEnabled, errorTableInstantTime, writeClient, latestCommittedInstant,
+          cfg, errorTableWriter, errorTableWriteStatusRDDOpt, errorWriteFailureStrategy, isErrorTableWriteUnificationEnabled, writeClient, latestCommittedInstant,
           totalSuccessfulRecords);
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
 
@@ -1311,7 +1309,6 @@ public class StreamSync implements Serializable, Closeable {
     private final Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt;
     private final HoodieErrorTableConfig.ErrorWriteFailureStrategy errorWriteFailureStrategy;
     private final boolean isErrorTableWriteUnificationEnabled;
-    private final String errorTableInstantTime;
     private final SparkRDDWriteClient writeClient;
     private final Option<String> latestCommittedInstant;
     private final AtomicLong totalSuccessfulRecords;
@@ -1323,7 +1320,6 @@ public class StreamSync implements Serializable, Closeable {
                                        Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt,
                                        HoodieErrorTableConfig.ErrorWriteFailureStrategy errorWriteFailureStrategy,
                                        boolean isErrorTableWriteUnificationEnabled,
-                                       String errorTableInstantTime,
                                        SparkRDDWriteClient writeClient,
                                        Option<String> latestCommittedInstant,
                                        AtomicLong totalSuccessfulRecords) {
@@ -1334,7 +1330,6 @@ public class StreamSync implements Serializable, Closeable {
       this.errorTableWriteStatusRDDOpt = errorTableWriteStatusRDDOpt;
       this.errorWriteFailureStrategy = errorWriteFailureStrategy;
       this.isErrorTableWriteUnificationEnabled = isErrorTableWriteUnificationEnabled;
-      this.errorTableInstantTime = errorTableInstantTime;
       this.writeClient = writeClient;
       this.latestCommittedInstant = latestCommittedInstant;
       this.totalSuccessfulRecords = totalSuccessfulRecords;
@@ -1368,7 +1363,7 @@ public class StreamSync implements Serializable, Closeable {
         boolean errorTableSuccess = true;
         // Commit the error events triggered so far to the error table
         if (isErrorTableWriteUnificationEnabled && errorTableWriteStatusRDDOpt.isPresent()) {
-          errorTableSuccess = errorTableWriter.get().commit(errorTableInstantTime, errorTableWriteStatusRDDOpt.get());
+          errorTableSuccess = errorTableWriter.get().commit(errorTableWriteStatusRDDOpt.get());
         } else if (!isErrorTableWriteUnificationEnabled) {
           errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, latestCommittedInstant);
         }

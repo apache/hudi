@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources.debezium;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.debezium.DebeziumConstants;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
@@ -97,6 +98,12 @@ public class MysqlDebeziumSource extends DebeziumSource {
   }
 
   private static String generateUniqueSequence(String fileId, Long pos) {
+    // Minimal validations to ensure fileId and pos are valid.
+    if (fileId == null || fileId.trim().isEmpty() || pos == null || pos < 0) {
+      throw new HoodieReadFromSourceException(
+          String.format("Invalid binlog file information from Debezium: fileId=%s, pos=%s", fileId, pos));
+    }
+
     return fileId.substring(fileId.lastIndexOf('.') + 1).concat("." + pos);
   }
 }

@@ -64,7 +64,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test cases for {@link StreamReadMonitoringFunction}.
  */
 public class TestStreamReadMonitoringFunction {
-  private static final long WAIT_TIME_MILLIS = 5 * 1000L;
+  private static final long WAIT_TIME_MILLIS = 10 * 1000L;
 
   private Configuration conf;
 

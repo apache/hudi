@@ -439,6 +439,15 @@ public class FSUtils {
     return false;
   }
 
+  public static String getWriteTokenFromBaseFile(String fileName) {
+    Matcher matcher = BASE_FILE_PATTERN.matcher(fileName);
+    if (!matcher.find()) {
+      throw new InvalidHoodiePathException(fileName, "BaseFile");
+    }
+    String[] pathParts = fileName.split("_");
+    return pathParts[1];
+  }
+
   public static boolean isLogFile(StoragePath logPath) {
     String scheme = logPath.toUri().getScheme();
     return isLogFile(InLineFSUtils.SCHEME.equals(scheme)

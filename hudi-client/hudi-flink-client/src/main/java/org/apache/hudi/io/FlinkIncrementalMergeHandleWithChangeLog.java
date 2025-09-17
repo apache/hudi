@@ -45,16 +45,16 @@ import java.util.List;
  * <p>The cdc about logic is copied from {@link HoodieMergeHandleWithChangeLog},
  * we should refactor it out when there are good abstractions.
  */
-public class FlinkMergeAndReplaceHandleWithChangeLog<T, I, K, O>
-    extends FlinkMergeAndReplaceHandle<T, I, K, O> {
+public class FlinkIncrementalMergeHandleWithChangeLog<T, I, K, O>
+    extends FlinkIncrementalMergeHandle<T, I, K, O> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkMergeAndReplaceHandleWithChangeLog.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkIncrementalMergeHandleWithChangeLog.class);
 
   private final HoodieCDCLogger cdcLogger;
 
-  public FlinkMergeAndReplaceHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                                 Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                                                 TaskContextSupplier taskContextSupplier, StoragePath basePath) {
+  public FlinkIncrementalMergeHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                                  Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                                                  TaskContextSupplier taskContextSupplier, StoragePath basePath) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, basePath);
     this.cdcLogger = new HoodieCDCLogger(
         instantTime,

@@ -71,7 +71,7 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, preserveMetadata);
     this.baseFileToMerge = baseFile;
     this.keyGeneratorOpt = keyGeneratorOpt;
-    initPartitionMetadataAndFilePaths(fileId, partitionPath);
+    initPartitionMetadataAndFilePaths(partitionPath);
     initWriteStatus(fileId, partitionPath);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
@@ -118,8 +118,8 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
   /**
    * Extract old file path, initialize StorageWriter and WriteStatus.
    */
-  private void initPartitionMetadataAndFilePaths(String targetFileId, String partitionPath) {
-    LOG.info("partitionPath:{}, targetFileId to be merged: {}", partitionPath, targetFileId);
+  private void initPartitionMetadataAndFilePaths(String partitionPath) {
+    LOG.info("partitionPath:{}, targetFileId to be merged: {}", partitionPath, fileId);
     String latestValidFilePath = baseFileToMerge == null ? null : baseFileToMerge.getFileName();
     HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(
         storage,
@@ -129,9 +129,9 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
         hoodieTable.getPartitionMetafileFormat());
     partitionMetadata.trySave();
 
-    String newFileName = FSUtils.makeBaseFileName(
-        instantTime, writeToken, targetFileId, hoodieTable.getBaseFileExtension());
-    makeOldAndNewFilePaths(partitionPath, latestValidFilePath, newFileName);
+    String newFileName = createNewFileName(latestValidFilePath);
+    oldFilePath = makeNewFilePath(partitionPath, latestValidFilePath);
+    newFilePath = makeNewFilePath(partitionPath, newFileName);
 
     LOG.info(
         "Merging new data into oldPath: {}, as newPath: {}",
@@ -162,6 +162,10 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
   private void validateAndSetAndKeyGenProps(Option<BaseKeyGenerator> keyGeneratorOpt, boolean populateMetaFields) {
     ValidationUtils.checkArgument(populateMetaFields == !keyGeneratorOpt.isPresent());
     this.keyGeneratorOpt = keyGeneratorOpt;
+  }
+
+  protected String createNewFileName(String oldFileName) {
+    return FSUtils.makeBaseFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
   }
 
   protected void makeOldAndNewFilePaths(String partitionPath, String oldFileName, String newFileName) {
