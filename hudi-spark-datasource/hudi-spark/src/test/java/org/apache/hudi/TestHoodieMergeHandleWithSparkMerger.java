@@ -23,7 +23,6 @@ package org.apache.hudi;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -300,22 +299,6 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   }
 
   public static class DefaultMerger extends DefaultSparkRecordMerger {
-    @Override
-    public boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) {
-      return true;
-    }
-  }
-
-  public static class NoFlushMerger extends DefaultSparkRecordMerger {
-    @Override
-    public boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) {
-      return false;
-    }
-
-    @Override
-    public String getMergingStrategy() {
-      return HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
-    }
   }
 
   public static class CustomMerger extends DefaultSparkRecordMerger {

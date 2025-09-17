@@ -309,26 +309,14 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     }
     try {
       if (combineRecord.isPresent() && !combineRecord.get().isDelete(schema, config.getProps()) && !isDelete) {
-        // Last-minute check.
-        boolean decision = recordMerger.shouldFlush(combineRecord.get(), schema, config.getProps());
-
-        if (decision) {
-          // CASE (1): Flush the merged record.
-          HoodieKey hoodieKey = newRecord.getKey();
-          if (isSecondaryIndexStatsStreamingWritesEnabled) {
-            SecondaryIndexStreamingTracker.trackSecondaryIndexStats(hoodieKey, combineRecord, oldRecord, false, writeStatus,
-                writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, config);
-          }
-          writeToFile(hoodieKey, combineRecord.get(), schema, props, preserveMetadata);
-          recordsWritten++;
-        } else {
-          // CASE (2): A delete operation.
-          if (isSecondaryIndexStatsStreamingWritesEnabled) {
-            SecondaryIndexStreamingTracker.trackSecondaryIndexStats(newRecord.getKey(), combineRecord, oldRecord, true, writeStatus,
-                writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, config);
-          }
-          recordsDeleted++;
+        // Flush the merged record.
+        HoodieKey hoodieKey = newRecord.getKey();
+        if (isSecondaryIndexStatsStreamingWritesEnabled) {
+          SecondaryIndexStreamingTracker.trackSecondaryIndexStats(hoodieKey, combineRecord, oldRecord, false, writeStatus,
+              writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, config);
         }
+        writeToFile(hoodieKey, combineRecord.get(), schema, props, preserveMetadata);
+        recordsWritten++;
       } else {
         if (isSecondaryIndexStatsStreamingWritesEnabled) {
           SecondaryIndexStreamingTracker.trackSecondaryIndexStats(newRecord.getKey(), combineRecord, oldRecord, true, writeStatus,
