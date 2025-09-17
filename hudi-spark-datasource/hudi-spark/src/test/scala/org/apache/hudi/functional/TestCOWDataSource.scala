@@ -154,6 +154,64 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   }
 
   @ParameterizedTest
+  @MethodSource(Array("writeTableVersionAndAutoUpgradeTestCases"))
+  def testAutoUpgradeControlsTableVersionUpgrade(writeTableVersion: String, autoUpgrade: String): Unit = {
+    val (writeOpts, _) = getWriterReaderOpts(HoodieRecordType.AVRO)
+
+    // Create initial table at version 6
+    val initialWriteOptions = writeOpts ++ Map(
+      HoodieWriteConfig.TBL_NAME.key -> "testTableVersionBehavior",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> "6",
+      HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> "true"
+    )
+
+    val records = recordsToStrings(dataGen.generateInserts("001", 10)).asScala.toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    // Create initial table at version 6
+    inputDF.write.format("hudi")
+      .options(initialWriteOptions)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    // Verify initial table is at version 6
+    metaClient = HoodieTableMetaClient.builder.setConf(storageConf).setBasePath(basePath).build
+    assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig.getTableVersion, "Initial table should be at version 6")
+
+    // Now test the write table version and auto upgrade combination
+    val testWriteOptions = writeOpts ++ Map(
+      HoodieWriteConfig.TBL_NAME.key -> "testTableVersionBehavior",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> writeTableVersion,
+      HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> autoUpgrade
+    )
+
+    val updateRecords = recordsToStrings(dataGen.generateUpdates("002", 5)).asScala.toList
+    val updateDF = spark.read.json(spark.sparkContext.parallelize(updateRecords, 2))
+
+    // Perform update with the test configuration
+    updateDF.write.format("hudi")
+      .options(testWriteOptions)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Verify the final table version based on autoUpgrade flag
+    metaClient = HoodieTableMetaClient.builder.setConf(storageConf).setBasePath(basePath).build
+
+    if (autoUpgrade == "false") {
+      // When autoUpgrade is false, table should stay at original version
+      assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig.getTableVersion,
+        s"Table version should remain at 6 when autoUpgrade=false, regardless of writeTableVersion=$writeTableVersion")
+    } else {
+      // When autoUpgrade is true, table should upgrade to writeTableVersion
+      val expectedVersion = HoodieTableVersion.fromVersionCode(writeTableVersion.toInt)
+      assertEquals(expectedVersion, metaClient.getTableConfig.getTableVersion,
+        s"Table version should be upgraded to $writeTableVersion when autoUpgrade=true")
+    }
+  }
+
+  @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testNoPrecombine(recordType: HoodieRecordType) {
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
@@ -2152,5 +2210,14 @@ object TestCOWDataSource {
     autoUpgradeValues.flatMap(
       (autoUpgrade: String) => targetVersions.map(
         (targetVersion: String) => Arguments.of(autoUpgrade, targetVersion)))
+  }
+
+  def writeTableVersionAndAutoUpgradeTestCases: Array[Arguments] = {
+    Array(
+      Arguments.of("8", "true"),
+      Arguments.of("8", "false"),
+      Arguments.of("6", "true"),
+      Arguments.of("6", "false")
+    )
   }
 }
