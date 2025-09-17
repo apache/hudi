@@ -134,7 +134,8 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   public ClosableIterator<IndexedRecord> getFileRecordIterator(
       StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
       HoodieStorage storage) throws IOException {
-    return getFileRecordIterator(storagePathInfo.getPath(), dataSchema, requiredSchema, format -> {
+    boolean isLogFile = FSUtils.isLogFile(storagePathInfo.getPath());
+    HoodieAvroFileReader reader = getOrCreateFileReader(storagePathInfo.getPath(), isLogFile, format -> {
       try {
         return (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
             .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
@@ -143,6 +144,8 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
         throw new HoodieIOException("Failed to create avro records iterator from file path " + storagePathInfo.getPath(), e);
       }
     });
+
+    return getFileRecordIterator(reader, storagePathInfo.getPath(), isLogFile, dataSchema, requiredSchema);
   }
 
   @Override
@@ -153,7 +156,8 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Schema dataSchema,
       Schema requiredSchema,
       HoodieStorage storage) throws IOException {
-    return getFileRecordIterator(filePath, dataSchema, requiredSchema, format -> {
+    boolean isLogFile = FSUtils.isLogFile(filePath);
+    HoodieAvroFileReader reader = getOrCreateFileReader(filePath, isLogFile, format -> {
       try {
         return (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
             .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
@@ -162,26 +166,23 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
         throw new HoodieIOException("Failed to create avro records iterator from file path " + filePath, e);
       }
     });
+
+    return getFileRecordIterator(reader, filePath, isLogFile, dataSchema, requiredSchema);
   }
 
-  private ClosableIterator<IndexedRecord> getFileRecordIterator(
-      StoragePath path, Schema dataSchema, Schema requiredSchema, Function<HoodieFileFormat, HoodieAvroFileReader> func) throws IOException {
-    HoodieAvroFileReader reader;
-    boolean isLogFile = FSUtils.isLogFile(path);
+  private HoodieAvroFileReader getOrCreateFileReader(
+      StoragePath path, boolean isLogFile, Function<HoodieFileFormat, HoodieAvroFileReader> func) throws IOException {
     if (reusableFileReaders.containsKey(path)) {
-      reader = reusableFileReaders.get(path);
+      return reusableFileReaders.get(path);
     } else {
       HoodieFileFormat fileFormat = isMultiFormat && !isLogFile ? HoodieFileFormat.fromFileExtension(path.getFileExtension()) : baseFileFormat;
       try {
-        reader = func.apply(fileFormat);
+        return func.apply(fileFormat);
       } catch (HoodieIOException e) {
         throw e.getIOException();
       }
     }
-
-    return getFileRecordIterator(reader, path, isLogFile, dataSchema, requiredSchema);
   }
-
 
   public ClosableIterator<IndexedRecord> getFileRecordIterator(
       HoodieAvroFileReader reader,
