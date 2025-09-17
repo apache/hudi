@@ -418,6 +418,9 @@ public abstract class RecordContext<T> implements Serializable {
 
   private SerializableBiFunction<T, Schema, String> virtualKeyExtractor(String[] recordKeyFields) {
     if (recordKeyFields.length == 1) {
+      // there might be consistency for record key encoding when partition fields are multiple for cow merging,
+      // currently the incoming records are using the keys from HoodieRecord which utilities the write config and by default encodes the field name with the value
+      // while here the field names are ignored, this function would be used to extract record keys from old base file.
       return (record, schema) -> {
         Object result = getValue(record, schema, recordKeyFields[0]);
         if (result == null) {
