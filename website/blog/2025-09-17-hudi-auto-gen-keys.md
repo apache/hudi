@@ -3,7 +3,7 @@ title: "Automatic Record Key Generation in Apache Hudi"
 excerpt: ""
 author: Shiyan Xu
 category: blog
-image: /assets/images/blog/2025-07-21-mor-comparison/mor-1200x600.jpg
+image: /assets/images/blog/2025-09-17-hudi-auto-gen-keys/2025-09-17-hudi-auto-gen-keys.fig2.jpg
 tags:
 - hudi
 - record key generation
