@@ -375,7 +375,7 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
    * Test disable with keepAuditFiles=false when no audit files exist.
    */
   @Test
-  public void testDisableLockAuditWithoutKeepingFilesNoFiles() throws Exception {
+  public void testDisableLockAuditWithoutKeepingFilesNoFiles() {
     // First enable audit but don't create any audit files
     shell.evaluate(() -> "locks audit enable");
 
@@ -852,12 +852,21 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
    */
   @Test
   public void testCleanupAuditLocksInvalidAgeDays() {
-    // Test basic cleanup command works
-    Object result = shell.evaluate(() -> "locks audit cleanup --dryRun true");
-    
-    assertAll("Basic cleanup command works",
-        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
-        () -> assertNotNull(result.toString()));
+    // Test with negative ageDays (Spring Shell treats this as invalid integer format)
+    Object resultNegative = shell.evaluate(() -> "locks audit cleanup --ageDays -1");
+
+    assertAll("Negative ageDays should be rejected",
+        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(resultNegative)),
+        () -> assertNotNull(resultNegative.toString()),
+        () -> assertEquals("Error: ageDays must be a value greater than 0.", resultNegative.toString()));
+
+    // Test with invalid string to verify our parsing validation
+    Object resultInvalid = shell.evaluate(() -> "locks audit cleanup --ageDays abc");
+
+    assertAll("Invalid string ageDays should be rejected",
+        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(resultInvalid)),
+        () -> assertNotNull(resultInvalid.toString()),
+        () -> assertEquals("Error: ageDays must be a value greater than 0.", resultInvalid.toString()));
   }
 
   /**
@@ -869,15 +878,12 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     String originalBasePath = HoodieCLI.basePath;
     HoodieCLI.basePath = null;
 
-    try {
-      Object result = shell.evaluate(() -> "locks audit cleanup");
-      assertAll("Cleanup handles no table loaded",
-          () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
-          () -> assertNotNull(result.toString()),
-          () -> assertEquals("No Hudi table loaded. Please connect to a table first.", result.toString()));
-    } finally {
-      HoodieCLI.basePath = originalBasePath;
-    }
+    Object result = shell.evaluate(() -> "locks audit cleanup");
+    assertAll("Cleanup handles no table loaded",
+        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
+        () -> assertNotNull(result.toString()),
+        () -> assertEquals("No Hudi table loaded. Please connect to a table first.", result.toString()));
+    HoodieCLI.basePath = originalBasePath;
   }
 
   /**
@@ -908,8 +914,51 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     assertAll("Multiple files handled correctly",
         () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
         () -> assertNotNull(result.toString()),
-        () -> assertTrue(result.toString().contains("No audit files older than") 
-                        || result.toString().contains("cleanup") 
+        () -> assertTrue(result.toString().contains("No audit files older than")
+                        || result.toString().contains("cleanup")
                         || result.toString().contains("found")));
+  }
+
+  /**
+   * Test that disable method can call performAuditCleanup with ageDays=0 to delete all files.
+   * This validates that the internal validation allows ageDays >= 0 (not just > 0).
+   */
+  @Test
+  public void testDisableLockAuditWithAgeDaysZero() throws Exception {
+    // First enable audit
+    shell.evaluate(() -> "locks audit enable");
+
+    // Create some audit files to be cleaned up
+    List<TransactionScenario> scenarios = new ArrayList<>();
+    List<AuditRecord> records = new ArrayList<>();
+    records.add(new AuditRecord("owner1", 1000L, 1100L, "START", 61000L));
+    records.add(new AuditRecord("owner1", 1000L, 1200L, "END", 61000L));
+    scenarios.add(new TransactionScenario("1000_owner1.jsonl", records));
+    createAuditFiles(scenarios);
+
+    // Verify files exist before disable
+    String auditFolderPath = StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath);
+    StoragePath auditFolder = new StoragePath(auditFolderPath);
+    List<StoragePathInfo> filesBefore = HoodieCLI.storage.listDirectEntries(auditFolder);
+    long jsonlFilesBefore = filesBefore.stream()
+        .filter(pathInfo -> pathInfo.isFile() && pathInfo.getPath().getName().endsWith(".jsonl"))
+        .count();
+    assertTrue(jsonlFilesBefore > 0, "Should have audit files before disable");
+
+    // Disable with keepAuditFiles=false, which internally calls performAuditCleanup(false, 0)
+    Object result = shell.evaluate(() -> "locks audit disable --keepAuditFiles false");
+
+    assertAll("Disable with ageDays=0 deletes all files",
+        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
+        () -> assertNotNull(result.toString()),
+        () -> assertTrue(result.toString().contains("Lock audit disabled successfully")),
+        () -> assertTrue(result.toString().contains("cleaned up") || result.toString().contains("No audit files to clean up")));
+
+    // Verify files were cleaned up (ageDays=0 should delete all files)
+    List<StoragePathInfo> filesAfter = HoodieCLI.storage.listDirectEntries(auditFolder);
+    long jsonlFilesAfter = filesAfter.stream()
+        .filter(pathInfo -> pathInfo.isFile() && pathInfo.getPath().getName().endsWith(".jsonl"))
+        .count();
+    assertEquals(0, jsonlFilesAfter, "All audit files should be deleted when ageDays=0");
   }
 }

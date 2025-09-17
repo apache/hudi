@@ -377,17 +377,30 @@ public class LockAuditingCommand {
       @ShellOption(value = {"--dryRun"}, defaultValue = "false",
           help = "Preview changes without actually deleting files") final boolean dryRun,
       @ShellOption(value = {"--ageDays"}, defaultValue = "7",
-          help = "Delete audit files older than this many days") final int ageDays) {
-    
-    if (HoodieCLI.basePath == null) {
-      return "No Hudi table loaded. Please connect to a table first.";
-    }
+          help = "Delete audit files older than this many days") final String ageDaysStr) {
 
-    if (ageDays <= 0) {
-      return "Error: ageDays must be a positive integer.";
-    }
+    try {
+      if (HoodieCLI.basePath == null) {
+        return "No Hudi table loaded. Please connect to a table first.";
+      }
 
-    return performAuditCleanup(dryRun, ageDays).toString();
+      // Parse ageDays manually to handle validation properly
+      int ageDays;
+      try {
+        ageDays = Integer.parseInt(ageDaysStr);
+      } catch (NumberFormatException e) {
+        return "Error: ageDays must be a value greater than 0.";
+      }
+
+      if (ageDays < 0) {
+        return "Error: ageDays must be non-negative (>= 0).";
+      }
+
+      return performAuditCleanup(dryRun, ageDays).toString();
+    } catch (Exception e) {
+      LOG.error("Error during audit cleanup", e);
+      return String.format("Error during cleanup: %s", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+    }
   }
 
   /**
@@ -398,10 +411,20 @@ public class LockAuditingCommand {
    * @return CleanupResult containing cleanup operation details
    */
   private CleanupResult performAuditCleanup(boolean dryRun, int ageDays) {
+    if (ageDays < 0) {
+      String message = "Error: ageDays must be non-negative (>= 0).";
+      return new CleanupResult(false, 0, 0, 0, message, dryRun);
+    }
+
     try {
+      if (HoodieCLI.storage == null) {
+        String message = "Storage not initialized.";
+        return new CleanupResult(false, 0, 0, 0, message, dryRun);
+      }
+
       String auditFolderPath = StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath);
       StoragePath auditFolder = new StoragePath(auditFolderPath);
-      
+
       // Check if audit folder exists
       if (!HoodieCLI.storage.exists(auditFolder)) {
         String message = "No audit folder found - nothing to cleanup.";
