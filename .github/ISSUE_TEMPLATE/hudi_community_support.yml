@@ -1,0 +1,88 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+---
+name: Community Support Request 🤝
+description: Report an issue faced while using Hudi
+labels: ["community-support"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Tips before filing an issue**
+
+        - Have you gone through our [FAQs](https://hudi.apache.org/learn/faq/)?
+        - Join the mailing list (dev-subscribe@hudi.apache.org) or use GH discussions if you have just questions.
+        - If you have triaged this as a bug already, then file a bug issue directly.
+
+  - type: textarea
+    attributes:
+      label: Describe the problem you faced
+      description: A clear and concise description of the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: To Reproduce
+      description: Steps to reproduce the behavior
+      placeholder: |
+        1.
+        2.
+        3.
+        4.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Expected behavior
+      description: A clear and concise description of what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Environment Description
+      description: Provide details about your environment
+      placeholder: |
+        * Hudi version:
+        * Spark version:
+        * Flink version:
+        * Hive version:
+        * Hadoop version:
+        * Storage (HDFS/S3/GCS..):
+        * Running on Docker? (yes/no):
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Additional context
+      description: Add any other context about the problem here.
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: Stacktrace
+      description: Add the stacktrace of the error
+      render: shell
+    validations:
+      required: false
