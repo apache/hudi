@@ -42,9 +42,9 @@ public class AutoRowDataKeyGen extends RowDataKeyGen {
       RowType rowType,
       boolean hiveStylePartitioning,
       boolean encodePartitionPath,
-      boolean useCompkexKeygenOldEncoding) {
+      boolean useCompkexKeygenNewEncoding) {
     super(Option.empty(), partitionFields, rowType, hiveStylePartitioning, encodePartitionPath, false, Option.empty(),
-        useCompkexKeygenOldEncoding);
+            useCompkexKeygenNewEncoding);
     this.taskId = taskId;
     this.instantTime = instantTime;
   }
@@ -52,7 +52,7 @@ public class AutoRowDataKeyGen extends RowDataKeyGen {
   public static RowDataKeyGen instance(Configuration conf, RowType rowType, int taskId, String instantTime) {
     return new AutoRowDataKeyGen(taskId, instantTime, conf.get(FlinkOptions.PARTITION_PATH_FIELD),
         rowType, conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.get(FlinkOptions.URL_ENCODE_PARTITIONING),
-        OptionsResolver.useComplexKeygenOldEncoding(conf));
+        OptionsResolver.useComplexKeygenNewEncoding(conf));
   }
 
   @Override

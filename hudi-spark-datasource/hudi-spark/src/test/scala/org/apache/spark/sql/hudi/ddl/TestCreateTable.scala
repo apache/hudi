@@ -1024,7 +1024,8 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         val encodeSingleKeyFieldValue = params._1
         val tableVersion = params._2
         import spark.implicits._
-        val keyPrefix = if (encodeSingleKeyFieldValue) "" else "id:"
+        // The COMPLEX_KEYGEN_NEW_ENCODING config only works for table version 8 and below
+        val keyPrefix = if (encodeSingleKeyFieldValue && tableVersion < 9) "" else "id:"
         val df = Seq((1, "a1", 10, 1000, "2025-07-29", 12)).toDF("id", "name", "value", "ts", "day", "hh")
         // Write a table by spark dataframe.
         df.write.format("hudi")

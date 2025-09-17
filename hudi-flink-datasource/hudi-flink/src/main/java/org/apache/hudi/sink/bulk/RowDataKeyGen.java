@@ -87,7 +87,7 @@ public class RowDataKeyGen implements Serializable {
       boolean encodePartitionPath,
       boolean consistentLogicalTimestampEnabled,
       Option<TimestampBasedAvroKeyGenerator> keyGenOpt,
-      boolean useComplexKeygenOldEncoding) {
+      boolean useComplexKeygenNewEncoding) {
     this.partitionPathFields = partitionFields.split(DEFAULT_FIELD_SEPARATOR);
     this.hiveStylePartitioning = hiveStylePartitioning;
     this.encodePartitionPath = encodePartitionPath;
@@ -129,7 +129,7 @@ public class RowDataKeyGen implements Serializable {
       multiplePartitions = true;
     }
     if (simpleRecordKey) {
-      if (multiplePartitions && useComplexKeygenOldEncoding) {
+      if (multiplePartitions && !useComplexKeygenNewEncoding) {
         // single record key with multiple partition fields
         this.simpleRecordKeyFunc = rowData -> {
           String oriKey = getRecordKey(recordKeyFieldGetter.getFieldOrNull(rowData), this.recordKeyFields[0], consistentLogicalTimestampEnabled);
@@ -154,7 +154,7 @@ public class RowDataKeyGen implements Serializable {
     boolean consistentLogicalTimestampEnabled = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
     return new RowDataKeyGen(Option.of(conf.get(FlinkOptions.RECORD_KEY_FIELD)), conf.get(FlinkOptions.PARTITION_PATH_FIELD),
         rowType, conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.get(FlinkOptions.URL_ENCODE_PARTITIONING),
-        consistentLogicalTimestampEnabled, keyGeneratorOpt, OptionsResolver.useComplexKeygenOldEncoding(conf));
+        consistentLogicalTimestampEnabled, keyGeneratorOpt, OptionsResolver.useComplexKeygenNewEncoding(conf));
   }
 
   public HoodieKey getHoodieKey(RowData rowData) {
