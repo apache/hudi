@@ -24,10 +24,7 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.{ConfigProperty, HoodieConfig, HoodieMetadataConfig}
-import org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER
-import org.apache.hudi.common.config.HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED
-import org.apache.hudi.common.config.HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE
-import org.apache.hudi.common.config.HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES
+import org.apache.hudi.common.config.HoodieReaderConfig.{HFILE_BLOCK_CACHE_ENABLED, HFILE_BLOCK_CACHE_SIZE, HFILE_BLOCK_CACHE_TTL_MINUTES, USE_NATIVE_HFILE_READER}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
