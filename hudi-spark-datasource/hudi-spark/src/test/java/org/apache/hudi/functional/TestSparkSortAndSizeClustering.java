@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -310,7 +311,8 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
 
   private Schema getSchema() {
     try {
-      return new Schema.Parser().parse(this.getClass().getClassLoader().getResourceAsStream("schema_with_logical_types.avsc"));
+      String schema = FileIOUtils.readAsUTFString(this.getClass().getClassLoader().getResourceAsStream("schema_with_logical_types.avsc"));
+      return new Schema.Parser().parse(schema);
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }

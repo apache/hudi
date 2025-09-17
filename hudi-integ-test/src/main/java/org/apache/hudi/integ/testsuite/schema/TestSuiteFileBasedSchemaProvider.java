@@ -33,6 +33,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
+
 /**
  * Appends source ordering field to both source and target schemas. This is required to assist in validation to differentiate records written in different batches.
  */
@@ -49,7 +51,7 @@ public class TestSuiteFileBasedSchemaProvider extends FilebasedSchemaProvider {
   private Schema addSourceOrderingFieldToSchema(Schema schema) {
     List<Field> fields = new ArrayList<>();
     for (Schema.Field field : schema.getFields()) {
-      Schema.Field newField = new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal());
+      Schema.Field newField = createNewSchemaField(field);
       for (Map.Entry<String, Object> prop : field.getObjectProps().entrySet()) {
         newField.addProp(prop.getKey(), prop.getValue());
       }

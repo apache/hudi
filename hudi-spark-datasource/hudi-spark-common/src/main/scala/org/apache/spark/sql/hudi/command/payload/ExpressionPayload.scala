@@ -22,9 +22,9 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.AvroSchemaUtils.{isNullable, resolveNullableSchema}
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
+import org.apache.hudi.avro.HoodieAvroUtils.{bytesToAvro, createNewSchemaField}
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
-import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, HoodieRecordUtils, Option => HOption, OrderingValues, StringUtils, ValidationUtils}
+import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, HoodieRecordUtils, OrderingValues, StringUtils, ValidationUtils, Option => HOption}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
@@ -572,10 +572,10 @@ object ExpressionPayload {
   private def mergeSchema(a: Schema, b: Schema): Schema = {
     val mergedFields =
       a.getFields.asScala.map(field =>
-        new Schema.Field("source_" + field.name,
+        createNewSchemaField("source_" + field.name,
           field.schema, field.doc, field.defaultVal, field.order)) ++
         b.getFields.asScala.map(field =>
-          new Schema.Field("target_" + field.name,
+          createNewSchemaField("target_" + field.name,
             field.schema, field.doc, field.defaultVal, field.order))
     Schema.createRecord(a.getName, a.getDoc, a.getNamespace, a.isError, mergedFields.asJava)
   }
