@@ -26,7 +26,7 @@ body:
     attributes:
       label: Bug Description
       description: Describe the bug and expected behavior
-      placeholder: |
+      value: |
         **What happened:**
 
         **What you expected:**
@@ -42,7 +42,7 @@ body:
     attributes:
       label: Environment
       description: Hudi version, query engine, and relevant configuration
-      placeholder: |
+      value: |
         **Hudi version:**
         **Query engine:** (Spark/Flink/Trino etc)
         **Relevant configs:**

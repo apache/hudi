@@ -26,7 +26,7 @@ body:
     attributes:
       label: Task Description
       description: Describe the development task or improvement
-      placeholder: |
+      value: |
         **What needs to be done:**
 
         **Why this task is needed:**
@@ -51,7 +51,7 @@ body:
     attributes:
       label: Related Issues
       description: Link to parent feature issue or related issues
-      placeholder: |
+      value: |
         **Parent feature issue:** (if applicable )
         **Related issues:**
         NOTE: Use `Relationships` button to add parent/blocking issues after issue is created.
