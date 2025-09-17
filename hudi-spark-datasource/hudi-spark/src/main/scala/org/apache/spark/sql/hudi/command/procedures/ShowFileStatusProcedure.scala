@@ -46,9 +46,11 @@ class ShowFileStatusProcedure extends BaseProcedure
   private val DEFAULT_VALUE = ""
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "partition", DataTypes.StringType),
-    ProcedureParameter.required(2, "file", DataTypes.StringType)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "partition", DataTypes.StringType),
+    ProcedureParameter.required(3, "file", DataTypes.StringType),
+    ProcedureParameter.optional(4, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -66,13 +68,16 @@ class ShowFileStatusProcedure extends BaseProcedure
   override def outputType: StructType = OUTPUT_TYPE
 
   override def call(args: ProcedureArgs): Seq[Row] = {
-    super.checkArgs(PARAMETERS, args)
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
-    val partition = getArgValueOrDefault(args, PARAMETERS(1))
-    val fileName = getArgValueOrDefault(args, PARAMETERS(2))
+    val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
+    val basePath: String = getBasePath(tableName, tablePath)
+    super.checkArgs(PARAMETERS, args)
+    val partition = getArgValueOrDefault(args, PARAMETERS(2))
+    val fileName = getArgValueOrDefault(args, PARAMETERS(3))
+    val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
 
-    val basePath: String = getBasePath(tableName, Option.empty)
+    validateFilter(filter, outputType)
     val metaClient = createMetaClient(jsc, basePath)
     val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, tableName.asInstanceOf[Option[String]])
     val table: HoodieSparkTable[String] = HoodieSparkTable.create(client.getConfig, client.getEngineContext)
@@ -83,7 +88,7 @@ class ShowFileStatusProcedure extends BaseProcedure
 
     // step1 lookup clean/rollback/restore metadata in active & archive timeline
     val fileStatus: Option[FileStatusInfo] = isDeleted(metaClient, partition.asInstanceOf[Option[String]], fileName.get.asInstanceOf[String])
-    if (fileStatus.isDefined) {
+    val results = if (fileStatus.isDefined) {
       val res: FileStatusInfo = fileStatus.get
       Seq(Row(res.status, res.action, res.instant, res.timeline, res.fullPath))
     } else {
@@ -100,6 +105,7 @@ class ShowFileStatusProcedure extends BaseProcedure
         .map(f => Seq(Row(FileStatus.EXIST.toString, DEFAULT_VALUE, DEFAULT_VALUE, TimelineType.ACTIVE.toString, f.getPath.toUri.getPath)))
         .getOrElse(Seq(Row(FileStatus.UNKNOWN.toString, DEFAULT_VALUE, DEFAULT_VALUE, DEFAULT_VALUE, DEFAULT_VALUE)))
     }
+    applyFilter(results, filter, outputType)
   }
 
   private def isDeleted(metaClient: HoodieTableMetaClient, partition: Option[String], fileName: String): Option[FileStatusInfo] = {

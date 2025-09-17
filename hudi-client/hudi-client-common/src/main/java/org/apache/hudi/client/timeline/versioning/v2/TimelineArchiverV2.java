@@ -21,6 +21,7 @@ package org.apache.hudi.client.timeline.versioning.v2;
 
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -214,7 +215,9 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
 
     // 4. If metadata table is enabled, do not archive instants which are more recent than the last compaction on the
     // metadata table.
-    if (config.isMetadataTableEnabled() && table.getMetaClient().getTableConfig().isMetadataTableAvailable()) {
+    if (config.isMetadataTableEnabled()
+        && table.getMetaClient().getTableConfig().isMetadataTableAvailable()
+        && table.getMetaClient().getTableFormat().getName().equals(NativeTableFormat.TABLE_FORMAT)) {
       try (HoodieTableMetadata tableMetadata = table.refreshAndGetTableMetadata()) {
         Option<String> latestCompactionTime = tableMetadata.getLatestCompactionTime();
         if (!latestCompactionTime.isPresent()) {

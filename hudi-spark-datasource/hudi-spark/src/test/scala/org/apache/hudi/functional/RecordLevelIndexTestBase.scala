@@ -44,7 +44,8 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
   def commonOpts: Map[String, String] = Map(
     PARTITIONPATH_FIELD.key -> "partition",
     HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
-    HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "15"
+    HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "15",
+    "hoodie.hfile.block.cache.enabled" -> "true"
   ) ++ baseOpts ++ metadataOpts
 
   val secondaryIndexOpts: Map[String, String] = Map(
@@ -72,20 +73,21 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
                                                      validate: Boolean = true,
                                                      numUpdates: Int = 1,
                                                      onlyUpdates: Boolean = false,
-                                                     schemaStr: String = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA): DataFrame = {
+                                                     schemaStr: String = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+                                                     timestamp: Long = System.currentTimeMillis()): DataFrame = {
     var latestBatch: mutable.Buffer[String] = null
     if (operation == UPSERT_OPERATION_OPT_VAL) {
       val instantTime = getInstantTime()
-      val records = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, numUpdates, schemaStr))
+      val records = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, numUpdates, schemaStr, timestamp))
       if (!onlyUpdates) {
-        records.addAll(recordsToStrings(dataGen.generateInsertsAsPerSchema(instantTime, 1, schemaStr)))
+        records.addAll(recordsToStrings(dataGen.generateInsertsAsPerSchema(instantTime, 1, schemaStr, timestamp)))
       }
       latestBatch = records.asScala
     } else if (operation == INSERT_OVERWRITE_OPERATION_OPT_VAL) {
       latestBatch = recordsToStrings(dataGen.generateInsertsForPartitionPerSchema(
         getInstantTime(), 5, dataGen.getPartitionPaths.last, schemaStr)).asScala
     } else {
-      latestBatch = recordsToStrings(dataGen.generateInsertsAsPerSchema(getInstantTime(), 5, schemaStr)).asScala
+      latestBatch = recordsToStrings(dataGen.generateInsertsAsPerSchema(getInstantTime(), 5, schemaStr, timestamp)).asScala
     }
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch.toSeq, 2))
     latestBatchDf.cache()

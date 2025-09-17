@@ -36,7 +36,6 @@ import java.util.Properties;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.apache.hudi.sync.datahub.DataHubTableProperties.HoodieTableMetadata;
 import static org.apache.hudi.sync.datahub.DataHubTableProperties.getTableProperties;
 
@@ -61,9 +60,9 @@ public class DataHubSyncTool extends HoodieSyncTool {
   public DataHubSyncTool(Properties props, Configuration hadoopConf, Option<HoodieTableMetaClient> metaClientOption) {
     super(props, hadoopConf);
     this.config = new DataHubSyncConfig(props);
-    this.tableName = config.getString(META_SYNC_TABLE_NAME);
     this.metaClient = metaClientOption.orElseGet(() -> buildMetaClient(config));
     this.syncClient = new DataHubSyncClient(config, metaClient);
+    this.tableName = this.syncClient.getTableName();
   }
 
   @Override

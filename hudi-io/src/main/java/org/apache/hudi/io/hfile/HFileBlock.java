@@ -189,6 +189,9 @@ public abstract class HFileBlock {
    * @return the number of checksum chunks.
    */
   static int numChecksumChunks(long numBytes, int bytesPerChecksum) {
+    if (bytesPerChecksum == 0) {
+      return 0;
+    }
     long numChunks = numBytes / bytesPerChecksum;
     if (numBytes % bytesPerChecksum != 0) {
       numChunks++;
@@ -283,7 +286,11 @@ public abstract class HFileBlock {
     // 5. Checksum type.
     buf.put(context.getChecksumType().getCode());
     // 6. Bytes covered per checksum.
-    buf.putInt(DEFAULT_BYTES_PER_CHECKSUM);
+    // Note that: Default value is 16K. There is a check on
+    // onDiskSizeWithoutHeader = uncompressedSizeWithoutHeader + Checksum.
+    // In order to pass this check, either we make isUseHBaseChecksum false in HFileContext (hbase),
+    // or we set this value to zero.
+    buf.putInt(0);
     // 7. onDiskDataSizeWithHeader
     int onDiskDataSizeWithHeader =
         HFileBlock.HFILEBLOCK_HEADER_SIZE + compressedBlockData.limit();

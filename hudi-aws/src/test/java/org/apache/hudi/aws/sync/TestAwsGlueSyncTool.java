@@ -33,6 +33,9 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.services.glue.GlueAsyncClient;
 import software.amazon.awssdk.services.glue.GlueAsyncClientBuilder;
+import software.amazon.awssdk.services.sts.StsClient;
+import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
+import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
 
 import java.io.IOException;
 
@@ -48,7 +51,6 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TestAwsGlueSyncTool {
-
   private AwsGlueCatalogSyncTool awsGlueCatalogSyncTool;
 
   @BeforeEach
@@ -81,12 +83,16 @@ class TestAwsGlueSyncTool {
 
   @Test
   void validateInitThroughSyncTool() throws Exception {
-    try (MockedStatic<GlueAsyncClient> mockedStatic = mockStatic(GlueAsyncClient.class)) {
+    try (MockedStatic<GlueAsyncClient> mockedStatic = mockStatic(GlueAsyncClient.class);
+         MockedStatic<StsClient> mockedStsStatic = mockStatic(StsClient.class)) {
       GlueAsyncClientBuilder builder = mock(GlueAsyncClientBuilder.class);
       mockedStatic.when(GlueAsyncClient::builder).thenReturn(builder);
       when(builder.credentialsProvider(any())).thenReturn(builder);
       GlueAsyncClient mockClient = mock(GlueAsyncClient.class);
       when(builder.build()).thenReturn(mockClient);
+      StsClient mockSts = mock(StsClient.class);
+      mockedStsStatic.when(StsClient::create).thenReturn(mockSts);
+      when(mockSts.getCallerIdentity(GetCallerIdentityRequest.builder().build())).thenReturn(GetCallerIdentityResponse.builder().account("").build());
       HoodieSyncTool syncTool = SyncUtilHelpers.instantiateMetaSyncTool(
           AwsGlueCatalogSyncTool.class.getName(),
           new TypedProperties(),

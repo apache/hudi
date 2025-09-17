@@ -35,9 +35,11 @@ import scala.collection.JavaConverters._
 
 class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "partition", DataTypes.StringType, ""),
-    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 100)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "partition", DataTypes.StringType, ""),
+    ProcedureParameter.optional(3, "limit", DataTypes.IntegerType, 100),
+    ProcedureParameter.optional(4, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -52,10 +54,13 @@ class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuil
     super.checkArgs(PARAMETERS, args)
 
     val table = getArgValueOrDefault(args, PARAMETERS(0))
-    val partition = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
-    val limit = getArgValueOrDefault(args, PARAMETERS(2))
+    val path = getArgValueOrDefault(args, PARAMETERS(1))
+    val partition = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
+    val limit = getArgValueOrDefault(args, PARAMETERS(3))
+    val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
 
-    val basePath = getBasePath(table)
+    validateFilter(filter, outputType)
+    val basePath = getBasePath(table, path)
     val metaClient = createMetaClient(jsc, basePath)
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
     val metaReader = new HoodieBackedTableMetadata(
@@ -77,12 +82,12 @@ class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuil
     statuses.asScala.sortBy(p => p.getPath.getName).foreach((f: StoragePathInfo) => {
       rows.add(Row(f.getPath.getName))
     })
-    if (limit.isDefined) {
+    val results = if (limit.isDefined) {
       rows.stream().limit(limit.get.asInstanceOf[Int]).toArray().map(r => r.asInstanceOf[Row]).toList
     } else {
       rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
     }
-
+    applyFilter(results, filter, outputType)
   }
 
   override def build: Procedure = new ShowMetadataTableFilesProcedure()
