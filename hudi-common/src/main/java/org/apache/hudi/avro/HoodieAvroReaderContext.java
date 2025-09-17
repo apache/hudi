@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
@@ -56,6 +57,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -132,18 +134,15 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   public ClosableIterator<IndexedRecord> getFileRecordIterator(
       StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
       HoodieStorage storage) throws IOException {
-    HoodieAvroFileReader reader;
-    boolean isLogFile = FSUtils.isLogFile(storagePathInfo.getPath());
-    if (reusableFileReaders.containsKey(storagePathInfo.getPath())) {
-      reader = reusableFileReaders.get(storagePathInfo.getPath());
-    } else {
-      HoodieFileFormat fileFormat = isMultiFormat && !isLogFile ? HoodieFileFormat.fromFileExtension(storagePathInfo.getPath().getFileExtension()) : baseFileFormat;
-      reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
-          .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
-              storagePathInfo, fileFormat, Option.empty());
-    }
-
-    return getFileRecordIterator(reader, storagePathInfo.getPath(), isLogFile, dataSchema, requiredSchema);
+    return getFileRecordIterator(storagePathInfo.getPath(), dataSchema, requiredSchema, format -> {
+      try {
+        return (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
+            .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
+                storagePathInfo, format, Option.empty());
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to create avro records iterator from file path " + storagePathInfo.getPath(), e);
+      }
+    });
   }
 
   @Override
@@ -154,19 +153,35 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Schema dataSchema,
       Schema requiredSchema,
       HoodieStorage storage) throws IOException {
+    return getFileRecordIterator(filePath, dataSchema, requiredSchema, format -> {
+      try {
+        return (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
+            .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
+                filePath, format, Option.empty());
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to create avro records iterator from file path " + filePath, e);
+      }
+    });
+  }
+
+  private ClosableIterator<IndexedRecord> getFileRecordIterator(
+      StoragePath path, Schema dataSchema, Schema requiredSchema, Function<HoodieFileFormat, HoodieAvroFileReader> func) throws IOException {
     HoodieAvroFileReader reader;
-    boolean isLogFile = FSUtils.isLogFile(filePath);
-    if (reusableFileReaders.containsKey(filePath)) {
-      reader = reusableFileReaders.get(filePath);
+    boolean isLogFile = FSUtils.isLogFile(path);
+    if (reusableFileReaders.containsKey(path)) {
+      reader = reusableFileReaders.get(path);
     } else {
-      HoodieFileFormat fileFormat = isMultiFormat && !isLogFile ? HoodieFileFormat.fromFileExtension(filePath.getFileExtension()) : baseFileFormat;
-      reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
-          .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
-              filePath, fileFormat, Option.empty());
+      HoodieFileFormat fileFormat = isMultiFormat && !isLogFile ? HoodieFileFormat.fromFileExtension(path.getFileExtension()) : baseFileFormat;
+      try {
+        reader = func.apply(fileFormat);
+      } catch (HoodieIOException e) {
+        throw e.getIOException();
+      }
     }
 
-    return getFileRecordIterator(reader, filePath, isLogFile, dataSchema, requiredSchema);
+    return getFileRecordIterator(reader, path, isLogFile, dataSchema, requiredSchema);
   }
+
 
   public ClosableIterator<IndexedRecord> getFileRecordIterator(
       HoodieAvroFileReader reader,
