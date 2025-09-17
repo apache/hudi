@@ -69,6 +69,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
   private final Map<StoragePath, HoodieAvroFileReader> reusableFileReaders;
   private final boolean isMultiFormat;
+  private final HoodieConfig hoodieConfig;
 
   /**
    * Constructs an instance of the reader context that will read data into Avro records.
@@ -82,7 +83,24 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       HoodieTableConfig tableConfig,
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt) {
-    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, Collections.emptyMap());
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, Collections.emptyMap(), tableConfig.getPayloadClass(), new HoodieConfig());
+  }
+
+  /**
+   * Constructs an instance of the reader context that will read data into Avro records with custom configuration.
+   * @param storageConfiguration the storage configuration to use for reading files
+   * @param tableConfig the configuration of the Hudi table being read
+   * @param instantRangeOpt the set of valid instants for this read
+   * @param filterOpt an optional filter to apply on the record keys
+   * @param hoodieConfig the configuration that contains cache and other settings
+   */
+  public HoodieAvroReaderContext(
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt,
+      Option<Predicate> filterOpt,
+      HoodieConfig hoodieConfig) {
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, Collections.emptyMap(), tableConfig.getPayloadClass(), hoodieConfig);
   }
 
   /**
@@ -101,7 +119,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt,
       Map<StoragePath, HoodieAvroFileReader> reusableFileReaders) {
-    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, reusableFileReaders, tableConfig.getPayloadClass());
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, reusableFileReaders, tableConfig.getPayloadClass(), new HoodieConfig());
   }
 
   /**
@@ -115,7 +133,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig,
       String payloadClassName) {
-    this(storageConfiguration, tableConfig, Option.empty(), Option.empty(), Collections.emptyMap(), payloadClassName);
+    this(storageConfiguration, tableConfig, Option.empty(), Option.empty(), Collections.emptyMap(), payloadClassName, new HoodieConfig());
   }
 
   private HoodieAvroReaderContext(
@@ -124,10 +142,12 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt,
       Map<StoragePath, HoodieAvroFileReader> reusableFileReaders,
-      String payloadClassName) {
+      String payloadClassName,
+      HoodieConfig hoodieConfig) {
     super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, new AvroRecordContext(tableConfig, payloadClassName));
     this.reusableFileReaders = reusableFileReaders;
     this.isMultiFormat = tableConfig.isMultipleBaseFileFormatsEnabled();
+    this.hoodieConfig = hoodieConfig;
   }
 
   @Override
@@ -160,7 +180,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     HoodieAvroFileReader reader = getOrCreateFileReader(filePath, isLogFile, format -> {
       try {
         return (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
-            .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
+            .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(hoodieConfig,
                 filePath, format, Option.empty());
       } catch (IOException e) {
         throw new HoodieIOException("Failed to create avro records iterator from file path " + filePath, e);
