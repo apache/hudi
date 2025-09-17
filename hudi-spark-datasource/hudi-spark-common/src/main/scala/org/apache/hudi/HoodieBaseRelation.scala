@@ -849,11 +849,11 @@ object HoodieBaseRelation extends SparkAdapterSupport {
 
       // Add HFile cache configurations from options
       hoodieConfig.setValue(HFILE_BLOCK_CACHE_ENABLED,
-        options.getOrElse(HFILE_BLOCK_CACHE_ENABLED.key(), HFILE_BLOCK_CACHE_TTL_MINUTES.defaultValue()))
+        options.getOrElse(HFILE_BLOCK_CACHE_ENABLED.key(), HFILE_BLOCK_CACHE_ENABLED.defaultValue().toString))
       hoodieConfig.setValue(HFILE_BLOCK_CACHE_SIZE,
-        options.getOrElse(HFILE_BLOCK_CACHE_SIZE.key(), HFILE_BLOCK_CACHE_TTL_MINUTES.defaultValue()))
+        options.getOrElse(HFILE_BLOCK_CACHE_SIZE.key(), HFILE_BLOCK_CACHE_SIZE.defaultValue().toString))
       hoodieConfig.setValue(HFILE_BLOCK_CACHE_TTL_MINUTES,
-        options.getOrElse(HFILE_BLOCK_CACHE_TTL_MINUTES.key(), HFILE_BLOCK_CACHE_TTL_MINUTES.defaultValue()))
+        options.getOrElse(HFILE_BLOCK_CACHE_TTL_MINUTES.key(), HFILE_BLOCK_CACHE_TTL_MINUTES.defaultValue().toString))
 
       val reader = new HoodieSparkIOFactory(
         new HoodieHadoopStorage(filePath, HadoopFSUtils.getStorageConf(hadoopConf)))
