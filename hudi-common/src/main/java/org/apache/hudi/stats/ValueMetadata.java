@@ -178,7 +178,7 @@ public class ValueMetadata implements Serializable {
       return V1EmptyMetadata.get();
     }
 
-    ValueType valueType = ValueType.fromInt(valueTypeInfo.getTypeOrdinal());
+    ValueType valueType = ValueType.fromOrdinal(valueTypeInfo.getTypeOrdinal());
     if (valueType == ValueType.V1) {
       return V1EmptyMetadata.get();
     } else if (valueType == ValueType.DECIMAL) {
@@ -199,7 +199,7 @@ public class ValueMetadata implements Serializable {
       return V1EmptyMetadata.get();
     }
 
-    ValueType valueType = ValueType.fromInt((Integer) valueTypeInfo.get(COLUMN_STATS_FIELD_VALUE_TYPE_ORDINAL));
+    ValueType valueType = ValueType.fromOrdinal((Integer) valueTypeInfo.get(COLUMN_STATS_FIELD_VALUE_TYPE_ORDINAL));
     if (valueType == ValueType.V1) {
       throw new IllegalArgumentException("Unsupported value type: " + valueTypeInfo.get(COLUMN_STATS_FIELD_VALUE_TYPE_ORDINAL));
     } else if (valueType == ValueType.DECIMAL) {
@@ -234,7 +234,7 @@ public class ValueMetadata implements Serializable {
     if (primitiveType == null) {
       return NULL_METADATA;
     }
-    ValueType valueType = ValueType.fromPrimitiveType(primitiveType);
+    ValueType valueType = ValueType.fromParquetPrimitiveType(primitiveType);
     if (valueType == ValueType.V1) {
       throw new IllegalArgumentException("Unsupported logical type: " + primitiveType.getLogicalTypeAnnotation());
     } else if (valueType == ValueType.DECIMAL) {

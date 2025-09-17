@@ -48,81 +48,81 @@ public class SchemaChangeUtils {
    * TODO: support more type update.
    *
    * @param src origin column type.
-   * @param dsr new column type.
+   * @param dst new column type.
    * @return whether to allow the column type to be updated.
    */
-  public static boolean isTypeUpdateAllow(Type src, Type dsr) {
-    if (src.isNestedType() || dsr.isNestedType()) {
+  public static boolean isTypeUpdateAllow(Type src, Type dst) {
+    if (src.isNestedType() || dst.isNestedType()) {
       throw new IllegalArgumentException("only support update primitive type");
     }
-    if (src.equals(dsr)) {
+    if (src.equals(dst)) {
       return true;
     }
-    return isTypeUpdateAllowInternal(src, dsr);
+    return isTypeUpdateAllowInternal(src, dst);
   }
 
-  public static boolean shouldPromoteType(Type src, Type dsr) {
-    if (src.equals(dsr) || src.isNestedType() || dsr.isNestedType()) {
+  public static boolean shouldPromoteType(Type src, Type dst) {
+    if (src.equals(dst) || src.isNestedType() || dst.isNestedType()) {
       return false;
     }
-    return isTypeUpdateAllowInternal(src, dsr);
+    return isTypeUpdateAllowInternal(src, dst);
   }
 
-  private static boolean isTypeUpdateAllowInternal(Type src, Type dsr) {
+  private static boolean isTypeUpdateAllowInternal(Type src, Type dst) {
     switch (src.typeId()) {
       case INT:
-        return dsr == Types.LongType.get() || dsr == Types.FloatType.get()
-            || dsr == Types.DoubleType.get() || dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL || dsr.typeId() == Type.TypeID.DECIMAL_FIXED;
+        return dst == Types.LongType.get() || dst == Types.FloatType.get()
+            || dst == Types.DoubleType.get() || dst == Types.StringType.get() || dst.typeId() == Type.TypeID.DECIMAL || dst.typeId() == Type.TypeID.DECIMAL_FIXED;
       case LONG:
-        return dsr == Types.FloatType.get() || dsr == Types.DoubleType.get() || dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL || dsr.typeId() == Type.TypeID.DECIMAL_FIXED;
+        return dst == Types.FloatType.get() || dst == Types.DoubleType.get() || dst == Types.StringType.get() || dst.typeId() == Type.TypeID.DECIMAL || dst.typeId() == Type.TypeID.DECIMAL_FIXED;
       case FLOAT:
-        return dsr == Types.DoubleType.get() || dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL || dsr.typeId() == Type.TypeID.DECIMAL_FIXED;
+        return dst == Types.DoubleType.get() || dst == Types.StringType.get() || dst.typeId() == Type.TypeID.DECIMAL || dst.typeId() == Type.TypeID.DECIMAL_FIXED;
       case DOUBLE:
-        return dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL || dsr.typeId() == Type.TypeID.DECIMAL_FIXED;
+        return dst == Types.StringType.get() || dst.typeId() == Type.TypeID.DECIMAL || dst.typeId() == Type.TypeID.DECIMAL_FIXED;
       case DATE:
       case BINARY:
-        return dsr == Types.StringType.get();
+        return dst == Types.StringType.get();
       case DECIMAL_BYTES:
-        return isDecimalBytesUpdateAllowInternal(src, dsr);
+        return isDecimalBytesUpdateAllowInternal(src, dst);
       case DECIMAL:
       case DECIMAL_FIXED:
-        return isDecimalFixedUpdateAllowInternal(src, dsr);
+        return isDecimalFixedUpdateAllowInternal(src, dst);
       case STRING:
-        return dsr == Types.DateType.get() || dsr.typeId() == Type.TypeID.DECIMAL || dsr.typeId() == Type.TypeID.DECIMAL_FIXED || dsr == Types.BinaryType.get();
+        return dst == Types.DateType.get() || dst.typeId() == Type.TypeID.DECIMAL || dst.typeId() == Type.TypeID.DECIMAL_FIXED || dst == Types.BinaryType.get();
       default:
         return false;
     }
   }
 
-  private static boolean isDecimalBytesUpdateAllowInternal(Type src, Type dsr) {
-    if (dsr.typeId() == Type.TypeID.DECIMAL_BYTES || dsr.typeId() == Type.TypeID.DECIMAL_FIXED || dsr.typeId() == Type.TypeID.DECIMAL) {
-      return isDecimalUpdateAllowInternalBase((Types.DecimalBase)src, (Types.DecimalBase)dsr);
+  private static boolean isDecimalBytesUpdateAllowInternal(Type src, Type dst) {
+    if (dst.typeId() == Type.TypeID.DECIMAL_BYTES || dst.typeId() == Type.TypeID.DECIMAL_FIXED || dst.typeId() == Type.TypeID.DECIMAL) {
+      return isDecimalUpdateAllowInternalBase((Types.DecimalBase)src, (Types.DecimalBase)dst);
     }
-    return dsr.typeId() == Type.TypeID.STRING;
+    return dst.typeId() == Type.TypeID.STRING;
   }
 
-  private static boolean isDecimalUpdateAllowInternalBase(Types.DecimalBase  src, Types.DecimalBase  dsr) {
-    if (dsr.isWiderThan(src)) {
+  private static boolean isDecimalUpdateAllowInternalBase(Types.DecimalBase  src, Types.DecimalBase  dst) {
+    if (dst.isWiderThan(src)) {
       return true;
     }
-    if (dsr.precision() >= src.precision() && dsr.scale() == src.scale()) {
+    if (dst.precision() >= src.precision() && dst.scale() == src.scale()) {
       return true;
     }
     return false;
   }
 
-  private static boolean isDecimalFixedUpdateAllowInternal(Type src, Type dsr) {
-    if (dsr instanceof Types.DecimalBase) {
-      if (dsr.typeId() == Type.TypeID.DECIMAL_FIXED || dsr.typeId() == Type.TypeID.DECIMAL) {
+  private static boolean isDecimalFixedUpdateAllowInternal(Type src, Type dst) {
+    if (dst instanceof Types.DecimalBase) {
+      if (dst.typeId() == Type.TypeID.DECIMAL_FIXED || dst.typeId() == Type.TypeID.DECIMAL) {
         Types.DecimalTypeFixed decimalSrc = (Types.DecimalTypeFixed)src;
-        Types.DecimalTypeFixed decimalDsr = (Types.DecimalTypeFixed)dsr;
-        if (decimalSrc.getFixedSize() > decimalDsr.getFixedSize()) {
+        Types.DecimalTypeFixed decimaldst = (Types.DecimalTypeFixed)dst;
+        if (decimalSrc.getFixedSize() > decimaldst.getFixedSize()) {
           return false;
         }
       }
-      return isDecimalUpdateAllowInternalBase((Types.DecimalBase)src, (Types.DecimalBase)dsr);
+      return isDecimalUpdateAllowInternalBase((Types.DecimalBase)src, (Types.DecimalBase)dst);
     }
-    return dsr.typeId() == Type.TypeID.STRING;
+    return dst.typeId() == Type.TypeID.STRING;
   }
 
   /**

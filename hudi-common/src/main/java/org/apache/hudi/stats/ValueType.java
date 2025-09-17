@@ -201,14 +201,14 @@ public enum ValueType {
 
   private static ValueType[] myEnumValues;
 
-  public static ValueType fromInt(int i) {
+  public static ValueType fromOrdinal(int i) {
     if (ValueType.myEnumValues == null) {
       ValueType.myEnumValues = ValueType.values();
     }
     return ValueType.myEnumValues[i];
   }
 
-  public static ValueType fromPrimitiveType(PrimitiveType primitiveType) {
+  public static ValueType fromParquetPrimitiveType(PrimitiveType primitiveType) {
     if (primitiveType.getLogicalTypeAnnotation() != null) {
       return LogicalTypeTokenParser.fromLogicalTypeAnnotation(primitiveType);
     }
@@ -225,9 +225,6 @@ public enum ValueType {
         return ValueType.FLOAT;
       case DOUBLE:
         return ValueType.DOUBLE;
-      case INT96:
-        // TODO: probably wrong
-        return ValueType.DECIMAL;
       case FIXED_LEN_BYTE_ARRAY:
         return ValueType.FIXED;
       default:

@@ -139,7 +139,6 @@ public class ColStatsUpgradeTesting {
       writer.write("hoodie.metadata.index.column.stats.enable=true\n");
     }
 
-
     // generate extra data that we can use to ingest with latest hudi in legacy mode
     for (int i = 0; i < 10; i++) {
       StoragePath dataCheckpointDir = new StoragePath(dataDirectory, "data_" + i);
