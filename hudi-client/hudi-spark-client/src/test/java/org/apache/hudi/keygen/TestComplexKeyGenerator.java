@@ -145,16 +145,16 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
 
   @ParameterizedTest
   @CsvSource(value = {"false,true", "true,false", "true,true"})
-  void testMultipleValueKeyGenerator(boolean setEncodeSingleKeyFieldNameConfig,
-                                     boolean encodeSingleKeyFieldName) {
+  void testMultipleValueKeyGenerator(boolean setNewEncodingConfig,
+                                     boolean encodeSingleKeyFieldValueOnly) {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,timestamp");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "rider,driver");
     properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
-    if (setEncodeSingleKeyFieldNameConfig) {
+    if (setNewEncodingConfig) {
       properties.setProperty(
           HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(),
-          String.valueOf(encodeSingleKeyFieldName));
+          String.valueOf(encodeSingleKeyFieldValueOnly));
     }
     ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(properties);
     assertEquals(2, compositeKeyGenerator.getRecordKeyFieldNames().size());
