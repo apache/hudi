@@ -252,8 +252,8 @@ class ValidateAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
         val otherWindow = sortedWindows(j)
         val otherStart = otherWindow.startTimestamp
 
-        // Check if windows overlap and current transaction didn't end gracefully
-        if (otherStart < currentEnd && currentWindow.endTimestamp.isEmpty) {
+        // Check if windows overlap
+        if (otherStart < currentEnd) {
           errors += s"[ERROR] ${currentWindow.filename} => overlaps with ${otherWindow.filename}"
         }
       }
