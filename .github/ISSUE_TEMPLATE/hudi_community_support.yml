@@ -42,7 +42,7 @@ body:
     attributes:
       label: To Reproduce
       description: Steps to reproduce the behavior
-      placeholder: |
+      value: |
         1.
         2.
         3.
@@ -61,7 +61,7 @@ body:
     attributes:
       label: Environment Description
       description: Provide details about your environment
-      placeholder: |
+      value: |
         * Hudi version:
         * Spark version:
         * Flink version:

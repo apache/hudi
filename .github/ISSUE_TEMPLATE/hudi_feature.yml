@@ -26,7 +26,7 @@ body:
     attributes:
       label: Feature Description
       description: Describe the feature and why it's desired
-      placeholder: |
+      value: |
         **What the feature achieves:**
 
         **Why this feature is needed:**
@@ -38,7 +38,7 @@ body:
     attributes:
       label: User Experience
       description: How will users interact with this feature?
-      placeholder: |
+      value: |
         **How users will use this feature:**
         - Configuration changes needed
         - API changes
@@ -50,7 +50,7 @@ body:
     attributes:
       label: Hudi RFC Requirements
       description: Link to RFC PR or justify why RFC is not needed
-      placeholder: |
+      value: |
         **RFC PR link:** (if applicable)
 
         **Why RFC is/isn't needed:**
