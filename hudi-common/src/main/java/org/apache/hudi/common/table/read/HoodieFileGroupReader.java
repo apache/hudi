@@ -82,7 +82,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private ClosableIterator<T> baseFileIterator;
   private final Option<UnaryOperator<T>> outputConverter;
   private final HoodieReadStats readStats;
-  // Callback to run custom logic on updates to the base files for the file group
   private final Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback;
   // The list of instant times read from the log blocks, this value is used by the log-compaction to allow optimized log-block scans
   private List<String> validBlockInstants = Collections.emptyList();
