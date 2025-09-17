@@ -24,6 +24,9 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.{ConfigProperty, HoodieConfig, HoodieMetadataConfig}
 import org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER
+import org.apache.hudi.common.config.HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED
+import org.apache.hudi.common.config.HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE
+import org.apache.hudi.common.config.HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
@@ -843,6 +846,15 @@ object HoodieBaseRelation extends SparkAdapterSupport {
       val hoodieConfig = new HoodieConfig()
       hoodieConfig.setValue(USE_NATIVE_HFILE_READER,
         options.getOrElse(USE_NATIVE_HFILE_READER.key(), USE_NATIVE_HFILE_READER.defaultValue().toString))
+
+      // Add HFile cache configurations from options
+      hoodieConfig.setValue(HFILE_BLOCK_CACHE_ENABLED,
+        options.getOrElse(HFILE_BLOCK_CACHE_ENABLED.key(), HFILE_BLOCK_CACHE_TTL_MINUTES.defaultValue()))
+      hoodieConfig.setValue(HFILE_BLOCK_CACHE_SIZE,
+        options.getOrElse(HFILE_BLOCK_CACHE_SIZE.key(), HFILE_BLOCK_CACHE_TTL_MINUTES.defaultValue()))
+      hoodieConfig.setValue(HFILE_BLOCK_CACHE_TTL_MINUTES,
+        options.getOrElse(HFILE_BLOCK_CACHE_TTL_MINUTES.key(), HFILE_BLOCK_CACHE_TTL_MINUTES.defaultValue()))
+
       val reader = new HoodieSparkIOFactory(
         new HoodieHadoopStorage(filePath, HadoopFSUtils.getStorageConf(hadoopConf)))
         .getReaderFactory(HoodieRecordType.AVRO)
