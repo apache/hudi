@@ -129,23 +129,17 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
   }
 
   @Override
-  public PartialUpdateAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue, Schema schema, Properties properties) {
+  public PartialUpdateAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue, Schema schema, Properties properties) throws IOException {
     if (oldValue.recordBytes.length == 0) {
       // use natural order for deleted record
       return this;
     }
     // pick the payload with greater ordering value as insert record
     final boolean shouldPickOldRecord = oldValue.orderingVal.compareTo(orderingVal) > 0;
-    try {
-      GenericRecord oldRecord = HoodieAvroUtils.bytesToAvro(oldValue.recordBytes, schema);
-      Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, shouldPickOldRecord, true);
-      if (mergedRecord.isPresent()) {
-        return new PartialUpdateAvroPayload((GenericRecord) mergedRecord.get(),
-            shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal);
-      }
-    } catch (Exception ex) {
-      LOG.warn("PartialUpdateAvroPayload precombine failed with ", ex);
-      return this;
+    GenericRecord oldRecord = HoodieAvroUtils.bytesToAvro(oldValue.recordBytes, schema);
+    Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, shouldPickOldRecord, true);
+    if (mergedRecord.isPresent()) {
+      return new PartialUpdateAvroPayload((GenericRecord) mergedRecord.get(), shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal);
     }
     return this;
   }
