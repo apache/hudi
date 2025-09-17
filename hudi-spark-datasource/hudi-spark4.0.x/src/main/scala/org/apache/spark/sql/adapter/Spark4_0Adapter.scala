@@ -39,10 +39,10 @@ import org.apache.spark.sql.execution.datasources.orc.Spark40OrcReader
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark40LegacyHoodieParquetFileFormat, Spark40ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
-import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
 import org.apache.spark.sql.jdbc.JdbcDialect
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark4_0ExtendedSqlParser}
-import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
+import org.apache.spark.sql.types.{DataType, DataTypes, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
@@ -181,5 +181,17 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
 
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {
     jssc.sc.stop(exitCode)
+  }
+
+  override def getDateTimeRebaseMode(): LegacyBehaviorPolicy.Value = {
+    LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.PARQUET_REBASE_MODE_IN_WRITE))
+  }
+
+  override def isLegacyBehaviorPolicy(value: Object): Boolean = {
+    value == LegacyBehaviorPolicy.LEGACY
+  }
+
+  override def isTimestampNTZType(dataType: DataType): Boolean = {
+    dataType == DataTypes.TimestampNTZType
   }
 }
