@@ -1,10 +1,14 @@
-### Problem Statement
+### Describe the issue this Pull Request addresses
 
-<!-- Describe the issue or motivation behind this change. What problem does this solve? -->
+<!-- Either describe the issue inline here with motivation behind the changes 
+     (or) link to an issue by including `Closes #<issue-number>` for context. 
+     If this PR includes changes to the storage format, public APIs,
+     or has breaking changes, use `!` (e.g., feat!: ...) -->
 
-### Change Logs
+### Summary and Changelog
 
-<!-- Describe context and summary for this change. Highlight if any code was copied. -->
+<!-- Short, plain-English summary of what users gain or what changed in behavior.
+     Followed by a detailed log of all the changes. Highlight if any code was copied. -->
 
 ### Impact
 
@@ -12,7 +16,8 @@
 
 ### Risk Level
 
-<!-- Write none, low, medium or high. If medium or high, explain what verification was done to mitigate the risks. -->
+<!-- Accepted values: none, low, medium or high. Other than `none`, explain the risk.
+     If medium or high, explain what verification was done to mitigate the risks. -->
 
 ### Documentation Update
 
@@ -25,6 +30,5 @@
 ### Contributor's checklist
 
 - [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)
-- [ ] Problem Statement, Change Logs and Impact are written clearly
+- [ ] Enough context is provided in the sections above
 - [ ] Adequate tests were added if applicable
-- [ ] CI passed

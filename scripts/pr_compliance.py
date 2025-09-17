@@ -322,9 +322,13 @@ class ValidateBody:
     def _has_github_issue_link(self):
         # Look for GitHub issue patterns:
         # - fixes #123, resolves #123, closes #123
+        # - Fixes #123, Resolves #123, Closes #123
         # - fixes https://github.com/apache/hudi/issues/123
         # - resolves https://github.com/apache/hudi/issues/123
         # - closes https://github.com/apache/hudi/issues/123
+        # - Fixes https://github.com/apache/hudi/issues/123
+        # - Resolves https://github.com/apache/hudi/issues/123
+        # - Closes https://github.com/apache/hudi/issues/123
         # - https://github.com/apache/hudi/issues/123
         # - fix for #123, etc.
         issue_patterns = [
@@ -344,17 +348,22 @@ class ValidateBody:
 #needs to be manually updated
 def make_default_validator(body, debug=False):
     problemStatement = ParseSectionData("PROBLEM_STATEMENT",
-                                        "### Problem Statement",
-                                        {"<!-- Describe the issue or motivation behind this change. What problem does this solve? -->"})
+                                        "### Describe the issue this Pull Request addresses",
+                                        {"<!-- Either describe the issue inline here with motivation behind the changes",
+                                         "     (or) link to an issue by including `Closes #<issue-number>` for context.",
+                                         "      If this PR includes changes to the storage format, public APIs,",
+                                         "      or has breaking changes, use `!` (e.g., feat!: ...) -->"})
     changelogs = ParseSectionData("CHANGE_LOGS",
-        "### Change Logs",
-        {"<!-- Describe context and summary for this change. Highlight if any code was copied. -->"})
+        "### Summary and Changelog",
+        {"<!-- Short, plain-English summary of what users gain or what changed in behavior.",
+         "     Followed by a detailed log of all the changes. Highlight if any code was copied. -->"})
     impact = ParseSectionData("IMPACT",
         "### Impact",
         {"<!-- Describe any public API or user-facing feature change or any performance impact. -->"})
     risklevel = RiskLevelData("RISK_LEVEL",
         "### Risk Level",
-        {"<!-- Write none, low, medium or high. If medium or high, explain what verification was done to mitigate the risks. -->"})
+        {"<!-- Accepted values: none, low, medium or high. Other than `none`, explain the risk.",
+         "     If medium or high, explain what verification was done to mitigate the risks. -->"})
     docsUpdate = ParseSectionData("DOCUMENTATION_UPDATE",
         "### Documentation Update",
         {"<!-- Describe any necessary documentation update if there is any new feature, config, or user-facing change. If not, put \"none\".",
@@ -402,9 +411,12 @@ def test_body():
     DEBUG_MESSAGES = False
     #Create sections that we will combine to create bodies to test validation on
     template_problem_statement = [
-        "### Problem Statement",
+        "### Describe the issue this Pull Request addresses",
         "",
-        "<!-- Describe the issue or motivation behind this change. What problem does this solve? -->",
+        "<!-- Either describe the issue inline here with motivation behind the changes",
+        "     (or) link to an issue by including `Closes #<issue-number>` for context.",
+        "      If this PR includes changes to the storage format, public APIs,",
+        "      or has breaking changes, use `!` (e.g., feat!: ...) -->",
         ""
     ]
 
@@ -412,9 +424,10 @@ def test_body():
     good_problem_statement[1] = "problem statement description"
 
     template_changelogs = [
-         "### Change Logs",
+         "### Summary and Changelog",
         "",
-        "<!-- Describe context and summary for this change. Highlight if any code was copied. -->",
+        "<!-- Short, plain-English summary of what users gain or what changed in behavior.",
+        "     Followed by a detailed log of all the changes. Highlight if any code was copied. -->",
         ""
     ]
 
@@ -434,7 +447,8 @@ def test_body():
     template_risklevel = [
         "### Risk Level",
         "",
-        "<!-- Write none, low, medium or high. If medium or high, explain what verification was done to mitigate the risks. -->",
+        "<!-- Accepted values: none, low, medium or high. Other than `none`, explain the risk.",
+        "     If medium or high, explain what verification was done to mitigate the risks. -->",
         ""
     ]
 
@@ -459,9 +473,8 @@ def test_body():
         "### Contributor's checklist",
         "",
         "- [ ] Read through [contributor's guide](https://hudi.apache.org/contribute/how-to-contribute)",
-        "- [ ] Problem Statement, Change Logs and Impact are written clearly",
-        "- [ ] Adequate tests were added if applicable",
-        "- [ ] CI passed"
+        "- [ ] Enough context is provided in the sections above",
+        "- [ ] Adequate tests were added if applicable"
     ]
 
     # list of sections that when combined from a valid body
@@ -579,6 +592,7 @@ def test_has_github_issue_link():
     tests_passed = run_issue_link_test("Fixes #456", "Fixes #456", True) and tests_passed
     tests_passed = run_issue_link_test("resolves #789", "resolves #789", True) and tests_passed
     tests_passed = run_issue_link_test("closes #101", "closes #101", True) and tests_passed
+    tests_passed = run_issue_link_test("Closes #101", "Closes #101", True) and tests_passed
     tests_passed = run_issue_link_test("fixes #123 link", "fixes https://github.com/apache/hudi/issues/123",
                                        True) and tests_passed
     tests_passed = run_issue_link_test("resolves #789 link", "resolves https://github.com/apache/hudi/issues/789",
