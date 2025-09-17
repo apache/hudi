@@ -175,18 +175,8 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
       var recordKeyQueries: List[Expression] = List.empty
       var compositeRecordKeys: List[String] = List.empty
       val recordKeyOpt = getRecordKeyConfig
-      val fieldCount = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0)
-
       // For tables with version < 9, single record key field, and using complex key generator,
       // avoid using the index due to ambiguity in record key encoding
-
-      // create a table version 8 with the old encoding and new encoding
-      // enable rli
-      // run a query with this skipping logic
-      // validate query result with data skipping enabled, before fix result will be wrong
-      // after fix it wont do pruning and return correct result.
-      // TestRecordLeveIndex class check those, and modify record level index tests to cover key encoding
-
       val tableVersion = metaClient.getTableConfig.getTableVersion
       val shouldSkipIndex = tableVersion.lesserThan(HoodieTableVersion.NINE) &&
           isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig)
@@ -195,7 +185,9 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
         // Avoid using the index for this case
         (List.empty, List.empty)
       } else {
-        val isComplexRecordKey = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0) > 1
+        // for other cases though we should be able to handle complex key
+        // a complex key can be a single field or multiple fields based on hudi docs, regardless of encoding
+        val isComplexRecordKey = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0) >= 1
         recordKeyOpt.foreach { recordKeysArray =>
           // Handle composite record keys
           breakable {
