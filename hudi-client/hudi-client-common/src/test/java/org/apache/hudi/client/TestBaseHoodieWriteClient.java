@@ -40,6 +40,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -119,7 +120,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     verify(tableServiceClient).rollbackFailedWrites(mockMetaClient);
   }
 
-  private static Stream<Arguments> testStartCommitWithComplexKeyGeneratorValidation() {
+  private static Stream<Arguments> testWithComplexKeyGeneratorValidation() {
     List<Arguments> arguments = new ArrayList<>();
 
     List<Arguments> keyAndPartitionFieldOptions = Arrays.asList(
@@ -206,7 +207,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
 
   @ParameterizedTest
   @MethodSource
-  void testStartCommitWithComplexKeyGeneratorValidation(String keyGeneratorClass,
+  void testWithComplexKeyGeneratorValidation(String keyGeneratorClass,
                                                         String recordKeyFields,
                                                         String partitionPathFields,
                                                         boolean setComplexKeyGeneratorValidationConfig,
@@ -242,8 +243,9 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
         && (ComplexAvroKeyGenerator.class.getCanonicalName().equals(keyGeneratorClass)
         || "org.apache.hudi.keygen.ComplexKeyGenerator".equals(keyGeneratorClass))
         && recordKeyFields.split(",").length == 1) {
-      assertComplexKeyGeneratorValidationThrows(() -> writeClient.startCommit("commit"), "ingestion");
+      assertComplexKeyGeneratorValidationThrows(() -> writeClient.initTable(WriteOperationType.INSERT, Option.empty()), "ingestion");
     } else {
+      writeClient.initTable(WriteOperationType.INSERT, Option.empty());
       String requestedTime = writeClient.startCommit("commit");
 
       HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
@@ -337,6 +339,8 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
       // table should only be made with remote view config for these tests
       FileSystemViewStorageType storageType = config.getViewStorageConfig().getStorageType();
       Assertions.assertTrue(storageType == FileSystemViewStorageType.REMOTE_FIRST || storageType == FileSystemViewStorageType.REMOTE_ONLY);
+      // Ensure the returned table has the correct metaClient
+      when(table.getMetaClient()).thenReturn(metaClient);
       return table;
     }
 

@@ -34,16 +34,17 @@ public class TestComplexAvroKeyGenerator {
 
   @ParameterizedTest
   @CsvSource(value = {"false,true", "true,false", "true,true"})
-  void testSingleValueKeyGenerator(boolean setEncodeSingleKeyFieldNameConfig,
-                                   boolean encodeSingleKeyFieldName) {
+  void testSingleValueKeyGenerator(boolean setNewEncodingConfig,
+                                   boolean encodeSingleKeyFieldValueOnly) {
     String recordKeyFieldName = "_row_key";
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), recordKeyFieldName);
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
-    if (setEncodeSingleKeyFieldNameConfig) {
+    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
+    if (setNewEncodingConfig) {
       properties.setProperty(
-          HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING.key(),
-          String.valueOf(encodeSingleKeyFieldName));
+          HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(),
+          String.valueOf(encodeSingleKeyFieldValueOnly));
     }
     ComplexAvroKeyGenerator compositeKeyGenerator = new ComplexAvroKeyGenerator(properties);
     assertEquals(compositeKeyGenerator.getRecordKeyFieldNames().size(), 1);
@@ -54,23 +55,24 @@ public class TestComplexAvroKeyGenerator {
     String partitionPath = record.get("timestamp").toString();
     HoodieKey hoodieKey = compositeKeyGenerator.getKey(record);
     assertEquals(
-        !setEncodeSingleKeyFieldNameConfig || encodeSingleKeyFieldName
-            ? recordKeyFieldName + ":" + rowKey : rowKey,
+            setNewEncodingConfig && encodeSingleKeyFieldValueOnly
+            ?  rowKey : recordKeyFieldName + ":" + rowKey,
         hoodieKey.getRecordKey());
     assertEquals(partitionPath, hoodieKey.getPartitionPath());
   }
 
   @ParameterizedTest
   @CsvSource(value = {"false,true", "true,false", "true,true"})
-  void testMultipleValueKeyGenerator(boolean setEncodeSingleKeyFieldNameConfig,
-                                     boolean encodeSingleKeyFieldName) {
+  void testMultipleValueKeyGenerator(boolean setNewEncodingConfig,
+                                     boolean encodeSingleKeyFieldValueOnly) {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,timestamp");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "rider,driver");
-    if (setEncodeSingleKeyFieldNameConfig) {
+    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
+    if (setNewEncodingConfig) {
       properties.setProperty(
-          HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING.key(),
-          String.valueOf(encodeSingleKeyFieldName));
+          HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(),
+          String.valueOf(encodeSingleKeyFieldValueOnly));
     }
     ComplexAvroKeyGenerator compositeKeyGenerator = new ComplexAvroKeyGenerator(properties);
     assertEquals(compositeKeyGenerator.getRecordKeyFieldNames().size(), 2);
@@ -88,15 +90,16 @@ public class TestComplexAvroKeyGenerator {
 
   @ParameterizedTest
   @CsvSource(value = {"false,true", "true,false", "true,true"})
-  void testMultipleValueKeyGeneratorNonPartitioned(boolean setEncodeSingleKeyFieldNameConfig,
-                                                   boolean encodeSingleKeyFieldName) {
+  void testMultipleValueKeyGeneratorNonPartitioned(boolean setNewEncodingConfig,
+                                                   boolean encodeSingleKeyFieldValueOnly) {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,timestamp");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
-    if (setEncodeSingleKeyFieldNameConfig) {
+    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
+    if (setNewEncodingConfig) {
       properties.setProperty(
-          HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING.key(),
-          String.valueOf(encodeSingleKeyFieldName));
+          HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(),
+          String.valueOf(encodeSingleKeyFieldValueOnly));
     }
     ComplexAvroKeyGenerator compositeKeyGenerator = new ComplexAvroKeyGenerator(properties);
     assertEquals(compositeKeyGenerator.getRecordKeyFieldNames().size(), 2);

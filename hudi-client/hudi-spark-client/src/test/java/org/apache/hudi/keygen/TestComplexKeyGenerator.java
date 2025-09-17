@@ -110,16 +110,17 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
 
   @ParameterizedTest
   @CsvSource(value = {"false,true", "true,false", "true,true"})
-  void testSingleValueKeyGenerator(boolean setEncodeSingleKeyFieldNameConfig,
-                                   boolean encodeSingleKeyFieldName) {
+  void testSingleValueKeyGenerator(boolean setNewEncodingConfig,
+                                   boolean encodeSingleKeyFieldValueOnly) {
     String recordKeyFieldName = "_row_key";
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), recordKeyFieldName);
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
-    if (setEncodeSingleKeyFieldNameConfig) {
+    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
+    if (setNewEncodingConfig) {
       properties.setProperty(
-          HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING.key(),
-          String.valueOf(encodeSingleKeyFieldName));
+          HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(),
+          String.valueOf(encodeSingleKeyFieldValueOnly));
     }
     ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(properties);
     assertEquals(1, compositeKeyGenerator.getRecordKeyFieldNames().size());
@@ -129,8 +130,8 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
       String rowKey = avroRecord.get(recordKeyFieldName).toString();
       String partitionPath = avroRecord.get("timestamp").toString();
       HoodieKey hoodieKey = compositeKeyGenerator.getKey(avroRecord);
-      String expectedRecordKey = !setEncodeSingleKeyFieldNameConfig || encodeSingleKeyFieldName
-          ? recordKeyFieldName + ":" + rowKey : rowKey;
+      String expectedRecordKey = setNewEncodingConfig && encodeSingleKeyFieldValueOnly
+              ?  rowKey : recordKeyFieldName + ":" + rowKey;
       assertEquals(expectedRecordKey, hoodieKey.getRecordKey());
       assertEquals(partitionPath, hoodieKey.getPartitionPath());
 
@@ -149,9 +150,10 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,timestamp");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "rider,driver");
+    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
     if (setEncodeSingleKeyFieldNameConfig) {
       properties.setProperty(
-          HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING.key(),
+          HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(),
           String.valueOf(encodeSingleKeyFieldName));
     }
     ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(properties);
@@ -178,15 +180,16 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
 
   @ParameterizedTest
   @CsvSource(value = {"false,true", "true,false", "true,true"})
-  void testMultipleValueKeyGeneratorNonPartitioned(boolean setEncodeSingleKeyFieldNameConfig,
-                                                   boolean encodeSingleKeyFieldName) {
+  void testMultipleValueKeyGeneratorNonPartitioned(boolean setNewEncodingConfig,
+                                                   boolean encodeSingleKeyFieldValueOnly) {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,timestamp");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
-    if (setEncodeSingleKeyFieldNameConfig) {
+    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
+    if (setNewEncodingConfig) {
       properties.setProperty(
-          HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING.key(),
-          String.valueOf(encodeSingleKeyFieldName));
+          HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(),
+          String.valueOf(encodeSingleKeyFieldValueOnly));
     }
     ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(properties);
     assertEquals(2, compositeKeyGenerator.getRecordKeyFieldNames().size());

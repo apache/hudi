@@ -418,7 +418,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     {
       val config = getKeyConfig("field1, name", "field1, name", "false")
       // This config should not affect record key encoding for multiple record key fields
-      config.put(HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING.key, "false")
+      config.put(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key, "true")
       val keyGen = new ComplexKeyGenerator(config)
 
       baseRow = getRow(baseRecord, schema, structType)
@@ -457,7 +457,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       // Turning on the encoding of record key field name if there is a single record key field
       val config = getKeyConfig("name,", "field1,", "false")
       // This config should not affect record key encoding for multiple record key fields
-      config.put(HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING.key, "true")
+      config.put(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key, "true")
       val keyGen = new ComplexKeyGenerator(config)
 
       val expectedKey = new HoodieKey("name:value1", "value2")
@@ -474,7 +474,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       // Turning off the encoding of record key field name if there is a single record key field
       val config = getKeyConfig("name,", "field1,", "false")
       // This config should not affect record key encoding for multiple record key fields
-      config.put(HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING.key, "false")
+      config.put(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key, "true")
       val keyGen = new ComplexKeyGenerator(config)
 
       val expectedKey = new HoodieKey("value1", "value2")

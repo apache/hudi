@@ -28,7 +28,7 @@ import org.apache.avro.generic.GenericRecord;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING;
+import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 
 /**
@@ -50,7 +50,7 @@ public class ComplexAvroKeyGenerator extends BaseKeyGenerator {
     HoodieTableVersion tableVersion = HoodieTableVersion.fromVersionCode(tableVersionCode);
     // Determine which encoding to use
     boolean useNewEncodingForSingleKey = tableVersion.lesserThan(HoodieTableVersion.NINE)
-        && !ConfigUtils.getBooleanWithAltKeys(props, COMPLEX_KEYGEN_OLD_ENCODING);
+        && ConfigUtils.getBooleanWithAltKeys(props, COMPLEX_KEYGEN_NEW_ENCODING);
     // Set the record key function
     this.recordKeyFunction = useNewEncodingForSingleKey
         ? this::getRecordKeyWithoutKeyFieldNameOnSingleKeyField

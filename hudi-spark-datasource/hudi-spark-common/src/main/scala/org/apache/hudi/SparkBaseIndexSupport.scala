@@ -179,9 +179,16 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
 
       // For tables with version < 9, single record key field, and using complex key generator,
       // avoid using the index due to ambiguity in record key encoding
+
+      // create a table version 8 with the old encoding and new encoding
+      // enable rli
+      // run a query with this skipping logic
+      // validate query result with data skipping enabled, before fix result will be wrong
+      // after fix it wont do pruning and return correct result.
+      // TestRecordLeveIndex class check those, and modify record level index tests to cover key encoding
+
       val tableVersion = metaClient.getTableConfig.getTableVersion
       val shouldSkipIndex = tableVersion.lesserThan(HoodieTableVersion.NINE) &&
-          fieldCount == 1 &&
           isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig)
 
       if (shouldSkipIndex) {

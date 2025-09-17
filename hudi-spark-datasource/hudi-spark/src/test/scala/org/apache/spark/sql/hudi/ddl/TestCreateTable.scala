@@ -1021,10 +1021,10 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       Seq((false, 6), (true, 6), (false, 8), (true, 8), (false, 9), (true, 9)).foreach { params =>
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-        val encodeSingleKeyFieldName = params._1
+        val encodeSingleKeyFieldValue = params._1
         val tableVersion = params._2
         import spark.implicits._
-        val keyPrefix = if (encodeSingleKeyFieldName) "id:" else ""
+        val keyPrefix = if (encodeSingleKeyFieldValue) "" else "id:"
         val df = Seq((1, "a1", 10, 1000, "2025-07-29", 12)).toDF("id", "name", "value", "ts", "day", "hh")
         // Write a table by spark dataframe.
         df.write.format("hudi")
@@ -1038,8 +1038,8 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.WRITE_TABLE_VERSION.key, tableVersion.toString)
           .option(
-            HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING.key,
-            encodeSingleKeyFieldName.toString)
+            HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key,
+            encodeSingleKeyFieldValue.toString)
           .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, (tableVersion >= 9).toString)
           .mode(SaveMode.Overwrite)
           .save(tablePath)
@@ -1056,7 +1056,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         spark.sql(
           s"""
              |ALTER TABLE $tableName
-             |SET TBLPROPERTIES (hoodie.write.complex.keygen.old.encoding = '$encodeSingleKeyFieldName',
+             |SET TBLPROPERTIES (hoodie.write.complex.keygen.new.encoding = '$encodeSingleKeyFieldValue',
              | hoodie.write.table.version = '$tableVersion')
              |""".stripMargin)
         // Check the missing properties for spark sql

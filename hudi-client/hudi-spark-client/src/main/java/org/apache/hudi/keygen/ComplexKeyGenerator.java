@@ -31,7 +31,7 @@ import org.apache.spark.unsafe.types.UTF8String;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING;
+import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 
 /**
@@ -55,13 +55,12 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
         .collect(Collectors.toList());
     this.complexAvroKeyGenerator = new ComplexAvroKeyGenerator(props);
     // Get table version
+    // make sure tests are using the correct table version
+    // we need to add new test if write table version and tweaking old encoding config should not be allowed, we just ingore and use the old encoding
     Integer tableVersionCode = ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION);
     HoodieTableVersion tableVersion = HoodieTableVersion.fromVersionCode(tableVersionCode);
-
-    // encodeSingleKeyFieldName = true means we INCLUDE the field name (old encoding)
-    // encodeSingleKeyFieldName = false means we DON'T include field name for single key (new encoding)
     this.encodeSingleKeyFieldName = tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)
-        || ConfigUtils.getBooleanWithAltKeys(props, COMPLEX_KEYGEN_OLD_ENCODING);
+        || !ConfigUtils.getBooleanWithAltKeys(props, COMPLEX_KEYGEN_NEW_ENCODING);
   }
 
   @Override

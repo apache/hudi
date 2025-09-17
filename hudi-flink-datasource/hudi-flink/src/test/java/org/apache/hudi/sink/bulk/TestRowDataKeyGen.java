@@ -80,15 +80,16 @@ public class TestRowDataKeyGen {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void testSingleKeyMultiplePartitionFields(boolean encodesKeyWithFieldName) {
+  void testSingleKeyMultiplePartitionFields(boolean encodeSingleKeyFieldValueOnly) {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
     conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition,ts");
-    conf.setString(HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING.key(), String.valueOf(encodesKeyWithFieldName));
+    conf.setString(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
+    conf.setString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(), String.valueOf(encodeSingleKeyFieldValueOnly));
     RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
         TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
     RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
-    String expectedKey = encodesKeyWithFieldName ? "uuid:id1" : "id1";
+    String expectedKey = encodeSingleKeyFieldValueOnly ? "id1" : "uuid:id1";
     assertThat(keyGen1.getRecordKey(rowData1), is(expectedKey));
     assertThat(keyGen1.getPartitionPath(rowData1), is("par1/1970-01-01T00:00:00.001"));
 
