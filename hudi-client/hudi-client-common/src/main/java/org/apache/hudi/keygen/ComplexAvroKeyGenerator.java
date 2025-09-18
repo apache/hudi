@@ -54,12 +54,12 @@ public class ComplexAvroKeyGenerator extends BaseKeyGenerator {
   }
 
   private SerializableFunctionUnchecked<GenericRecord, String> getRecordKeyFunc(boolean encodeSingleKeyFieldName) {
-    if (encodeSingleKeyFieldName) {
-      return record -> KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames(), isConsistentLogicalTimestampEnabled());
-    } else if (getRecordKeyFieldNames().size() == 1) {
+    if (getRecordKeyFieldNames().size() == 1) {
+      if (encodeSingleKeyFieldName) {
+        return record -> KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames(), isConsistentLogicalTimestampEnabled());
+      }
       return record -> KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames().get(0), isConsistentLogicalTimestampEnabled());
-    } else {
-      return record -> KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames(), isConsistentLogicalTimestampEnabled());
     }
+    return record -> KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames(), isConsistentLogicalTimestampEnabled());
   }
 }

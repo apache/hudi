@@ -357,7 +357,7 @@ public class KeyGenUtils {
   }
 
   public static boolean encodeSingleKeyFieldNameForComplexKeyGen(TypedProperties props) {
-    Integer tableVersionCode = ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION);
+    int tableVersionCode = ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION);
     HoodieTableVersion tableVersion = HoodieTableVersion.fromVersionCode(tableVersionCode);
     return tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)
         || !ConfigUtils.getBooleanWithAltKeys(props, COMPLEX_KEYGEN_NEW_ENCODING);
