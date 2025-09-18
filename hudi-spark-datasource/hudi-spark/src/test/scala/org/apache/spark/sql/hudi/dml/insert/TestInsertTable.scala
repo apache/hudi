@@ -39,7 +39,7 @@ import org.apache.spark.scheduler.{SparkListener, SparkListenerStageSubmitted}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, enableComplexKeygenValidation, getLastCommitMetadata}
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.junit.jupiter.api.Assertions.assertEquals
 
 import java.io.File
@@ -208,7 +208,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
       spark.sql("set spark.sql.shuffle.partitions = 11")
 
-      disableComplexKeygenValidation(spark, targetTable)
       spark.sql(
         s"""
            |insert into ${targetTable}
@@ -226,7 +225,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |when not matched then insert *
            |""".stripMargin
       )
-      enableComplexKeygenValidation(spark, targetTable)
       // check result after insert and merge data into target table
       checkAnswer(s"select id, name, dt, day, hour from $targetTable limit 10")(
         Seq("1", "aa", 123, "2024-02-19", 10),
@@ -394,7 +392,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              | partitioned by (dt, ht)
              | location '${tmp.getCanonicalPath}'
        """.stripMargin)
-        disableComplexKeygenValidation(spark, tableName)
         spark.sql(
           s"""
              | insert into $tableName partition(dt, ht)
@@ -720,7 +717,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                | partitioned by (dt, hh)
           """.stripMargin
           )
-          disableComplexKeygenValidation(spark, tableName)
           spark.sql(
             s"""
                | insert into table $tableName values
@@ -1029,7 +1025,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                  | partitioned by (dt, hh)
                  | location '${tmp.getCanonicalPath}/$tableMultiPartition'
          """.stripMargin)
-            disableComplexKeygenValidation(spark, tableMultiPartition)
             // Enable the bulk insert
             spark.sql("set hoodie.sql.bulk.insert.enable = true")
             spark.sql(s"insert into $tableMultiPartition values(1, 'a1', 10, '2021-07-18', '12')")
@@ -2577,7 +2572,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |partitioned by (`day`,`hour`)
            |location '${tmp.getCanonicalPath}/$targetTable'
            |""".stripMargin)
-      disableComplexKeygenValidation(spark, targetTable)
       spark.sql(
         s"""
            |insert into ${targetTable}
@@ -2873,7 +2867,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       // Avoid operation type modification.
       spark.sql(s"set ${INSERT_DROP_DUPS.key}=false")
       spark.sql(s"set ${INSERT_DUP_POLICY.key}=$NONE_INSERT_DUP_POLICY")
-      disableComplexKeygenValidation(spark, tableName)
       // Insert data into partitioned table
       spark.sql(
         s"""
@@ -3177,8 +3170,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |location '$tablePathB'
            |""".stripMargin)
 
-      disableComplexKeygenValidation(spark, targetTableB)
-
       spark.sql(s"insert into $targetTableB (id, day, price, name, hour) " +
         s"values (2, '01', 12.2, 'bbb', '02')")
 
@@ -3255,8 +3246,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |location '$tablePathB'
            |""".stripMargin)
 
-      disableComplexKeygenValidation(spark, targetTableB)
-
       spark.sql(s"insert overwrite $targetTableB (id, day, price, name, hour) " +
         s"values (2, '01', 12.2, 'bbb', '02')")
 
@@ -3314,7 +3303,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              | partitioned by (dt, pt)
              | location '${tmp.getCanonicalPath}/$tableName'
        """.stripMargin)
-        disableComplexKeygenValidation(spark, tableName)
         //Insert data and check the same
         spark.sql(
           s"""insert into $tableName  values
@@ -3358,7 +3346,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            partitioned by (`day`,`hour`)
            location '${tablePath}'
            """.stripMargin)
-        disableComplexKeygenValidation(spark, targetTable)
         spark.sql(
           s"""
              |ALTER TABLE $targetTable
