@@ -19,42 +19,20 @@
 
 package org.apache.parquet.avro;
 
-import org.apache.hudi.AvroParquetAdapter;
-import org.apache.hudi.AvroSchemaConverter;
-import org.apache.hudi.stats.ValueType;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.OriginalTypeParser;
-import org.apache.parquet.schema.PrimitiveType;
 
-public class Parquet10Adapter implements AvroParquetAdapter {
+/**
+ * uses the native avro schema converter from parquet java
+ */
+public class NativeAvroAdapter implements AvroAdapter {
   @Override
-  public boolean hasAnnotation(PrimitiveType primitiveType) {
-    return primitiveType.getOriginalType() != null;
-  }
-
-  @Override
-  public ValueType getValueTypeFromAnnotation(PrimitiveType primitiveType) {
-    return OriginalTypeParser.fromOriginalType(primitiveType);
-  }
-
-  @Override
-  public int getPrecision(PrimitiveType primitiveType) {
-    return OriginalTypeParser.getPrecision(primitiveType);
-  }
-
-  @Override
-  public int getScale(PrimitiveType primitiveType) {
-    return OriginalTypeParser.getScale(primitiveType);
-  }
-
-  @Override
-  public AvroSchemaConverter getAvroSchemaConverter(StorageConfiguration<?> storageConfiguration) {
+  public org.apache.hudi.AvroSchemaConverter getAvroSchemaConverter(StorageConfiguration<?> storageConfiguration) {
     org.apache.parquet.avro.AvroSchemaConverter avroSchemaConverter = new org.apache.parquet.avro.AvroSchemaConverter(storageConfiguration.unwrapAs(Configuration.class));
-    return new AvroSchemaConverter() {
+    return new org.apache.hudi.AvroSchemaConverter() {
       @Override
       public MessageType convert(Schema schema) {
         return avroSchemaConverter.convert(schema);

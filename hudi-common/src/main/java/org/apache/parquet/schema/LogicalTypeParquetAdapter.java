@@ -17,20 +17,15 @@
  * under the License.
  */
 
-package org.apache.parquet.avro;
+package org.apache.parquet.schema;
 
-import org.apache.hudi.AvroParquetAdapter;
-import org.apache.hudi.AvroSchemaConverter;
+import org.apache.hudi.ParquetAdapter;
 import org.apache.hudi.stats.ValueType;
-import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.parquet.schema.LogicalTypeTokenParser;
-import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.PrimitiveType;
-
-public class LatestParquetAdapter implements AvroParquetAdapter {
+/**
+ * Uses LogicalTypeAnnotation to extract value type, precision, and scale
+ */
+public class LogicalTypeParquetAdapter implements ParquetAdapter {
   @Override
   public boolean hasAnnotation(PrimitiveType primitiveType) {
     return primitiveType.getLogicalTypeAnnotation() != null;
@@ -49,21 +44,5 @@ public class LatestParquetAdapter implements AvroParquetAdapter {
   @Override
   public int getScale(PrimitiveType primitiveType) {
     return LogicalTypeTokenParser.getScale(primitiveType);
-  }
-
-  @Override
-  public AvroSchemaConverter getAvroSchemaConverter(StorageConfiguration<?> storageConfiguration) {
-    HoodieAvroSchemaConverter avroSchemaConverter = new HoodieAvroSchemaConverter(storageConfiguration.unwrapAs(Configuration.class));
-    return new AvroSchemaConverter() {
-      @Override
-      public MessageType convert(Schema schema) {
-        return avroSchemaConverter.convert(schema);
-      }
-
-      @Override
-      public Schema convert(MessageType schema) {
-        return avroSchemaConverter.convert(schema);
-      }
-    };
   }
 }

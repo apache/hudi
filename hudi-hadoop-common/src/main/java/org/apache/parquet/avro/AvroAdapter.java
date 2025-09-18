@@ -17,17 +17,26 @@
  * under the License.
  */
 
-package org.apache.hudi;
+package org.apache.parquet.avro;
 
+import org.apache.hudi.AvroSchemaConverter;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.stats.ValueType;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.parquet.schema.PrimitiveType;
 
-public interface AvroParquetAdapter {
-
-  static AvroParquetAdapter getAdapter() {
+/**
+ * Parquet-Java AvroSchemaConverter doesn't support local timestamp types until version 1.14
+ * for this reason we use a modified version of the AvroSchemaConverter that adds support for local timestamp types
+ * Parquet-Java still supports local timestamp types from version 1.11.0, just that the AvroSchemaConverter
+ * doesn't work.
+ * <p>
+ * However, for versions < 1.11.0, local timestamp is not supported at all. Therefore, we just use the
+ * library AvroSchemaConverter in this case.
+ *
+ */
+public interface AvroAdapter {
+  static AvroAdapter getAdapter() {
     String version = PrimitiveType.class.getPackage().getImplementationVersion();
     if (version != null) {
       String[] parts = version.split("\\.");
@@ -37,22 +46,18 @@ public interface AvroParquetAdapter {
       int major = Integer.parseInt(parts[0]);
       int minor = Integer.parseInt(parts[1]);
 
-      // Use old adapter for anything < 1.11.0
-      if (major < 1 || (major == 1 && minor < 11)) {
-        return ReflectionUtils.loadClass("org.apache.parquet.avro.Parquet10Adapter");
+      // Use native adapter for anything < 1.11.0 or >= 1.14.0
+      if ((major == 1 && minor < 11) || (major == 1 && minor >= 14)) {
+        return ReflectionUtils.loadClass("org.apache.parquet.avro.NativeAvroAdapter");
       }
     }
-    return ReflectionUtils.loadClass("org.apache.parquet.avro.LatestParquetAdapter");
+    try {
+      Class.forName("org.apache.parquet.schema.LogicalTypeAnnotation");
+    } catch (ClassNotFoundException e) {
+      return ReflectionUtils.loadClass("org.apache.parquet.avro.NativeAvroAdapter");
+    }
+    return ReflectionUtils.loadClass("org.apache.parquet.avro.ModifiedAvroAdapter");
   }
 
-  boolean hasAnnotation(PrimitiveType primitiveType);
-
-  ValueType getValueTypeFromAnnotation(PrimitiveType primitiveType);
-
-  int getPrecision(PrimitiveType primitiveType);
-
-  int getScale(PrimitiveType primitiveType);
-
   AvroSchemaConverter getAvroSchemaConverter(StorageConfiguration<?> storageConfiguration);
-
 }

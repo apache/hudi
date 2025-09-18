@@ -19,7 +19,7 @@
 
 package org.apache.hudi.stats;
 
-import org.apache.hudi.AvroParquetAdapter;
+import org.apache.hudi.ParquetAdapter;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroWrapperUtils;
 import org.apache.hudi.common.util.DateTimeUtils;
@@ -208,7 +208,7 @@ public enum ValueType {
     return ValueType.myEnumValues[i];
   }
 
-  private static final AvroParquetAdapter ADAPTER = AvroParquetAdapter.getAdapter();
+  private static final ParquetAdapter ADAPTER = ParquetAdapter.getAdapter();
 
   public static ValueType fromParquetPrimitiveType(PrimitiveType primitiveType) {
     if (ADAPTER.hasAnnotation(primitiveType)) {

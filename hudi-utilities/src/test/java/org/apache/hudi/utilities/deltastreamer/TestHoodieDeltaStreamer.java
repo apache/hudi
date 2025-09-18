@@ -827,6 +827,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       cfg.configs.add("hoodie.streamer.source.dfs.root=" + zipOutput + "/data/data_6/");
       cfg.configs.add(String.format(("%s=%s"), HoodieWriteConfig.WRITE_TABLE_VERSION.key(), version.versionCode()));
       cfg.configs.add(String.format(("%s=%s"), HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "100"));
+      String schemaPath = zipOutput + "/schema.avsc";
+      cfg.configs.add(String.format(("%s=%s"), "hoodie.streamer.schemaprovider.source.schema.file", schemaPath));
+      cfg.configs.add(String.format(("%s=%s"), "hoodie.streamer.schemaprovider.target.schema.file", schemaPath));
       cfg.forceDisableCompaction = true;
       cfg.sourceLimit = 100_000;
       cfg.ignoreCheckpoint = "12345";

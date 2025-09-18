@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.hudi.AvroParquetAdapter;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.bootstrap.BootstrapRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -42,6 +41,7 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.avro.AvroAdapter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
@@ -65,7 +65,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
     super(config, table, srcFileStatus);
   }
 
-  private static final AvroParquetAdapter ADAPTER = AvroParquetAdapter.getAdapter();
+  private static final AvroAdapter ADAPTER = AvroAdapter.getAdapter();
 
   @Override
   Schema getAvroSchema(StoragePath sourceFilePath) throws IOException {

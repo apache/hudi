@@ -19,15 +19,15 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.hudi.AvroParquetAdapter;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.parquet.avro.AvroAdapter;
 import org.apache.parquet.schema.MessageType;
 
 public class ParquetTableSchemaResolver extends TableSchemaResolver {
-  private static final AvroParquetAdapter ADAPTER = AvroParquetAdapter.getAdapter();
+  private static final AvroAdapter ADAPTER = AvroAdapter.getAdapter();
 
   public ParquetTableSchemaResolver(HoodieTableMetaClient metaClient) {
     super(metaClient);

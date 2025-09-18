@@ -19,7 +19,7 @@
 
 package org.apache.hudi.stats;
 
-import org.apache.hudi.AvroParquetAdapter;
+import org.apache.hudi.ParquetAdapter;
 import org.apache.hudi.avro.model.HoodieValueTypeInfo;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieIndexVersion;
@@ -38,7 +38,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_
 
 public class ValueMetadata implements Serializable {
 
-  private static final AvroParquetAdapter ADAPTER = AvroParquetAdapter.getAdapter();
+  private static final ParquetAdapter ADAPTER = ParquetAdapter.getAdapter();
 
   private final ValueType valueType;
 
