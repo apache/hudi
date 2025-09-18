@@ -59,8 +59,7 @@ public class OriginalTypeParquetAdapter implements ParquetAdapter {
     }
   }
 
-  @Override
-  public int getPrecision(PrimitiveType primitiveType) {
+  private static void validatePrimitiveType(PrimitiveType primitiveType) {
     if (primitiveType.getOriginalType() == null) {
       throw new IllegalArgumentException("Unsupported primitive type: " + primitiveType.getPrimitiveTypeName());
     }
@@ -68,20 +67,17 @@ public class OriginalTypeParquetAdapter implements ParquetAdapter {
     if (primitiveType.getOriginalType() != OriginalType.DECIMAL) {
       throw new IllegalArgumentException("Unsupported original type: " + primitiveType.getOriginalType());
     }
+  }
 
+  @Override
+  public int getPrecision(PrimitiveType primitiveType) {
+    validatePrimitiveType(primitiveType);
     return primitiveType.getDecimalMetadata().getPrecision();
   }
 
   @Override
   public int getScale(PrimitiveType primitiveType) {
-    if (primitiveType.getOriginalType() == null) {
-      throw new IllegalArgumentException("Unsupported primitive type: " + primitiveType.getPrimitiveTypeName());
-    }
-
-    if (primitiveType.getOriginalType() != OriginalType.DECIMAL) {
-      throw new IllegalArgumentException("Unsupported original type: " + primitiveType.getOriginalType());
-    }
-
+    validatePrimitiveType(primitiveType);
     return primitiveType.getDecimalMetadata().getScale();
   }
 }

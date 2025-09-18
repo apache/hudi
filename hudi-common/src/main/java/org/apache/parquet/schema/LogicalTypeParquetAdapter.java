@@ -33,66 +33,60 @@ public class LogicalTypeParquetAdapter implements ParquetAdapter {
 
   @Override
   public ValueType getValueTypeFromAnnotation(PrimitiveType primitiveType) {
-    switch (primitiveType.getLogicalTypeAnnotation().getType()) {
-      case STRING:
-        return ValueType.STRING;
-      case DECIMAL:
-        return ValueType.DECIMAL;
-      case DATE:
-        return ValueType.DATE;
-      case TIME:
-        // TODO: decide if we need to support adjusted to UTC
-        boolean isAdjustedToUTCTime = ((LogicalTypeAnnotation.TimeLogicalTypeAnnotation) primitiveType.getLogicalTypeAnnotation()).isAdjustedToUTC();
-        LogicalTypeAnnotation.TimeUnit unit = ((LogicalTypeAnnotation.TimeLogicalTypeAnnotation) primitiveType.getLogicalTypeAnnotation()).getUnit();
-        if (unit == LogicalTypeAnnotation.TimeUnit.MILLIS) {
-          return ValueType.TIME_MILLIS;
-        } else if (unit == LogicalTypeAnnotation.TimeUnit.MICROS) {
-          return ValueType.TIME_MICROS;
-        } else {
-          throw new IllegalArgumentException("Unsupported time unit: " + unit);
-        }
-      case TIMESTAMP:
-        boolean isAdjustedToUTCTimestamp = ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) primitiveType.getLogicalTypeAnnotation()).isAdjustedToUTC();
-        LogicalTypeAnnotation.TimeUnit timestampUnit = ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) primitiveType.getLogicalTypeAnnotation()).getUnit();
-        if (timestampUnit == LogicalTypeAnnotation.TimeUnit.MILLIS) {
-          return isAdjustedToUTCTimestamp ? ValueType.TIMESTAMP_MILLIS : ValueType.LOCAL_TIMESTAMP_MILLIS;
-        } else if (timestampUnit == LogicalTypeAnnotation.TimeUnit.MICROS) {
-          return isAdjustedToUTCTimestamp ? ValueType.TIMESTAMP_MICROS : ValueType.LOCAL_TIMESTAMP_MICROS;
-        } else if (timestampUnit == LogicalTypeAnnotation.TimeUnit.NANOS) {
-          return isAdjustedToUTCTimestamp ? ValueType.TIMESTAMP_NANOS : ValueType.LOCAL_TIMESTAMP_NANOS;
-        } else {
-          throw new IllegalArgumentException("Unsupported timestamp unit: " + timestampUnit);
-        }
-      case UUID:
-        return ValueType.UUID;
-      default:
-        throw new IllegalArgumentException("Unsupported logical type: " + primitiveType.getLogicalTypeAnnotation().getType());
+    LogicalTypeAnnotation annotation = primitiveType.getLogicalTypeAnnotation();
+    if (annotation instanceof LogicalTypeAnnotation.StringLogicalTypeAnnotation) {
+      return ValueType.STRING;
+    } else if (annotation instanceof LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) {
+      return ValueType.DECIMAL;
+    } else if (annotation instanceof LogicalTypeAnnotation.DateLogicalTypeAnnotation) {
+      return ValueType.DATE;
+    } else if (annotation instanceof LogicalTypeAnnotation.TimeLogicalTypeAnnotation) {
+      // TODO: decide if we need to support adjusted to UTC
+      LogicalTypeAnnotation.TimeLogicalTypeAnnotation timeAnnotation = (LogicalTypeAnnotation.TimeLogicalTypeAnnotation) annotation;
+      if (timeAnnotation.getUnit() == LogicalTypeAnnotation.TimeUnit.MILLIS) {
+        return ValueType.TIME_MILLIS;
+      } else if (timeAnnotation.getUnit() == LogicalTypeAnnotation.TimeUnit.MICROS) {
+        return ValueType.TIME_MICROS;
+      } else {
+        throw new IllegalArgumentException("Unsupported time unit: " + timeAnnotation.getUnit());
+      }
+    } else if (annotation instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) {
+      LogicalTypeAnnotation.TimestampLogicalTypeAnnotation timestampAnnotation = (LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) annotation;
+      if (timestampAnnotation.getUnit() == LogicalTypeAnnotation.TimeUnit.MILLIS) {
+        return timestampAnnotation.isAdjustedToUTC() ? ValueType.TIMESTAMP_MILLIS : ValueType.LOCAL_TIMESTAMP_MILLIS;
+      } else if (timestampAnnotation.getUnit() == LogicalTypeAnnotation.TimeUnit.MICROS) {
+        return timestampAnnotation.isAdjustedToUTC() ? ValueType.TIMESTAMP_MICROS : ValueType.LOCAL_TIMESTAMP_MICROS;
+      } else if (timestampAnnotation.getUnit() == LogicalTypeAnnotation.TimeUnit.NANOS) {
+        return timestampAnnotation.isAdjustedToUTC() ? ValueType.TIMESTAMP_NANOS : ValueType.LOCAL_TIMESTAMP_NANOS;
+      } else {
+        throw new IllegalArgumentException("Unsupported timestamp unit: " + timestampAnnotation.getUnit());
+      }
+    } else if (annotation instanceof LogicalTypeAnnotation.UUIDLogicalTypeAnnotation) {
+      return ValueType.UUID;
+    }
+
+    throw new IllegalArgumentException("Unsupported logical type annotation: " + annotation);
+  }
+
+  private static void validatePrimitiveType(PrimitiveType primitiveType) {
+    if (primitiveType.getLogicalTypeAnnotation() == null) {
+      throw new IllegalArgumentException("Unsupported primitive type: " + primitiveType.getPrimitiveTypeName());
+    }
+
+    if (!(primitiveType.getLogicalTypeAnnotation() instanceof LogicalTypeAnnotation.DecimalLogicalTypeAnnotation)) {
+      throw new IllegalArgumentException("Unsupported logical type annotation: " + primitiveType.getLogicalTypeAnnotation());
     }
   }
 
   @Override
   public int getPrecision(PrimitiveType primitiveType) {
-    if (primitiveType.getLogicalTypeAnnotation() == null) {
-      throw new IllegalArgumentException("Unsupported primitive type: " + primitiveType.getPrimitiveTypeName());
-    }
-
-    if (primitiveType.getLogicalTypeAnnotation().getType() != LogicalTypeAnnotation.LogicalTypeToken.DECIMAL) {
-      throw new IllegalArgumentException("Unsupported logical type: " + primitiveType.getLogicalTypeAnnotation().getType());
-    }
-
+    validatePrimitiveType(primitiveType);
     return ((LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) primitiveType.getLogicalTypeAnnotation()).getPrecision();
   }
 
   @Override
   public int getScale(PrimitiveType primitiveType) {
-    if (primitiveType.getLogicalTypeAnnotation() == null) {
-      throw new IllegalArgumentException("Unsupported primitive type: " + primitiveType.getPrimitiveTypeName());
-    }
-
-    if (primitiveType.getLogicalTypeAnnotation().getType() != LogicalTypeAnnotation.LogicalTypeToken.DECIMAL) {
-      throw new IllegalArgumentException("Unsupported logical type: " + primitiveType.getLogicalTypeAnnotation().getType());
-    }
-
+    validatePrimitiveType(primitiveType);
     return ((LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) primitiveType.getLogicalTypeAnnotation()).getScale();
   }
 }
