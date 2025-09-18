@@ -76,10 +76,11 @@ public class JoinedGenericRecord implements GenericRecord {
   }
 
   private Integer getMetaFieldPos(String fieldName) {
-    if (fieldName.equals(HoodieRecord.OPERATION_METADATA_FIELD)) {
+    Integer pos = HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(fieldName);
+    if (pos == null && fieldName.equals(HoodieRecord.OPERATION_METADATA_FIELD)) {
       return HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.size();
     }
-    return HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(fieldName);
+    return pos;
   }
 
   @Override
