@@ -225,6 +225,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |when not matched then insert *
            |""".stripMargin
       )
+
       // check result after insert and merge data into target table
       checkAnswer(s"select id, name, dt, day, hour from $targetTable limit 10")(
         Seq("1", "aa", 123, "2024-02-19", 10),
@@ -717,6 +718,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                | partitioned by (dt, hh)
           """.stripMargin
           )
+
           spark.sql(
             s"""
                | insert into table $tableName values
@@ -1025,6 +1027,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                  | partitioned by (dt, hh)
                  | location '${tmp.getCanonicalPath}/$tableMultiPartition'
          """.stripMargin)
+
             // Enable the bulk insert
             spark.sql("set hoodie.sql.bulk.insert.enable = true")
             spark.sql(s"insert into $tableMultiPartition values(1, 'a1', 10, '2021-07-18', '12')")
@@ -1274,10 +1277,9 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   test("Test insert overwrite partitions with empty dataset") {
     Seq(true, false).foreach { enableBulkInsert =>
       val bulkInsertConf: Array[(String, String)] = if (enableBulkInsert) {
-        Array(SPARK_SQL_INSERT_INTO_OPERATION.key -> WriteOperationType.BULK_INSERT.value(),
-          HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false")
+        Array(SPARK_SQL_INSERT_INTO_OPERATION.key -> WriteOperationType.BULK_INSERT.value())
       } else {
-        Array(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false")
+        Array()
       }
       withSQLConf(bulkInsertConf: _*) {
         withTempDir { tmp =>
@@ -1492,7 +1494,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         .option(RECORDKEY_FIELD.key, "id")
         .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
         .option(PARTITIONPATH_FIELD.key, "day,hh")
-        .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
         .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
         .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
         .option(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key, "true")
@@ -2867,6 +2868,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       // Avoid operation type modification.
       spark.sql(s"set ${INSERT_DROP_DUPS.key}=false")
       spark.sql(s"set ${INSERT_DUP_POLICY.key}=$NONE_INSERT_DUP_POLICY")
+
       // Insert data into partitioned table
       spark.sql(
         s"""
@@ -3346,11 +3348,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            partitioned by (`day`,`hour`)
            location '${tablePath}'
            """.stripMargin)
-        spark.sql(
-          s"""
-             |ALTER TABLE $targetTable
-             |SET TBLPROPERTIES (hoodie.write.complex.keygen.new.encoding = 'false')
-             |""".stripMargin)
+
         spark.sql("set spark.sql.shuffle.partitions = 11")
         spark.sql(
           s"""
@@ -3363,7 +3361,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
             s"""
                |insert into ${targetTable}
                |select '1' as id, 'aa' as name, 1234 as dt, '2024-02-19' as `day`, 10 as `hour`
-               |""".stripMargin))(s"Duplicate key found for insert statement, key is: id:1")
+               |""".stripMargin))(s"Duplicate key found for insert statement, key is: 1")
         } else {
           spark.sql(s"set hoodie.datasource.write.operation=insert")
           spark.sql(
