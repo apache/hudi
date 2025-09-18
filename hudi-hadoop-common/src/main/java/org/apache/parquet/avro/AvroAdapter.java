@@ -52,7 +52,7 @@ public interface AvroAdapter {
       }
     }
     try {
-      Class.forName("org.apache.parquet.schema.LogicalTypeAnnotation");
+      Class.forName("org.apache.parquet.avro.HoodieAvroSchemaConverter");
     } catch (ClassNotFoundException e) {
       return ReflectionUtils.loadClass("org.apache.parquet.avro.NativeAvroAdapter");
     }

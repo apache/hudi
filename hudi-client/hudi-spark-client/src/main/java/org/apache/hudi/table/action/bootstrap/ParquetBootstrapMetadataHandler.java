@@ -65,7 +65,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
     super(config, table, srcFileStatus);
   }
 
-  private static final AvroAdapter ADAPTER = AvroAdapter.getAdapter();
+  private static final AvroAdapter AVRO_ADAPTER = AvroAdapter.getAdapter();
 
   @Override
   Schema getAvroSchema(StoragePath sourceFilePath) throws IOException {
@@ -73,7 +73,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
         (Configuration) table.getStorageConf().unwrap(), new Path(sourceFilePath.toUri()),
         ParquetMetadataConverter.NO_FILTER);
     MessageType parquetSchema = readFooter.getFileMetaData().getSchema();
-    return ADAPTER.getAvroSchemaConverter(table.getStorageConf()).convert(parquetSchema);
+    return AVRO_ADAPTER.getAvroSchemaConverter(table.getStorageConf()).convert(parquetSchema);
   }
 
   @Override

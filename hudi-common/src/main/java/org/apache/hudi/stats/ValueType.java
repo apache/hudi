@@ -208,11 +208,11 @@ public enum ValueType {
     return ValueType.myEnumValues[i];
   }
 
-  private static final ParquetAdapter ADAPTER = ParquetAdapter.getAdapter();
+  private static final ParquetAdapter PARQUET_ADAPTER = ParquetAdapter.getAdapter();
 
   public static ValueType fromParquetPrimitiveType(PrimitiveType primitiveType) {
-    if (ADAPTER.hasAnnotation(primitiveType)) {
-      return ADAPTER.getValueTypeFromAnnotation(primitiveType);
+    if (PARQUET_ADAPTER.hasAnnotation(primitiveType)) {
+      return PARQUET_ADAPTER.getValueTypeFromAnnotation(primitiveType);
     }
     switch (primitiveType.getPrimitiveTypeName()) {
       case INT64:

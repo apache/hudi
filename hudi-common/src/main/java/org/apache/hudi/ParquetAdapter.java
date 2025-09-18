@@ -46,11 +46,10 @@ public interface ParquetAdapter {
       }
     }
     try {
-      Class.forName("org.apache.parquet.schema.LogicalTypeAnnotation");
-    } catch (ClassNotFoundException e) {
+      return ReflectionUtils.loadClass("org.apache.parquet.schema.LogicalTypeParquetAdapter");
+    } catch (IllegalAccessError e) {
       return ReflectionUtils.loadClass("org.apache.parquet.schema.OriginalTypeParquetAdapter");
     }
-    return ReflectionUtils.loadClass("org.apache.parquet.schema.LogicalTypeParquetAdapter");
   }
 
   boolean hasAnnotation(PrimitiveType primitiveType);

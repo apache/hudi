@@ -115,7 +115,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
     return new HoodieAvroOrcWriter(instantTime, path, orcConfig, schema, taskContextSupplier);
   }
 
-  private static final AvroAdapter ADAPTER = AvroAdapter.getAdapter();
+  private static final AvroAdapter AVRO_ADAPTER = AvroAdapter.getAdapter();
 
   private HoodieAvroWriteSupport getHoodieAvroWriteSupport(Schema schema,
                                                            HoodieConfig config, boolean enableBloomFilter) {
@@ -123,6 +123,6 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
     return (HoodieAvroWriteSupport) ReflectionUtils.loadClass(
         config.getStringOrDefault(HoodieStorageConfig.HOODIE_AVRO_WRITE_SUPPORT_CLASS),
         new Class<?>[] {MessageType.class, Schema.class, Option.class, Properties.class},
-        ADAPTER.getAvroSchemaConverter(storage.getConf()).convert(schema), schema, filter, config.getProps());
+        AVRO_ADAPTER.getAvroSchemaConverter(storage.getConf()).convert(schema), schema, filter, config.getProps());
   }
 }

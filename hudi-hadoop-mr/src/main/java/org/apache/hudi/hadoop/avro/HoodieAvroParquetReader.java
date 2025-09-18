@@ -55,14 +55,14 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
 
   private final ParquetRecordReader<GenericData.Record> parquetRecordReader;
   private Schema baseSchema;
-  private static final AvroAdapter ADAPTER = AvroAdapter.getAdapter();
+  private static final AvroAdapter AVRO_ADAPTER = AvroAdapter.getAdapter();
 
   public HoodieAvroParquetReader(InputSplit inputSplit, Configuration conf, Option<InternalSchema> internalSchemaOption) throws IOException {
     // get base schema
     ParquetMetadata fileFooter =
         ParquetFileReader.readFooter(conf, ((ParquetInputSplit) inputSplit).getPath(), ParquetMetadataConverter.NO_FILTER);
     MessageType messageType = fileFooter.getFileMetaData().getSchema();
-    baseSchema = ADAPTER.getAvroSchemaConverter(new HadoopStorageConfiguration(conf)).convert(messageType);
+    baseSchema = AVRO_ADAPTER.getAvroSchemaConverter(new HadoopStorageConfiguration(conf)).convert(messageType);
 
     if (internalSchemaOption.isPresent()) {
       // do schema reconciliation in case there exists read column which is not in the file schema.

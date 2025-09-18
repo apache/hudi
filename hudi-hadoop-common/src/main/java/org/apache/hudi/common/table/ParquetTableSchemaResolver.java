@@ -27,22 +27,22 @@ import org.apache.parquet.avro.AvroAdapter;
 import org.apache.parquet.schema.MessageType;
 
 public class ParquetTableSchemaResolver extends TableSchemaResolver {
-  private static final AvroAdapter ADAPTER = AvroAdapter.getAdapter();
+  private static final AvroAdapter AVRO_ADAPTER = AvroAdapter.getAdapter();
 
   public ParquetTableSchemaResolver(HoodieTableMetaClient metaClient) {
     super(metaClient);
   }
 
   public static MessageType convertAvroSchemaToParquet(Schema schema, Configuration hadoopConf) {
-    return ADAPTER.getAvroSchemaConverter(new HadoopStorageConfiguration(hadoopConf)).convert(schema);
+    return AVRO_ADAPTER.getAvroSchemaConverter(new HadoopStorageConfiguration(hadoopConf)).convert(schema);
   }
 
   private Schema convertParquetSchemaToAvro(MessageType parquetSchema) {
-    return ADAPTER.getAvroSchemaConverter(metaClient.getStorageConf()).convert(parquetSchema);
+    return AVRO_ADAPTER.getAvroSchemaConverter(metaClient.getStorageConf()).convert(parquetSchema);
   }
 
   private MessageType convertAvroSchemaToParquet(Schema schema) {
-    return ADAPTER.getAvroSchemaConverter(metaClient.getStorageConf()).convert(schema);
+    return AVRO_ADAPTER.getAvroSchemaConverter(metaClient.getStorageConf()).convert(schema);
   }
 
   /**

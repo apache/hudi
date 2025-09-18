@@ -268,12 +268,12 @@ public class ParquetUtils extends FileFormatUtils {
     return footerVals;
   }
 
-  private static final AvroAdapter ADAPTER = AvroAdapter.getAdapter();
+  private static final AvroAdapter AVRO_ADAPTER = AvroAdapter.getAdapter();
 
   @Override
   public Schema readAvroSchema(HoodieStorage storage, StoragePath filePath) {
     MessageType parquetSchema = readSchema(storage, filePath);
-    return ADAPTER.getAvroSchemaConverter(storage.getConf()).convert(parquetSchema);
+    return AVRO_ADAPTER.getAvroSchemaConverter(storage.getConf()).convert(parquetSchema);
   }
 
   @Override

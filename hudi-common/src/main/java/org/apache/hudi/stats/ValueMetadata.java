@@ -38,7 +38,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_
 
 public class ValueMetadata implements Serializable {
 
-  private static final ParquetAdapter ADAPTER = ParquetAdapter.getAdapter();
+  private static final ParquetAdapter PARQUET_ADAPTER = ParquetAdapter.getAdapter();
 
   private final ValueType valueType;
 
@@ -136,7 +136,7 @@ public class ValueMetadata implements Serializable {
     }
 
     static DecimalMetadata create(PrimitiveType primitiveType) {
-      return new DecimalMetadata(ADAPTER.getPrecision(primitiveType), ADAPTER.getScale(primitiveType));
+      return new DecimalMetadata(PARQUET_ADAPTER.getPrecision(primitiveType), PARQUET_ADAPTER.getScale(primitiveType));
     }
 
     static DecimalMetadata create(int precision, int scale) {

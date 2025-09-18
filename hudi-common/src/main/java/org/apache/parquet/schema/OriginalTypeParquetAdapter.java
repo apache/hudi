@@ -33,16 +33,55 @@ public class OriginalTypeParquetAdapter implements ParquetAdapter {
 
   @Override
   public ValueType getValueTypeFromAnnotation(PrimitiveType primitiveType) {
-    return OriginalTypeParser.fromOriginalType(primitiveType);
+    switch (primitiveType.getOriginalType()) {
+      case UTF8:
+        return ValueType.STRING;
+      case DECIMAL:
+        return ValueType.DECIMAL;
+      case DATE:
+        return ValueType.DATE;
+      case TIME_MILLIS:
+        return ValueType.TIME_MILLIS;
+      case TIME_MICROS:
+        return ValueType.TIME_MICROS;
+      case TIMESTAMP_MILLIS:
+        if (primitiveType.toString().contains("(TIMESTAMP(MILLIS,false))")) {
+          return ValueType.LOCAL_TIMESTAMP_MILLIS;
+        }
+        return ValueType.TIMESTAMP_MILLIS;
+      case TIMESTAMP_MICROS:
+        if (primitiveType.toString().contains("(TIMESTAMP(MICROS,false))")) {
+          return ValueType.LOCAL_TIMESTAMP_MICROS;
+        }
+        return ValueType.TIMESTAMP_MICROS;
+      default:
+        throw new IllegalArgumentException("Unsupported original type: " + primitiveType.getOriginalType());
+    }
   }
 
   @Override
   public int getPrecision(PrimitiveType primitiveType) {
-    return OriginalTypeParser.getPrecision(primitiveType);
+    if (primitiveType.getOriginalType() == null) {
+      throw new IllegalArgumentException("Unsupported primitive type: " + primitiveType.getPrimitiveTypeName());
+    }
+
+    if (primitiveType.getOriginalType() != OriginalType.DECIMAL) {
+      throw new IllegalArgumentException("Unsupported original type: " + primitiveType.getOriginalType());
+    }
+
+    return primitiveType.getDecimalMetadata().getPrecision();
   }
 
   @Override
   public int getScale(PrimitiveType primitiveType) {
-    return OriginalTypeParser.getScale(primitiveType);
+    if (primitiveType.getOriginalType() == null) {
+      throw new IllegalArgumentException("Unsupported primitive type: " + primitiveType.getPrimitiveTypeName());
+    }
+
+    if (primitiveType.getOriginalType() != OriginalType.DECIMAL) {
+      throw new IllegalArgumentException("Unsupported original type: " + primitiveType.getOriginalType());
+    }
+
+    return primitiveType.getDecimalMetadata().getScale();
   }
 }

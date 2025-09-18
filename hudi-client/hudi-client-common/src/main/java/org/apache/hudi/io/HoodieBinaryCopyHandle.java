@@ -57,6 +57,7 @@ import java.util.List;
 public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieBinaryCopyHandle.class);
+  private static final AvroAdapter AVRO_ADAPTER = AvroAdapter.getAdapter();
   protected final HoodieFileBinaryCopier writer;
   private final List<StoragePath> inputFiles;
   private final StoragePath path;
@@ -81,7 +82,7 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       }
     } else {
       // Default behavior: use the table's write schema for evolution
-      return AvroAdapter.getAdapter().getAvroSchemaConverter(new HadoopStorageConfiguration(conf)).convert(writeSchemaWithMetaFields);
+      return AVRO_ADAPTER.getAvroSchemaConverter(new HadoopStorageConfiguration(conf)).convert(writeSchemaWithMetaFields);
     }
   }
 
