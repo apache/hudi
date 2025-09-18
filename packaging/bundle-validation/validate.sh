@@ -102,11 +102,12 @@ test_spark_hadoop_mr_bundles () {
     hiveqlresultsdir=/tmp/hadoop-mr-bundle/hiveql/trips/results
     mkdir -p $hiveqlresultsdir
     $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
-      -u jdbc:hive2://localhost:10000/default --showHeader=false --outputformat=csv2 \
+      -u jdbc:hive2://localhost:10000/default --verbose=true --showHeader=false --outputformat=csv2 \
       -e 'select * from trips' >> $hiveqlresultsdir/results.csv
     numRecordsHiveQL=$(cat $hiveqlresultsdir/*.csv | wc -l)
     if [ "$numRecordsHiveQL" -ne 10 ]; then
         echo "::error::validate.sh HiveQL validation failed."
+        cat $hiveqlresultsdir/results.csv
         exit 1
     fi
     echo "::warning::validate.sh spark & hadoop-mr bundles validation was successful."
