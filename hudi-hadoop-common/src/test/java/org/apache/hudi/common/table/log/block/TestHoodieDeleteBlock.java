@@ -19,11 +19,13 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.avro.model.HoodieDeleteRecordList;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -42,6 +44,9 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.log.block.HoodieDeleteBlock.ORD_ORDERING_VAL;
+import static org.apache.hudi.common.table.log.block.HoodieDeleteBlock.ORD_PARTITION_PATH;
+import static org.apache.hudi.common.table.log.block.HoodieDeleteBlock.ORD_RECORD_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -53,6 +58,20 @@ public class TestHoodieDeleteBlock {
   private static String PARTITION_PATH = "2023-01-01";
 
   private static Random random = new Random();
+
+  @Test
+  void validateHoodieDeleteRecordListFieldsAndOrdinals() {
+    // HoodieDeleteBlock uses IndexedRecord instead of HoodieDeleteRecordList as the output of
+    // reading the delete record list, due to class loading issue on the executor side on Spark
+    // with Java 11+, so we need to validate the logic follows the expected schema
+    Schema.Field rootField = HoodieDeleteRecordList.SCHEMA$.getFields().get(0);
+    assertEquals("deleteRecordList", rootField.name());
+    assertEquals(Schema.Type.ARRAY, rootField.schema().getType());
+    Schema elementSchema = rootField.schema().getElementType();
+    assertEquals("recordKey", elementSchema.getFields().get(ORD_RECORD_KEY).name());
+    assertEquals("partitionPath", elementSchema.getFields().get(ORD_PARTITION_PATH).name());
+    assertEquals("orderingVal", elementSchema.getFields().get(ORD_ORDERING_VAL).name());
+  }
 
   @Test
   public void testSerializeAndDeserializeV3DeleteBlock() throws IOException {
