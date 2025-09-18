@@ -258,6 +258,37 @@ public class HoodieWriteConfig extends HoodieConfig {
           "**Note** This is being actively worked on. Please use "
               + "`hoodie.datasource.write.keygenerator.class` instead.");
 
+  public static final ConfigProperty<Boolean> COMPLEX_KEYGEN_NEW_ENCODING = ConfigProperty
+      .key("hoodie.write.complex.keygen.new.encoding")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .supportedVersions("0.14.2", "0.15.1", "1.0.3")
+      .withDocumentation("This config only takes effect for writing table version 8 and below. "
+          + "If set to false, the record key field name is encoded and prepended "
+          + "in the case where a single record key field is used in the complex key generator, "
+          + "i.e., record keys stored in _hoodie_record_key meta field is in the format of "
+          + "`<field_name>:<field_value>`, which conforms to the behavior "
+          + "in 0.14.0 release and older. If set to true, the record key field name is not "
+          + "encoded under the same case in the complex key generator, i.e., record keys stored "
+          + "in _hoodie_record_key meta field is in the format of `<field_value>`, "
+          + "which conforms to the behavior in 0.14.1, 0.15.0, 1.0.0, 1.0.1, 1.0.2 releases.");
+
+  public static final ConfigProperty<Boolean> ENABLE_COMPLEX_KEYGEN_VALIDATION = ConfigProperty
+      .key("hoodie.write.complex.keygen.validation.enable")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .supportedVersions("0.14.2", "0.15.1", "1.0.3")
+      .withDocumentation("This config only takes effect for writing table version 8 and below, "
+          + "upgrade or downgrade. If set to true, the writer enables the validation on whether the "
+          + "table uses the complex key generator with a single record key field, which can be affected "
+          + "by a breaking change in 0.14.1, 0.15.0, 1.0.0, 1.0.1, 1.0.2 releases, causing key "
+          + "encoding change and potential duplicates in the table. The validation fails the "
+          + "pipeline if the table meets the condition for the user to take proper action. "
+          + "The user can turn this validation off by setting the config to false, after "
+          + "evaluating the table and situation and doing table repair if needed.");
+
   public static final ConfigProperty<String> ROLLBACK_USING_MARKERS_ENABLE = ConfigProperty
       .key("hoodie.rollback.using.markers")
       .defaultValue("true")
@@ -1498,6 +1529,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean shouldRollbackUsingMarkers() {
     return getBoolean(ROLLBACK_USING_MARKERS_ENABLE);
+  }
+
+  public boolean enableComplexKeygenValidation() {
+    return getBoolean(ENABLE_COMPLEX_KEYGEN_VALIDATION);
   }
 
   public boolean shouldFailOnDuplicateDataFileDetection() {
@@ -3114,6 +3149,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withRollbackUsingMarkers(boolean rollbackUsingMarkers) {
       writeConfig.setValue(ROLLBACK_USING_MARKERS_ENABLE, String.valueOf(rollbackUsingMarkers));
+      return this;
+    }
+
+    public Builder withComplexKeygenValidation(boolean enableComplexKeygenValidation) {
+      writeConfig.setValue(ENABLE_COMPLEX_KEYGEN_VALIDATION, String.valueOf(enableComplexKeygenValidation));
       return this;
     }
 
