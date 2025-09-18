@@ -26,13 +26,15 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.{FileSystemViewManager, HoodieTableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.index.record.HoodieRecordIndex
+import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.hudi.util.JFunction
 
 import org.apache.spark.sql.{DataFrame, HoodieCatalystExpressionUtils, SaveMode}
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, Literal, Or}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.junit.jupiter.api.{Tag, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -43,6 +45,28 @@ import scala.util.Using
 @Tag("functional")
 class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   val sqlTempTable = "tbl"
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testRLICreationUsingSQL(isPartitioned: Boolean): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
+      "hoodie.metadata.index.column.stats.enable" -> "false",
+      HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "false")
+
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite,
+      validate = false)
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(HoodieTestUtils.getDefaultStorageConf).build()
+    assertFalse(MetadataPartitionType.RECORD_INDEX.isMetadataPartitionAvailable(getLatestMetaClient(true)))
+    spark.sql(s"create table $sqlTempTable using hudi location '$basePath'")
+    spark.sql(s"create index record_index on $sqlTempTable (_row_key) options(${HoodieRecordIndex.IS_PARTITIONED_OPTION}='$isPartitioned')")
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(HoodieTestUtils.getDefaultStorageConf).build()
+    assertEquals(isPartitioned, HoodieRecordIndex.isPartitioned(metaClient.getIndexMetadata.get().getIndex(MetadataPartitionType.RECORD_INDEX.getPartitionPath).get()))
+    assertTrue(MetadataPartitionType.RECORD_INDEX.isMetadataPartitionAvailable(getLatestMetaClient(true)))
+    spark.sql(s"drop table $sqlTempTable")
+  }
 
   @ParameterizedTest
   @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
