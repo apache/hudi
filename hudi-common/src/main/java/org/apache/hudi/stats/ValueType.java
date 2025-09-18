@@ -209,9 +209,13 @@ public enum ValueType {
   }
 
   public static ValueType fromParquetPrimitiveType(PrimitiveType primitiveType) {
-    if (primitiveType.getLogicalTypeAnnotation() != null) {
-      return LogicalTypeTokenParser.fromLogicalTypeAnnotation(primitiveType);
+    // TODO: switch to logical type after we get rid of parquet 1.10.1
+    if (primitiveType.getOriginalType() != null) {
+      return LogicalTypeTokenParser.fromOriginalTypeAnnotation(primitiveType);
     }
+    /*if (primitiveType.getLogicalTypeAnnotation() != null) {
+      return LogicalTypeTokenParser.fromLogicalTypeAnnotation(primitiveType);
+    }*/
     switch (primitiveType.getPrimitiveTypeName()) {
       case INT64:
         return ValueType.LONG;
