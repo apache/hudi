@@ -23,32 +23,25 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 /**
  * Impl of {@link GenericRecord} to abstract meta fields and an actual data records of type GenericRecord.
  */
 public class JoinedGenericRecord implements GenericRecord {
   private final GenericRecord dataRecord;
-  private final Map<String, Object> metaFields;
-  private final List<String> metaFieldNames;
+  private final Object[] metaFields;
   private final Schema schema;
 
   public JoinedGenericRecord(GenericRecord dataRecord, int metaFieldsSize, Schema schema) {
     this.dataRecord = dataRecord;
-    this.metaFields = new HashMap<>(metaFieldsSize);
-    this.metaFieldNames = metaFieldsSize == HoodieRecord.HOODIE_META_COLUMNS.size()
-        ? HoodieRecord.HOODIE_META_COLUMNS
-        : HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION_LIST;
+    this.metaFields = new Object[metaFieldsSize];
     this.schema = schema;
   }
 
   @Override
   public void put(String key, Object v) {
-    if (metaFieldNames.contains(key)) {
-      metaFields.put(key, v);
+    Integer metaFieldPos = getMetaFieldPos(key);
+    if (metaFieldPos != null) {
+      metaFields[metaFieldPos] = v;
     } else {
       dataRecord.put(key, v);
     }
@@ -56,8 +49,9 @@ public class JoinedGenericRecord implements GenericRecord {
 
   @Override
   public Object get(String key) {
-    if (metaFieldNames.contains(key)) {
-      return metaFields.get(key);
+    Integer metaFieldPos = getMetaFieldPos(key);
+    if (metaFieldPos != null) {
+      return metaFields[metaFieldPos];
     } else {
       return dataRecord.get(key);
     }
@@ -65,20 +59,27 @@ public class JoinedGenericRecord implements GenericRecord {
 
   @Override
   public void put(int i, Object v) {
-    if (i < metaFieldNames.size()) {
-      metaFields.put(metaFieldNames.get(i), v);
+    if (i < metaFields.length) {
+      metaFields[i] = v;
     } else {
-      dataRecord.put(i - metaFieldNames.size(), v);
+      dataRecord.put(i - metaFields.length, v);
     }
   }
 
   @Override
   public Object get(int i) {
-    if (i < metaFieldNames.size()) {
-      return metaFields.get(metaFieldNames.get(i));
+    if (i < metaFields.length) {
+      return metaFields[i];
     } else {
-      return dataRecord.get(i - metaFieldNames.size());
+      return dataRecord.get(i - metaFields.length);
     }
+  }
+
+  private Integer getMetaFieldPos(String fieldName) {
+    if (fieldName.equals(HoodieRecord.OPERATION_METADATA_FIELD)) {
+      return HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.size();
+    }
+    return HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(fieldName);
   }
 
   @Override

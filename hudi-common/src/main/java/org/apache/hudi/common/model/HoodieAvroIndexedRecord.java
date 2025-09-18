@@ -200,7 +200,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     decodeRecord(recordSchema);
     GenericRecord genericRecord = (GenericRecord) data;
     int metaFieldSize = targetSchema.getFields().size() - genericRecord.getSchema().getFields().size();
-    GenericRecord newAvroRecord = metaFieldSize == 0 ? genericRecord : new JoinedGenericRecord((GenericRecord) data, metaFieldSize, targetSchema);
+    GenericRecord newAvroRecord = metaFieldSize == 0 ? genericRecord : new JoinedGenericRecord(genericRecord, metaFieldSize, targetSchema);
     updateMetadataValuesInternal(newAvroRecord, metadataValues);
     HoodieAvroIndexedRecord newRecord = new HoodieAvroIndexedRecord(key, newAvroRecord, operation, metaData, orderingValue);
     newRecord.setNewLocation(this.newLocation);

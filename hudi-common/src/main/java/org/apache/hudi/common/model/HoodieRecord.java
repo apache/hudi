@@ -102,11 +102,6 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
       CollectionUtils.createImmutableList(COMMIT_TIME_METADATA_FIELD, COMMIT_SEQNO_METADATA_FIELD,
           RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD, FILENAME_METADATA_FIELD);
 
-  public static final List<String> HOODIE_META_COLUMNS_WITH_OPERATION_LIST =
-      CollectionUtils.createImmutableList(COMMIT_TIME_METADATA_FIELD, COMMIT_SEQNO_METADATA_FIELD,
-          RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD, FILENAME_METADATA_FIELD,
-          OPERATION_METADATA_FIELD);
-
   // Temporary to support the '_hoodie_operation' field, once we solve
   // the compatibility problem, it can be removed.
   public static final Set<String> HOODIE_META_COLUMNS_WITH_OPERATION =
