@@ -32,7 +32,7 @@ import org.apache.hudi.common.util.collection
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieIndexVersion, HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
-import org.apache.hudi.stats.{SparkValueMetadata, ValueMetadata, ValueType}
+import org.apache.hudi.stats.{SparkValueMetadataUtils, ValueMetadata, ValueType}
 import org.apache.hudi.stats.ValueMetadata.getValueMetadata
 import org.apache.hudi.util.JFunction
 
@@ -456,7 +456,7 @@ object ColumnStatsIndexSupport {
   }
 
   private def extractColStatsValueV2(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata, useJava8api: Boolean): Any = {
-    val colStatsValue = SparkValueMetadata.convertJavaTypeToSparkType(SparkValueMetadata.getValueMetadata(dataType, HoodieIndexVersion.V2)
+    val colStatsValue = SparkValueMetadataUtils.convertJavaTypeToSparkType(SparkValueMetadataUtils.getValueMetadata(dataType, HoodieIndexVersion.V2)
       .standardizeJavaTypeAndPromote(valueMetadata.unwrapValue(valueWrapper)), useJava8api)
     // TODO: should this be done here? Should we handle this with adding more value types?
     // TODO: should this logic be in convertJavaTypeToSparkType?

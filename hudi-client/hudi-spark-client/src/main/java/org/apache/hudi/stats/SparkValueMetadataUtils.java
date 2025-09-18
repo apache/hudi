@@ -45,12 +45,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 
-public abstract class SparkValueMetadata extends ValueMetadata {
-
-  private SparkValueMetadata() {
-    super(null);
-    throw new IllegalStateException("This constructor should never be called");
-  }
+public class SparkValueMetadataUtils {
 
   public static ValueMetadata getValueMetadata(DataType dataType, HoodieIndexVersion indexVersion) {
     if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {

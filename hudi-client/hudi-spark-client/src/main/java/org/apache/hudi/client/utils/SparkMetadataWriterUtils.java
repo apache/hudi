@@ -61,7 +61,7 @@ import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
-import org.apache.hudi.stats.SparkValueMetadata;
+import org.apache.hudi.stats.SparkValueMetadataUtils;
 import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.JavaScalaConverters;
@@ -172,8 +172,8 @@ public class SparkMetadataWriterUtils {
             row -> {
               int baseAggregatePosition = SparkMetadataWriterUtils.getExpressionIndexColumnNames().length;
               long nullCount = row.getLong(baseAggregatePosition);
-              Comparable minValue = SparkValueMetadata.convertSparkToJava(valueMetadata, row.get(baseAggregatePosition + 1));
-              Comparable maxValue = SparkValueMetadata.convertSparkToJava(valueMetadata, row.get(baseAggregatePosition + 2));
+              Comparable minValue = SparkValueMetadataUtils.convertSparkToJava(valueMetadata, row.get(baseAggregatePosition + 1));
+              Comparable maxValue = SparkValueMetadataUtils.convertSparkToJava(valueMetadata, row.get(baseAggregatePosition + 2));
               long valueCount = row.getLong(baseAggregatePosition + 3);
 
               String partitionName = row.getString(0);
@@ -221,7 +221,7 @@ public class SparkMetadataWriterUtils {
     if (minDataType != maxDataType) {
       throw new HoodieException(String.format("Column stats data types do not match for min (%s) and max (%s)", minDataType, maxDataType));
     }
-    return SparkValueMetadata.getValueMetadata(minDataType, indexVersion);
+    return SparkValueMetadataUtils.getValueMetadata(minDataType, indexVersion);
   }
 
   public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingBloomFilter(

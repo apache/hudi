@@ -54,7 +54,7 @@ public class ValueMetadata implements Serializable {
         .build();
   }
 
-  public String getAdditionalInfo() {
+  String getAdditionalInfo() {
     return null;
   }
 
@@ -101,7 +101,7 @@ public class ValueMetadata implements Serializable {
 
   public static final ValueMetadata NULL_METADATA = new ValueMetadata(ValueType.NULL);
 
-  public interface DecimalValueMetadata {
+  interface DecimalValueMetadata {
 
     int getPrecision();
 
@@ -120,7 +120,7 @@ public class ValueMetadata implements Serializable {
 
   protected static class DecimalMetadata extends ValueMetadata implements DecimalValueMetadata {
 
-    public static DecimalMetadata create(String additionalInfo) {
+    static DecimalMetadata create(String additionalInfo) {
       if (additionalInfo == null) {
         throw new IllegalArgumentException("additionalInfo cannot be null");
       }
@@ -128,15 +128,15 @@ public class ValueMetadata implements Serializable {
       return new DecimalMetadata(data.getLeft(), data.getRight());
     }
 
-    public static DecimalMetadata create(LogicalTypes.Decimal decimal) {
+    static DecimalMetadata create(LogicalTypes.Decimal decimal) {
       return new DecimalMetadata(decimal.getPrecision(), decimal.getScale());
     }
 
-    public static DecimalMetadata create(PrimitiveType primitiveType) {
+    static DecimalMetadata create(PrimitiveType primitiveType) {
       return new DecimalMetadata(LogicalTypeTokenParser.getPrecision(primitiveType), LogicalTypeTokenParser.getScale(primitiveType));
     }
 
-    public static DecimalMetadata create(int precision, int scale) {
+    static DecimalMetadata create(int precision, int scale) {
       return new DecimalMetadata(precision, scale);
     }
 
@@ -160,7 +160,7 @@ public class ValueMetadata implements Serializable {
     }
 
     @Override
-    public String getAdditionalInfo() {
+    String getAdditionalInfo() {
       return DecimalValueMetadata.encodeData(this);
     }
   }

@@ -107,7 +107,7 @@ test_spark_hadoop_mr_bundles () {
     numRecordsHiveQL=$(cat $hiveqlresultsdir/*.csv | wc -l)
     if [ "$numRecordsHiveQL" -ne 10 ]; then
         echo "::error::validate.sh HiveQL validation failed."
-        cat $hiveqlresultsdir/results.csv
+        cat $HIVE_HOME/logs/hiveserver2.log
         exit 1
     fi
     echo "::warning::validate.sh spark & hadoop-mr bundles validation was successful."

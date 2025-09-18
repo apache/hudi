@@ -41,7 +41,7 @@ import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.expression.HoodieExpressionIndex
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieIndexVersion, HoodieMetadataPayload, MetadataPartitionType}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
-import org.apache.hudi.stats.{SparkValueMetadata, ValueType}
+import org.apache.hudi.stats.{SparkValueMetadataUtils, ValueType}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -1556,14 +1556,14 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         spark.sql(s"create index idx_to_timestamp_default on $tableName using column_stats(date) options(expr='to_timestamp')")
         metaClient = HoodieTableMetaClient.reload(metaClient)
         val toTimestampDefault = resolveExpr(spark, unapply(functions.to_timestamp(functions.col("date"))).get, tableSchema)
-        dataFilter = EqualTo(toTimestampDefault, lit(SparkValueMetadata.convertJavaTypeToSparkType(ValueType.toTimestampMicros(1732924800000000L, null), false)).expr)
+        dataFilter = EqualTo(toTimestampDefault, lit(SparkValueMetadataUtils.convertJavaTypeToSparkType(ValueType.toTimestampMicros(1732924800000000L, null), false)).expr)
         verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
         spark.sql(s"drop index idx_to_timestamp_default on $tableName")
 
         spark.sql(s"create index idx_to_timestamp on $tableName using column_stats(date) options(expr='to_timestamp', format='yyyy-MM-dd')")
         metaClient = HoodieTableMetaClient.reload(metaClient)
         val toTimestamp = resolveExpr(spark, unapply(functions.to_timestamp(functions.col("date"), "yyyy-MM-dd")).get, tableSchema)
-        dataFilter = EqualTo(toTimestamp, lit(SparkValueMetadata.convertJavaTypeToSparkType(ValueType.toTimestampMicros(1732924800000000L, null), false)).expr)
+        dataFilter = EqualTo(toTimestamp, lit(SparkValueMetadataUtils.convertJavaTypeToSparkType(ValueType.toTimestampMicros(1732924800000000L, null), false)).expr)
         verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
         spark.sql(s"drop index idx_to_timestamp on $tableName")
 

@@ -34,7 +34,7 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.index.expression.HoodieExpressionIndex
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadataUtil, MetadataPartitionType}
-import org.apache.hudi.stats.{SparkValueMetadata, ValueMetadata, ValueType}
+import org.apache.hudi.stats.{SparkValueMetadataUtils, ValueMetadata, ValueType}
 import org.apache.hudi.stats.ValueMetadata.getValueMetadata
 import org.apache.hudi.util.JFunction
 
@@ -625,7 +625,7 @@ object ExpressionIndexSupport {
   }
 
   private def extractExpressionIndexValueV2(valueWrapper: AnyRef, valueMetadata: ValueMetadata, useJava8api: Boolean): Any = {
-    SparkValueMetadata.convertJavaTypeToSparkType(valueMetadata.unwrapValue(valueWrapper), useJava8api)
+    SparkValueMetadataUtils.convertJavaTypeToSparkType(valueMetadata.unwrapValue(valueWrapper), useJava8api)
   }
 
   val INDEX_NAME = "EXPRESSION"
