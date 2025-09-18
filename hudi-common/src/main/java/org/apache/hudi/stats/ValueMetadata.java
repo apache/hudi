@@ -236,7 +236,7 @@ public class ValueMetadata implements Serializable {
     }
     ValueType valueType = ValueType.fromParquetPrimitiveType(primitiveType);
     if (valueType == ValueType.V1) {
-      throw new IllegalArgumentException("Unsupported logical type: " + primitiveType.getLogicalTypeAnnotation());
+      throw new IllegalArgumentException("Unsupported original type: " + primitiveType.getOriginalType());
     } else if (valueType == ValueType.DECIMAL) {
       return DecimalMetadata.create(primitiveType);
     } else {

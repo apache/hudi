@@ -28,7 +28,7 @@ import org.apache.hudi.stats.ValueType;
 public class LogicalTypeTokenParser {
 
   //TODO: get rid of this when we get rid of parquet 1.10.1
-  public static ValueType fromOriginalTypeAnnotation(PrimitiveType primitiveType) {
+  public static ValueType fromOriginalType(PrimitiveType primitiveType) {
     switch (primitiveType.getOriginalType()) {
       case UTF8:
         return ValueType.STRING;
