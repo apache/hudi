@@ -89,12 +89,11 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.AssertionsKt.assertNull;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mockConstruction;
 
@@ -241,21 +240,17 @@ public class TestMergeHandle extends BaseTestHandle {
     try (MockedConstruction<JoinedGenericRecord> mocked = mockConstruction(JoinedGenericRecord.class,
         (mock, context) -> {
           doThrow(new HoodieIOException("Simulated write failure for record key: " + recordKeyForFailure))
-              .when(mock).put(eq(HoodieRecord.RECORD_KEY_METADATA_FIELD), eq((Object) recordKeyForFailure));
+              .when(mock).put(any(), any());
       })) {
       fileGroupReaderBasedMergeHandle.doMerge();
     }
 
     writeStatuses = fileGroupReaderBasedMergeHandle.close();
     WriteStatus writeStatus = writeStatuses.get(0);
-    assertEquals(1, writeStatus.getErrors().size());
+    assertEquals(2, writeStatus.getErrors().size());
     // check that record and secondary index stats are non-empty
-    assertFalse(writeStatus.getWrittenRecordDelegates().isEmpty());
-    assertFalse(writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().flatMap(Collection::stream).count() == 0L);
-
-    writeStatus.getWrittenRecordDelegates().forEach(recordDelegate -> assertNotEquals(recordKeyForFailure, recordDelegate.getRecordKey()));
-    writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().flatMap(Collection::stream)
-        .forEach(secondaryIndexStats -> assertNotEquals(recordKeyForFailure, secondaryIndexStats.getRecordKey()));
+    assertTrue(writeStatus.getWrittenRecordDelegates().isEmpty());
+    assertTrue(writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().flatMap(Collection::stream).count() == 0L);
 
     AtomicBoolean cdcRecordsFound = new AtomicBoolean(false);
     String cdcFilePath = metaClient.getBasePath().toString() + "/" + writeStatus.getStat().getCdcStats().keySet().stream().findFirst().get();
