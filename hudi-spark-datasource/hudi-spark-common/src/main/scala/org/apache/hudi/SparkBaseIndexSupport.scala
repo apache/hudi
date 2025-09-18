@@ -174,9 +174,8 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
       var compositeRecordKeys: List[String] = List.empty
       val recordKeyOpt = getRecordKeyConfig
 
-      // for other cases though we should be able to handle complex key
-      // a complex key can be a single field or multiple fields based on hudi docs, regardless of encoding
-      val isComplexRecordKey = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0) > 1
+      val isComplexRecordKey = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0) > 1 ||
+        KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig)
       recordKeyOpt.foreach { recordKeysArray =>
         // Handle composite record keys
         breakable {
