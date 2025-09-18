@@ -109,14 +109,15 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"false,true", "true,false", "true,true"})
+  @CsvSource(value = {"false,true,8", "true,false,8", "true,true,8", "false,true,9", "true,false,9", "true,true,9"})
   void testSingleValueKeyGenerator(boolean setNewEncodingConfig,
-                                   boolean encodeSingleKeyFieldValueOnly) {
+                                   boolean encodeSingleKeyFieldValueOnly,
+                                   String tableVersion) {
     String recordKeyFieldName = "_row_key";
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), recordKeyFieldName);
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
-    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
+    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersion);
     if (setNewEncodingConfig) {
       properties.setProperty(
           HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(),
@@ -130,8 +131,16 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
       String rowKey = avroRecord.get(recordKeyFieldName).toString();
       String partitionPath = avroRecord.get("timestamp").toString();
       HoodieKey hoodieKey = compositeKeyGenerator.getKey(avroRecord);
-      String expectedRecordKey = setNewEncodingConfig && encodeSingleKeyFieldValueOnly
-              ?  rowKey : recordKeyFieldName + ":" + rowKey;
+      // For table version 9, new encoding config should have no effect
+      String expectedRecordKey;
+      if ("9".equals(tableVersion)) {
+        // Table version 9 ignores the new encoding config and always uses the old format
+        expectedRecordKey = recordKeyFieldName + ":" + rowKey;
+      } else {
+        // Table version 8 may use new encoding config if set
+        expectedRecordKey = setNewEncodingConfig && encodeSingleKeyFieldValueOnly
+                ?  rowKey : recordKeyFieldName + ":" + rowKey;
+      }
       assertEquals(expectedRecordKey, hoodieKey.getRecordKey());
       assertEquals(partitionPath, hoodieKey.getPartitionPath());
 
@@ -144,13 +153,14 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"false,true", "true,false", "true,true"})
+  @CsvSource(value = {"false,true,8", "true,false,8", "true,true,8", "false,true,9", "true,false,9", "true,true,9"})
   void testMultipleValueKeyGenerator(boolean setNewEncodingConfig,
-                                     boolean encodeSingleKeyFieldValueOnly) {
+                                     boolean encodeSingleKeyFieldValueOnly,
+                                     String tableVersion) {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,timestamp");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "rider,driver");
-    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
+    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersion);
     if (setNewEncodingConfig) {
       properties.setProperty(
           HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(),
@@ -179,13 +189,14 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"false,true", "true,false", "true,true"})
+  @CsvSource(value = {"false,true,8", "true,false,8", "true,true,8", "false,true,9", "true,false,9", "true,true,9"})
   void testMultipleValueKeyGeneratorNonPartitioned(boolean setNewEncodingConfig,
-                                                   boolean encodeSingleKeyFieldValueOnly) {
+                                                   boolean encodeSingleKeyFieldValueOnly,
+                                                   String tableVersion) {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,timestamp");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
-    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");
+    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersion);
     if (setNewEncodingConfig) {
       properties.setProperty(
           HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(),

@@ -264,6 +264,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.write.complex.keygen.new.encoding")
       .defaultValue(false)
       .markAdvanced()
+      .sinceVersion("1.1.0")
       .supportedVersions("0.14.2", "0.15.1", "1.0.3")
       .withDocumentation("This config only takes effect for writing table version 8 and below. "
           + "If set to false, the record key field name is encoded and prepended "
