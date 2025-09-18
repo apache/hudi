@@ -20,7 +20,7 @@
 ---
 name: Community Support Request 🤝
 description: Report an issue faced while using Hudi
-labels: ["community-support"]
+labels: ["type:community-support"]
 body:
   - type: markdown
     attributes:
