@@ -19,6 +19,7 @@
 
 package org.apache.hudi.stats;
 
+import org.apache.hudi.AvroParquetAdapter;
 import org.apache.hudi.avro.model.HoodieValueTypeInfo;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieIndexVersion;
@@ -26,7 +27,6 @@ import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.parquet.schema.LogicalTypeTokenParser;
 import org.apache.parquet.schema.PrimitiveType;
 
 import java.io.Serializable;
@@ -37,6 +37,9 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE_ORDINAL;
 
 public class ValueMetadata implements Serializable {
+
+  private static final AvroParquetAdapter ADAPTER = AvroParquetAdapter.getAdapter();
+
   private final ValueType valueType;
 
   protected ValueMetadata(ValueType valueType) {
@@ -133,7 +136,7 @@ public class ValueMetadata implements Serializable {
     }
 
     static DecimalMetadata create(PrimitiveType primitiveType) {
-      return new DecimalMetadata(LogicalTypeTokenParser.getPrecision(primitiveType), LogicalTypeTokenParser.getScale(primitiveType));
+      return new DecimalMetadata(ADAPTER.getPrecision(primitiveType), ADAPTER.getScale(primitiveType));
     }
 
     static DecimalMetadata create(int precision, int scale) {

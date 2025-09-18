@@ -21,41 +21,8 @@ package org.apache.parquet.schema;
 
 import org.apache.hudi.stats.ValueType;
 
-/**
- * If you get rid of parquet 1.10.1 please review the commented code
- *
- */
 public class LogicalTypeTokenParser {
 
-  //TODO: get rid of this when we get rid of parquet 1.10.1
-  public static ValueType fromOriginalType(PrimitiveType primitiveType) {
-    switch (primitiveType.getOriginalType()) {
-      case UTF8:
-        return ValueType.STRING;
-      case DECIMAL:
-        return ValueType.DECIMAL;
-      case DATE:
-        return ValueType.DATE;
-      case TIME_MILLIS:
-        return ValueType.TIME_MILLIS;
-      case TIME_MICROS:
-        return ValueType.TIME_MICROS;
-      case TIMESTAMP_MILLIS:
-        if (primitiveType.toString().contains("(TIMESTAMP(MILLIS,false))")) {
-          return ValueType.LOCAL_TIMESTAMP_MILLIS;
-        }
-        return ValueType.TIMESTAMP_MILLIS;
-      case TIMESTAMP_MICROS:
-        if (primitiveType.toString().contains("(TIMESTAMP(MICROS,false))")) {
-          return ValueType.LOCAL_TIMESTAMP_MICROS;
-        }
-        return ValueType.TIMESTAMP_MICROS;
-      default:
-        throw new IllegalArgumentException("Unsupported original type: " + primitiveType.getOriginalType());
-    }
-  }
-
-  /* TODO: Use this when we get rid of parquet 1.10.1
   public static ValueType fromLogicalTypeAnnotation(PrimitiveType primitiveType) {
     switch (primitiveType.getLogicalTypeAnnotation().getType()) {
       case STRING:
@@ -92,22 +59,8 @@ public class LogicalTypeTokenParser {
       default:
         throw new IllegalArgumentException("Unsupported logical type: " + primitiveType.getLogicalTypeAnnotation().getType());
     }
-  }*/
-
-  //TODO: get rid of this when we get rid of parquet 1.10.1
-  public static int getPrecision(PrimitiveType primitiveType) {
-    if (primitiveType.getOriginalType() == null) {
-      throw new IllegalArgumentException("Unsupported primitive type: " + primitiveType.getPrimitiveTypeName());
-    }
-
-    if (primitiveType.getOriginalType() != OriginalType.DECIMAL) {
-      throw new IllegalArgumentException("Unsupported original type: " + primitiveType.getOriginalType());
-    }
-
-    return primitiveType.getDecimalMetadata().getPrecision();
   }
 
-  /* TODO:Use this when we get rid of parquet 1.10.1
   public static int getPrecision(PrimitiveType primitiveType) {
     if (primitiveType.getLogicalTypeAnnotation() == null) {
       throw new IllegalArgumentException("Unsupported primitive type: " + primitiveType.getPrimitiveTypeName());
@@ -118,22 +71,8 @@ public class LogicalTypeTokenParser {
     }
 
     return ((LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) primitiveType.getLogicalTypeAnnotation()).getPrecision();
-  }*/
-
-  //TODO: get rid of this when we get rid of parquet 1.10.1
-  public static int getScale(PrimitiveType primitiveType) {
-    if (primitiveType.getOriginalType() == null) {
-      throw new IllegalArgumentException("Unsupported primitive type: " + primitiveType.getPrimitiveTypeName());
-    }
-
-    if (primitiveType.getOriginalType() != OriginalType.DECIMAL) {
-      throw new IllegalArgumentException("Unsupported original type: " + primitiveType.getOriginalType());
-    }
-
-    return primitiveType.getDecimalMetadata().getScale();
   }
 
-  /* TODO:Use this when we get rid of parquet 1.10.1
   public static int getScale(PrimitiveType primitiveType) {
     if (primitiveType.getLogicalTypeAnnotation() == null) {
       throw new IllegalArgumentException("Unsupported primitive type: " + primitiveType.getPrimitiveTypeName());
@@ -144,6 +83,6 @@ public class LogicalTypeTokenParser {
     }
 
     return ((LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) primitiveType.getLogicalTypeAnnotation()).getScale();
-  }*/
+  }
 
 }

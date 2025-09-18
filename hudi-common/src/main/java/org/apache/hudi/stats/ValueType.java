@@ -19,6 +19,7 @@
 
 package org.apache.hudi.stats;
 
+import org.apache.hudi.AvroParquetAdapter;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroWrapperUtils;
 import org.apache.hudi.common.util.DateTimeUtils;
@@ -29,7 +30,6 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.parquet.io.api.Binary;
-import org.apache.parquet.schema.LogicalTypeTokenParser;
 import org.apache.parquet.schema.PrimitiveType;
 
 import java.math.BigDecimal;
@@ -208,14 +208,12 @@ public enum ValueType {
     return ValueType.myEnumValues[i];
   }
 
+  private static final AvroParquetAdapter ADAPTER = AvroParquetAdapter.getAdapter();
+
   public static ValueType fromParquetPrimitiveType(PrimitiveType primitiveType) {
-    // TODO: switch to logical type after we get rid of parquet 1.10.1
-    if (primitiveType.getOriginalType() != null) {
-      return LogicalTypeTokenParser.fromOriginalType(primitiveType);
+    if (ADAPTER.hasAnnotation(primitiveType)) {
+      return ADAPTER.getValueTypeFromAnnotation(primitiveType);
     }
-    /*if (primitiveType.getLogicalTypeAnnotation() != null) {
-      return LogicalTypeTokenParser.fromLogicalTypeAnnotation(primitiveType);
-    }*/
     switch (primitiveType.getPrimitiveTypeName()) {
       case INT64:
         return ValueType.LONG;

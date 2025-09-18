@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.AvroParquetAdapter;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -46,7 +47,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
-import org.apache.parquet.avro.HoodieAvroSchemaConverter;
 import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
@@ -268,10 +268,12 @@ public class ParquetUtils extends FileFormatUtils {
     return footerVals;
   }
 
+  private static final AvroParquetAdapter ADAPTER = AvroParquetAdapter.getAdapter();
+
   @Override
   public Schema readAvroSchema(HoodieStorage storage, StoragePath filePath) {
     MessageType parquetSchema = readSchema(storage, filePath);
-    return new HoodieAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(parquetSchema);
+    return ADAPTER.getAvroSchemaConverter(storage.getConf()).convert(parquetSchema);
   }
 
   @Override

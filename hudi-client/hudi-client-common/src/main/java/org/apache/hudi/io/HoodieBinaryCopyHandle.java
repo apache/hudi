@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.AvroParquetAdapter;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -27,6 +28,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.util.HoodieFileMetadataMerger;
 import org.apache.hudi.io.storage.HoodieFileBinaryCopier;
 import org.apache.hudi.parquet.io.HoodieParquetFileBinaryCopier;
@@ -35,7 +37,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.parquet.avro.HoodieAvroSchemaConverter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
@@ -80,7 +81,7 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       }
     } else {
       // Default behavior: use the table's write schema for evolution
-      return new HoodieAvroSchemaConverter(conf).convert(writeSchemaWithMetaFields);
+      return AvroParquetAdapter.getAdapter().getAvroSchemaConverter(new HadoopStorageConfiguration(conf)).convert(writeSchemaWithMetaFields);
     }
   }
 

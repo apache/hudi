@@ -19,30 +19,30 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.AvroParquetAdapter;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
+
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.parquet.avro.HoodieAvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
 
 public class ParquetTableSchemaResolver extends TableSchemaResolver {
+  private static final AvroParquetAdapter ADAPTER = AvroParquetAdapter.getAdapter();
 
   public ParquetTableSchemaResolver(HoodieTableMetaClient metaClient) {
     super(metaClient);
   }
 
   public static MessageType convertAvroSchemaToParquet(Schema schema, Configuration hadoopConf) {
-    HoodieAvroSchemaConverter avroSchemaConverter = new HoodieAvroSchemaConverter(hadoopConf);
-    return avroSchemaConverter.convert(schema);
+    return ADAPTER.getAvroSchemaConverter(new HadoopStorageConfiguration(hadoopConf)).convert(schema);
   }
 
   private Schema convertParquetSchemaToAvro(MessageType parquetSchema) {
-    HoodieAvroSchemaConverter avroSchemaConverter = new HoodieAvroSchemaConverter(metaClient.getStorageConf().unwrapAs(Configuration.class));
-    return avroSchemaConverter.convert(parquetSchema);
+    return ADAPTER.getAvroSchemaConverter(metaClient.getStorageConf()).convert(parquetSchema);
   }
 
   private MessageType convertAvroSchemaToParquet(Schema schema) {
-    HoodieAvroSchemaConverter avroSchemaConverter = new HoodieAvroSchemaConverter(metaClient.getStorageConf().unwrapAs(Configuration.class));
-    return avroSchemaConverter.convert(schema);
+    return ADAPTER.getAvroSchemaConverter(metaClient.getStorageConf()).convert(schema);
   }
 
   /**
