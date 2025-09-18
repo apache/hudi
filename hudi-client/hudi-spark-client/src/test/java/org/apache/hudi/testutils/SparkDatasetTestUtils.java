@@ -191,7 +191,7 @@ public class SparkDatasetTestUtils {
         .withBulkInsertParallelism(2);
   }
 
-  private static InternalRow serializeRow(ExpressionEncoder encoder, Row row)
+  public static InternalRow serializeRow(ExpressionEncoder encoder, Row row)
       throws InvocationTargetException, IllegalAccessException, NoSuchMethodException, ClassNotFoundException {
     // TODO remove reflection if Spark 2.x support is dropped
     if (package$.MODULE$.SPARK_VERSION().startsWith("2.")) {
