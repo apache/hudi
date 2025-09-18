@@ -263,7 +263,8 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         metaClient = createMetaClient(spark, basePath)
         assertTrue(metaClient.getIndexMetadata.isPresent)
         var expressionIndexMetadata = metaClient.getIndexMetadata.get()
-        assertEquals(1, expressionIndexMetadata.getIndexDefinitions.size())
+        // RLI and expression index
+        assertEquals(2, expressionIndexMetadata.getIndexDefinitions.size())
         assertEquals("expr_index_idx_datestr", expressionIndexMetadata.getIndexDefinitions.get("expr_index_idx_datestr").getIndexName)
 
         // Verify one can create more than one expression index. When function is not provided,
@@ -279,7 +280,8 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         spark.sql(createIndexSql)
         metaClient = createMetaClient(spark, basePath)
         expressionIndexMetadata = metaClient.getIndexMetadata.get()
-        assertEquals(2, expressionIndexMetadata.getIndexDefinitions.size())
+        // RLI and 2 expression indexes
+        assertEquals(3, expressionIndexMetadata.getIndexDefinitions.size())
         assertEquals("expr_index_name_lower", expressionIndexMetadata.getIndexDefinitions.get("expr_index_name_lower").getIndexName)
 
         // Ensure that both the indexes are tracked correctly in metadata partition config
@@ -335,14 +337,16 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       metaClient = createMetaClient(spark, basePath)
       assertTrue(metaClient.getIndexMetadata.isPresent)
       var expressionIndexMetadata = metaClient.getIndexMetadata.get()
-      assertEquals(1, expressionIndexMetadata.getIndexDefinitions.size())
+      // RLI and expression index
+      assertEquals(2, expressionIndexMetadata.getIndexDefinitions.size())
       assertEquals("expr_index_idx_datestr", expressionIndexMetadata.getIndexDefinitions.get("expr_index_idx_datestr").getIndexName)
 
       // Verify one can create more than one expression index
       spark.sql(s"create index name_lower on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy')")
       metaClient = createMetaClient(spark, basePath)
       expressionIndexMetadata = metaClient.getIndexMetadata.get()
-      assertEquals(2, expressionIndexMetadata.getIndexDefinitions.size())
+      // RLI and 2 expression indexes
+      assertEquals(3, expressionIndexMetadata.getIndexDefinitions.size())
       assertEquals("expr_index_name_lower", expressionIndexMetadata.getIndexDefinitions.get("expr_index_name_lower").getIndexName)
 
       // Ensure that both the indexes are tracked correctly in metadata partition config
@@ -393,7 +397,8 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       spark.sql(createIndexSql)
       var metaClient = createMetaClient(spark, basePath)
       var expressionIndexMetadata = metaClient.getIndexMetadata.get()
-      assertEquals(1, expressionIndexMetadata.getIndexDefinitions.size())
+      // RLI and expression indexes
+      assertEquals(2, expressionIndexMetadata.getIndexDefinitions.size())
       assertEquals("expr_index_idx_datestr", expressionIndexMetadata.getIndexDefinitions.get("expr_index_idx_datestr").getIndexName)
       assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains("expr_index_idx_datestr"))
       assertTrue(metaClient.getIndexMetadata.isPresent)
@@ -410,7 +415,8 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       spark.sql(createIndexSql)
       metaClient = createMetaClient(spark, basePath)
       expressionIndexMetadata = metaClient.getIndexMetadata.get()
-      assertEquals(2, expressionIndexMetadata.getIndexDefinitions.size())
+      // RLI and 2 expression indexes
+      assertEquals(3, expressionIndexMetadata.getIndexDefinitions.size())
       assertEquals("expr_index_name_lower", expressionIndexMetadata.getIndexDefinitions.get("expr_index_name_lower").getIndexName)
 
       // Ensure that both the indexes are tracked correctly in metadata partition config

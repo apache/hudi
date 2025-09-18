@@ -120,8 +120,9 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     this.schema = schema;
   }
 
-  public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, boolean copy, HoodieOperation hoodieOperation, boolean isDelete) {
+  public HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, boolean copy, HoodieOperation hoodieOperation, Comparable orderingValue, boolean isDelete) {
     super(key, data, hoodieOperation, isDelete, Option.empty());
+    this.orderingValue = orderingValue;
 
     validateRow(data, schema);
     this.copy = copy;
@@ -257,7 +258,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
   @Override
   protected boolean checkIsDelete(Schema recordSchema, Properties props) {
-    if (null == data) {
+    if (data == null || HoodieOperation.isDelete(getOperation())) {
       return true;
     }
 

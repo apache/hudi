@@ -79,6 +79,8 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V1;
 import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V2;
+import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
+import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
@@ -101,6 +103,10 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(context.getStorageConf().newInstance()).setBasePath(config.getBasePath()).build();
+    if (config.enableComplexKeygenValidation()
+        && isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig())) {
+      throw new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage("downgrade"));
+    }
     // Handle timeline downgrade:
     //  - Rename instants in active timeline to old format for table version 6
     //  - Convert LSM timeline format to archived timeline for table version 6

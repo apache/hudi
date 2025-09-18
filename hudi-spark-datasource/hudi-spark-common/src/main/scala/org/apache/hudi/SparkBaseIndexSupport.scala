@@ -23,7 +23,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.keygen.KeyGenerator
+import org.apache.hudi.keygen.{KeyGenerator, KeyGenUtils}
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 
@@ -167,13 +167,15 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
    * @return Tuple of List of filtered queries and list of record key literals that need to be matched
    */
   protected def filterQueriesWithRecordKey(queryFilters: Seq[Expression]): (List[Expression], List[String]) = {
-    if (!isIndexAvailable) {
+    if (!isIndexAvailable || KeyGenUtils.mayUseNewEncodingForComplexKeyGen(metaClient.getTableConfig)) {
       (List.empty, List.empty)
     } else {
       var recordKeyQueries: List[Expression] = List.empty
       var compositeRecordKeys: List[String] = List.empty
       val recordKeyOpt = getRecordKeyConfig
-      val isComplexRecordKey = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0) > 1
+
+      val isComplexRecordKey = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0) > 1 ||
+        KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig)
       recordKeyOpt.foreach { recordKeysArray =>
         // Handle composite record keys
         breakable {
@@ -229,5 +231,4 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
     // Convert the Hudi Option to Scala Option and return if present
     Option(recordKeysOpt.orElse(null)).filter(_.nonEmpty)
   }
-
 }

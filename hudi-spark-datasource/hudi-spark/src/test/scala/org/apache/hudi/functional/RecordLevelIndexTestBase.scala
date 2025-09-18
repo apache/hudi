@@ -44,7 +44,8 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
   def commonOpts: Map[String, String] = Map(
     PARTITIONPATH_FIELD.key -> "partition",
     HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
-    HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "15"
+    HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "15",
+    "hoodie.hfile.block.cache.enabled" -> "true"
   ) ++ baseOpts ++ metadataOpts
 
   val secondaryIndexOpts: Map[String, String] = Map(
@@ -124,7 +125,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
   }
 
   protected def validateDataAndRecordIndices(hudiOpts: Map[String, String],
-                                           deletedDf: DataFrame = sparkSession.emptyDataFrame): Unit = {
+                                             deletedDf: DataFrame = sparkSession.emptyDataFrame): Unit = {
     val writeConfig = getWriteConfig(hudiOpts)
     val metadata = metadataWriter(writeConfig).getTableMetadata
     val readDf = spark.read.format("hudi").load(basePath)

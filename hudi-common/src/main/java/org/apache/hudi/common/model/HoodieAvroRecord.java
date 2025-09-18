@@ -54,8 +54,9 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     super(key, data);
   }
 
-  public HoodieAvroRecord(HoodieKey key, T data, HoodieOperation hoodieOperation, boolean isDelete) {
+  public HoodieAvroRecord(HoodieKey key, T data, HoodieOperation hoodieOperation, Comparable orderingValue, Boolean isDelete) {
     super(key, data, hoodieOperation, isDelete, Option.empty());
+    this.orderingValue = orderingValue;
   }
 
   public HoodieAvroRecord(HoodieKey key, T data, HoodieOperation operation) {
@@ -85,12 +86,12 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
 
   @Override
   public HoodieRecord<T> newInstance(HoodieKey key, HoodieOperation op) {
-    return new HoodieAvroRecord<>(key, data, op);
+    return new HoodieAvroRecord<>(key, data, op, orderingValue, isDelete);
   }
 
   @Override
   public HoodieRecord<T> newInstance(HoodieKey key) {
-    return new HoodieAvroRecord<>(key, data);
+    return new HoodieAvroRecord<>(key, data, operation, orderingValue, isDelete);
   }
 
   @Override
@@ -251,7 +252,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     Option<IndexedRecord> avroData = getData().getIndexedRecord(recordSchema, props);
     if (avroData.isPresent()) {
       HoodieAvroIndexedRecord record =
-          new HoodieAvroIndexedRecord(key, avroData.get(), operation, getData().getMetadata());
+          new HoodieAvroIndexedRecord(key, avroData.get(), operation, getData().getMetadata(), getData().getOrderingValue());
       return Option.of(record);
     } else {
       return Option.empty();

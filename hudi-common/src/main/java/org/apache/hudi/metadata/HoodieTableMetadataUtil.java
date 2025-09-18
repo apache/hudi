@@ -74,6 +74,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -3151,6 +3152,21 @@ public class HoodieTableMetadataUtil {
     Set<String> completedMetadataPartitions = dataMetaClient.getTableConfig().getMetadataPartitions();
     indexPartitions.removeAll(completedMetadataPartitions);
     return indexPartitions;
+  }
+
+  static void createRecordIndexDefinition(HoodieTableMetaClient metaClient,
+                                          Map<String, String> options) {
+    String indexName = PARTITION_NAME_RECORD_INDEX;
+    HoodieTableVersion tableVersion = metaClient.getTableConfig().getTableVersion();
+    HoodieIndexVersion indexVersion = HoodieIndexVersion.getCurrentVersion(tableVersion, MetadataPartitionType.RECORD_INDEX);
+
+    HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
+        .withIndexName(indexName)
+        .withIndexType(indexName)
+        .withIndexOptions(options)
+        .withVersion(indexVersion)
+        .build();
+    metaClient.buildIndexDefinition(indexDefinition);
   }
 
   /**

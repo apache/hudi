@@ -76,6 +76,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.index.record.HoodieRecordIndex;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.DirectoryInfo;
@@ -124,6 +125,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_S
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.createRecordIndexDefinition;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getExpressionIndexPartitionsToInit;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
@@ -477,7 +479,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
             initializeFilegroupsAndCommit(partitionType, COLUMN_STATS.getPartitionPath(), fileGroupCountAndRecordsPair, instantTimeForPartition, colStatsColumnsAndRecord.getKey());
             break;
           case RECORD_INDEX:
-            initializeFilegroupsAndCommitToRecordIndexPartition(instantTimeForPartition, lazyLatestMergedPartitionFileSliceList);
+            boolean isPartitionedRLI = dataWriteConfig.isPartitionedRecordIndexEnabled();
+            initializeFilegroupsAndCommitToRecordIndexPartition(instantTimeForPartition, lazyLatestMergedPartitionFileSliceList, isPartitionedRLI);
             break;
           case EXPRESSION_INDEX:
             Set<String> expressionIndexPartitionsToInit = getExpressionIndexPartitionsToInit(partitionType, dataWriteConfig.getMetadataConfig(), dataMetaClient);
@@ -740,8 +743,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   private void initializeFilegroupsAndCommitToRecordIndexPartition(String commitTimeForPartition,
-                                                                   Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException {
-    if (dataWriteConfig.isPartitionedRecordIndexEnabled()) {
+                                                                   Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList, boolean isPartitionedRLI) throws IOException {
+    createRecordIndexDefinition(dataMetaClient, Collections.singletonMap(HoodieRecordIndex.IS_PARTITIONED_OPTION, String.valueOf(isPartitionedRLI)));
+    if (isPartitionedRLI) {
       initializeFilegroupsAndCommitToPartitionedRecordIndexPartition(commitTimeForPartition, lazyLatestMergedPartitionFileSliceList);
     } else {
       initializeFilegroupsAndCommit(RECORD_INDEX, RECORD_INDEX.getPartitionPath(),

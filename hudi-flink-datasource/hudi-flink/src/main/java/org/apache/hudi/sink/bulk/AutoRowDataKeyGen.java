@@ -21,6 +21,7 @@ package org.apache.hudi.sink.bulk;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
@@ -40,15 +41,18 @@ public class AutoRowDataKeyGen extends RowDataKeyGen {
       String partitionFields,
       RowType rowType,
       boolean hiveStylePartitioning,
-      boolean encodePartitionPath) {
-    super(Option.empty(), partitionFields, rowType, hiveStylePartitioning, encodePartitionPath, false, Option.empty());
+      boolean encodePartitionPath,
+      boolean useCompkexKeygenNewEncoding) {
+    super(Option.empty(), partitionFields, rowType, hiveStylePartitioning, encodePartitionPath, false, Option.empty(),
+            useCompkexKeygenNewEncoding);
     this.taskId = taskId;
     this.instantTime = instantTime;
   }
 
   public static RowDataKeyGen instance(Configuration conf, RowType rowType, int taskId, String instantTime) {
     return new AutoRowDataKeyGen(taskId, instantTime, conf.get(FlinkOptions.PARTITION_PATH_FIELD),
-        rowType, conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.get(FlinkOptions.URL_ENCODE_PARTITIONING));
+        rowType, conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.get(FlinkOptions.URL_ENCODE_PARTITIONING),
+        OptionsResolver.useComplexKeygenNewEncoding(conf));
   }
 
   @Override

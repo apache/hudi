@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.HashMap;
@@ -51,6 +52,8 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
+import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
+import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.PAYLOAD_CLASSES_TO_HANDLE;
 
 /**
@@ -76,6 +79,10 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
                                                          SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
+    if (config.enableComplexKeygenValidation()
+        && isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig())) {
+      throw new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage("downgrade"));
+    }
     // Handle index Changes
     UpgradeDowngradeUtils.dropNonV1IndexPartitions(
         config, context, table, upgradeDowngradeHelper, "downgrading from table version nine to eight");
