@@ -552,7 +552,6 @@ public class HoodieIndexUtils {
         readerContext.getMergeMode(),
         false,
         readerContext.getRecordMerger(),
-        orderingFieldNames,
         writerSchema.get(),
         Option.ofNullable(Pair.of(hoodieTable.getMetaClient().getTableConfig().getPayloadClass(), hoodieTable.getConfig().getPayloadClass())),
         properties,

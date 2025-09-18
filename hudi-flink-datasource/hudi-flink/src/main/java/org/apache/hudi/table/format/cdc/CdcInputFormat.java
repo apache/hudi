@@ -374,7 +374,6 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
           readerContext.getMergeMode(),
           false,
           Option.of(imageManager.writeConfig.getRecordMerger()),
-          Arrays.asList(orderingFields),
           tableSchema,
           Option.ofNullable(Pair.of(metaClient.getTableConfig().getPayloadClass(), writeConfig.getPayloadClass())),
           props,

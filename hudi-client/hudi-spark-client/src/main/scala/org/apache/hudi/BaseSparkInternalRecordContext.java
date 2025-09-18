@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
-import org.apache.hudi.common.util.OrderingValues;
 
 import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
@@ -51,8 +50,12 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 
 public abstract class BaseSparkInternalRecordContext extends RecordContext<InternalRow> {
 
-  public BaseSparkInternalRecordContext(HoodieTableConfig tableConfig) {
+  protected BaseSparkInternalRecordContext(HoodieTableConfig tableConfig) {
     super(tableConfig, new DefaultJavaTypeConverter());
+  }
+
+  protected BaseSparkInternalRecordContext() {
+    super(new DefaultJavaTypeConverter());
   }
 
   public static Object getFieldValueFromInternalRow(InternalRow row, Schema recordSchema, String fieldName) {
@@ -84,14 +87,14 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
       return new HoodieEmptyRecord<>(
           hoodieKey,
           bufferedRecord.getHoodieOperation(),
-          OrderingValues.getDefault(),
+          bufferedRecord.getOrderingValue(),
           HoodieRecord.HoodieRecordType.SPARK);
     }
 
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     InternalRow row = bufferedRecord.getRecord();
     return new HoodieSparkRecord(hoodieKey, row, HoodieInternalRowUtils.getCachedSchema(schema),
-        false, bufferedRecord.getHoodieOperation(), bufferedRecord.isDelete());
+        false, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), bufferedRecord.isDelete());
   }
 
   @Override

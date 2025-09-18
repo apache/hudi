@@ -22,6 +22,7 @@ import org.apache.hudi.client.SecondaryIndexStats;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -124,7 +125,7 @@ class TestSecondaryIndexStreamingTracker {
     HoodieRecord<HoodieAvroPayload> newRecord = createHoodieRecord(hoodieKey, avroRecord);
     
     // Track insert operation
-    trackSecondaryIndexStats(hoodieKey, Option.of(newRecord), null, false, testSchema);
+    trackSecondaryIndexStats(hoodieKey, newRecord, null, false, testSchema);
     
     // Verify single insert entry
     verifySecondaryIndexStats(writeStatus, (stats, indexName) -> {
@@ -165,7 +166,7 @@ class TestSecondaryIndexStreamingTracker {
     HoodieRecord<HoodieAvroPayload> newRecord = createHoodieRecord(hoodieKey, newAvroRecord);
     
     // Track update operation
-    trackSecondaryIndexStats(hoodieKey, Option.of(newRecord), oldRecord, false, nullableSchema);
+    trackSecondaryIndexStats(hoodieKey, newRecord, oldRecord, false, nullableSchema);
     
     if (!expectUpdate) {
       // No update expected (same value)
@@ -203,7 +204,7 @@ class TestSecondaryIndexStreamingTracker {
     HoodieRecord<HoodieAvroPayload> oldRecord = createHoodieRecord(hoodieKey, oldAvroRecord);
     
     // Track delete operation
-    trackSecondaryIndexStats(hoodieKey, Option.empty(), oldRecord, true, nullableSchema);
+    trackSecondaryIndexStats(hoodieKey, new HoodieEmptyRecord<>(null, HoodieRecord.HoodieRecordType.AVRO), oldRecord, true, nullableSchema);
     
     // Verify single delete entry
     verifySecondaryIndexStats(writeStatus, (stats, indexName) -> {
@@ -245,7 +246,7 @@ class TestSecondaryIndexStreamingTracker {
     
     SecondaryIndexStreamingTracker.trackSecondaryIndexStats(
         hoodieKey,
-        Option.of(newRecord),
+        newRecord,
         null,
         false,
         writeStatus,
@@ -285,16 +286,16 @@ class TestSecondaryIndexStreamingTracker {
     HoodieRecord<HoodieAvroPayload> newRecord = createHoodieRecord(hoodieKey, avroRecord);
     
     // Test with empty secondary index definitions
-    trackSecondaryIndexStats(hoodieKey, Option.of(newRecord), null, false, schema, Collections.emptyList());
+    trackSecondaryIndexStats(hoodieKey, newRecord, null, false, schema, Collections.emptyList());
     assertEquals(0, writeStatus.getIndexStats().getSecondaryIndexStats().size());
     
     // Test with null hoodie key and empty records
     WriteStatus newWriteStatus = new WriteStatus(true, 0.0d);
     SecondaryIndexStreamingTracker.trackSecondaryIndexStats(
         null,
-        Option.empty(),
+        new HoodieEmptyRecord<>(null, HoodieRecord.HoodieRecordType.AVRO),
         null,
-        false,
+        true,
         newWriteStatus,
         schema,
         () -> schema,
@@ -320,7 +321,7 @@ class TestSecondaryIndexStreamingTracker {
     
     SecondaryIndexStreamingTracker.trackSecondaryIndexStats(
         null,
-        Option.empty(),
+        new HoodieEmptyRecord<>(null, HoodieRecord.HoodieRecordType.AVRO),
         oldRecord,
         true,
         case1WriteStatus,
@@ -346,7 +347,7 @@ class TestSecondaryIndexStreamingTracker {
     
     SecondaryIndexStreamingTracker.trackSecondaryIndexStats(
         null,
-        Option.of(newRecord),
+        newRecord,
         null,
         false,
         case2WriteStatus,
@@ -387,18 +388,18 @@ class TestSecondaryIndexStreamingTracker {
     return new HoodieAvroRecord<>(key, payload);
   }
 
-  private void trackSecondaryIndexStats(HoodieKey hoodieKey, Option<HoodieRecord<HoodieAvroPayload>> newRecord,
+  private void trackSecondaryIndexStats(HoodieKey hoodieKey, HoodieRecord<HoodieAvroPayload> newRecord,
       HoodieRecord<HoodieAvroPayload> oldRecord, boolean isDelete, Schema recordSchema) {
     trackSecondaryIndexStats(hoodieKey, newRecord, oldRecord, isDelete, recordSchema, 
         Collections.singletonList(fareIndexDef));
   }
 
-  private void trackSecondaryIndexStats(HoodieKey hoodieKey, Option<HoodieRecord<HoodieAvroPayload>> newRecord,
+  private void trackSecondaryIndexStats(HoodieKey hoodieKey, HoodieRecord<HoodieAvroPayload> newRecord,
       HoodieRecord<HoodieAvroPayload> oldRecord, boolean isDelete, Schema recordSchema, 
       List<HoodieIndexDefinition> indexDefs) {
     SecondaryIndexStreamingTracker.trackSecondaryIndexStats(
         hoodieKey,
-        (Option<HoodieRecord>) (Option<?>) newRecord,
+        newRecord,
         oldRecord,
         isDelete,
         writeStatus,
