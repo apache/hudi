@@ -357,9 +357,6 @@ public class KeyGenUtils {
   }
 
   public static boolean encodeSingleKeyFieldNameForComplexKeyGen(TypedProperties props) {
-    // Get table version
-    // make sure tests are using the correct table version
-    // we need to add new test if write table version and tweaking old encoding config should not be allowed, we just ingore and use the old encoding
     Integer tableVersionCode = ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION);
     HoodieTableVersion tableVersion = HoodieTableVersion.fromVersionCode(tableVersionCode);
     return tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)
@@ -367,8 +364,6 @@ public class KeyGenUtils {
   }
 
   public static boolean mayUseNewEncodingForComplexKeyGen(HoodieTableConfig tableConfig) {
-    // For tables with version < 9, single record key field, and using complex key generator,
-    // avoid using the index due to ambiguity in record key encoding
     return tableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)
         && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig);
   }

@@ -40,7 +40,6 @@ public class ComplexAvroKeyGenerator extends BaseKeyGenerator {
         .map(String::trim)
         .filter(s -> !s.isEmpty())
         .collect(Collectors.toList());
-    // Set the record key function
     this.recordKeyFunction = getRecordKeyFunc(KeyGenUtils.encodeSingleKeyFieldNameForComplexKeyGen(props));
   }
 

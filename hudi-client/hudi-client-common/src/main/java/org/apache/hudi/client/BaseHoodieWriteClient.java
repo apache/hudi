@@ -1433,7 +1433,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         throw new HoodieException("Only simple, non-partitioned or complex key generator are supported when meta-fields are disabled. Used: " + keyGenClass);
       }
     }
-    // if current table version is less than NINE, then need to inform user about key encoding
     if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)
             && config.enableComplexKeygenValidation()
             && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {

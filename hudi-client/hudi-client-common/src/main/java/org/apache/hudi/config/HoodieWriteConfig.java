@@ -258,8 +258,6 @@ public class HoodieWriteConfig extends HoodieConfig {
           "**Note** This is being actively worked on. Please use "
               + "`hoodie.datasource.write.keygenerator.class` instead.");
 
-  // keep both configs for table version 8 and below
-  // change naming to be new and then flip default to false
   public static final ConfigProperty<Boolean> COMPLEX_KEYGEN_NEW_ENCODING = ConfigProperty
       .key("hoodie.write.complex.keygen.new.encoding")
       .defaultValue(false)
