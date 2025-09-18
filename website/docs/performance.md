@@ -76,7 +76,7 @@ significant savings on the overall compute cost.
 </figure>
 
 Hudi upserts have been stress tested upto 4TB in a single commit across the t1 table. 
-See [here](https://cwiki.apache.org/confluence/display/HUDI/Tuning+Guide) for some tuning tips.
+See [here](/docs/tuning-guide) for some tuning tips.
 
 #### Indexing
 
