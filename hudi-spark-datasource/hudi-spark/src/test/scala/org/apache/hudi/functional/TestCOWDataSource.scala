@@ -2160,7 +2160,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   def testIncrementalAndTimeTravelWithEventTimeOrdering(tableVersion: String): Unit = {
     val _spark = spark
     import _spark.implicits._
-    import org.apache.spark.sql.functions.lit
 
     // Configuration with event time ordering enabled
     val commonOpts = Map(
@@ -2238,6 +2237,11 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       (10, "val10", 2000L, true)
     ).toDF("id", "value", "timestamp", "_hoodie_is_deleted")
     val commit2 = writeBatch(df2, commonOpts, tableVersion)
+
+    metaClient.reload()
+    val currentTableVersion = metaClient.getTableConfig.getTableVersion.versionCode()
+    assert(currentTableVersion == tableVersion.toInt,
+      s"Table version should remain $tableVersion but found $currentTableVersion after second write")
 
     // Commit c3 - New Inserts (3 new records)
     val df3 = Seq(
@@ -2317,12 +2321,11 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     // Incremental Query (c1, c3) - Multi-commit range
     // Note: Incremental query range semantics differ by table version:
-    // - v6: Uses open_close range (START exclusive, END inclusive)
+    // - v6: Uses open_close range (START exclusive, END inclusive) so for now doing a commit - 1 on start time
     // - v9: Uses close_close range (both START and END inclusive)
     val incrementalDf1 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key,
-        if (tableVersion == "6") commit1 else getIncrementalStartTime(commit2, tableVersion))
+      .option(DataSourceReadOptions.START_COMMIT.key, getIncrementalStartTime(commit1, tableVersion))
       .option(DataSourceReadOptions.END_COMMIT.key, commit3)
       .load(basePath)
       .select("id", "value", "timestamp")
@@ -2330,15 +2333,19 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .collect()
 
     // Expected records for incremental query (c1, c3):
-    // Should include all changes from c2 and c3
+    // Should include all changes from c1, c2, and c3
+    // - c1: Initial inserts 1-10
     // - c2: Updates to 1,2,3 (higher timestamps), 4,5 (lower timestamps ignored but still appear as touched), deletes 9,10
     // - c3: New inserts 11,12,13
     val expectedIncremental1 = Array(
-      Row(1, "val1_updated_high", 2000L),  // Updated in c2
-      Row(2, "val2_updated_high", 2000L),  // Updated in c2
-      Row(3, "val3_updated_high", 2000L),  // Updated in c2
-      Row(4, "val4", 1000L),                // Touched in c2 but original value kept
-      Row(5, "val5", 1000L),                // Touched in c2 but original value kept
+      Row(1, "val1_updated_high", 2000L),  // Original from c1, updated in c2
+      Row(2, "val2_updated_high", 2000L),  // Original from c1, updated in c2
+      Row(3, "val3_updated_high", 2000L),  // Original from c1, updated in c2
+      Row(4, "val4", 1000L),                // Original from c1, touched in c2 but original value kept
+      Row(5, "val5", 1000L),                // Original from c1, touched in c2 but original value kept
+      Row(6, "val6", 1000L),                // Original from c1
+      Row(7, "val7", 1000L),                // Original from c1
+      Row(8, "val8", 1000L),                // Original from c1
       Row(11, "val11", 3000L),              // New insert from c3
       Row(12, "val12", 3000L),              // New insert from c3
       Row(13, "val13", 3000L)               // New insert from c3
@@ -2351,24 +2358,27 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }
 
     // Incremental Query (c3, latest) - Open-ended range
-    // Should include changes from c4 and c5
+    // Should include changes from c3, c4 and c5
     val incrementalDf2 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key,
-        if (tableVersion == "6") commit3 else getIncrementalStartTime(commit4, tableVersion))
+      .option(DataSourceReadOptions.START_COMMIT.key, getIncrementalStartTime(commit3, tableVersion))
       .load(basePath) // No END_COMMIT means up to latest
       .select("id", "value", "timestamp")
       .orderBy("id")
       .collect()
 
     // Expected records for incremental query (c3, latest):
-    // Should include changes from c4 and c5
+    // Should include changes from c3, c4 and c5
+    // - c3: New inserts 11,12,13
     // - c4: Updates to 2,4,6
     // - c5: Delete 7 (may not appear in results depending on configuration)
     val expectedIncremental2 = Array(
       Row(2, "val2_updated_again", 4000L), // Updated in c4
       Row(4, "val4_updated_high", 4000L),  // Updated in c4
-      Row(6, "val6_updated", 4000L)        // Updated in c4
+      Row(6, "val6_updated", 4000L),       // Updated in c4
+      Row(11, "val11", 3000L),             // New insert from c3
+      Row(12, "val12", 3000L),             // New insert from c3
+      Row(13, "val13", 3000L)              // New insert from c3
       // Record 7 deleted in c5 typically won't appear in incremental results
     )
     assertEquals(expectedIncremental2.length, incrementalDf2.length,
