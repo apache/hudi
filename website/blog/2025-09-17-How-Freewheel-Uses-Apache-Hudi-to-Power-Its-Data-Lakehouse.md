@@ -1,8 +1,9 @@
 ---
 title: "How Freewheel Uses Apache Hudi to Power Its Data Lakehouse"
+excerpt: ""
 author: Deepak Panda · Based on a session by Bing Jiang
 category: blog
-image: /assets/images/blog/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse/freewheel1200x600.jpg
+image: /assets/images/blog/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse.fig8.jpg
 tags:
 - Apache Hudi
 - Freewheel
@@ -20,7 +21,7 @@ Freewheel, a division of Comcast, provides advanced video ad solutions across TV
 Their original stack, shown below, used multiple systems like **Presto**, **ClickHouse**, and **Druid** to serve analytical and real-time use cases.
 
 
-<img src="/assets/images/blog/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse/fig1_freewheel.png" alt="challenge" width="800" align="middle"/>
+<img src="/assets/images/blog/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse.fig1.png" alt="challenge" width="800" align="middle"/>
 
 
 However, the architecture had some limitations:
@@ -39,7 +40,7 @@ However, the architecture had some limitations:
 
 ## Use Case 1: Lambda Architecture and Its Drawbacks
 
-<img src="/assets/images/blog/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse/fig2_freewheel.png" alt="challenge" width="800" align="middle"/>
+<img src="/assets/images/blog/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse.fig2.png" alt="challenge" width="800" align="middle"/>
 
 Freewheel initially followed a traditional Lambda architecture, where batch data and real-time data were processed separately. 
 
@@ -56,7 +57,7 @@ Adopting Apache Hudi brought these benefits:
 
 ## Use Case 2: Real-Time Inventory Management
 
-<img src="/assets/images/blog/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse/fig3_freewheel.png" alt="challenge" width="800" align="middle"/>
+<img src="/assets/images/blog/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse.fig3.png" alt="challenge" width="800" align="middle"/>
 
 Challenges with daily ad inventory updates included:
 
@@ -72,7 +73,7 @@ Hudi brought the following enhancements:
 
 ## Use Case 3: Scalable Audience Data Processing
 
-<img src="/assets/images/blog/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse/fig4_freewheel.png" alt="challenge" width="800" align="middle"/>
+<img src="/assets/images/blog/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse.fig4.png" alt="challenge" width="800" align="middle"/>
 
 Freewheel ingests audience segments into Aerospike for online services.
 
@@ -96,7 +97,7 @@ This Hudi implementation showcases how a large-scale platform ingests and update
 
 ### Key Architecture and Design Principles:
 
-<img src="/assets/images/blog/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse/fig5_freewheel.png" alt="challenge" width="600" align="middle"/>
+<img src="/assets/images/blog/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse.fig5.png" alt="challenge" width="600" align="middle"/>
 
 #### Partitioning Strategy
 
@@ -129,7 +130,7 @@ This Hudi implementation showcases how a large-scale platform ingests and update
 
 ### Metrics and Performance Insights:
 
-<img src="/assets/images/blog/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse/fig6_freewheel.png" alt="challenge" width="600" align="middle"/>
+<img src="/assets/images/blog/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse.fig6.png" alt="challenge" width="600" align="middle"/>
 
 * Data Volume & Records per Commit  
   * Over 434 TiB written across multiple commits.  
@@ -154,7 +155,7 @@ This Hudi implementation showcases how a large-scale platform ingests and update
 
 This implementation showcases an efficient pipeline where Spark Streaming ingests aggregated data into a Hudi Lakehouse using the bulk\_insert operation followed by [asynchronous clustering](https://hudi.apache.org/blog/2021/08/23/async-clustering/).
 
-<img src="/assets/images/blog/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse/fig7_freewheel.png" alt="challenge" width="800" align="middle"/>
+<img src="/assets/images/blog/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse/2025-09-17-How-Freewheel-Uses-Apache-Hudi-to-Power-Its-Data-Lakehouse.fig7.png" alt="challenge" width="800" align="middle"/>
 
 ### Data Ingestion Flow:
 
