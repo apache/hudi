@@ -18,6 +18,7 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.HoodieSparkUtils;
+
 import org.junit.jupiter.api.extension.ConditionEvaluationResult;
 import org.junit.jupiter.api.extension.ExecutionCondition;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -27,8 +28,7 @@ public class DisableOnSpark4Condition implements ExecutionCondition {
   public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
     if (HoodieSparkUtils.gteqSpark4_0()) {
       return ConditionEvaluationResult.disabled("Test disabled on Spark 4");
-    } else {
-      return ConditionEvaluationResult.enabled("Test enabled");
     }
+    return ConditionEvaluationResult.enabled("Test enabled");
   }
 }

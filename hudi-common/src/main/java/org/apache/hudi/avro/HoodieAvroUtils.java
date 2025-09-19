@@ -110,6 +110,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class HoodieAvroUtils {
 
   public static final String AVRO_VERSION = Schema.class.getPackage().getImplementationVersion();
+
   private static final ThreadLocal<BinaryEncoder> BINARY_ENCODER = ThreadLocal.withInitial(() -> null);
   private static final ThreadLocal<BinaryDecoder> BINARY_DECODER = ThreadLocal.withInitial(() -> null);
 
