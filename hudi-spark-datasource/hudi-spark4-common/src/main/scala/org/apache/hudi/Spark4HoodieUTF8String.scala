@@ -20,7 +20,6 @@ package org.apache.hudi
 import org.apache.spark.unsafe.types.UTF8String
 
 class Spark4HoodieUTF8String(utf8String: UTF8String) extends HoodieUTF8String(utf8String) {
-
+  // [SPARK-46832] [[UTF8String]] doesn't support compareTo anymore since Spark 4.0
   override def compareTo(t: HoodieUTF8String): Int = this.utf8String.binaryCompare(t.getUtf8String)
-
 }

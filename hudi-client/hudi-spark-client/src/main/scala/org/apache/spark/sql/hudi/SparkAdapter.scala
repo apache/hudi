@@ -363,6 +363,7 @@ trait SparkAdapter extends Serializable {
 
   /**
    * Gets the DataFrame utility helper for the current Spark version.
+   * Since Spark 4.0 [[org.apache.spark.sql.classic.Dataset]] has to be used.
    *
    * @return [[DataFrameUtil]] instance
    */
