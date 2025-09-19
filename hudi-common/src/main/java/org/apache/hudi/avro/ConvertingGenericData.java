@@ -126,7 +126,9 @@ public class ConvertingGenericData extends GenericData {
         return isLong(datum)
             || TIME_MICROS_CONVERSION.getConvertedType().isInstance(datum)
             || TIMESTAMP_MICROS_CONVERSION.getConvertedType().isInstance(datum)
-            || LOCAL_TIMESTAMP_MICROS_CONVERSION.getConvertedType().isInstance(datum);
+            || TIMESTAMP_MILLIS_CONVERSION.getConvertedType().isInstance(datum)
+            || LOCAL_TIMESTAMP_MICROS_CONVERSION.getConvertedType().isInstance(datum)
+            || LOCAL_TIMESTAMP_MILLIS_CONVERSION.getConvertedType().isInstance(datum);
       case FLOAT:
         return isFloat(datum);
       case DOUBLE:

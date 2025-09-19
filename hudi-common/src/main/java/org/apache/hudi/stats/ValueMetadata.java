@@ -36,6 +36,11 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE_ADDITIONAL_INFO;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE_ORDINAL;
 
+/**
+ * Holder for VaueType and additional info
+ * Used for wrapping and unwrapping col stat values
+ * as well as for type promotion
+ */
 public class ValueMetadata implements Serializable {
 
   private static final ParquetAdapter PARQUET_ADAPTER = ParquetAdapter.getAdapter();
@@ -86,9 +91,9 @@ public class ValueMetadata implements Serializable {
   }
 
   public static class V1EmptyMetadata extends ValueMetadata {
-    private static final V1EmptyMetadata V_1_EMPTY_METADATA = new V1EmptyMetadata();
+    private static final V1EmptyMetadata V1_EMPTY_METADATA = new V1EmptyMetadata();
     public static V1EmptyMetadata get() {
-      return V_1_EMPTY_METADATA;
+      return V1_EMPTY_METADATA;
     }
 
     private V1EmptyMetadata() {
@@ -121,7 +126,7 @@ public class ValueMetadata implements Serializable {
     }
   }
 
-  protected static class DecimalMetadata extends ValueMetadata implements DecimalValueMetadata {
+  static class DecimalMetadata extends ValueMetadata implements DecimalValueMetadata {
 
     static DecimalMetadata create(String additionalInfo) {
       if (additionalInfo == null) {

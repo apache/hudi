@@ -83,7 +83,7 @@ public abstract class FileFormatUtils {
                 e.getTotalUncompressedSize(), valueMetadata);
           }).reduce(HoodieColumnRangeMetadata::merge).orElseThrow(() -> new HoodieException("MergingColumnRanges failed."));
     }
-    // we are reducing using merge so IDK why we think there are multiple cols that need to go through schema evolution
+    
     // Let's do one pass and deduce all columns that needs to go through schema evolution.
     Map<String, Set<Class<?>>> schemaSeenForColsToIndex = new HashMap<>();
     Set<String> colsWithSchemaEvolved = new HashSet<>();

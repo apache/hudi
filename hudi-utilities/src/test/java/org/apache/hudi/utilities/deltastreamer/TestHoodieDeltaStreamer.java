@@ -678,10 +678,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testTimestampMillis() throws Exception {
-    //    if (zookeeperTestService != null) {
-    //      zookeeperTestService.stop();
-    //      zookeeperTestService = null;
-    //    }
     String tableBasePath = basePath + "/testTimestampMillis";
     defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
     // Insert data produced with Schema A, pass Schema A
@@ -732,10 +728,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testLogicalTypes() throws Exception {
-    if (zookeeperTestService != null) {
-      zookeeperTestService.stop();
-      zookeeperTestService = null;
-    }
     try {
       String tableBasePath = basePath + "/testTimestampMillis";
       defaultSchemaProviderClassName = TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.class.getName();
@@ -800,10 +792,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
   public void testBackwardsCompatibility(HoodieTableVersion version) throws Exception {
     TestMercifulJsonToRowConverter.timestampNTZCompatibility(() -> {
-      if (zookeeperTestService != null) {
-        zookeeperTestService.stop();
-        zookeeperTestService = null;
-      }
       String dirName = "colstats-upgrade-test-v" + version.versionCode();
       String dataPath = basePath + "/" + dirName;
       java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));

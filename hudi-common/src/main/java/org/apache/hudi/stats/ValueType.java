@@ -91,10 +91,20 @@ public enum ValueType {
   LOCAL_TIMESTAMP_NANOS(LocalDateTime.class, HoodieAvroWrapperUtils.PrimitiveWrapperType.LONG,
       ValueType::castToLocalTimestampNanos, ValueType::toLocalTimestampNanos, ValueType::fromLocalTimestampNanos);
 
+  // java type to represent this data type while in memory
   private final Class<?> internalType;
+
+  // primitive wrapper type to represent this data type when we write to the MDT
   private final HoodieAvroWrapperUtils.PrimitiveWrapperType primitiveWrapperType;
+
+  // converts to the internal type if it is something else, and will also type promote
+  // if the column has been promoted since it was written
   private final BiFunction<Object, ValueMetadata, Comparable<?>> standardize;
-  private final BiFunction<Comparable<?>, ValueMetadata, Comparable<?>> toComplex;
+
+  // converts primitive value read from the mdt to the internalType java class
+  private final BiFunction<Comparable<?>, ValueMetadata, Comparable<?>> toComposite;
+
+  // converts value from internalType java class to primitive type for writing to MDT
   private final BiFunction<Comparable<?>, ValueMetadata, Comparable<?>> toPrimitive;
 
   ValueType(HoodieAvroWrapperUtils.PrimitiveWrapperType primitiveWrapperType, Function<Object, Object> single) {
@@ -108,12 +118,12 @@ public enum ValueType {
   ValueType(Class<?> internalType,
             HoodieAvroWrapperUtils.PrimitiveWrapperType primitiveWrapperType,
             BiFunction<Object, ValueMetadata, Comparable<?>> standardize,
-            BiFunction<Comparable<?>, ValueMetadata, Comparable<?>> toComplex,
+            BiFunction<Comparable<?>, ValueMetadata, Comparable<?>> toComposite,
             BiFunction<Comparable<?>, ValueMetadata, Comparable<?>> toPrimitive) {
     this.internalType = internalType;
     this.primitiveWrapperType = primitiveWrapperType;
     this.standardize = standardize;
-    this.toComplex = toComplex;
+    this.toComposite = toComposite;
     this.toPrimitive = toPrimitive;
   }
 
@@ -135,7 +145,7 @@ public enum ValueType {
     if (val == null) {
       return null;
     }
-    return toComplex.apply(val, meta);
+    return toComposite.apply(val, meta);
   }
 
   void validate(Object val) {
@@ -327,12 +337,6 @@ public enum ValueType {
     }
     if (val instanceof Integer) {
       return (Integer) val;
-    } else if (val instanceof Long) {
-      return ((Long) val).intValue();
-    } else if (val instanceof Float) {
-      return ((Float) val).intValue();
-    } else if (val instanceof Double) {
-      return ((Double) val).intValue();
     } else if (val instanceof Boolean) {
       return ((Boolean) val) ? 1 : 0;
     } else {
@@ -349,10 +353,6 @@ public enum ValueType {
       return ((Integer) val).longValue();
     } else if (val instanceof Long) {
       return ((Long) val);
-    } else if (val instanceof Float) {
-      return ((Float) val).longValue();
-    } else if (val instanceof Double) {
-      return ((Double) val).longValue();
     } else if (val instanceof Boolean) {
       return ((Boolean) val) ? 1L : 0L;
     } else {
@@ -371,8 +371,6 @@ public enum ValueType {
       return ((Long) val).floatValue();
     } else if (val instanceof Float) {
       return (Float) val;
-    } else if (val instanceof Double) {
-      return ((Double) val).floatValue();
     } else if (val instanceof Boolean) {
       return (Boolean) val ? 1.0f : 0.0f;
     } else {

@@ -185,7 +185,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
       if (!row.isNullAt(tsLocalMillisFieldIndex)) {
         assertEquals(ValueType.toLocalTimestampMillis(ts, null), row.get(tsLocalMillisFieldIndex));
       }
-      assertEquals(ValueType.toLocalTimestampMillis(ts, null), row.get(tsLocalMicrosFieldIndex));
+      assertEquals(ValueType.toLocalTimestampMicros(Math.multiplyExact(ts, 1000L), null), row.get(tsLocalMicrosFieldIndex));
     }
   }
 

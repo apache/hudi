@@ -690,9 +690,6 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     Instant tsMillisThreshold = Instant.parse("2020-01-01T00:00:00Z");
     Instant tsMicrosThreshold = Instant.parse("2020-06-01T12:00:00Z");
 
-    //LocalTime timeMillisThreshold = LocalTime.of(12, 0, 0);  // noon
-    //LocalTime timeMicrosThreshold = LocalTime.of(6, 0, 0);   // 6 AM
-
     Instant localTsMillisThreshold = ZonedDateTime.of(
         2015, 5, 20, 12, 34, 56, 0, ZoneOffset.UTC).toInstant();
     Instant localTsMicrosThreshold = ZonedDateTime.of(
@@ -711,14 +708,6 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     // ts_micros
     long tsMicrosBase = TimeUnit.SECONDS.toMicros(tsMicrosThreshold.getEpochSecond()) + tsMicrosThreshold.getNano() / 1_000L;
     rec.put("ts_micros", above ? tsMicrosBase + 1 : tsMicrosBase - 1);
-
-    // time_millis
-    //int timeMillisBase = (int) TimeUnit.SECONDS.toMillis(timeMillisThreshold.toSecondOfDay());
-    //rec.put("time_millis", above ? timeMillisBase + 1 : timeMillisBase - 1);
-
-    // time_micros
-    //long timeMicrosBase = TimeUnit.SECONDS.toMicros(timeMicrosThreshold.toSecondOfDay());
-    //rec.put("time_micros", above ? timeMicrosBase + 1 : timeMicrosBase - 1);
 
     if (hasLTS) {
       // local_ts_millis

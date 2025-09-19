@@ -138,6 +138,12 @@ public class SparkValueMetadataUtils {
     }
   }
 
+  /**
+   * useJava8api is based of the spark config `spark.sql.datetime.java8API.enabled`
+   * If true, we need to return java.time.Instant and java.time.LocalDate for timestamp and date, otherwise
+   * we need to return java.sql.Timestamp and java.sql.Date
+   *
+   */
   public static Object convertJavaTypeToSparkType(Comparable<?> javaVal, boolean useJava8api) {
     if (!useJava8api) {
       if (javaVal instanceof Instant) {

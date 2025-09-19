@@ -17,9 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.avro;
-
-import org.apache.hudi.stats.ValueType;
+package org.apache.hudi.stats;
 
 import org.junit.jupiter.api.Test;
 

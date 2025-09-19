@@ -72,6 +72,8 @@ import static org.apache.parquet.schema.Type.Repetition.REPEATED;
  * Converts an Avro schema into a Parquet schema, or vice versa. See package
  * documentation for details of the mapping.
  * </p>
+ * This was taken from parquet-java 1.13.1 AvroSchemaConverter and modified
+ * to support local timestamp types by copying a few methods from 1.14.0 AvroSchemaConverter.
  */
 @SuppressWarnings("all")
 public class AvroSchemaConverterWithNTZ extends HoodieAvroParquetSchemaConverter {

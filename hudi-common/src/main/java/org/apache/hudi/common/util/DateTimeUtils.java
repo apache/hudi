@@ -77,6 +77,9 @@ public class DateTimeUtils {
     }
   }
 
+  /**
+   * This is based off instantToMicros above.
+   * */
   public static long instantToNanos(Instant instant) {
     long seconds = instant.getEpochSecond();
     int nanos = instant.getNano();
