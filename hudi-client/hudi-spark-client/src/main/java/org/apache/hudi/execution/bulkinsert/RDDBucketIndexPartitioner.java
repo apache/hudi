@@ -47,11 +47,11 @@ public abstract class RDDBucketIndexPartitioner<T> extends BucketIndexBulkInsert
 
   public static final Logger LOG = LogManager.getLogger(RDDBucketIndexPartitioner.class);
 
-  private final HoodieUTF8StringFactory hoodieUTF8StringFactory;
+  private final HoodieUTF8StringFactory utf8StringFactory;
 
   public RDDBucketIndexPartitioner(HoodieTable table, String sortString, boolean preserveHoodieMetadata) {
     super(table, sortString, preserveHoodieMetadata);
-    this.hoodieUTF8StringFactory = SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory();
+    this.utf8StringFactory = SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory();
   }
 
   /**
@@ -89,9 +89,9 @@ public abstract class RDDBucketIndexPartitioner<T> extends BucketIndexBulkInsert
     final String[] sortColumns = sortColumnNames;
     final SerializableSchema schema = new SerializableSchema(HoodieAvroUtils.addMetadataFields((new Schema.Parser().parse(table.getConfig().getSchema()))));
     Comparator<HoodieRecord<T>> comparator = (Comparator<HoodieRecord<T>> & Serializable) (t1, t2) -> {
-      FlatLists.ComparableList obj1 = FlatLists.ofComparableArray(hoodieUTF8StringFactory.wrapArrayOfObjects(
+      FlatLists.ComparableList obj1 = FlatLists.ofComparableArray(utf8StringFactory.wrapArrayOfObjects(
           t1.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled)));
-      FlatLists.ComparableList obj2 = FlatLists.ofComparableArray(hoodieUTF8StringFactory.wrapArrayOfObjects(
+      FlatLists.ComparableList obj2 = FlatLists.ofComparableArray(utf8StringFactory.wrapArrayOfObjects(
           t2.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled)));
       return obj1.compareTo(obj2);
     };

@@ -159,7 +159,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     new ParseException(command, exception.getMessage, start, stop)
   }
 
-  override def getHoodieUTF8StringFactory: HoodieUTF8StringFactory = Spark3HoodieUTF8StringFactory
+  override def getUTF8StringFactory: HoodieUTF8StringFactory = Spark3HoodieUTF8StringFactory
 
   override def splitFiles(sparkSession: SparkSession,
                           partitionDirectory: PartitionDirectory,

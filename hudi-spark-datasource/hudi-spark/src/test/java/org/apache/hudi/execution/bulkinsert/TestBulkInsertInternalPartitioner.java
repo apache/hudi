@@ -59,7 +59,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
   private static final Comparator<HoodieRecord<? extends HoodieRecordPayload>> KEY_COMPARATOR =
       Comparator.comparing(o -> (o.getPartitionPath() + "+" + o.getRecordKey()));
   private static final HoodieUTF8StringFactory HOODIE_UTF8STRING_FACTORY =
-      SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory();
+      SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory();
 
   public static JavaRDD<HoodieRecord> generateTestRecordsForBulkInsert(JavaSparkContext jsc) {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();

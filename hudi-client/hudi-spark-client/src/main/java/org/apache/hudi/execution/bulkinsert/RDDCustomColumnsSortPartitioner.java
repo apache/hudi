@@ -46,8 +46,8 @@ public class RDDCustomColumnsSortPartitioner<T>
   private final SerializableSchema serializableSchema;
   private final boolean consistentLogicalTimestampEnabled;
   private final boolean suffixRecordKey;
-  private final HoodieUTF8StringFactory hoodieUTF8StringFactory =
-      SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory();
+  private final HoodieUTF8StringFactory utf8StringFactory =
+      SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory();
 
   public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config) {
     this.serializableSchema = new SerializableSchema(new Schema.Parser().parse(config.getSchema()));
@@ -68,7 +68,7 @@ public class RDDCustomColumnsSortPartitioner<T>
                                                      int outputSparkPartitions) {
     return records
         .sortBy(record -> SortUtils.getComparableSortColumns(record, sortColumnNames, serializableSchema.get(), suffixRecordKey, consistentLogicalTimestampEnabled,
-                hoodieUTF8StringFactory::wrapArrayOfObjects),true, outputSparkPartitions);
+            utf8StringFactory::wrapArrayOfObjects), true, outputSparkPartitions);
   }
 
   @Override

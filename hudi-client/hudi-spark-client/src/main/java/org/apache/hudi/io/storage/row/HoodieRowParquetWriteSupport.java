@@ -370,8 +370,8 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
 
   private static class HoodieBloomFilterRowWriteSupport extends HoodieBloomFilterWriteSupport<UTF8String> {
 
-    private static final HoodieUTF8StringFactory HOODIE_UTF8STRING_FACTORY =
-        SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory();
+    private static final HoodieUTF8StringFactory UTF8STRING_FACTORY =
+        SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory();
 
     public HoodieBloomFilterRowWriteSupport(BloomFilter bloomFilter) {
       super(bloomFilter);
@@ -379,7 +379,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
 
     @Override
     protected int compareRecordKey(UTF8String a, UTF8String b) {
-      return HOODIE_UTF8STRING_FACTORY.wrapUTF8String(a).compareTo(HOODIE_UTF8STRING_FACTORY.wrapUTF8String(b));
+      return UTF8STRING_FACTORY.wrapUTF8String(a).compareTo(UTF8STRING_FACTORY.wrapUTF8String(b));
     }
 
     @Override

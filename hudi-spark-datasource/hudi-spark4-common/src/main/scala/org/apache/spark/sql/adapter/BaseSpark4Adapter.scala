@@ -138,7 +138,7 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
 
   def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
 
-  override def getHoodieUTF8StringFactory: HoodieUTF8StringFactory = Spark4HoodieUTF8StringFactory
+  override def getUTF8StringFactory: HoodieUTF8StringFactory = Spark4HoodieUTF8StringFactory
 
   override def createInternalRow(metaFields: Array[UTF8String],
                                  sourceRow: InternalRow,

@@ -122,9 +122,9 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
       // To foster value comparison, if the value is of String type, e.g., from
       // the delete record, we convert it to UTF8String type.
       // [SPARK-46832] UTF8String doesn't support compareTo anymore
-      return SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory().wrapUTF8String(UTF8String.fromString((String) value));
+      return SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory().wrapUTF8String(UTF8String.fromString((String) value));
     } else if (value instanceof UTF8String) {
-      return SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory().wrapUTF8String((UTF8String) value);
+      return SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory().wrapUTF8String((UTF8String) value);
     }
     return value;
   }
