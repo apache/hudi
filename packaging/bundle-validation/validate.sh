@@ -85,11 +85,11 @@ test_spark_hadoop_mr_bundles () {
     local HIVE_PID=$!
     change_java_runtime_version
     echo "::warning::validate.sh Writing sample data via Spark DataSource and run Hive Sync..."
-    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/write.scala
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar' --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' < $WORKDIR/spark_hadoop_mr/write.scala
 
     echo "::warning::validate.sh Query and validate the results using Spark SQL"
     # save Spark SQL query results
-    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/validate.scala
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar' --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' < $WORKDIR/spark_hadoop_mr/validate.scala
     numRecords=$(cat /tmp/spark-bundle/sparksql/trips/results/*.csv | wc -l)
     if [ "$numRecords" -ne 10 ]; then
         echo "::error::validate.sh Spark SQL validation failed."
