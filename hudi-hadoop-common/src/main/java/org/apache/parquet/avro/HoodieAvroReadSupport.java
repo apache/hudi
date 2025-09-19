@@ -61,7 +61,16 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
     return new ReadContext(requestedSchema, readContext.getReadSupportMetadata());
   }
 
-  @Override
+  /**
+   * Initializes the Avro read support for Parquet files using {@link ParquetConfiguration} (Avro 1.12.x+).
+   * This method overrides {@code AvroReadSupport#init} to handle legacy list structure compatibility
+   * and projection schema configuration.
+   *
+   * @param configuration    The Parquet configuration containing read settings and projection schema
+   * @param keyValueMetaData Key-value metadata from the Parquet file footer
+   * @param fileSchema       The schema of the Parquet file being read
+   * @return A {@link ReadContext} containing the projection schema and read support metadata
+   */
   public ReadContext init(ParquetConfiguration configuration, Map<String, String> keyValueMetaData, MessageType fileSchema) {
     boolean legacyMode = checkLegacyMode(fileSchema.getFields());
     configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, String.valueOf(legacyMode));
