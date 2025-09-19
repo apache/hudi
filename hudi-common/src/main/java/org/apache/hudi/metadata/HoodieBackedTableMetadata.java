@@ -182,13 +182,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   protected Option<HoodieRecord<HoodieMetadataPayload>> readFilesIndexRecords(String key, String partitionName) {
     HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> recordsData = readIndexRecordsWithKeys(
         HoodieListData.eager(Collections.singletonList(new FilesIndexRawKey(key))), partitionName);
-    try {
-      List<HoodieRecord<HoodieMetadataPayload>> records = recordsData.values().collectAsList();
+    return HoodieDataUtils.withHoodieDataCleanUp(recordsData, data -> {
+      List<HoodieRecord<HoodieMetadataPayload>> records = data.values().collectAsList();
       ValidationUtils.checkArgument(records.size() <= 1, () -> "Found more than 1 record for record key " + key);
       return records.isEmpty() ? Option.empty() : Option.ofNullable(records.get(0));
-    } finally {
-      recordsData.unpersistWithDependencies();
-    }
+    });
   }
 
   @Override
