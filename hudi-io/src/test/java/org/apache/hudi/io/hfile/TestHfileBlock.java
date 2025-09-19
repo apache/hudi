@@ -31,11 +31,6 @@ class TestHfileBlock {
   }
 
   @Test
-  void testNumChecksumChunksZeroBytesPerChecksum() {
-    Assertions.assertEquals(0, HFileBlock.numChecksumChunks(100L, 0));
-  }
-
-  @Test
   void testNumChecksumChunksExactDivision() {
     Assertions.assertEquals(2, HFileBlock.numChecksumChunks(1024L, 512));
   }

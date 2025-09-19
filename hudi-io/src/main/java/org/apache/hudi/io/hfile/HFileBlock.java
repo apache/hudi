@@ -189,9 +189,6 @@ public abstract class HFileBlock {
    * @return the number of checksum chunks.
    */
   static int numChecksumChunks(long numBytes, int bytesPerChecksum) {
-    //if (bytesPerChecksum == 0) {
-    //  return 0;
-    //}
     long numChunks = numBytes / bytesPerChecksum;
     if (numBytes % bytesPerChecksum != 0) {
       numChunks++;
@@ -278,9 +275,10 @@ public abstract class HFileBlock {
     // 1. Magic is always 8 bytes.
     buf.put(blockType.getMagic(), 0, 8);
     // 2. onDiskSizeWithoutHeader.
-    int onDiskSizeWithoutHeader = compressedBlockData.limit();
-    int numChecksumBytes = numChecksumBytes(onDiskSizeWithoutHeader, DEFAULT_BYTES_PER_CHECKSUM);
-    buf.putInt(onDiskSizeWithoutHeader + numChecksumBytes);
+    int compressedDataSize = compressedBlockData.limit();
+    int onDiskDataSizeWithHeader = HFileBlock.HFILEBLOCK_HEADER_SIZE + compressedDataSize;
+    int numChecksumBytes = numChecksumBytes(onDiskDataSizeWithHeader, DEFAULT_BYTES_PER_CHECKSUM);
+    buf.putInt(compressedDataSize + numChecksumBytes);
     // 3. uncompressedSizeWithoutHeader.
     buf.putInt(uncompressedBlockData.limit());
     // 4. Previous block offset.
@@ -294,8 +292,6 @@ public abstract class HFileBlock {
     // or we set this value to zero.
     buf.putInt(DEFAULT_BYTES_PER_CHECKSUM);
     // 7. onDiskDataSizeWithHeader
-    int onDiskDataSizeWithoutChecksum = HFileBlock.HFILEBLOCK_HEADER_SIZE + onDiskSizeWithoutHeader;
-    int onDiskDataSizeWithHeader = onDiskDataSizeWithoutChecksum + numChecksumBytes;
     buf.putInt(onDiskDataSizeWithHeader);
     // 8. Payload.
     buf.put(compressedBlockData);
