@@ -13,7 +13,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# See https://docs.kapa.ai/integrations/understanding-csp-cors and https://issues.apache.org/jira/browse/INFRA-26638
-<IfModule mod_headers.c>
-    Header set Content-Security-Policy "default-src 'self' data: blob: 'unsafe-inline' https://www.apachecon.com/ https://www.communityovercode.org/ https://analytics.apache.org/; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://analytics.apache.org/ https://www.apachecon.com/ https://*.kapa.ai/ https://www.gstatic.com/recaptcha/ https://www.google.com/recaptcha/ https://www.recaptcha.net/; script-src-elem 'self' 'unsafe-inline' https://www.gstatic.com/recaptcha/ https://www.google.com/recaptcha/ https://www.recaptcha.net/ https://analytics.apache.org/ https://widget.kapa.ai/; style-src 'self' 'unsafe-inline' https://*.kapa.ai/ data:; frame-ancestors 'self'; frame-src 'self' data: blob: https://www.google.com/ https://www.recaptcha.net/; connect-src 'self' https://analytics.apache.org proxy.kapa.ai kapa-widget-proxy-la7.kapa.ai kapa-widget-proxy-la7dkmplpq-uc.a.run.app metrics.kapa.ai www.google.com recaptcha.net; img-src 'self' data: https://*.apache.org/ https://www.apachecon.com/ https://*.kapa.ai/ https://www.google.com https://*.gstatic.com/; worker-src 'self' data: blob:;"
-</IfModule>
+# https://infra.apache.org/tools/csp.html and https://issues.apache.org/jira/browse/INFRA-27242
+SetEnv CSP_PROJECT_DOMAINS "https://*.kapa.ai/ https://widget.kapa.ai/ proxy.kapa.ai kapa-widget-proxy-la7.kapa.ai kapa-widget-proxy-la7dkmplpq-uc.a.run.app metrics.kapa.ai"
