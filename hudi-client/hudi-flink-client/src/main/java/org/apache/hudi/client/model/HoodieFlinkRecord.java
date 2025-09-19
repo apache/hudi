@@ -89,7 +89,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public HoodieRecord<RowData> newInstance(HoodieKey key) {
-    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+    return new HoodieFlinkRecord(key, operation, orderingValue, data);
   }
 
   @Override
@@ -267,7 +267,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
         HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
     RowDataQueryContext rowDataQueryContext = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone);
     IndexedRecord indexedRecord = (IndexedRecord) rowDataQueryContext.getRowDataToAvroConverter().convert(recordSchema, getData());
-    return Option.of(new HoodieAvroIndexedRecord(getKey(), indexedRecord, getOperation(), getMetadata()));
+    return Option.of(new HoodieAvroIndexedRecord(getKey(), indexedRecord, getOperation(), getMetadata(), orderingValue));
   }
 
   @Override

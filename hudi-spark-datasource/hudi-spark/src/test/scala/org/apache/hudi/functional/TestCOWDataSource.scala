@@ -279,7 +279,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     val records2 = recordsToStrings(dataGen.generateInserts("000", 200)).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    // hard code the value for rider and fare so that we can verify the partitions paths with hudi
+    // hard code the value for rider and fare so that we can verify the partition paths with hudi
     val toInsertDf = inputDF1.withColumn("fare", lit(100)).withColumn("rider", lit("rider-123"))
       .union(inputDF2.withColumn("fare", lit(200)).withColumn("rider", lit("rider-456")))
 
@@ -1209,10 +1209,16 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   private def getDataFrameWriter(keyGenerator: String, opts: Map[String, String]): DataFrameWriter[Row] = {
     val records = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
-    inputDF.write.format("hudi")
+    val writer = inputDF.write.format("hudi")
       .options(opts)
       .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, keyGenerator)
       .mode(SaveMode.Overwrite)
+    if (classOf[ComplexKeyGenerator].getCanonicalName.equals(keyGenerator)) {
+      // Disable complex key generator validation so that the writer can succeed
+      writer.option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
+    } else {
+      writer
+    }
   }
 
   @ParameterizedTest

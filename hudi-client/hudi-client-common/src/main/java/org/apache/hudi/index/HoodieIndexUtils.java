@@ -552,7 +552,6 @@ public class HoodieIndexUtils {
         readerContext.getMergeMode(),
         false,
         readerContext.getRecordMerger(),
-        orderingFieldNames,
         writerSchema.get(),
         Option.ofNullable(Pair.of(hoodieTable.getMetaClient().getTableConfig().getPayloadClass(), hoodieTable.getConfig().getPayloadClass())),
         properties,
@@ -681,16 +680,7 @@ public class HoodieIndexUtils {
   public static void register(HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
     LOG.info("Registering index {} of using {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
     // build HoodieIndexMetadata and then add to index definition file
-    boolean indexDefnUpdated = metaClient.buildIndexDefinition(indexDefinition);
-    if (indexDefnUpdated) {
-      String indexMetaPath = metaClient.getIndexDefinitionPath();
-      // update table config if necessary
-      if (!metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key())
-          || !metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()) {
-        metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH, FSUtils.getRelativePartitionPath(metaClient.getBasePath(), new StoragePath(indexMetaPath)));
-        HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
-      }
-    }
+    metaClient.buildIndexDefinition(indexDefinition);
   }
 
   static HoodieIndexDefinition getSecondaryOrExpressionIndexDefinition(HoodieTableMetaClient metaClient, String userIndexName, String indexType, Map<String, Map<String, String>> columns,

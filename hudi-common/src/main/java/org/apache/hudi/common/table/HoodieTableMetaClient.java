@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
@@ -259,6 +260,13 @@ public class HoodieTableMetaClient implements Serializable {
     }
     if (updateIndexDefn) {
       writeIndexMetadataToStorage();
+      String indexMetaPath = getIndexDefinitionPath();
+      // update table config if necessary
+      if (!tableConfig.getProps().containsKey(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key())
+          || !tableConfig.getRelativeIndexDefinitionPath().isPresent()) {
+        tableConfig.setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH, FSUtils.getRelativePartitionPath(basePath, new StoragePath(indexMetaPath)));
+        HoodieTableConfig.update(storage, metaPath, tableConfig.getProps());
+      }
     }
     return updateIndexDefn;
   }

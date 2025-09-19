@@ -27,14 +27,15 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordGlobalLocation, HoodieTableType}
-import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeGenerator}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.TestPartitionedRecordLevelIndex.TestPartitionedRecordLevelIndexTestCase
 import org.apache.hudi.index.HoodieIndex.IndexType.PARTITIONED_RECORD_INDEX
-import org.apache.hudi.metadata.HoodieBackedTableMetadata
+import org.apache.hudi.index.record.HoodieRecordIndex
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy
 
@@ -192,6 +193,9 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase with Spar
     assertEquals(5, partition0Locations.size)
     df = spark.read.format("hudi").load(basePath).collect()
     validateDFWithLocations(df, partition0Locations, "partition0")
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertTrue(HoodieRecordIndex.isPartitioned(metaClient.getIndexMetadata.get().getIndexDefinitions.get(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)))
   }
 
   @ParameterizedTest
@@ -433,6 +437,9 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase with Spar
     val df = spark.read.format("hudi").load(basePath).collect()
     validateDFWithLocations(df, partition1Locations, "partition1")
     validateDFWithLocations(df, partition2Locations, "partition2")
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertTrue(HoodieRecordIndex.isPartitioned(metaClient.getIndexMetadata.get().getIndexDefinitions.get(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)))
   }
 
   def readRecordIndex(metadata: HoodieBackedTableMetadata, recordKeys: java.util.List[String], dataTablePartition: HOption[String]): Map[String, HoodieRecordGlobalLocation] = {

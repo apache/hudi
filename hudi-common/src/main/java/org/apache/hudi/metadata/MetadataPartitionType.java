@@ -26,6 +26,7 @@ import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -89,7 +90,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.mergeColumnStatsR
 public enum MetadataPartitionType {
   FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-", 2) {
     @Override
-    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
       return metadataConfig.isEnabled();
     }
 
@@ -105,7 +106,7 @@ public enum MetadataPartitionType {
   },
   COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-", 3) {
     @Override
-    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
       return metadataConfig.isColumnStatsIndexEnabled();
     }
 
@@ -127,7 +128,7 @@ public enum MetadataPartitionType {
   },
   BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-", 4) {
     @Override
-    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
       return metadataConfig.isBloomFilterIndexEnabled();
     }
 
@@ -158,7 +159,7 @@ public enum MetadataPartitionType {
   },
   RECORD_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, "record-index-", 5) {
     @Override
-    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
       return metadataConfig.isRecordIndexEnabled() || metadataConfig.isPartitionedRecordIndexEnabled();
     }
 
@@ -181,7 +182,7 @@ public enum MetadataPartitionType {
   },
   EXPRESSION_INDEX(PARTITION_NAME_EXPRESSION_INDEX_PREFIX, "expr-index-", -1) {
     @Override
-    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
       return metadataConfig.isExpressionIndexEnabled();
     }
 
@@ -203,7 +204,7 @@ public enum MetadataPartitionType {
   },
   SECONDARY_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX, "secondary-index-", 7) {
     @Override
-    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
       return metadataConfig.isSecondaryIndexEnabled();
     }
 
@@ -237,8 +238,8 @@ public enum MetadataPartitionType {
   },
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-", 6) {
     @Override
-    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
-      return metadataConfig.isPartitionStatsIndexEnabled();
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
+      return tableConfig.isTablePartitioned() && metadataConfig.isPartitionStatsIndexEnabled();
     }
 
     @Override
@@ -260,7 +261,7 @@ public enum MetadataPartitionType {
   // ALL_PARTITIONS is just another record type in FILES partition
   ALL_PARTITIONS(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-", 1) {
     @Override
-    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
+    public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
       return metadataConfig.isEnabled();
     }
 
@@ -355,7 +356,7 @@ public enum MetadataPartitionType {
   /**
    * Check if the metadata partition is enabled based on the metadata config.
    */
-  public abstract boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig);
+  public abstract boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig);
 
   /**
    * Check if the metadata partition is available based on the table config.
@@ -470,7 +471,7 @@ public enum MetadataPartitionType {
       return Collections.emptyList();
     }
     return Arrays.stream(getValidValues())
-        .filter(partitionType -> partitionType.isMetadataPartitionEnabled(dataMetadataConfig) || partitionType.isMetadataPartitionAvailable(metaClient))
+        .filter(partitionType -> partitionType.isMetadataPartitionEnabled(dataMetadataConfig, metaClient.getTableConfig()) || partitionType.isMetadataPartitionAvailable(metaClient))
         .collect(Collectors.toList());
   }
 
