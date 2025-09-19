@@ -288,8 +288,8 @@ public abstract class HFileBlock {
     // 6. Bytes covered per checksum.
     // Note that: Default value is 16K. There is a check on
     // onDiskSizeWithoutHeader = uncompressedSizeWithoutHeader + Checksum.
-    // In order to pass this check, either we make isUseHBaseChecksum false in HFileContext (hbase),
-    // or we set this value to zero.
+    // For compatibility with both HBase and native reader, the size of checksum bytes is
+    // calculated based on this and the checksum is appended at the end of the block
     buf.putInt(DEFAULT_BYTES_PER_CHECKSUM);
     // 7. onDiskDataSizeWithHeader
     buf.putInt(onDiskDataSizeWithHeader);
