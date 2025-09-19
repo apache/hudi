@@ -20,7 +20,7 @@ package org.apache.spark.sql
 import org.apache.spark.sql.connector.expressions.{BucketTransform, NamedReference, Transform}
 
 object HoodieSparkCatalogUtils {
-
+  // This object has to stay in [[org.apache.spark.sql]] package so [[BucketTransform]] can be accessed
   object MatchBucketTransform {
     def unapply(t: Transform): Option[(Int, Seq[NamedReference], Seq[NamedReference])] =
       t match {

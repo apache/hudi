@@ -27,6 +27,9 @@ import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
+/**
+ * this class is similar with spark::ResolveInsertionBase in spark3.4
+ */
 object ResolveInsertionBase extends SparkAdapterSupport {
   def resolver: Resolver = SQLConf.get.resolver
 
