@@ -20,12 +20,27 @@ ARG HIVE_VERSION=3.1.3
 ARG SPARK_VERSION=3.5.3
 FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}-sparkbase_${SPARK_VERSION}
 
-COPY master.sh /opt/spark
+#COPY master.sh /opt/spark
+#RUN chmod +x /opt/spark/master.sh
+
+#COPY jupyter.sh /opt/spark
+#RUN chmod +x /opt/spark/jupyter.sh
+
+#COPY entrypoint.sh /opt/spark
+#RUN chmod +x /opt/spark/entrypoint.sh
+
+COPY *.sh /opt/spark
+RUN chmod +x /opt/spark/*.sh
 
 ENV SPARK_MASTER_PORT 7077
 ENV SPARK_MASTER_WEBUI_PORT 8080
 ENV SPARK_MASTER_LOG /opt/spark/logs
+ENV SPARK_JUPYTER_WEBUI_PORT 8888
 
-EXPOSE 8080 7077 6066
+RUN pip install --upgrade pip && pip install jupyterlab findspark pandas
 
-CMD ["/bin/bash", "/opt/spark/master.sh"]
+EXPOSE 8080 7077 6066 8888
+
+WORKDIR /opt/workspace
+
+CMD ["/opt/spark/entrypoint.sh"]
