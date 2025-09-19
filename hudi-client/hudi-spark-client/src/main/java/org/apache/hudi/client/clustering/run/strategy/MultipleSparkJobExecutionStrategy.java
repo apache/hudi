@@ -327,7 +327,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       }
     }).rdd();
 
-    return SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUnsafeUtils()
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().getUnsafeUtils()
         .createDataFrameFromRDD(((HoodieSparkEngineContext) getEngineContext()).getSqlContext().sparkSession(),
             internalRowRDD, sparkSchemaWithMetaFields);
   }

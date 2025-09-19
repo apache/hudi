@@ -142,12 +142,12 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     new Spark3HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields)
   }
 
-  override def createHoodiePartitionCDCFileGroupMapping(partitionValues: InternalRow,
+  override def createPartitionCDCFileGroupMapping(partitionValues: InternalRow,
                                                         fileSplits: List[HoodieCDCFileSplit]): HoodiePartitionCDCFileGroupMapping = {
     new Spark3HoodiePartitionCDCFileGroupMapping(partitionValues, fileSplits)
   }
 
-  override def createHoodiePartitionFileSliceMapping(values: InternalRow,
+  override def createPartitionFileSliceMapping(values: InternalRow,
                                                      slices: Map[String, FileSlice]): HoodiePartitionFileSliceMapping = {
     new Spark3HoodiePartitionFileSliceMapping(values, slices)
   }
@@ -174,7 +174,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
   override def getExpressionFromColumn(column: Column): Expression = column.expr
 
-  override def getHoodieUnsafeUtils: HoodieUnsafeUtils = Spark3HoodieUnsafeUtils
+  override def getUnsafeUtils: HoodieUnsafeUtils = Spark3HoodieUnsafeUtils
 
   override def getDataFrameUtil: DataFrameUtil = Spark3DataFrameUtil
 

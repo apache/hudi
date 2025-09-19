@@ -371,7 +371,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     sqlContext.sparkContext().addSparkListener(stageCheckBulkParallelismListener);
     List<Row> inserts = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(inserts, structType).repartition(3);
-    assertNotEquals(checkParallelism, SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUnsafeUtils().getNumPartitions(dataset));
+    assertNotEquals(checkParallelism, SparkAdapterSupport$.MODULE$.sparkAdapter().getUnsafeUtils().getNumPartitions(dataset));
     assertNotEquals(checkParallelism, sqlContext.sparkContext().defaultParallelism());
     Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
         tableConfig, new NonSortPartitionerWithRows(), "000001111");

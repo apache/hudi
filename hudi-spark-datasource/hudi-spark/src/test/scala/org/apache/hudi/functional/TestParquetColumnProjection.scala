@@ -342,7 +342,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
 
           val (rows, bytesRead) = measureBytesRead { () =>
             val rdd = hoodieRelation.buildScan(targetColumns, Array.empty).asInstanceOf[HoodieUnsafeRDD]
-            sparkAdapter.getHoodieUnsafeUtils.collect(rdd)
+            sparkAdapter.getUnsafeUtils.collect(rdd)
           }
 
           val targetRecordCount = tableState.targetRecordCount;

@@ -54,7 +54,7 @@ import scala.collection.JavaConverters.asScalaBufferConverter
 import scala.collection.mutable
 
 object HoodieDatasetBulkInsertHelper
-  extends ParallelismHelper[DataFrame](toJavaSerializableFunctionUnchecked(df => sparkAdapter.getHoodieUnsafeUtils.getNumPartitions(df)))
+  extends ParallelismHelper[DataFrame](toJavaSerializableFunctionUnchecked(df => sparkAdapter.getUnsafeUtils.getNumPartitions(df)))
     with Logging
     with SparkAdapterSupport {
 
@@ -132,7 +132,7 @@ object HoodieDatasetBulkInsertHelper
         prependedRdd
       }
 
-      sparkAdapter.getHoodieUnsafeUtils.createDataFrameFromRDD(df.sparkSession, dedupedRdd, updatedSchema)
+      sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(df.sparkSession, dedupedRdd, updatedSchema)
     } else {
       // NOTE: In cases when we're not populating meta-fields we actually don't
       //       need access to the [[InternalRow]] and therefore can avoid the need
@@ -141,7 +141,7 @@ object HoodieDatasetBulkInsertHelper
       val metaFieldsStubs = metaFields.map(f => Alias(Literal(UTF8String.EMPTY_UTF8, dataType = StringType), f.name)())
       val prependedQuery = Project(metaFieldsStubs ++ query.output, query)
 
-      sparkAdapter.getHoodieUnsafeUtils.createDataFrameFrom(df.sparkSession, prependedQuery)
+      sparkAdapter.getUnsafeUtils.createDataFrameFrom(df.sparkSession, prependedQuery)
     }
 
     partitioner.repartitionRecords(updatedDF, targetParallelism)

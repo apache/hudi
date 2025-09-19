@@ -112,7 +112,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       )
 
     def appendData(schema: StructType, batch: Seq[Row], shouldAllowDroppedColumns: Boolean = false): Unit = {
-      sparkAdapter.getHoodieUnsafeUtils.createDataFrameFromRows(spark, batch, schema)
+      sparkAdapter.getUnsafeUtils.createDataFrameFromRows(spark, batch, schema)
         .write
         .format("org.apache.hudi")
         .options(opts ++ Map(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> shouldAllowDroppedColumns.toString))
@@ -153,7 +153,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       Row("2", "Lisi", "Wallace", 1, 1),
       Row("3", "Zhangsan", "Shu", 1, 1))
 
-    sparkAdapter.getHoodieUnsafeUtils.createDataFrameFromRows(spark, firstBatch, firstSchema)
+    sparkAdapter.getUnsafeUtils.createDataFrameFromRows(spark, firstBatch, firstSchema)
       .write
       .format("org.apache.hudi")
       .options(opts)

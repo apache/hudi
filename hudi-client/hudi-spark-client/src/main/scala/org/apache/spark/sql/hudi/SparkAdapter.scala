@@ -270,37 +270,122 @@ trait SparkAdapter extends Serializable {
                 alwaysNullable: Boolean = false,
                 isTimestampNTZ: Boolean = false): StructType
 
+  /**
+   * Gets the [[UTF8String]] factory implementation for the current Spark version.
+   * [SPARK-46832] [[UTF8String]] doesn't support compareTo anymore since Spark 4.0
+   *
+   * @return [[HoodieUTF8StringFactory]] instance
+   */
   def getUTF8StringFactory: HoodieUTF8StringFactory
 
+  /**
+   * Creates a [[HoodieInternalRow]] with meta fields.
+   *
+   * @param metaFields               Array of [[UTF8String]] meta fields to prepend
+   * @param sourceRow                The source [[InternalRow]] containing the data
+   * @param sourceContainsMetaFields Whether the source row already contains meta fields
+   * @return A new [[HoodieInternalRow]] with appropriate meta fields handling
+   */
   def createInternalRow(metaFields: Array[UTF8String],
                         sourceRow: InternalRow,
                         sourceContainsMetaFields: Boolean): HoodieInternalRow
 
-  def createHoodiePartitionCDCFileGroupMapping(partitionValues: InternalRow,
-                                               fileSplits: List[HoodieCDCFileSplit]): HoodiePartitionCDCFileGroupMapping
+  /**
+   * Creates a partition-to-CDC file group mapping for CDC operations.
+   *
+   * @param partitionValues [[InternalRow]] containing the partition values
+   * @param fileSplits      List of CDC file splits for this partition
+   * @return [[HoodiePartitionCDCFileGroupMapping]] instance
+   */
+  def createPartitionCDCFileGroupMapping(partitionValues: InternalRow,
+                                         fileSplits: List[HoodieCDCFileSplit]): HoodiePartitionCDCFileGroupMapping
 
-  def createHoodiePartitionFileSliceMapping(values: InternalRow,
-                                            slices: Map[String, FileSlice]): HoodiePartitionFileSliceMapping
+  /**
+   * Creates a partition-to-file slice mapping for file operations.
+   *
+   * @param values [[InternalRow]] containing the partition values
+   * @param slices Map of file IDs to FileSlice instances
+   * @return [[HoodiePartitionFileSliceMapping]] instance
+   */
+  def createPartitionFileSliceMapping(values: InternalRow,
+                                      slices: Map[String, FileSlice]): HoodiePartitionFileSliceMapping
 
+  /**
+   * Creates a [[ParseException]] with proper location information.
+   *
+   * @param command   Optional command string that caused the exception
+   * @param exception The underlying AnalysisException
+   * @param start     Start position in the input where the error occurred
+   * @param stop      End position in the input where the error occurred
+   * @return A new [[ParseException]] with location details
+   */
   def newParseException(command: Option[String],
                         exception: AnalysisException,
                         start: Origin,
                         stop: Origin): ParseException
 
+  /**
+   * Splits files in a partition directory based on size constraints.
+   *
+   * @param sparkSession       The active Spark session
+   * @param partitionDirectory The partition directory containing files to split
+   * @param isSplitable        Whether the files can be split
+   * @param maxSplitSize       Maximum size for each split in bytes
+   * @return Sequence of [[PartitionedFile]] instances after splitting
+   */
   def splitFiles(sparkSession: SparkSession,
                  partitionDirectory: PartitionDirectory,
                  isSplitable: Boolean,
                  maxSplitSize: Long): Seq[PartitionedFile]
 
+  /**
+   * Creates a [[Column]] from a Catalyst [[Expression]].
+   *
+   * @param expression The Catalyst [[Expression]] to convert
+   * @return A Spark SQL [[Column]] wrapping the expression
+   */
   def createColumnFromExpression(expression: Expression): Column
 
+  /**
+   * Extracts the underlying [[Expression]] from a [[Column]].
+   *
+   * @param column The Spark SQL [[Column]]
+   * @return The underlying Catalyst [[Expression]]
+   */
   def getExpressionFromColumn(column: Column): Expression
 
-  def getHoodieUnsafeUtils: HoodieUnsafeUtils
+  /**
+   * Gets the unsafe utilities for low-level memory operations.
+   *
+   * @return [[HoodieUnsafeUtils]] instance
+   */
+  def getUnsafeUtils: HoodieUnsafeUtils
 
+  /**
+   * Gets the DataFrame utility helper for the current Spark version.
+   *
+   * @return [[DataFrameUtil]] instance
+   */
   def getDataFrameUtil: DataFrameUtil
 
+  /**
+   * Creates a [[DataFrame]] from an RDD of [[InternalRow]]s.
+   *
+   * @param spark       The active Spark session
+   * @param rdd         RDD containing InternalRow instances
+   * @param schema      The schema for the [[DataFrame]]
+   * @param isStreaming Whether this is a streaming DataFrame
+   * @return A new [[DataFrame]] with the specified schema
+   */
   def internalCreateDataFrame(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType, isStreaming: Boolean = false): DataFrame
 
+  /**
+   * Creates a streaming [[DataFrame]] from a [[HadoopFsRelation.]]
+   *
+   * @param sqlContext     The SQL context
+   * @param relation       The [[HadoopFsRelation]] to stream from
+   * @param requiredSchema The required schema for the streaming DataFrame
+   * @return A streaming [[DataFrame]]
+   */
   def createStreamingDataFrame(sqlContext: SQLContext, relation: HadoopFsRelation, requiredSchema: StructType): DataFrame
 }
