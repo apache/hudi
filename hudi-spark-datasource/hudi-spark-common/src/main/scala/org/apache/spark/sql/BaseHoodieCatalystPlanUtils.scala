@@ -32,7 +32,7 @@ import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
-trait HoodieSparkBaseCatalystPlanUtils extends HoodieCatalystPlansUtils {
+trait BaseHoodieCatalystPlanUtils extends HoodieCatalystPlansUtils {
 
   /**
    * Instantiates [[ProjectionOverSchema]] utility
@@ -80,7 +80,7 @@ trait HoodieSparkBaseCatalystPlanUtils extends HoodieCatalystPlansUtils {
   override def createProjectForByNameQuery(lr: LogicalRelation, plan: LogicalPlan): Option[LogicalPlan] = None
 }
 
-object HoodieSparkBaseCatalystPlanUtils extends SparkAdapterSupport {
+object BaseHoodieCatalystPlanUtils extends SparkAdapterSupport {
 
   /**
    * This is an extractor to accommodate for [[ResolvedTable]] signature change in Spark 3.2
@@ -88,7 +88,7 @@ object HoodieSparkBaseCatalystPlanUtils extends SparkAdapterSupport {
   object MatchResolvedTable {
     def unapply(plan: LogicalPlan): Option[(TableCatalog, Identifier, Table)] =
       sparkAdapter.getCatalystPlanUtils match {
-        case sparkCatalystPlanUtils: HoodieSparkBaseCatalystPlanUtils => sparkCatalystPlanUtils.unapplyResolvedTable(plan)
+        case sparkCatalystPlanUtils: BaseHoodieCatalystPlanUtils => sparkCatalystPlanUtils.unapplyResolvedTable(plan)
         case _ => None
       }
   }

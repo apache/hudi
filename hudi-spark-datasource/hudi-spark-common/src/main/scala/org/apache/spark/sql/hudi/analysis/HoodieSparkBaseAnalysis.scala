@@ -21,7 +21,7 @@ import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSuppor
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.sql.{AnalysisException, SparkSession}
-import org.apache.spark.sql.HoodieSparkBaseCatalystPlanUtils.MatchResolvedTable
+import org.apache.spark.sql.BaseHoodieCatalystPlanUtils.MatchResolvedTable
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec}
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionByPlanChildren
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}

@@ -29,7 +29,7 @@ import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRela
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
 import org.apache.spark.sql.types.StructType
 
-object HoodieSpark40CatalystPlanUtils extends HoodieSparkBaseCatalystPlanUtils {
+object HoodieSpark40CatalystPlanUtils extends BaseHoodieCatalystPlanUtils {
 
   def unapplyResolvedTable(plan: LogicalPlan): Option[(TableCatalog, Identifier, Table)] =
     plan match {
