@@ -2165,6 +2165,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val commonOpts = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
       HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp", // Required for event time ordering
       HoodieWriteConfig.WRITE_TABLE_VERSION.key -> tableVersion,
