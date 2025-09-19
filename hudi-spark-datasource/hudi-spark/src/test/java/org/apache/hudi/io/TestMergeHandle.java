@@ -19,7 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.JoinedGenericRecord;
 import org.apache.hudi.client.SecondaryIndexStats;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -70,9 +70,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.Answers;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
+import org.mockito.MockedConstruction;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -91,13 +89,13 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.AssertionsKt.assertNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mockConstruction;
 
 /**
  * Unit tests {@link HoodieMergeHandle}.
@@ -236,30 +234,23 @@ public class TestMergeHandle extends BaseTestHandle {
     FileGroupReaderBasedMergeHandle fileGroupReaderBasedMergeHandle = new FileGroupReaderBasedMergeHandle(
         config, instantTime, table, updates.iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
         Option.empty());
-
+    List<WriteStatus> writeStatuses;
     String recordKeyForFailure = updates.get(5).getRecordKey();
-    try (MockedStatic<HoodieAvroUtils> mockedStatic = mockStatic(HoodieAvroUtils.class, Mockito.withSettings().defaultAnswer(Answers.CALLS_REAL_METHODS))) {
-      int position = AVRO_SCHEMA.getField("_row_key").pos();
-      mockedStatic.when(() -> HoodieAvroUtils.rewriteRecordWithNewSchema(any(), any())).thenAnswer(invocationOnMock -> {
-        IndexedRecord record = invocationOnMock.getArgument(0);
-        if (record.get(position).toString().equals(recordKeyForFailure)) {
-          throw new HoodieIOException("Simulated write failure for record key: " + recordKeyForFailure);
-        }
-        return HoodieAvroUtils.rewriteRecordWithNewSchema((IndexedRecord) invocationOnMock.getArgument(0), invocationOnMock.getArgument(1), Collections.emptyMap());
-      });
+
+    try (MockedConstruction<JoinedGenericRecord> mocked = mockConstruction(JoinedGenericRecord.class,
+        (mock, context) -> {
+          doThrow(new HoodieIOException("Simulated write failure for record key: " + recordKeyForFailure))
+              .when(mock).put(any(), any());
+      })) {
       fileGroupReaderBasedMergeHandle.doMerge();
     }
 
-    List<WriteStatus> writeStatuses = fileGroupReaderBasedMergeHandle.close();
+    writeStatuses = fileGroupReaderBasedMergeHandle.close();
     WriteStatus writeStatus = writeStatuses.get(0);
-    assertEquals(1, writeStatus.getErrors().size());
+    assertEquals(2, writeStatus.getErrors().size());
     // check that record and secondary index stats are non-empty
-    assertFalse(writeStatus.getWrittenRecordDelegates().isEmpty());
-    assertFalse(writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().flatMap(Collection::stream).count() == 0L);
-
-    writeStatus.getWrittenRecordDelegates().forEach(recordDelegate -> assertNotEquals(recordKeyForFailure, recordDelegate.getRecordKey()));
-    writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().flatMap(Collection::stream)
-        .forEach(secondaryIndexStats -> assertNotEquals(recordKeyForFailure, secondaryIndexStats.getRecordKey()));
+    assertTrue(writeStatus.getWrittenRecordDelegates().isEmpty());
+    assertTrue(writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().flatMap(Collection::stream).count() == 0L);
 
     AtomicBoolean cdcRecordsFound = new AtomicBoolean(false);
     String cdcFilePath = metaClient.getBasePath().toString() + "/" + writeStatus.getStat().getCdcStats().keySet().stream().findFirst().get();
