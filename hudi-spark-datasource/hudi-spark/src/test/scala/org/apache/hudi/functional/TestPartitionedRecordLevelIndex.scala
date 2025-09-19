@@ -443,7 +443,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase with Spar
   }
 
   def readRecordIndex(metadata: HoodieBackedTableMetadata, recordKeys: java.util.List[String], dataTablePartition: HOption[String]): Map[String, HoodieRecordGlobalLocation] = {
-    metadata.readRecordIndexLocationsWithKeys(HoodieListData.eager(recordKeys), dataTablePartition)
+    metadata.readRecordIndexKeysAndLocations(HoodieListData.eager(recordKeys), dataTablePartition)
       .collectAsList().asScala.map(p => p.getKey -> p.getValue).toMap
   }
 

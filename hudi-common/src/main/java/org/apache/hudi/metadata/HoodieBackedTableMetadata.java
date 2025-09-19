@@ -179,9 +179,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  protected Option<HoodieRecord<HoodieMetadataPayload>> readFilesIndexRecords(String key, String partitionName) {
+  protected Option<HoodieRecord<HoodieMetadataPayload>> readFilesIndexRecords(String key) {
     HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> recordsData = readIndexRecordsWithKeys(
-        HoodieListData.eager(Collections.singletonList(new FilesIndexRawKey(key))), partitionName);
+        HoodieListData.eager(Collections.singletonList(new FilesIndexRawKey(key))), MetadataPartitionType.FILES.getPartitionPath());
     try {
       List<HoodieRecord<HoodieMetadataPayload>> records = recordsData.values().collectAsList();
       ValidationUtils.checkArgument(records.size() <= 1, () -> "Found more than 1 record for record key " + key);
@@ -228,7 +228,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(
-      HoodieData<? extends RawKey> rawKeys,
+      HoodieData<? extends MetadataRawKey> rawKeys,
       String partitionName,
       boolean shouldLoadInMemory) {
     // Apply key encoding
@@ -334,12 +334,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @param recordKeys List of mapping from keys to the record location.
    */
   @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys) {
-    return readRecordIndexLocationsWithKeys(recordKeys, Option.empty());
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexKeysAndLocations(HoodieData<String> recordKeys) {
+    return readRecordIndexKeysAndLocations(recordKeys, Option.empty());
   }
 
   @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys, Option<String> dataTablePartition) {
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexKeysAndLocations(HoodieData<String> recordKeys, Option<String> dataTablePartition) {
     // If record index is not initialized yet, we cannot return an empty result here unlike the code for reading from other
     // indexes. This is because results from this function are used for upserts and returning an empty result here would lead
     // to existing records being inserted again causing duplicates.
@@ -386,14 +386,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @param secondaryKeys The list of secondary keys to read
    */
   @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexLocationsWithKeys(HoodieData<String> secondaryKeys, String partitionName) {
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexKeysAndLocations(HoodieData<String> secondaryKeys, String partitionName) {
     HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, dataMetaClient);
 
     return dataCleanupManager.ensureDataCleanupOnException(v -> {
       if (indexVersion.equals(HoodieIndexVersion.V1)) {
-        return readSecondaryIndexLocationsWithKeysV1(secondaryKeys, partitionName);
+        return readSecondaryIndexKeysAndLocationV1(secondaryKeys, partitionName);
       } else if (indexVersion.equals(HoodieIndexVersion.V2)) {
-        return readSecondaryIndexLocationsWithKeysV2(secondaryKeys, partitionName);
+        return readSecondaryIndexKeysAndLocationV2(secondaryKeys, partitionName);
       } else {
         throw new IllegalArgumentException("readSecondaryIndex does not support index with version " + indexVersion);
       }
@@ -413,7 +413,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     return dataCleanupManager.ensureDataCleanupOnException(v -> {
       if (indexVersion.equals(HoodieIndexVersion.V1)) {
-        return readSecondaryIndexLocationsWithKeysV1(secondaryKeys, partitionName).values();
+        return readSecondaryIndexKeysAndLocationV1(secondaryKeys, partitionName).values();
       } else if (indexVersion.equals(HoodieIndexVersion.V2)) {
         return readRecordIndexLocations(readSecondaryIndexDataTableRecordKeysV2(secondaryKeys, partitionName));
       } else {
@@ -424,13 +424,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   public HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> readIndexRecordsWithKeys(
-      HoodieData<? extends RawKey> rawKeys, String partitionName) {
+      HoodieData<? extends MetadataRawKey> rawKeys, String partitionName) {
     return readIndexRecordsWithKeys(rawKeys, partitionName, Option.empty());
   }
 
   @Override
   public HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> readIndexRecordsWithKeys(
-      HoodieData<? extends RawKey> rawKeys, String partitionName, Option<String> dataTablePartition) {
+      HoodieData<? extends MetadataRawKey> rawKeys, String partitionName, Option<String> dataTablePartition) {
     return readIndexRecords(rawKeys, partitionName, dataTablePartition)
         .mapToPair(record -> Pair.of(record.getRecordKey(), record));
   }
@@ -443,11 +443,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     });
   }
 
-  private HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexLocationsWithKeysV2(HoodieData<String> secondaryKeys, String partitionName) {
-    return readRecordIndexLocationsWithKeys(readSecondaryIndexDataTableRecordKeysV2(secondaryKeys, partitionName));
+  private HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexKeysAndLocationV2(HoodieData<String> secondaryKeys, String partitionName) {
+    return readRecordIndexKeysAndLocations(readSecondaryIndexDataTableRecordKeysV2(secondaryKeys, partitionName));
   }
 
-  private HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexLocationsWithKeysV1(HoodieData<String> secondaryKeys, String partitionName) {
+  private HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexKeysAndLocationV1(HoodieData<String> secondaryKeys, String partitionName) {
     // For secondary index v1 we keep the old implementation.
     ValidationUtils.checkState(secondaryKeys instanceof HoodieListData, "readSecondaryIndex only support HoodieListData at the moment");
     ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX),
@@ -461,10 +461,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Now collect the record-keys and fetch the RLI records
     List<String> recordKeys = new ArrayList<>();
     secondaryKeyRecords.values().forEach(recordKeys::addAll);
-    return readRecordIndexLocationsWithKeys(HoodieListData.eager(recordKeys));
+    return readRecordIndexKeysAndLocations(HoodieListData.eager(recordKeys));
   }
 
-  protected HoodieData<HoodieRecord<HoodieMetadataPayload>> readIndexRecords(HoodieData<? extends RawKey> rawKeys,
+  protected HoodieData<HoodieRecord<HoodieMetadataPayload>> readIndexRecords(HoodieData<? extends MetadataRawKey> rawKeys,
                                                                              String partitionName,
                                                                              Option<String> dataTablePartition) {
     List<FileSlice> fileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,

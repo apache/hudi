@@ -23,7 +23,7 @@ import java.io.Serializable;
 /**
  * Interface for raw keys that can be encoded for storage in the metadata table.
  */
-public interface RawKey extends Serializable {
+public interface MetadataRawKey extends Serializable {
   
   /**
    * Encode this raw key into a string for storage.
