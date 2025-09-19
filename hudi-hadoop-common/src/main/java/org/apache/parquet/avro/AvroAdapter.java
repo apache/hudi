@@ -53,7 +53,7 @@ public interface AvroAdapter {
     }
     try {
       Class.forName("org.apache.parquet.avro.HoodieAvroSchemaConverter");
-    } catch (ClassNotFoundException e) {
+    } catch (ClassNotFoundException | NoClassDefFoundError e) {
       return ReflectionUtils.loadClass("org.apache.parquet.avro.NativeAvroAdapter");
     }
     return ReflectionUtils.loadClass("org.apache.parquet.avro.ModifiedAvroAdapter");
