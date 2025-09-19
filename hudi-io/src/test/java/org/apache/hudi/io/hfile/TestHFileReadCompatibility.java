@@ -38,7 +38,6 @@ import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -234,12 +233,6 @@ class TestHFileReadCompatibility {
         .openConnection().getContentLength();
     return readAsByteArray(
         TestHFileReader.class.getResourceAsStream(filename), (int) size);
-  }
-
-  @Disabled
-  @Test
-  void runTest() throws IOException, URISyntaxException {
-    testWriteHFiles();
   }
 
   /**
