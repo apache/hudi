@@ -1,0 +1,2 @@
+# CSP permissions for foo.apache.org - https://issues.apache.org/jira/browse/INFRA-27242
+SetEnv CSP_PROJECT_DOMAINS "https://*.kapa.ai/"
