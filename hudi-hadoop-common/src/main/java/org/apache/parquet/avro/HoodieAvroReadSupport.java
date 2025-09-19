@@ -61,6 +61,7 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
     return new ReadContext(requestedSchema, readContext.getReadSupportMetadata());
   }
 
+  @Override
   public ReadContext init(ParquetConfiguration configuration, Map<String, String> keyValueMetaData, MessageType fileSchema) {
     boolean legacyMode = checkLegacyMode(fileSchema.getFields());
     configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, String.valueOf(legacyMode));
