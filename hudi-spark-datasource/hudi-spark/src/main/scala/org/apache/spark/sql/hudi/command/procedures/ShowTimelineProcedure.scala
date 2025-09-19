@@ -153,7 +153,15 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
 
     val activeRollbackInfoMap = getRolledBackInstantInfo(metaClient.getActiveTimeline, metaClient)
     val archivedRollbackInfoMap = if (showArchived) {
-      getRolledBackInstantInfo(metaClient.getArchivedTimeline, metaClient)
+      val archivedTimeline = metaClient.getArchivedTimeline.reload()
+      if (startTime.nonEmpty && endTime.nonEmpty) {
+        archivedTimeline.loadCompletedInstantDetailsInMemory(startTime, endTime)
+        archivedTimeline.loadCompactionDetailsInMemory(startTime, endTime)
+      } else {
+        archivedTimeline.loadCompletedInstantDetailsInMemory(limit)
+        archivedTimeline.loadCompactionDetailsInMemory(limit)
+      }
+      getRolledBackInstantInfo(archivedTimeline, metaClient)
     } else {
       Map.empty[String, List[String]]
     }
@@ -167,7 +175,19 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
         metaClient.getArchivedTimeline, "ARCHIVED", metaClient, instantInfoMap, archivedRollbackInfoMap, limit, startTime, endTime
       )
       val combinedEntries = (activeEntries ++ archivedEntries)
-        .sortWith((a, b) => a.getString(0) > b.getString(0))
+        .sortWith((a, b) => {
+          val timePriorityOrder = a.getString(0).compareTo(b.getString(0))
+          if (timePriorityOrder != 0) {
+            timePriorityOrder > 0
+          } else {
+            val statePriorityOrder = Map("COMPLETED" -> 3, "INFLIGHT" -> 2, "REQUESTED" -> 1)
+            val state1 = a.getString(2)
+            val state2 = b.getString(2)
+            val priority1 = statePriorityOrder.getOrElse(state1, 0)
+            val priority2 = statePriorityOrder.getOrElse(state2, 0)
+            priority1 > priority2
+          }
+        })
 
       if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
         combinedEntries
