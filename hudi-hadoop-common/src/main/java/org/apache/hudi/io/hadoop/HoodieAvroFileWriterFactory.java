@@ -38,15 +38,17 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.orc.CompressionKind;
-import org.apache.parquet.avro.AvroAdapter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Properties;
+
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
 
@@ -115,14 +117,12 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
     return new HoodieAvroOrcWriter(instantTime, path, orcConfig, schema, taskContextSupplier);
   }
 
-  private static final AvroAdapter AVRO_ADAPTER = AvroAdapter.getAdapter();
-
   private HoodieAvroWriteSupport getHoodieAvroWriteSupport(Schema schema,
                                                            HoodieConfig config, boolean enableBloomFilter) {
     Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
     return (HoodieAvroWriteSupport) ReflectionUtils.loadClass(
         config.getStringOrDefault(HoodieStorageConfig.HOODIE_AVRO_WRITE_SUPPORT_CLASS),
         new Class<?>[] {MessageType.class, Schema.class, Option.class, Properties.class},
-        AVRO_ADAPTER.getAvroSchemaConverter(storage.getConf()).convert(schema), schema, filter, config.getProps());
+        getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(schema), schema, filter, config.getProps());
   }
 }

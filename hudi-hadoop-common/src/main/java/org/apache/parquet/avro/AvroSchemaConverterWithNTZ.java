@@ -74,7 +74,7 @@ import static org.apache.parquet.schema.Type.Repetition.REPEATED;
  * </p>
  */
 @SuppressWarnings("all")
-public class HoodieAvroSchemaConverter {
+public class AvroSchemaConverterWithNTZ extends HoodieAvroParquetSchemaConverter {
 
   public static final String ADD_LIST_ELEMENT_RECORDS =
       "parquet.avro.add-list-element-records";
@@ -86,7 +86,7 @@ public class HoodieAvroSchemaConverter {
   private final boolean readInt96AsFixed;
   private final Set<String> pathsToInt96;
 
-  public HoodieAvroSchemaConverter() {
+  public AvroSchemaConverterWithNTZ() {
     this(ADD_LIST_ELEMENT_RECORDS_DEFAULT);
   }
 
@@ -96,7 +96,7 @@ public class HoodieAvroSchemaConverter {
    *
    * @param assumeRepeatedIsListElement whether to assume 2-level lists
    */
-  HoodieAvroSchemaConverter(boolean assumeRepeatedIsListElement) {
+  AvroSchemaConverterWithNTZ(boolean assumeRepeatedIsListElement) {
     this.assumeRepeatedIsListElement = assumeRepeatedIsListElement;
     this.writeOldListStructure = WRITE_OLD_LIST_STRUCTURE_DEFAULT;
     this.writeParquetUUID = WRITE_PARQUET_UUID_DEFAULT;
@@ -104,7 +104,7 @@ public class HoodieAvroSchemaConverter {
     this.pathsToInt96 = Collections.emptySet();
   }
 
-  public HoodieAvroSchemaConverter(Configuration conf) {
+  public AvroSchemaConverterWithNTZ(Configuration conf) {
     this.assumeRepeatedIsListElement = conf.getBoolean(
         ADD_LIST_ELEMENT_RECORDS, ADD_LIST_ELEMENT_RECORDS_DEFAULT);
     this.writeOldListStructure = conf.getBoolean(
@@ -140,6 +140,7 @@ public class HoodieAvroSchemaConverter {
     }
   }
 
+  @Override
   public MessageType convert(Schema avroSchema) {
     if (!avroSchema.getType().equals(Schema.Type.RECORD)) {
       throw new IllegalArgumentException("Avro schema must be a record.");
@@ -278,6 +279,7 @@ public class HoodieAvroSchemaConverter {
     return convertField(field.name(), field.schema(), schemaPath);
   }
 
+  @Override
   public Schema convert(MessageType parquetSchema) {
     return convertFields(parquetSchema.getName(), parquetSchema.getFields(), new HashMap<>());
   }

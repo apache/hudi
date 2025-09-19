@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.util.HoodieFileMetadataMerger;
 import org.apache.hudi.io.storage.HoodieFileBinaryCopier;
 import org.apache.hudi.parquet.io.HoodieParquetFileBinaryCopier;
@@ -36,7 +35,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.parquet.avro.AvroAdapter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
@@ -45,6 +43,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 /**
  * Compared to other Write Handles, HoodieBinaryCopyHandle merge multiple inputFiles into a single outputFile without performing
@@ -57,7 +57,6 @@ import java.util.List;
 public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieBinaryCopyHandle.class);
-  private static final AvroAdapter AVRO_ADAPTER = AvroAdapter.getAdapter();
   protected final HoodieFileBinaryCopier writer;
   private final List<StoragePath> inputFiles;
   private final StoragePath path;
@@ -82,7 +81,7 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       }
     } else {
       // Default behavior: use the table's write schema for evolution
-      return AVRO_ADAPTER.getAvroSchemaConverter(new HadoopStorageConfiguration(conf)).convert(writeSchemaWithMetaFields);
+      return getAvroSchemaConverter(conf).convert(writeSchemaWithMetaFields);
     }
   }
 

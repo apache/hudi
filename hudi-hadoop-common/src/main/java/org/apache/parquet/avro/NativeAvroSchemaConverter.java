@@ -19,8 +19,6 @@
 
 package org.apache.parquet.avro;
 
-import org.apache.hudi.storage.StorageConfiguration;
-
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.schema.MessageType;
@@ -28,20 +26,21 @@ import org.apache.parquet.schema.MessageType;
 /**
  * uses the native avro schema converter from parquet java
  */
-public class NativeAvroAdapter implements AvroAdapter {
-  @Override
-  public org.apache.hudi.AvroSchemaConverter getAvroSchemaConverter(StorageConfiguration<?> storageConfiguration) {
-    org.apache.parquet.avro.AvroSchemaConverter avroSchemaConverter = new org.apache.parquet.avro.AvroSchemaConverter(storageConfiguration.unwrapAs(Configuration.class));
-    return new org.apache.hudi.AvroSchemaConverter() {
-      @Override
-      public MessageType convert(Schema schema) {
-        return avroSchemaConverter.convert(schema);
-      }
+public class NativeAvroSchemaConverter extends HoodieAvroParquetSchemaConverter {
 
-      @Override
-      public Schema convert(MessageType schema) {
-        return avroSchemaConverter.convert(schema);
-      }
-    };
+  private final AvroSchemaConverter avroSchemaConverter;
+
+  public NativeAvroSchemaConverter(Configuration configuration) {
+    this.avroSchemaConverter = new AvroSchemaConverter(configuration);
+  }
+
+  @Override
+  public MessageType convert(Schema schema) {
+    return avroSchemaConverter.convert(schema);
+  }
+
+  @Override
+  public Schema convert(MessageType schema) {
+    return avroSchemaConverter.convert(schema);
   }
 }

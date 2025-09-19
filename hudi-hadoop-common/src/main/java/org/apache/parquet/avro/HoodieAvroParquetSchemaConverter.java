@@ -19,11 +19,14 @@
 
 package org.apache.parquet.avro;
 
-import org.apache.hudi.AvroSchemaConverter;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.exception.HoodieException;
 
-import org.apache.parquet.schema.PrimitiveType;
+import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.parquet.schema.MessageType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Parquet-Java AvroSchemaConverter doesn't support local timestamp types until version 1.14
@@ -35,29 +38,21 @@ import org.apache.parquet.schema.PrimitiveType;
  * library AvroSchemaConverter in this case.
  *
  */
-public interface AvroAdapter {
-  static AvroAdapter getAdapter() {
-    String version = PrimitiveType.class.getPackage().getImplementationVersion();
-    if (version != null) {
-      String[] parts = version.split("\\.");
-      if (parts.length < 3) {
-        throw new RuntimeException("Invalid version: " + version);
-      }
-      int major = Integer.parseInt(parts[0]);
-      int minor = Integer.parseInt(parts[1]);
+public abstract class HoodieAvroParquetSchemaConverter {
 
-      // Use native adapter for anything < 1.11.0 or >= 1.14.0
-      if ((major == 1 && minor < 11) || (major == 1 && minor >= 14)) {
-        return ReflectionUtils.loadClass("org.apache.parquet.avro.NativeAvroAdapter");
-      }
-    }
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroParquetSchemaConverter.class);
+  public static HoodieAvroParquetSchemaConverter getAvroSchemaConverter(Configuration configuration) {
     try {
-      Class.forName("org.apache.parquet.avro.HoodieAvroSchemaConverter");
-    } catch (ClassNotFoundException | NoClassDefFoundError e) {
-      return ReflectionUtils.loadClass("org.apache.parquet.avro.NativeAvroAdapter");
+      return (HoodieAvroParquetSchemaConverter) ReflectionUtils.loadClass("org.apache.parquet.avro.AvroSchemaConverterWithNTZ",
+          new Class<?>[] {Configuration.class}, configuration);
+    } catch (HoodieException e) {
+      LOG.debug("Failed to load AvroSchemaConverterWithNTZ, using NativeAvroSchemaConverter instead", e);
+      return (HoodieAvroParquetSchemaConverter) ReflectionUtils.loadClass("org.apache.parquet.avro.NativeAvroSchemaConverter",
+          new Class<?>[] {Configuration.class}, configuration);
     }
-    return ReflectionUtils.loadClass("org.apache.parquet.avro.ModifiedAvroAdapter");
   }
 
-  AvroSchemaConverter getAvroSchemaConverter(StorageConfiguration<?> storageConfiguration);
+  public abstract MessageType convert(Schema schema);
+
+  public abstract Schema convert(MessageType schema);
 }
