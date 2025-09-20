@@ -2051,6 +2051,14 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     ).toDF("id", "value", "timestamp", "_hoodie_is_deleted")
     val commit5 = writeBatch(df5, commonOpts, tableVersion)
 
+    // Commit c6 - Test deletes with lower ordering values (should be ignored)
+    val df6 = Seq(
+      (1, "val1", 500L, true),  // Attempt to delete record 1 with lower timestamp
+      (11, "val11", 2000L, true), // Attempt to delete record 11 with lower timestamp
+      (13, "val13", 1000L, true)  // Attempt to delete record 13 with lower timestamp
+    ).toDF("id", "value", "timestamp", "_hoodie_is_deleted")
+    val commit6 = writeBatch(df6, commonOpts, tableVersion)
+
     // Time Travel Query - Query state as of c2
     // Should show: 8 records (10 original - 2 deletes)
     // Records 1,2,3 should have updated values (higher timestamps)
