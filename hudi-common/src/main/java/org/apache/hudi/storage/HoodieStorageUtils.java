@@ -30,6 +30,18 @@ public class HoodieStorageUtils {
     return getStorage(DEFAULT_URI, conf);
   }
 
+  public static HoodieStorage getStorage() {
+    try {
+      String defaultStorageConfClass = "org.apache.hudi.storage.hadoop.HadoopStorageConfiguration";
+      StorageConfiguration<?> storageConfig = (StorageConfiguration<?>) ReflectionUtils.loadClassWithCallerClassLoader(
+          defaultStorageConfClass,
+          new Class<?>[] {Boolean.class}, true);
+      return getStorage(storageConfig);
+    } catch (Exception e) {
+      throw new HoodieException("Unable to create default storage class", e);
+    }
+  }
+
   public static HoodieStorage getStorage(String basePath, StorageConfiguration<?> conf) {
     return getStorage(new StoragePath(basePath), conf);
   }
