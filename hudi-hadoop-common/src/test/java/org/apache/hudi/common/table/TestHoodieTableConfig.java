@@ -633,12 +633,12 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
         // Test case: Version 9 table with PostgresDebeziumAvroPayload (should set partial update mode and custom properties)
         arguments("Version 9 with PostgresDebeziumAvroPayload", null, PostgresDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE,
-            5, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, PostgresDebeziumAvroPayload.class.getName(),
+            8, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, PostgresDebeziumAvroPayload.class.getName(),
             PartialUpdateMode.FILL_UNAVAILABLE.name(), HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE, null, null),
 
         // Test case: Version 9 table with AWSDmsAvroPayload (should set custom delete properties)
         arguments("Version 9 with AWSDmsAvroPayload", null, AWSDmsAvroPayload.class.getName(), null, null, HoodieTableVersion.NINE,
-            5, COMMIT_TIME_ORDERING.name(), null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, AWSDmsAvroPayload.class.getName(), null, null, "Op", "D"),
+            5, COMMIT_TIME_ORDERING.name(), null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, AWSDmsAvroPayload.class.getName(), null, null, "_change_operation_type", "d"),
 
         // Test case: Version 9 table with EventTimeAvroPayload (event time based payload)
         arguments("Version 9 with EventTimeAvroPayload", null, EventTimeAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE,
@@ -646,7 +646,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
         // Test case: Version 9 table with MySqlDebeziumAvroPayload (event time based payload)
         arguments("Version 9 with MySqlDebeziumAvroPayload", null, MySqlDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE,
-            3, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, MySqlDebeziumAvroPayload.class.getName(), null, null, null, null)
+            6, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, MySqlDebeziumAvroPayload.class.getName(), null, null, "_change_operation_type", "d")
     );
   }
 

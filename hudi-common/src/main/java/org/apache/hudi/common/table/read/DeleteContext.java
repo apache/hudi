@@ -45,7 +45,7 @@ public class DeleteContext implements Serializable {
   private Schema readerSchema;
 
   public DeleteContext(Properties props, Schema tableSchema) {
-    this.customDeleteMarkerKeyValue = getCustomDeleteMarkerKevValue(props);
+    this.customDeleteMarkerKeyValue = getCustomDeleteMarkerKeyValue(props);
     this.hasBuiltInDeleteField = hasBuiltInDeleteField(tableSchema);
   }
 
@@ -54,7 +54,7 @@ public class DeleteContext implements Serializable {
    * the field which contains the corresponding delete-marker if a record is deleted. If no delete key and marker
    * are configured, the function returns an empty option.
    */
-  private static Option<Pair<String, String>> getCustomDeleteMarkerKevValue(Properties props) {
+  private static Option<Pair<String, String>> getCustomDeleteMarkerKeyValue(Properties props) {
     String deleteKey = props.getProperty(DELETE_KEY);
     String deleteMarker = props.getProperty(DELETE_MARKER);
     boolean deleteKeyExists = !StringUtils.isNullOrEmpty(deleteKey);

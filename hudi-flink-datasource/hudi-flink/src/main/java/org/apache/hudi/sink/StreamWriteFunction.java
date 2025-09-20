@@ -234,7 +234,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   private void initMergeClass() {
     readerContext = writeClient.getEngineContext().<RowData>getReaderContextFactory(metaClient).getContext();
     readerContext.initRecordMergerForIngestion(writeClient.getConfig().getProps());
-    orderingFieldNames = getOrderingFieldNames(readerContext.getMergeMode(), writeClient.getConfig().getProps(), metaClient);
+    orderingFieldNames = getOrderingFieldNames(readerContext.getMergeMode(), metaClient);
 
     recordMerger = BufferedRecordMergerFactory.create(
         readerContext,
