@@ -84,6 +84,39 @@ class TestHoodieDataUtils extends HoodieSparkSqlTestBase {
     assert(result.equals(expectedMap), s"Expected $expectedMap but got $result")
   }
 
+  test("Test dedupeAndCollectAsList with null keys") {
+    // Given: A dataset with a mix of null and non-null keys, including duplicates
+    val testData = Seq(
+      pair("key1", "value1"),
+      pair("key2", "value2"),
+      pair(null, "nullValue1"),
+      pair("key1", "value1_dup"),  // Duplicate key
+      pair(null, "nullValue2"),    // Another null key
+      pair("key3", "value3")
+    )
+
+    val rdd = spark.sparkContext.parallelize(testData).toJavaRDD()
+    val pairRDD = rdd.mapToPair(p => (p.getKey, p.getValue))
+    val pairData: HoodiePairData[String, String] = HoodieJavaPairRDD.of(pairRDD)
+
+    // When: dedupeAndCollectAsList is called
+    val result = HoodieDataUtils.dedupeAndCollectAsList(pairData)
+
+    // Then: Last value for each key should win
+    val expected = Seq(
+      ("key1", "value1_dup"),
+      ("key2", "value2"),
+      ("key3", "value3"),
+      (null, "nullValue2")
+    )
+
+    val resultAsScala = result.asScala.map(p => (p.getKey, p.getValue)).toSet
+    val expectedAsSet = expected.toSet
+
+    assert(resultAsScala == expectedAsSet,
+      s"Expected $expectedAsSet but got $resultAsScala")
+  }
+
   test("Test CollectPairDataAsMap with null keys") {
     // Given: A dataset with both null and non-null keys, where some keys have multiple values
     // When: CollectPairDataAsMap is called on the data

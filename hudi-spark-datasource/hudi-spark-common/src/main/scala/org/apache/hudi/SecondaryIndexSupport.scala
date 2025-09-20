@@ -82,10 +82,10 @@ class SecondaryIndexSupport(spark: SparkSession,
     val secondaryIndexData = metadataTable.readSecondaryIndexLocationsWithKeys(
         HoodieListData.eager(JavaConverters.seqAsJavaListConverter(secondaryKeys).asJava), secondaryIndexName)
     try {
-      val recordKeyLocationsMap = HoodieDataUtils.dedupeAndCollectAsMap(secondaryIndexData)
+      val recordKeyLocationsList = HoodieDataUtils.dedupeAndCollectAsList(secondaryIndexData)
       val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
       val candidateFiles: mutable.Set[String] = mutable.Set.empty
-      recordKeyLocationsMap.values().forEach(location => fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath))
+      recordKeyLocationsList.forEach(recordKeyAndLocation => fileIdToPartitionMap.put(recordKeyAndLocation.getValue.getFileId, recordKeyAndLocation.getValue.getPartitionPath))
 
       for (file <- allFiles) {
         val fileId = FSUtils.getFileIdFromFilePath(file)
