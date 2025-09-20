@@ -57,6 +57,7 @@ import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.TestSnapshotQuerySplitterImpl;
+import org.apache.hudi.utilities.sources.helpers.TestSnapshotQuerySplitterWithoutPartitionFilterImpl;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
@@ -481,9 +482,17 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
   }
 
+  private static Stream<Arguments> testHoodieIncrSourceWithDataSourceOptions() {
+    return Stream.of(
+        Arguments.of(COPY_ON_WRITE, TestSnapshotQuerySplitterImpl.class),
+        Arguments.of(MERGE_ON_READ, TestSnapshotQuerySplitterImpl.class),
+        Arguments.of(COPY_ON_WRITE, TestSnapshotQuerySplitterWithoutPartitionFilterImpl.class)
+    );
+  }
+
   @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
-  public void testHoodieIncrSourceWithDataSourceOptions(HoodieTableType tableType) throws IOException {
+  @MethodSource
+  public void testHoodieIncrSourceWithDataSourceOptions(HoodieTableType tableType, Class<SnapshotLoadQuerySplitter> splitterClass) throws IOException {
     this.tableType = tableType;
     metaClient = getHoodieMetaClient(storageConf(), basePath());
     HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
@@ -509,7 +518,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           Option.empty(),
           100,
           inserts.getInstant(),
-          Option.of(TestSnapshotQuerySplitterImpl.class.getName()), extraProps, HoodieTableVersion.EIGHT);
+          Option.of(splitterClass.getName()), extraProps, HoodieTableVersion.EIGHT);
     }
   }
 
