@@ -124,7 +124,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     // Handle partial update mode config.
     reconcilePartialUpdateModeConfig(tablePropsToAdd, tableConfig);
     // Handle merge properties config.
-    reconcileMergePropertiesConfig(tablePropsToAdd, tableConfig);
+    reconcileMergePropertiesConfig(tablePropsToAdd, tableConfig, config);
     // Handle payload class configs.
     reconcilePayloadClassConfig(tablePropsToAdd, tablePropsToRemove, tableConfig);
     // Handle ordering fields config.
@@ -178,7 +178,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     }
   }
 
-  private void reconcileMergePropertiesConfig(Map<ConfigProperty, String> tablePropsToAdd, HoodieTableConfig tableConfig) {
+  private void reconcileMergePropertiesConfig(Map<ConfigProperty, String> tablePropsToAdd, HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     String payloadClass = tableConfig.getPayloadClass();
     String mergeStrategy = tableConfig.getRecordMergeStrategyId();
     if (!BUILTIN_MERGE_STRATEGIES.contains(mergeStrategy) || StringUtils.isNullOrEmpty(payloadClass)) {
@@ -208,6 +208,10 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
       tablePropsToAdd.put(
           ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER).noDefaultValue(),
           DebeziumConstants.DELETE_OP);
+    }
+    if (writeConfig.contains(DELETE_KEY) && writeConfig.contains(DELETE_MARKER)) {
+      tablePropsToAdd.put(ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY).noDefaultValue(), writeConfig.getString(DELETE_KEY));
+      tablePropsToAdd.put(ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER).noDefaultValue(), writeConfig.getString(DELETE_MARKER));
     }
   }
 

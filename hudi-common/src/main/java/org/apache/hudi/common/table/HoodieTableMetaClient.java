@@ -57,6 +57,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -85,8 +86,11 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.VERSION;
@@ -1068,6 +1072,7 @@ public class HoodieTableMetaClient implements Serializable {
 
     private String indexDefinitionPath;
     private String tableFormat;
+    private Pair<String, String> deleteFieldAndMarker;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -1276,6 +1281,21 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    /**
+     * When the value in the specified field matches the marker value, the record is considered a deletion.
+     * @param deleteFieldName the field name which should be checked for deletion marker value
+     * @param markerValue the value to compare against
+     * @return the builder instance
+     */
+    public TableBuilder setRecordDeleteFieldAndMarker(String deleteFieldName, String markerValue) {
+      // check that parameters are not null or empty
+      if (StringUtils.isNullOrEmpty(deleteFieldName) || StringUtils.isNullOrEmpty(markerValue)) {
+        return this;
+      }
+      this.deleteFieldAndMarker = Pair.of(deleteFieldName, markerValue);
+      return this;
+    }
+
     public TableBuilder set(Map<String, Object> props) {
       for (ConfigProperty<String> configProperty : HoodieTableConfig.PERSISTED_CONFIG_LIST) {
         if (containsConfigProperty(props, configProperty)) {
@@ -1432,6 +1452,18 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH)) {
         setIndexDefinitionPath(hoodieConfig.getString(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH));
       }
+      // set delete field and marker value, if both are present
+      // check if config is prefixed for the table config or passed in from older write config properties
+      if (hoodieConfig.contains(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY)) {
+        String deleteFieldName = hoodieConfig.getString(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY);
+        String markerValue = hoodieConfig.getString(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER);
+        setRecordDeleteFieldAndMarker(deleteFieldName, markerValue);
+      }
+      if (hoodieConfig.contains(DELETE_KEY)) {
+        String deleteFieldName = hoodieConfig.getString(DELETE_KEY);
+        String markerValue = hoodieConfig.getString(DELETE_MARKER);
+        setRecordDeleteFieldAndMarker(deleteFieldName, markerValue);
+      }
       return this;
     }
 
@@ -1572,6 +1604,10 @@ public class HoodieTableMetaClient implements Serializable {
         for (Map.Entry<String, String> config : mergeConfigs.entrySet()) {
           tableConfig.setValue(config.getKey(), config.getValue());
         }
+      }
+      if (null != deleteFieldAndMarker) {
+        tableConfig.setValue(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, deleteFieldAndMarker.getLeft());
+        tableConfig.setValue(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, deleteFieldAndMarker.getRight());
       }
 
       return tableConfig.getProps();

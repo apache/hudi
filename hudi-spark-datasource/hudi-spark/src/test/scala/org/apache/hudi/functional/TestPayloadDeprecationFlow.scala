@@ -22,8 +22,10 @@ package org.apache.hudi.functional
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, ORDERING_FIELDS, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY
 import org.apache.hudi.common.model.{AWSDmsAvroPayload, DefaultHoodieRecordPayload, EventTimeAvroPayload, HoodieRecordMerger, HoodieTableType, OverwriteNonDefaultsWithLatestAvroPayload, OverwriteWithLatestAvroPayload, PartialUpdateAvroPayload}
 import org.apache.hudi.common.model.debezium.{DebeziumConstants, MySqlDebeziumAvroPayload, PostgresDebeziumAvroPayload}
+import org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
@@ -67,14 +69,21 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (10, 4L, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
       (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
-    val orderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
+    val originalOrderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
       "_event_seq"
     } else {
       "ts"
     }
+    val expectedOrderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
+      "_event_bin_file,_event_pos"
+    } else if (payloadClazz.equals(classOf[PostgresDebeziumAvroPayload].getName)) {
+      "_event_lsn"
+    } else {
+      originalOrderingFields
+    }
     inserts.write.format("hudi").
       option(RECORDKEY_FIELD.key(), "_event_lsn").
-      option(HoodieTableConfig.ORDERING_FIELDS.key(), orderingFields).
+      option(HoodieTableConfig.ORDERING_FIELDS.key(), originalOrderingFields).
       option(TABLE_TYPE.key(), tableType).
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
@@ -101,6 +110,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(OPERATION.key(), "upsert").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8").
+      option(HoodieTableConfig.ORDERING_FIELDS.key(), originalOrderingFields).
+      options(opts).
       mode(SaveMode.Append).
       save(basePath)
     // Validate table version.
@@ -119,12 +130,16 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     secondUpdate.write.format("hudi").
       option(OPERATION.key(), "upsert").
       option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9").
+      options(opts).
       mode(SaveMode.Append).
       save(basePath)
     // Validate table version as 9.
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(9, metaClient.getTableConfig.getTableVersion.versionCode())
     assertEquals(payloadClazz, metaClient.getTableConfig.getLegacyPayloadClass)
+    assertEquals(isCDCPayload(payloadClazz) || useOpAsDelete,
+      metaClient.getTableConfig.getProps.containsKey(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY))
+    assertEquals(expectedOrderingFields, metaClient.getTableConfig.getOrderingFieldsStr.orElse(""))
     val compactionInstants = metaClient.getActiveTimeline.getCommitsAndCompactionTimeline.getInstants
     val foundCompaction = compactionInstants.stream().anyMatch(i => i.getAction.equals("commit"))
     assertTrue(foundCompaction)
@@ -366,7 +381,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
   }
 
   def getExpectedResultForSnapshotQuery(payloadClazz: String, usesDeleteMarker: Boolean): Seq[(Int, Long, String, String, Double, String, String, Int, Int, String)] = {
-    if (isNotCDCPayload(payloadClazz) && !usesDeleteMarker) {
+    if (!isCDCPayload(payloadClazz) && !usesDeleteMarker) {
       if (payloadClazz.equals(classOf[PartialUpdateAvroPayload].getName)
         || payloadClazz.equals(classOf[EventTimeAvroPayload].getName)
         || payloadClazz.equals(classOf[DefaultHoodieRecordPayload].getName))
@@ -382,15 +397,21 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
           (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"))
       }
     } else {
-      Seq(
-        (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-        (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"))
+      if (payloadClazz.equals(classOf[DefaultHoodieRecordPayload].getName)) {
+        Seq(
+          (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
+          (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"))
+      } else {
+        Seq(
+          (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
+          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"))
+      }
     }
   }
 
   def getExpectedResultForTimeTravelQuery(payloadClazz: String, usesDeleteMarker: Boolean):
   Seq[(Int, Long, String, String, Double, String, String, Int, Int, String)] = {
-    if (isNotCDCPayload(payloadClazz) && !usesDeleteMarker) {
+    if (!isCDCPayload(payloadClazz) && !usesDeleteMarker) {
       Seq(
         (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
         (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
@@ -406,8 +427,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     }
   }
 
-  private def isNotCDCPayload(payloadClazz: String) = {
-    !payloadClazz.equals(classOf[AWSDmsAvroPayload].getName) && !payloadClazz.equals(classOf[PostgresDebeziumAvroPayload].getName) && !payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)
+  private def isCDCPayload(payloadClazz: String) = {
+    payloadClazz.equals(classOf[AWSDmsAvroPayload].getName) || payloadClazz.equals(classOf[PostgresDebeziumAvroPayload].getName) || payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)
   }
 }
 
