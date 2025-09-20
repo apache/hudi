@@ -466,6 +466,7 @@ public class TestStreamReadMonitoringFunction {
   public void testCheckpointRestoreWithLimit() throws Exception {
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     conf.set(FlinkOptions.READ_SPLITS_LIMIT, 2);
+    conf.set(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 1);
     StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);
     OperatorSubtaskState state;
     try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(function)) {
@@ -478,7 +479,6 @@ public class TestStreamReadMonitoringFunction {
       state = harness.snapshot(1, 1);
       // Stop the stream task.
       function.close();
-      assertTrue(latch.await(WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS), "Should finish splits generation");
       assertThat("Should produce the expected splits", sourceContext.getPartitionPaths(), is("par1,par2"));
       assertTrue(sourceContext.splits.stream().allMatch(split -> split.getInstantRange().isPresent()),
           "All instants should have range limit");
@@ -493,11 +493,9 @@ public class TestStreamReadMonitoringFunction {
       CountDownLatch latch = new CountDownLatch(6);
       CollectingSourceContext sourceContext = new CollectingSourceContext(latch);
       runAsync(sourceContext, function2);
-      state = harness.snapshot(2, 1);
       assertTrue(latch.await(WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS), "Should finish splits generation");
       // Stop the stream task.
       function2.close();
-      assertTrue(latch.await(WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS), "Should finish splits generation");
       assertThat("Should produce the expected splits", sourceContext.getPartitionPaths(), is("par1,par2,par3,par4"));
       assertTrue(sourceContext.splits.stream().allMatch(split -> split.getInstantRange().isPresent()),
           "All the instants should have range limit");
