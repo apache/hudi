@@ -48,7 +48,6 @@ import org.apache.hudi.testutils.SparkDatasetTestUtils;
 import org.apache.avro.Schema;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -112,7 +111,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
 
   public List<HoodieRecord> generateRecords(int numOfRecords, String commitTime) throws Exception {
     Dataset<Row> rows = SparkDatasetTestUtils.getRandomRowsWithCommitTime(
-        new SQLContext(jsc()), numOfRecords, getPartitionPath(), false, commitTime);
+        sqlContext(), numOfRecords, getPartitionPath(), false, commitTime);
     List<InternalRow> internalRows = SparkDatasetTestUtils.toInternalRows(rows, SparkDatasetTestUtils.ENCODER);
     return internalRows.stream()
         .map(r -> new HoodieSparkRecord(new HoodieKey(r.getString(2), r.getString(3)),
@@ -123,7 +122,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
 
   public List<HoodieRecord> generateRecordUpdates(List<HoodieKey> keys, String commitTime) throws Exception {
     Dataset<Row> rows = SparkDatasetTestUtils.getRandomRowsWithKeys(
-        new SQLContext(jsc()), keys, false, commitTime);
+        sqlContext(), keys, false, commitTime);
     List<InternalRow> internalRows = SparkDatasetTestUtils.toInternalRows(rows, SparkDatasetTestUtils.ENCODER);
     return internalRows.stream()
         .map(r -> new HoodieSparkRecord(new HoodieKey(r.getString(2), r.getString(3)),

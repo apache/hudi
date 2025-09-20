@@ -36,6 +36,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
@@ -82,7 +83,7 @@ public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
 
     for (Schema.Field sourceField : sourceFields) {
       if (!columnsToDelete.contains(sourceField.name().toLowerCase(Locale.ROOT))) {
-        targetFields.add(new Schema.Field(sourceField.name(), sourceField.schema(), sourceField.doc(), sourceField.defaultVal()));
+        targetFields.add(createNewSchemaField(sourceField));
       }
     }
 

@@ -221,6 +221,10 @@ public abstract class RecordContext<T> implements Serializable {
     return value;
   }
 
+  public Comparable convertPartitionValueToEngineType(Comparable value) {
+    return convertValueToEngineType(value);
+  }
+
   /**
    * Converts the ordering value to the specific engine type.
    */

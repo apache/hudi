@@ -372,7 +372,7 @@ public class SparkMain {
   private static int deduplicatePartitionPath(JavaSparkContext jsc, String duplicatedPartitionPath,
                                               String repairedOutputPath, String basePath, boolean dryRun, String dedupeType) {
     DedupeSparkJob job = new DedupeSparkJob(basePath, duplicatedPartitionPath, repairedOutputPath,
-        new SQLContext(jsc),
+        SQLContext.getOrCreate(jsc.sc()),
         HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration())),
         DeDupeType.withName(dedupeType));
     job.fixDuplicates(dryRun);
@@ -380,7 +380,7 @@ public class SparkMain {
   }
 
   public static int repairDeprecatedPartition(JavaSparkContext jsc, String basePath) {
-    SQLContext sqlContext = new SQLContext(jsc);
+    SQLContext sqlContext = SQLContext.getOrCreate(jsc.sc());
     Dataset<Row> recordsToRewrite = getRecordsToRewrite(basePath, PartitionPathEncodeUtils.DEPRECATED_DEFAULT_PARTITION_PATH, sqlContext);
 
     if (!recordsToRewrite.isEmpty()) {
@@ -397,7 +397,7 @@ public class SparkMain {
   }
 
   public static int renamePartition(JavaSparkContext jsc, String basePath, String oldPartition, String newPartition) {
-    SQLContext sqlContext = new SQLContext(jsc);
+    SQLContext sqlContext = SQLContext.getOrCreate(jsc.sc());
     Dataset<Row> recordsToRewrite = getRecordsToRewrite(basePath, oldPartition, sqlContext);
 
     if (!recordsToRewrite.isEmpty()) {

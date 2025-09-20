@@ -47,7 +47,7 @@ object PartitionDirectoryConverter extends SparkAdapterSupport {
     if (fileSlice.hasLogFiles || fileSlice.hasBootstrapBase) {
       // should read as file slice, so we need to create a mapping from fileId to file slice
       sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-        new HoodiePartitionFileSliceMapping(partitionValues, Map(fileSlice.getFileId -> fileSlice)), Seq(delegateFile))
+        sparkAdapter.createPartitionFileSliceMapping(partitionValues, Map(fileSlice.getFileId -> fileSlice)), Seq(delegateFile))
     } else {
       sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(partitionValues, Seq(delegateFile))
     }

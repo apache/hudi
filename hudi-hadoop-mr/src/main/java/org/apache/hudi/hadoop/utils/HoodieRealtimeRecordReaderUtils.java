@@ -68,6 +68,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
@@ -139,7 +140,7 @@ public class HoodieRealtimeRecordReaderUtils {
         throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
             + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
       } else {
-        projectedFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
+        projectedFields.add(createNewSchemaField(field));
       }
     }
 

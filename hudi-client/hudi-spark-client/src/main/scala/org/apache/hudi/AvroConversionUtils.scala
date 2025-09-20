@@ -20,6 +20,7 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.avro.AvroSchemaUtils
+import org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.internal.schema.HoodieSchemaException
 
@@ -204,12 +205,8 @@ object AvroConversionUtils {
             case Schema.Type.UNION => resolveUnion(field.schema(), structFields(i).dataType)
             case _ => (getAvroSchemaWithDefaults(field.schema(), structFields(i).dataType), false)
           }
-          new Schema.Field(field.name(), newSchema, comment,
-            if (containsNullSchema) {
-              JsonProperties.NULL_VALUE
-            } else {
-              field.defaultVal()
-            })
+          createNewSchemaField(field.name(), newSchema, comment,
+            if (containsNullSchema) JsonProperties.NULL_VALUE else field.defaultVal())
         }).asJava
         Schema.createRecord(schema.getName, schema.getDoc, schema.getNamespace, schema.isError, modifiedFields)
       }

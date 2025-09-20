@@ -23,13 +23,17 @@ This repo contains the code that integrate Hudi with Spark. The repo is split in
 `hudi-spark3.3.x`
 `hudi-spark3.4.x`
 `hudi-spark3.5.x`
+`hudi-spark4.0.x`
+`hudi-spark3-common`
 `hudi-spark-common`
 
 * hudi-spark is the module that contains the code that spark3 version would share.
 * hudi-spark3.3.x is the module that contains the code that compatible with spark3.3.x versions.
 * hudi-spark3.4.x is the module that contains the code that compatible with spark 3.4.x versions.
 * hudi-spark3.5.x is the module that contains the code that compatible with spark 3.5.x versions.
-* hudi-spark-common is the module that contains the code that would be reused between spark3.x versions.
+* hudi-spark4.0.x is the module that contains the code that compatible with spark 4.0.x versions.
+* hudi-spark3-common is the module that contains the code that would be reused between spark3.x versions.
+* hudi-spark-common is the module that contains the code that would be reused between spark3.x and spark4.x versions.
 
 ## Description of Time Travel
 * `HoodieSpark3_2ExtendedSqlAstBuilder` have comments in the spark3.2's code fork from `org.apache.spark.sql.catalyst.parser.AstBuilder`, and additional `withTimeTravel` method.

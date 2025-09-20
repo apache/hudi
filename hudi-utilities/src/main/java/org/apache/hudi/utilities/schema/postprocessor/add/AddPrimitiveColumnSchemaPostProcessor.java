@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getRawValueWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
@@ -68,7 +69,7 @@ public class AddPrimitiveColumnSchemaPostProcessor extends SchemaPostProcessor {
 
 
     for (Schema.Field sourceField : sourceFields) {
-      targetFields.add(new Schema.Field(sourceField.name(), sourceField.schema(), sourceField.doc(), sourceField.defaultVal()));
+      targetFields.add(createNewSchemaField(sourceField));
     }
 
     // add new column to the end

@@ -67,7 +67,7 @@ class HoodieCDCFileIndex(override val spark: SparkSession,
         // Note that CDC file splits must be sorted based on their instant time.
         // Otherwise, the resulting records may not be correct.
         sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-          new HoodiePartitionCDCFileGroupMapping(
+          sparkAdapter.createPartitionCDCFileGroupMapping(
             partitionValues, fileSplits.asScala.sortBy(_.getInstant).toList),
           Seq(fileStatus)
         )

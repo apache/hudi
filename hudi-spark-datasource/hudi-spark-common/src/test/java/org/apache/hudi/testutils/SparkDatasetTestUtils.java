@@ -237,7 +237,7 @@ public class SparkDatasetTestUtils {
         .withBulkInsertParallelism(2);
   }
 
-  public static InternalRow serializeRow(ExpressionEncoder encoder, Row row)
+  public static InternalRow serializeRow(ExpressionEncoder<Row> encoder, Row row)
       throws InvocationTargetException, IllegalAccessException, NoSuchMethodException {
     Object serializer = encoder.createSerializer();
     Method applyMethod = serializer.getClass().getMethod("apply", Object.class);

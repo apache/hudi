@@ -17,10 +17,9 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
 import org.apache.hudi.HoodieSparkUtils.injectSQLConf
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.client.WriteStatus
-import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.TaskContextSupplier
@@ -30,32 +29,36 @@ import org.apache.hudi.common.util.{OrderingValues, ReflectionUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
 import org.apache.hudi.index.{HoodieIndex, SparkHoodieIndexFactory}
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
 import org.apache.hudi.keygen.{AutoRecordGenWrapperKeyGenerator, BuiltinKeyGenerator, KeyGenUtils}
-import org.apache.hudi.table.action.commit.{BucketBulkInsertDataInternalWriterHelper, BulkInsertDataInternalWriterHelper, ConsistentBucketBulkInsertDataInternalWriterHelper, ParallelismHelper}
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
+import org.apache.hudi.table.action.commit.{BucketBulkInsertDataInternalWriterHelper, BulkInsertDataInternalWriterHelper, ConsistentBucketBulkInsertDataInternalWriterHelper, ParallelismHelper}
 import org.apache.hudi.util.JFunction.toJavaSerializableFunctionUnchecked
 
+import org.apache.avro.Schema
 import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.HoodieUnsafeRowUtils.{NestedFieldPath, composeNestedFieldPath, getNestedInternalRowValue}
-import org.apache.spark.sql.HoodieUnsafeUtils.getNumPartitions
+import org.apache.spark.sql.{DataFrame, Dataset, Row}
+import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedInternalRowValue, NestedFieldPath}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.Project
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeUtils, Row}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters.asScalaBufferConverter
-import scala.collection.{JavaConverters, mutable}
+import scala.collection.mutable
 
 object HoodieDatasetBulkInsertHelper
-  extends ParallelismHelper[DataFrame](toJavaSerializableFunctionUnchecked(df => getNumPartitions(df))) with Logging {
+  extends ParallelismHelper[DataFrame](toJavaSerializableFunctionUnchecked(df => sparkAdapter.getUnsafeUtils.getNumPartitions(df)))
+    with Logging
+    with SparkAdapterSupport {
+
+  private val hoodieUTF8StringFactory = sparkAdapter.getUTF8StringFactory
 
   /**
    * Prepares [[DataFrame]] for bulk-insert into Hudi table, taking following steps:
@@ -110,14 +113,15 @@ object HoodieDatasetBulkInsertHelper
 
           iter.map { row =>
             // auto generate record keys if needed
-            val recordKey = keyGenerator.getRecordKey(row, schema)
-            val partitionPath = keyGenerator.getPartitionPath(row, schema)
-            val commitTimestamp = UTF8String.EMPTY_UTF8
-            val commitSeqNo = UTF8String.EMPTY_UTF8
-            val filename = UTF8String.EMPTY_UTF8
+            val metaFields = new Array[UTF8String](5)
+            metaFields(2) = keyGenerator.getRecordKey(row, schema)
+            metaFields(3) = keyGenerator.getPartitionPath(row, schema)
+            metaFields(0) = UTF8String.EMPTY_UTF8
+            metaFields(1) = UTF8String.EMPTY_UTF8
+            metaFields(4) = UTF8String.EMPTY_UTF8
 
             // TODO use mutable row, avoid re-allocating
-            new HoodieInternalRow(commitTimestamp, commitSeqNo, recordKey, partitionPath, filename, row, false)
+            sparkAdapter.createInternalRow(metaFields, row, false)
           }
         }, SQLConf.get)
       }
@@ -128,7 +132,7 @@ object HoodieDatasetBulkInsertHelper
         prependedRdd
       }
 
-      HoodieUnsafeUtils.createDataFrameFromRDD(df.sparkSession, dedupedRdd, updatedSchema)
+      sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(df.sparkSession, dedupedRdd, updatedSchema)
     } else {
       // NOTE: In cases when we're not populating meta-fields we actually don't
       //       need access to the [[InternalRow]] and therefore can avoid the need
@@ -137,7 +141,7 @@ object HoodieDatasetBulkInsertHelper
       val metaFieldsStubs = metaFields.map(f => Alias(Literal(UTF8String.EMPTY_UTF8, dataType = StringType), f.name)())
       val prependedQuery = Project(metaFieldsStubs ++ query.output, query)
 
-      HoodieUnsafeUtils.createDataFrameFrom(df.sparkSession, prependedQuery)
+      sparkAdapter.getUnsafeUtils.createDataFrameFrom(df.sparkSession, prependedQuery)
     }
 
     partitioner.repartitionRecords(updatedDF, targetParallelism)
@@ -220,8 +224,11 @@ object HoodieDatasetBulkInsertHelper
     val recordKeyMetaFieldOrd = schema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)
     val partitionPathMetaFieldOrd = schema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
     // NOTE: Pre-combine field could be a nested field
-    val preCombineFieldPaths = preCombineFields.map(preCombineField => composeNestedFieldPath(schema, preCombineField)
-      .getOrElse(throw new HoodieException(s"Pre-combine field $preCombineField is missing in $schema")))
+    val preCombineFieldPaths = preCombineFields.map(preCombineField => {
+      val nestedFieldPath = composeNestedFieldPath(schema, preCombineField)
+        .getOrElse(throw new HoodieException(s"Pre-combine field $preCombineField is missing in $schema"))
+      (nestedFieldPath, nestedFieldPath.parts(0)._2.dataType.isInstanceOf[StringType])
+    })
 
     rdd.map { row =>
         val rowKey = if (isGlobalIndex) {
@@ -259,9 +266,16 @@ object HoodieDatasetBulkInsertHelper
     }
   }
 
-  private def getOrderingValue(nestedFieldPaths: List[NestedFieldPath], r: InternalRow): Comparable[_] = {
+  private def getOrderingValue(nestedFieldPaths: List[(NestedFieldPath, Boolean)], r: InternalRow): Comparable[_] = {
     OrderingValues.create(
-      nestedFieldPaths.map(nestedFieldPath => getNestedInternalRowValue(r, nestedFieldPath).asInstanceOf[Comparable[_]]).toArray)
+      nestedFieldPaths.map(nestedFieldPath => {
+        if (nestedFieldPath._2) {
+          hoodieUTF8StringFactory.wrapUTF8String(
+            getNestedInternalRowValue(r, nestedFieldPath._1).asInstanceOf[UTF8String])
+        } else {
+          getNestedInternalRowValue(r, nestedFieldPath._1).asInstanceOf[Comparable[_]]
+        }
+      }).toArray)
   }
 
   private def getPartitionPathFields(config: HoodieWriteConfig): mutable.Seq[String] = {

@@ -67,7 +67,7 @@ public class TestSanitizationUtils {
   }
 
   @AfterAll
-  public static void shutdown() {
+  public static void shutdown() throws IOException {
     jsc.close();
     spark.close();
   }

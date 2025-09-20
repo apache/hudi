@@ -21,16 +21,16 @@ package org.apache.hudi
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.client.utils.SparkRowSerDe
+import org.apache.hudi.common.config.TimestampKeyGeneratorConfig
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator
+import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.ExceptionWrappingIterator
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.config.TimestampKeyGeneratorConfig
-import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator
-import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -40,7 +40,7 @@ import org.apache.spark.sql.execution.SQLConfInjectingRDD
 import org.apache.spark.sql.execution.datasources.SparkParsePartitionUtil
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.sql.{DataFrame, HoodieUnsafeUtils}
+import org.apache.spark.sql.DataFrame
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters._
@@ -50,13 +50,16 @@ private[hudi] trait SparkVersionsSupport {
   def getSparkVersion: String
 
   def isSpark3: Boolean = getSparkVersion.startsWith("3.")
+  def isSpark4: Boolean = getSparkVersion.startsWith("4.")
   def isSpark3_3: Boolean = getSparkVersion.startsWith("3.3")
   def isSpark3_4: Boolean = getSparkVersion.startsWith("3.4")
   def isSpark3_5: Boolean = getSparkVersion.startsWith("3.5")
+  def isSpark4_0: Boolean = getSparkVersion.startsWith("4.0")
 
   def gteqSpark3_3_2: Boolean = getSparkVersion >= "3.3.2"
   def gteqSpark3_4: Boolean = getSparkVersion >= "3.4"
   def gteqSpark3_5: Boolean = getSparkVersion >= "3.5"
+  def gteqSpark4_0: Boolean = getSparkVersion >= "4.0"
 }
 
 object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport with Logging {
@@ -126,7 +129,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
 
   def maybeWrapDataFrameWithException(df: DataFrame, exceptionClass: String, msg: String, shouldWrap: Boolean): DataFrame = {
     if (shouldWrap) {
-      HoodieUnsafeUtils.createDataFrameFromRDD(df.sparkSession, injectSQLConf(df.queryExecution.toRdd.mapPartitions {
+      sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(df.sparkSession, injectSQLConf(df.queryExecution.toRdd.mapPartitions {
         rows => new ExceptionWrappingIterator[InternalRow](rows, exceptionClass, msg)
       }, SQLConf.get), df.schema)
     } else {
