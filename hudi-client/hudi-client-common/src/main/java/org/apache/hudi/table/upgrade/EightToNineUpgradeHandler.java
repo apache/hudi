@@ -208,8 +208,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
       tablePropsToAdd.put(
           ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER).noDefaultValue(),
           DebeziumConstants.DELETE_OP);
-    }
-    if (writeConfig.contains(DELETE_KEY) && writeConfig.contains(DELETE_MARKER)) {
+    } else if (writeConfig.contains(DELETE_KEY) && writeConfig.contains(DELETE_MARKER)) {
       tablePropsToAdd.put(ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY).noDefaultValue(), writeConfig.getString(DELETE_KEY));
       tablePropsToAdd.put(ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER).noDefaultValue(), writeConfig.getString(DELETE_MARKER));
     }
