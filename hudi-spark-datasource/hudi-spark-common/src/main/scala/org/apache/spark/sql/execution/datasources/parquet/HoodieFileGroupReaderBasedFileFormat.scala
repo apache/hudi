@@ -366,15 +366,9 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     if (remainingPartitionSchema.fields.length == partitionSchema.fields.length) {
       //none of partition fields are read from the file, so the reader will do the appending for us
       val pfileUtils = sparkAdapter.getSparkPartitionedFileUtils
-      try {
-        val modifiedFile = pfileUtils.createPartitionedFile(file.partitionValues, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
-        parquetFileReader.read(modifiedFile, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
-      } catch {
-        case _: ClassCastException =>
-          val typedPartitionValues = ensurePartitionValuesTyped(file.partitionValues, partitionSchema)
-          val modifiedFile = pfileUtils.createPartitionedFile(typedPartitionValues, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
-          parquetFileReader.read(modifiedFile, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
-      }
+      val typedPartitionValues = ensurePartitionValuesTyped(file.partitionValues, partitionSchema)
+      val modifiedFile = pfileUtils.createPartitionedFile(typedPartitionValues, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
+      parquetFileReader.read(modifiedFile, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
     } else if (remainingPartitionSchema.fields.length == 0) {
       //we read all of the partition fields from the file
       val pfileUtils = sparkAdapter.getSparkPartitionedFileUtils
@@ -387,7 +381,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       //then we will read (dataSchema + a + c) and append b. So the final schema will be (data schema + a + c +b)
       //but expected output is (data schema + a + b + c)
       val pfileUtils = sparkAdapter.getSparkPartitionedFileUtils
-      val partitionValues = getFixedPartitionValues(file.partitionValues, partitionSchema, fixedPartitionIndexes)
+      val typedPartitionValues = ensurePartitionValuesTyped(file.partitionValues, partitionSchema)
+      val partitionValues = getFixedPartitionValues(typedPartitionValues, partitionSchema, fixedPartitionIndexes)
       val modifiedFile = pfileUtils.createPartitionedFile(partitionValues, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
       val iter = parquetFileReader.read(modifiedFile, requestedSchema, remainingPartitionSchema, internalSchemaOpt, filters, storageConf)
       projectIter(iter, StructType(requestedSchema.fields ++ remainingPartitionSchema.fields), outputSchema)
