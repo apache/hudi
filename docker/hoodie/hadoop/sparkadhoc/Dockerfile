@@ -50,4 +50,7 @@ RUN set -x \
     ## trino-cli
     && wget -q -O /usr/local/bin/trino ${BASE_URL}/io/trino/trino-cli/${TRINO_VERSION}/trino-cli-${TRINO_VERSION}-executable.jar \
     && chmod +x /usr/local/bin/trino
+
+RUN cp /opt/hive/lib/calcite-core*.jar $HADOOP_HOME/share/hadoop/common/lib/
+RUN cp /opt/hive/lib/libfb*.jar $HADOOP_HOME/share/hadoop/common/lib/
 CMD ["/bin/bash", "/opt/spark/adhoc.sh"]
