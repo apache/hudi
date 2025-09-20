@@ -479,6 +479,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     // Upload metadata that will unlock this lock.
     StorageLockData expiredLockData = new StorageLockData(true, this.getLock().getValidUntilMs(), ownerId);
     Pair<LockUpsertResult, Option<StorageLockFile>> result;
+    long lockExpirationTimeMs = System.currentTimeMillis();
     result = this.storageLockClient.tryUpsertLockFile(expiredLockData, Option.of(this.getLock()));
     switch (result.getLeft()) {
       case UNKNOWN_ERROR:
@@ -488,7 +489,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         return false;
       case SUCCESS:
         logInfoLockState(RELEASED);
-        recordAuditOperation(AuditOperationState.END, System.currentTimeMillis());
+        recordAuditOperation(AuditOperationState.END, lockExpirationTimeMs);
         setLock(null);
         return true;
       case ACQUIRED_BY_OTHERS:
