@@ -269,11 +269,11 @@ public class HoodieIncrSource extends RowSource {
         Option<SnapshotLoadQuerySplitter.CheckpointWithPredicates> newCheckpointAndPredicate =
             snapshotLoadQuerySplitter.get().getNextCheckpointWithPredicates(snapshot, queryContext);
         if (newCheckpointAndPredicate.isPresent()) {
-          endCompletionTime = newCheckpointAndPredicate.get().endCompletionTime;
-          predicate = Option.of(newCheckpointAndPredicate.get().predicateFilter);
+          endCompletionTime = newCheckpointAndPredicate.get().getEndCompletionTime();
+          predicate = Option.ofNullable(newCheckpointAndPredicate.get().getPredicateFilter());
           instantTimeList = queryContext.getInstants().stream()
               .filter(instant -> compareTimestamps(
-                  instant.getCompletionTime(), LESSER_THAN_OR_EQUALS, newCheckpointAndPredicate.get().endCompletionTime))
+                  instant.getCompletionTime(), LESSER_THAN_OR_EQUALS, newCheckpointAndPredicate.get().getEndCompletionTime()))
               .map(HoodieInstant::requestedTime)
               .collect(Collectors.toList());
         } else {
