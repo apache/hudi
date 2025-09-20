@@ -634,11 +634,11 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
         // Test case: Version 9 table with PostgresDebeziumAvroPayload (should set partial update mode and custom properties)
         arguments("Version 9 with PostgresDebeziumAvroPayload", null, PostgresDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE,
             8, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, PostgresDebeziumAvroPayload.class.getName(),
-            PartialUpdateMode.FILL_UNAVAILABLE.name(), HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE, null, null),
+            PartialUpdateMode.FILL_UNAVAILABLE.name(), HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE, "_change_operation_type", "d"),
 
         // Test case: Version 9 table with AWSDmsAvroPayload (should set custom delete properties)
         arguments("Version 9 with AWSDmsAvroPayload", null, AWSDmsAvroPayload.class.getName(), null, null, HoodieTableVersion.NINE,
-            5, COMMIT_TIME_ORDERING.name(), null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, AWSDmsAvroPayload.class.getName(), null, null, "_change_operation_type", "d"),
+            5, COMMIT_TIME_ORDERING.name(), null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, AWSDmsAvroPayload.class.getName(), null, null, "Op", "D"),
 
         // Test case: Version 9 table with EventTimeAvroPayload (event time based payload)
         arguments("Version 9 with EventTimeAvroPayload", null, EventTimeAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE,
@@ -707,7 +707,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
             "Custom merge property " + HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE + " not expected to be set");
       }
 
-      if (expectedDeleteKey != null) {
+      if (expectedDeleteKey != null || configs.containsKey(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY)) {
         assertEquals(expectedDeleteKey, configs.get(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY),
             "Delete key mismatch for: " + testName);
       } else {
