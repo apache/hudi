@@ -521,7 +521,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> METADATA_FILE_CACHE_MAX_SIZE_MB = ConfigProperty
       .key(METADATA_PREFIX + ".file.cache.max.size.mb")
-      .defaultValue(0)
+      .defaultValue(50)
       .markAdvanced()
       .sinceVersion("1.1.0")
       .withDocumentation("Max size in MB below which metadata file (HFile) will be downloaded "
