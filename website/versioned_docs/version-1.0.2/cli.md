@@ -5,7 +5,7 @@ last_modified_at: 2021-08-18T15:59:57-04:00
 ---
 
 ### Local set up
-Once hudi has been built, the shell can be fired by via  `cd packaging/hudi-cli-bundle && hudi-cli-with-bundle.sh` or `packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh`.
+Once hudi has been built, the shell can be fired up via  `cd packaging/hudi-cli-bundle && hudi-cli-with-bundle.sh` or `packaging/hudi-cli-bundle/hudi-cli-with-bundle.sh`.
 
 ### Hudi CLI setup
 In release `0.13.0` we have now added new way of launching the `hudi cli`, which is using the `hudi-cli-bundle` script.
@@ -68,8 +68,8 @@ Apart from these, we might need to add aws jars to class path so that accessing 
 We need two jars, namely, aws-java-sdk-bundle jar and hadoop-aws jar which you can find online.
 For eg:
 ```
-wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar -o /lib/spark-3.5.4-bin-hadoop3/jars/hadoop-aws-3.3.4.jar
-wget https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar -o /lib/spark-3.5.4-bin-hadoop3/jars/aws-java-sdk-bundle-1.12.262.jar
+wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar -O /lib/spark-3.5.4-bin-hadoop3/jars/hadoop-aws-3.3.4.jar
+wget https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar -O /lib/spark-3.5.4-bin-hadoop3/jars/aws-java-sdk-bundle-1.12.262.jar
 ```
 
 #### Note: These AWS jar versions below are specific to Spark 3.5.4 and Hadoop 3.3.4
