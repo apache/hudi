@@ -50,7 +50,7 @@ import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapCol
 import org.apache.spark.sql.hudi.MultipleColumnarFileFormatReader
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
 import org.apache.spark.util.SerializableConfiguration
 
@@ -365,7 +365,11 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                            storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
     if (remainingPartitionSchema.fields.length == partitionSchema.fields.length) {
       //none of partition fields are read from the file, so the reader will do the appending for us
-      parquetFileReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
+      // Ensure partition values are properly typed before passing to the reader
+      val typedPartitionValues = ensurePartitionValuesTyped(file.partitionValues, partitionSchema)
+      val pfileUtils = sparkAdapter.getSparkPartitionedFileUtils
+      val modifiedFile = pfileUtils.createPartitionedFile(typedPartitionValues, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
+      parquetFileReader.read(modifiedFile, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
     } else if (remainingPartitionSchema.fields.length == 0) {
       //we read all of the partition fields from the file
       val pfileUtils = sparkAdapter.getSparkPartitionedFileUtils
@@ -385,6 +389,19 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     }
   }
 
+  private def ensurePartitionValuesTyped(partitionValues: InternalRow, partitionSchema: StructType): InternalRow = {
+    val typedValues = (0 until partitionValues.numFields).map(i => {
+      val value = partitionValues.get(i, partitionSchema.fields(i).dataType)
+      value match {
+        case utf8String: org.apache.spark.unsafe.types.UTF8String =>
+          val expectedType = partitionSchema.fields(i).dataType
+          castStringToType(utf8String.toString, expectedType)
+        case other => other
+      }
+    })
+    InternalRow.fromSeq(typedValues)
+  }
+
   private def projectIter(iter: Iterator[Any], from: StructType, to: StructType): Iterator[InternalRow] = {
     val unsafeProjection = generateUnsafeProjection(from, to)
     val batchProjection = ColumnarBatchUtils.generateProjection(from, to)
@@ -395,7 +412,32 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   }
 
   private def getFixedPartitionValues(allPartitionValues: InternalRow, partitionSchema: StructType, fixedPartitionIndexes: Set[Int]): InternalRow = {
-    InternalRow.fromSeq(allPartitionValues.toSeq(partitionSchema).zipWithIndex.filter(p => fixedPartitionIndexes.contains(p._2)).map(p => p._1))
+    val originalValues = (0 until allPartitionValues.numFields).map(i => {
+      val value = allPartitionValues.get(i, partitionSchema.fields(i).dataType)
+      value match {
+        case utf8String: org.apache.spark.unsafe.types.UTF8String =>
+          val expectedType = partitionSchema.fields(i).dataType
+          castStringToType(utf8String.toString, expectedType)
+        case other => other
+      }
+    })
+    InternalRow.fromSeq(originalValues.zipWithIndex.filter(p => fixedPartitionIndexes.contains(p._2)).map(p => p._1))
+  }
+
+  private def castStringToType(value: String, dataType: DataType): Any = {
+    import org.apache.spark.sql.types._
+    dataType match {
+      case LongType => value.toLong
+      case IntegerType => value.toInt
+      case ShortType => value.toShort
+      case ByteType => value.toByte
+      case FloatType => value.toFloat
+      case DoubleType => value.toDouble
+      case BooleanType => value.toBoolean
+      case _: DecimalType => new java.math.BigDecimal(value)
+      case StringType => org.apache.spark.unsafe.types.UTF8String.fromString(value)
+      case _ => value
+    }
   }
 
   override def inferSchema(sparkSession: SparkSession, options: Map[String, String], files: Seq[FileStatus]): Option[StructType] = {
