@@ -313,7 +313,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> BOOTSTRAP_INDEX_ENABLE = ConfigProperty
       .key("hoodie.bootstrap.index.enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .withDocumentation("Whether or not, this is a bootstrapped table, with bootstrap base data and an mapping index defined, default true.");
 
   public static final ConfigProperty<String> BOOTSTRAP_INDEX_CLASS_NAME = ConfigProperty
@@ -793,8 +793,8 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public HoodieTableVersion getTableInitialVersion() {
     return contains(INITIAL_VERSION)
-        ? HoodieTableVersion.fromVersionCode(getInt(INITIAL_VERSION))
-        : INITIAL_VERSION.defaultValue();
+            ? HoodieTableVersion.fromVersionCode(getInt(INITIAL_VERSION))
+            : INITIAL_VERSION.defaultValue();
   }
 
   public void setTableVersion(HoodieTableVersion tableVersion) {
