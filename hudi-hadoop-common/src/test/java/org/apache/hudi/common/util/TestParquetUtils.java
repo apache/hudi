@@ -24,7 +24,6 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -32,6 +31,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.JsonProperties;
@@ -64,6 +64,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.METADATA_FIELD_SCHEMA;
+import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -278,7 +279,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     columnList.add(dataField);
 
     List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = parquetUtils.readColumnStatsFromMetadata(
-            HoodieTestUtils.getStorage(filePath), new StoragePath(filePath), columnList)
+            HoodieTestUtils.getStorage(filePath), new StoragePath(filePath), columnList, V1)
         .stream()
         .sorted(Comparator.comparing(HoodieColumnRangeMetadata::getColumnName))
         .collect(Collectors.toList());

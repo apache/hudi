@@ -34,8 +34,8 @@ import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+
 import org.apache.parquet.avro.AvroReadSupport;
-import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetInputSplit;
@@ -47,6 +47,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 import static org.apache.parquet.hadoop.ParquetInputFormat.getFilter;
 
 public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
@@ -59,7 +60,7 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
     ParquetMetadata fileFooter =
         ParquetFileReader.readFooter(conf, ((ParquetInputSplit) inputSplit).getPath(), ParquetMetadataConverter.NO_FILTER);
     MessageType messageType = fileFooter.getFileMetaData().getSchema();
-    baseSchema = new AvroSchemaConverter(conf).convert(messageType);
+    baseSchema = getAvroSchemaConverter(conf).convert(messageType);
 
     if (internalSchemaOption.isPresent()) {
       // do schema reconciliation in case there exists read column which is not in the file schema.

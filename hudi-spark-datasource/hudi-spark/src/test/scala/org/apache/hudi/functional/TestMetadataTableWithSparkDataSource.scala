@@ -22,7 +22,6 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.view.FileSystemViewManager
@@ -31,7 +30,8 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieIndexVersion, HoodieTableMetadata}
+import org.apache.hudi.stats.HoodieColumnRangeMetadata
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
@@ -161,7 +161,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     val colRangeMetadataList: java.util.List[HoodieColumnRangeMetadata[Comparable[_]]] = new ParquetUtils()
       .readColumnStatsFromMetadata(
         new HoodieHadoopStorage(fileStatuses.get(0).getPath, HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration())),
-        fileStatuses.get(0).getPath, Collections.singletonList("begin_lat"))
+        fileStatuses.get(0).getPath, Collections.singletonList("begin_lat"), HoodieIndexVersion.V1)
     val columnRangeMetadata = colRangeMetadataList.get(0)
 
     assertEquals(metadataColStats.getValueCount, columnRangeMetadata.getValueCount)
@@ -219,7 +219,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     val colRangeMetadataList: java.util.List[HoodieColumnRangeMetadata[Comparable[_]]] = new ParquetUtils()
       .readColumnStatsFromMetadata(
         new HoodieHadoopStorage(fileStatuses.get(0).getPath, HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration())),
-        fileStatuses.get(0).getPath, Collections.singletonList("begin_lat"))
+        fileStatuses.get(0).getPath, Collections.singletonList("begin_lat"), HoodieIndexVersion.V1)
     val columnRangeMetadata = colRangeMetadataList.get(0)
 
     assertEquals(metadataColStats.getValueCount, columnRangeMetadata.getValueCount)

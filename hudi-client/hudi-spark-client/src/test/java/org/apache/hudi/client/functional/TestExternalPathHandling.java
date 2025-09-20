@@ -31,7 +31,6 @@ import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -49,6 +48,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
@@ -291,8 +292,8 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     writeStat.setTotalCorruptLogBlock(0);
     writeStat.setTotalRollbackBlocks(0);
     Map<String, HoodieColumnRangeMetadata<Comparable>> stats = new HashMap<>();
-    stats.put(FIELD_1, HoodieColumnRangeMetadata.<Comparable>create(filePath, FIELD_1, 1, 2, 0, 2, 5, 10));
-    stats.put(FIELD_2, HoodieColumnRangeMetadata.<Comparable>create(filePath, FIELD_2, "a", "b", 1, 3, 10, 20));
+    stats.put(FIELD_1, HoodieColumnRangeMetadata.<Comparable>create(filePath, FIELD_1, 1, 2, 0, 2, 5, 10, ValueMetadata.V1EmptyMetadata.get()));
+    stats.put(FIELD_2, HoodieColumnRangeMetadata.<Comparable>create(filePath, FIELD_2, "a", "b", 1, 3, 10, 20, ValueMetadata.V1EmptyMetadata.get()));
     writeStat.putRecordsStats(stats);
     writeStatus.setStat(writeStat);
     return writeStatus;

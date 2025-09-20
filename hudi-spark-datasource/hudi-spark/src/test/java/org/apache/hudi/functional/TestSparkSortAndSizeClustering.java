@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.stats.ValueType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
@@ -182,9 +183,9 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
         assertTrue(actualDate.compareTo(startDate) > 0 && actualDate.compareTo(endDate) < 0);
       }
       if (!row.isNullAt(tsLocalMillisFieldIndex)) {
-        assertEquals(ts, row.get(tsLocalMillisFieldIndex));
+        assertEquals(ValueType.toLocalTimestampMillis(ts, null), row.get(tsLocalMillisFieldIndex));
       }
-      assertEquals(ts * 1000L, row.get(tsLocalMicrosFieldIndex));
+      assertEquals(ValueType.toLocalTimestampMicros(Math.multiplyExact(ts, 1000L), null), row.get(tsLocalMicrosFieldIndex));
     }
   }
 

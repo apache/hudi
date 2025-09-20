@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
+import org.apache.hudi.stats.ValueMetadata;
 
 import org.apache.avro.generic.GenericRecord;
 
@@ -44,8 +45,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
-import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -305,14 +304,16 @@ public enum MetadataPartitionType {
       checkArgument(record.getSchema().getField(SCHEMA_FIELD_ID_COLUMN_STATS) == null,
           String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_COLUMN_STATS, MetadataPartitionType.COLUMN_STATS.getRecordType()));
     } else {
+      ValueMetadata valueMetadata = ValueMetadata.getValueMetadata(columnStatsRecord);
       HoodieMetadataColumnStats.Builder columnStatsBuilder = HoodieMetadataColumnStats.newBuilder(METADATA_COLUMN_STATS_BUILDER_STUB.get())
           .setFileName(columnStatsRecord.get(COLUMN_STATS_FIELD_FILE_NAME).toString())
           .setColumnName(columnStatsRecord.get(COLUMN_STATS_FIELD_COLUMN_NAME).toString())
           // AVRO-2377 1.9.2 Modified the type of org.apache.avro.Schema#FIELD_RESERVED to Collections.unmodifiableSet.
           // This causes Kryo to fail when deserializing a GenericRecord, See HUDI-5484.
           // We should avoid using GenericRecord and convert GenericRecord into a serializable type.
-          .setMinValue(wrapValueIntoAvro(unwrapAvroValueWrapper(columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE))))
-          .setMaxValue(wrapValueIntoAvro(unwrapAvroValueWrapper(columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE))))
+          .setMinValue(valueMetadata.wrapValue(valueMetadata.unwrapValue(columnStatsRecord.get(COLUMN_STATS_FIELD_MIN_VALUE))))
+          .setMaxValue(valueMetadata.wrapValue(valueMetadata.unwrapValue(columnStatsRecord.get(COLUMN_STATS_FIELD_MAX_VALUE))))
+          .setValueType(valueMetadata.getValueTypeInfo())
           .setValueCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_VALUE_COUNT))
           .setNullCount((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_NULL_COUNT))
           .setTotalSize((Long) columnStatsRecord.get(COLUMN_STATS_FIELD_TOTAL_SIZE))

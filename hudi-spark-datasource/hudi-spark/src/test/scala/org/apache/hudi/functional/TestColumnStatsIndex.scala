@@ -35,6 +35,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERA
 import org.apache.hudi.common.util.{ParquetUtils, StringUtils}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams, WrapperCreator}
+import org.apache.hudi.metadata.HoodieIndexVersion
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
@@ -50,7 +51,7 @@ import org.apache.spark.sql.types._
 import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
+import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource}
 
 import java.math.{BigDecimal => JBigDecimal}
 import java.nio.ByteBuffer
@@ -504,7 +505,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(value = Array("6", "8"))
+  @MethodSource(Array("testMORDeleteBlocksParams"))
   def testMORDeleteBlocks(tableVersion: Int): Unit = {
     val tableType: HoodieTableType = HoodieTableType.MERGE_ON_READ
     val partitionCol = "c8"
@@ -1073,7 +1074,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     val parquetFilePath = new StoragePath(
       fs.listStatus(path).filter(fs => fs.getPath.getName.endsWith(".parquet")).toSeq.head.getPath.toUri)
 
-    val ranges = utils.readColumnStatsFromMetadata(storage, parquetFilePath, Seq("c1", "c2", "c3a", "c3b", "c3c", "c4", "c5", "c6", "c7", "c8").asJava)
+    val ranges = utils.readColumnStatsFromMetadata(storage, parquetFilePath, Seq("c1", "c2", "c3a", "c3b", "c3c", "c4", "c5", "c6", "c7", "c8").asJava, HoodieIndexVersion.V1)
 
     ranges.asScala.foreach(r => {
       // NOTE: Unfortunately Parquet can't compute statistics for Timestamp column, hence we
@@ -1111,5 +1112,17 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     assertTrue(deserialized.isInstanceOf[JBigDecimal], "Deserialized value should be a java.math.BigDecimal")
     assertEquals(expected, deserialized.asInstanceOf[JBigDecimal],
       s"Decimal value from $description does not match")
+  }
+}
+
+object TestColumnStatsIndex {
+  def testMORDeleteBlocksParams: java.util.stream.Stream[Arguments] = {
+    val currentVersionCode = HoodieTableVersion.current().versionCode().toString
+    java.util.stream.Stream.of(Seq(
+      Arguments.arguments("6"),
+      Arguments.arguments("8"),
+      Arguments.arguments(currentVersionCode)
+    )
+      : _*)
   }
 }

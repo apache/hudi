@@ -18,7 +18,8 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 
 import java.util.Map;
 
@@ -30,5 +31,5 @@ public interface ColumnRangeMetadataProvider {
   /**
    * Get the column statistics, key is column name, value is the statistic for the column.
    */
-  Map<String, HoodieColumnRangeMetadata<Comparable>> getColumnRangeMeta(String filePath);
+  Map<String, HoodieColumnRangeMetadata<Comparable>> getColumnRangeMeta(String filePath, HoodieIndexVersion indexVersion);
 }

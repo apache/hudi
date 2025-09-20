@@ -50,6 +50,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.DateTimeUtils.instantToMicros;
@@ -127,22 +128,21 @@ public class HoodieAvroWrapperUtils {
           .setValue(instantToMicros(instant))
           .build();
     } else if (value instanceof Boolean) {
-      return BooleanWrapper.newBuilder(BOOLEAN_WRAPPER_BUILDER_STUB.get()).setValue((Boolean) value).build();
+      return wrapBoolean(value);
     } else if (value instanceof Integer) {
-      return IntWrapper.newBuilder(INT_WRAPPER_BUILDER_STUB.get()).setValue((Integer) value).build();
+      return wrapInt(value);
     } else if (value instanceof Long) {
-      return LongWrapper.newBuilder(LONG_WRAPPER_BUILDER_STUB.get()).setValue((Long) value).build();
+      return wrapLong(value);
     } else if (value instanceof Float) {
-      return FloatWrapper.newBuilder(FLOAT_WRAPPER_BUILDER_STUB.get()).setValue((Float) value).build();
+      return wrapFloat(value);
     } else if (value instanceof Double) {
-      return DoubleWrapper.newBuilder(DOUBLE_WRAPPER_BUILDER_STUB.get()).setValue((Double) value).build();
+      return wrapDouble(value);
     } else if (value instanceof ByteBuffer) {
-      return BytesWrapper.newBuilder(BYTES_WRAPPER_BUILDER_STUB.get()).setValue((ByteBuffer) value).build();
+      return wrapBytes(value);
     } else if (value instanceof String || value instanceof Utf8) {
-      return StringWrapper.newBuilder(STRING_WRAPPER_BUILDER_STUB.get()).setValue(value.toString()).build();
+      return wrapString(value.toString());
     } else if (value instanceof ArrayComparable) {
-      List<Object> avroValues = OrderingValues.getValues((ArrayComparable) value).stream().map(HoodieAvroWrapperUtils::wrapValueIntoAvro).collect(Collectors.toList());
-      return ArrayWrapper.newBuilder(ARRAY_WRAPPER_BUILDER_STUB.get()).setWrappedValues(avroValues).build();
+      return wrapArray(value, HoodieAvroWrapperUtils::wrapValueIntoAvro);
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", value.getClass()));
     }
@@ -174,30 +174,26 @@ public class HoodieAvroWrapperUtils {
     } else if (avroValueWrapper instanceof TimestampMicrosWrapper) {
       return microsToInstant(((TimestampMicrosWrapper) avroValueWrapper).getValue());
     } else if (avroValueWrapper instanceof BooleanWrapper) {
-      return ((BooleanWrapper) avroValueWrapper).getValue();
+      return unwrapBoolean(avroValueWrapper);
     } else if (avroValueWrapper instanceof IntWrapper) {
-      return ((IntWrapper) avroValueWrapper).getValue();
+      return unwrapInt(avroValueWrapper);
     } else if (avroValueWrapper instanceof LongWrapper) {
-      return ((LongWrapper) avroValueWrapper).getValue();
+      return unwrapLong(avroValueWrapper);
     } else if (avroValueWrapper instanceof FloatWrapper) {
-      return ((FloatWrapper) avroValueWrapper).getValue();
+      return unwrapFloat(avroValueWrapper);
     } else if (avroValueWrapper instanceof DoubleWrapper) {
-      return ((DoubleWrapper) avroValueWrapper).getValue();
+      return unwrapDouble(avroValueWrapper);
     } else if (avroValueWrapper instanceof BytesWrapper) {
-      return ((BytesWrapper) avroValueWrapper).getValue();
+      return unwrapBytes(avroValueWrapper);
     } else if (avroValueWrapper instanceof StringWrapper) {
-      return ((StringWrapper) avroValueWrapper).getValue();
+      return unwrapString(avroValueWrapper);
     } else if (avroValueWrapper instanceof ArrayWrapper) {
       ArrayWrapper arrayWrapper = (ArrayWrapper) avroValueWrapper;
       return OrderingValues.create(arrayWrapper.getWrappedValues().stream()
           .map(HoodieAvroWrapperUtils::unwrapAvroValueWrapper)
           .toArray(Comparable[]::new));
     } else if (avroValueWrapper instanceof GenericRecord) {
-      // NOTE: This branch could be hit b/c Avro records could be reconstructed
-      //       as {@code GenericRecord)
-      // TODO add logical type decoding
-      GenericRecord genRec = (GenericRecord) avroValueWrapper;
-      return (Comparable<?>) genRec.get("value");
+      return unwrapGenericRecord(avroValueWrapper);
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
     }
@@ -237,5 +233,121 @@ public class HoodieAvroWrapperUtils {
       }
     }
     return Pair.of(false, null);
+  }
+
+  public enum PrimitiveWrapperType {
+    V1(Object.class, HoodieAvroWrapperUtils::wrapValueIntoAvro, HoodieAvroWrapperUtils::unwrapAvroValueWrapper, GenericRecord.class),
+    NULL(Void.class, HoodieAvroWrapperUtils::wrapNull, HoodieAvroWrapperUtils::unwrapNull, Void.class),
+    BOOLEAN(Boolean.class, HoodieAvroWrapperUtils::wrapBoolean, HoodieAvroWrapperUtils::unwrapBoolean, BooleanWrapper.class),
+    INT(Integer.class, HoodieAvroWrapperUtils::wrapInt, HoodieAvroWrapperUtils::unwrapInt, IntWrapper.class),
+    LONG(Long.class, HoodieAvroWrapperUtils::wrapLong, HoodieAvroWrapperUtils::unwrapLong, LongWrapper.class),
+    FLOAT(Float.class, HoodieAvroWrapperUtils::wrapFloat, HoodieAvroWrapperUtils::unwrapFloat, FloatWrapper.class),
+    DOUBLE(Double.class, HoodieAvroWrapperUtils::wrapDouble, HoodieAvroWrapperUtils::unwrapDouble, DoubleWrapper.class),
+    STRING(String.class, HoodieAvroWrapperUtils::wrapString, HoodieAvroWrapperUtils::unwrapString, StringWrapper.class),
+    BYTES(ByteBuffer.class, HoodieAvroWrapperUtils::wrapBytes, HoodieAvroWrapperUtils::unwrapBytes, BytesWrapper.class);
+
+    private final Class<?> clazz;
+    private final Function<Comparable<?>, Object> wrapper;
+    private final Function<Object, Comparable<?>> unwrapper;
+    private final Class<?> wrapperClass;
+
+    PrimitiveWrapperType(Class<?> clazz, Function<Comparable<?>, Object> wrapper, Function<Object, Comparable<?>> unwrapper, Class<?> wrapperClass) {
+      this.clazz = clazz;
+      this.wrapper = wrapper;
+      this.unwrapper = unwrapper;
+      this.wrapperClass = wrapperClass;
+    }
+
+    public Class<?> getClazz() {
+      return clazz;
+    }
+
+    public Object wrap(Comparable<?> value) {
+      return wrapper.apply(value);
+    }
+
+    public Comparable<?> unwrap(Object value) {
+      return unwrapper.apply(value);
+    }
+
+    public Class<?> getWrapperClass() {
+      return wrapperClass;
+    }
+  }
+
+  private static Object wrapNull(Comparable<?> value) {
+    return value;
+  }
+
+  private static Object wrapBoolean(Comparable<?> value) {
+    return BooleanWrapper.newBuilder(BOOLEAN_WRAPPER_BUILDER_STUB.get()).setValue((Boolean) value).build();
+  }
+
+  private static Object wrapInt(Comparable<?> value) {
+    return IntWrapper.newBuilder(INT_WRAPPER_BUILDER_STUB.get()).setValue((Integer) value).build();
+  }
+
+  private static Object wrapLong(Comparable<?> value) {
+    return LongWrapper.newBuilder(LONG_WRAPPER_BUILDER_STUB.get()).setValue((Long) value).build();
+  }
+
+  private static Object wrapFloat(Comparable<?> value) {
+    return FloatWrapper.newBuilder(FLOAT_WRAPPER_BUILDER_STUB.get()).setValue((Float) value).build();
+  }
+
+  private static Object wrapDouble(Comparable<?> value) {
+    return DoubleWrapper.newBuilder(DOUBLE_WRAPPER_BUILDER_STUB.get()).setValue((Double) value).build();
+  }
+
+  private static Object wrapString(Comparable<?> value) {
+    return StringWrapper.newBuilder(STRING_WRAPPER_BUILDER_STUB.get()).setValue((String) value).build();
+  }
+
+  private static Object wrapBytes(Comparable<?> value) {
+    return BytesWrapper.newBuilder(BYTES_WRAPPER_BUILDER_STUB.get()).setValue((ByteBuffer) value).build();
+  }
+
+  public static Object wrapArray(Comparable<?> value, Function<Comparable<?>, Object> wrapper) {
+    List<Object> avroValues = OrderingValues.getValues((ArrayComparable) value).stream().map(wrapper::apply).collect(Collectors.toList());
+    return ArrayWrapper.newBuilder(ARRAY_WRAPPER_BUILDER_STUB.get()).setWrappedValues(avroValues).build();
+  }
+
+  private static Comparable<?> unwrapNull(Object val) {
+    return (Comparable<?>) val;
+  }
+
+  private static Comparable<?> unwrapBoolean(Object val) {
+    return ((BooleanWrapper) val).getValue();
+  }
+
+  private static Comparable<?> unwrapInt(Object val) {
+    return ((IntWrapper) val).getValue();
+  }
+
+  private static Comparable<?> unwrapLong(Object val) {
+    return ((LongWrapper) val).getValue();
+  }
+
+  private static Comparable<?> unwrapFloat(Object val) {
+    return ((FloatWrapper) val).getValue();
+  }
+
+  private static Comparable<?> unwrapDouble(Object val) {
+    return ((DoubleWrapper) val).getValue();
+  }
+
+  private static Comparable<?> unwrapString(Object val) {
+    return ((StringWrapper) val).getValue();
+  }
+
+  private static Comparable<?> unwrapBytes(Object val) {
+    return ((BytesWrapper) val).getValue();
+  }
+
+  // NOTE: This branch could be hit b/c Avro records could be reconstructed
+  //       as {@code GenericRecord)
+  public static Comparable<?> unwrapGenericRecord(Object val) {
+    GenericRecord genRec = (GenericRecord) val;
+    return (Comparable<?>) genRec.get("value");
   }
 }
