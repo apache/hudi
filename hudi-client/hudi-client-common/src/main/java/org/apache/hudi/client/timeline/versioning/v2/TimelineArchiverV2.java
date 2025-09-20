@@ -85,7 +85,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
     this.config = config;
     this.table = table;
     this.metaClient = table.getMetaClient();
-    this.txnManager = new TransactionManager(config, table.getStorage());
+    this.txnManager = table.getTxnManager().get();
     this.timelineWriter = LSMTimelineWriter.getInstance(config, table);
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();
@@ -97,7 +97,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
     try {
       if (acquireLock) {
         // there is no owner or instant time per se for archival.
-        txnManager.beginStateChange(Option.empty(), Option.empty());
+        txnManager.beginStateChange();
       }
     } catch (HoodieLockException e) {
       LOG.error("Fail to begin transaction", e);

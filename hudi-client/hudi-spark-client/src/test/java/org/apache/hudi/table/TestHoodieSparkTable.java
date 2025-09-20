@@ -110,7 +110,7 @@ public class TestHoodieSparkTable extends HoodieCommonTestHarness {
         throw new HoodieException("Failed to check data file existance " + fileName);
       }
     });
-    HoodieTable hoodieTable = HoodieSparkTable.create(writeConfig, getEngineContext(), metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.createForReads(writeConfig, getEngineContext(), metaClient);
     if (failureType == DeleteFailureType.RUNTIME_EXC_ON_DELETE || failureType == DeleteFailureType.FALSE_ON_DELETE_IS_EXISTS_TRUE) {
       assertThrows(HoodieException.class, () -> {
         hoodieTable.reconcileAgainstMarkers(getEngineContext(), "0001", writeStatList, false, false, writeMarkers);

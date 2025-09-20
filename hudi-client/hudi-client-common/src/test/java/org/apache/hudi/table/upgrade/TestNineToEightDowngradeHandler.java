@@ -19,6 +19,7 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -98,6 +99,7 @@ class TestNineToEightDowngradeHandler {
   public void setUp() {
     when(upgradeDowngradeHelper.getTable(any(), any())).thenReturn(table);
     when(table.getMetaClient()).thenReturn(metaClient);
+    when(table.getTxnManager()).thenReturn(Option.of(mock(TransactionManager.class)));
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     when(tableConfig.getOrderingFieldsStr()).thenReturn(Option.empty());
   }

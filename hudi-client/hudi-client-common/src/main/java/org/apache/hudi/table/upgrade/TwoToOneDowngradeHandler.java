@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -68,6 +69,7 @@ public class TwoToOneDowngradeHandler implements DowngradeHandler {
         throw new HoodieException("Converting marker files to DIRECT style failed during downgrade", e);
       }
     }
+    table.getTxnManager().ifPresent(obj -> ((TransactionManager) obj).close());
     return new UpgradeDowngrade.TableConfigChangeSet();
   }
 

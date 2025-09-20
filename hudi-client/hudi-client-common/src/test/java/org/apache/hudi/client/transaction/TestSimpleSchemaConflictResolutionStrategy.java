@@ -26,15 +26,13 @@ import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
@@ -57,7 +55,6 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_AC
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
-import static org.apache.hudi.common.testutils.HoodieCommonTestHarness.incTimestampStrByOne;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
 import static org.apache.hudi.config.HoodieWriteConfig.ENABLE_SCHEMA_CONFLICT_RESOLUTION;
@@ -65,14 +62,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestSimpleSchemaConflictResolutionStrategy {
+public class TestSimpleSchemaConflictResolutionStrategy extends HoodieCommonTestHarness {
 
-  @Mock
-  public static FileSystemViewManager viewManager;
-  @Mock
-  public static HoodieEngineContext engineContext;
-  @Mock
-  public static TaskContextSupplier taskContextSupplier;
   public Option<HoodieInstant> lastCompletedTxnOwnerInstant;
   public Option<HoodieInstant> tableCompactionOwnerInstant;
   public Option<HoodieInstant> tableClusteringOwnerInstant;
@@ -121,7 +112,7 @@ public class TestSimpleSchemaConflictResolutionStrategy {
         COMMIT_ACTION)));
 
     if (setupLegacyClustering) {
-      Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> result = getGetDummyClusteringMetadata();
+      Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> result = dummyClusteringMetadata();
       dummyInstantGenerator.addReplaceCommit(tableReplacementOwnerInstant.get().requestedTime(), Option.of(result.getLeft()), Option.empty(), result.getRight());
     }
     // Setup config
@@ -130,7 +121,7 @@ public class TestSimpleSchemaConflictResolutionStrategy {
         enableResolution ? ENABLE_SCHEMA_CONFLICT_RESOLUTION.defaultValue().toString() : "false");
     config = HoodieWriteConfig.newBuilder().withSchema(writerSchemaOfTxn).withPath(basePath.toString()).withProperties(typedProperties).build();
 
-    table = new TestBaseHoodieTable(config, engineContext, viewManager, metaClient, taskContextSupplier);
+    table = new TestBaseHoodieTable(config, getEngineContext(), metaClient);
     strategy = new SimpleSchemaConflictResolutionStrategy();
   }
 
@@ -244,7 +235,7 @@ public class TestSimpleSchemaConflictResolutionStrategy {
     assertFalse(hasSchema);
   }
 
-  private Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> getGetDummyClusteringMetadata() {
+  private Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> dummyClusteringMetadata() {
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
     requestedReplaceMetadata.setOperationType(WriteOperationType.CLUSTER.toString());
     requestedReplaceMetadata.setVersion(1);

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.streamer;
 
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -211,7 +212,8 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     HoodieInstant instant = new HoodieInstant(HoodieInstant.State.INFLIGHT,
         HoodieTimeline.COMMIT_ACTION, commitTime, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
     timeline.createNewInstant(instant);
-    timeline.saveAsComplete(instant, HoodieCommonTestHarness.getCommitMetadata(metaClient, basePath(), "partition1", commitTime, 2, extraMetadata));
+    timeline.saveAsComplete(instant, HoodieCommonTestHarness.getCommitMetadata(metaClient, basePath(), "partition1", commitTime, 2, extraMetadata),
+        WriteClientTestUtils.createNewInstantTime());
     metaClient.reloadActiveTimeline();
   }
 
@@ -317,7 +319,8 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     HoodieInstant instant = new HoodieInstant(HoodieInstant.State.INFLIGHT,
         HoodieTimeline.DELTA_COMMIT_ACTION, deltaCommitTime, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
     timeline.createNewInstant(instant);
-    timeline.saveAsComplete(instant, HoodieCommonTestHarness.getCommitMetadata(metaClient, basePath(), "partition1", deltaCommitTime, 2, extraMetadata));
+    timeline.saveAsComplete(instant, HoodieCommonTestHarness.getCommitMetadata(metaClient, basePath(), "partition1", deltaCommitTime, 2, extraMetadata),
+        WriteClientTestUtils.createNewInstantTime());
     metaClient.reloadActiveTimeline();
   }
 

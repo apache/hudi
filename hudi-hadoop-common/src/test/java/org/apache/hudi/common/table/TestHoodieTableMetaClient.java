@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -94,7 +95,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     commitTimeline.createNewInstant(instant);
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     metadata.addMetadata("key", "val");
-    commitTimeline.saveAsComplete(instant, Option.of(metadata));
+    commitTimeline.saveAsComplete(instant, Option.of(metadata), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     commitTimeline = commitTimeline.reload();
     HoodieInstant completedInstant = commitTimeline.getInstantsAsStream().findFirst().get();
     assertTrue(completedInstant.isCompleted());
@@ -112,7 +113,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     activeTimeline.createNewInstant(instant);
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     metadata.addMetadata("key", "val");
-    activeTimeline.saveAsComplete(instant, Option.of(metadata));
+    activeTimeline.saveAsComplete(instant, Option.of(metadata), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
 
     // Commit timeline should not auto-reload every time getActiveCommitTimeline(), it should be cached
     activeTimeline = metaClient.getActiveTimeline();

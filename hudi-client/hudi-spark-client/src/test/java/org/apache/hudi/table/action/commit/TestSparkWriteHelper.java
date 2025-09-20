@@ -57,7 +57,7 @@ public class TestSparkWriteHelper extends TestWriterHelperBase<HoodieData<Hoodie
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withEmbeddedTimelineServerEnabled(false)
         .build();
-    this.table = HoodieSparkTable.create(config, context, metaClient);
+    this.table = HoodieSparkTable.createForReads(config, context);
   }
 
   @Override

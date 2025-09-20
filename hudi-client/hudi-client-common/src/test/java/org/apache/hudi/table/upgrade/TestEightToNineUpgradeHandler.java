@@ -19,6 +19,7 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
@@ -113,6 +114,7 @@ class TestEightToNineUpgradeHandler {
   public void setUp() throws IOException {
     when(upgradeDowngradeHelper.getTable(any(), any())).thenReturn(table);
     when(table.getMetaClient()).thenReturn(metaClient);
+    when(table.getTxnManager()).thenReturn(Option.of(mock(TransactionManager.class)));
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     when(config.autoUpgrade()).thenReturn(true);
 

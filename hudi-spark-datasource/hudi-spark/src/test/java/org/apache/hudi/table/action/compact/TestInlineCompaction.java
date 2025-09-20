@@ -113,7 +113,7 @@ public class TestInlineCompaction extends CompactionTestBase {
       assertEquals(4, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
       assertEquals(HoodieTimeline.COMMIT_ACTION, metaClient.getActiveTimeline().lastInstant().get().getAction());
       String compactionTime = metaClient.getActiveTimeline().lastInstant().get().requestedTime();
-      assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), HoodieSparkTable.create(cfg, context), compactionTime).doesMarkerDirExist());
+      assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), HoodieSparkTable.createForReads(cfg, context), compactionTime).doesMarkerDirExist());
     }
   }
 
