@@ -26,15 +26,19 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.specific.SpecificRecord;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * An implementation of {@link SizeEstimator} for Avro {@link BufferedRecord}, which estimates the size of
  * Avro record excluding the internal {@link Schema}.
  */
 public class AvroRecordSizeEstimator implements SizeEstimator<BufferedRecord<IndexedRecord>> {
-  private final long sizeOfSchema;
+  private final Map<Integer, Long> sizeOfSchemaMap;
 
   public AvroRecordSizeEstimator(Schema recordSchema) {
-    sizeOfSchema = ObjectSizeCalculator.getObjectSize(recordSchema);
+    this.sizeOfSchemaMap = new HashMap<>();
+    this.sizeOfSchemaMap.put(recordSchema.getFields().size(), ObjectSizeCalculator.getObjectSize(recordSchema));
   }
 
   @Override
@@ -45,6 +49,8 @@ public class AvroRecordSizeEstimator implements SizeEstimator<BufferedRecord<Ind
       return sizeOfRecord;
     }
     // do not contain size of Avro schema as the schema is reused among records
+    Schema recordSchema = record.getRecord().getSchema();
+    long sizeOfSchema = sizeOfSchemaMap.computeIfAbsent(recordSchema.getFields().size(), arity -> ObjectSizeCalculator.getObjectSize(recordSchema));
     return sizeOfRecord - sizeOfSchema + 8;
   }
 }
