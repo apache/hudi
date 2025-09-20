@@ -53,5 +53,4 @@ RUN set -x \
 
 RUN cp /opt/hive/lib/calcite-core*.jar $HADOOP_HOME/share/hadoop/common/lib/
 RUN cp /opt/hive/lib/libfb*.jar $HADOOP_HOME/share/hadoop/common/lib/
-
 CMD ["/bin/bash", "/opt/spark/adhoc.sh"]
