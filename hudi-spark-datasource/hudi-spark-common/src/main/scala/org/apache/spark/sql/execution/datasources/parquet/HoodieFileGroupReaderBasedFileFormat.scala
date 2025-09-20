@@ -365,11 +365,16 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                            storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
     if (remainingPartitionSchema.fields.length == partitionSchema.fields.length) {
       //none of partition fields are read from the file, so the reader will do the appending for us
-      // Ensure partition values are properly typed before passing to the reader
-      val typedPartitionValues = ensurePartitionValuesTyped(file.partitionValues, partitionSchema)
       val pfileUtils = sparkAdapter.getSparkPartitionedFileUtils
-      val modifiedFile = pfileUtils.createPartitionedFile(typedPartitionValues, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
-      parquetFileReader.read(modifiedFile, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
+      try {
+        val modifiedFile = pfileUtils.createPartitionedFile(file.partitionValues, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
+        parquetFileReader.read(modifiedFile, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
+      } catch {
+        case _: ClassCastException =>
+          val typedPartitionValues = ensurePartitionValuesTyped(file.partitionValues, partitionSchema)
+          val modifiedFile = pfileUtils.createPartitionedFile(typedPartitionValues, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
+          parquetFileReader.read(modifiedFile, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
+      }
     } else if (remainingPartitionSchema.fields.length == 0) {
       //we read all of the partition fields from the file
       val pfileUtils = sparkAdapter.getSparkPartitionedFileUtils
@@ -390,7 +395,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   }
 
   private def ensurePartitionValuesTyped(partitionValues: InternalRow, partitionSchema: StructType): InternalRow = {
-    val typedValues = (0 until partitionValues.numFields).map(i => {
+    val numFields = math.min(partitionValues.numFields, partitionSchema.fields.length)
+    val typedValues = (0 until numFields).map(i => {
       val value = partitionValues.get(i, partitionSchema.fields(i).dataType)
       value match {
         case utf8String: org.apache.spark.unsafe.types.UTF8String =>
@@ -412,16 +418,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   }
 
   private def getFixedPartitionValues(allPartitionValues: InternalRow, partitionSchema: StructType, fixedPartitionIndexes: Set[Int]): InternalRow = {
-    val originalValues = (0 until allPartitionValues.numFields).map(i => {
-      val value = allPartitionValues.get(i, partitionSchema.fields(i).dataType)
-      value match {
-        case utf8String: org.apache.spark.unsafe.types.UTF8String =>
-          val expectedType = partitionSchema.fields(i).dataType
-          castStringToType(utf8String.toString, expectedType)
-        case other => other
-      }
-    })
-    InternalRow.fromSeq(originalValues.zipWithIndex.filter(p => fixedPartitionIndexes.contains(p._2)).map(p => p._1))
+    InternalRow.fromSeq(allPartitionValues.toSeq(partitionSchema).zipWithIndex.filter(p => fixedPartitionIndexes.contains(p._2)).map(p => p._1))
   }
 
   private def castStringToType(value: String, dataType: DataType): Any = {
