@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -34,7 +35,6 @@ import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.table.HoodieTable;
 
@@ -47,22 +47,20 @@ import java.util.Set;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_FILE_COL_NAME;
+import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_POS_COL_NAME;
 import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
-import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_FILE_COL_NAME;
-import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_POS_COL_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
-import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
-import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.PAYLOAD_CLASSES_TO_HANDLE;
 
 /**
@@ -110,10 +108,6 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     Set<ConfigProperty> tablePropsToRemove = new HashSet<>();
     HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    if (config.enableComplexKeygenValidation()
-        && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
-      throw new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage("upgrade"));
-    }
     // Populate missing index versions indexes
     Option<HoodieIndexMetadata> indexMetadataOpt = metaClient.getIndexMetadata();
     if (indexMetadataOpt.isPresent()) {
@@ -201,6 +195,19 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
       tablePropsToAdd.put(
           ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE).noDefaultValue(), // // to be fixed once we land PR #13721.
           DEBEZIUM_UNAVAILABLE_VALUE);
+      tablePropsToAdd.put(
+          ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY).noDefaultValue(),
+          DebeziumConstants.FLATTENED_OP_COL_NAME);
+      tablePropsToAdd.put(
+          ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER).noDefaultValue(),
+          DebeziumConstants.DELETE_OP);
+    } else if (payloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
+      tablePropsToAdd.put(
+          ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY).noDefaultValue(),
+          DebeziumConstants.FLATTENED_OP_COL_NAME);
+      tablePropsToAdd.put(
+          ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER).noDefaultValue(),
+          DebeziumConstants.DELETE_OP);
     }
   }
 
@@ -208,9 +215,14 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
                                              Set<ConfigProperty> tablePropsToRemove,
                                              HoodieTableConfig tableConfig) {
     String payloadClass = tableConfig.getPayloadClass();
-    Option<String> orderingFieldsOpt = MySqlDebeziumAvroPayload.class.getName().equals(payloadClass)
-        ? Option.of(FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME)
-        : tableConfig.getOrderingFieldsStr();
+    Option<String> orderingFieldsOpt;
+    if (MySqlDebeziumAvroPayload.class.getName().equals(payloadClass)) {
+      orderingFieldsOpt = Option.of(FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME);
+    } else if (PostgresDebeziumAvroPayload.class.getName().equals(payloadClass)) {
+      orderingFieldsOpt = Option.of(DebeziumConstants.FLATTENED_LSN_COL_NAME);
+    } else {
+      orderingFieldsOpt = tableConfig.getOrderingFieldsStr();
+    }
     orderingFieldsOpt.ifPresent(orderingFields -> {
       tablePropsToAdd.put(HoodieTableConfig.ORDERING_FIELDS, orderingFields);
       tablePropsToRemove.add(HoodieTableConfig.PRECOMBINE_FIELD);

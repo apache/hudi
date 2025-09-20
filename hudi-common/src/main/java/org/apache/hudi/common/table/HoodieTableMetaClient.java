@@ -27,7 +27,6 @@ import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
@@ -260,13 +259,6 @@ public class HoodieTableMetaClient implements Serializable {
     }
     if (updateIndexDefn) {
       writeIndexMetadataToStorage();
-      String indexMetaPath = getIndexDefinitionPath();
-      // update table config if necessary
-      if (!tableConfig.getProps().containsKey(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key())
-          || !tableConfig.getRelativeIndexDefinitionPath().isPresent()) {
-        tableConfig.setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH, FSUtils.getRelativePartitionPath(basePath, new StoragePath(indexMetaPath)));
-        HoodieTableConfig.update(storage, metaPath, tableConfig.getProps());
-      }
     }
     return updateIndexDefn;
   }
@@ -1465,23 +1457,6 @@ public class HoodieTableMetaClient implements Serializable {
       tableConfig.setTableVersion(tableVersion);
       tableConfig.setInitialVersion(tableVersion);
 
-      // For table version <= 8
-      if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
-        Triple<RecordMergeMode, String, String> mergeConfigs =
-            inferMergingConfigsForPreV9Table(
-                recordMergeMode, payloadClassName, recordMergerStrategyId, orderingFields,
-                tableVersion);
-        tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());
-        tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
-        tableConfig.setValue(RECORD_MERGE_STRATEGY_ID, mergeConfigs.getRight());
-      } else { // For table version >= 9
-        Map<String, String> mergeConfigs = inferMergingConfigsForV9TableCreation(
-            recordMergeMode, payloadClassName, recordMergerStrategyId, orderingFields, tableVersion);
-        for (Map.Entry<String, String> config : mergeConfigs.entrySet()) {
-          tableConfig.setValue(config.getKey(), config.getValue());
-        }
-      }
-
       if (null != tableCreateSchema) {
         tableConfig.setValue(HoodieTableConfig.CREATE_SCHEMA, tableCreateSchema);
       }
@@ -1582,6 +1557,23 @@ public class HoodieTableMetaClient implements Serializable {
       if (null != tableFormat) {
         tableConfig.setValue(HoodieTableConfig.TABLE_FORMAT, tableFormat);
       }
+      // For table version <= 8
+      if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+        Triple<RecordMergeMode, String, String> mergeConfigs =
+            inferMergingConfigsForPreV9Table(
+                recordMergeMode, payloadClassName, recordMergerStrategyId, orderingFields,
+                tableVersion);
+        tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());
+        tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
+        tableConfig.setValue(RECORD_MERGE_STRATEGY_ID, mergeConfigs.getRight());
+      } else { // For table version >= 9
+        Map<String, String> mergeConfigs = inferMergingConfigsForV9TableCreation(
+            recordMergeMode, payloadClassName, recordMergerStrategyId, orderingFields, tableVersion);
+        for (Map.Entry<String, String> config : mergeConfigs.entrySet()) {
+          tableConfig.setValue(config.getKey(), config.getValue());
+        }
+      }
+
       return tableConfig.getProps();
     }
 

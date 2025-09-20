@@ -41,6 +41,7 @@ import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -312,7 +313,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> BOOTSTRAP_INDEX_ENABLE = ConfigProperty
       .key("hoodie.bootstrap.index.enable")
-      .defaultValue(true)
+      .defaultValue(false)
       .withDocumentation("Whether or not, this is a bootstrapped table, with bootstrap base data and an mapping index defined, default true.");
 
   public static final ConfigProperty<String> BOOTSTRAP_INDEX_CLASS_NAME = ConfigProperty
@@ -792,8 +793,8 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public HoodieTableVersion getTableInitialVersion() {
     return contains(INITIAL_VERSION)
-            ? HoodieTableVersion.fromVersionCode(getInt(INITIAL_VERSION))
-            : INITIAL_VERSION.defaultValue();
+        ? HoodieTableVersion.fromVersionCode(getInt(INITIAL_VERSION))
+        : INITIAL_VERSION.defaultValue();
   }
 
   public void setTableVersion(HoodieTableVersion tableVersion) {
@@ -884,10 +885,17 @@ public class HoodieTableConfig extends HoodieConfig {
           reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.FILL_UNAVAILABLE.name());
         }
         // Additional custom merge properties.
-        // Cretain payloads are migrated to non payload way from 1.1 Hudi binary and the reader might need certain properties for the
+        // Certain payloads are migrated to non payload way from 1.1 Hudi binary and the reader might need certain properties for the
         // merge to function as expected. Handing such special cases here.
         if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
           reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE, DEBEZIUM_UNAVAILABLE_VALUE);
+          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, DebeziumConstants.FLATTENED_OP_COL_NAME);
+          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DebeziumConstants.DELETE_OP);
+          reconciledConfigs.put(ORDERING_FIELDS.key(), DebeziumConstants.FLATTENED_LSN_COL_NAME);
+        } else if (payloadClassName.equals(MySqlDebeziumAvroPayload.class.getName())) {
+          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, DebeziumConstants.FLATTENED_OP_COL_NAME);
+          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DebeziumConstants.DELETE_OP);
+          reconciledConfigs.put(ORDERING_FIELDS.key(), DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME);
         } else if (payloadClassName.equals(AWSDmsAvroPayload.class.getName())) {
           reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, OP_FIELD);
           reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DELETE_OPERATION_VALUE);

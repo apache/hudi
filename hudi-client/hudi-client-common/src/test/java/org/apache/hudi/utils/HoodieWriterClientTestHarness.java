@@ -566,7 +566,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     HoodieReaderContext readerContext = writeClient.getEngineContext()
         .getReaderContextFactoryForWrite(metaClient, HoodieRecord.HoodieRecordType.AVRO, writeConfig.getProps()).getContext();
     List<String> orderingFieldNames = getOrderingFieldNames(
-        readerContext.getMergeMode(), writeClient.getConfig().getProps(), metaClient);
+        readerContext.getMergeMode(), metaClient);
     BufferedRecordMerger<HoodieRecord> recordMerger = BufferedRecordMergerFactory.create(
         readerContext,
         metaClient.getTableConfig().getRecordMergeMode(),
