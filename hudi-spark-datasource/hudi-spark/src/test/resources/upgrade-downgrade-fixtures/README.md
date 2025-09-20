@@ -17,15 +17,23 @@ limitations under the License.
 
 # Hudi Upgrade/Downgrade Test Fixtures
 
-This directory contains pre-created MOR Hudi tables from different releases used for testing upgrade/downgrade functionality.
+This directory contains pre-created Hudi tables from different releases used for testing upgrade/downgrade functionality.
 
-## Fixture Tables
+## Directory Structure
 
-| Directory | Hudi Version | Table Version |
-|-----------|--------------|---------------|
-| `hudi-v6-table/` | 0.14.0       | 6 |
-| `hudi-v8-table/` | 1.0.2        | 8 |
-| `hudi-v9-table/` | 1.1.0        | 9 |
+The fixtures are organized by table type in separate directories:
+
+### Maintenance Tables (`maintenance-tables/`)
+Tables that include maintenance operations (compaction, clustering, archival, cleaning):
+- `hudi-v6-maintenance-table.zip` - Hudi 0.14.0, Table Version 6
+- `hudi-v8-maintenance-table.zip` - Hudi 1.0.2, Table Version 8
+- `hudi-v9-maintenance-table.zip` - Hudi 1.1.0, Table Version 9
+
+### Complex Key Generator Tables (`complex-keygen-tables/`)
+Tables that use complex key generators for testing key generator compatibility:
+- `hudi-v6-table-complex-keygen.zip` - Hudi 0.14.0, Table Version 6
+- `hudi-v8-table-complex-keygen.zip` - Hudi 1.0.2, Table Version 8
+- `hudi-v9-table-complex-keygen.zip` - Hudi 1.1.0, Table Version 9
 
 ## Table Schema
 
@@ -49,7 +57,7 @@ Use the `generate-fixtures.sh` script to create all fixture tables:
 ./generate-fixtures.sh
 ```
 
-**Note**: The script will create fixture tables in the `maintenance-tables/` directory. On first run, it downloads and caches Spark binaries in the `spark-versions/` directory. Each fixture generation may take several minutes as it downloads Spark binaries and Hudi bundles, then creates table data.
+**Note**: By default, the script creates maintenance tables in the `maintenance-tables/` directory. The output directory is automatically determined by the template used. On first run, it downloads and caches Spark binaries in the `spark-versions/` directory. Each fixture generation may take several minutes as it downloads Spark binaries and Hudi bundles, then creates table data.
 
 ### Script Parameters
 
@@ -83,21 +91,27 @@ The `generate-fixtures.sh` script supports the following parameters:
 
 # Generate multiple versions including version 9
 ./generate-fixtures.sh --version 6,8,9 --hudi-bundle-path /path/to/bundle.jar
+
+# Generate complex-keygen tables instead of maintenance tables
+./generate-fixtures.sh --script-name generate-fixture-complex-keygen.scala
+
+# Generate only version 6 complex-keygen table
+./generate-fixtures.sh --version 6 --script-name generate-fixture-complex-keygen.scala
 ```
 
 #### Available Script Templates
 
 The script supports different Scala templates located in the `scala-templates/` folder:
 
-| Script Name | Description | Output Zip Suffix |
-|-------------|-------------|-------------------|
-| `generate-fixture.scala` | Default fixture generator | `.zip` (no suffix) |
-| `generate-fixture-complex-keygen.scala` | Complex key generator fixtures | `-complex-keygen.zip` |
+| Script Name | Description | Output Directory | Output Filename Pattern |
+|-------------|-------------|-------------------|-------------------------|
+| `generate-fixture-maintenance.scala` (default) | Maintenance tables with compaction, clustering, archival | `maintenance-tables/` | `hudi-v{X}-maintenance-table.zip` |
+| `generate-fixture-complex-keygen.scala` | Complex key generator tables | `complex-keygen-tables/` | `hudi-v{X}-table-complex-keygen.zip` |
 
-**Note**: The zip file suffix is automatically determined by extracting the portion after "generate-fixture" from the script name. For example:
-- `generate-fixture.scala` → `hudi-v8-table.zip` 
-- `generate-fixture-complex-keygen.scala` → `hudi-v8-table-complex-keygen.zip`
-- `generate-fixture-custom.scala` → `hudi-v8-table-custom.zip`
+**Note**: The output directory and filename pattern are automatically determined by the template name:
+- Templates containing "maintenance" → `maintenance-tables/` directory
+- Templates containing "complex-keygen" → `complex-keygen-tables/` directory
+- The zip file suffix comes from extracting the portion after "generate-fixture" from the script name
 
 #### Version 9 Special Requirements
 
