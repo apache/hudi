@@ -46,6 +46,7 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
   private static final long serialVersionUID = 1L;
 
   private IndexedRecord record;
+  private Schema schema;
   private byte[] recordBytes;
 
   static SerializableIndexedRecord createInstance(IndexedRecord record) {
@@ -59,17 +60,17 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
 
   @Override
   public void put(int i, Object v) {
-    record.put(i, v);
+    getData().put(i, v);
   }
 
   @Override
   public Object get(int i) {
-    return record.get(i);
+    return getData().get(i);
   }
 
   @Override
   public Schema getSchema() {
-    return record.getSchema();
+    return getData().getSchema();
   }
 
   byte[] encodeRecord() {
@@ -81,13 +82,21 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
 
   void decodeRecord(Schema schema) {
     if (record == null) {
+      this.schema = schema;
+    }
+  }
+
+  IndexedRecord getData() {
+    if (record == null) {
       try {
         record = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
         recordBytes = null;
+        schema = null;
       } catch (IOException e) {
         throw new HoodieIOException("Failed to parse record into provided schema", e);
       }
     }
+    return record;
   }
 
   @Override
@@ -149,8 +158,8 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
   }
 
   IndexedRecord getRecord() {
-    ValidationUtils.checkArgument(record != null, "Record must be deserialized before accessing");
-    return record;
+    ValidationUtils.checkArgument(record != null || schema != null, "Record must be deserialized before accessing");
+    return getData();
   }
 
   @Override

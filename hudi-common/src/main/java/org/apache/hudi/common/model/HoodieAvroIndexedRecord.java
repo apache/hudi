@@ -83,7 +83,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     this.orderingValue = orderingValue;
   }
 
-  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, Comparable<?> orderingValue, HoodieOperation operation, boolean isDelete) {
+  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, Comparable<?> orderingValue, HoodieOperation operation, Boolean isDelete) {
     this(key, data, operation);
     this.orderingValue = orderingValue;
     this.isDelete = isDelete;
@@ -376,6 +376,6 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public IndexedRecord getData() {
-    return binaryRecord.getRecord();
+    return binaryRecord;
   }
 }
