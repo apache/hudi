@@ -26,7 +26,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
 
 import java.util.List;
@@ -58,10 +57,10 @@ public class SparkBasedReader {
         .toJavaRDD();
   }
 
-  public static JavaRDD<GenericRecord> readParquet(SQLContext sqlContext, List<String>
+  public static JavaRDD<GenericRecord> readParquet(SparkSession sparkSession, List<String>
       listOfPaths, Option<String> structName, Option<String> nameSpace) {
 
-    Dataset<Row> dataSet = sqlContext.read()
+    Dataset<Row> dataSet = sparkSession.read()
         .parquet((JavaConverters.asScalaIteratorConverter(listOfPaths.iterator()).asScala().toSeq()));
 
     return HoodieSparkUtils
@@ -70,10 +69,10 @@ public class SparkBasedReader {
         .toJavaRDD();
   }
 
-  public static JavaRDD<GenericRecord> readOrc(SQLContext sqlContext, List<String>
+  public static JavaRDD<GenericRecord> readOrc(SparkSession sparkSession, List<String>
       listOfPaths, Option<String> structName, Option<String> nameSpace) {
 
-    Dataset<Row> dataSet = sqlContext.read()
+    Dataset<Row> dataSet = sparkSession.read()
         .orc((JavaConverters.asScalaIteratorConverter(listOfPaths.iterator()).asScala().toSeq()));
 
     return HoodieSparkUtils.createRdd(dataSet.toDF(),

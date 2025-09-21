@@ -51,7 +51,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -124,10 +124,10 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
   @Override
   protected long analyzeSingleFile(String filePath) {
     if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-      return SparkBasedReader.readParquet(SQLContext.getOrCreate(jsc.sc()), Arrays.asList(filePath),
+      return SparkBasedReader.readParquet(new SparkSession(jsc.sc()), Arrays.asList(filePath),
           Option.empty(), Option.empty()).count();
     } else if (filePath.endsWith(HoodieFileFormat.ORC.getFileExtension())) {
-      return SparkBasedReader.readOrc(SQLContext.getOrCreate(jsc.sc()), Arrays.asList(filePath),
+      return SparkBasedReader.readOrc(new SparkSession(jsc.sc()), Arrays.asList(filePath),
           Option.empty(), Option.empty()).count();
     }
     throw new UnsupportedOperationException("Format for " + filePath + " is not supported yet.");

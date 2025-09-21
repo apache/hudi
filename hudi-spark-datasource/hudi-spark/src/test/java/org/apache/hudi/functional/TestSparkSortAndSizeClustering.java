@@ -70,8 +70,6 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -188,9 +186,9 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
         assertTrue(actualDate.compareTo(startDate) > 0 && actualDate.compareTo(endDate) < 0);
       }
       if (!row.isNullAt(tsLocalMillisFieldIndex)) {
-        assertEquals(ts, ((LocalDateTime) row.get(tsLocalMillisFieldIndex)).toInstant(ZoneOffset.UTC).toEpochMilli());
+        assertEquals(ts, row.get(tsLocalMillisFieldIndex));
       }
-      assertEquals(ts, ((LocalDateTime) row.get(tsLocalMicrosFieldIndex)).toInstant(ZoneOffset.UTC).toEpochMilli());
+      assertEquals(ts * 1000L, row.get(tsLocalMicrosFieldIndex));
     }
   }
 

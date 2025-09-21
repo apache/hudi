@@ -461,7 +461,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
             .as(LogicalTypeAnnotation.timestampType(false, LogicalTypeAnnotation.TimeUnit.MICROS)).named(structField.name());
       } else if (logicalType.getName().equals(LogicalTypes.localTimestampMillis().getName())) {
         return Types.primitive(INT64, repetition)
-            .as(LogicalTypeAnnotation.timestampType(false, LogicalTypeAnnotation.TimeUnit.MILLIS)).named(structField.name());
+            .as(LogicalTypeAnnotation.timestampType(false, LogicalTypeAnnotation.TimeUnit.MICROS)).named(structField.name());
       } else {
         throw new UnsupportedOperationException("Unsupported timestamp type: " + logicalType);
       }
