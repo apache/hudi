@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSource, HoodieBaseRelation, HoodieSparkUtils, HoodieUnsafeRDD, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSource, HoodieBaseRelation, HoodieUnsafeRDD, SparkAdapterSupport}
 import org.apache.hudi.HoodieBaseRelation.projectSchema
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{HoodieRecord, OverwriteNonDefaultsWithLatestAvroPayload}
@@ -36,7 +36,7 @@ import org.apache.spark.sql.{Dataset, Row, SaveMode}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.sources.BaseRelation
 import org.junit.jupiter.api.{Tag, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import scala.collection.JavaConverters._
 import scala.math.abs
@@ -89,14 +89,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
     // increases along w/ the # of columns)
     val projectedColumnsReadStats: Array[(String, Long)] =
-      if (HoodieSparkUtils.gteqSpark3_3_2)
-        Array(
-          ("rider", 2452),
-          ("rider,driver", 2552),
-          ("rider,driver,tip_history", 3517))
-      else
-        fail("Only Spark 3 is currently supported")
-
+      Array(("rider", 2452), ("rider,driver", 2552), ("rider,driver,tip_history", 3517))
     // Test MOR / Snapshot / Skip-merge
     runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL, projectedColumnsReadStats)
 
@@ -106,13 +99,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
     // increases along w/ the # of columns) in Read Optimized mode (which is essentially equivalent to COW)
     val projectedColumnsReadStatsReadOptimized: Array[(String, Long)] =
-      if (HoodieSparkUtils.gteqSpark3_3_2)
-        Array(
-          ("rider", 2363),
-          ("rider,driver", 2463),
-          ("rider,driver,tip_history", 3428))
-      else
-        fail("Only Spark 3 is currently supported")
+      Array(("rider", 2363), ("rider,driver", 2463), ("rider,driver,tip_history", 3428))
 
     // Test MOR / Read Optimized
     // TODO(HUDI-3896) re-enable
@@ -135,13 +122,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
     // increases along w/ the # of columns)
     val projectedColumnsReadStats: Array[(String, Long)] =
-      if (HoodieSparkUtils.gteqSpark3_3_2)
-        Array(
-          ("rider", 2452),
-          ("rider,driver", 2552),
-          ("rider,driver,tip_history", 3517))
-      else
-        fail("Only Spark 3 is currently supported")
+      Array(("rider", 2452), ("rider,driver", 2552), ("rider,driver,tip_history", 3517))
 
     // Test MOR / Snapshot / Skip-merge
     runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL, projectedColumnsReadStats)
@@ -152,13 +133,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
     // increases along w/ the # of columns) in Read Optimized mode (which is essentially equivalent to COW)
     val projectedColumnsReadStatsReadOptimized: Array[(String, Long)] =
-      if (HoodieSparkUtils.gteqSpark3_3_2)
-        Array(
-          ("rider", 2363),
-          ("rider,driver", 2463),
-          ("rider,driver,tip_history", 3428))
-      else
-        fail("Only Spark 3 is currently supported")
+      Array(("rider", 2363), ("rider,driver", 2463), ("rider,driver,tip_history", 3428))
 
     // Test MOR / Read Optimized
     // TODO(HUDI-3896) re-enable
@@ -187,24 +162,12 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
     // increases along w/ the # of columns)
     val projectedColumnsReadStats: Array[(String, Long)] =
-    if (HoodieSparkUtils.gteqSpark3_3_2)
-      Array(
-        ("rider", 2452),
-        ("rider,driver", 2552),
-        ("rider,driver,tip_history", 3517))
-    else
-      fail("Only Spark 3 is currently supported")
+      Array(("rider", 2452), ("rider,driver", 2552), ("rider,driver,tip_history", 3517))
 
     // Stats for the reads fetching _all_ columns (note, how amount of bytes read
     // is invariant of the # of columns)
     val fullColumnsReadStats: Array[(String, Long)] =
-    if (HoodieSparkUtils.gteqSpark3_3_2)
-      Array(
-        ("rider", 14167),
-        ("rider,driver", 14167),
-        ("rider,driver,tip_history", 14167))
-    else
-      fail("Only Spark 3 is currently supported")
+      Array(("rider", 14167), ("rider,driver", 14167), ("rider,driver,tip_history", 14167))
 
     // Test MOR / Snapshot / Skip-merge
     runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL, projectedColumnsReadStats)
@@ -230,13 +193,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
     // increases along w/ the # of columns)
     val projectedColumnsReadStats: Array[(String, Long)] =
-      if (HoodieSparkUtils.gteqSpark3_3_2)
-        Array(
-          ("rider", 4219),
-          ("rider,driver", 4279),
-          ("rider,driver,tip_history", 5186))
-      else
-        fail("Only Spark 3 is currently supported")
+      Array(("rider", 4219), ("rider,driver", 4279), ("rider,driver,tip_history", 5186))
 
     val incrementalOpts: Map[String, String] = Map(
       DataSourceReadOptions.START_COMMIT.key -> "001"
