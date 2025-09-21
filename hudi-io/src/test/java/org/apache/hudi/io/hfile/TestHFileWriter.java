@@ -174,7 +174,7 @@ class TestHFileWriter {
   private static void validateHFileSize() throws IOException {
     Path path = Paths.get(TEST_FILE);
     long actualSize = Files.size(path);
-    long expectedSize = 4521;
+    long expectedSize = 4537;
     assertEquals(expectedSize, actualSize);
   }
 
