@@ -20,6 +20,7 @@
 package org.apache.hudi.client.utils;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.SparkRowSerDe;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -332,7 +333,9 @@ public class SparkMetadataWriterUtils {
         .build();
     try {
       ClosableIterator<InternalRow> rowsForFilePath = fileGroupReader.getClosableIterator();
-      SparkRowSerDe sparkRowSerDe = HoodieCatalystExpressionUtils.sparkAdapter().createSparkRowSerDe(HoodieInternalRowUtils.getCachedSchema(readerSchema));
+      SparkRowSerDe sparkRowSerDe = new SparkRowSerDe(
+          HoodieCatalystExpressionUtils.sparkAdapter().getCatalystExpressionUtils()
+              .getEncoder(HoodieInternalRowUtils.getCachedSchema(readerSchema)));
       return getRowsWithExpressionIndexMetadata(rowsForFilePath, sparkRowSerDe, partition, relativeFilePath, fileSize);
     } catch (IOException ex) {
       throw new HoodieIOException("Error reading file " + filePath, ex);

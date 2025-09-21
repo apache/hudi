@@ -18,9 +18,8 @@
 
 package org.apache.hudi.common.model
 
-import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
+import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport, SparkRowSerDe}
 import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, createInternalRowToAvroConverter}
-import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.TestHoodieRecordSerialization.{cloneUsingKryo, convertToAvroRecord, toUnsafeRow, OverwriteWithLatestAvroPayloadWithEquality}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
@@ -176,7 +175,7 @@ object TestHoodieRecordSerialization {
   }
 
   private def toUnsafeRow(row: Row, schema: StructType): UnsafeRow = {
-    val encoder = SparkAdapterSupport.sparkAdapter.createSparkRowSerDe(schema)
+    val encoder = new SparkRowSerDe(SparkAdapterSupport.sparkAdapter.getCatalystExpressionUtils.getEncoder(schema))
     val internalRow = encoder.serializeRow(row)
     internalRow.asInstanceOf[UnsafeRow]
   }

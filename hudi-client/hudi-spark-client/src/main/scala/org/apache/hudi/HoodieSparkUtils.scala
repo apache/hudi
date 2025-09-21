@@ -20,7 +20,6 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
-import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator
@@ -228,7 +227,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
   }
 
   def getCatalystRowSerDe(structType: StructType): SparkRowSerDe = {
-    sparkAdapter.createSparkRowSerDe(structType)
+    new SparkRowSerDe(sparkAdapter.getCatalystExpressionUtils.getEncoder(structType))
   }
 
   def parsePartitionColumnValues(partitionColumns: Array[String],

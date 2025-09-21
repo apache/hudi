@@ -26,10 +26,11 @@ import org.apache.hudi.common.table.cdc.HoodieCDCUtils
 import org.apache.hudi.common.table.checkpoint.{CheckpointUtils, StreamerCheckpointV2}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.util.SparkConfigUtils
+import org.apache.hudi.HoodieSparkUtils.getCatalystRowSerDe
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, FileFormatUtilsForFileGroupReader, SQLContext}
+import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.streaming.{Offset, Source}
 import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
@@ -164,7 +165,7 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
         } else {
           val rdd = tableType match {
             case HoodieTableType.COPY_ON_WRITE =>
-              val serDe = sparkAdapter.createSparkRowSerDe(schema)
+              val serDe = getCatalystRowSerDe(schema)
               new IncrementalRelationV2(sqlContext, incParams, Some(schema), metaClient, rangeType)
                 .buildScan()
                 .map(serDe.serializeRow)

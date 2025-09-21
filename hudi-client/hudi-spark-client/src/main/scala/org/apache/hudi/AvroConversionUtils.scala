@@ -18,7 +18,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.HoodieSparkUtils.sparkAdapter
+import org.apache.hudi.HoodieSparkUtils.{getCatalystRowSerDe, sparkAdapter}
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField
 import org.apache.hudi.exception.SchemaCompatibilityException
@@ -86,7 +86,7 @@ object AvroConversionUtils {
   @Deprecated
   def createConverterToRow(sourceAvroSchema: Schema,
                            targetSqlType: StructType): GenericRecord => Row = {
-    val serde = sparkAdapter.createSparkRowSerDe(targetSqlType)
+    val serde = getCatalystRowSerDe(targetSqlType)
     val converter = AvroConversionUtils.createAvroToInternalRowConverter(sourceAvroSchema, targetSqlType)
 
     avro => converter.apply(avro).map(serde.deserializeRow).get
@@ -99,7 +99,7 @@ object AvroConversionUtils {
   def createConverterToAvro(sourceSqlType: StructType,
                             structName: String,
                             recordNamespace: String): Row => GenericRecord = {
-    val serde = sparkAdapter.createSparkRowSerDe(sourceSqlType)
+    val serde = getCatalystRowSerDe(sourceSqlType)
     val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(sourceSqlType, structName, recordNamespace)
     val nullable = AvroSchemaUtils.resolveNullableSchema(avroSchema) != avroSchema
 
