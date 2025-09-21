@@ -376,7 +376,6 @@ class TestSavepointsProcedure extends HoodieSparkProcedureTestBase {
       checkAnswer(s"""call create_savepoint('$tableName', '${commits(0)}')""")(Seq(true))
       checkAnswer(s"""call create_savepoint('$tableName', '${commits(1)}')""")(Seq(true))
 
-      spark.table(s"$tableName").select("id").count()
       spark.table(s"$tableName").select("id").cache()
       assertCached(spark.table(s"$tableName").select("id"), 1)
 

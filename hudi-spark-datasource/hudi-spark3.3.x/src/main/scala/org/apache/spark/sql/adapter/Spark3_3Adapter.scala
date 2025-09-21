@@ -34,21 +34,17 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils
 import org.apache.spark.sql.execution.datasources.orc.Spark33OrcReader
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark33LegacyHoodieParquetFileFormat, Spark33ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
-import org.apache.spark.sql.jdbc.JdbcDialect
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_3ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
-
-import java.sql.{Connection, ResultSet}
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.3.x branch
@@ -169,12 +165,4 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
   }
 
   override def isTimestampNTZType(dataType: DataType): Boolean = false
-
-  override def getSchema(conn: Connection,
-                         resultSet: ResultSet,
-                         dialect: JdbcDialect,
-                         alwaysNullable: Boolean = false,
-                         isTimestampNTZ: Boolean = false): StructType = {
-    JdbcUtils.getSchema(resultSet, dialect, alwaysNullable)
-  }
 }

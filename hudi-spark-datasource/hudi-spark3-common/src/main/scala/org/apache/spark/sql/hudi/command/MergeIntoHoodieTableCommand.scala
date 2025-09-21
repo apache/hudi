@@ -165,7 +165,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
     if (primaryKeyFields.isPresent) {
       //pkless tables can have more complex conditions
       if (!conditions.forall(p => p.isInstanceOf[EqualTo])) {
-        throw new HoodieAnalysisException(s"Currently only equality predicates are supported in MERGE INTO statement on primary key table" +
+        throw new HoodieAnalysisException(s"Currently only equality predicates are supported in MERGE INTO statement on record key table" +
           s"(provided ${mergeInto.mergeCondition.sql}")
       }
     }

@@ -528,9 +528,11 @@ public class UtilHelpers {
         try (ResultSet rs = statement.executeQuery()) {
           StructType structType;
           if (Boolean.parseBoolean(options.get("nullable"))) {
-            structType = SparkAdapterSupport$.MODULE$.sparkAdapter().getSchema(conn, rs, dialect, true, false);
+            structType = SparkAdapterSupport$.MODULE$.sparkAdapter().getSchemaUtils()
+                .getSchema(conn, rs, dialect, true, false);
           } else {
-            structType = SparkAdapterSupport$.MODULE$.sparkAdapter().getSchema(conn, rs, dialect, false, false);
+            structType = SparkAdapterSupport$.MODULE$.sparkAdapter().getSchemaUtils()
+                .getSchema(conn, rs, dialect, false, false);
           }
           return AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table);
         }

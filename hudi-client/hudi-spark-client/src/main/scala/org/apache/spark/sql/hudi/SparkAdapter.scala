@@ -245,21 +245,6 @@ trait SparkAdapter extends Serializable {
   def isTimestampNTZType(dataType: DataType): Boolean
 
   /**
-   * Takes a [[ResultSet]] and returns its Catalyst schema.
-   *
-   * @param conn           [[Connection]] instance.
-   * @param resultSet      [[ResultSet]] instance.
-   * @param dialect        [[JdbcDialect]] instance.
-   * @param alwaysNullable If true, all the columns are nullable.
-   * @return A [[StructType]] giving the Catalyst schema.
-   */
-  def getSchema(conn: Connection,
-                resultSet: ResultSet,
-                dialect: JdbcDialect,
-                alwaysNullable: Boolean = false,
-                isTimestampNTZ: Boolean = false): StructType
-
-  /**
    * Gets the [[UTF8String]] factory implementation for the current Spark version.
    * [SPARK-46832] [[UTF8String]] doesn't support compareTo anymore since Spark 4.0
    *

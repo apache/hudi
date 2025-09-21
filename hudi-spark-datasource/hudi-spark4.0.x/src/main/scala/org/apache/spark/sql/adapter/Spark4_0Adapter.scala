@@ -34,20 +34,16 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils
 import org.apache.spark.sql.execution.datasources.orc.Spark40OrcReader
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark40LegacyHoodieParquetFileFormat, Spark40ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
-import org.apache.spark.sql.jdbc.JdbcDialect
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark4_0ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, DataTypes, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
-
-import java.sql.{Connection, ResultSet}
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 4.0.x branch
@@ -169,14 +165,6 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
                                    hadoopConf: Configuration,
                                    dataSchema: StructType): SparkColumnarFileReader = {
     Spark40OrcReader.build(vectorized, sqlConf, options, hadoopConf, dataSchema)
-  }
-
-  override def getSchema(conn: Connection,
-                         resultSet: ResultSet,
-                         dialect: JdbcDialect,
-                         alwaysNullable: Boolean = false,
-                         isTimestampNTZ: Boolean = false): StructType = {
-    JdbcUtils.getSchema(conn, resultSet, dialect, alwaysNullable)
   }
 
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {
