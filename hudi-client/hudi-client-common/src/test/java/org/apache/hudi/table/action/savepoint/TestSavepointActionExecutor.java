@@ -57,7 +57,7 @@ class TestSavepointActionExecutor {
         InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)));
     when(mockTable.getCleanTimeline().lastInstant()).thenReturn(Option.empty());
 
-    SavepointActionExecutor executor = new SavepointActionExecutor(engineContext, null, mockTable, instantTime, "user", "comment");
+    SavepointActionExecutor executor = new SavepointActionExecutor(engineContext, null, mockTable, instantTime, instantTime, "user", "comment");
     assertEquals(expectedInstant, executor.getLastCommitRetained());
   }
 
@@ -74,7 +74,7 @@ class TestSavepointActionExecutor {
     cleanMetadata.setEarliestCommitToRetain(expectedInstant);
     when(mockTable.getActiveTimeline().readCleanMetadata(cleanInstant)).thenReturn(cleanMetadata);
 
-    SavepointActionExecutor executor = new SavepointActionExecutor(engineContext, null, mockTable, instantTime, "user", "comment");
+    SavepointActionExecutor executor = new SavepointActionExecutor(engineContext, null, mockTable, instantTime, instantTime,"user", "comment");
     assertEquals(expectedInstant, executor.getLastCommitRetained());
   }
 
@@ -99,7 +99,7 @@ class TestSavepointActionExecutor {
     cleanerPlan.setEarliestInstantToRetain(lastInstantToRetain);
     when(mockTable.getActiveTimeline().readCleanerPlan(cleanInstant)).thenReturn(cleanerPlan);
 
-    SavepointActionExecutor executor = new SavepointActionExecutor(engineContext, null, mockTable, instantTime, "user", "comment");
+    SavepointActionExecutor executor = new SavepointActionExecutor(engineContext, null, mockTable, instantTime, instantTime, "user", "comment");
     assertEquals(expectedInstant, executor.getLastCommitRetained());
   }
 
@@ -126,7 +126,7 @@ class TestSavepointActionExecutor {
     MockHoodieTimeline mockTimeline = new MockHoodieTimeline(writeInstants, Stream.empty());
     when(mockTable.getActiveTimeline().getWriteTimeline().filterCompletedInstants()).thenReturn(mockTimeline);
 
-    SavepointActionExecutor executor = new SavepointActionExecutor(engineContext, null, mockTable, instantTime, "user", "comment");
+    SavepointActionExecutor executor = new SavepointActionExecutor(engineContext, null, mockTable, instantTime, instantTime, "user", "comment");
     assertEquals(expectedInstant, executor.getLastCommitRetained());
   }
 }

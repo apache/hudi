@@ -100,40 +100,41 @@ class TestHoodieTable extends HoodieCommonTestHarness {
             .withLockProvider(InProcessLockProvider.class)
             .build())
         .build();
-    TransactionManager transactionManager = new TransactionManager(writeConfig, metaClient.getStorage());
-    HoodieEngineContext context = mock(HoodieEngineContext.class);
-    HoodieTable hoodieTable =
-        new TestBaseHoodieTable(writeConfig, context, metaClient);
-    // Prepare test inputs.
-    HoodieInstant inflightInstant = new HoodieInstant(
-        HoodieInstant.State.INFLIGHT,
-        COMPACTION_ACTION,
-        "123",
-        InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    // Mock getPendingRollbackInstantFunc behavior.
-    Function<String, Option<HoodiePendingRollbackInfo>>
-        getPendingRollbackInstantFunc = mock(Function.class);
-    HoodiePendingRollbackInfo pendingRollbackInfo = new HoodiePendingRollbackInfo(
-        inflightInstant, new HoodieRollbackPlan());
-    when(getPendingRollbackInstantFunc.apply("123"))
-        .thenReturn(Option.of(pendingRollbackInfo));
+    try (TransactionManager transactionManager = new TransactionManager(writeConfig, metaClient.getStorage())) {
+      HoodieEngineContext context = mock(HoodieEngineContext.class);
+      HoodieTable hoodieTable =
+          new TestBaseHoodieTable(writeConfig, context, metaClient);
+      // Prepare test inputs.
+      HoodieInstant inflightInstant = new HoodieInstant(
+          HoodieInstant.State.INFLIGHT,
+          COMPACTION_ACTION,
+          "123",
+          InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+      // Mock getPendingRollbackInstantFunc behavior.
+      Function<String, Option<HoodiePendingRollbackInfo>>
+          getPendingRollbackInstantFunc = mock(Function.class);
+      HoodiePendingRollbackInfo pendingRollbackInfo = new HoodiePendingRollbackInfo(
+          inflightInstant, new HoodieRollbackPlan());
+      when(getPendingRollbackInstantFunc.apply("123"))
+          .thenReturn(Option.of(pendingRollbackInfo));
 
-    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
-    timeline.createNewInstant(inflightInstant);
-    // Case 1: Execute the method with pending rollback instant.
-    hoodieTable.rollbackInflightInstant(
-        inflightInstant, getPendingRollbackInstantFunc, transactionManager);
-    // Validate that function scheduleRollback is not called.
-    assertEquals(0, ((TestBaseHoodieTable) hoodieTable).getCountOfScheduleRollbackFunctionCalls());
+      HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+      timeline.createNewInstant(inflightInstant);
+      // Case 1: Execute the method with pending rollback instant.
+      hoodieTable.rollbackInflightInstant(
+          inflightInstant, getPendingRollbackInstantFunc, transactionManager);
+      // Validate that function scheduleRollback is not called.
+      assertEquals(0, ((TestBaseHoodieTable) hoodieTable).getCountOfScheduleRollbackFunctionCalls());
 
-    // Reset the parameters.
-    when(getPendingRollbackInstantFunc.apply("123"))
-        .thenReturn(Option.empty());
-    timeline.createNewInstant(inflightInstant);
-    // Case 2: Execute the method without pending rollback instant.
-    hoodieTable.rollbackInflightInstant(
-        inflightInstant, getPendingRollbackInstantFunc, transactionManager);
-    // Validate that function scheduleRollback is called.
-    assertEquals(1, ((TestBaseHoodieTable) hoodieTable).getCountOfScheduleRollbackFunctionCalls());
+      // Reset the parameters.
+      when(getPendingRollbackInstantFunc.apply("123"))
+          .thenReturn(Option.empty());
+      timeline.createNewInstant(inflightInstant);
+      // Case 2: Execute the method without pending rollback instant.
+      hoodieTable.rollbackInflightInstant(
+          inflightInstant, getPendingRollbackInstantFunc, transactionManager);
+      // Validate that function scheduleRollback is called.
+      assertEquals(1, ((TestBaseHoodieTable) hoodieTable).getCountOfScheduleRollbackFunctionCalls());
+    }
   }
 }

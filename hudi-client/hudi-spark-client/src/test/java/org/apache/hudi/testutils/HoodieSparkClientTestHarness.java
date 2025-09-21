@@ -535,7 +535,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
 
     // Files within each partition should match
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieSparkTable.create(writeConfig, engineContext);
+    HoodieTable table = HoodieSparkTable.createForReads(writeConfig, engineContext);
     TableFileSystemView tableView = table.getHoodieView();
     List<String> fullPartitionPaths =
         fsPartitions.stream().map(partition -> basePath + "/" + partition)

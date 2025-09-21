@@ -19,6 +19,7 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.client.SparkRDDReadClient;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -40,6 +41,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
@@ -335,6 +337,46 @@ public class HoodieClientTestUtils {
       return ReflectionUtils.getClass(className) != null;
     } catch (Exception e) {
       return false;
+    }
+  }
+
+  /**
+   * Creates a TransactionManager for testing purposes.
+   *
+   * @param config HoodieWriteConfig to use
+   * @param context HoodieEngineContext to use
+   * @return TransactionManager instance
+   */
+  public static TransactionManager createTransactionManager(HoodieWriteConfig config, HoodieEngineContext context) {
+    return new TransactionManager(config, HoodieStorageUtils.getStorage(config.getBasePath(), context.getStorageConf()));
+  }
+
+  /**
+   * Creates a TransactionManager for testing purposes.
+   *
+   * @param config HoodieWriteConfig to use
+   * @param basePath Base path for the table
+   * @param storageConfiguration Storage configuration to use
+   * @return TransactionManager instance
+   */
+  public static TransactionManager createTransactionManager(HoodieWriteConfig config, String basePath, 
+                                                           org.apache.hudi.storage.StorageConfiguration<?> storageConfiguration) {
+    return new TransactionManager(config, HoodieStorageUtils.getStorage(basePath, storageConfiguration));
+  }
+
+  /**
+   * Safely closes a TransactionManager if it's not null.
+   *
+   * @param txnManager TransactionManager to close
+   */
+  public static void closeTransactionManager(TransactionManager txnManager) {
+    if (txnManager != null) {
+      try {
+        txnManager.close();
+      } catch (Exception e) {
+        // Log and ignore cleanup errors in tests
+        System.err.println("Error closing TransactionManager in test: " + e.getMessage());
+      }
     }
   }
 }

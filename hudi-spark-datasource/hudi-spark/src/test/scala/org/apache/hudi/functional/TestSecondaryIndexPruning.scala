@@ -679,7 +679,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
 
     // do another insert and validate compaction in metadata table
     spark.sql(s"insert into $tableName values(3, 'row3', 'def', 'p2')")
-    val metadataTableFSView = HoodieSparkTable.create(getWriteConfig(hudiOpts), context()).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
+    val metadataTableFSView = HoodieSparkTable.createForReads(getWriteConfig(hudiOpts), context()).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
     try {
       val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
       val lastCompactionInstant = compactionTimeline

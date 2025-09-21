@@ -29,12 +29,9 @@ import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
-import org.apache.hudi.client.transaction.TestSimpleSchemaConflictResolutionStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -46,12 +43,7 @@ import java.util.List;
 
 public class TestBaseHoodieTable extends HoodieTable {
   public TestBaseHoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
-    super(config, context, metaClient);
-  }
-
-  public TestBaseHoodieTable(
-      HoodieWriteConfig config, HoodieEngineContext engineContext, FileSystemViewManager viewManager, HoodieTableMetaClient metaClient, TaskContextSupplier taskContextSupplier) {
-    super(config, engineContext, metaClient, viewManager, TestSimpleSchemaConflictResolutionStrategy.taskContextSupplier);
+    super(config, context, metaClient, Option.empty());
   }
 
   private int countOfScheduleRollbackFunctionCalls = 0;
@@ -152,7 +144,7 @@ public class TestBaseHoodieTable extends HoodieTable {
   }
 
   @Override
-  public HoodieSavepointMetadata savepoint(HoodieEngineContext context, String instantToSavepoint, String user, String comment) {
+  public HoodieSavepointMetadata savepoint(HoodieEngineContext context, String instantToSavepoint, String completionTime, String user, String comment) {
     return null;
   }
 

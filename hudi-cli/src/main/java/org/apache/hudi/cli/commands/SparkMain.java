@@ -276,13 +276,13 @@ public class SparkMain {
     try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false)) {
       HoodieWriteConfig config = client.getConfig();
       HoodieEngineContext context = client.getEngineContext();
-      HoodieSparkTable table = HoodieSparkTable.create(config, context);
+      HoodieSparkTable table = HoodieSparkTable.create(config, context, client.getTransactionManager());
       client.validateAgainstTableProperties(table.getMetaClient().getTableConfig(), config);
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       return 0;
     } catch (Exception e) {
-      LOG.warn(String.format("Failed: Could not clean marker instantTime: \"%s\".", instantTime), e);
+      LOG.warn("Failed: Could not clean marker instantTime: \"{}\".", instantTime, e);
       return -1;
     }
   }

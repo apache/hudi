@@ -29,6 +29,7 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StoragePath;
 
@@ -52,8 +53,10 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
 
   /**
    * Create a complete instant and save to storage with a completion time.
+   * Only used for testing purposes.
    * @param instant the complete instant.
    */
+  @VisibleForTesting
   void createCompleteInstant(HoodieInstant instant);
 
   /**
@@ -65,43 +68,25 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   HoodieInstant createRequestedCommitWithReplaceMetadata(String instantTime, String actionType);
 
   /**
-   * Save Completed instant in active timeline.
+   * Save Completed instant in active timeline with an optional completion time. For version 8 tables, completion times are generated just before wrapping up the commit and serialized as part of
+   * completed commit metadata file.
    * @param instant Instant to be saved.
    * @param metadata metadata to write into the instant file
+   * @param completionTime the completion time for the instant.
+   * @param <T> type of the metadata persisted to the timeline
    */
-  <T> HoodieInstant saveAsComplete(HoodieInstant instant, Option<T> metadata);
-
-  /**
-   * Save Completed instant in active timeline.
-   * @param shouldLock Lock before writing to timeline.
-   * @param instant Instant to be saved.
-   * @param metadata metadata to write into the instant file
-   */
-  <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata);
-
-  /**
-   * Save Completed instant in active timeline with table format completion actions.
-   *
-   * @param shouldLock Lock before writing to timeline.
-   * @param instant Instant to be saved.
-   * @param metadata metadata to write into the instant file
-   * @param tableFormatCompletionAction functional interface to perform table format specific completion actions.
-   * @return The completed hoodie instant
-   * @param <T>
-   */
-  <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, TableFormatCompletionAction tableFormatCompletionAction);
-
+  <T> HoodieInstant saveAsComplete(HoodieInstant instant, Option<T> metadata, String completionTime);
 
   /**
    * Save Completed instant in active timeline with an optional completion time. For version 8 tables, completion times are generated just before wrapping up the commit and serialized as part of
    * completed commit metadata file.
-   * @param shouldLock Lock before writing to timeline.
    * @param instant Instant to be saved.
    * @param metadata metadata to write into the instant file
-   * @param completionTimeOpt an optinal instance of completion time.
-   * @param <T>
+   * @param completionTime the completion time for the instant.
+   * @param tableFormatCompletionAction functional interface to perform table format specific completion actions.
+   * @param <T> type of the metadata persisted to the timeline
    */
-  <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, Option<String> completionTimeOpt);
+  <T> HoodieInstant saveAsComplete(HoodieInstant instant, Option<T> metadata, String completionTime, TableFormatCompletionAction tableFormatCompletionAction);
 
   /**
    * Delete Compaction requested instant file from timeline.
@@ -209,22 +194,21 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   /**
    * Transition Compaction State from inflight to Committed.
    *
-   * @param shouldLock Whether to hold the lock when performing transition
    * @param inflightInstant Inflight instant
-   * @param metadata metadata to write into the instant file
+   * @param metadata        metadata to write into the instant file
    * @return commit instant
    */
-  HoodieInstant transitionCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieCommitMetadata metadata);
+  HoodieInstant transitionCompactionInflightToComplete(HoodieInstant inflightInstant, HoodieCommitMetadata metadata, String completionInstant);
 
   /**
    * Transition Log Compaction State from inflight to Committed.
    *
-   * @param shouldLock Whether to hold the lock when performing transition
-   * @param inflightInstant Inflight instant
-   * @param metadata metadata to write into the instant file
+   * @param inflightInstant   Inflight instant
+   * @param metadata          metadata to write into the instant file
+   * @param completionInstant the completion time for the log-compaction
    * @return commit instant
    */
-  HoodieInstant transitionLogCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieCommitMetadata metadata);
+  HoodieInstant transitionLogCompactionInflightToComplete(HoodieInstant inflightInstant, HoodieCommitMetadata metadata, String completionInstant);
 
   //-----------------------------------------------------------------
   //      END - COMPACTION RELATED META-DATA MANAGEMENT
@@ -233,14 +217,15 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   /**
    * Transition Clean State from inflight to Committed.
    *
-   * @param shouldLock Whether to hold the lock when performing transition
-   * @param inflightInstant Inflight instant
-   * @param metadata metadata to write into the instant file
+   * @param inflightInstant   Inflight instant
+   * @param metadata          metadata to write into the instant file
+   * @param completionInstant the completion time for the clean
    * @return commit instant
    */
-  HoodieInstant transitionCleanInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata);
+  HoodieInstant transitionCleanInflightToComplete(HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata, String completionInstant);
 
-  HoodieInstant transitionCleanInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata, TableFormatCompletionAction tableFormatCompletionAction);
+  HoodieInstant transitionCleanInflightToComplete(HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata, String completionInstant,
+                                                  TableFormatCompletionAction tableFormatCompletionAction);
 
   /**
    * Transition Clean State from requested to inflight.
@@ -253,14 +238,15 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   /**
    * Transition Rollback State from inflight to Committed.
    *
-   * @param shouldLock Whether to hold the lock when performing transition
-   * @param inflightInstant Inflight instant
-   * @param metadata metadata to write into the instant file
+   * @param inflightInstant   Inflight instant
+   * @param metadata          metadata to write into the instant file
+   * @param completionInstant the completion time for the rollback
    * @return commit instant
    */
-  HoodieInstant transitionRollbackInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieRollbackMetadata metadata);
+  HoodieInstant transitionRollbackInflightToComplete(HoodieInstant inflightInstant, HoodieRollbackMetadata metadata, String completionInstant);
 
-  HoodieInstant transitionRollbackInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieRollbackMetadata metadata, TableFormatCompletionAction tableFormatCompletionAction);
+  HoodieInstant transitionRollbackInflightToComplete(HoodieInstant inflightInstant, HoodieRollbackMetadata metadata, String completionInstant,
+                                                     TableFormatCompletionAction tableFormatCompletionAction);
 
   /**
    * Transition Rollback State from requested to inflight.
@@ -299,26 +285,28 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   /**
    * Transition replace inflight to Committed.
    *
-   * @param shouldLock Whether to hold the lock when performing transition
-   * @param inflightInstant Inflight instant
-   * @param metadata metadata to write into the instant file
+   * @param inflightInstant   Inflight instant
+   * @param metadata          metadata to write into the instant file
+   * @param completionInstant the completion time for the replace commit
    * @return commit instant
    */
-  HoodieInstant transitionReplaceInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata);
+  HoodieInstant transitionReplaceInflightToComplete(HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, String completionInstant);
 
-  HoodieInstant transitionReplaceInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, TableFormatCompletionAction tableFormatCompletionAction);
+  HoodieInstant transitionReplaceInflightToComplete(HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, String completionInstant,
+                                                    TableFormatCompletionAction tableFormatCompletionAction);
 
   /**
    * Transition cluster inflight to replace committed.
    *
-   * @param shouldLock Whether to hold the lock when performing transition
-   * @param inflightInstant Inflight instant
-   * @param metadata metadata to write into the instant file
+   * @param inflightInstant   Inflight instant
+   * @param metadata          metadata to write into the instant file
+   * @param completionInstant the completion time for the clustering
    * @return commit instant
    */
-  HoodieInstant transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata);
+  HoodieInstant transitionClusterInflightToComplete(HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, String completionInstant);
 
-  HoodieInstant transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, TableFormatCompletionAction tableFormatCompletionAction);
+  HoodieInstant transitionClusterInflightToComplete(HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, String completionInstant,
+                                                    TableFormatCompletionAction tableFormatCompletionAction);
 
   /**
    * Save Restore requested instant with metadata.

@@ -99,7 +99,7 @@ parameters:
 variables:
   BUILD_PROFILES: '-Dscala-2.12 -Dspark3.5 -Dflink1.18'
   PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
-  MVN_OPTS_INSTALL: '-T 3 -Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS) -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5'
+  MVN_OPTS_INSTALL: '-T 1 -Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS) -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5'
   MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   JAVA_MVN_TEST_FILTER: '-DwildcardSuites=skipScalaTests -DfailIfNoTests=false'
   SCALA_MVN_TEST_FILTER: '-Dtest=skipJavaTests -DfailIfNoTests=false'
@@ -489,7 +489,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_10
         displayName: UT FT common & other modules
-        timeoutInMinutes: '90'
+        timeoutInMinutes: '390'
         steps:
           - task: Docker@2
             displayName: "login to docker hub"
@@ -514,9 +514,9 @@ stages:
                 -v $(Build.SourcesDirectory):/hudi
                 -i docker.io/apachehudi/hudi-ci-bundle-validation-base:$(Build.BuildId)
                 /bin/bash -c "mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source
-                && mvn test  $(MVN_OPTS_TEST) -Punit-tests -DfailIfNoTests=false -DargLine="-Xmx4g" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB10_UT_MODULES)
-                && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE2_ARG) -Dtest="!TestHoodie*" -DfailIfNoTests=false -DargLine="-Xmx4g" -pl hudi-utilities
-                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -DfailIfNoTests=false -DargLine="-Xmx4g" $(JACOCO_AGENT_DESTFILE3_ARG) -pl $(JOB10_FT_MODULES)"
+                && mvn test  $(MVN_OPTS_TEST) -Punit-tests -Dsurefire.exitTimeout=600000 -Dsurefire.forkCount=0 -Dsurefire.reuseForks=false -DfailIfNoTests=false -DargLine="-Xmx6g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB10_UT_MODULES)
+                && mvn test  $(MVN _OPTS_TEST) -Punit-tests -Dsurefire.exitTimeout=600000 -Dsurefire.forkCount=0 -Dsurefire.reuseForks=false $(JACOCO_AGENT_DESTFILE2_ARG) -Dtest="!TestHoodie*" -DfailIfNoTests=false -DargLine="-Xmx6g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp" -pl hudi-utilities
+                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -Dsurefire.exitTimeout=600000 -Dsurefire.forkCount=0 -Dsurefire.reuseForks=false -DfailIfNoTests=false -DargLine="-Xmx6g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp" $(JACOCO_AGENT_DESTFILE3_ARG) -pl $(JOB10_FT_MODULES)"
           - task: PublishTestResults@2
             displayName: 'Publish Test Results'
             inputs:

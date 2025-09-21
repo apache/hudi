@@ -666,7 +666,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertEquals(deltaFile3, logFiles.get(0).getFileName(), "Log File Order check");
 
     // now finished the long pending delta instant 3
-    commitTimeline.saveAsComplete(deltaInstant3, Option.empty());
+    commitTimeline.saveAsComplete(deltaInstant3, Option.empty(), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
 
     refreshFsView();
     fileSlices = rtView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
@@ -1194,7 +1194,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       commitTimeline.createNewInstant(compactionInstant);
     }
 
-    commitTimeline.saveAsComplete(compactionInstant, Option.empty());
+    commitTimeline.saveAsComplete(compactionInstant, Option.empty(), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     refreshFsView(preTableVersion8);
     // populate the cache
     roView.getAllBaseFiles(partitionPath);
@@ -1909,12 +1909,12 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
   private void saveAsComplete(HoodieActiveTimeline timeline, HoodieInstant inflight, HoodieCommitMetadata metadata) {
     if (inflight.getAction().equals(HoodieTimeline.COMPACTION_ACTION)) {
-      timeline.transitionCompactionInflightToComplete(true, inflight, metadata);
+      timeline.transitionCompactionInflightToComplete(inflight, metadata, HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     } else {
       HoodieInstant requested = INSTANT_GENERATOR.createNewInstant(State.REQUESTED, inflight.getAction(), inflight.requestedTime());
       timeline.createNewInstant(requested);
       timeline.transitionRequestedToInflight(requested, Option.empty());
-      timeline.saveAsComplete(inflight, Option.of(metadata));
+      timeline.saveAsComplete(inflight, Option.of(metadata), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     }
   }
 
@@ -1934,7 +1934,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         .build();
     timeline.saveToPendingClusterCommit(clusteringInstant, requestedReplaceMetadata);
     timeline.transitionRequestedToInflight(clusteringInstant, Option.empty());
-    timeline.transitionClusterInflightToComplete(true, inflight, (HoodieReplaceCommitMetadata) metadata);
+    timeline.transitionClusterInflightToComplete(inflight, (HoodieReplaceCommitMetadata) metadata, HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
   }
 
   @Test

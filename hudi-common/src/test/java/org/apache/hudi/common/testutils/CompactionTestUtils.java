@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
@@ -146,7 +147,7 @@ public class CompactionTestUtils {
     metaClient.getActiveTimeline().createNewInstant(requested);
     metaClient.getActiveTimeline().transitionRequestedToInflight(requested, Option.empty());
     metaClient.getActiveTimeline().saveAsComplete(
-        INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, DELTA_COMMIT_ACTION, instantTime), Option.empty());
+        INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, DELTA_COMMIT_ACTION, instantTime), Option.empty(), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
   }
 
   public static void scheduleInflightCompaction(HoodieTableMetaClient metaClient, String instantTime,

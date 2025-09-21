@@ -19,12 +19,14 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.SparkMetadataTableSecondaryDeltaCommitActionExecutor;
@@ -39,8 +41,8 @@ import java.util.List;
 public class HoodieSparkMergeOnReadMetadataTable<T> extends HoodieSparkMergeOnReadTable<T> {
 
   HoodieSparkMergeOnReadMetadataTable(HoodieWriteConfig config, HoodieEngineContext context,
-                                      HoodieTableMetaClient metaClient) {
-    super(config, context, metaClient);
+                                      HoodieTableMetaClient metaClient, Option<TransactionManager> txnManager) {
+    super(config, context, metaClient, txnManager);
   }
 
   public HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPrepped(HoodieEngineContext context, String instantTime,

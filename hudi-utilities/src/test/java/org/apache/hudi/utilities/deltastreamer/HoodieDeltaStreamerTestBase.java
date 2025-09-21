@@ -528,11 +528,11 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     HoodieInstant inflightInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime);
     metaClient.getActiveTimeline().createNewInstant(inflightInstant);
     if (commitActiontype.equals(HoodieTimeline.CLUSTERING_ACTION)) {
-      metaClient.getActiveTimeline().transitionClusterInflightToComplete(true, inflightInstant, (HoodieReplaceCommitMetadata) commitMetadata);
+      metaClient.getActiveTimeline().transitionClusterInflightToComplete(inflightInstant, (HoodieReplaceCommitMetadata) commitMetadata, WriteClientTestUtils.createNewInstantTime());
     } else {
       metaClient.getActiveTimeline().saveAsComplete(
           INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime),
-          Option.of(commitMetadata));
+          Option.of(commitMetadata), WriteClientTestUtils.createNewInstantTime());
     }
   }
 

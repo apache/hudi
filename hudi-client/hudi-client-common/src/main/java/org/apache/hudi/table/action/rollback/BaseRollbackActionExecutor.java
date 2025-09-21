@@ -97,7 +97,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     this.deleteInstants = deleteInstants;
     this.skipTimelinePublish = skipTimelinePublish;
     this.skipLocking = skipLocking;
-    this.txnManager = new TransactionManager(config, table.getStorage());
+    this.txnManager = table.getTxnManager().get();
   }
 
   /**
@@ -288,9 +288,9 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
         // NOTE: no need to lock here, since !skipTimelinePublish is always true,
         // when skipLocking is false, txnManager above-mentioned should lock it.
         // when skipLocking is true, the caller should have already held the lock.
-        table.getActiveTimeline().transitionRollbackInflightToComplete(false, inflightInstant, rollbackMetadata,
+        table.getActiveTimeline().transitionRollbackInflightToComplete(inflightInstant, rollbackMetadata, txnManager.generateInstantTime(),
             completedInstant -> table.getMetaClient().getTableFormat().completedRollback(completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
-        LOG.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
+        LOG.info("Rollback of Commits {} is complete", rollbackMetadata.getCommitsRollback());
       }
     } finally {
       if (enableLocking) {

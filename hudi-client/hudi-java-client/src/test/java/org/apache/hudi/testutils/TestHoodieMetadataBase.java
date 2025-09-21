@@ -21,6 +21,7 @@ package org.apache.hudi.testutils;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.EngineType;
@@ -253,9 +254,11 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
   }
 
   protected void archiveDataTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) throws IOException {
-    HoodieTable table = HoodieJavaTable.create(writeConfig, context, metaClient);
-    HoodieTimelineArchiver archiver = new TimelineArchiverV2(writeConfig, table);
-    archiver.archiveIfRequired(context);
+    try (TransactionManager txnManager = new TransactionManager(writeConfig, metaClient.getStorage())) {
+      HoodieTable table = HoodieJavaTable.create(writeConfig, context, metaClient, Option.of(txnManager));
+      HoodieTimelineArchiver archiver = new TimelineArchiverV2(writeConfig, table);
+      archiver.archiveIfRequired(context);
+    }
   }
 
   protected void validateMetadata(HoodieTestTable testTable) throws IOException {

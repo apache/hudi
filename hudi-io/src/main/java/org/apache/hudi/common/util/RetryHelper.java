@@ -98,7 +98,7 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
           throw e;
         }
         if (retries++ >= num) {
-          String message = "Still failed to " + taskInfo + " after retried " + num + " times.";
+          String message = "Still failed to " + taskInfo + " after retrying " + num + " times.";
           LOG.error(message, e);
           throw e;
         }

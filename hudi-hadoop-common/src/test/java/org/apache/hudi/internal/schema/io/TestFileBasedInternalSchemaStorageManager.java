@@ -20,6 +20,7 @@ package org.apache.hudi.internal.schema.io;
 
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
@@ -105,7 +106,7 @@ public class TestFileBasedInternalSchemaStorageManager extends HoodieCommonTestH
     timeline.createNewInstant(instant);
     timeline.transitionRequestedToInflight(instant, Option.empty());
     timeline.saveAsComplete(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instant.getAction(), instant.requestedTime()),
-        Option.empty());
+        Option.empty(), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
   }
 
   private InternalSchema getSimpleSchema() {

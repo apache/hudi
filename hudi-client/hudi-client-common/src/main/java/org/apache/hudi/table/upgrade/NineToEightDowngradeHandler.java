@@ -19,6 +19,7 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -92,6 +93,7 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     reconcileMergeConfigs(propertiesToAdd, propertiesToRemove, tableConfig);
     reconcileOrderingFieldsConfig(propertiesToAdd, propertiesToRemove, tableConfig);
+    table.getTxnManager().ifPresent(obj -> ((TransactionManager) obj).close());
     return new UpgradeDowngrade.TableConfigChangeSet(propertiesToAdd, propertiesToRemove);
   }
 

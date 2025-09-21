@@ -111,7 +111,7 @@ object AlterHoodieTableAddColumnsCommand extends SparkAdapterSupport with Loggin
     val instantTime = client.startCommit(commitActionType)
     client.preWrite(instantTime, WriteOperationType.ALTER_SCHEMA, hoodieCatalogTable.metaClient)
 
-    val hoodieTable = HoodieSparkTable.create(client.getConfig, client.getEngineContext)
+    val hoodieTable = HoodieSparkTable.createForReads(client.getConfig, client.getEngineContext)
     val timeLine = hoodieTable.getActiveTimeline
     val requested = hoodieTable.getInstantGenerator.createNewInstant(State.REQUESTED, commitActionType, instantTime)
     val metadata = new HoodieCommitMetadata

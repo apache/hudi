@@ -39,7 +39,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -105,7 +104,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
 
       // Reload and rollback inflight compaction
       metaClient.reloadActiveTimeline();
-      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context, metaClient);
+      HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
 
       hoodieTable.rollbackInflightCompaction(
           INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime), client.getTransactionManager());

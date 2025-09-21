@@ -162,7 +162,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       client.rollback(newCommitTime);
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.createForReads(cfg, context(), metaClient);
       List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
       HoodieTableFileSystemView tableView =
           getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(),
@@ -212,7 +212,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
 
       client.commit(newCommitTime, jsc().parallelize(statuses));
 
-      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.createForReads(cfg, context(), metaClient);
 
       Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
       assertTrue(deltaCommit.isPresent());
@@ -315,7 +315,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
             + remainingFiles);
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
-        hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+        hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient, Option.of(thirdClient.getTransactionManager()));
         tableView =
             getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(),
                 allFiles);
@@ -413,7 +413,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
 
       client.commit(newCommitTime, jsc().parallelize(statuses));
 
-      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient, Option.of(client.getTransactionManager()));
 
       Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
       assertTrue(deltaCommit.isPresent());
@@ -536,7 +536,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
           metaClient.getActiveTimeline().getCommitAndReplaceTimeline().firstInstant();
       assertFalse(commit.isPresent());
 
-      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.createForReads(cfg, context(), metaClient);
 
       List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
       HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient,
@@ -745,7 +745,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       client.restoreToInstant(commit2, cfg.isMetadataTableEnabled());
 
       // verify that no files are present after 002. every data file should have been cleaned up
-      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.createForReads(cfg, context(), metaClient);
       List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
       HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient,
           metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
@@ -842,8 +842,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   }
 
   private void validateRecords(HoodieWriteConfig cfg, HoodieTableMetaClient metaClient, List<HoodieRecord> expectedRecords) throws IOException {
-
-    HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.createForReads(cfg, context(), metaClient);
     List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
     HoodieTableFileSystemView tableView =
         getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(),
@@ -953,7 +952,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
 
       writeClient.rollback(newCommitTime);
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable table = HoodieSparkTable.create(config, context());
+      HoodieTable table = HoodieSparkTable.createForReads(config, context(), metaClient);
       TableFileSystemView.SliceView tableRTFileSystemView = table.getSliceView();
 
       long numLogFiles = 0;
@@ -1002,7 +1001,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       writeClient.commit(newCommitTime, statuses);
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
+      HoodieTable table = HoodieSparkTable.create(config, context(), metaClient, Option.of(writeClient.getTransactionManager()));
       table.getHoodieView().sync();
       TableFileSystemView.SliceView tableRTFileSystemView = table.getSliceView();
 
@@ -1030,7 +1029,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
           HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, newCommitTime), writeClient.getTransactionManager());
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      table = HoodieSparkTable.create(config, context(), metaClient);
+      table = HoodieSparkTable.createForReads(config, context(), metaClient);
       tableRTFileSystemView = table.getSliceView();
       ((SyncableFileSystemView) tableRTFileSystemView).reset();
 
@@ -1096,7 +1095,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
     }
 
     if (assertLogFiles) {
-      HoodieTable table = HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieTable table = HoodieSparkTable.createForReads(cfg, context(), metaClient);
       table.getHoodieView().sync();
       TableFileSystemView.SliceView tableRTFileSystemView = table.getSliceView();
 
@@ -1120,7 +1119,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
     assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(instantTime));
 
     metaClient.reloadActiveTimeline();
-    HoodieTable table = HoodieSparkTable.create(cfg, context(), metaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(cfg, context(), metaClient);
     String extension = table.getBaseFileExtension();
     Collection<List<HoodieWriteStat>> stats = compactionMetadata.getCommitMetadata().get().getPartitionToWriteStats().values();
     assertEquals(numLogFiles, stats.stream().flatMap(Collection::stream).filter(state -> state.getPath().contains(extension)).count());
@@ -1130,7 +1129,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
 
   private long getNumLogFilesInLatestFileSlice(HoodieTableMetaClient metaClient, HoodieWriteConfig cfg, HoodieTestDataGenerator dataGen) {
     metaClient.reloadActiveTimeline();
-    HoodieTable table = HoodieSparkTable.create(cfg, context(), metaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(cfg, context(), metaClient);
     table.getHoodieView().sync();
     TableFileSystemView.SliceView tableRTFileSystemView = table.getSliceView();
 

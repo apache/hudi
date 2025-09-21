@@ -103,7 +103,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
     this.table = table;
     this.metaClient = table.getMetaClient();
     this.archiveFilePath = ArchivedTimelineV1.getArchiveLogPath(metaClient.getArchivePath());
-    this.txnManager = new TransactionManager(config, table.getMetaClient().getStorage());
+    this.txnManager = table.getTxnManager().get();
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();
     this.maxInstantsToKeep = minAndMaxInstants.getRight();
@@ -139,7 +139,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
     try {
       if (acquireLock) {
         // there is no owner or instant time per se for archival.
-        txnManager.beginStateChange(Option.empty(), Option.empty());
+        txnManager.beginStateChange();
       }
       List<HoodieInstant> instantsToArchive = getInstantsToArchive();
       if (!instantsToArchive.isEmpty()) {

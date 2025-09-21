@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -28,6 +29,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -268,7 +270,7 @@ public class UpgradeDowngrade {
       HoodieWriteConfig updatedConfig = HoodieWriteConfig.newBuilder().withPath(config.getBasePath()).withProperties(typedProperties).build();
 
       HoodieTable table = upgradeDowngradeHelper.getTable(updatedConfig, context);
-      String newInstant = table.getMetaClient().createNewInstantTime(false);
+      String newInstant = HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
       Option<HoodieTableMetadataWriter> mdtWriterOpt = table.getMetadataWriter(newInstant);
       mdtWriterOpt.ifPresent(mdtWriter -> {
         HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
@@ -280,6 +282,7 @@ public class UpgradeDowngrade {
           throw new HoodieException("Failed to close MDT writer for table " + table.getConfig().getBasePath());
         }
       });
+      table.getTxnManager().ifPresent(obj -> ((TransactionManager) obj).close());
     }
   }
 
@@ -396,16 +399,18 @@ public class UpgradeDowngrade {
       // as table version SEVEN is not considered as a valid value due to being a bridge release.
       // otherwise use current table version
       HoodieTableVersion tableVersion = fromVersion == HoodieTableVersion.SEVEN
-          ? HoodieTableVersion.SIX 
+          ? HoodieTableVersion.SIX
           : metaClient.getTableConfig().getTableVersion();
 
+      HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
       UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
-          upgradeDowngradeHelper.getTable(config, context),
-          context, 
-          config, 
-          upgradeDowngradeHelper, 
+          table,
+          context,
+          config,
+          upgradeDowngradeHelper,
           HoodieTableType.MERGE_ON_READ.equals(metaClient.getTableType()),
           tableVersion);
+      table.getTxnManager().ifPresent(obj -> ((TransactionManager) obj).close());
     }
   }
 }

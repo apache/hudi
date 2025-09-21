@@ -20,14 +20,19 @@ package org.apache.hudi.client.transaction;
 
 import org.apache.hudi.client.transaction.lock.LockManager;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
+import org.apache.hudi.common.table.timeline.TimeGenerator;
+import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.HoodieStorage;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
+import java.util.function.Function;
 
 /**
  * This class allows clients to start and end transactions. Anything done between a start and end transaction is
@@ -38,16 +43,83 @@ public class TransactionManager implements Serializable, AutoCloseable {
   protected static final Logger LOG = LoggerFactory.getLogger(TransactionManager.class);
   protected final LockManager lockManager;
   protected final boolean isLockRequired;
+  private final transient TimeGenerator timeGenerator;
+  protected volatile boolean hasLock;
   protected Option<HoodieInstant> changeActionInstant = Option.empty();
   private Option<HoodieInstant> lastCompletedActionInstant = Option.empty();
 
   public TransactionManager(HoodieWriteConfig config, HoodieStorage storage) {
-    this(new LockManager(config, storage), config.isLockRequired());
+    this(config, new LockManager(config, storage));
   }
 
-  protected TransactionManager(LockManager lockManager, boolean isLockRequired) {
+  protected TransactionManager(HoodieWriteConfig writeConfig, LockManager lockManager) {
+    this(lockManager, writeConfig.isLockRequired(), TimeGenerators.getTimeGenerator(writeConfig.getTimeGeneratorConfig()));
+  }
+
+  public TransactionManager(LockManager lockManager, boolean isLockRequired, TimeGenerator timeGenerator) {
     this.lockManager = lockManager;
     this.isLockRequired = isLockRequired;
+    this.timeGenerator = timeGenerator;
+  }
+
+  public String generateInstantTime() {
+    if (!hasLock && isLockRequired) {
+      throw new HoodieLockException("Cannot create instant without acquiring a lock first.");
+    }
+    return HoodieInstantTimeGenerator.createNewInstantTime(timeGenerator, 0L);
+  }
+
+  /**
+   * Generates an instant time and executes an action that requires that instant time within a lock.
+   * @param instantTimeConsumingAction a function that takes the generated instant time and performs some action
+   * @return the result of the action
+   * @param <T> type of the result
+   */
+  public <T> T executeStateChangeWithInstant(Function<String, T> instantTimeConsumingAction) {
+    return executeStateChangeWithInstant(Option.empty(), Option.empty(), instantTimeConsumingAction);
+  }
+
+  /**
+   * Uses the provided instant if present or else generates an instant time and executes an action that requires that instant time within a lock.
+   * @param providedInstantTime an optional instant time provided by the caller. If not provided, a new instant time will be generated.
+   * @param instantTimeConsumingAction a function that takes the generated instant time and performs some action
+   * @return the result of the action
+   * @param <T> type of the result
+   */
+  public <T> T executeStateChangeWithInstant(Option<String> providedInstantTime, Function<String, T> instantTimeConsumingAction) {
+    return executeStateChangeWithInstant(providedInstantTime, Option.empty(), instantTimeConsumingAction);
+  }
+
+  /**
+   * Uses the provided instant if present or else generates an instant time and executes an action that requires that instant time within a lock.
+   * @param providedInstantTime an optional instant time provided by the caller. If not provided, a new instant time will be generated.
+   * @param lastCompletedActionInstant optional input representing the last completed instant, used for logging purposes.
+   * @param instantTimeConsumingAction a function that takes the generated instant time and performs some action
+   * @return the result of the action
+   * @param <T> type of the result
+   */
+  public <T> T executeStateChangeWithInstant(Option<String> providedInstantTime, Option<HoodieInstant> lastCompletedActionInstant, Function<String, T> instantTimeConsumingAction) {
+    if (isLockRequired()) {
+      acquireLock();
+    }
+    String requestedInstant = providedInstantTime.orElseGet(() -> HoodieInstantTimeGenerator.createNewInstantTime(timeGenerator, 0L));
+    try {
+      if (lastCompletedActionInstant.isEmpty()) {
+        LOG.info("State change starting for {}", changeActionInstant);
+      } else {
+        LOG.info("State change starting for {} with latest completed action instant {}", changeActionInstant, lastCompletedActionInstant.get());
+      }
+      return instantTimeConsumingAction.apply(requestedInstant);
+    } finally {
+      if (isLockRequired()) {
+        releaseLock();
+        LOG.info("State change ended for {}", requestedInstant);
+      }
+    }
+  }
+
+  public void beginStateChange() {
+    beginStateChange(Option.empty(), Option.empty());
   }
 
   public void beginStateChange(Option<HoodieInstant> changeActionInstant,
@@ -55,23 +127,51 @@ public class TransactionManager implements Serializable, AutoCloseable {
     if (isLockRequired) {
       LOG.info("State change starting for {} with latest completed action instant {}",
           changeActionInstant, lastCompletedActionInstant);
-      lockManager.lock();
+      acquireLock();
       reset(this.changeActionInstant, changeActionInstant, lastCompletedActionInstant);
       LOG.info("State change started for {} with latest completed action instant {}",
           changeActionInstant, lastCompletedActionInstant);
     }
   }
 
+  public void endStateChange() {
+    endStateChange(Option.empty());
+  }
+
   public void endStateChange(Option<HoodieInstant> changeActionInstant) {
     if (isLockRequired) {
       LOG.info("State change ending for action instant {}", changeActionInstant);
       if (reset(changeActionInstant, Option.empty(), Option.empty())) {
-        lockManager.unlock();
+        releaseLock();
         LOG.info("State change ended for action instant {}", changeActionInstant);
       }
     }
   }
 
+  private void acquireLock() {
+    if (hasLock) {
+      LOG.info("{}: Lock already acquired, skipping lock acquisition.", this);
+      return;
+    }
+    lockManager.lock();
+    hasLock = true;
+    LOG.info("{}: Lock acquired for action instant {}", this, changeActionInstant);
+  }
+
+  private void releaseLock() {
+    if (hasLock) {
+      // set the boolean first (reverse of above); to be in a safe critical section.
+      hasLock = false;
+      lockManager.unlock();
+      LOG.info("{}: Lock released for action instant {}", this, changeActionInstant);
+    } else {
+      LOG.info("{}: No lock acquired before, skipping lock release.", this);
+    }
+  }
+
+  /* this method remains `synchronized` without any deadlocks only because reset() is called
+   * after a lock acquistion, and before a release. i.e. in a critical section.
+   */
   protected synchronized boolean reset(Option<HoodieInstant> callerInstant,
                                        Option<HoodieInstant> changeActionInstant,
                                        Option<HoodieInstant> lastCompletedActionInstant) {
@@ -85,7 +185,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
 
   @Override
   public void close() {
-    if (isLockRequired) {
+    if (lockManager != null) {
       lockManager.close();
       LOG.info("Transaction manager closed");
     }

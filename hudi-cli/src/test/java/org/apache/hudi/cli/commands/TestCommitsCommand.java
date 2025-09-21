@@ -28,6 +28,7 @@ import org.apache.hudi.cli.testutils.HoodieTestReplaceCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -310,9 +311,11 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
 
     // archive
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
-    HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient);
-    HoodieTimelineArchiver archiver = new TimelineArchiverV2(cfg, table);
-    archiver.archiveIfRequired(context());
+    try (TransactionManager txnManager = new TransactionManager(cfg, metaClient.getStorage())) {
+      HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient, Option.of(txnManager));
+      HoodieTimelineArchiver archiver = new TimelineArchiverV2(cfg, table);
+      archiver.archiveIfRequired(context());
+    }
     return data;
   }
 
@@ -349,11 +352,13 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
           Option.of(value[0]), Option.of(value[1]));
       // archive
       metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
-      HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient);
+      try (TransactionManager txnManager = new TransactionManager(cfg, metaClient.getStorage())) {
+        HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient, Option.of(txnManager));
 
-      // need to create multi archive files
-      HoodieTimelineArchiver archiver = new TimelineArchiverV2(cfg, table);
-      archiver.archiveIfRequired(context());
+        // need to create multi archive files
+        HoodieTimelineArchiver archiver = new TimelineArchiverV2(cfg, table);
+        archiver.archiveIfRequired(context());
+      }
     }
 
     Object result = shell.evaluate(() -> String.format("commits showarchived --startTs %s --endTs %s", "160", "174"));

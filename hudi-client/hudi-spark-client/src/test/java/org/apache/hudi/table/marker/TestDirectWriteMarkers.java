@@ -115,7 +115,7 @@ public class TestDirectWriteMarkers extends TestWriteMarkersBase {
 
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(metaClient.getBasePath()).withMarkersType(MarkerType.DIRECT.name()).build();
 
-    HoodieTable hoodieTable = HoodieSparkTable.create(writeConfig, context, metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.createForReads(writeConfig, context, metaClient);
     hoodieTable.finalizeWrite(context, "000", writeStatList); // data file 2 should have been deleted.
     assertTrue(storage.exists(dataFile1));
     // file 2 is expected to be deleted.
@@ -126,5 +126,4 @@ public class TestDirectWriteMarkers extends TestWriteMarkersBase {
   public void testFailureToDeleteDuringReconciliation() {
 
   }
-
 }

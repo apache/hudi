@@ -716,7 +716,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieWriteConfig config = getSmallInsertWriteConfig(100,
         TRIP_EXAMPLE_SCHEMA, dataGen.getEstimatedFileSizeInBytes(150), true, props);
     SparkRDDWriteClient client = getHoodieWriteClient(config);
-    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.createForReads(config, context, metaClient);
 
     //1. insert to generate 2 file group
     Pair<JavaRDD<WriteStatus>, List<HoodieRecord>> upsertResult = insertBatchRecords(client, "001", 600, 2, 1, SparkRDDWriteClient::upsert);

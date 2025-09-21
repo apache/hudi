@@ -52,7 +52,7 @@ public class TestHoodieAvroFileWriterFactory extends HoodieClientTestBase {
     final StoragePath parquetPath = new StoragePath(
         basePath + "/partition/path/f1_1-0-1_000.parquet");
     final HoodieWriteConfig cfg = getConfig();
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(cfg, context, metaClient);
     SparkTaskContextSupplier supplier = new SparkTaskContextSupplier();
     HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(instantTime,
         parquetPath, table.getStorage(), cfg.getStorageConfig(), HoodieTestDataGenerator.AVRO_SCHEMA, supplier, HoodieRecordType.AVRO);

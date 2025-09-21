@@ -26,6 +26,7 @@ import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.TableFormatCompletionAction;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -63,7 +64,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
 
   public CleanActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
     super(context, config, table, instantTime);
-    this.txnManager = new TransactionManager(config, table.getStorage());
+    this.txnManager = table.getTxnManager().get();
   }
 
   private static boolean deleteFileAndGetResult(HoodieStorage storage, String deletePathStr) throws IOException {
@@ -222,11 +223,11 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       );
       this.txnManager.beginStateChange(Option.of(inflightInstant), Option.empty());
       writeTableMetadata(metadata, inflightInstant.requestedTime());
-      table.getActiveTimeline().transitionCleanInflightToComplete(
-          false,
-          inflightInstant,
-          Option.of(metadata),
-          completedInstant -> table.getMetaClient().getTableFormat().clean(metadata, completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
+      TableFormatCompletionAction formatCompletionAction = completedInstant -> table.getMetaClient().getTableFormat()
+          .clean(metadata, completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager());
+      HoodieInstant completedInstant = table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant, Option.of(metadata), txnManager.generateInstantTime());
+      // FIXME-vc: this is an one off..
+      formatCompletionAction.execute(completedInstant);
       LOG.info("Marked clean started on {} as complete", inflightInstant.requestedTime());
       return metadata;
     } finally {

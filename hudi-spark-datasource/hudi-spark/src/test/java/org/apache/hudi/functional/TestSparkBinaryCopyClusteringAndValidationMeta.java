@@ -226,7 +226,7 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
         .withEmbeddedTimelineServerEnabled(false)
         .build();
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    HoodieTable table = HoodieSparkTable.create(writeConfig, engineContext, metaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(writeConfig, engineContext, metaClient);
     SparkBinaryCopyClusteringExecutionStrategy strategy = new SparkBinaryCopyClusteringExecutionStrategy(table, engineContext, writeConfig);
 
     MessageType legacySchema = new AvroSchemaConverter().convert(AVRO_SCHEMA);
@@ -254,7 +254,7 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
     Assertions.assertTrue(strategy.supportBinaryStreamCopy(groups, new HashMap<>()));
 
     metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ);
-    table = HoodieSparkTable.create(writeConfig, engineContext, metaClient);
+    table = HoodieSparkTable.createForReads(writeConfig, engineContext);
     strategy = new SparkBinaryCopyClusteringExecutionStrategy(table, engineContext, writeConfig);
     Assertions.assertFalse(strategy.supportBinaryStreamCopy(groups, new HashMap<>()));
   }
