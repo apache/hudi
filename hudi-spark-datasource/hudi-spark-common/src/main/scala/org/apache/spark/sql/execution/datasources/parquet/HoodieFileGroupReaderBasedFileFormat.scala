@@ -365,9 +365,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                            storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
     if (remainingPartitionSchema.fields.length == partitionSchema.fields.length) {
       //none of partition fields are read from the file, so the reader will do the appending for us
-      val pfileUtils = sparkAdapter.getSparkPartitionedFileUtils
-      val modifiedFile = pfileUtils.createPartitionedFile(file.partitionValues, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
-      parquetFileReader.read(modifiedFile, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
+      parquetFileReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
     } else if (remainingPartitionSchema.fields.length == 0) {
       //we read all of the partition fields from the file
       val pfileUtils = sparkAdapter.getSparkPartitionedFileUtils
@@ -386,7 +384,6 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       projectIter(iter, StructType(requestedSchema.fields ++ remainingPartitionSchema.fields), outputSchema)
     }
   }
-
 
   private def projectIter(iter: Iterator[Any], from: StructType, to: StructType): Iterator[InternalRow] = {
     val unsafeProjection = generateUnsafeProjection(from, to)
