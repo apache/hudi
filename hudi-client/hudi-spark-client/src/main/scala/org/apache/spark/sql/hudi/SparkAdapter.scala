@@ -120,11 +120,6 @@ trait SparkAdapter extends Serializable {
   def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface
 
   /**
-   * Create the SparkParsePartitionUtil.
-   */
-  def getSparkParsePartitionUtil: SparkParsePartitionUtil
-
-  /**
    * Gets the [[HoodieSparkPartitionedFileUtils]].
    */
   def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils

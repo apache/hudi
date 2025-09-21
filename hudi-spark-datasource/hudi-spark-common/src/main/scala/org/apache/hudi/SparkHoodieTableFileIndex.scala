@@ -43,7 +43,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{expressions, InternalRow}
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, EmptyRow, EqualTo, Expression, InterpretedPredicate, Literal}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache, SparkBaseParsePartitionUtil}
+import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{ByteType, DateType, IntegerType, LongType, ShortType, StringType, StructField, StructType}
 import org.slf4j.LoggerFactory
@@ -417,7 +417,6 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       schema,
       metaClient.getTableConfig.propsMap,
       configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
-      SparkBaseParsePartitionUtil,
       shouldValidatePartitionColumns(spark))
   }
 

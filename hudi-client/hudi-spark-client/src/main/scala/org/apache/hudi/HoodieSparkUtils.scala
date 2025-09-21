@@ -237,7 +237,6 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
                                    tableSchema: StructType,
                                    tableConfig: java.util.Map[String, String],
                                    timeZoneId: String,
-                                   sparkParsePartitionUtil: SparkParsePartitionUtil,
                                    shouldValidatePartitionColumns: Boolean): Array[Object] = {
     val keyGeneratorClass = KeyGeneratorType.getKeyGeneratorClassName(tableConfig)
     val timestampKeyGeneratorType = tableConfig.get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key())
@@ -252,7 +251,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       Array.fill(partitionColumns.length)(UTF8String.fromString(partitionPath))
     } else {
       doParsePartitionColumnValues(partitionColumns, partitionPath, tableBasePath, tableSchema, timeZoneId,
-        sparkParsePartitionUtil, shouldValidatePartitionColumns)
+        shouldValidatePartitionColumns)
     }
   }
 
@@ -261,7 +260,6 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
                                  basePath: StoragePath,
                                  schema: StructType,
                                  timeZoneId: String,
-                                 sparkParsePartitionUtil: SparkParsePartitionUtil,
                                  shouldValidatePartitionCols: Boolean): Array[Object] = {
     if (partitionColumns.length == 0) {
       // This is a non-partitioned table
@@ -316,17 +314,16 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
         val pathWithPartitionName = new StoragePath(basePath, partitionWithName)
         val partitionSchema = StructType(schema.fields.filter(f => partitionColumns.contains(f.name)))
         val partitionValues = parsePartitionPath(pathWithPartitionName, partitionSchema, timeZoneId,
-          sparkParsePartitionUtil, basePath, shouldValidatePartitionCols)
+          basePath, shouldValidatePartitionCols)
         partitionValues.map(_.asInstanceOf[Object]).toArray
       }
     }
   }
 
   private def parsePartitionPath(partitionPath: StoragePath, partitionSchema: StructType, timeZoneId: String,
-                                 sparkParsePartitionUtil: SparkParsePartitionUtil, basePath: StoragePath,
-                                 shouldValidatePartitionCols: Boolean): Seq[Any] = {
+                                 basePath: StoragePath, shouldValidatePartitionCols: Boolean): Seq[Any] = {
     val partitionDataTypes = partitionSchema.map(f => f.name -> f.dataType).toMap
-    sparkParsePartitionUtil.parsePartition(
+    SparkParsePartitionUtil.parsePartition(
       new Path(partitionPath.toUri),
       typeInference = false,
       Set(new Path(basePath.toUri)),
