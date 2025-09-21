@@ -38,7 +38,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Matchers}
 
 import java.nio.ByteBuffer
-import java.util.{ArrayList, HashMap, Objects, Collections => JCollections}
+import java.util.{ArrayList, Collections => JCollections, HashMap, Objects}
 
 class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAfterAll {
   private var sparkSession: SparkSession = _
