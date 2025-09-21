@@ -124,7 +124,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       this.scannedPrefixes = new HashSet<>();
       this.allowInflightInstants = allowInflightInstants;
       this.orderingFields = ConfigUtils.getOrderingFields(this.hoodieTableMetaClient.getTableConfig().getProps());
-      TypedProperties mergeProps = ConfigUtils.getMergeProps(getPayloadProps(), this.hoodieTableMetaClient.getTableConfig().getProps());
+      TypedProperties mergeProps = ConfigUtils.getMergeProps(getPayloadProps(), this.hoodieTableMetaClient.getTableConfig());
       this.deleteContext = new DeleteContext(mergeProps, readerSchema).withReaderSchema(readerSchema);
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);

@@ -1321,7 +1321,18 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public Map<String, String> getTableMergeProperties() {
-    return ConfigUtils.extractWithPrefix(this.props, RECORD_MERGE_PROPERTY_PREFIX);
+    Map<String, String> configs = ConfigUtils.extractWithPrefix(this.props, RECORD_MERGE_PROPERTY_PREFIX);
+    if (getTableVersion().lesserThan(HoodieTableVersion.NINE)) {
+      // Convert legacy payload properties do delete key and delete marker properties
+      if (getPayloadClass().equals(AWSDmsAvroPayload.class.getName())) {
+        configs.put(DELETE_KEY, OP_FIELD);
+        configs.put(DELETE_MARKER, DELETE_OPERATION_VALUE);
+      } else if (getPayloadClass().equals(MySqlDebeziumAvroPayload.class.getName()) || getPayloadClass().equals(PostgresDebeziumAvroPayload.class.getName())) {
+        configs.put(DELETE_KEY, DebeziumConstants.FLATTENED_OP_COL_NAME);
+        configs.put(DELETE_MARKER, DebeziumConstants.DELETE_OP);
+      }
+    }
+    return configs;
   }
 
   public Map<String, String> propsMap() {
