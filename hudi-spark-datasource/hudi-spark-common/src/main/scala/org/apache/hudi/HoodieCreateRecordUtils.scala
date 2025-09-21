@@ -19,14 +19,15 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions.INSERT_DROP_DUPS
-import org.apache.hudi.avro.{AvroSchemaCache, HoodieAvroUtils}
+import org.apache.hudi.avro.{AvroRecordContext, AvroSchemaCache, HoodieAvroUtils}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.model.WriteOperationType.isChangingRecords
-import org.apache.hudi.common.util.{HoodieRecordUtils, Option => HOption, OrderingValues}
+import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.read.DeleteContext
+import org.apache.hudi.common.util.{ConfigUtils, HoodieRecordUtils, Option => HOption, OrderingValues}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.io.FileGroupReaderBasedMergeHandle
 import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, SparkKeyGeneratorInterface}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
@@ -61,7 +62,7 @@ object HoodieCreateRecordUtils {
                                        preppedSparkSqlWrites: Boolean,
                                        preppedSparkSqlMergeInto: Boolean,
                                        preppedWriteOperation: Boolean,
-                                       orderingFields: java.util.List[String])
+                                       tableConfig: HoodieTableConfig)
 
   def createHoodieRecordRdd(args: createHoodieRecordRddArgs) = {
     val df = args.df
@@ -76,7 +77,7 @@ object HoodieCreateRecordUtils {
     val preppedSparkSqlWrites = args.preppedSparkSqlWrites
     val preppedSparkSqlMergeInto = args.preppedSparkSqlMergeInto
     val preppedWriteOperation = args.preppedWriteOperation
-    val orderingFields = args.orderingFields
+    val orderingFields = args.tableConfig.getOrderingFields
 
     val shouldDropPartitionColumns = config.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
     val recordType = config.getRecordMerger.getRecordType
@@ -130,9 +131,12 @@ object HoodieCreateRecordUtils {
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
           val requiresPayload = isChangingRecords(operation) && !config.isFileGroupReaderBasedMergeHandle
+          val mergeProps = ConfigUtils.getMergeProps(config.getProps, args.tableConfig.getProps)
+          val deleteContext = new DeleteContext(mergeProps, writerSchema).withReaderSchema(writerSchema);
 
           // handle dropping partition columns
           it.map { avroRec =>
+            val isDelete: Boolean = AvroRecordContext.getFieldAccessorInstance.isDeleteRecord(avroRec, deleteContext)
             val (hoodieKey: HoodieKey, recordLocation: HOption[HoodieRecordLocation]) = HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec,
               preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedWriteOperation || preppedSparkSqlMergeInto)
             val avroRecWithoutMeta: GenericRecord = if (preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation) {
@@ -146,7 +150,6 @@ object HoodieCreateRecordUtils {
             } else {
               avroRecWithoutMeta
             }
-
             val hoodieRecord = if (shouldCombine && !orderingFields.isEmpty) {
               val orderingVal = OrderingValues.create(
                 orderingFields,
@@ -154,10 +157,10 @@ object HoodieCreateRecordUtils {
                   field => HoodieAvroUtils.getNestedFieldVal(avroRec, field, false,
                     consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]))
               HoodieRecordUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
-                config.getPayloadClass, null, recordLocation, requiresPayload)
+                config.getPayloadClass, null, recordLocation, requiresPayload, isDelete)
             } else {
               HoodieRecordUtils.createHoodieRecord(processedRecord, hoodieKey,
-                config.getPayloadClass, recordLocation, requiresPayload)
+                config.getPayloadClass, recordLocation, requiresPayload, isDelete)
             }
             hoodieRecord
           }
