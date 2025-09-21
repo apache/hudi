@@ -457,8 +457,8 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     @SuppressWarnings("unchecked")
     private Option<HoodieRecord<RowData>> mergeRowWithLog(HoodieRecord<RowData> historyRecord, HoodieRecord<RowData> newRecord) {
       try {
-        BufferedRecord<RowData> historyBufferedRecord = BufferedRecords.fromHoodieRecord(historyRecord, tableSchema, readerContext.getRecordContext(), props, orderingFields);
-        BufferedRecord<RowData> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, tableSchema, readerContext.getRecordContext(), props, orderingFields);
+        BufferedRecord<RowData> historyBufferedRecord = BufferedRecords.fromHoodieRecord(historyRecord, tableSchema, readerContext.getRecordContext(), props, orderingFields, deleteContext);
+        BufferedRecord<RowData> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, tableSchema, readerContext.getRecordContext(), props, orderingFields, deleteContext);
         BufferedRecord<RowData> mergedRecord = recordMerger.finalMerge(historyBufferedRecord, newBufferedRecord);
         return Option.ofNullable(readerContext.getRecordContext().constructHoodieRecord(mergedRecord, historyRecord.getPartitionPath()));
       } catch (IOException e) {
