@@ -32,6 +32,7 @@ import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.BootstrapIndexType;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -1467,7 +1468,8 @@ public class HoodieTableMetaClient implements Serializable {
         String markerValue = hoodieConfig.getString(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER);
         setRecordDeleteFieldAndMarker(deleteFieldName, markerValue);
       }
-      if (hoodieConfig.contains(DELETE_KEY)) {
+      // Check if legacy payload configs are provided. The delete key and marker were only used with the DefaultHoodieRecordPayload.
+      if (hoodieConfig.getStringOrDefault(HoodieTableConfig.PAYLOAD_CLASS_NAME, "").equals(DefaultHoodieRecordPayload.class.getName()) && hoodieConfig.contains(DELETE_KEY)) {
         String deleteFieldName = hoodieConfig.getString(DELETE_KEY);
         String markerValue = hoodieConfig.getString(DELETE_MARKER);
         setRecordDeleteFieldAndMarker(deleteFieldName, markerValue);
