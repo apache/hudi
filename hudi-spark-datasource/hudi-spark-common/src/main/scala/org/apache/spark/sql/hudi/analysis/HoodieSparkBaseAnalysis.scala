@@ -310,7 +310,7 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
  * Rule replacing resolved Spark's commands (not working for Hudi tables out-of-the-box) with
  * corresponding Hudi implementations
  */
-case class HoodieSparkBasePostAnalysisRule(sparkSession: SparkSession) extends Rule[LogicalPlan] {
+case class PostAnalysisRule(sparkSession: SparkSession) extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan = {
     plan match {
       case ShowPartitions(MatchResolvedTable(_, id, HoodieV1OrV2Table(_)), specOpt, _) =>

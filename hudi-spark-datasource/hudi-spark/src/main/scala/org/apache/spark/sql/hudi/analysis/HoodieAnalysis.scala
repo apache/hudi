@@ -80,13 +80,12 @@ object HoodieAnalysis extends SparkAdapterSupport {
     // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
     rules ++= Seq(dataSourceV2ToV1Fallback, resolveReferences)
 
-    if (HoodieSparkUtils.isSpark3_5) {
-      rules += (_ => instantiateKlass(
-        "org.apache.spark.sql.hudi.analysis.HoodieSpark35ResolveColumnsForInsertInto"))
-    }
     if (HoodieSparkUtils.isSpark4_0) {
       rules += (_ => instantiateKlass(
         "org.apache.spark.sql.hudi.analysis.HoodieSpark40ResolveColumnsForInsertInto"))
+    } else if (HoodieSparkUtils.isSpark3_5) {
+      rules += (_ => instantiateKlass(
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark35ResolveColumnsForInsertInto"))
     }
 
     val resolveAlterTableCommandsClass =
@@ -123,9 +122,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
       session => HoodiePostAnalysisRule(session)
     )
 
-    val sparkBasePostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSparkBasePostAnalysisRule"
+    val postHocResolutionClass = "org.apache.spark.sql.hudi.analysis.PostAnalysisRule"
     val sparkBasePostHocResolution: RuleBuilder =
-      session => instantiateKlass(sparkBasePostHocResolutionClass, session)
+      session => instantiateKlass(postHocResolutionClass, session)
     rules += sparkBasePostHocResolution
 
     rules.toSeq
@@ -159,12 +158,12 @@ object HoodieAnalysis extends SparkAdapterSupport {
     //       To work this around, we injecting this as the rule that trails pre-CBO, ie it's
     //          - Triggered before CBO, therefore have access to the same stats as CBO
     //          - Precedes actual [[customEarlyScanPushDownRules]] invocation
-    val hoodiePruneFileSourcePartitionsClass = if (HoodieSparkUtils.gteqSpark4_0) {
+    val pruneFileSourcePartitionsClass = if (HoodieSparkUtils.gteqSpark4_0) {
       "org.apache.spark.sql.hudi.analysis.Spark4HoodiePruneFileSourcePartitions"
     } else {
       "org.apache.spark.sql.hudi.analysis.Spark3HoodiePruneFileSourcePartitions"
     }
-    rules += (spark => instantiateKlass(hoodiePruneFileSourcePartitionsClass, spark))
+    rules += (spark => instantiateKlass(pruneFileSourcePartitionsClass, spark))
 
     rules.toSeq
   }

@@ -58,7 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase implements Serializable {
   private static final Comparator<HoodieRecord<? extends HoodieRecordPayload>> KEY_COMPARATOR =
       Comparator.comparing(o -> (o.getPartitionPath() + "+" + o.getRecordKey()));
-  private static final HoodieUTF8StringFactory HOODIE_UTF8STRING_FACTORY =
+  private static final HoodieUTF8StringFactory UTF8STRING_FACTORY =
       SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory();
 
   public static JavaRDD<HoodieRecord> generateTestRecordsForBulkInsert(JavaSparkContext jsc) {
@@ -257,8 +257,8 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
         throw new HoodieIOException("unable to read value for " + sortColumns);
       }
     }, (o1, o2) -> {
-      FlatLists.ComparableList values1 = FlatLists.ofComparableArray(HOODIE_UTF8STRING_FACTORY.wrapArrayOfObjects(o1.toArray()));
-      FlatLists.ComparableList values2 = FlatLists.ofComparableArray(HOODIE_UTF8STRING_FACTORY.wrapArrayOfObjects(o2.toArray()));
+      FlatLists.ComparableList values1 = FlatLists.ofComparableArray(UTF8STRING_FACTORY.wrapArrayOfObjects(o1.toArray()));
+      FlatLists.ComparableList values2 = FlatLists.ofComparableArray(UTF8STRING_FACTORY.wrapArrayOfObjects(o2.toArray()));
         return values1.compareTo(values2);
       }
     );
