@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.AvroRecordContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -191,7 +192,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  protected boolean checkIsDelete(Schema recordSchema, Properties props) throws IOException {
+  protected boolean checkIsDelete(Schema recordSchema, Properties props, DeleteContext deleteContext) throws IOException {
     if (HoodieOperation.isDelete(getOperation())) {
       return true;
     }

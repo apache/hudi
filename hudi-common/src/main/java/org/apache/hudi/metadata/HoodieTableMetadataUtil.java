@@ -79,6 +79,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
@@ -222,6 +223,7 @@ public class HoodieTableMetadataUtil {
   private static final int DECIMAL_MAX_PRECISION = 30;
   private static final int DECIMAL_MAX_SCALE = 15;
 
+  private static final DeleteContext DELETE_CONTEXT = new DeleteContext(CollectionUtils.emptyProps(), HoodieMetadataRecord.getClassSchema()).withReaderSchema(HoodieMetadataRecord.getClassSchema());
   private HoodieTableMetadataUtil() {
   }
 
@@ -1099,7 +1101,7 @@ public class HoodieTableMetadataUtil {
     HoodiePairData<HoodieKey, HoodieRecord> recordIndexRecordsPair;
     if (isPartitionedRLI) {
       recordIndexRecordsPair = recordIndexRecords.mapToPair(r -> {
-        String recordPartitionPath = r.isDelete(HoodieMetadataRecord.getClassSchema(), CollectionUtils.emptyProps())
+        String recordPartitionPath = r.isDelete(HoodieMetadataRecord.getClassSchema(), CollectionUtils.emptyProps(), DELETE_CONTEXT)
             ? ((EmptyHoodieRecordPayloadWithPartition) r.getData()).getPartitionPath() : ((HoodieMetadataPayload) r.getData()).getDataPartition();
         return Pair.of(new HoodieKey(r.getRecordKey(), recordPartitionPath), r);
       });
@@ -1107,8 +1109,8 @@ public class HoodieTableMetadataUtil {
       recordIndexRecordsPair = recordIndexRecords.mapToPair(r -> Pair.of(r.getKey(), r));
     }
     return recordIndexRecordsPair.reduceByKey((SerializableBiFunction<HoodieRecord, HoodieRecord, HoodieRecord>) (record1, record2) -> {
-      boolean isRecord1Deleted = record1.isDelete(HoodieMetadataRecord.getClassSchema(), CollectionUtils.emptyProps());
-      boolean isRecord2Deleted = record2.isDelete(HoodieMetadataRecord.getClassSchema(), CollectionUtils.emptyProps());
+      boolean isRecord1Deleted = record1.isDelete(HoodieMetadataRecord.getClassSchema(), CollectionUtils.emptyProps(), DELETE_CONTEXT);
+      boolean isRecord2Deleted = record2.isDelete(HoodieMetadataRecord.getClassSchema(), CollectionUtils.emptyProps(), DELETE_CONTEXT);
       if (isRecord1Deleted && !isRecord2Deleted) {
         return record2;
       } else if (!isRecord1Deleted && isRecord2Deleted) {

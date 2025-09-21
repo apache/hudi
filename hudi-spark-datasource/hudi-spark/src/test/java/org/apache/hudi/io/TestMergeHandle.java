@@ -46,6 +46,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -141,10 +142,11 @@ public class TestMergeHandle extends BaseTestHandle {
     int numDeletes = generateDeleteRecords(newRecords, dataGenerator, instantTime);
     if (!useFileGroupReader) {
       // legacy merge handle expects HoodieAvroPayload
+      DeleteContext deleteContext = new DeleteContext(CollectionUtils.emptyProps(), AVRO_SCHEMA).withReaderSchema(AVRO_SCHEMA);
       newRecords = newRecords.stream()
           .map(avroIndexedRecord -> {
             HoodieRecord hoodieRecord = new HoodieAvroRecord<>(avroIndexedRecord.getKey(), new DefaultHoodieRecordPayload(Option.of((GenericRecord) avroIndexedRecord.getData())),
-                avroIndexedRecord.getOperation(), null, avroIndexedRecord.isDelete(AVRO_SCHEMA, CollectionUtils.emptyProps()));
+                avroIndexedRecord.getOperation(), null, avroIndexedRecord.isDelete(AVRO_SCHEMA, CollectionUtils.emptyProps(), deleteContext));
             hoodieRecord.setIgnoreIndexUpdate(avroIndexedRecord.getIgnoreIndexUpdate());
             return hoodieRecord;
           })

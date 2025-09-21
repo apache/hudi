@@ -38,6 +38,7 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -343,6 +344,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     private final RowDataProjection projection;
     private final BufferedRecordMerger recordMerger;
     private final ClosableIterator<HoodieRecord<RowData>> logRecordIterator;
+    private final DeleteContext deleteContext;
 
     private ExternalSpillableMap<String, byte[]> beforeImages;
     private RowData currentImage;
@@ -380,6 +382,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
           metaClient.getTableConfig().getPartialUpdateMode());
       this.logRecordIterator = logRecordIterator;
       initImages(cdcFileSplit);
+      this.deleteContext = new DeleteContext(props, tableSchema).withReaderSchema(tableSchema);
     }
 
     private void initImages(HoodieCDCFileSplit fileSplit) throws IOException {
@@ -464,7 +467,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     }
 
     private boolean isDelete(HoodieRecord<RowData> record) {
-      return record.isDelete(tableSchema, CollectionUtils.emptyProps());
+      return record.isDelete(tableSchema, CollectionUtils.emptyProps(), deleteContext);
     }
   }
 
