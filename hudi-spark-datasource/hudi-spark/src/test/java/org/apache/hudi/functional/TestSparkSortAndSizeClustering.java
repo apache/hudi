@@ -18,6 +18,7 @@
 
 package org.apache.hudi.functional;
 
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
@@ -185,10 +186,12 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
         Date actualDate = (Date) row.get(dateFieldIndex);
         assertTrue(actualDate.compareTo(startDate) > 0 && actualDate.compareTo(endDate) < 0);
       }
-      if (!row.isNullAt(tsLocalMillisFieldIndex)) {
-        assertEquals(ts, row.get(tsLocalMillisFieldIndex));
+      if (!HoodieSparkUtils.gteqSpark4_0()) {
+        if (!row.isNullAt(tsLocalMillisFieldIndex)) {
+          assertEquals(ts, row.get(tsLocalMillisFieldIndex));
+        }
+        assertEquals(ts * 1000L, row.get(tsLocalMicrosFieldIndex));
       }
-      assertEquals(ts * 1000L, row.get(tsLocalMicrosFieldIndex));
     }
   }
 
