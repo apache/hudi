@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.checkpoint.{CheckpointUtils, StreamerCheckpo
 import org.apache.hudi.common.table.timeline.TimelineUtils.{handleHollowCommitIfNeeded, HollowCommitHandling}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling._
 import org.apache.hudi.util.SparkConfigUtils
+import org.apache.hudi.HoodieSparkUtils.getCatalystRowSerDe
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
