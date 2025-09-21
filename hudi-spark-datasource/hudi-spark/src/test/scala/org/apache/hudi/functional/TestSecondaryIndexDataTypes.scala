@@ -157,7 +157,7 @@ class TestSecondaryIndexDataTypes extends HoodieSparkSqlTestBase {
        """.stripMargin)
       // Define supported columns with multiple test values for comprehensive validation
       // Filter based on values of string, long, double, int. Spark will take care of the type cast.
-            val supportedColumns = Seq(
+      val supportedColumns = Seq(
         ("col_string", Seq(("'string3'", 3))),
         ("col_int", Seq(("'300'", 3), ("200L", 2), (100, 1), (100.00, 1), (if (gteqSpark4_0) "100.00" else "'100.00'", 1))),
         ("col_bigint", Seq(("'3000'", 3), ("2000L", 2), (1000, 1), (1000.00, 1), (if (gteqSpark4_0) "1000.00" else "'1000.00'", 1))),
