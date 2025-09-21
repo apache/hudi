@@ -512,7 +512,7 @@ class HoodieSparkSqlWriterInternal {
             val hoodieRecords = Try(HoodieCreateRecordUtils.createHoodieRecordRdd(
               HoodieCreateRecordUtils.createHoodieRecordRddArgs(df, writeConfig, parameters, avroRecordName,
                 avroRecordNamespace, writerSchema, processedDataSchema, operation, instantTime, preppedSparkSqlWrites,
-                preppedSparkSqlMergeInto, preppedWriteOperation, tableConfig.getOrderingFields))) match {
+                preppedSparkSqlMergeInto, preppedWriteOperation, tableConfig))) match {
               case Success(recs) => recs
               case Failure(e) => throw new HoodieRecordCreationException("Failed to create Hoodie Spark Record", e)
             }

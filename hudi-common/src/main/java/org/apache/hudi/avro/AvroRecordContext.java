@@ -114,7 +114,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     }
 
     return HoodieRecordUtils.createHoodieRecord((GenericRecord) bufferedRecord.getRecord(), bufferedRecord.getOrderingValue(),
-        hoodieKey, payloadClass, bufferedRecord.getHoodieOperation(), Option.empty(), false);
+        hoodieKey, payloadClass, bufferedRecord.getHoodieOperation(), Option.empty(), false, bufferedRecord.isDelete());
   }
 
   @Override
