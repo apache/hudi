@@ -428,7 +428,7 @@ public class HoodieIndexUtils {
       TypedProperties properties,
       DeleteContext deleteContext) throws IOException {
     BufferedRecord<R> incomingBufferedRecord = BufferedRecords.fromHoodieRecord(incoming, writeSchemaWithMetaFields, incomingRecordContext, properties, orderingFieldNames, deleteContext);
-    BufferedRecord<R> existingBufferedRecord = BufferedRecords.fromHoodieRecord(existing, writeSchemaWithMetaFields, existingRecordContext, properties, orderingFieldNames, deleteContext);
+    BufferedRecord<R> existingBufferedRecord = BufferedRecords.fromHoodieRecord(existing, writeSchemaWithMetaFields, existingRecordContext, properties, orderingFieldNames, false);
     BufferedRecord<R> mergeResult = recordMerger.finalMerge(existingBufferedRecord, incomingBufferedRecord);
     if (mergeResult.isDelete()) {
       //the record was deleted
@@ -484,7 +484,7 @@ public class HoodieIndexUtils {
     } else {
       // prepend the hoodie meta fields as the incoming record does not have them
       BufferedRecord<R> incomingBufferedRecord = BufferedRecords.fromHoodieRecord(incoming, writeSchema, incomingRecordContext, properties, orderingFieldNames, deleteContext);
-      BufferedRecord<R> existingBufferedRecord = BufferedRecords.fromHoodieRecord(existing, writeSchemaWithMetaFields, existingRecordContext, properties, orderingFieldNames, deleteContext);
+      BufferedRecord<R> existingBufferedRecord = BufferedRecords.fromHoodieRecord(existing, writeSchemaWithMetaFields, existingRecordContext, properties, orderingFieldNames, false);
       existingBufferedRecord.project(existingRecordContext.projectRecord(writeSchemaWithMetaFields, writeSchema));
       BufferedRecord<R> mergeResult = recordMerger.finalMerge(existingBufferedRecord, incomingBufferedRecord);
 
@@ -560,8 +560,7 @@ public class HoodieIndexUtils {
         properties,
         hoodieTable.getMetaClient().getTableConfig().getPartialUpdateMode());
     String[] orderingFieldsArray = orderingFieldNames.toArray(new String[0]);
-    DeleteContext deleteContext = readerContext.getSchemaHandler().getDeleteContext();
-    deleteContext.withReaderSchema(writerSchema.get());
+    DeleteContext deleteContext = new DeleteContext(properties, writerSchema.get()).withReaderSchema(writerSchema.get());
     HoodieData<HoodieRecord<R>> taggedUpdatingRecords = untaggedUpdatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
         .leftOuterJoin(existingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)))
         .values().flatMap(entry -> {
@@ -637,8 +636,7 @@ public class HoodieIndexUtils {
     // if the index is not updating the partition of the record, and the table is COW, then we do not need to do merging at
     // this phase since the writer path will merge when rewriting the files as part of the upsert operation.
     boolean requiresMergingWithOlderRecordVersion = shouldUpdatePartitionPath || table.getMetaClient().getTableConfig().getTableType() == HoodieTableType.MERGE_ON_READ;
-    DeleteContext deleteContext = readerContext.getSchemaHandler().getDeleteContext();
-    deleteContext.withReaderSchema(writerSchema.get());
+    DeleteContext deleteContext = new DeleteContext(properties, writerSchema.get()).withReaderSchema(writerSchema.get());
 
     // Pair of incoming record and the global location if meant for merged lookup in later stage
     HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations
