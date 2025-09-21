@@ -104,7 +104,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     val firstUpdateData = Seq(
       (11, 1L, "rider-X", "driver-X", 19.10, "i", "11.1", 11, 1, "i"),
       (12, 1L, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
-      (11, 2L, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"))
+      (11, 2L, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
+      (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
     val firstUpdate = spark.createDataFrame(firstUpdateData).toDF(columns: _*)
     firstUpdate.write.format("hudi").
       option(OPERATION.key(), "upsert").
@@ -226,7 +227,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (10, 2L, "rider-B", "driver-B", 27.70, "i", "10.1", 10, 1, "i"),
       (10, 3L, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"),
       (10, 4L, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
-      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))
+      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"),
+      (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
     val originalOrderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
       "_event_seq"
@@ -389,12 +391,14 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
         Seq(
           (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-          (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"))
+          (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
+          (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
       } else {
         Seq(
           (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"))
+          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
+          (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
       }
     } else {
       if (payloadClazz.equals(classOf[DefaultHoodieRecordPayload].getName)) {
@@ -417,7 +421,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
         (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
         (10, 3, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"),
         (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
-        (10, 5, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))
+        (10, 5, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"),
+        (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
     } else {
       Seq(
         (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),

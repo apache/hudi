@@ -143,8 +143,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         && hoodieTable.getMetaClient().getTableConfig().getRecordMergeMode() == EVENT_TIME_ORDERING
         && ConfigUtils.isTrackingEventTimeWatermark(config.getProps());
     this.keepConsistentLogicalTimestamp = isTrackingEventTimeWatermark && ConfigUtils.shouldKeepConsistentLogicalTimestamp(config.getProps());
-    this.deleteContext = new DeleteContext(ConfigUtils.getMergeProps(config.getProps(), hoodieTable.getMetaClient().getTableConfig().getProps()), writeSchema);
-    this.deleteContextWithMetaFields = new DeleteContext(ConfigUtils.getMergeProps(config.getProps(), hoodieTable.getMetaClient().getTableConfig().getProps()), writeSchemaWithMetaFields);
+    this.deleteContext = new DeleteContext(ConfigUtils.getMergeProps(config.getProps(), hoodieTable.getMetaClient().getTableConfig().getProps()), writeSchema).withReaderSchema(writeSchema);
+    this.deleteContextWithMetaFields = new DeleteContext(ConfigUtils.getMergeProps(config.getProps(), hoodieTable.getMetaClient().getTableConfig().getProps()), writeSchemaWithMetaFields).withReaderSchema(writeSchemaWithMetaFields);
   }
 
   private void initSecondaryIndexStats(boolean preserveMetadata) {

@@ -39,7 +39,6 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
 import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
@@ -188,15 +187,12 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public boolean checkIsDelete(Schema recordSchema, Properties props, DeleteContext deleteContext) throws IOException {
+  public boolean checkIsDelete(Schema recordSchema, Properties props, DeleteContext deleteContext) {
     if (null == data || HoodieOperation.isDelete(getOperation())) {
       return true;
     }
-    if (recordSchema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) == null) {
-      return false;
-    }
-    Object deleteMarker = getValue(HoodieRecord.HOODIE_IS_DELETED_FIELD);
-    return deleteMarker instanceof BooleanWritable && ((BooleanWritable) deleteMarker).get();
+
+    return HiveRecordContext.getFieldAccessorInstance().isDeleteRecord(data, deleteContext);
   }
 
   @Override

@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
+import org.apache.hudi.SparkFileFormatInternalRecordContext;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
@@ -65,7 +66,6 @@ import scala.Function1;
 import static org.apache.hudi.BaseSparkInternalRecordContext.getFieldValueFromInternalRow;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedUnsafeProjection;
-import static org.apache.spark.sql.types.DataTypes.BooleanType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
 
 /**
@@ -263,21 +263,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
       return true;
     }
 
-    // Use metadata filed to decide.
-    Schema.Field operationField = recordSchema.getField(OPERATION_METADATA_FIELD);
-    if (null != operationField
-        && HoodieOperation.isDeleteRecord((String) data.get(operationField.pos(), StringType))) {
-      return true;
-    }
-
-    // Use data field to decide.
-    if (recordSchema.getField(HOODIE_IS_DELETED_FIELD) == null) {
-      return false;
-    }
-
-    Object deleteMarker = data.get(
-        recordSchema.getField(HOODIE_IS_DELETED_FIELD).pos(), BooleanType);
-    return deleteMarker instanceof Boolean && (boolean) deleteMarker;
+    return SparkFileFormatInternalRecordContext.getFieldAccessorInstance().isDeleteRecord(data, deleteContext);
   }
 
   @Override

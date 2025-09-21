@@ -41,7 +41,7 @@ public class DeleteContext implements Serializable {
 
   private final Option<Pair<String, String>> customDeleteMarkerKeyValue;
   private final boolean hasBuiltInDeleteField;
-  private int hoodieOperationPos;
+  private int hoodieOperationPos = -1;
   private Schema readerSchema;
 
   public DeleteContext(Properties props, Schema tableSchema) {
@@ -88,7 +88,7 @@ public class DeleteContext implements Serializable {
   /**
    * Returns position of hoodie operation meta field in the schema
    */
-  private static Integer getHoodieOperationPos(Schema schema) {
+  private static int getHoodieOperationPos(Schema schema) {
     return Option.ofNullable(schema.getField(HoodieRecord.OPERATION_METADATA_FIELD)).map(Schema.Field::pos).orElse(-1);
   }
 

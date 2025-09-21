@@ -105,7 +105,7 @@ public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, Iterator<HoodieRe
 
     // caution that the avro schema is not serializable
     final Schema schema = new Schema.Parser().parse(schemaStr);
-    DeleteContext deleteContext = readerContext.getSchemaHandler().getDeleteContext();
+    DeleteContext deleteContext = new DeleteContext(props, schema).withReaderSchema(schema);
     return keyedRecords.values().stream().map(x -> x.stream().reduce((previous, next) ->
       reduceRecords(props, recordMerger, orderingFieldNames, previous, next, schema, readerContext.getRecordContext(), deleteContext)
     ).orElse(null)).filter(Objects::nonNull).iterator();

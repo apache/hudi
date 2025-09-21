@@ -76,7 +76,7 @@ public class JavaWriteHelper<T,R> extends BaseWriteHelper<T, List<HoodieRecord<T
     }).collect(Collectors.groupingBy(Pair::getLeft));
 
     final Schema schema = new Schema.Parser().parse(schemaStr);
-    DeleteContext deleteContext = readerContext.getSchemaHandler().getDeleteContext();
+    DeleteContext deleteContext = new DeleteContext(props, schema).withReaderSchema(schema);
     return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((previous, next) ->
         reduceRecords(props, recordMerger, orderingFieldNames, previous, next, schema, readerContext.getRecordContext(), deleteContext)
     ).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList());

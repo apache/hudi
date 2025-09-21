@@ -66,7 +66,7 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
     boolean isIndexingGlobal = index.isGlobal();
     final SerializableSchema schema = new SerializableSchema(schemaStr);
     RecordContext<T> recordContext = readerContext.getRecordContext();
-    DeleteContext deleteContext = readerContext.getSchemaHandler().getDeleteContext();
+    DeleteContext deleteContext = new DeleteContext(props, schema.get()).withReaderSchema(schema.get());
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
       // If index used is global, then records are expected to differ in their partitionPath
