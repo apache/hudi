@@ -25,7 +25,7 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.types.StructType
 
-class Spark35NestedSchemaPruning extends SparkBaseNestedSchemaPruning {
+class Spark35NestedSchemaPruning extends BaseHoodieNestedSchemaPruning {
 
   // Prune the given output to make it consistent with `requiredSchema`.
   protected def getPrunedOutput(output: Seq[AttributeReference],

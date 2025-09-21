@@ -44,10 +44,10 @@ import java.time.ZoneId
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
 class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
-                                                 filePath: Path,
-                                                 requiredSchema: StructType,
-                                                 partitionSchema: StructType,
-                                                 internalSchemaOpt: util.Option[InternalSchema]) extends SparkAdapterSupport{
+                                  filePath: Path,
+                                  requiredSchema: StructType,
+                                  partitionSchema: StructType,
+                                  internalSchemaOpt: util.Option[InternalSchema]) extends SparkAdapterSupport {
   // Fetch internal schema
   private lazy val querySchemaOption: util.Option[InternalSchema] = pruneInternalSchema(internalSchemaOpt, requiredSchema)
 

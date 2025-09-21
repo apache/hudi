@@ -37,7 +37,7 @@ import org.apache.spark.sql.util.SchemaUtils.restoreOriginalOutputNames
  * NOTE: This class is borrowed from Spark 3.2.1, with modifications adapting it to handle [[HoodieBaseRelation]],
  *       instead of [[HadoopFsRelation]]
  */
-abstract class SparkBaseNestedSchemaPruning extends Rule[LogicalPlan] {
+abstract class BaseHoodieNestedSchemaPruning extends Rule[LogicalPlan] {
   import org.apache.spark.sql.catalyst.expressions.SchemaPruning._
 
   // Prune the given output to make it consistent with `requiredSchema`.
