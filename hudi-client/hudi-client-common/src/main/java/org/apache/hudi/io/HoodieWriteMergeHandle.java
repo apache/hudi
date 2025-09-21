@@ -318,7 +318,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       return false;
     }
     try {
-      if (!isDelete && !combineRecord.isDelete(schema, config.getProps(), preserveMetadata ? deleteContext : deleteContextWithMetaFields)) {
+      if (!isDelete && !combineRecord.isDelete(schema, config.getProps(), deleteContext)) {
         // Flush the merged record.
         HoodieKey hoodieKey = newRecord.getKey();
         if (isSecondaryIndexStatsStreamingWritesEnabled) {
@@ -369,9 +369,8 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       // writing the first record. So make a copy of the record to be merged
       HoodieRecord<T> newRecord = keyToNewRecords.get(key).newInstance();
       try {
-        BufferedRecord<T> oldBufferedRecord = BufferedRecords.fromHoodieRecord(oldRecord, oldSchema, readerContext.getRecordContext(), props, orderingFields, deleteContextWithMetaFields);
-        BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, newSchema, readerContext.getRecordContext(), props, orderingFields,
-            preserveMetadata ? deleteContextWithMetaFields : deleteContext);
+        BufferedRecord<T> oldBufferedRecord = BufferedRecords.fromHoodieRecord(oldRecord, oldSchema, readerContext.getRecordContext(), props, orderingFields, false);
+        BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, newSchema, readerContext.getRecordContext(), props, orderingFields, deleteContext);
         BufferedRecord<T> mergeResult = recordMerger.merge(oldBufferedRecord, newBufferedRecord, readerContext.getRecordContext(), props);
         Schema combineRecordSchema = readerContext.getRecordContext().getSchemaFromBufferRecord(mergeResult);
         HoodieRecord combinedRecord = readerContext.getRecordContext().constructHoodieRecord(mergeResult);

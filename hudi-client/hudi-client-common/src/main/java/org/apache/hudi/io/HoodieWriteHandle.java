@@ -83,7 +83,6 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected final Schema writeSchemaWithMetaFields;
   protected final HoodieRecordMerger recordMerger;
   protected final DeleteContext deleteContext;
-  protected final DeleteContext deleteContextWithMetaFields;
 
   protected HoodieTimer timer;
   protected WriteStatus writeStatus;
@@ -143,8 +142,9 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         && hoodieTable.getMetaClient().getTableConfig().getRecordMergeMode() == EVENT_TIME_ORDERING
         && ConfigUtils.isTrackingEventTimeWatermark(config.getProps());
     this.keepConsistentLogicalTimestamp = isTrackingEventTimeWatermark && ConfigUtils.shouldKeepConsistentLogicalTimestamp(config.getProps());
-    this.deleteContext = new DeleteContext(ConfigUtils.getMergeProps(config.getProps(), hoodieTable.getMetaClient().getTableConfig().getProps()), writeSchema).withReaderSchema(writeSchema);
-    this.deleteContextWithMetaFields = new DeleteContext(ConfigUtils.getMergeProps(config.getProps(), hoodieTable.getMetaClient().getTableConfig().getProps()), writeSchemaWithMetaFields).withReaderSchema(writeSchemaWithMetaFields);
+    TypedProperties mergeProps = ConfigUtils.getMergeProps(config.getProps(), hoodieTable.getMetaClient().getTableConfig().getProps());
+    Schema deleteContextSchema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
+    this.deleteContext = new DeleteContext(mergeProps, deleteContextSchema).withReaderSchema(deleteContextSchema);
   }
 
   private void initSecondaryIndexStats(boolean preserveMetadata) {

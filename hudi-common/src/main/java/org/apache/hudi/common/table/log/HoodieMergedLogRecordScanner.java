@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.avro.AvroRecordContext;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -95,6 +97,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
   // Stores the total time taken to perform reading and merging of log blocks
   private long totalTimeTakenToReadAndMergeBlocks;
   private final String[] orderingFields;
+  private final DeleteContext deleteContext;
 
   @SuppressWarnings("unchecked")
   protected HoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
@@ -121,6 +124,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       this.scannedPrefixes = new HashSet<>();
       this.allowInflightInstants = allowInflightInstants;
       this.orderingFields = ConfigUtils.getOrderingFields(this.hoodieTableMetaClient.getTableConfig().getProps());
+      TypedProperties mergeProps = ConfigUtils.getMergeProps(getPayloadProps(), this.hoodieTableMetaClient.getTableConfig().getProps());
+      this.deleteContext = new DeleteContext(mergeProps, readerSchema).withReaderSchema(readerSchema);
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
@@ -253,8 +258,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     if (prevRecord != null) {
       // Merge and store the combined record
       RecordContext recordContext = AvroRecordContext.getFieldAccessorInstance();
-      BufferedRecord<T> prevBufferedRecord = BufferedRecords.fromHoodieRecord(prevRecord, readerSchema, recordContext, this.getPayloadProps(), orderingFields);
-      BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, readerSchema, recordContext, this.getPayloadProps(), orderingFields);
+      BufferedRecord<T> prevBufferedRecord = BufferedRecords.fromHoodieRecord(prevRecord, readerSchema, recordContext, this.getPayloadProps(), orderingFields, deleteContext);
+      BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, readerSchema, recordContext, this.getPayloadProps(), orderingFields, deleteContext);
       BufferedRecord<T> combinedRecord = recordMerger.merge(prevBufferedRecord, newBufferedRecord, recordContext, this.getPayloadProps());
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getRecord() != prevRecord.getData()) {

@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
-import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -100,11 +99,10 @@ public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieWriteMerge
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
     Schema schema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
-    DeleteContext recordDeleteContext = preserveMetadata ? deleteContextWithMetaFields : deleteContext;
     // TODO Remove these unnecessary newInstance invocations
     HoodieRecord<T> savedRecord = newRecord.newInstance();
     super.writeInsertRecord(newRecord);
-    if (!HoodieOperation.isDelete(newRecord.getOperation()) && !savedRecord.isDelete(schema, config.getPayloadConfig().getProps(), recordDeleteContext)) {
+    if (!HoodieOperation.isDelete(newRecord.getOperation()) && !savedRecord.isDelete(schema, config.getPayloadConfig().getProps(), deleteContext)) {
       cdcLogger.put(newRecord, null, savedRecord.toIndexedRecord(schema, config.getPayloadConfig().getProps()).map(HoodieAvroIndexedRecord::getData));
     }
   }
