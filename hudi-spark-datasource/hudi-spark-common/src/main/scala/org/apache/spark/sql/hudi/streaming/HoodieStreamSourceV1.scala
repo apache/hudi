@@ -19,7 +19,7 @@
 
 package org.apache.spark.sql.hudi.streaming
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, HoodieCopyOnWriteCDCHadoopFsRelationFactory, HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV1, HoodieMergeOnReadCDCHadoopFsRelationFactory, HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV1, IncrementalRelationV1, MergeOnReadIncrementalRelationV1, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, HoodieCopyOnWriteCDCHadoopFsRelationFactory, HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV1, HoodieMergeOnReadCDCHadoopFsRelationFactory, HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV1, HoodieSparkUtils, IncrementalRelationV1, MergeOnReadIncrementalRelationV1, SparkAdapterSupport}
 import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.config.HoodieReaderConfig
@@ -30,7 +30,6 @@ import org.apache.hudi.common.table.checkpoint.{CheckpointUtils, StreamerCheckpo
 import org.apache.hudi.common.table.timeline.TimelineUtils.{handleHollowCommitIfNeeded, HollowCommitHandling}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling._
 import org.apache.hudi.util.SparkConfigUtils
-import org.apache.hudi.HoodieSparkUtils.getCatalystRowSerDe
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -189,7 +188,7 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
         } else {
           val rdd = tableType match {
             case HoodieTableType.COPY_ON_WRITE =>
-              val serDe = getCatalystRowSerDe(schema)
+              val serDe = HoodieSparkUtils.getCatalystRowSerDe(schema)
               new IncrementalRelationV1(sqlContext, incParams, Some(schema), metaClient)
                 .buildScan()
                 .map(serDe.serializeRow)

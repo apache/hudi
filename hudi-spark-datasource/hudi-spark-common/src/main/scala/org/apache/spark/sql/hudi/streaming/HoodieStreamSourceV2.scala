@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.streaming
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, HoodieCopyOnWriteCDCHadoopFsRelationFactory, HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2, HoodieMergeOnReadCDCHadoopFsRelationFactory, HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2, IncrementalRelationV2, MergeOnReadIncrementalRelationV2, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, HoodieCopyOnWriteCDCHadoopFsRelationFactory, HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2, HoodieMergeOnReadCDCHadoopFsRelationFactory, HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2, HoodieSparkUtils, IncrementalRelationV2, MergeOnReadIncrementalRelationV2, SparkAdapterSupport}
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieTableType
@@ -26,7 +26,6 @@ import org.apache.hudi.common.table.cdc.HoodieCDCUtils
 import org.apache.hudi.common.table.checkpoint.{CheckpointUtils, StreamerCheckpointV2}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.util.SparkConfigUtils
-import org.apache.hudi.HoodieSparkUtils.getCatalystRowSerDe
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -165,7 +164,7 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
         } else {
           val rdd = tableType match {
             case HoodieTableType.COPY_ON_WRITE =>
-              val serDe = getCatalystRowSerDe(schema)
+              val serDe = HoodieSparkUtils.getCatalystRowSerDe(schema)
               new IncrementalRelationV2(sqlContext, incParams, Some(schema), metaClient, rangeType)
                 .buildScan()
                 .map(serDe.serializeRow)
