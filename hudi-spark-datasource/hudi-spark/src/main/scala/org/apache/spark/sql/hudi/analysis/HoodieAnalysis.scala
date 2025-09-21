@@ -69,16 +69,16 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val dataSourceV2ToV1Fallback: RuleBuilder =
       session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)
 
-    val sparkBaseResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSparkBaseResolveReferences"
-    val sparkBaseResolveReferences: RuleBuilder =
-      session => instantiateKlass(sparkBaseResolveReferencesClass, session)
+    val resolveReferencesClass = "org.apache.spark.sql.hudi.analysis.ResolveReferences"
+    val resolveReferences: RuleBuilder =
+      session => instantiateKlass(resolveReferencesClass, session)
 
     // NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
     //
     // It's critical for this rules to follow in this order; re-ordering this rules might lead to changes in
     // behavior of Spark's analysis phase (for ex, DataSource V2 to V1 fallback might not kick in before other rules,
     // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
-    rules ++= Seq(dataSourceV2ToV1Fallback, sparkBaseResolveReferences)
+    rules ++= Seq(dataSourceV2ToV1Fallback, resolveReferences)
 
     if (HoodieSparkUtils.isSpark3_5) {
       rules += (_ => instantiateKlass(

@@ -89,5 +89,8 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
     assertEquals(1.1d, sparkReaderContext.getRecordContext().convertValueToEngineType(1.1d))
     assertEquals(UTF8String.fromString(stringValue),
       sparkReaderContext.getRecordContext().convertPartitionValueToEngineType(stringValue))
+    val utf8StringValue = UTF8String.fromString(stringValue)
+    assertEquals(utf8StringValue,
+      sparkReaderContext.getRecordContext().convertPartitionValueToEngineType(utf8StringValue))
   }
 }

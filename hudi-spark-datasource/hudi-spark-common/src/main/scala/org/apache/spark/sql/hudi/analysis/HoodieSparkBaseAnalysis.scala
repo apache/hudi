@@ -52,7 +52,7 @@ import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 /**
  * Rule for resolve hoodie's extended syntax or rewrite some logical plan.
  */
-case class HoodieSparkBaseResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
+case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
   with SparkAdapterSupport with ProvidesHoodieConfig {
 
   def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
