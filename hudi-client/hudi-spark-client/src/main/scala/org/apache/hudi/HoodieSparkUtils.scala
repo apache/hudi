@@ -231,12 +231,12 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
   }
 
   def parsePartitionColumnValues(partitionColumns: Array[String],
-                               partitionPath: String,
-                               tableBasePath: StoragePath,
-                               tableSchema: StructType,
-                               tableConfig: java.util.Map[String, String],
-                               timeZoneId: String,
-                               shouldValidatePartitionColumns: Boolean): Array[Object] = {
+                                   partitionPath: String,
+                                   tableBasePath: StoragePath,
+                                   tableSchema: StructType,
+                                   tableConfig: java.util.Map[String, String],
+                                   timeZoneId: String,
+                                   shouldValidatePartitionColumns: Boolean): Array[Object] = {
     val keyGeneratorClass = KeyGeneratorType.getKeyGeneratorClassName(tableConfig)
     val timestampKeyGeneratorType = tableConfig.get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key())
 
