@@ -66,17 +66,34 @@ class TestTlsEnabledDataHubEmitterSupplier {
   void testEmitterCreationWithCACertificate() throws Exception {
     // Create a dummy CA certificate file for testing
     Path caCertPath = createDummyCertificateFile();
-    
+
     Properties props = new Properties();
     props.setProperty(META_SYNC_DATAHUB_EMITTER_SERVER.key(), "https://datahub.example.com:8080");
     props.setProperty(META_SYNC_DATAHUB_TLS_CA_CERT_PATH.key(), caCertPath.toString());
-    
+
     TypedProperties typedProps = new TypedProperties();
     TypedProperties.putAll(typedProps, props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
-    
+
     RestEmitter emitter = supplier.get();
     assertNotNull(emitter, "Emitter should be created with CA certificate");
+  }
+
+  @Test
+  void testEmitterCreationWithMultipleCACertificates() throws Exception {
+    // Load a PEM file with multiple certificates from resources
+    Path multiCertPath = copyMultipleCertificateFromResources();
+
+    Properties props = new Properties();
+    props.setProperty(META_SYNC_DATAHUB_EMITTER_SERVER.key(), "https://datahub.example.com:8080");
+    props.setProperty(META_SYNC_DATAHUB_TLS_CA_CERT_PATH.key(), multiCertPath.toString());
+
+    TypedProperties typedProps = new TypedProperties();
+    TypedProperties.putAll(typedProps, props);
+    TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
+
+    RestEmitter emitter = supplier.get();
+    assertNotNull(emitter, "Emitter should be created with multiple CA certificates");
   }
 
   @Test
@@ -420,13 +437,24 @@ class TestTlsEnabledDataHubEmitterSupplier {
 
   private Path createDummyCertificateFile() throws Exception {
     Path certPath = tempDir.resolve("ca-cert.pem");
-    
+
     try (InputStream certStream = getClass().getClassLoader().getResourceAsStream("test-ca-cert.pem")) {
       Objects.requireNonNull(certStream, "test-ca-cert.pem not found in resources");
       Files.copy(certStream, certPath);
     }
-    
+
     return certPath;
+  }
+
+  private Path copyMultipleCertificateFromResources() throws Exception {
+    Path multiCertPath = tempDir.resolve("multi-ca-cert.pem");
+
+    try (InputStream certStream = getClass().getClassLoader().getResourceAsStream("multi-ca-cert.pem")) {
+      Objects.requireNonNull(certStream, "multi-ca-cert.pem not found in resources");
+      Files.copy(certStream, multiCertPath);
+    }
+
+    return multiCertPath;
   }
 
 }

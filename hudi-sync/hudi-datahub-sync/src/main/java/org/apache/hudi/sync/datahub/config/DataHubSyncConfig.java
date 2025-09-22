@@ -141,6 +141,7 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       .key("hoodie.meta.sync.datahub.tls.ca.cert.path")
       .noDefaultValue()
       .markAdvanced()
+      .sinceVersion("1.1.0")
       .withDocumentation("Path to the CA certificate file for TLS verification. "
           + "Used when connecting to DataHub over HTTPS with custom CA certificates.");
 
@@ -148,6 +149,7 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       .key("hoodie.meta.sync.datahub.tls.keystore.path")
       .noDefaultValue()
       .markAdvanced()
+      .sinceVersion("1.1.0")
       .withDocumentation("Path to the keystore file for TLS client authentication. "
           + "Used when connecting to DataHub over HTTPS with mutual TLS authentication.");
 
@@ -155,6 +157,7 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       .key("hoodie.meta.sync.datahub.tls.keystore.password")
       .noDefaultValue()
       .markAdvanced()
+      .sinceVersion("1.1.0")
       .withDocumentation("Password for the keystore file. Optional but recommended for security. "
           + "If not provided, an empty password will be used.");
 
@@ -162,6 +165,7 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       .key("hoodie.meta.sync.datahub.tls.truststore.path")
       .noDefaultValue()
       .markAdvanced()
+      .sinceVersion("1.1.0")
       .withDocumentation("Path to the truststore file for TLS server verification. "
           + "Alternative to CA certificate file for trust management.");
 
@@ -169,6 +173,7 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       .key("hoodie.meta.sync.datahub.tls.truststore.password")
       .noDefaultValue()
       .markAdvanced()
+      .sinceVersion("1.1.0")
       .withDocumentation("Password for the truststore file. Optional but recommended for security. "
           + "If not provided, an empty password will be used.");
 
