@@ -50,10 +50,10 @@ public class HFileReaderFactory {
   private final Either<StoragePath, byte[]> fileSource;
   private Option<Long> fileSizeOpt;
 
-  public HFileReaderFactory(HoodieStorage storage,
-                            TypedProperties properties,
-                            Either<StoragePath, byte[]> fileSource,
-                            Option<Long> fileSizeOpt) {
+  private HFileReaderFactory(HoodieStorage storage,
+                             TypedProperties properties,
+                             Either<StoragePath, byte[]> fileSource,
+                             Option<Long> fileSizeOpt) {
     this.storage = storage;
     this.metadataConfig = HoodieMetadataConfig.newBuilder().withProperties(properties).build();
     this.properties = properties;
