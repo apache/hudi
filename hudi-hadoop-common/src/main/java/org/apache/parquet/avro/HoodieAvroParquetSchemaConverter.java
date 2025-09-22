@@ -44,8 +44,8 @@ public abstract class HoodieAvroParquetSchemaConverter {
     try {
       return (HoodieAvroParquetSchemaConverter) ReflectionUtils.loadClass("org.apache.parquet.avro.AvroSchemaConverterWithNTZ",
           new Class<?>[] {Configuration.class}, configuration);
-    } catch (Exception e) {
-      LOG.debug("Failed to load AvroSchemaConverterWithNTZ, using NativeAvroSchemaConverter instead", e);
+    } catch (Throwable t) {
+      LOG.debug("Failed to load AvroSchemaConverterWithNTZ, using NativeAvroSchemaConverter instead", t);
       return (HoodieAvroParquetSchemaConverter) ReflectionUtils.loadClass("org.apache.parquet.avro.NativeAvroSchemaConverter",
           new Class<?>[] {Configuration.class}, configuration);
     }

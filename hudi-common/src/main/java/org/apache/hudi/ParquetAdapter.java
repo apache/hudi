@@ -33,7 +33,7 @@ public interface ParquetAdapter {
   static ParquetAdapter getAdapter() {
     try {
       return ReflectionUtils.loadClass("org.apache.parquet.schema.LogicalTypeParquetAdapter");
-    } catch (Exception e) {
+    } catch (Throwable t) {
       return ReflectionUtils.loadClass("org.apache.parquet.schema.OriginalTypeParquetAdapter");
     }
   }
