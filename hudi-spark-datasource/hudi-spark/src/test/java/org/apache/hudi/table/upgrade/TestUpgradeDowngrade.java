@@ -317,18 +317,18 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
 
   private static Stream<Arguments> testComplexKeygenValidationDuringUpgradeDowngrade() {
     return Stream.of(
-            Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.NINE, true),
-            Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.NINE, false),
-            Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, true),
-            Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, false),
-            Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.NINE, true),
-            Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.NINE, false),
-            Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.SIX, true),
-            Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.SIX, false),
-            Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.EIGHT, true),
-            Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.EIGHT, false),
-            Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX, true),
-            Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX, false)
+        Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.NINE, true),
+        Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.NINE, false),
+        Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, true),
+        Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, false),
+        Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.NINE, true),
+        Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.NINE, false),
+        Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.SIX, true),
+        Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.SIX, false),
+        Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.EIGHT, true),
+        Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.EIGHT, false),
+        Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX, true),
+        Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX, false)
     );
   }
 
@@ -340,29 +340,28 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     assertTrue(KeyGeneratorType.isComplexKeyGenerator(originalMetaClient.getTableConfig()));
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
-            .withPath(originalMetaClient.getBasePath().toString())
-            .withAutoUpgradeVersion(true)
-            .withComplexKeygenValidation(enableValidation)
-            .build();
+        .withPath(originalMetaClient.getBasePath().toString())
+        .withAutoUpgradeVersion(true)
+        .withComplexKeygenValidation(enableValidation)
+        .build();
     String operation = fromVersion.lesserThan(toVersion) ? "upgrade" : "downgrade";
     Dataset<Row> originalData = readTableData(originalMetaClient, "before " + operation);
 
     if (enableValidation) {
       HoodieUpgradeDowngradeException exception = assertThrows(HoodieUpgradeDowngradeException.class,
-              () -> new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance()).run(toVersion, null),
-              "Expected HoodieUpgradeDowngradeException for upgrade with complex keygen validation enabled");
+          () -> new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance()).run(toVersion, null),
+          "Expected HoodieUpgradeDowngradeException for upgrade with complex keygen validation enabled");
 
-      assertEquals(getComplexKeygenErrorMessage(operation), exception.getMessage(),
-              "Exception message should mention complex key generator issue");
+      assertEquals(getComplexKeygenErrorMessage(operation), exception.getMessage(), "Exception message should mention complex key generator issue");
     } else {
       // Should succeed
       new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
-              .run(toVersion, null);
+          .run(toVersion, null);
 
       HoodieTableMetaClient resultMetaClient = HoodieTableMetaClient.builder()
-              .setConf(storageConf().newInstance())
-              .setBasePath(originalMetaClient.getBasePath())
-              .build();
+          .setConf(storageConf().newInstance())
+          .setBasePath(originalMetaClient.getBasePath())
+          .build();
 
       assertTableVersionOnDataAndMetadataTable(resultMetaClient, toVersion);
       validateVersionSpecificProperties(resultMetaClient, toVersion);
