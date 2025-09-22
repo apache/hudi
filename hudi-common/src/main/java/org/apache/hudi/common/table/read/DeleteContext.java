@@ -95,7 +95,7 @@ public class DeleteContext implements Serializable {
    * @return whether built-in delete field is included in the table schema
    */
   private static boolean hasBuiltInDeleteField(Schema schema) {
-    return schema.getField(HOODIE_IS_DELETED_FIELD) != null;
+    return schema.getType() != Schema.Type.NULL && schema.getField(HOODIE_IS_DELETED_FIELD) != null;
   }
 
   /**
