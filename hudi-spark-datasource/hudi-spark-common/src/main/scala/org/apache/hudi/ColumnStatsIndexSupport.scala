@@ -19,17 +19,16 @@ package org.apache.hudi
 
 import org.apache.hudi.ColumnStatsIndexSupport._
 import org.apache.hudi.HoodieCatalystUtils.{withPersistedData, withPersistedDataset}
-import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
+import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.model._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
-import org.apache.hudi.common.function.{SerializableFunction, SerializableFunctionUnchecked}
-import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
+import org.apache.hudi.common.function.SerializableFunction
+import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.BinaryUtil.toBytes
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection
-import org.apache.hudi.common.util.hash.{ColumnIndexID, PartitionIndexID}
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
@@ -38,7 +37,6 @@ import org.apache.hudi.util.JFunction
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
-import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
@@ -147,7 +145,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
             //       of the transposed table in memory, facilitating execution of the subsequently chained operations
             //       on it locally (on the driver; all such operations are actually going to be performed by Spark's
             //       Optimizer)
-            createDataFrameFromRows(spark, transposedRows.collectAsList().asScala.toSeq, indexSchema)
+            sparkAdapter.getUnsafeUtils.createDataFrameFromRows(spark, transposedRows.collectAsList().asScala.toSeq, indexSchema)
           } else {
             val rdd = HoodieJavaRDD.getJavaRDD(transposedRows)
             spark.createDataFrame(rdd, indexSchema)
@@ -326,9 +324,9 @@ class ColumnStatsIndexSupport(spark: SparkSession,
         //       of the transposed table in memory, facilitating execution of the subsequently chained operations
         //       on it locally (on the driver; all such operations are actually going to be performed by Spark's
         //       Optimizer)
-        createDataFrameFromInternalRows(spark, catalystRows.collectAsList().asScala.toSeq, columnStatsRecordStructType)
+        sparkAdapter.getUnsafeUtils.createDataFrameFromInternalRows(spark, catalystRows.collectAsList().asScala.toSeq, columnStatsRecordStructType)
       } else {
-        createDataFrameFromRDD(spark, HoodieJavaRDD.getJavaRDD(catalystRows), columnStatsRecordStructType)
+        sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(spark, HoodieJavaRDD.getJavaRDD(catalystRows), columnStatsRecordStructType)
       }
     }
 

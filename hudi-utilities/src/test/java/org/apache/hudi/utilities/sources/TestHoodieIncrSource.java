@@ -648,7 +648,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           .format("hudi").load(basePath());
       dataset.persist(StorageLevel.MEMORY_AND_DISK_SER());
       dataset.count();
-      List<LogicalPlan> logicalPlanChildren = JavaConverters.seqAsJavaList(dataset.logicalPlan().children().toSeq());
+      List<LogicalPlan> logicalPlanChildren = JavaConverters.seqAsJavaList(dataset.queryExecution().commandExecuted().children().toSeq());
       BaseHoodieTableFileIndex hoodieTableFileIndex = (BaseHoodieTableFileIndex) (((HadoopFsRelation) ((LogicalRelation) logicalPlanChildren.get(0)).relation()).location());
       if (useSpillableMap) {
         ExternalSpillableMap<BaseHoodieTableFileIndex.PartitionPath, List<FileSlice>> cachedAllInputFileSlices =

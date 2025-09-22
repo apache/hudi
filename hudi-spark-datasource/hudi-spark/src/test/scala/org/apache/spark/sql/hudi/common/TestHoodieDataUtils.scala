@@ -41,7 +41,7 @@ class TestHoodieDataUtils extends HoodieSparkSqlTestBase {
   override def beforeAll(): Unit = {
     super.beforeAll()
     jsc = new JavaSparkContext(spark.sparkContext)
-    context = new HoodieSparkEngineContext(jsc, new SQLContext(spark))
+    context = new HoodieSparkEngineContext(jsc)
   }
 
   override def afterAll(): Unit = {

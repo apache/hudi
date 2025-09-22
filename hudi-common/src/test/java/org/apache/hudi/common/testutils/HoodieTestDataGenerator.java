@@ -87,6 +87,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -1473,14 +1474,14 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     boolean addedFields = false;
     for (Schema.Field field : fields) {
       if (configs.nestedSupport && field.name().equals("fare") && field.schema().getType() == Schema.Type.RECORD) {
-        finalFields.add(new Schema.Field(field.name(), generateExtendedSchema(field.schema(), configs, baseFields, "customFare", false), field.doc(), field.defaultVal()));
+        finalFields.add(createNewSchemaField(field.name(), generateExtendedSchema(field.schema(), configs, baseFields, "customFare", false), field.doc(), field.defaultVal()));
       } else if (configs.anyArraySupport || !field.name().equals("tip_history")) {
         //TODO: [HUDI-9603] remove the if condition when the issue is fixed
         if (field.name().equals("_hoodie_is_deleted")) {
           addedFields = true;
           addFields(configs, finalFields, baseFields, fieldPrefix, baseSchema.getNamespace(), toplevel);
         }
-        finalFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
+        finalFields.add(createNewSchemaField(field));
       }
     }
     if (!addedFields) {

@@ -20,7 +20,7 @@ package org.apache.hudi.keygen;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
-import org.apache.hudi.client.utils.SparkRowSerDe;
+import org.apache.hudi.SparkRowSerDe;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
