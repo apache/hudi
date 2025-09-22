@@ -125,7 +125,7 @@ public class HFileReaderFactory {
     private HoodieStorage storage;
     private Option<TypedProperties> properties = Option.empty();
     private Either<StoragePath, byte[]> fileSource;
-    private Option<Long> fileSizeOpt;
+    private Option<Long> fileSizeOpt = Option.empty();
 
     public Builder withStorage(HoodieStorage storage) {
       this.storage = storage;
@@ -159,7 +159,7 @@ public class HFileReaderFactory {
       ValidationUtils.checkArgument(storage != null, "Storage cannot be null");
       ValidationUtils.checkArgument(fileSource != null, "HFile source cannot be null");
       TypedProperties props = properties.isPresent() ? properties.get() : new TypedProperties();
-      return new HFileReaderFactory(storage, props, fileSource, fileSizeOpt == null ? Option.empty() : fileSizeOpt);
+      return new HFileReaderFactory(storage, props, fileSource, fileSizeOpt);
     }
   }
 }
