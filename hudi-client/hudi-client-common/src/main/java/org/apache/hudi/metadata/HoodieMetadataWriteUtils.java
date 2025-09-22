@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.FailOnFirstErrorWriteStatus;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -199,6 +200,14 @@ public class HoodieMetadataWriteUtils {
       properties.put(HoodieMetricsConfig.METRICS_REPORTER_PREFIX.key(),
           writeConfig.getMetricReporterMetricsNamePrefix() + METADATA_TABLE_NAME_SUFFIX);
     }
+    // HFile caching properties
+    properties.put(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), writeConfig.getProps()
+        .getOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.defaultValue()));
+    properties.put(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(), writeConfig.getProps()
+        .getOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(), HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.defaultValue()));
+    properties.put(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(), writeConfig.getProps()
+        .getOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(), HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.defaultValue()));
+
     builder.withProperties(properties);
 
     if (writeConfig.isMetricsOn()) {

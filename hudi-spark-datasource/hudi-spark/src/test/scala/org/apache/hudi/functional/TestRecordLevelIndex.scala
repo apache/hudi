@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
@@ -363,6 +363,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       saveMode = SaveMode.Overwrite)
     insertDf.cache()
 
+    spark.sql(s"SET hoodie.hfile.block.cache.size = 200")
     spark.sql(s"CREATE TABLE IF NOT EXISTS hudi_indexed_table USING hudi OPTIONS (hoodie.metadata.enable = 'true', hoodie.metadata.record.index.enable = 'true', hoodie.write.merge.handle.class = 'org.apache.hudi.io.FileGroupReaderBasedMergeHandle') LOCATION '$basePath'")
     val existingKeys = dataGen.getExistingKeys
     spark.sql(s"DELETE FROM hudi_indexed_table WHERE _row_key IN ('${existingKeys.get(0)}', '${existingKeys.get(1)}')")

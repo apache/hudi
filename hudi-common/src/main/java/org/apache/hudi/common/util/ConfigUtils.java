@@ -19,7 +19,10 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.PropertiesConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
@@ -52,7 +55,10 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER;
+import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
+import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
+import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
+import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED;
 
@@ -748,8 +754,28 @@ public class ConfigUtils {
   public static HoodieConfig getReaderConfigs(StorageConfiguration<?> storageConf) {
     HoodieConfig config = new HoodieConfig();
     config.setAll(DEFAULT_HUDI_CONFIG_FOR_READER.getProps());
-    config.setValue(USE_NATIVE_HFILE_READER,
-        Boolean.toString(storageConf.getBoolean(USE_NATIVE_HFILE_READER.key(), USE_NATIVE_HFILE_READER.defaultValue())));
+    return config;
+  }
+
+  /**
+   * Apply HFile cache configurations from options to a HoodieConfig.
+   * This method extracts HFile cache-related settings from the provided options map
+   * and applies them to the given HoodieConfig instance.
+   *
+   * @param options Map of options containing HFile cache configurations
+   * @return HoodieConfig with HFile reader configurations
+   */
+  public static HoodieReaderConfig getHFileCacheConfigs(Map<String, String> options) {
+    HoodieReaderConfig config = new HoodieReaderConfig();
+    config.setValue(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED,
+        options.getOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(),
+            HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.defaultValue().toString()));
+    config.setValue(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE,
+        options.getOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(),
+            HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.defaultValue().toString()));
+    config.setValue(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES,
+        options.getOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(),
+            HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.defaultValue().toString()));
     return config;
   }
 
@@ -788,5 +814,33 @@ public class ConfigUtils {
       mergeProperties.put(propKey, stringValue);
     }
     return mergeProperties;
+  }
+
+  /**
+   * Derive necessary properties for FG reader.
+   */
+  public static TypedProperties buildFileGroupReaderProperties(HoodieMetadataConfig metadataConfig) {
+    HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder()
+        .fromProperties(metadataConfig.getProps()).build();
+    TypedProperties props = new TypedProperties();
+    props.setProperty(
+        MAX_MEMORY_FOR_MERGE.key(),
+        Long.toString(metadataConfig.getMaxReaderMemory()));
+    props.setProperty(
+        SPILLABLE_MAP_BASE_PATH.key(),
+        metadataConfig.getSplliableMapDir());
+    props.setProperty(
+        SPILLABLE_DISK_MAP_TYPE.key(),
+        commonConfig.getSpillableDiskMapType().name());
+    props.setProperty(
+        DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
+        Boolean.toString(commonConfig.isBitCaskDiskMapCompressionEnabled()));
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(),
+        metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED));
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(),
+        metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE));
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(),
+        metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES));
+    return props;
   }
 }
