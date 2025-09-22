@@ -193,17 +193,19 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     val expectedData = getExpectedResultForSnapshotQuery(payloadClazz, useOpAsDelete)
     val expectedDf = spark.createDataFrame(spark.sparkContext.parallelize(expectedData)).toDF(columns: _*).sort("_event_lsn")
     assertTrue(expectedDf.except(finalDf).isEmpty && finalDf.except(expectedDf).isEmpty)
-    // Validate time travel query.
-    val timeTravelDf = spark.read.format("hudi")
-      .option("as.of.instant", firstUpdateInstantTime).load(basePath)
-      .select("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME, DebeziumConstants.FLATTENED_OP_COL_NAME)
-      .sort("_event_lsn")
-    val expectedTimeTravelData = getExpectedResultForTimeTravelQuery(payloadClazz, useOpAsDelete)
-    val expectedTimeTravelDf = spark.createDataFrame(
-      spark.sparkContext.parallelize(expectedTimeTravelData)).toDF(columns: _*).sort("_event_lsn")
-    assertTrue(
-      expectedTimeTravelDf.except(timeTravelDf).isEmpty
-        && timeTravelDf.except(expectedTimeTravelDf).isEmpty)
+    // Validate time travel query. Reading from v8 log file will not work for MySQLDebeziumAvroPayload due to the change from a single ordering field, to two ordering fields.
+    if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name()) || !payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
+      val timeTravelDf = spark.read.format("hudi")
+        .option("as.of.instant", firstUpdateInstantTime).load(basePath)
+        .select("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME, DebeziumConstants.FLATTENED_OP_COL_NAME)
+        .sort("_event_lsn")
+      val expectedTimeTravelData = getExpectedResultForTimeTravelQuery(payloadClazz, useOpAsDelete)
+      val expectedTimeTravelDf = spark.createDataFrame(
+        spark.sparkContext.parallelize(expectedTimeTravelData)).toDF(columns: _*).sort("_event_lsn")
+      assertTrue(
+        expectedTimeTravelDf.except(timeTravelDf).isEmpty
+          && timeTravelDf.except(expectedTimeTravelDf).isEmpty)
+    }
   }
 
   @ParameterizedTest
