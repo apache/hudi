@@ -228,7 +228,14 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
     // Use data field to decide.
     Schema.Field deleteField = deleteContext.getReaderSchema().getField(HOODIE_IS_DELETED_FIELD);
-    return deleteField != null && data.getBoolean(deleteField.pos());
+    if (deleteField != null && data.getBoolean(deleteField.pos())) {
+      return true;
+    }
+    // check custom delete marker
+    return deleteContext.getCustomDeleteMarkerKeyValue().map(markerKeyValue -> {
+      Object fieldValue = getColumnValueAsJava(deleteContext.getReaderSchema(), markerKeyValue.getKey(), props, true);
+      return markerKeyValue.getValue().equals(fieldValue);
+    }).orElse(false);
   }
 
   @Override
