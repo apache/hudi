@@ -677,6 +677,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       cfgs.add(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key() + "=true");
       cfgs.add("hoodie.streamer.source.hoodieincr.read_latest_on_missing_ckpt=" + addReadLatestOnMissingCkpt);
       cfgs.add("hoodie.streamer.source.hoodieincr.path=" + srcBasePath);
+      cfgs.add("hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy=READ_UPTO_LATEST_COMMIT");
       // No partition
       cfgs.add("hoodie.streamer.source.hoodieincr.partition.fields=datestr");
       cfg.configs = cfgs;

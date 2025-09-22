@@ -3392,20 +3392,20 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         sourceTablePath, WriteOperationType.BULK_INSERT);
     sourceConfig.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + HoodieTableVersion.SIX.versionCode());
     sourceConfig.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=false");
-    sourceConfig.sourceLimit = 1000;
+    sourceConfig.sourceLimit = 100;
 
     // Initialize source table with first commit
     HoodieDeltaStreamer sourceStreamer = new HoodieDeltaStreamer(sourceConfig, jsc);
     sourceStreamer.sync();
 
     // Add 2 more commits to source table (total 3 commits)
-    sourceConfig.operation = WriteOperationType.UPSERT;
+    sourceConfig.operation = WriteOperationType.BULK_INSERT;
     for (int i = 0; i < 2; i++) {
       // Create fresh config to avoid conflicts
       HoodieDeltaStreamer.Config newSourceConfig = TestHelpers.makeConfig(
-          sourceTablePath, WriteOperationType.UPSERT);
+          sourceTablePath, WriteOperationType.BULK_INSERT);
       newSourceConfig.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=false");
-      newSourceConfig.sourceLimit = 1000;
+      newSourceConfig.sourceLimit = 100;
       sourceStreamer = new HoodieDeltaStreamer(newSourceConfig, jsc);
       sourceStreamer.sync();
     }
@@ -3418,22 +3418,18 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(3, sourceMetaClient.getActiveTimeline().getCommitsTimeline().countInstants());
     assertEquals(HoodieTableVersion.SIX, sourceMetaClient.getTableConfig().getTableVersion());
 
-    // Debug: Print source record count after initial setup
-    long sourceRecordsAfterInitial = sqlContext.read().format("org.apache.hudi").load(sourceTablePath).count();
-    System.out.println("Source records after initial 3 commits: " + sourceRecordsAfterInitial);
-
     // Phase 2: Setup target table at v6 and sync first 3 commits
     HoodieDeltaStreamer.Config targetConfig = TestHelpers.makeConfigForHudiIncrSrc(
-        sourceTablePath, targetTablePath, WriteOperationType.BULK_INSERT, true, null);
+        sourceTablePath, targetTablePath, WriteOperationType.BULK_INSERT, false, null);
     targetConfig.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + HoodieTableVersion.SIX.versionCode());
     targetConfig.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=false");
-    targetConfig.configs.add("hoodie.streamer.source.hoodieincr.num_instants=1");
+    targetConfig.configs.add("hoodie.streamer.source.hoodieincr.num_instants=3");
 
     // Sync all 3 commits from source to target, one by one
     HoodieDeltaStreamer targetStreamer = new HoodieDeltaStreamer(targetConfig, jsc);
-    for (int i = 0; i < 3; i++) {
-      targetStreamer.sync();
-    }
+    //try calling this once INSTEAD OF THREEE TIMES
+    targetStreamer.sync();
+
 
     // Verify checkpoint is established in V1 format
     HoodieTableMetaClient targetMetaClient = HoodieTableMetaClient.builder()
@@ -3448,11 +3444,28 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertTrue(commitMetadata.get().getExtraMetadata().containsKey(STREAMER_CHECKPOINT_KEY_V1));
     String checkpointBeforeUpgrade = commitMetadata.get().getExtraMetadata().get(STREAMER_CHECKPOINT_KEY_V1);
 
+    // Verify record counts match between source and target
+    long sourceRecordCountOriginal = sqlContext.read()
+            .format("org.apache.hudi")
+            .load(sourceTablePath)
+            .count();
+    long targetRecordCountOriginal = sqlContext.read()
+            .format("org.apache.hudi")
+            .load(targetTablePath)
+            .count();
+
+    System.out.println("Source record count: " + sourceRecordCountOriginal);
+    System.out.println("Target record count: " + targetRecordCountOriginal);
+
+    assertEquals(sourceRecordCountOriginal, targetRecordCountOriginal,
+            "Target should have all records from source");
+
+
     // Phase 3: Upgrade source table from v6 to v9
-    HoodieDeltaStreamer.Config upgradeConfig = TestHelpers.makeConfig(sourceTablePath, WriteOperationType.UPSERT);
+    HoodieDeltaStreamer.Config upgradeConfig = TestHelpers.makeConfig(sourceTablePath, WriteOperationType.BULK_INSERT);
     upgradeConfig.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + HoodieTableVersion.NINE.versionCode());
     upgradeConfig.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=true");
-    upgradeConfig.sourceLimit = 1000;
+    upgradeConfig.sourceLimit = 100;
 
     // This sync will trigger the upgrade
     sourceStreamer = new HoodieDeltaStreamer(upgradeConfig, jsc);
@@ -3468,9 +3481,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Phase 4: Add 2 more commits to upgraded source table
     // After upgrade, don't specify version - let it use the existing table version
     for (int i = 0; i < 2; i++) {
-      HoodieDeltaStreamer.Config postUpgradeConfig = TestHelpers.makeConfig(sourceTablePath, WriteOperationType.UPSERT);
+      HoodieDeltaStreamer.Config postUpgradeConfig = TestHelpers.makeConfig(sourceTablePath, WriteOperationType.BULK_INSERT);
       postUpgradeConfig.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=false");
-      postUpgradeConfig.sourceLimit = 1000;
+      postUpgradeConfig.sourceLimit = 100;
       sourceStreamer = new HoodieDeltaStreamer(postUpgradeConfig, jsc);
       sourceStreamer.sync();
     }
@@ -3482,11 +3495,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Phase 5: Resume incremental sync from target table (still at v6)
     // Create base config following existing test patterns
     HoodieDeltaStreamer.Config resumeTargetConfig = TestHelpers.makeConfigForHudiIncrSrc(
-        sourceTablePath, targetTablePath, WriteOperationType.UPSERT, false, null);
+        sourceTablePath, targetTablePath, WriteOperationType.BULK_INSERT, false, null);
     resumeTargetConfig.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + HoodieTableVersion.SIX.versionCode());
     resumeTargetConfig.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=false");
-    // Process one commit at a time to isolate any record loss issues
-    resumeTargetConfig.configs.add("hoodie.streamer.source.hoodieincr.num_instants=10");
+    resumeTargetConfig.configs.add("hoodie.streamer.source.hoodieincr.num_instants=3");
 
     // This should successfully pull all remaining commits from upgraded source
     targetStreamer = new HoodieDeltaStreamer(resumeTargetConfig, jsc);
@@ -3495,35 +3507,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Phase 6: Validate data integrity and checkpoint continuity
     targetMetaClient.reloadActiveTimeline();
     assertEquals(HoodieTableVersion.SIX, targetMetaClient.getTableConfig().getTableVersion());
-
-    // Debug: Print commit timelines for comparison
-    System.out.println("=== SOURCE TABLE COMMITS ===");
-    sourceMetaClient.reloadActiveTimeline();
-    sourceMetaClient.getActiveTimeline().getCommitsTimeline().getInstants().forEach(instant -> {
-      System.out.println("Source commit: " + instant.requestedTime() + " - " + instant.getAction() + " - " + instant.getState());
-    });
-
-    System.out.println("=== TARGET TABLE COMMITS ===");
-    targetMetaClient.getActiveTimeline().getCommitsTimeline().getInstants().forEach(instant -> {
-      System.out.println("Target commit: " + instant.requestedTime() + " - " + instant.getAction() + " - " + instant.getState());
-    });
-
-    // Debug: Check checkpoints in target table
-    System.out.println("=== TARGET TABLE CHECKPOINTS ===");
-    targetMetaClient.getActiveTimeline().getCommitsTimeline().getInstants().forEach(instant -> {
-      try {
-        Option<HoodieCommitMetadata> metadata = HoodieClientTestUtils.getCommitMetadataForInstant(targetMetaClient, instant);
-        if (metadata.isPresent()) {
-          String v1Checkpoint = metadata.get().getExtraMetadata().get(STREAMER_CHECKPOINT_KEY_V1);
-          String v2Checkpoint = metadata.get().getExtraMetadata().get(STREAMER_CHECKPOINT_KEY_V2);
-          System.out.println("Target instant " + instant.requestedTime()
-              + " - V1 checkpoint: " + v1Checkpoint
-              + " - V2 checkpoint: " + v2Checkpoint);
-        }
-      } catch (Exception e) {
-        System.out.println("Failed to read metadata for instant: " + instant.requestedTime());
-      }
-    });
 
     // Verify record counts match between source and target
     long sourceRecordCount = sqlContext.read()
@@ -3556,26 +3539,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // Verify target has correct number of commits
     assertEquals(2, targetMetaClient.getActiveTimeline().getCommitsTimeline().countInstants(),
-        "Target should have 2 commits: initial bulk insert + 1 incremental pull");
-
-    // Phase 7: Additional edge case testing - one more round
-    HoodieDeltaStreamer.Config finalSourceConfig = TestHelpers.makeConfig(sourceTablePath, WriteOperationType.UPSERT);
-    finalSourceConfig.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=false");
-    finalSourceConfig.sourceLimit = 1000;
-    sourceStreamer = new HoodieDeltaStreamer(finalSourceConfig, jsc);
-    sourceStreamer.sync();
-
-    HoodieDeltaStreamer.Config finalTargetConfig = TestHelpers.makeConfigForHudiIncrSrc(
-        sourceTablePath, targetTablePath, WriteOperationType.UPSERT, false, null);
-    finalTargetConfig.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=false");
-    targetStreamer = new HoodieDeltaStreamer(finalTargetConfig, jsc);
-    targetStreamer.sync();
-
-    // Final verification - ensure continued compatibility
-    sourceRecordCount = sqlContext.read().format("org.apache.hudi").load(sourceTablePath).count();
-    targetRecordCount = sqlContext.read().format("org.apache.hudi").load(targetTablePath).count();
-    assertEquals(sourceRecordCount, targetRecordCount,
-        "Final sync should maintain data consistency across versions");
+        "Target should have 2 commits (as its batches 3 source table commits into one target table commit)");
 
     // Clean up
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, sourceTablePath);

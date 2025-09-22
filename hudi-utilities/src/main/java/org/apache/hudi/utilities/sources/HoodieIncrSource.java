@@ -380,6 +380,7 @@ public class HoodieIncrSource extends RowSource {
       source = reader
           .options(readOpts)
           .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
+          .option(INCREMENTAL_READ_TABLE_VERSION().key(), HoodieTableVersion.SIX.versionCode())
           .option(START_COMMIT().key(), queryInfo.getStartInstant())
           .option(END_COMMIT().key(), queryInfo.getEndInstant())
           .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
