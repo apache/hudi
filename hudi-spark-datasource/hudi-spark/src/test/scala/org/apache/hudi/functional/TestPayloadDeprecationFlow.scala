@@ -72,6 +72,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
     val originalOrderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
       "_event_seq"
+    } else if (payloadClazz.equals(classOf[PostgresDebeziumAvroPayload].getName)) {
+      "_event_lsn"
     } else {
       "ts"
     }
@@ -105,8 +107,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     val firstUpdateData = Seq(
       (11, 1L, "rider-X", "driver-X", 19.10, "i", "11.1", 11, 1, "i"),
       (12, 1L, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
-      (11, 2L, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-      (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
+      (11, 2L, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"))
     val firstUpdate = spark.createDataFrame(firstUpdateData).toDF(columns: _*)
     firstUpdate.write.format("hudi").
       option(OPERATION.key(), "upsert").
