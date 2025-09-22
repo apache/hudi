@@ -88,6 +88,7 @@ import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.DummySchemaProvider;
@@ -258,9 +259,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
-  public void testProps() {
+  void testProps() {
     TypedProperties props =
-        new DFSPropertiesConfiguration(fs.getConf(), new StoragePath(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
+        new DFSPropertiesConfiguration(new HadoopStorageConfiguration(fs.getConf()), new StoragePath(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
     assertEquals(2, props.getInteger("hoodie.upsert.shuffle.parallelism"));
     assertEquals("_row_key", props.getString("hoodie.datasource.write.recordkey.field"));
     assertEquals("org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer$TestGenerator",
@@ -381,7 +382,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     String checkpointProviderClass = "org.apache.hudi.utilities.checkpointing.KafkaConnectHdfsProvider";
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeDropAllConfig(tableBasePath, WriteOperationType.UPSERT);
     TypedProperties props =
-        new DFSPropertiesConfiguration(fs.getConf(), new StoragePath(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
+        new DFSPropertiesConfiguration(new HadoopStorageConfiguration(fs.getConf()), new StoragePath(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
     props.put("hoodie.streamer.checkpoint.provider.path", bootstrapPath);
     cfg.initialCheckpointProvider = checkpointProviderClass;
     // create regular kafka connect hdfs dirs
@@ -2933,9 +2934,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
-  public void testToSortedTruncatedStringSecretsMasked() {
+  void testToSortedTruncatedStringSecretsMasked() {
     TypedProperties props =
-        new DFSPropertiesConfiguration(fs.getConf(), new StoragePath(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
+        new DFSPropertiesConfiguration(new HadoopStorageConfiguration(fs.getConf()), new StoragePath(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
     props.put("ssl.trustore.location", "SSL SECRET KEY");
     props.put("sasl.jaas.config", "SASL SECRET KEY");
     props.put("auth.credentials", "AUTH CREDENTIALS");
@@ -3248,11 +3249,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
-  public void testBulkInsertWithUserDefinedPartitioner() throws Exception {
+  void testBulkInsertWithUserDefinedPartitioner() throws Exception {
     String tableBasePath = basePath + "/test_table_bulk_insert";
     String sortColumn = "weight";
+
     TypedProperties bulkInsertProps =
-        new DFSPropertiesConfiguration(fs.getConf(), new StoragePath(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
+        new DFSPropertiesConfiguration(new HadoopStorageConfiguration(fs.getConf()), new StoragePath(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
     bulkInsertProps.setProperty("hoodie.bulkinsert.shuffle.parallelism", "1");
     bulkInsertProps.setProperty("hoodie.bulkinsert.user.defined.partitioner.class", "org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner");
     bulkInsertProps.setProperty("hoodie.bulkinsert.user.defined.partitioner.sort.columns", sortColumn);
@@ -3302,8 +3304,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     int columnCardinality = 2;
     // This column has 2 values [BLACK, UBERX]
     String sortColumn = "trip_type";
+
     TypedProperties bulkInsertProps =
-        new DFSPropertiesConfiguration(fs.getConf(), new StoragePath(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
+        new DFSPropertiesConfiguration(new HadoopStorageConfiguration(fs.getConf()), new StoragePath(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
     bulkInsertProps.setProperty(HoodieWriteConfig.BULKINSERT_SUFFIX_RECORD_KEY_SORT_COLUMNS.key(), String.valueOf(suffixRecordKey));
     bulkInsertProps.setProperty("hoodie.bulkinsert.shuffle.parallelism", String.valueOf(outputParallelism));
     bulkInsertProps.setProperty("hoodie.datasource.write.partitionpath.field", "");
@@ -3335,7 +3338,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   void testErrorTableSourcePersist(WriteOperationType writeOperationType, boolean persistSourceRdd) throws Exception {
     String tableBasePath = basePath + "/test_table_error_table" + persistSourceRdd + writeOperationType;
     TypedProperties tableProps =
-        new DFSPropertiesConfiguration(fs.getConf(), new StoragePath(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
+        new DFSPropertiesConfiguration(new HadoopStorageConfiguration(fs.getConf()), new StoragePath(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
     tableProps.setProperty(ERROR_TABLE_PERSIST_SOURCE_RDD.key(), String.valueOf(persistSourceRdd));
     switch (writeOperationType) {
       case BULK_INSERT:
