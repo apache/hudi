@@ -28,6 +28,7 @@ import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieNativeAvroHFileReader;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
 
@@ -53,6 +54,15 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
         .withPath(path).build();
     return HoodieNativeAvroHFileReader.builder()
         .readerFactory(readerFactory).path(path).schema(schemaOption).build();
+  }
+
+  protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig, StoragePathInfo pathInfo,
+                                                Option<Schema> schemaOption) {
+    HFileReaderFactory readerFactory = HFileReaderFactory.builder()
+        .withStorage(storage).withProps(hoodieConfig.getProps())
+        .withPath(pathInfo.getPath()).withFileSize(pathInfo.getLength()).build();
+    return HoodieNativeAvroHFileReader.builder()
+        .readerFactory(readerFactory).path(pathInfo.getPath()).schema(schemaOption).build();
   }
 
   @Override
