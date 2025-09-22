@@ -23,11 +23,11 @@ This directory contains pre-created Hudi tables from different releases used for
 
 The fixtures are organized by table type in separate directories:
 
-### Maintenance Tables (`maintenance-tables/`)
-Tables that include maintenance operations (compaction, clustering, archival, cleaning):
-- `hudi-v6-maintenance-table.zip` - Hudi 0.14.0, Table Version 6
-- `hudi-v8-maintenance-table.zip` - Hudi 1.0.2, Table Version 8
-- `hudi-v9-maintenance-table.zip` - Hudi 1.1.0, Table Version 9
+### MOR Tables (`mor-tables/`)
+Tables that include table service operations such as (compaction, clustering, archival, cleaning):
+- `hudi-v6-mor-table.zip` - Hudi 0.14.0, Table Version 6
+- `hudi-v8-mor-table.zip` - Hudi 1.0.2, Table Version 8
+- `hudi-v9-mor-table.zip` - Hudi 1.1.0, Table Version 9
 
 ### Complex Key Generator Tables (`complex-keygen-tables/`)
 Tables that use complex key generators for testing key generator compatibility:
@@ -57,7 +57,7 @@ Use the `generate-fixtures.sh` script to create all fixture tables:
 ./generate-fixtures.sh
 ```
 
-**Note**: By default, the script creates maintenance tables in the `maintenance-tables/` directory. The output directory is automatically determined by the template used. On first run, it downloads and caches Spark binaries in the `spark-versions/` directory. Each fixture generation may take several minutes as it downloads Spark binaries and Hudi bundles, then creates table data.
+**Note**: By default, the script creates mor tables in the `mor-tables/` directory. The output directory is automatically determined by the template used. On first run, it downloads and caches Spark binaries in the `spark-versions/` directory. Each fixture generation may take several minutes as it downloads Spark binaries and Hudi bundles, then creates table data.
 
 ### Script Parameters
 
@@ -92,7 +92,7 @@ The `generate-fixtures.sh` script supports the following parameters:
 # Generate multiple versions including version 9
 ./generate-fixtures.sh --version 6,8,9 --hudi-bundle-path /path/to/bundle.jar
 
-# Generate complex-keygen tables instead of maintenance tables
+# Generate complex-keygen tables instead of mor tables
 ./generate-fixtures.sh --script-name generate-fixture-complex-keygen.scala
 
 # Generate only version 6 complex-keygen table
@@ -105,11 +105,11 @@ The script supports different Scala templates located in the `scala-templates/` 
 
 | Script Name | Description | Output Directory | Output Filename Pattern |
 |-------------|-------------|-------------------|-------------------------|
-| `generate-fixture-maintenance.scala` (default) | Maintenance tables with compaction, clustering, archival | `maintenance-tables/` | `hudi-v{X}-maintenance-table.zip` |
+| `generate-fixture-mor.scala` (default) | mor tables with compaction, clustering, archival | `mor-tables/` | `hudi-v{X}-mor-table.zip` |
 | `generate-fixture-complex-keygen.scala` | Complex key generator tables | `complex-keygen-tables/` | `hudi-v{X}-table-complex-keygen.zip` |
 
 **Note**: The output directory and filename pattern are automatically determined by the template name:
-- Templates containing "maintenance" → `maintenance-tables/` directory
+- Templates containing "mor" → `mor-tables/` directory
 - Templates containing "complex-keygen" → `complex-keygen-tables/` directory
 - The zip file suffix comes from extracting the portion after "generate-fixture" from the script name
 
@@ -153,20 +153,20 @@ cd ..
 
 # 3. Substitute template variables in the copied script
 sed -i.bak \
--e 's/${TABLE_NAME}/hudi-v6-maintenance-table/g' \
--e 's|${BASE_PATH}|'$(pwd)'/maintenance-tables/hudi-v6-maintenance-table|g' \
--e 's/${FIXTURE_NAME}/hudi-v6-maintenance-table/g' \
-/scala-templates/generate-fixture-maintenance.scala
+-e 's/${TABLE_NAME}/hudi-v6-mor-table/g' \
+-e 's|${BASE_PATH}|'$(pwd)'/mor-tables/hudi-v6-mor-table|g' \
+-e 's/${FIXTURE_NAME}/hudi-v6-mor-table/g' \
+/scala-templates/generate-fixture-mor.scala
 
 # 4. Run spark-shell with the customized Scala script using -i flag
 ./spark-versions/spark-3.4.3-bin-hadoop3/bin/spark-shell \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
---conf 'spark.jars.ivy=/tmp/ivy-cache-hudi-v6-maintenance-table' \
+--conf 'spark.jars.ivy=/tmp/ivy-cache-hudi-v6-mor-table' \
 --conf 'spark.sql.warehouse.dir=/tmp/spark-warehouse' \
 --packages org.apache.hudi:hudi-spark3.4-bundle_2.12:0.14.0 \
--i /scala-templates/generate-fixture-maintenance.scala
+-i /scala-templates/generate-fixture-mor.scala
 
 ```
 
@@ -178,7 +178,7 @@ For other versions, use the same template-based pattern but with the appropriate
 - **Hudi 1.0.2 (Version 8)**:
 - Spark binary: `./spark-versions/spark-3.5.1-bin-hadoop3/bin/spark-shell`
 - Hudi bundle: `--packages org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.2`
-- Table name: `hudi-v8-maintenance-table`, Base path: `maintenance-tables/hudi-v8-maintenance-table`
+- Table name: `hudi-v8-mor-table`, Base path: `mor-tables/hudi-v8-mor-table`
 
 - **Hudi 1.1.0 (Version 9)**: Requires `--jars <local-bundle-path>` instead of `--packages` (see version 9 requirements above)
 

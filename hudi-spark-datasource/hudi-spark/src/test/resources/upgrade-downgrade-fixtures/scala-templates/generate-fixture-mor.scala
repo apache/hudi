@@ -24,10 +24,10 @@ import spark.implicits._
 val tableName = "${TABLE_NAME}"  // Backticks for SQL identifiers with hyphens
 val basePath = "${BASE_PATH}"
 
-println("Generating maintenance table with archival and clustering...")
+println("Generating mor table with archival and clustering...")
 
-// Base maintenance settings used by all steps
-val maintenanceConfig = Map(
+// Base mor settings used by all steps
+val morConfig = Map(
   "hoodie.compact.inline" -> "true",
   "hoodie.clustering.inline" -> "true",
   "hoodie.compact.inline.max.delta.commits" -> "3",
@@ -69,13 +69,13 @@ val initialData = Seq(
 val initialDf = initialData.toDF("id", "name", "ts", "partition")
 
 (initialDf.write.format("hudi").
-  options(initialSetupConfig ++ maintenanceConfig).
+  options(initialSetupConfig ++ morConfig).
   option("hoodie.datasource.write.operation", "insert").
   mode(SaveMode.Overwrite)).
   save(basePath)
 
 
-println("Step 1: Initial data written as table (no maintenance yet)")
+println("Step 1: Initial data written as table")
 
 val moreData1 = Seq(
   ("id6", "Frank", 2000L, "2023-01-01"),
@@ -83,17 +83,17 @@ val moreData1 = Seq(
 )
 
 ((moreData1.toDF("id", "name", "ts", "partition").write.format("hudi").
-  options(initialSetupConfig ++ maintenanceConfig).
+  options(initialSetupConfig ++ morConfig).
   option("hoodie.datasource.write.operation", "insert").
   mode(SaveMode.Append))).
   save(basePath)
 
 
-println("Step 2: Added more small files (no maintenance yet)")
+println("Step 2: Added more small files")
 
 val update1 = Seq(("id1", "Alice_v2", 3000L, "2023-01-01"))
 update1.toDF("id", "name", "ts", "partition").write.format("hudi").
-  options(maintenanceConfig).
+  options(morConfig).
   option("hoodie.datasource.write.operation", "upsert").
   mode(SaveMode.Append).
   save(basePath)
@@ -103,7 +103,7 @@ println("Step 3: First update - will trigger COMPACTION after 3 delta commits (m
 
 val update2 = Seq(("id2", "Bob_v2", 4000L, "2023-01-01"))
 update2.toDF("id", "name", "ts", "partition").write.format("hudi").
-  options(maintenanceConfig).
+  options(morConfig).
   option("hoodie.datasource.write.operation", "upsert").
   mode(SaveMode.Append).
   save(basePath)
@@ -113,7 +113,7 @@ println("Step 4: Second update - will trigger CLUSTERING after 4 commits (max.co
 
 val finalData = Seq(("id8", "Final", 5000L, "2023-01-01"))
 finalData.toDF("id", "name", "ts", "partition").write.format("hudi").
-  options(maintenanceConfig ++ archivalConfig).
+  options(morConfig ++ archivalConfig).
   option("hoodie.datasource.write.operation", "insert").
   mode(SaveMode.Append).
   save(basePath)
@@ -123,7 +123,7 @@ println("Step 5: Insert - will trigger CLEANING (retained=5) and begin ARCHIVAL 
 
 val extraData = Seq(("id9", "Extra", 6000L, "2023-01-01"))
 extraData.toDF("id", "name", "ts", "partition").write.format("hudi").
-  options(maintenanceConfig ++ archivalConfig).
+  options(morConfig ++ archivalConfig).
   option("hoodie.datasource.write.operation", "insert").
   mode(SaveMode.Append).
   save(basePath)
@@ -132,7 +132,7 @@ println("Step 6: Extra insert - will trigger ARCHIVAL (keep.max.commits=6 exceed
 
 val moreExtraData = Seq(("id10", "MoreExtra", 7000L, "2023-01-01"))
 moreExtraData.toDF("id", "name", "ts", "partition").write.format("hudi").
-  options(maintenanceConfig ++ archivalConfig).
+  options(morConfig ++ archivalConfig).
   option("hoodie.datasource.write.operation", "insert").
   mode(SaveMode.Append).
   save(basePath)
@@ -151,5 +151,5 @@ deleteData.toDF("id", "name", "ts", "partition").write.format("hudi").
 
 println("Step 8: Delete operation (creates uncompacted log files)")
 
-println(s"Maintenance fixture ${FIXTURE_NAME} generated!")
+println(s"mor table fixture ${FIXTURE_NAME} generated!")
 System.exit(0)

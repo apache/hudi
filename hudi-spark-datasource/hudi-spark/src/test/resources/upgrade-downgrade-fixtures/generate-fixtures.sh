@@ -28,7 +28,7 @@ echo "Generating Hudi upgrade/downgrade test fixtures..."
 # Parse command line arguments
 REQUESTED_VERSIONS=""
 HUDI_BUNDLE_PATH=""
-SCALA_SCRIPT_NAME="generate-fixture-maintenance.scala"
+SCALA_SCRIPT_NAME="generate-fixture-mor.scala"
 while [[ $# -gt 0 ]]; do
     case $1 in
         --version)
@@ -48,7 +48,7 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: $0 [--version <version_list>] [--hudi-bundle-path <path>] [--script-name <script>]"
             echo "  --version <version_list>          Comma-separated list of table versions to generate (e.g., 4,5,6)"
             echo "  --hudi-bundle-path <path>         Path to locally built Hudi bundle JAR (required for version 9)"
-            echo "  --script-name <script>            Scala script name from scala-templates folder (default: generate-fixture-maintenance.scala)"
+            echo "  --script-name <script>            Scala script name from scala-templates folder (default: generate-fixture-mor.scala)"
             echo ""
             echo "Examples:"
             echo "  $0                                           # Generate all versions (except 9)"
@@ -68,9 +68,9 @@ SCRIPT_BASE="${SCALA_SCRIPT_NAME%.scala}"  # Remove .scala extension
 SCRIPT_SUFFIX="${SCRIPT_BASE#generate-fixture}"  # Remove generate-fixture prefix
 
 # Determine output directory based on template type
-if [[ "$SCALA_SCRIPT_NAME" == *"maintenance"* ]]; then
-    FIXTURES_DIR="$SCRIPT_DIR/maintenance-tables"
-    echo "Using maintenance tables directory: $FIXTURES_DIR"
+if [[ "$SCALA_SCRIPT_NAME" == *"mor"* ]]; then
+    FIXTURES_DIR="$SCRIPT_DIR/mor-tables"
+    echo "Using mor tables directory: $FIXTURES_DIR"
 elif [[ "$SCALA_SCRIPT_NAME" == *"complex-keygen"* ]]; then
     FIXTURES_DIR="$SCRIPT_DIR/complex-keygen-tables"
     echo "Using complex-keygen tables directory: $FIXTURES_DIR"

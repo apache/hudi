@@ -38,7 +38,6 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -48,7 +47,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -81,7 +79,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     if (suffix.contains("complex-keygen")) {
       return "/upgrade-downgrade-fixtures/complex-keygen-tables/";
     }
-    return "/upgrade-downgrade-fixtures/maintenance-tables/";
+    return "/upgrade-downgrade-fixtures/mor-tables/";
   }
 
   @ParameterizedTest
@@ -438,8 +436,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     if (suffix.contains("complex-keygen")) {
       return baseName + "-table" + suffix + ".zip";
     }  else {
-      // Default to maintenance tables
-      return baseName + "-table-maintenance.zip";
+      // Default to mor tables
+      return baseName + "-table-mor.zip";
     }
   }
 
