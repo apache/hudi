@@ -245,9 +245,11 @@ public class FlinkWriteClients {
 
     // <merge_mode, payload_class, merge_strategy_id>
     Triple<RecordMergeMode, String, String> mergingBehavior = StreamerUtil.inferMergingBehavior(conf);
-    builder.withRecordMergeStrategyId(mergingBehavior.getRight())
-        .withRecordMergeMode(mergingBehavior.getLeft())
+    builder.withRecordMergeMode(mergingBehavior.getLeft())
         .withRecordMergeImplClasses(StreamerUtil.getMergerClasses(conf, mergingBehavior.getLeft(), mergingBehavior.getMiddle()));
+    if (mergingBehavior.getRight() != null) {
+      builder.withRecordMergeStrategyId(mergingBehavior.getRight());
+    }
 
     Option<HoodieLockConfig> lockConfig = getLockConfig(conf);
     if (lockConfig.isPresent()) {

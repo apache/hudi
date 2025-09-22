@@ -44,6 +44,8 @@ import java.util.Set;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
@@ -100,9 +102,17 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
                                      HoodieTableConfig tableConfig) {
     // Update table properties.
     propertiesToRemove.add(PARTIAL_UPDATE_MODE);
-    // For specified payload classes, add strategy id and custom merge mode.
     String legacyPayloadClass = tableConfig.getLegacyPayloadClass();
-    if (!StringUtils.isNullOrEmpty(legacyPayloadClass) && (PAYLOAD_CLASSES_TO_HANDLE.contains(legacyPayloadClass))) {
+    // For tables with commit time or event time mode, add strategy id.
+    RecordMergeMode mergeMode = tableConfig.getRecordMergeMode();
+    if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {
+      propertiesToAdd.put(RECORD_MERGE_STRATEGY_ID, EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
+    } else if (mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING) {
+      propertiesToAdd.put(RECORD_MERGE_STRATEGY_ID, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
+    }
+    // For specified payload classes, add strategy id and custom merge mode.
+    if (!StringUtils.isNullOrEmpty(legacyPayloadClass)
+        && (PAYLOAD_CLASSES_TO_HANDLE.contains(legacyPayloadClass))) {
       propertiesToRemove.add(LEGACY_PAYLOAD_CLASS_NAME);
       propertiesToAdd.put(PAYLOAD_CLASS_NAME, legacyPayloadClass);
       if (!legacyPayloadClass.equals(OverwriteWithLatestAvroPayload.class.getName())
