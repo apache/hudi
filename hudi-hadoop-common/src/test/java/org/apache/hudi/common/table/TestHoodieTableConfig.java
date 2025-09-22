@@ -633,8 +633,8 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
         // Test case: Version 9 table with PostgresDebeziumAvroPayload (should set partial update mode and custom properties)
         arguments("Version 9 with PostgresDebeziumAvroPayload", null, PostgresDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE,
-            5, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, PostgresDebeziumAvroPayload.class.getName(),
-            PartialUpdateMode.FILL_UNAVAILABLE.name(), HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE, null, null),
+            8, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, PostgresDebeziumAvroPayload.class.getName(),
+            PartialUpdateMode.FILL_UNAVAILABLE.name(), HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE, "_change_operation_type", "d"),
 
         // Test case: Version 9 table with AWSDmsAvroPayload (should set custom delete properties)
         arguments("Version 9 with AWSDmsAvroPayload", null, AWSDmsAvroPayload.class.getName(), null, null, HoodieTableVersion.NINE,
@@ -646,7 +646,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
         // Test case: Version 9 table with MySqlDebeziumAvroPayload (event time based payload)
         arguments("Version 9 with MySqlDebeziumAvroPayload", null, MySqlDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE,
-            3, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, MySqlDebeziumAvroPayload.class.getName(), null, null, null, null)
+            6, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, MySqlDebeziumAvroPayload.class.getName(), null, null, "_change_operation_type", "d")
     );
   }
 
@@ -707,7 +707,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
             "Custom merge property " + HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE + " not expected to be set");
       }
 
-      if (expectedDeleteKey != null) {
+      if (expectedDeleteKey != null || configs.containsKey(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY)) {
         assertEquals(expectedDeleteKey, configs.get(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY),
             "Delete key mismatch for: " + testName);
       } else {
