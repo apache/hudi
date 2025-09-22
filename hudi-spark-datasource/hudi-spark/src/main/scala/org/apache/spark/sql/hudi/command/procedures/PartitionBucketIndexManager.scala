@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieSparkSqlWriter}
+import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, ENABLE_ROW_WRITER, OPERATION}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -40,7 +40,7 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.avro.Schema
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{HoodieUnsafeUtils, Row, SaveMode}
+import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.PredicateHelper
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
@@ -56,7 +56,8 @@ class PartitionBucketIndexManager extends BaseProcedure
   with ProcedureBuilder
   with PredicateHelper
   with ProvidesHoodieConfig
-  with Logging {
+  with Logging
+  with SparkAdapterSupport {
 
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType),
@@ -248,7 +249,7 @@ class PartitionBucketIndexManager extends BaseProcedure
           iterator.asScala
         })
       }
-      val dataFrame = HoodieUnsafeUtils.createDataFrameFromRDD(sparkSession, res, sparkSchemaWithMetaFields)
+      val dataFrame = sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(sparkSession, res, sparkSchemaWithMetaFields)
       logInfo("Start to do bucket rescale for " + rescalePartitionsMap)
       val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(
         sparkSession.sqlContext,

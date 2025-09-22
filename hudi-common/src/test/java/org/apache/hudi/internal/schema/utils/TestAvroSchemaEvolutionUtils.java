@@ -274,7 +274,7 @@ public class TestAvroSchemaEvolutionUtils {
    */
   @Test
   public void testReWriteRecordWithTypeChanged() {
-    String enumSchema = "{\"type\":\"enum\",\"name\":\"Enum\",\"namespace\":\"org.apache.hudi.internal.schema.utils.TestAvroSchemaEvolutionUtils$\",\"symbols\":[\"ENUM1\",\"ENUM2\"]}";
+    String enumSchema = "{\"type\":\"enum\",\"name\":\"Enum\",\"namespace\":\"org.apache.hudi.internal.schema.utils.TestAvroSchemaEvolutionUtils\",\"symbols\":[\"ENUM1\",\"ENUM2\"]}";
     Schema avroSchema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"h0_record\",\"namespace\":\"hoodie.h0\",\"fields\""
         + ":[{\"name\":\"id\",\"type\":[\"null\",\"int\"],\"default\":null},"
         + "{\"name\":\"comb\",\"type\":[\"null\",\"int\"],\"default\":null},"

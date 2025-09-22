@@ -39,12 +39,14 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -55,6 +57,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -129,14 +132,64 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public ClosableIterator<IndexedRecord> getFileRecordIterator(
+      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
+      HoodieStorage storage) throws IOException {
+    boolean isLogFile = FSUtils.isLogFile(storagePathInfo.getPath());
+    HoodieAvroFileReader reader = getOrCreateFileReader(storagePathInfo.getPath(), isLogFile, format -> {
+      try {
+        return (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
+            .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
+                storagePathInfo, format, Option.empty());
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to create avro records iterator from file path " + storagePathInfo.getPath(), e);
+      }
+    });
+
+    return getFileRecordIterator(reader, storagePathInfo.getPath(), isLogFile, dataSchema, requiredSchema);
+  }
+
+  @Override
+  public ClosableIterator<IndexedRecord> getFileRecordIterator(
       StoragePath filePath,
       long start,
       long length,
       Schema dataSchema,
       Schema requiredSchema,
       HoodieStorage storage) throws IOException {
-    HoodieAvroFileReader reader;
     boolean isLogFile = FSUtils.isLogFile(filePath);
+    HoodieAvroFileReader reader = getOrCreateFileReader(filePath, isLogFile, format -> {
+      try {
+        return (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
+            .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
+                filePath, format, Option.empty());
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to create avro records iterator from file path " + filePath, e);
+      }
+    });
+
+    return getFileRecordIterator(reader, filePath, isLogFile, dataSchema, requiredSchema);
+  }
+
+  private HoodieAvroFileReader getOrCreateFileReader(
+      StoragePath path, boolean isLogFile, Function<HoodieFileFormat, HoodieAvroFileReader> func) throws IOException {
+    if (reusableFileReaders.containsKey(path)) {
+      return reusableFileReaders.get(path);
+    } else {
+      HoodieFileFormat fileFormat = isMultiFormat && !isLogFile ? HoodieFileFormat.fromFileExtension(path.getFileExtension()) : baseFileFormat;
+      try {
+        return func.apply(fileFormat);
+      } catch (HoodieIOException e) {
+        throw e.getIOException();
+      }
+    }
+  }
+
+  public ClosableIterator<IndexedRecord> getFileRecordIterator(
+      HoodieAvroFileReader reader,
+      StoragePath filePath,
+      boolean isLogFile,
+      Schema dataSchema,
+      Schema requiredSchema) throws IOException {
     Schema fileOutputSchema;
     Map<String, String> renamedColumns;
     if (isLogFile) {
@@ -146,14 +199,6 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Pair<Schema, Map<String, String>> requiredSchemaForFileAndRenamedColumns = getSchemaHandler().getRequiredSchemaForFileAndRenamedColumns(filePath);
       fileOutputSchema = requiredSchemaForFileAndRenamedColumns.getLeft();
       renamedColumns = requiredSchemaForFileAndRenamedColumns.getRight();
-    }
-    if (reusableFileReaders.containsKey(filePath)) {
-      reader = reusableFileReaders.get(filePath);
-    } else {
-      HoodieFileFormat fileFormat = isMultiFormat && !isLogFile ? HoodieFileFormat.fromFileExtension(filePath.getFileExtension()) : baseFileFormat;
-      reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
-          .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
-              filePath, fileFormat, Option.empty());
     }
     if (keyFilterOpt.isEmpty()) {
       return reader.getIndexedRecordIterator(dataSchema, fileOutputSchema, renamedColumns);

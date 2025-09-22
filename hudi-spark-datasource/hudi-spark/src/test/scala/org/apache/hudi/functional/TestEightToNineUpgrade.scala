@@ -59,8 +59,8 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
       HoodieWriteConfig.WRITE_TABLE_VERSION.key -> "8",
       HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
     )
-    hudiOpts = hudiOpts ++ Map(HoodieTableConfig.PRECOMBINE_FIELD.key() -> hudiOpts(HoodieTableConfig.ORDERING_FIELDS.key())) - HoodieTableConfig.ORDERING_FIELDS.key()
-    val orderingValue = "timestamp"
+    val orderingValue = if (classOf[PostgresDebeziumAvroPayload].getName.equals(payloadClass)) "_event_lsn" else "timestamp"
+    hudiOpts = hudiOpts ++ Map(HoodieTableConfig.PRECOMBINE_FIELD.key() -> orderingValue) - HoodieTableConfig.ORDERING_FIELDS.key()
 
     // Create a table in table version 8.
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
@@ -132,15 +132,15 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
       HoodieMetadataConfig.ENABLE.key() -> "false"
     )
     val columns = Seq("ts", "key", "rider", "driver", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME,
-      DebeziumConstants.ADDED_SEQ_COL_NAME)
+      DebeziumConstants.ADDED_SEQ_COL_NAME, DebeziumConstants.FLATTENED_OP_COL_NAME)
 
     // 1. Add an insert.
     val data = Seq(
-      (10, "1", "rider-A", "driver-A", 1, 1, "1.1"),
-      (10, "2", "rider-B", "driver-B", 2, 5, "2.5"),
-      (10, "3", "rider-C", "driver-C", 3, 10, "3.10"),
-      (10, "4", "rider-D", "driver-D", 4, 8, "4.8"),
-      (10, "5", "rider-E", "driver-E", 5, 4, "5.4"))
+      (10, "1", "rider-A", "driver-A", 1, 1, "1.1", "i"),
+      (10, "2", "rider-B", "driver-B", 2, 5, "2.5", "i"),
+      (10, "3", "rider-C", "driver-C", 3, 10, "3.10", "i"),
+      (10, "4", "rider-D", "driver-D", 4, 8, "4.8", "i"),
+      (10, "5", "rider-E", "driver-E", 5, 4, "5.4", "i"))
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
     var orderingValue: String = DebeziumConstants.ADDED_SEQ_COL_NAME
     inserts.write.format("hudi").
@@ -160,10 +160,10 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
     // first two records with larger ordering values based on debezium payload
     // last two records with smaller ordering values based on debezium payload, below updates should be rejected
     var updateData = Seq(
-      (9, "1", "rider-X", "driver-X", 1, 2, "1.2"),
-      (9, "2", "rider-Y", "driver-Y", 3, 2, "3.2"),
-      (9, "3", "rider-C", "driver-C", 2, 10, "2.10"),
-      (9, "4", "rider-D", "driver-D", 4, 7, "4.7")
+      (9, "1", "rider-X", "driver-X", 1, 2, "1.2", "u"),
+      (9, "2", "rider-Y", "driver-Y", 3, 2, "3.2", "u"),
+      (9, "3", "rider-C", "driver-C", 2, 10, "2.10", "u"),
+      (9, "4", "rider-D", "driver-D", 4, 7, "4.7", "u")
     )
     var update = spark.createDataFrame(updateData).toDF(columns: _*)
     update.write.format("hudi").
@@ -185,10 +185,10 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
     // first two records with larger ordering values based on debezium payload
     // last two records with smaller ordering values based on debezium payload, below updates should be rejected
     updateData = Seq(
-      (8, "1", "rider-X", "driver-X", 1, 3, "1.3"),
-      (8, "2", "rider-Y", "driver-Y", 4, 2, "4.2"),
-      (8, "3", "rider-C", "driver-C", 2, 10, "2.10"),
-      (8, "4", "rider-D", "driver-D", 4, 7, "4.7")
+      (8, "1", "rider-X", "driver-X", 1, 3, "1.3", "u"),
+      (8, "2", "rider-Y", "driver-Y", 4, 2, "4.2", "u"),
+      (8, "3", "rider-C", "driver-C", 2, 10, "2.10", "u"),
+      (8, "4", "rider-D", "driver-D", 4, 7, "4.7", "u")
     )
     update = spark.createDataFrame(updateData).toDF(columns: _*)
     update.write.format("hudi").
@@ -203,12 +203,12 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
     tableName = "testUpgradeDowngradeMySqlDebeziumPayload"
     spark.sql(s"create table testUpgradeDowngradeMySqlDebeziumPayload using hudi location '$basePath'")
     checkAnswer(spark, s"select ts, key, rider, driver, ${DebeziumConstants.FLATTENED_FILE_COL_NAME}, ${DebeziumConstants.FLATTENED_POS_COL_NAME},"
-      + s" ${DebeziumConstants.ADDED_SEQ_COL_NAME} from default.$tableName")(
-      Seq(8, "1", "rider-X", "driver-X", 1, 3, "1.3"),
-      Seq(8, "2", "rider-Y", "driver-Y", 4, 2, "4.2"),
-      Seq(10, "3", "rider-C", "driver-C", 3, 10, "3.10"),
-      Seq(10, "4", "rider-D", "driver-D", 4, 8, "4.8"),
-      Seq(10, "5", "rider-E", "driver-E", 5, 4, "5.4")
+      + s" ${DebeziumConstants.ADDED_SEQ_COL_NAME}, ${DebeziumConstants.FLATTENED_OP_COL_NAME} from default.$tableName")(
+      Seq(8, "1", "rider-X", "driver-X", 1, 3, "1.3", "u"),
+      Seq(8, "2", "rider-Y", "driver-Y", 4, 2, "4.2", "u"),
+      Seq(10, "3", "rider-C", "driver-C", 3, 10, "3.10", "i"),
+      Seq(10, "4", "rider-D", "driver-D", 4, 8, "4.8", "i"),
+      Seq(10, "5", "rider-E", "driver-E", 5, 4, "5.4", "i")
     )
 
     spark.sql(s"drop table default.$tableName")

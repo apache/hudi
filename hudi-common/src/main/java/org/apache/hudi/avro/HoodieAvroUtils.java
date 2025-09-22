@@ -41,6 +41,7 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.LogicalTypes.Decimal;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
+import org.apache.avro.Schema.Field.Order;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericData.Record;
@@ -68,6 +69,7 @@ import java.math.BigInteger;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -321,7 +323,7 @@ public class HoodieAvroUtils {
 
     for (Schema.Field field : schema.getFields()) {
       if (!isMetadataField(field.name())) {
-        Schema.Field newField = new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal());
+        Schema.Field newField = createNewSchemaField(field);
         for (Map.Entry<String, Object> prop : field.getObjectProps().entrySet()) {
           newField.addProp(prop.getKey(), prop.getValue());
         }
@@ -329,6 +331,64 @@ public class HoodieAvroUtils {
       }
     }
     return createNewSchemaFromFieldsWithReference(schema, parentFields);
+  }
+
+  /**
+   * Creates a new Avro Schema.Field from an existing field, with special handling for
+   * default values to ensure compatibility with Avro 1.12.0 and later versions.
+   *
+   * @param field the original Schema.Field to create a new field from
+   * @return a new Schema.Field with the same properties but properly formatted default value
+   */
+  public static Schema.Field createNewSchemaField(Schema.Field field) {
+    return createNewSchemaField(field.name(), field.schema(), field.doc(), field.defaultVal());
+  }
+
+  /**
+   * Creates a new Avro Schema.Field with special handling for default values to ensure
+   * compatibility with Avro 1.12.0 and later versions.
+   *
+   * <p>In Avro 1.12.0+, the validation of default values for bytes fields is stricter.
+   * When the default value is a byte array, it needs to be converted to a String using
+   * ISO-8859-1 encoding so that the correct JsonNode type (TextNode) is used for validation,
+   * rather than BinaryNode which would fail validation. Changes in Avro 1.12.0 that
+   * lead to this behavior: [AVRO-3876] https://github.com/apache/avro/pull/2529
+   *
+   * <p>This conversion ensures that schemas with bytes fields having default values
+   * can be properly constructed without AvroTypeException in Avro 1.12.0+.
+   *
+   * @param name         the name of the field
+   * @param schema       the schema of the field
+   * @param doc          the documentation for the field (can be null)
+   * @param defaultValue the default value for the field (can be null)
+   * @return a new Schema.Field with properly formatted default value for Avro 1.12.0+ compatibility
+   */
+  public static Schema.Field createNewSchemaField(String name, Schema schema, String doc, Object defaultValue) {
+    return new Schema.Field(name, schema, doc, convertDefaultValueForAvroCompatibility(defaultValue));
+  }
+
+  /**
+   * Creates a new Avro Schema.Field with special handling for default values to ensure
+   * compatibility with Avro 1.12.0 and later versions.
+   *
+   * <p>In Avro 1.12.0+, the validation of default values for bytes fields is stricter.
+   * When the default value is a byte array, it needs to be converted to a String using
+   * ISO-8859-1 encoding so that the correct JsonNode type (TextNode) is used for validation,
+   * rather than BinaryNode which would fail validation. Changes in Avro 1.12.0 that
+   * lead to this behavior: [AVRO-3876] https://github.com/apache/avro/pull/2529
+   *
+   * <p>This conversion ensures that schemas with bytes fields having default values
+   * can be properly constructed without AvroTypeException in Avro 1.12.0+.
+   *
+   * @param name         the name of the field
+   * @param schema       the schema of the field
+   * @param doc          the documentation for the field (can be null)
+   * @param defaultValue the default value for the field (can be null)
+   * @param order        the sort order for this field (can be null, defaults to ascending)
+   * @return a new Schema.Field with properly formatted default value for Avro 1.12.0+ compatibility
+   */
+  public static Schema.Field createNewSchemaField(String name, Schema schema, String doc, Object defaultValue, Order order) {
+    return new Schema.Field(name, schema, doc, convertDefaultValueForAvroCompatibility(defaultValue), order);
   }
 
   public static boolean isSchemaNull(Schema schema) {
@@ -346,7 +406,7 @@ public class HoodieAvroUtils {
     List<Schema.Field> filteredFields = schema.getFields()
         .stream()
         .filter(field -> !fieldsToRemove.contains(field.name()))
-        .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
+        .map(HoodieAvroUtils::createNewSchemaField)
         .collect(Collectors.toList());
 
     return createNewSchemaFromFieldsWithReference(schema, filteredFields);
@@ -362,9 +422,9 @@ public class HoodieAvroUtils {
         .stream()
         .map(field -> {
           if (Objects.equals(field.name(), fieldName)) {
-            return new Schema.Field(field.name(), AvroSchemaUtils.resolveNullableSchema(field.schema()), field.doc(), fieldDefaultValue);
+            return createNewSchemaField(field.name(), AvroSchemaUtils.resolveNullableSchema(field.schema()), field.doc(), fieldDefaultValue);
           } else {
-            return new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal());
+            return createNewSchemaField(field);
           }
         })
         .collect(Collectors.toList());
@@ -496,7 +556,7 @@ public class HoodieAvroUtils {
         projectedFieldSchema = originalFieldSchema;
       }
 
-      projectedFields.add(new Schema.Field(originalField.name(), projectedFieldSchema, originalField.doc(), originalField.defaultVal()));
+      projectedFields.add(createNewSchemaField(originalField.name(), projectedFieldSchema, originalField.doc(), originalField.defaultVal()));
     }
 
     return projectedFields;
@@ -635,7 +695,7 @@ public class HoodieAvroUtils {
         throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
             + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
       } else {
-        projectedFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
+        projectedFields.add(createNewSchemaField(field));
       }
     }
 
@@ -1574,6 +1634,10 @@ public class HoodieAvroUtils {
     return StringUtils.compareVersions(AVRO_VERSION, "1.10") >= 0;
   }
 
+  static boolean gteqAvro1_12() {
+    return StringUtils.compareVersions(AVRO_VERSION, "1.12") >= 0;
+  }
+
   /**
    * Returns field name and the resp data type of the field. The data type will always refer to the leaf node.
    * for eg, for a.b.c, we turn Pair.of(a.b.c, DataType(c))
@@ -1637,5 +1701,17 @@ public class HoodieAvroUtils {
           .getType();
     }
     return schema.getType();
+  }
+
+  private static Object convertDefaultValueForAvroCompatibility(Object defaultValue) {
+    if (gteqAvro1_12() && defaultValue instanceof byte[]) {
+      // For Avro 1.12.0 compatibility, we need to convert the default value in byte array
+      // to String so that correct JsonNode is used for the default value for validation,
+      // instead of directly relying on Avro's JacksonUtils.toJsonNode which is called
+      // by `Schema.Field` constructor
+      // The logic of getting the String value is copied from JacksonUtils.toJsonNode in Avro 1.11.4
+      return new String((byte[]) defaultValue, StandardCharsets.ISO_8859_1);
+    }
+    return defaultValue;
   }
 }

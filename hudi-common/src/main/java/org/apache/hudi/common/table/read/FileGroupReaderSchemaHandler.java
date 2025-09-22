@@ -58,6 +58,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNested;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNewSchemaFromFieldsWithReference;
 import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForPreV9Table;
 
 /**
@@ -292,7 +293,7 @@ public class FileGroupReaderSchemaHandler<T> {
     //fields have positions set, so we need to remove them due to avro setFields implementation
     for (int i = 0; i < fields.size(); i++) {
       Schema.Field curr = fields.get(i);
-      fields.set(i, new Schema.Field(curr.name(), curr.schema(), curr.doc(), curr.defaultVal()));
+      fields.set(i, createNewSchemaField(curr));
     }
     return createNewSchemaFromFieldsWithReference(tableSchema, fields);
   }

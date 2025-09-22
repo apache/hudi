@@ -45,6 +45,7 @@ import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.util.CollectionUtils.reduce;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter.convert;
@@ -268,7 +269,7 @@ public class AvroSchemaUtils {
         return Option.empty();
       }
       Schema.Field nu = notUnion.get();
-      return Option.of(new Schema.Field(nu.name(), nu.schema(), nu.doc(), nu.defaultVal()));
+      return Option.of(createNewSchemaField(nu));
     }
     if (fieldParts.length <= index) {
       return Option.empty();
@@ -280,7 +281,7 @@ public class AvroSchemaUtils {
     }
 
     if (index == fieldParts.length - 1) {
-      return Option.of(new Schema.Field(foundField.name(), foundField.schema(), foundField.doc(), foundField.defaultVal()));
+      return Option.of(createNewSchemaField(foundField));
     }
 
     Schema foundSchema = foundField.schema();
@@ -294,7 +295,7 @@ public class AvroSchemaUtils {
       foundSchema = resolveNullableSchema(foundSchema);
     }
     Schema newSchema = createNewSchemaFromFieldsWithReference(foundSchema, Collections.singletonList(nestedPart.get()));
-    return Option.of(new Schema.Field(foundField.name(), isUnion ? createNullableSchema(newSchema) : newSchema, foundField.doc(), foundField.defaultVal()));
+    return Option.of(createNewSchemaField(foundField.name(), isUnion ? createNullableSchema(newSchema) : newSchema, foundField.doc(), foundField.defaultVal()));
   }
 
   /**
@@ -313,12 +314,12 @@ public class AvroSchemaUtils {
     List<Schema.Field> fields = new ArrayList<>();
     for (Schema.Field f : a.getFields()) {
       Schema.Field foundField = b.getField(f.name());
-      fields.add(new Schema.Field(f.name(), foundField == null ? f.schema() : mergeSchemas(f.schema(), foundField.schema()),
+      fields.add(createNewSchemaField(f.name(), foundField == null ? f.schema() : mergeSchemas(f.schema(), foundField.schema()),
           f.doc(), f.defaultVal()));
     }
     for (Schema.Field f : b.getFields()) {
       if (a.getField(f.name()) == null) {
-        fields.add(new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal()));
+        fields.add(createNewSchemaField(f));
       }
     }
     return createNewSchemaFromFieldsWithReference(a, fields);
@@ -336,13 +337,13 @@ public class AvroSchemaUtils {
 
   private static Schema appendFieldsToSchemaBase(Schema schema, List<Schema.Field> newFields, boolean dedupNested) {
     List<Schema.Field> fields = schema.getFields().stream()
-        .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
+        .map(HoodieAvroUtils::createNewSchemaField)
         .collect(Collectors.toList());
     if (dedupNested) {
       for (Schema.Field f : newFields) {
         Schema.Field foundField = schema.getField(f.name());
         if (foundField != null) {
-          fields.set(foundField.pos(), new Schema.Field(foundField.name(), mergeSchemas(foundField.schema(), f.schema()), foundField.doc(), foundField.defaultVal()));
+          fields.set(foundField.pos(), createNewSchemaField(foundField.name(), mergeSchemas(foundField.schema(), f.schema()), foundField.doc(), foundField.defaultVal()));
         } else {
           fields.add(f);
         }
@@ -429,16 +430,11 @@ public class AvroSchemaUtils {
         List<Schema.Field> newFields = new ArrayList<>();
         for (Schema.Field requiredSchemaField : requiredSchema.getFields()) {
           if (mandatoryFields.contains(requiredSchemaField.name())) {
-            newFields.add(new Schema.Field(
-                requiredSchemaField.name(),
-                requiredSchemaField.schema(),
-                requiredSchemaField.doc(),
-                requiredSchemaField.defaultVal()
-            ));
+            newFields.add(createNewSchemaField(requiredSchemaField));
           } else {
             Schema.Field dataSchemaField = dataSchema.getField(requiredSchemaField.name());
             if (dataSchemaField != null) {
-              Schema.Field newField = new Schema.Field(
+              Schema.Field newField = createNewSchemaField(
                   dataSchemaField.name(),
                   pruneDataSchema(dataSchemaField.schema(), requiredSchemaField.schema(), Collections.emptySet()),
                   dataSchemaField.doc(),

@@ -18,23 +18,26 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.client.utils.SparkRowSerDe
+import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping}
+import org.apache.hudi.client.model.HoodieInternalRow
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
-import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
+import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
-import org.apache.spark.sql.catalyst.parser.ParserInterface
-import org.apache.spark.sql.catalyst.planning.PhysicalOperation
+import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface}
 import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan}
+import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.util.DateFormatter
-import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
@@ -42,8 +45,9 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, StructType}
-import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.storage.StorageLevel
+import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.{Locale, TimeZone}
 
@@ -66,13 +70,7 @@ trait SparkAdapter extends Serializable {
   /**
    * Inject table-valued functions to SparkSessionExtensions
    */
-  def injectTableFunctions(extensions : SparkSessionExtensions): Unit = {}
-
-  /**
-   * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's
-   * [[TableCatalog]]s
-   */
-  def getCatalogUtils: HoodieCatalogUtils
+  def injectTableFunctions(extensions: SparkSessionExtensions): Unit = {}
 
   /**
    * Returns an instance of [[HoodieCatalystExpressionUtils]] providing for common utils operating
@@ -109,19 +107,9 @@ trait SparkAdapter extends Serializable {
   def getAvroSchemaConverters: HoodieAvroSchemaConverters
 
   /**
-   * Create the SparkRowSerDe.
-   */
-  def createSparkRowSerDe(schema: StructType): SparkRowSerDe
-
-  /**
    * Create the hoodie's extended spark sql parser.
    */
   def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface
-
-  /**
-   * Create the SparkParsePartitionUtil.
-   */
-  def getSparkParsePartitionUtil: SparkParsePartitionUtil
 
   /**
    * Gets the [[HoodieSparkPartitionedFileUtils]].
@@ -137,22 +125,13 @@ trait SparkAdapter extends Serializable {
    * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.
    */
   def getFilePartitions(sparkSession: SparkSession, partitionedFiles: Seq[PartitionedFile],
-      maxSplitBytes: Long): Seq[FilePartition]
+                        maxSplitBytes: Long): Seq[FilePartition]
 
   /**
    * Checks whether [[LogicalPlan]] refers to Hudi table, and if it's the case extracts
    * corresponding [[CatalogTable]]
    */
-  def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
-    EliminateSubqueryAliases(plan) match {
-      // First, we need to weed out unresolved plans
-      case plan if !plan.resolved => None
-      // NOTE: When resolving Hudi table we allow [[Filter]]s and [[Project]]s be applied
-      //       on top of it
-      case PhysicalOperation(_, _, LogicalRelation(_, _, Some(table), _)) if isHoodieTable(table) => Some(table)
-      case _ => None
-    }
-  }
+  def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable]
 
   def isHoodieTable(map: java.util.Map[String, String]): Boolean = {
     isHoodieTable(map.getOrDefault("provider", ""))
@@ -262,4 +241,124 @@ trait SparkAdapter extends Serializable {
   def isLegacyBehaviorPolicy(value: Object): Boolean
 
   def isTimestampNTZType(dataType: DataType): Boolean
+
+  /**
+   * Gets the [[UTF8String]] factory implementation for the current Spark version.
+   * [SPARK-46832] [[UTF8String]] doesn't support compareTo anymore since Spark 4.0
+   *
+   * @return [[HoodieUTF8StringFactory]] instance
+   */
+  def getUTF8StringFactory: HoodieUTF8StringFactory
+
+  /**
+   * Creates a [[HoodieInternalRow]] with meta fields.
+   *
+   * @param metaFields               Array of [[UTF8String]] meta fields to prepend
+   * @param sourceRow                The source [[InternalRow]] containing the data
+   * @param sourceContainsMetaFields Whether the source row already contains meta fields
+   * @return A new [[HoodieInternalRow]] with appropriate meta fields handling
+   */
+  def createInternalRow(metaFields: Array[UTF8String],
+                        sourceRow: InternalRow,
+                        sourceContainsMetaFields: Boolean): HoodieInternalRow
+
+  /**
+   * Creates a partition-to-CDC file group mapping for CDC operations.
+   *
+   * @param partitionValues [[InternalRow]] containing the partition values
+   * @param fileSplits      List of CDC file splits for this partition
+   * @return [[HoodiePartitionCDCFileGroupMapping]] instance
+   */
+  def createPartitionCDCFileGroupMapping(partitionValues: InternalRow,
+                                         fileSplits: List[HoodieCDCFileSplit]): HoodiePartitionCDCFileGroupMapping
+
+  /**
+   * Creates a partition-to-file slice mapping for file operations.
+   *
+   * @param values [[InternalRow]] containing the partition values
+   * @param slices Map of file IDs to FileSlice instances
+   * @return [[HoodiePartitionFileSliceMapping]] instance
+   */
+  def createPartitionFileSliceMapping(values: InternalRow,
+                                      slices: Map[String, FileSlice]): HoodiePartitionFileSliceMapping
+
+  /**
+   * Creates a [[ParseException]] with proper location information.
+   *
+   * @param command   Optional command string that caused the exception
+   * @param exception The underlying AnalysisException
+   * @param start     Start position in the input where the error occurred
+   * @param stop      End position in the input where the error occurred
+   * @return A new [[ParseException]] with location details
+   */
+  def newParseException(command: Option[String],
+                        exception: AnalysisException,
+                        start: Origin,
+                        stop: Origin): ParseException
+
+  /**
+   * Splits files in a partition directory based on size constraints.
+   *
+   * @param sparkSession       The active Spark session
+   * @param partitionDirectory The partition directory containing files to split
+   * @param isSplitable        Whether the files can be split
+   * @param maxSplitSize       Maximum size for each split in bytes
+   * @return Sequence of [[PartitionedFile]] instances after splitting
+   */
+  def splitFiles(sparkSession: SparkSession,
+                 partitionDirectory: PartitionDirectory,
+                 isSplitable: Boolean,
+                 maxSplitSize: Long): Seq[PartitionedFile]
+
+  /**
+   * Creates a [[Column]] from a Catalyst [[Expression]].
+   *
+   * @param expression The Catalyst [[Expression]] to convert
+   * @return A Spark SQL [[Column]] wrapping the expression
+   */
+  def createColumnFromExpression(expression: Expression): Column
+
+  /**
+   * Extracts the underlying [[Expression]] from a [[Column]].
+   *
+   * @param column The Spark SQL [[Column]]
+   * @return The underlying Catalyst [[Expression]]
+   */
+  def getExpressionFromColumn(column: Column): Expression
+
+  /**
+   * Gets the unsafe utilities for low-level memory operations.
+   *
+   * @return [[HoodieUnsafeUtils]] instance
+   */
+  def getUnsafeUtils: HoodieUnsafeUtils
+
+  /**
+   * Gets the DataFrame utility helper for the current Spark version.
+   * Since Spark 4.0 [[org.apache.spark.sql.classic.Dataset]] has to be used.
+   *
+   * @return [[DataFrameUtil]] instance
+   */
+  def getDataFrameUtil: DataFrameUtil
+
+  /**
+   * Creates a [[DataFrame]] from an RDD of [[InternalRow]]s.
+   *
+   * @param spark       The active Spark session
+   * @param rdd         RDD containing InternalRow instances
+   * @param schema      The schema for the [[DataFrame]]
+   * @param isStreaming Whether this is a streaming DataFrame
+   * @return A new [[DataFrame]] with the specified schema
+   */
+  def internalCreateDataFrame(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType, isStreaming: Boolean = false): DataFrame
+
+  /**
+   * Creates a streaming [[DataFrame]] from a [[HadoopFsRelation.]]
+   *
+   * @param sqlContext     The SQL context
+   * @param relation       The [[HadoopFsRelation]] to stream from
+   * @param requiredSchema The required schema for the streaming DataFrame
+   * @return A streaming [[DataFrame]]
+   */
+  def createStreamingDataFrame(sqlContext: SQLContext, relation: HadoopFsRelation, requiredSchema: StructType): DataFrame
 }

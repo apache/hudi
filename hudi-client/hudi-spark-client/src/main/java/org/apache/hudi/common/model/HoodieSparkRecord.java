@@ -361,6 +361,10 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
             HoodieInternalRowUtils.getCachedPosList(structType, field);
         if (cachedNestedFieldPath.isDefined()) {
           NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
+          if (nestedFieldPath.parts()[0]._2.dataType() instanceof org.apache.spark.sql.types.StringType) {
+            return SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory()
+                .wrapUTF8String((UTF8String) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath));
+          }
           return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
         }
         return OrderingValues.getDefault();
@@ -433,7 +437,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
     boolean containsMetaFields = hasMetaFields(structType);
     UTF8String[] metaFields = extractMetaFields(data, structType);
-    return new HoodieInternalRow(metaFields, data, containsMetaFields);
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(metaFields, data, containsMetaFields);
   }
 
   private static UTF8String[] extractMetaFields(InternalRow row, StructType structType) {

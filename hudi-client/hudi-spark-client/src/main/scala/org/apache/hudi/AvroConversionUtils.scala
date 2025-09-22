@@ -18,8 +18,9 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.HoodieSparkUtils.sparkAdapter
+import org.apache.hudi.HoodieSparkUtils.{getCatalystRowSerDe, sparkAdapter}
 import org.apache.hudi.avro.AvroSchemaUtils
+import org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.internal.schema.HoodieSchemaException
 
@@ -85,7 +86,7 @@ object AvroConversionUtils {
   @Deprecated
   def createConverterToRow(sourceAvroSchema: Schema,
                            targetSqlType: StructType): GenericRecord => Row = {
-    val serde = sparkAdapter.createSparkRowSerDe(targetSqlType)
+    val serde = getCatalystRowSerDe(targetSqlType)
     val converter = AvroConversionUtils.createAvroToInternalRowConverter(sourceAvroSchema, targetSqlType)
 
     avro => converter.apply(avro).map(serde.deserializeRow).get
@@ -98,7 +99,7 @@ object AvroConversionUtils {
   def createConverterToAvro(sourceSqlType: StructType,
                             structName: String,
                             recordNamespace: String): Row => GenericRecord = {
-    val serde = sparkAdapter.createSparkRowSerDe(sourceSqlType)
+    val serde = getCatalystRowSerDe(sourceSqlType)
     val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(sourceSqlType, structName, recordNamespace)
     val nullable = AvroSchemaUtils.resolveNullableSchema(avroSchema) != avroSchema
 
@@ -204,12 +205,8 @@ object AvroConversionUtils {
             case Schema.Type.UNION => resolveUnion(field.schema(), structFields(i).dataType)
             case _ => (getAvroSchemaWithDefaults(field.schema(), structFields(i).dataType), false)
           }
-          new Schema.Field(field.name(), newSchema, comment,
-            if (containsNullSchema) {
-              JsonProperties.NULL_VALUE
-            } else {
-              field.defaultVal()
-            })
+          createNewSchemaField(field.name(), newSchema, comment,
+            if (containsNullSchema) JsonProperties.NULL_VALUE else field.defaultVal())
         }).asJava
         Schema.createRecord(schema.getName, schema.getDoc, schema.getNamespace, schema.isError, modifiedFields)
       }

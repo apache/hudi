@@ -17,6 +17,7 @@
  * under the License.
  */
 package org.apache.hudi.functional
+import org.apache.hudi.HoodieSparkUtils.gteqSpark4_0
 import org.apache.hudi.exception.HoodieMetadataIndexException
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -158,11 +159,11 @@ class TestSecondaryIndexDataTypes extends HoodieSparkSqlTestBase {
       // Filter based on values of string, long, double, int. Spark will take care of the type cast.
       val supportedColumns = Seq(
         ("col_string", Seq(("'string3'", 3))),
-        ("col_int", Seq(("'300'", 3), ("200L", 2), (100, 1), (100.00, 1), ("'100.00'", 1))),
-        ("col_bigint", Seq(("'3000'", 3), ("2000L", 2), (1000, 1), (1000.00, 1), ("'1000.00'", 1))),
-        ("col_long", Seq(("'3000'", 3), ("2000L", 2), (1000, 1), (1000.00, 1), ("'1000.00'", 1))),
-        ("col_smallint", Seq(("'30'", 3), ("20L", 2), (10, 1), (10.00, 1), ("'10.00'", 1))),
-        ("col_tinyint", Seq(("'3'", 3), ("2L", 2), (1, 1), (1.0, 1), ("'1.00'", 1))),
+        ("col_int", Seq(("'300'", 3), ("200L", 2), (100, 1), (100.00, 1), (if (gteqSpark4_0) "100.00" else "'100.00'", 1))),
+        ("col_bigint", Seq(("'3000'", 3), ("2000L", 2), (1000, 1), (1000.00, 1), (if (gteqSpark4_0) "1000.00" else "'1000.00'", 1))),
+        ("col_long", Seq(("'3000'", 3), ("2000L", 2), (1000, 1), (1000.00, 1), (if (gteqSpark4_0) "1000.00" else "'1000.00'", 1))),
+        ("col_smallint", Seq(("'30'", 3), ("20L", 2), (10, 1), (10.00, 1), (if (gteqSpark4_0) "10.00" else "'10.00'", 1))),
+        ("col_tinyint", Seq(("'3'", 3), ("2L", 2), (1, 1), (1.0, 1), (if (gteqSpark4_0) "1.00" else "'1.00'", 1))),
         ("col_timestamp", Seq(("cast('2023-01-03 10:00:00' as timestamp)", 3))),
         ("col_date", Seq(("cast('2023-01-03' as date)", 3))),
         ("col_double", Seq(("'1'", 1), ("1L", 1), (2.222220, 2), ("'3.3300'", 3)))

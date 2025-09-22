@@ -19,7 +19,6 @@
 
 package org.apache.hudi;
 
-import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -156,6 +155,20 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
       // Spark reads String field values as UTF8String.
       // To foster value comparison, if the value is of String type, e.g., from
       // the delete record, we convert it to UTF8String type.
+      // [SPARK-46832] UTF8String doesn't support compareTo anymore
+      return SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory().wrapUTF8String(UTF8String.fromString((String) value));
+    } else if (value instanceof UTF8String) {
+      return SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory().wrapUTF8String((UTF8String) value);
+    }
+    return value;
+  }
+
+  @Override
+  public Comparable convertPartitionValueToEngineType(Comparable value) {
+    if (value instanceof String) {
+      // Spark reads String field values as UTF8String.
+      // To foster value comparison, if the value is of String type, e.g., from
+      // the delete record, we convert it to UTF8String type.
       return UTF8String.fromString((String) value);
     }
     return value;
@@ -163,7 +176,14 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
 
   @Override
   public InternalRow getDeleteRow(String recordKey) {
-    return new HoodieInternalRow(null, null, UTF8String.fromString(recordKey), UTF8String.fromString(partitionPath), null, null, false);
+    UTF8String[] metaFields = new UTF8String[]{
+        null,
+        null,
+        UTF8String.fromString(recordKey),
+        UTF8String.fromString(partitionPath),
+        null
+    };
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(metaFields, null, false);
   }
 
   @Override
