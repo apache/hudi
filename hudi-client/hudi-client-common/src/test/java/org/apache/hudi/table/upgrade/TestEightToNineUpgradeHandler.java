@@ -46,7 +46,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -304,7 +303,7 @@ class TestEightToNineUpgradeHandler {
     }
   }
 
-  @Disabled
+  @Test
   void testUpgradeWithMissingIndexVersion() throws IOException {
     try (MockedStatic<UpgradeDowngradeUtils> mockedUtils = mockStatic(UpgradeDowngradeUtils.class);
          MockedStatic<HoodieTableMetaClient> mockedMetaClient = mockStatic(HoodieTableMetaClient.class)) {
@@ -403,7 +402,7 @@ class TestEightToNineUpgradeHandler {
     }
   }
 
-  @Disabled
+  @Test
   void testUpgradeWithIndexMetadataHavingVersions() {
     try (MockedStatic<UpgradeDowngradeUtils> mockedUtils = mockStatic(UpgradeDowngradeUtils.class)) {
       // Mock the static method to do nothing - avoid NPE
@@ -431,7 +430,7 @@ class TestEightToNineUpgradeHandler {
     }
   }
 
-  @Disabled
+  @Test
   void testUpgradeWithEmptyIndexMetadata() {
     try (MockedStatic<UpgradeDowngradeUtils> mockedUtils = mockStatic(UpgradeDowngradeUtils.class)) {
       // Mock the static method to do nothing - avoid NPE
@@ -456,7 +455,7 @@ class TestEightToNineUpgradeHandler {
     }
   }
 
-  @Disabled
+  @Test
   void testUpgradeWithFileAlreadyExists() throws IOException {
     try (MockedStatic<UpgradeDowngradeUtils> mockedUtils = mockStatic(UpgradeDowngradeUtils.class);
          MockedStatic<HoodieTableMetaClient> mockedMetaClient = mockStatic(HoodieTableMetaClient.class)) {
