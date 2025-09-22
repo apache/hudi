@@ -44,6 +44,7 @@ import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.Type;
 import org.apache.parquet.schema.Types;
+import org.apache.spark.sql.HoodieUTF8StringFactory;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.SpecializedGetters;
 import org.apache.spark.sql.catalyst.util.ArrayData;
@@ -368,8 +369,17 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   }
 
   private static class HoodieBloomFilterRowWriteSupport extends HoodieBloomFilterWriteSupport<UTF8String> {
+
+    private static final HoodieUTF8StringFactory UTF8STRING_FACTORY =
+        SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory();
+
     public HoodieBloomFilterRowWriteSupport(BloomFilter bloomFilter) {
       super(bloomFilter);
+    }
+
+    @Override
+    protected int compareRecordKey(UTF8String a, UTF8String b) {
+      return UTF8STRING_FACTORY.wrapUTF8String(a).compareTo(UTF8STRING_FACTORY.wrapUTF8String(b));
     }
 
     @Override

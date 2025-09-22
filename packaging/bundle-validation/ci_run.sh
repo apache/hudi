@@ -119,6 +119,16 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.13' ]];
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
   IMAGE_TAG=flink1200hive313spark351scala213
+elif [[ ${SPARK_RUNTIME} == 'spark4.0.0' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
+  HADOOP_VERSION=3.4.0
+  HIVE_VERSION=3.1.3
+  DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.20.1
+  SPARK_VERSION=4.0.0
+  SPARK_HADOOP_VERSION=3
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1200hive313spark400scala213
 fi
 
 # Copy bundle jars to temp dir for mounting
@@ -164,6 +174,11 @@ else
   elif [[ ${SPARK_PROFILE} == 'spark3.5' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
     HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.13
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3.5-bundle_2.13
+    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.13
+    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.13
+  elif [[ ${SPARK_PROFILE} == 'spark4.0' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
+    HUDI_CLI_BUNDLE_NAME=hudi-cli-bundle_2.13
+    HUDI_SPARK_BUNDLE_NAME=hudi-spark4.0-bundle_2.13
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.13
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.13
   elif [[ ${SPARK_PROFILE} == 'spark3' ]]; then
@@ -226,4 +241,4 @@ docker run --name $CONTAINER_NAME \
   -v ${GITHUB_WORKSPACE}:/opt/bundle-validation/docker-test \
   -v $TMP_JARS_DIR:/opt/bundle-validation/jars \
   -v $TMP_DATA_DIR:/opt/bundle-validation/data \
-  -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh $JAVA_RUNTIME_VERSION $SCALA_PROFILE
+  -i hudi-ci-bundle-validation:$IMAGE_TAG bash validate.sh $JAVA_RUNTIME_VERSION $SCALA_PROFILE $SPARK_VERSION

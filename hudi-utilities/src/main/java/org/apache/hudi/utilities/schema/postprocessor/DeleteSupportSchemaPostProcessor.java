@@ -30,6 +30,8 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
+
 /**
  * An implementation of {@link SchemaPostProcessor} which will add a column named "_hoodie_is_deleted" to the end of
  * a given schema.
@@ -54,7 +56,7 @@ public class DeleteSupportSchemaPostProcessor extends SchemaPostProcessor {
     List<Schema.Field> targetFields = new ArrayList<>(sourceFields.size() + 1);
     // copy existing columns
     for (Schema.Field sourceField : sourceFields) {
-      targetFields.add(new Schema.Field(sourceField.name(), sourceField.schema(), sourceField.doc(), sourceField.defaultVal()));
+      targetFields.add(createNewSchemaField(sourceField));
     }
     // add _hoodie_is_deleted column
     targetFields.add(new Schema.Field(HoodieRecord.HOODIE_IS_DELETED_FIELD, Schema.create(Schema.Type.BOOLEAN), null, false));

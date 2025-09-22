@@ -84,7 +84,7 @@ trait ProvidesHoodieConfig extends Logging {
     )
 
     val overridingOpts = buildOverridingOpts(hoodieCatalogTable, orderingFields)
-    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
 
@@ -105,7 +105,7 @@ trait ProvidesHoodieConfig extends Logging {
     )
 
     val overridingOpts = buildOverridingOpts(hoodieCatalogTable, orderingFields)
-    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
 
@@ -182,7 +182,7 @@ trait ProvidesHoodieConfig extends Logging {
     val tableType = hoodieCatalogTable.tableTypeName
     val tableConfig = hoodieCatalogTable.tableConfig
 
-    val combinedOpts: Map[String, String] = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    val combinedOpts: Map[String, String] = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = Map.empty, overridingOpts = extraOptions)
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig, extraOptions)
 
@@ -306,7 +306,7 @@ trait ProvidesHoodieConfig extends Logging {
         keyGeneratorClassName, partitionFieldsStr, hoodieCatalogTable)
     ) ++ overwriteTableOpts ++ getDropDupsConfig(useLegacyInsertModeFlow, combinedOpts) ++ staticOverwritePartitionPathOptions
 
-    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
 
@@ -343,7 +343,7 @@ trait ProvidesHoodieConfig extends Logging {
     val overridingOpts = extraOptions ++ Map(
       "path" -> catalogTable.tableLocation
     )
-    val combinedOpts: Map[String, String] = combineOptions(catalogTable, catalogTable.tableConfig, sparkSession.sqlContext.conf,
+    val combinedOpts: Map[String, String] = combineOptions(catalogTable, catalogTable.tableConfig, sparkSession.sessionState.conf,
       defaultOpts = Map.empty, overridingOpts = overridingOpts)
     val operation = combinedOpts.getOrElse(OPERATION.key, null)
     val isOverwriteOperation = operation != null &&
@@ -410,7 +410,7 @@ trait ProvidesHoodieConfig extends Logging {
       HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
     )
 
-    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = Map.empty, overridingOpts = overridingOpts)
   }
 
@@ -438,7 +438,7 @@ trait ProvidesHoodieConfig extends Logging {
     )
 
     val overridingOpts = buildOverridingOptsForDelete(hoodieCatalogTable)
-    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
 
@@ -446,7 +446,7 @@ trait ProvidesHoodieConfig extends Logging {
                           hoodieCatalogTable: HoodieCatalogTable,
                           tableConfig: HoodieTableConfig,
                           extraOptions: Map[String, String] = Map.empty): HiveSyncConfig = {
-    val combinedOpts = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    val combinedOpts = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = Map.empty, overridingOpts = extraOptions)
     val props = toProperties(combinedOpts)
 

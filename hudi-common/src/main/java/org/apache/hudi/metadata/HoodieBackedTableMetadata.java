@@ -83,6 +83,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -179,11 +180,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  protected Option<HoodieRecord<HoodieMetadataPayload>> readFilesIndexRecords(String key, String partitionName) {
-    HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> recordsData = readIndexRecordsWithKeys(
+  protected Option<HoodieMetadataPayload> readFilesIndexRecords(String key, String partitionName) {
+    HoodiePairData<String, HoodieMetadataPayload> recordsData = readIndexRecordsWithKeys(
         HoodieListData.eager(Collections.singletonList(new FilesIndexRawKey(key))), partitionName);
     try {
-      List<HoodieRecord<HoodieMetadataPayload>> records = recordsData.values().collectAsList();
+      List<HoodieMetadataPayload> records = recordsData.values().collectAsList();
       ValidationUtils.checkArgument(records.size() <= 1, () -> "Found more than 1 record for record key " + key);
       return records.isEmpty() ? Option.empty() : Option.ofNullable(records.get(0));
     } finally {
@@ -258,10 +259,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .filter(r -> !r.getData().isDeleted());
   }
 
-  private static List<String> getDistinctSortedKeysForSingleSlice(HoodieData<String> keys) {
+  private static TreeSet<String> getDistinctSortedKeysForSingleSlice(HoodieData<String> keys) {
     List<String> keysList = keys.collectAsList();
-    TreeSet<String> distinctSortedKeys = new TreeSet<>(keysList);
-    return new ArrayList<>(distinctSortedKeys);
+    return new TreeSet<>(keysList);
   }
 
   /**
@@ -280,8 +280,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           .filter(fileSlice -> HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName(fileSlice.getFileId()).equals(dataTablePartition.get()))
           .collect(Collectors.toList());
       // all keys will be from the same shard index so just calculate the first key and reduce partitionFileSlices to 1
-      List<String> distinctSortedKeys = getDistinctSortedKeysForSingleSlice(keys);
-      int fileGroupIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(distinctSortedKeys.get(0), fileSlicesForDataPartition.size());
+      TreeSet<String> distinctSortedKeys = getDistinctSortedKeysForSingleSlice(keys);
+      int fileGroupIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(distinctSortedKeys.stream().findFirst().get(), fileSlicesForDataPartition.size());
       return readSliceAndFilterByKeysIntoList(partitionName, distinctSortedKeys, fileSlicesForDataPartition.get(fileGroupIndex), false);
     } else if (partitionName.equals(RECORD_INDEX.getPartitionPath()) && !fileSlices.isEmpty() && HoodieTableMetadataUtil.verifyRLIFile(fileSlices.get(0).getFileId(), true)) {
       if (keys.isEmpty()) {
@@ -351,7 +351,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       // TODO [HUDI-9544]: Metric does not work for rdd based API due to lazy evaluation.
       HoodieData<RecordIndexRawKey> rawKeys = recordKeys.map(RecordIndexRawKey::new);
       return readIndexRecordsWithKeys(rawKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), dataTablePartition)
-          .mapToPair((Pair<String, HoodieRecord<HoodieMetadataPayload>> p) -> Pair.of(p.getLeft(), p.getRight().getData().getRecordGlobalLocation()));
+          .mapToPair((Pair<String, HoodieMetadataPayload> p) -> Pair.of(p.getLeft(), p.getRight().getRecordGlobalLocation()));
     });
   }
 
@@ -374,7 +374,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return dataCleanupManager.ensureDataCleanupOnException(v -> {
       HoodieData<RecordIndexRawKey> rawKeys = recordKeys.map(RecordIndexRawKey::new);
       return readIndexRecords(rawKeys, RECORD_INDEX.getPartitionPath(), Option.empty())
-            .map(r -> r.getData().getRecordGlobalLocation());
+          .map(r -> r.getData().getRecordGlobalLocation());
     });
   }
 
@@ -423,23 +423,23 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  public HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> readIndexRecordsWithKeys(
+  public HoodiePairData<String, HoodieMetadataPayload> readIndexRecordsWithKeys(
       HoodieData<? extends RawKey> rawKeys, String partitionName) {
     return readIndexRecordsWithKeys(rawKeys, partitionName, Option.empty());
   }
 
   @Override
-  public HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> readIndexRecordsWithKeys(
+  public HoodiePairData<String, HoodieMetadataPayload> readIndexRecordsWithKeys(
       HoodieData<? extends RawKey> rawKeys, String partitionName, Option<String> dataTablePartition) {
     return readIndexRecords(rawKeys, partitionName, dataTablePartition)
-        .mapToPair(record -> Pair.of(record.getRecordKey(), record));
+        .mapToPair(record -> Pair.of(record.getRecordKey(), record.getData()));
   }
 
   public HoodieData<String> readSecondaryIndexDataTableRecordKeysV2(HoodieData<String> secondaryKeys, String partitionName) {
     return dataCleanupManager.ensureDataCleanupOnException(v -> {
       HoodieData<SecondaryIndexPrefixRawKey> rawKeys = secondaryKeys.map(SecondaryIndexPrefixRawKey::new);
-      return readIndexRecords(rawKeys, partitionName, Option.empty())
-            .map(hoodieRecord -> SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(hoodieRecord.getRecordKey()));
+      return readIndexRecordsWithKeys(rawKeys, partitionName, Option.empty())
+            .map(hoodieRecord -> SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(hoodieRecord.getLeft()));
     });
   }
 
@@ -576,7 +576,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   private HoodieData<HoodieRecord<HoodieMetadataPayload>> readSliceAndFilterByKeysIntoList(String partitionName,
-                                                                                           List<String> sortedKeys,
+                                                                                           Collection<String> sortedKeys,
                                                                                            FileSlice fileSlice,
                                                                                            boolean isFullKey) {
     List<HoodieRecord<HoodieMetadataPayload>> res = new ArrayList<>();
@@ -601,7 +601,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   private ClosableIterator<HoodieRecord<HoodieMetadataPayload>> lookupRecordsItr(String partitionName,
-                                                                                 List<String> keys,
+                                                                                 Collection<String> keys,
                                                                                  FileSlice fileSlice,
                                                                                  boolean isFullKey) {
     return new CloseableFilterIterator<>(
@@ -617,7 +617,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @param isFullKey If true, perform exact key match. If false, perform prefix match.
    */
   private <T> ClosableIterator<T> readSliceAndFilterByKeysIntoList(String partitionName,
-                                                                   List<String> sortedKeys,
+                                                                   Collection<String> sortedKeys,
                                                                    FileSlice fileSlice,
                                                                    SerializableFunctionUnchecked<GenericRecord, T> transformer,
                                                                    boolean isFullKey) {
@@ -651,7 +651,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @param isFullKey Whether to perform exact key matching (ignored for secondary index partitions)
    * @return A predicate for filtering records
    */
-  static Predicate buildPredicate(String partitionName, List<String> sortedKeys, boolean isFullKey) {
+  static Predicate buildPredicate(String partitionName, Collection<String> sortedKeys, boolean isFullKey) {
     if (isFullKey) {
       ValidationUtils.checkArgument(
           !MetadataPartitionType.fromPartitionPath(partitionName).equals(MetadataPartitionType.SECONDARY_INDEX),

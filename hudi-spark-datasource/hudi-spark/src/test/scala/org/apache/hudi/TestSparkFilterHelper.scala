@@ -37,7 +37,7 @@ class TestSparkFilterHelper extends HoodieSparkClientTestHarness with SparkAdapt
   @Test
   def testConvertInExpression(): Unit = {
     val filterExpr = sparkAdapter.translateFilter(
-      expr("col1 IN (1, 2, 3)").expr.transformUp {
+      sparkAdapter.getExpressionFromColumn(expr("col1 IN (1, 2, 3)")).transformUp {
         case UnresolvedAttribute(nameParts) => AttributeReference(nameParts.mkString("."), IntegerType)()
       })
 

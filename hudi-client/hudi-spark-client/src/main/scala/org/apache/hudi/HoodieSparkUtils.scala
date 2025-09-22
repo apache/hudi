@@ -39,7 +39,7 @@ import org.apache.spark.sql.catalyst.util.DateTimeUtils.getTimeZone
 import org.apache.spark.sql.execution.SQLConfInjectingRDD
 import org.apache.spark.sql.execution.datasources.SparkParsePartitionUtil
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{DateType, StringType, StructField, StructType, TimestampType}
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, HoodieUnsafeUtils}
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -277,22 +277,12 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
           } else {
             partitionPath
           }
-          val partitionSchema = buildPartitionSchemaForNestedFields(schema, partitionColumns)
-          val typedValue = if (partitionSchema.fields.nonEmpty) {
-            castStringToType(partitionValue, partitionSchema.fields.head.dataType)
-          } else {
-            UTF8String.fromString(partitionValue)
-          }
-          Array(typedValue.asInstanceOf[Object])
+          Array(UTF8String.fromString(partitionValue))
         } else {
           val prefix = s"${partitionColumns.head}="
           if (partitionPath.startsWith(prefix)) {
-            val partitionValues = splitHiveSlashPartitions(partitionFragments, partitionColumns.length)
-            val partitionSchema = buildPartitionSchemaForNestedFields(schema, partitionColumns)
-            val typedValues = partitionValues.zip(partitionSchema.fields).map { case (stringValue, field) =>
-              castStringToType(stringValue, field.dataType)
-            }
-            typedValues.map(_.asInstanceOf[Object])
+            return splitHiveSlashPartitions(partitionFragments, partitionColumns.length).
+              map(p => UTF8String.fromString(p)).toArray
           } else {
             // If the partition column size is not equal to the partition fragments size
             // and the partition column size > 1, we do not know how to map the partition
@@ -321,7 +311,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
         }.mkString(StoragePath.SEPARATOR)
 
         val pathWithPartitionName = new StoragePath(basePath, partitionWithName)
-        val partitionSchema = buildPartitionSchemaForNestedFields(schema, partitionColumns)
+        val partitionSchema = StructType(schema.fields.filter(f => partitionColumns.contains(f.name)))
         val partitionValues = parsePartitionPath(pathWithPartitionName, partitionSchema, timeZoneId,
           sparkParsePartitionUtil, basePath, shouldValidatePartitionCols)
         partitionValues.map(_.asInstanceOf[Object]).toArray
@@ -341,71 +331,6 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       getTimeZone(timeZoneId),
       validatePartitionValues = shouldValidatePartitionCols
     ).toSeq(partitionSchema)
-  }
-
-  private def buildPartitionSchemaForNestedFields(schema: StructType, partitionColumns: Array[String]): StructType = {
-    val partitionFields = partitionColumns.flatMap { partitionCol =>
-      extractNestedField(schema, partitionCol)
-    }
-    StructType(partitionFields)
-  }
-
-  private def extractNestedField(schema: StructType, fieldPath: String): Option[StructField] = {
-    val pathParts = fieldPath.split("\\.")
-
-    def traverseSchema(currentSchema: StructType, remainingPath: List[String], originalFieldName: String): Option[StructField] = {
-      remainingPath match {
-        case Nil => None
-        case head :: Nil =>
-          currentSchema.fields.find(_.name == head).map { field =>
-            StructField(originalFieldName, field.dataType, field.nullable, field.metadata)
-          }
-        case head :: tail =>
-          currentSchema.fields.find(_.name == head) match {
-            case Some(StructField(_, structType: StructType, _, _)) =>
-              traverseSchema(structType, tail, originalFieldName)
-            case _ => None
-          }
-      }
-    }
-    traverseSchema(schema, pathParts.toList, fieldPath)
-  }
-
-  private def castStringToType(value: String, dataType: org.apache.spark.sql.types.DataType): Any = {
-    import org.apache.spark.sql.types._
-
-    // handling cases where the value contains path separators or is complex
-    if (value.contains("/") || value.contains("=")) {
-      // For complex paths, falling back to string representation
-      logWarning(s"Cannot convert complex partition path '$value' to $dataType, keeping as string")
-      return UTF8String.fromString(value)
-    }
-
-    try {
-      dataType match {
-        case LongType => value.toLong
-        case IntegerType => value.toInt
-        case ShortType => value.toShort
-        case ByteType => value.toByte
-        case FloatType => value.toFloat
-        case DoubleType => value.toDouble
-        case BooleanType => value.toBoolean
-        case _: DecimalType => new java.math.BigDecimal(value)
-        case StringType => UTF8String.fromString(value)
-        case _: TimestampType =>
-          UTF8String.fromString(value)
-        case _: DateType =>
-          UTF8String.fromString(value)
-        case _ => UTF8String.fromString(value)
-      }
-    } catch {
-      case _: NumberFormatException =>
-        logWarning(s"Failed to convert '$value' to $dataType, keeping as string")
-        UTF8String.fromString(value)
-      case _: Exception =>
-        logWarning(s"Error converting '$value' to $dataType, keeping as string")
-        UTF8String.fromString(value)
-    }
   }
 
   def splitHiveSlashPartitions(partitionFragments: Array[String], nPartitions: Int): Array[String] = {

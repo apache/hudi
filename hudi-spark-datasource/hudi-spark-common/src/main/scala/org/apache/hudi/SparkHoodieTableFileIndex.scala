@@ -113,8 +113,6 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
   protected lazy val shouldFastBootstrap = configProperties.getBoolean(DATA_QUERIES_ONLY.key, false)
 
-  private lazy val sparkParsePartitionUtil = sparkAdapter.getSparkParsePartitionUtil
-
   /**
    * Get the partition schema from the hoodie.properties.
    */
@@ -417,7 +415,6 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       schema,
       metaClient.getTableConfig.propsMap,
       configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
-      sparkParsePartitionUtil,
       shouldValidatePartitionColumns(spark))
   }
 

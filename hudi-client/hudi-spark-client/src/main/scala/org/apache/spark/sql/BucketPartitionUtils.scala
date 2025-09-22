@@ -18,6 +18,7 @@
 
 package org.apache.spark.sql
 
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig
 import org.apache.hudi.common.util.{Functions, RemotePartitionHelper}
@@ -28,7 +29,7 @@ import org.apache.hudi.index.bucket.partition.NumBucketsFunction
 import org.apache.spark.Partitioner
 import org.apache.spark.sql.catalyst.InternalRow
 
-object BucketPartitionUtils {
+object BucketPartitionUtils extends SparkAdapterSupport {
   def createDataFrame(df: DataFrame, indexKeyFields: String, numBucketsFunction: NumBucketsFunction, partitioner: Partitioner): DataFrame = {
     def getPartitionKeyExtractor(): InternalRow => (String, Int) = row => {
       val partition = row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD)
@@ -48,7 +49,7 @@ object BucketPartitionUtils {
       .keyBy(row => getPartitionKey(row))
       .repartitionAndSortWithinPartitions(partitioner)
       .values
-    df.sparkSession.internalCreateDataFrame(reRdd, df.schema)
+    sparkAdapter.internalCreateDataFrame(df.sparkSession, reRdd, df.schema)
   }
 
   def getRemotePartitioner(viewConf: FileSystemViewStorageConfig, numBucketsFunction: NumBucketsFunction, partitionNum: Int): Partitioner = {

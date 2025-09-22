@@ -79,7 +79,7 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
   }
 
   @AfterAll
-  public static void clear() {
+  public static void clear() throws IOException {
     spark.close();
   }
 
