@@ -755,8 +755,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   }
 
   private void validateVersion9Properties(HoodieTableMetaClient metaClient, HoodieTableConfig tableConfig) {
-    validateVersion8Properties(tableConfig);
-
     // Check if index metadata exists and has proper version information
     Option<HoodieIndexMetadata> indexMetadata = metaClient.getIndexMetadata();
     if (indexMetadata.isPresent()) {

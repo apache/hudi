@@ -961,7 +961,8 @@ public class TestData {
         .build();
     // deal with partial update merger
     if (config.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME).contains(PartialUpdateAvroPayload.class.getSimpleName())
-        || config.getString(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID).equalsIgnoreCase(HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID)) {
+        || (config.getString(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID) != null
+        && config.getString(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID).equalsIgnoreCase(HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID))) {
       config.setValue(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), PartialUpdateFlinkRecordMerger.class.getName());
     }
 

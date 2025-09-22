@@ -109,6 +109,7 @@ import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_
 import static org.apache.hudi.common.model.HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.table.HoodieTableConfig.PayloadGroupings.EVENT_TIME_ORDERING_PAYLOADS;
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
@@ -833,15 +834,24 @@ public class HoodieTableConfig extends HoodieConfig {
     recordMergeStrategyId = inferredConfigs.getRight();
 
     // Step 2: Handle Version 9 specific logic.
-    // CASE 0: For tables with special merger properties, e.g., with non-builtin mergers.
-    // CASE 1: For tables using MERGE MODE, or CUSTOM builtin mergers.
-    //   NOTE: Payload class should NOT be set for these cases.
-    if (!BUILTIN_MERGE_STRATEGIES.contains(recordMergeStrategyId)
+    if (recordMergeMode != CUSTOM && StringUtils.isNullOrEmpty(payloadClassName)) {
+      // CASE 0: For commit time and event time based table, only merge mode is set.
+      //   `StringUtils.isNullOrEmpty(payloadClassName)` is added since
+      //   `DefaultHoodieRecordPayload`, `OverwriteWithLatestAvroPayload` and `EventTimeAvroPayload`
+      //   have the commit/event time merge mode through `inferMergingConfigsForPreV9Table`.
+      //   NOTE: Payload class / strategy id should NOT be set for this case.
+      reconciledConfigs.put(RECORD_MERGE_MODE.key(), recordMergeMode.name());
+    } else if (!BUILTIN_MERGE_STRATEGIES.contains(recordMergeStrategyId)
         || StringUtils.isNullOrEmpty(payloadClassName)) {
+      // CASE 1: For tables using non-builtin custom merger
+      //           (payload class is inferred in `inferMergingConfigsForPreV9Table`),
+      //         or for tables using builtin custom merger without using a payload class,
+      //         in this case, merge mode and strategy id should be set.
+      //   NOTE: Payload class should NOT be set for these cases.
       reconciledConfigs.put(RECORD_MERGE_MODE.key(), recordMergeMode.name());
       reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), recordMergeStrategyId);
     } else {
-      // For tables using payload classes.
+      // For tables using payload classes in custom merge mode.
       //   CASE 2: Custom payload class. We set these properties explicitly.
       if (!PayloadGroupings.getPayloadsUnderDeprecation().contains(payloadClassName)) {
         reconciledConfigs.put(RECORD_MERGE_MODE.key(), CUSTOM.toString());
@@ -849,44 +859,56 @@ public class HoodieTableConfig extends HoodieConfig {
         reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), PAYLOAD_BASED_MERGE_STRATEGY_UUID);
       } else { // CASE 3: Payload classes are under deprecation.
         // Standard merging configs.
-        // NOTE: We use LEGACY_PAYLOAD_CLASS_NAME instead of PAYLOAD_CLASS_NAME here.
-        if (PayloadGroupings.getEventTimeOrderingPayloads().contains(payloadClassName)) {
-          reconciledConfigs.put(RECORD_MERGE_MODE.key(), EVENT_TIME_ORDERING.name());
-          reconciledConfigs.put(LEGACY_PAYLOAD_CLASS_NAME.key(), payloadClassName);
-          reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
-        } else {
-          reconciledConfigs.put(RECORD_MERGE_MODE.key(), COMMIT_TIME_ORDERING.name());
-          reconciledConfigs.put(LEGACY_PAYLOAD_CLASS_NAME.key(), payloadClassName);
-          reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
-        }
+        handleMergeModeConfigs(payloadClassName, reconciledConfigs);
         // Partial update mode config.
-        // Certain payloads are migrated to non payload way from 1.1 Hudi binary.
-        // Hence we need to set the right value for partial update mode for some of the cases.
-        if (payloadClassName.equals(PartialUpdateAvroPayload.class.getName())
-            || payloadClassName.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())) {
-          reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.IGNORE_DEFAULTS.name());
-        } else if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
-          reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.FILL_UNAVAILABLE.name());
-        }
-        // Additional custom merge properties.
+        handlePartialUpdateModeConfigs(payloadClassName, reconciledConfigs);
+        // Additional custom merge properties.s
         // Certain payloads are migrated to non payload way from 1.1 Hudi binary and the reader might need certain properties for the
         // merge to function as expected. Handing such special cases here.
-        if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
-          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE, DEBEZIUM_UNAVAILABLE_VALUE);
-          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, DebeziumConstants.FLATTENED_OP_COL_NAME);
-          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DebeziumConstants.DELETE_OP);
-          reconciledConfigs.put(ORDERING_FIELDS.key(), DebeziumConstants.FLATTENED_LSN_COL_NAME);
-        } else if (payloadClassName.equals(MySqlDebeziumAvroPayload.class.getName())) {
-          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, DebeziumConstants.FLATTENED_OP_COL_NAME);
-          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DebeziumConstants.DELETE_OP);
-          reconciledConfigs.put(ORDERING_FIELDS.key(), DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME);
-        } else if (payloadClassName.equals(AWSDmsAvroPayload.class.getName())) {
-          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, OP_FIELD);
-          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DELETE_OPERATION_VALUE);
-        }
+        handlePayloadAdhocConfigs(payloadClassName, reconciledConfigs);
       }
     }
     return reconciledConfigs;
+  }
+
+  private static void handleMergeModeConfigs(String payloadClassName, Map<String, String> reconciledConfigs) {
+    // NOTE: We use LEGACY_PAYLOAD_CLASS_NAME instead of PAYLOAD_CLASS_NAME here.
+    if (PayloadGroupings.getEventTimeOrderingPayloads().contains(payloadClassName)) {
+      reconciledConfigs.put(RECORD_MERGE_MODE.key(), EVENT_TIME_ORDERING.name());
+      reconciledConfigs.put(LEGACY_PAYLOAD_CLASS_NAME.key(), payloadClassName);
+    } else {
+      reconciledConfigs.put(RECORD_MERGE_MODE.key(), COMMIT_TIME_ORDERING.name());
+      reconciledConfigs.put(LEGACY_PAYLOAD_CLASS_NAME.key(), payloadClassName);
+    }
+  }
+
+  private static void handlePartialUpdateModeConfigs(String payloadClassName, Map<String, String> reconciledConfigs) {
+    // Certain payloads are migrated to non payload way from 1.1 Hudi binary.
+    // Hence we need to set the right value for partial update mode for some of the cases.
+    if (payloadClassName.equals(PartialUpdateAvroPayload.class.getName())
+        || payloadClassName.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())) {
+      reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.IGNORE_DEFAULTS.name());
+    } else if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
+      reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.FILL_UNAVAILABLE.name());
+    }
+  }
+
+  private static void handlePayloadAdhocConfigs(String payloadClassName, Map<String, String> reconciledConfigs) {
+    // Certain payloads are migrated to non payload way from 1.1 Hudi binary and the reader might need certain properties for the
+    // merge to function as expected. Handing such special cases here.
+    if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
+      reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE, DEBEZIUM_UNAVAILABLE_VALUE);
+      reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, DebeziumConstants.FLATTENED_OP_COL_NAME);
+      reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DebeziumConstants.DELETE_OP);
+      reconciledConfigs.put(ORDERING_FIELDS.key(), DebeziumConstants.FLATTENED_LSN_COL_NAME);
+    } else if (payloadClassName.equals(MySqlDebeziumAvroPayload.class.getName())) {
+      reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, DebeziumConstants.FLATTENED_OP_COL_NAME);
+      reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DebeziumConstants.DELETE_OP);
+      reconciledConfigs.put(ORDERING_FIELDS.key(), DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME);
+    } else if (payloadClassName.equals(AWSDmsAvroPayload.class.getName())) {
+      reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, OP_FIELD);
+      reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DELETE_OPERATION_VALUE);
+    }
   }
 
   /**
