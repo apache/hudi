@@ -3424,6 +3424,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     targetConfig.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + HoodieTableVersion.SIX.versionCode());
     targetConfig.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=false");
     targetConfig.configs.add("hoodie.streamer.source.hoodieincr.num_instants=3");
+    targetConfig.configs.add("hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy=READ_UPTO_LATEST_COMMIT");
 
     // Sync all 3 commits from source to target, one by one
     HoodieDeltaStreamer targetStreamer = new HoodieDeltaStreamer(targetConfig, jsc);
@@ -3499,6 +3500,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     resumeTargetConfig.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + HoodieTableVersion.SIX.versionCode());
     resumeTargetConfig.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=false");
     resumeTargetConfig.configs.add("hoodie.streamer.source.hoodieincr.num_instants=3");
+    resumeTargetConfig.configs.add("hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy=READ_UPTO_LATEST_COMMIT");
 
     // This should successfully pull all remaining commits from upgraded source
     targetStreamer = new HoodieDeltaStreamer(resumeTargetConfig, jsc);
