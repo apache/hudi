@@ -761,6 +761,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option("hoodie.write.merge.handle.class", "org.apache.hudi.io.FileGroupReaderBasedMergeHandle")
+      .option("hoodie.metadata.enable","false")
       .mode(SaveMode.Append)
       .save(basePath)
     val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
