@@ -23,21 +23,18 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.util.JavaScalaConverters;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.Properties;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getMetaClientBuilder;
-import static org.junit.jupiter.params.provider.Arguments.arguments;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestHoodieWriterUtils extends HoodieClientTestBase {
 
@@ -52,37 +49,71 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
   }
 
   @Test
-  void testGetKeyInTableConfigTableVersion9PayloadClassKeyWithoutLegacyPayloadClass() {
-    HoodieConfig config = new HoodieConfig();
-    String result = HoodieWriterUtils.getPayloadClassConfigKeyFromTableConfig(
-        HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), config);
-    Assertions.assertEquals(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), result);
+  void testReturnsKeyWhenTableConfigIsNull() {
+    assertEquals("randomKey", HoodieWriterUtils.getKeyInTableConfig("randomKey", null));
   }
 
-  private static Stream<Arguments> testGetKeyInTableConfigTableVersion9PayloadClassKeyWithLegacyPayloadClass() {
-
-    Stream<Arguments> arguments = Stream.of(
-        arguments(HoodieTableVersion.EIGHT,
-            "org.apache.hudi.common.model.DefaultHoodieRecordPayload", "hoodie.compaction.payload.class"),
-        arguments(HoodieTableVersion.NINE,
-            "", "hoodie.compaction.payload.class"),
-        arguments(HoodieTableVersion.NINE,
-            "  ", "hoodie.compaction.payload.class"),
-        arguments(HoodieTableVersion.NINE,
-            "org.apache.hudi.common.model.DefaultHoodieRecordPayload", "hoodie.table.legacy.payload.class")
-    );
-    return arguments;
+  @Test
+  void testPayloadClassNameNotVersion9() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION, "8");
+    String result = HoodieWriterUtils.getKeyInTableConfig(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), config);
+    assertEquals(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), result);
   }
 
-  @ParameterizedTest
-  @MethodSource()
-  void testGetKeyInTableConfigTableVersion9PayloadClassKeyWithLegacyPayloadClass(
-      HoodieTableVersion tableVersion, String legacyPayloadToSet, String expectedKey) {
+  @Test
+  void testPayloadClassNameVersion9WithLegacyPayload() {
     HoodieConfig config = new HoodieConfig();
-    config.setValue(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, legacyPayloadToSet);
-    config.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion.versionCode()));
-    String result = HoodieWriterUtils.getPayloadClassConfigKeyFromTableConfig(
-        HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), config);
-    Assertions.assertEquals(expectedKey, result);
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.NINE.versionCode()));
+    config.setValue(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, "com.example.LegacyPayload");
+    String result = HoodieWriterUtils.getKeyInTableConfig(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), config);
+    assertEquals(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key(), result);
+  }
+
+  @Test
+  void testPayloadClassNameVersion9WithoutLegacyPayload() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.NINE.versionCode()));
+    String result = HoodieWriterUtils.getKeyInTableConfig(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), config);
+    assertEquals(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), result);
+  }
+
+  @Test
+  void testRecordMergeModeMappingWithVersion9() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION.key(), "9");
+    String result = HoodieWriterUtils.getKeyInTableConfig(HoodieWriteConfig.RECORD_MERGE_MODE.key(), config);
+    assertEquals(HoodieTableConfig.RECORD_MERGE_MODE.key(), result);
+  }
+
+  @Test
+  void testRecordMergeModeMappingWithVersion8() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION.key(), "8");
+    String result = HoodieWriterUtils.getKeyInTableConfig(HoodieWriteConfig.RECORD_MERGE_MODE.key(), config);
+    assertEquals(HoodieWriteConfig.RECORD_MERGE_MODE.key(), result);
+  }
+
+  @Test
+  void testRecordMergeStrategyIdMappingWithVersion9() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION.key(), "9");
+    String result = HoodieWriterUtils.getKeyInTableConfig(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key(), config);
+    assertEquals(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), result);
+  }
+
+  @Test
+  void testRecordMergeStrategyIdMappingWithVersion8() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION.key(), "8");
+    String result = HoodieWriterUtils.getKeyInTableConfig(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key(), config);
+    assertEquals(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key(), result);
+  }
+
+  @Test
+  void testFallbackToOriginalKey() {
+    HoodieConfig config = new HoodieConfig();
+    String result = HoodieWriterUtils.getKeyInTableConfig("my.custom.key", config);
+    assertEquals("my.custom.key", result);
   }
 }
