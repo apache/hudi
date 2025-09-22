@@ -102,6 +102,6 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
   }
 
   static Option<Schema.Field> getKeySchema(Schema schema) {
-    return Option.ofNullable(schema.getField(KEY_FIELD_NAME));
+    return schema.getType() != Schema.Type.RECORD ? Option.empty() : Option.ofNullable(schema.getField(KEY_FIELD_NAME));
   }
 }
