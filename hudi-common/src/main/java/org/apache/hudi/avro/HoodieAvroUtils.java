@@ -54,13 +54,11 @@ import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
-import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
 
 import javax.annotation.Nullable;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -129,13 +127,6 @@ public class HoodieAvroUtils {
   public static final Schema METADATA_FIELD_SCHEMA = createNullableSchema(Schema.Type.STRING);
 
   public static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
-
-  /**
-   * TODO serialize other type of record.
-   */
-  public static Option<byte[]> recordToBytes(HoodieRecord record, Schema schema) throws IOException {
-    return Option.of(HoodieAvroUtils.indexedRecordToBytesStream(record.toIndexedRecord(schema, new Properties()).get().getData()).toByteArray());
-  }
 
   /**
    * Convert a given avro record to bytes.
@@ -241,21 +232,16 @@ public class HoodieAvroUtils {
    */
   public static GenericRecord bytesToAvro(byte[] bytes, int offset, int length, Schema writerSchema,
                                           Schema readerSchema) throws IOException {
-    BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(
-        bytes, offset, length, BINARY_DECODER.get());
-    BINARY_DECODER.set(decoder);
+    BinaryDecoder decoder = getBinaryDecoder(bytes, offset, length);
     GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
     return reader.read(null, decoder);
   }
 
-  /**
-   * Convert json bytes back into avro record.
-   */
-  public static GenericRecord jsonBytesToAvro(byte[] bytes, Schema schema) throws IOException {
-    ByteArrayInputStream bio = new ByteArrayInputStream(bytes);
-    JsonDecoder jsonDecoder = DecoderFactory.get().jsonDecoder(schema, bio);
-    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(schema);
-    return reader.read(null, jsonDecoder);
+  public static BinaryDecoder getBinaryDecoder(byte[] bytes, int offset, int length) {
+    BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(
+        bytes, offset, length, BINARY_DECODER.get());
+    BINARY_DECODER.set(decoder);
+    return decoder;
   }
 
   public static boolean isTypeNumeric(Schema.Type type) {
