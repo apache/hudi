@@ -231,12 +231,12 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
   }
 
   def parsePartitionColumnValues(partitionColumns: Array[String],
-                                 partitionPath: String,
-                                 tableBasePath: StoragePath,
-                                 tableSchema: StructType,
-                                 tableConfig: java.util.Map[String, String],
-                                 timeZoneId: String,
-                                 shouldValidatePartitionColumns: Boolean): Array[Object] = {
+                               partitionPath: String,
+                               tableBasePath: StoragePath,
+                               tableSchema: StructType,
+                               tableConfig: java.util.Map[String, String],
+                               timeZoneId: String,
+                               shouldValidatePartitionColumns: Boolean): Array[Object] = {
     val keyGeneratorClass = KeyGeneratorType.getKeyGeneratorClassName(tableConfig)
     val timestampKeyGeneratorType = tableConfig.get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key())
 
@@ -255,11 +255,11 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
   }
 
   def doParsePartitionColumnValues(partitionColumns: Array[String],
-                                   partitionPath: String,
-                                   basePath: StoragePath,
-                                   schema: StructType,
-                                   timeZoneId: String,
-                                   shouldValidatePartitionCols: Boolean): Array[Object] = {
+                                 partitionPath: String,
+                                 basePath: StoragePath,
+                                 schema: StructType,
+                                 timeZoneId: String,
+                                 shouldValidatePartitionCols: Boolean): Array[Object] = {
     if (partitionColumns.length == 0) {
       // This is a non-partitioned table
       Array.empty
@@ -311,14 +311,14 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
         // HIVE_STYLE_PARTITIONING is disable.
         // e.g. convert "/xx/xx/2021/02" to "/xx/xx/year=2021/month=02"
         val partitionWithName =
-          partitionFragments.zip(partitionColumns).map {
-            case (partition, columnName) =>
-              if (partition.indexOf("=") == -1) {
-                s"${columnName}=$partition"
-              } else {
-                partition
-              }
-          }.mkString(StoragePath.SEPARATOR)
+        partitionFragments.zip(partitionColumns).map {
+          case (partition, columnName) =>
+            if (partition.indexOf("=") == -1) {
+              s"${columnName}=$partition"
+            } else {
+              partition
+            }
+        }.mkString(StoragePath.SEPARATOR)
 
         val pathWithPartitionName = new StoragePath(basePath, partitionWithName)
         val partitionSchema = buildPartitionSchemaForNestedFields(schema, partitionColumns)
