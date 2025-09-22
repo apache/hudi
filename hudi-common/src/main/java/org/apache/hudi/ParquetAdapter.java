@@ -20,7 +20,6 @@
 package org.apache.hudi;
 
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.stats.ValueType;
 
 import org.apache.parquet.schema.PrimitiveType;
@@ -34,7 +33,7 @@ public interface ParquetAdapter {
   static ParquetAdapter getAdapter() {
     try {
       return ReflectionUtils.loadClass("org.apache.parquet.schema.LogicalTypeParquetAdapter");
-    } catch (HoodieException e) {
+    } catch (Exception e) {
       return ReflectionUtils.loadClass("org.apache.parquet.schema.OriginalTypeParquetAdapter");
     }
   }

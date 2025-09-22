@@ -20,7 +20,6 @@
 package org.apache.parquet.avro;
 
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -45,7 +44,7 @@ public abstract class HoodieAvroParquetSchemaConverter {
     try {
       return (HoodieAvroParquetSchemaConverter) ReflectionUtils.loadClass("org.apache.parquet.avro.AvroSchemaConverterWithNTZ",
           new Class<?>[] {Configuration.class}, configuration);
-    } catch (HoodieException e) {
+    } catch (Exception e) {
       LOG.debug("Failed to load AvroSchemaConverterWithNTZ, using NativeAvroSchemaConverter instead", e);
       return (HoodieAvroParquetSchemaConverter) ReflectionUtils.loadClass("org.apache.parquet.avro.NativeAvroSchemaConverter",
           new Class<?>[] {Configuration.class}, configuration);
