@@ -3432,7 +3432,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     //try calling this once INSTEAD OF THREEE TIMES
     targetStreamer.sync();
 
-
     // Verify checkpoint is established in V1 format
     HoodieTableMetaClient targetMetaClient = HoodieTableMetaClient.builder()
         .setConf(context.getStorageConf())
@@ -3456,12 +3455,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             .load(targetTablePath)
             .count();
 
-    System.out.println("Source record count: " + sourceRecordCountOriginal);
-    System.out.println("Target record count: " + targetRecordCountOriginal);
-
     assertEquals(sourceRecordCountOriginal, targetRecordCountOriginal,
             "Target should have all records from source");
-
 
     // Phase 3: Upgrade source table from v6 to v9
     HoodieDeltaStreamer.Config upgradeConfig = TestHelpers.makeConfig(sourceTablePath, WriteOperationType.BULK_INSERT);
@@ -3520,9 +3515,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         .format("org.apache.hudi")
         .load(targetTablePath)
         .count();
-
-    System.out.println("Source record count: " + sourceRecordCount);
-    System.out.println("Target record count: " + targetRecordCount);
 
     assertEquals(sourceRecordCount, targetRecordCount,
         "Target should have all records from source despite version difference");
@@ -3620,10 +3612,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             .format("org.apache.hudi")
             .load(targetTablePath)
             .count();
-
-    System.out.println("Source record count: " + sourceRecordCountOriginal);
-    System.out.println("Target record count: " + targetRecordCountOriginal);
-
+    
     assertEquals(sourceRecordCountOriginal, targetRecordCountOriginal,
             "Target should have all records from source");
 
@@ -3687,9 +3676,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         .format("org.apache.hudi")
         .load(targetTablePath)
         .count();
-
-    System.out.println("Source record count: " + sourceRecordCount);
-    System.out.println("Target record count: " + targetRecordCount);
 
     assertEquals(sourceRecordCount, targetRecordCount,
         "Target should have all records from source despite version difference");
