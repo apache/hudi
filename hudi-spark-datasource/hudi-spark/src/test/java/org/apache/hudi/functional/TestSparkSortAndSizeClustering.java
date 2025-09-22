@@ -18,6 +18,7 @@
 
 package org.apache.hudi.functional;
 
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
@@ -33,6 +34,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -139,6 +141,9 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     long ts = System.currentTimeMillis();
     List<WriteStatus> initialWriteStats = writeData(numRecords, true, ts);
     validateTypes(initialWriteStats.stream().map(WriteStatus::getStat).collect(Collectors.toList()));
+    List<Row> rows = readRecords();
+    assertEquals(numRecords, rows.size());
+    validateDateAndTimestampFields(rows, ts);
 
     String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
     HoodieClusteringPlan plan = ClusteringUtils.getClusteringPlan(
@@ -154,7 +159,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     List<HoodieWriteStat> writeStats = (List<HoodieWriteStat>)writeMetadata.getWriteStats().get();
     assertEquals(2, writeStats.size(), "Clustering should write 2 files");
 
-    List<Row> rows = readRecords();
+    rows = readRecords();
     assertEquals(numRecords, rows.size());
     validateTypes(writeStats);
     validateDateAndTimestampFields(rows, ts);
@@ -181,10 +186,12 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
         Date actualDate = (Date) row.get(dateFieldIndex);
         assertTrue(actualDate.compareTo(startDate) > 0 && actualDate.compareTo(endDate) < 0);
       }
-      if (!row.isNullAt(tsLocalMillisFieldIndex)) {
-        assertEquals(ts, row.get(tsLocalMillisFieldIndex));
+      if (!HoodieSparkUtils.gteqSpark4_0()) {
+        if (!row.isNullAt(tsLocalMillisFieldIndex)) {
+          assertEquals(ts, row.get(tsLocalMillisFieldIndex));
+        }
+        assertEquals(ts * 1000L, row.get(tsLocalMicrosFieldIndex));
       }
-      assertEquals(ts * 1000L, row.get(tsLocalMicrosFieldIndex));
     }
   }
 
@@ -310,7 +317,8 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
 
   private Schema getSchema() {
     try {
-      return new Schema.Parser().parse(this.getClass().getClassLoader().getResourceAsStream("schema_with_logical_types.avsc"));
+      String schema = FileIOUtils.readAsUTFString(this.getClass().getClassLoader().getResourceAsStream("schema_with_logical_types.avsc"));
+      return new Schema.Parser().parse(schema);
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }

@@ -189,9 +189,6 @@ public abstract class HFileBlock {
    * @return the number of checksum chunks.
    */
   static int numChecksumChunks(long numBytes, int bytesPerChecksum) {
-    if (bytesPerChecksum == 0) {
-      return 0;
-    }
     long numChunks = numBytes / bytesPerChecksum;
     if (numBytes % bytesPerChecksum != 0) {
       numChunks++;
@@ -278,7 +275,10 @@ public abstract class HFileBlock {
     // 1. Magic is always 8 bytes.
     buf.put(blockType.getMagic(), 0, 8);
     // 2. onDiskSizeWithoutHeader.
-    buf.putInt(compressedBlockData.limit());
+    int compressedDataSize = compressedBlockData.limit();
+    int onDiskDataSizeWithHeader = HFileBlock.HFILEBLOCK_HEADER_SIZE + compressedDataSize;
+    int numChecksumBytes = numChecksumBytes(onDiskDataSizeWithHeader, DEFAULT_BYTES_PER_CHECKSUM);
+    buf.putInt(compressedDataSize + numChecksumBytes);
     // 3. uncompressedSizeWithoutHeader.
     buf.putInt(uncompressedBlockData.limit());
     // 4. Previous block offset.
@@ -288,17 +288,15 @@ public abstract class HFileBlock {
     // 6. Bytes covered per checksum.
     // Note that: Default value is 16K. There is a check on
     // onDiskSizeWithoutHeader = uncompressedSizeWithoutHeader + Checksum.
-    // In order to pass this check, either we make isUseHBaseChecksum false in HFileContext (hbase),
-    // or we set this value to zero.
-    buf.putInt(0);
+    // For compatibility with both HBase and native reader, the size of checksum bytes is
+    // calculated based on this and the checksum is appended at the end of the block
+    buf.putInt(DEFAULT_BYTES_PER_CHECKSUM);
     // 7. onDiskDataSizeWithHeader
-    int onDiskDataSizeWithHeader =
-        HFileBlock.HFILEBLOCK_HEADER_SIZE + compressedBlockData.limit();
     buf.putInt(onDiskDataSizeWithHeader);
     // 8. Payload.
     buf.put(compressedBlockData);
     // 9. Checksum.
-    buf.put(generateChecksumBytes(context.getChecksumType()));
+    buf.put(generateChecksumBytes(context.getChecksumType(), numChecksumBytes));
 
     // Update sizes
     buf.flip();
@@ -323,9 +321,9 @@ public abstract class HFileBlock {
    * Returns checksum bytes if checksum type is not NULL.
    * Note that current HFileReaderImpl does not support non-NULL checksum.
    */
-  private byte[] generateChecksumBytes(ChecksumType type) {
+  private byte[] generateChecksumBytes(ChecksumType type, int numChecksumBytes) {
     if (type == ChecksumType.NULL) {
-      return EMPTY_BYTE_ARRAY;
+      return new byte[numChecksumBytes];
     }
     throw new HoodieException("Only NULL checksum type is supported");
   }

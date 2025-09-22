@@ -628,11 +628,11 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
 
     var dataFilter: Expression = GreaterThan(attribute("c5"), literal("70"))
     verifyPruningFileCount(commonOpts, dataFilter)
-    dataFilter = And(dataFilter, GreaterThan(attribute("c6"), literal("'2020-03-28'")))
+    dataFilter = And(dataFilter, GreaterThan(attribute("c6"), literal("2020-03-28")))
     verifyPruningFileCount(commonOpts, dataFilter)
     dataFilter = GreaterThan(attribute("c5"), literal("90"))
     verifyPruningFileCount(commonOpts, dataFilter)
-    dataFilter = And(dataFilter, GreaterThan(attribute("c6"), literal("'2020-03-28'")))
+    dataFilter = And(dataFilter, GreaterThan(attribute("c6"), literal("2020-03-28")))
     verifyPruningFileCount(commonOpts, dataFilter)
   }
 
@@ -642,10 +642,11 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts, includeLogFiles = true)
     val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(dataFilter))
     val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
+    val latestDataFilesCount = getLatestDataFilesCount(opts)
     if (shouldPrune) {
-      assertTrue(filteredFilesCount < getLatestDataFilesCount(opts))
+      assertTrue(filteredFilesCount < latestDataFilesCount)
     } else {
-      assertEquals(filteredFilesCount, getLatestDataFilesCount(opts))
+      assertEquals(filteredFilesCount, latestDataFilesCount)
     }
 
     // with no data skipping
