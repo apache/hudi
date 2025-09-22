@@ -41,12 +41,25 @@ public class DeleteContext implements Serializable {
 
   private final Option<Pair<String, String>> customDeleteMarkerKeyValue;
   private final boolean hasBuiltInDeleteField;
-  private int hoodieOperationPos = -1;
+  private int hoodieOperationPos;
   private Schema readerSchema;
 
   public DeleteContext(Properties props, Schema tableSchema) {
     this.customDeleteMarkerKeyValue = getCustomDeleteMarkerKeyValue(props);
     this.hasBuiltInDeleteField = hasBuiltInDeleteField(tableSchema);
+  }
+
+  /**
+   * Creates a DeleteContext for the writer path where it is assumed the HoodieOperation field is not set in the incoming record.
+   * @param properties the properties defining how deletes are handled for the table
+   * @param recordSchema the schema of the incoming record
+   * @return the delete context
+   */
+  public static DeleteContext fromRecordSchema(Properties properties, Schema recordSchema) {
+    DeleteContext deleteContext = new DeleteContext(properties, recordSchema);
+    deleteContext.hoodieOperationPos = -1;
+    deleteContext.readerSchema = recordSchema;
+    return deleteContext;
   }
 
   /**

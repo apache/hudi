@@ -187,7 +187,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public boolean checkIsDelete(Schema recordSchema, Properties props, DeleteContext deleteContext) {
+  public boolean checkIsDelete(DeleteContext deleteContext, Properties props) {
     if (null == data || HoodieOperation.isDelete(getOperation())) {
       return true;
     }

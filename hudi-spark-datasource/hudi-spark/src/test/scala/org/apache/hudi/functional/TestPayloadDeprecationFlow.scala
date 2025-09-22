@@ -67,7 +67,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (10, 2L, "rider-B", "driver-B", 27.70, "i", "10.1", 10, 1, "i"),
       (10, 3L, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"),
       (10, 4L, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
-      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))
+      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"),
+      (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
     val originalOrderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
       "_event_seq"

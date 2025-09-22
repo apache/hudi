@@ -217,7 +217,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  protected boolean checkIsDelete(Schema recordSchema, Properties props, DeleteContext deleteContext) {
+  protected boolean checkIsDelete(DeleteContext deleteContext, Properties props) {
     if (data == null) {
       return true;
     }
@@ -227,7 +227,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
     }
 
     // Use data field to decide.
-    Schema.Field deleteField = recordSchema.getField(HOODIE_IS_DELETED_FIELD);
+    Schema.Field deleteField = deleteContext.getReaderSchema().getField(HOODIE_IS_DELETED_FIELD);
     return deleteField != null && data.getBoolean(deleteField.pos());
   }
 

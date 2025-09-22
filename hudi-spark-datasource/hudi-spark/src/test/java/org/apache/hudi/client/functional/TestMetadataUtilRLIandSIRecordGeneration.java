@@ -493,7 +493,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
   }
 
   private static void populateValidAndDeletedSecondaryIndexRecords(HoodieRecord record, List<HoodieRecord> deletedSecondaryIndexRecords, List<HoodieRecord> validSecondaryIndexRecords) {
-    if (record.isDelete(HoodieMetadataRecord.getClassSchema(), CollectionUtils.emptyProps(), new DeleteContext(CollectionUtils.emptyProps(), HoodieMetadataRecord.getClassSchema()))) {
+    if (record.isDelete(new DeleteContext(CollectionUtils.emptyProps(), HoodieMetadataRecord.getClassSchema()), CollectionUtils.emptyProps())) {
       deletedSecondaryIndexRecords.add(record);
     } else {
       validSecondaryIndexRecords.add(record);
@@ -612,14 +612,14 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
   private void assertHoodieRecordListEquality(List<HoodieRecord> actualList, List<HoodieRecord> expectedList) {
     DeleteContext deleteContext = new DeleteContext(CollectionUtils.emptyProps(), AVRO_SCHEMA).withReaderSchema(AVRO_SCHEMA);
     assertEquals(expectedList.size(), actualList.size());
-    List<String> expectedInsertRecordKeys = expectedList.stream().filter(record -> !record.isDelete(AVRO_SCHEMA, CollectionUtils.emptyProps(), deleteContext))
+    List<String> expectedInsertRecordKeys = expectedList.stream().filter(record -> !record.isDelete(deleteContext, CollectionUtils.emptyProps()))
         .map(record -> record.getRecordKey()).collect(Collectors.toList());
-    List<String> expectedDeletedRecordKeys = expectedList.stream().filter(record -> record.isDelete(AVRO_SCHEMA, CollectionUtils.emptyProps(), deleteContext))
+    List<String> expectedDeletedRecordKeys = expectedList.stream().filter(record -> record.isDelete(deleteContext, CollectionUtils.emptyProps()))
         .map(record -> record.getRecordKey()).collect(Collectors.toList());
 
-    List<String> actualInsertRecordKeys = actualList.stream().filter(record -> !record.isDelete(AVRO_SCHEMA, CollectionUtils.emptyProps(), deleteContext))
+    List<String> actualInsertRecordKeys = actualList.stream().filter(record -> !record.isDelete(deleteContext, CollectionUtils.emptyProps()))
         .map(record -> record.getRecordKey()).collect(Collectors.toList());
-    List<String> actualDeletedRecordKeys = actualList.stream().filter(record -> record.isDelete(AVRO_SCHEMA, CollectionUtils.emptyProps(), deleteContext))
+    List<String> actualDeletedRecordKeys = actualList.stream().filter(record -> record.isDelete(deleteContext, CollectionUtils.emptyProps()))
         .map(record -> record.getRecordKey()).collect(Collectors.toList());
 
     assertListEquality(expectedInsertRecordKeys, actualInsertRecordKeys);

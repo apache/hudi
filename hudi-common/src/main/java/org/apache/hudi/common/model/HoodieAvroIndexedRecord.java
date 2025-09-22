@@ -230,12 +230,12 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  protected boolean checkIsDelete(Schema recordSchema, Properties props, DeleteContext deleteContext) {
+  protected boolean checkIsDelete(DeleteContext deleteContext, Properties props) {
     if (data == null || HoodieOperation.isDelete(getOperation())) {
       return true;
     }
 
-    decodeRecord(recordSchema);
+    decodeRecord(deleteContext.getReaderSchema());
     if (getData().equals(SENTINEL)) {
       return false; // Sentinel record is not a delete
     }

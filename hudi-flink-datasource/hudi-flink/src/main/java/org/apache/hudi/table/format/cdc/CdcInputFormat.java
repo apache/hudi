@@ -467,7 +467,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     }
 
     private boolean isDelete(HoodieRecord<RowData> record) {
-      return record.isDelete(tableSchema, CollectionUtils.emptyProps(), deleteContext);
+      return record.isDelete(deleteContext, CollectionUtils.emptyProps());
     }
   }
 

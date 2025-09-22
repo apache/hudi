@@ -318,7 +318,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       return false;
     }
     try {
-      if (!isDelete && !combineRecord.isDelete(schema, config.getProps(), deleteContext)) {
+      if (!isDelete && !combineRecord.isDelete(deleteContext, config.getProps())) {
         // Flush the merged record.
         HoodieKey hoodieKey = newRecord.getKey();
         if (isSecondaryIndexStatsStreamingWritesEnabled) {

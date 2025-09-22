@@ -48,14 +48,14 @@ class TestHoodieAvroIndexedRecord {
     TypedProperties props = new TypedProperties();
     DeleteContext deleteContext = new DeleteContext(props, schema).withReaderSchema(schema);
     HoodieAvroIndexedRecord indexedRecord1 = new HoodieAvroIndexedRecord(record1);
-    assertTrue(indexedRecord1.isDelete(schema, props, deleteContext));
+    assertTrue(indexedRecord1.isDelete(deleteContext, props));
 
     GenericRecord record2 = new GenericRecordBuilder(schema)
         .set("_hoodie_is_deleted", false)
         .set("field2", "value2")
         .build();
     HoodieAvroIndexedRecord indexedRecord2 = new HoodieAvroIndexedRecord(record2);
-    assertFalse(indexedRecord2.isDelete(schema, props, deleteContext));
+    assertFalse(indexedRecord2.isDelete(deleteContext, props));
   }
 
   @Test
@@ -75,14 +75,14 @@ class TestHoodieAvroIndexedRecord {
     DeleteContext deleteContext = new DeleteContext(props, schema).withReaderSchema(schema);
 
     HoodieAvroIndexedRecord indexedRecord1 = new HoodieAvroIndexedRecord(record1);
-    assertTrue(indexedRecord1.isDelete(schema, props, deleteContext));
+    assertTrue(indexedRecord1.isDelete(deleteContext, props));
 
     GenericRecord record2 = new GenericRecordBuilder(schema)
         .set("custom_is_deleted", "a")
         .set("field2", "value2")
         .build();
     HoodieAvroIndexedRecord indexedRecord2 = new HoodieAvroIndexedRecord(record2);
-    assertFalse(indexedRecord2.isDelete(schema, props, deleteContext));
+    assertFalse(indexedRecord2.isDelete(deleteContext, props));
   }
 
   @Test
@@ -99,13 +99,13 @@ class TestHoodieAvroIndexedRecord {
     TypedProperties props = new TypedProperties();
     DeleteContext deleteContext = new DeleteContext(props, schema).withReaderSchema(schema);
     HoodieAvroIndexedRecord indexedRecord1 = new HoodieAvroIndexedRecord(record1);
-    assertTrue(indexedRecord1.isDelete(schema, props, deleteContext));
+    assertTrue(indexedRecord1.isDelete(deleteContext, props));
 
     GenericRecord record2 = new GenericRecordBuilder(schema)
         .set("_hoodie_operation", HoodieOperation.INSERT.getName())
         .set("field2", "value2")
         .build();
     HoodieAvroIndexedRecord indexedRecord2 = new HoodieAvroIndexedRecord(record2);
-    assertFalse(indexedRecord2.isDelete(schema, props, deleteContext));
+    assertFalse(indexedRecord2.isDelete(deleteContext, props));
   }
 }

@@ -192,16 +192,16 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  protected boolean checkIsDelete(Schema recordSchema, Properties props, DeleteContext deleteContext) throws IOException {
+  protected boolean checkIsDelete(DeleteContext deleteContext, Properties props) throws IOException {
     if (HoodieOperation.isDelete(getOperation())) {
       return true;
     }
     if (this.data instanceof BaseAvroPayload) {
-      return ((BaseAvroPayload) this.data).isDeleted(recordSchema, props);
+      return ((BaseAvroPayload) this.data).isDeleted(deleteContext.getReaderSchema(), props);
     } else if (this.data instanceof HoodieMetadataPayload) {
       return ((HoodieMetadataPayload) this.data).isDeleted();
     } else {
-      return !this.data.getInsertValue(recordSchema, props).isPresent();
+      return !this.data.getInsertValue(deleteContext.getReaderSchema(), props).isPresent();
     }
   }
 

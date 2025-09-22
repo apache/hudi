@@ -146,7 +146,7 @@ public class TestMergeHandle extends BaseTestHandle {
       newRecords = newRecords.stream()
           .map(avroIndexedRecord -> {
             HoodieRecord hoodieRecord = new HoodieAvroRecord<>(avroIndexedRecord.getKey(), new DefaultHoodieRecordPayload(Option.of((GenericRecord) avroIndexedRecord.getData())),
-                avroIndexedRecord.getOperation(), null, avroIndexedRecord.isDelete(AVRO_SCHEMA, CollectionUtils.emptyProps(), deleteContext));
+                avroIndexedRecord.getOperation(), null, avroIndexedRecord.isDelete(deleteContext, CollectionUtils.emptyProps()));
             hoodieRecord.setIgnoreIndexUpdate(avroIndexedRecord.getIgnoreIndexUpdate());
             return hoodieRecord;
           })

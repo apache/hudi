@@ -302,7 +302,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       recordProperties.put(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, String.valueOf(isUpdateRecord));
 
       // Check for delete
-      if (config.allowOperationMetadataField() || !hoodieRecord.isDelete(schema, recordProperties, deleteContext)) {
+      if (config.allowOperationMetadataField() || !hoodieRecord.isDelete(deleteContext, recordProperties)) {
         bufferInsertAndUpdate(schema, hoodieRecord, isUpdateRecord);
       } else {
         bufferDelete(hoodieRecord);

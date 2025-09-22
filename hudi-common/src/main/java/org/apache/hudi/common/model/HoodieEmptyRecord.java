@@ -125,7 +125,7 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
-  protected boolean checkIsDelete(Schema recordSchema, Properties props, DeleteContext deleteContext) {
+  protected boolean checkIsDelete(DeleteContext deleteContext, Properties props) {
     return true;
   }
 
