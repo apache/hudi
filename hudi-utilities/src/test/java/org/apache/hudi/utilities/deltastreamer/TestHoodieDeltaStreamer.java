@@ -183,6 +183,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_TH
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD;
+import static org.apache.hudi.config.HoodieWriteConfig.STREAMER_CHECKPOINT_KEY;
 import static org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -3542,6 +3543,174 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Verify target has correct number of commits
     assertEquals(2, targetMetaClient.getActiveTimeline().getCommitsTimeline().countInstants(),
         "Target should have 2 commits (as its batches 3 source table commits into one target table commit)");
+
+    // Clean up
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, sourceTablePath);
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, targetTablePath);
+  }
+
+  @Test
+  public void testIncrementalSourceWithTargetTableUpgradeFromV6ToV9() throws Exception {
+    // Create unique paths for both tables
+    String sourceTablePath = basePath + "/source_table_v6_target_upgrade";
+    String targetTablePath = basePath + "/target_table_v6_to_v9";
+
+    // Phase 1: Create source table at v6 with initial commits
+    HoodieDeltaStreamer.Config sourceConfig = TestHelpers.makeConfig(
+        sourceTablePath, WriteOperationType.BULK_INSERT);
+    sourceConfig.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + HoodieTableVersion.SIX.versionCode());
+    sourceConfig.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=false");
+    sourceConfig.sourceLimit = 100;
+
+    // Initialize source table with first commit
+    HoodieDeltaStreamer sourceStreamer = new HoodieDeltaStreamer(sourceConfig, jsc);
+    sourceStreamer.sync();
+
+    // Add 2 more commits to source table (total 3 commits)
+    sourceConfig.operation = WriteOperationType.BULK_INSERT;
+    for (int i = 0; i < 2; i++) {
+      // Create fresh config to avoid conflicts
+      HoodieDeltaStreamer.Config newSourceConfig = TestHelpers.makeConfig(
+          sourceTablePath, WriteOperationType.BULK_INSERT);
+      newSourceConfig.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=false");
+      newSourceConfig.sourceLimit = 100;
+      sourceStreamer = new HoodieDeltaStreamer(newSourceConfig, jsc);
+      sourceStreamer.sync();
+    }
+
+    // Verify source has 3 commits and is at v6
+    HoodieTableMetaClient sourceMetaClient = HoodieTableMetaClient.builder()
+        .setConf(context.getStorageConf())
+        .setBasePath(sourceTablePath)
+        .build();
+    assertEquals(3, sourceMetaClient.getActiveTimeline().getCommitsTimeline().countInstants());
+    assertEquals(HoodieTableVersion.SIX, sourceMetaClient.getTableConfig().getTableVersion());
+
+    // Phase 2: Setup target table at v6 and sync first 3 commits
+    HoodieDeltaStreamer.Config targetConfig = TestHelpers.makeConfigForHudiIncrSrc(
+        sourceTablePath, targetTablePath, WriteOperationType.BULK_INSERT, false, null);
+    targetConfig.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + HoodieTableVersion.SIX.versionCode());
+    targetConfig.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=false");
+    targetConfig.configs.add("hoodie.streamer.source.hoodieincr.num_instants=3");
+    targetConfig.configs.add("hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy=READ_UPTO_LATEST_COMMIT");
+
+    // Sync all 3 commits from source to target
+    HoodieDeltaStreamer targetStreamer = new HoodieDeltaStreamer(targetConfig, jsc);
+    targetStreamer.sync();
+
+    // Verify checkpoint is established in V1 format
+    HoodieTableMetaClient targetMetaClient = HoodieTableMetaClient.builder()
+        .setConf(context.getStorageConf())
+        .setBasePath(targetTablePath)
+        .build();
+    HoodieInstant lastTargetInstant = targetMetaClient.getActiveTimeline().lastInstant().get();
+    Option<HoodieCommitMetadata> commitMetadata = HoodieClientTestUtils.getCommitMetadataForInstant(
+        targetMetaClient, lastTargetInstant);
+    assertTrue(commitMetadata.isPresent());
+    // Checkpoint should be in V1 format
+    assertTrue(commitMetadata.get().getExtraMetadata().containsKey(STREAMER_CHECKPOINT_KEY_V1));
+    String checkpointBeforeUpgrade = commitMetadata.get().getExtraMetadata().get(STREAMER_CHECKPOINT_KEY_V1);
+
+    // Verify record counts match between source and target
+    long sourceRecordCountOriginal = sqlContext.read()
+            .format("org.apache.hudi")
+            .load(sourceTablePath)
+            .count();
+    long targetRecordCountOriginal = sqlContext.read()
+            .format("org.apache.hudi")
+            .load(targetTablePath)
+            .count();
+
+    System.out.println("Source record count: " + sourceRecordCountOriginal);
+    System.out.println("Target record count: " + targetRecordCountOriginal);
+
+    assertEquals(sourceRecordCountOriginal, targetRecordCountOriginal,
+            "Target should have all records from source");
+
+    // Phase 3: Upgrade target table from v6 to v9
+    HoodieDeltaStreamer.Config upgradeTargetConfig = TestHelpers.makeConfigForHudiIncrSrc(
+        sourceTablePath, targetTablePath, WriteOperationType.BULK_INSERT, false, null);
+    upgradeTargetConfig.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + HoodieTableVersion.NINE.versionCode());
+    upgradeTargetConfig.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=true");
+    upgradeTargetConfig.configs.add("hoodie.streamer.source.hoodieincr.num_instants=3");
+    upgradeTargetConfig.configs.add("hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy=READ_UPTO_LATEST_COMMIT");
+    upgradeTargetConfig.allowCommitOnNoCheckpointChange = true; // Allow commit even with no new data to trigger upgrade
+
+    // This sync will trigger the upgrade of target table and create a new commit
+    targetStreamer = new HoodieDeltaStreamer(upgradeTargetConfig, jsc);
+    targetStreamer.sync();
+
+    // Verify target table is now v9 - create fresh metaclient after upgrade
+    targetMetaClient = HoodieTableMetaClient.builder()
+        .setConf(HoodieTestUtils.getDefaultStorageConf())
+        .setBasePath(targetTablePath)
+        .build();
+    assertEquals(HoodieTableVersion.NINE, targetMetaClient.getTableConfig().getTableVersion());
+
+    // Phase 4: Add 2 more commits to source table (keeping it at v6)
+    for (int i = 0; i < 2; i++) {
+      HoodieDeltaStreamer.Config postTargetUpgradeConfig = TestHelpers.makeConfig(sourceTablePath, WriteOperationType.BULK_INSERT);
+      postTargetUpgradeConfig.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=false");
+      postTargetUpgradeConfig.sourceLimit = 100;
+      sourceStreamer = new HoodieDeltaStreamer(postTargetUpgradeConfig, jsc);
+      sourceStreamer.sync();
+    }
+
+    // Verify source now has 5 total commits and is still at v6
+    sourceMetaClient = HoodieTableMetaClient.reload(sourceMetaClient);
+    assertEquals(5, sourceMetaClient.getActiveTimeline().getCommitsTimeline().countInstants());
+    assertEquals(HoodieTableVersion.SIX, sourceMetaClient.getTableConfig().getTableVersion());
+
+    // Phase 5: Resume incremental sync from upgraded target table (now at v9)
+    // Create base config for resuming sync
+    HoodieDeltaStreamer.Config resumeTargetConfig = TestHelpers.makeConfigForHudiIncrSrc(
+        sourceTablePath, targetTablePath, WriteOperationType.BULK_INSERT, false, null);
+    resumeTargetConfig.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=false");
+    resumeTargetConfig.configs.add("hoodie.streamer.source.hoodieincr.num_instants=3");
+    resumeTargetConfig.configs.add("hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy=READ_UPTO_LATEST_COMMIT");
+    resumeTargetConfig.allowCommitOnNoCheckpointChange = true; // Allow commit even with no new data to trigger upgrade
+
+    // This should successfully pull all remaining commits from v6 source to v9 target
+    targetStreamer = new HoodieDeltaStreamer(resumeTargetConfig, jsc);
+    targetStreamer.sync();
+
+    // Phase 6: Validate data integrity and checkpoint continuity
+    targetMetaClient.reloadActiveTimeline();
+    assertEquals(HoodieTableVersion.NINE, targetMetaClient.getTableConfig().getTableVersion());
+
+    // Verify record counts match between source and target
+    long sourceRecordCount = sqlContext.read()
+        .format("org.apache.hudi")
+        .load(sourceTablePath)
+        .count();
+    long targetRecordCount = sqlContext.read()
+        .format("org.apache.hudi")
+        .load(targetTablePath)
+        .count();
+
+    System.out.println("Source record count: " + sourceRecordCount);
+    System.out.println("Target record count: " + targetRecordCount);
+
+    assertEquals(sourceRecordCount, targetRecordCount,
+        "Target should have all records from source despite version difference");
+
+    // Verify checkpoint was properly updated and migrated to V2 format after upgrade
+    HoodieInstant finalTargetInstant = targetMetaClient.getActiveTimeline().lastInstant().get();
+    Option<HoodieCommitMetadata> finalCommitMetadata = HoodieClientTestUtils.getCommitMetadataForInstant(
+        targetMetaClient, finalTargetInstant);
+    assertTrue(finalCommitMetadata.isPresent());
+
+    // The first time after upgrading, target checkpoint read is still in v1
+    assertTrue(finalCommitMetadata.get().getExtraMetadata().containsKey(STREAMER_CHECKPOINT_KEY));
+    String finalCheckpoint = finalCommitMetadata.get().getExtraMetadata().get(STREAMER_CHECKPOINT_KEY);
+
+    // Checkpoint should have advanced from the pre-upgrade checkpoint
+    assertNotEquals(checkpointBeforeUpgrade, finalCheckpoint,
+        "Checkpoint should have advanced after consuming new commits");
+
+    // Verify target has correct number of commits
+    assertEquals(3, targetMetaClient.getActiveTimeline().getCommitsTimeline().countInstants(),
+        "Target should have 3 commits (as it batches source table commits into target table commits) + upgrade commit");
 
     // Clean up
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, sourceTablePath);
