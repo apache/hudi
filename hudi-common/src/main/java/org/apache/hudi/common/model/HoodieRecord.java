@@ -160,7 +160,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    */
   protected Option<Map<String, String>> metaData;
 
-  protected transient Comparable<?> orderingValue;
+  protected Comparable<?> orderingValue;
 
   protected Boolean isDelete;
 
@@ -384,6 +384,10 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   protected abstract void writeRecordPayload(T payload, Kryo kryo, Output output);
 
   protected abstract T readRecordPayload(Kryo kryo, Input input);
+
+  protected void decodeRecord(Schema recordSchema) {
+
+  }
 
   /**
    * Clears the new currentLocation of the record. 

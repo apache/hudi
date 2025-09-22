@@ -126,6 +126,8 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     this.newLocation = record.getNewLocation();
     this.ignoreIndexUpdate = record.getIgnoreIndexUpdate();
     this.binaryRecord = (SerializableIndexedRecord) this.data;
+    this.isDelete = record.isDelete;
+    this.orderingValue = record.orderingValue;
   }
 
   public HoodieAvroIndexedRecord() {
@@ -310,7 +312,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
         field -> (Comparable<?>) HoodieAvroUtils.getNestedFieldVal((GenericRecord) data, field, true, consistentLogicalTimestampEnabled));
   }
 
-  private void decodeRecord(Schema recordSchema) {
+  protected void decodeRecord(Schema recordSchema) {
     binaryRecord.decodeRecord(recordSchema);
   }
 
