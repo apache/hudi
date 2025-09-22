@@ -1688,4 +1688,75 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       }
     }
   }
+
+  test("Test partition not at end") {
+    withSQLConf("hoodie.memory.merge.max.size" -> "1",
+      "hoodie.memory.compaction.max.size" -> "1",
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "1") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  partition string,
+             |  name string,
+             |  price double,
+             |  ts int
+             |) using hudi
+             | partitioned by (partition)
+             | location '${tmp.getCanonicalPath}'
+             | tblproperties (
+             |  primaryKey ='id',
+             |  preCombineField = 'ts'
+             | )
+       """.stripMargin)
+
+        spark.sql(
+          s"""
+             |insert into $tableName values
+             |(1, 'a1', 1, 100, 'p1'),
+             |(11, 'a1', 1, 100, 'p1'),
+             |(12, 'a1', 1, 100, 'p1'),
+             |(13, 'a1', 1, 100, 'p1'),
+             |(2, 'a2', 2, 200, 'p2'),
+             |(21, 'a2', 2, 200, 'p2'),
+             |(22, 'a2', 2, 200, 'p2'),
+             |(23, 'a2', 2, 200, 'p2')
+             |""".stripMargin
+        )
+
+        spark.sql(
+          s"""
+             | merge into $tableName
+             | using (
+             |  select 1 as id, 'p1' as partition, 'a1' as name, 10 as price, 1000 as ts
+             |  union
+             |  select 11 as id, 'p1' as partition, 'a1' as name, 10 as price, 1000 as ts
+             |  union
+             |  select 12 as id, 'p1' as partition, 'a1' as name, 10 as price, 1000 as ts
+             |  union
+             |  select 13 as id, 'p1' as partition, 'a1' as name, 10 as price, 1000 as ts
+             |  union
+             |  select 2 as id, 'p2' as partition, 'a2' as name, 20 as price, 1000 as ts
+             |  union
+             |  select 21 as id, 'p2' as partition, 'a2' as name, 20 as price, 1000 as ts
+             |  union
+             |  select 22 as id, 'p2' as partition, 'a2' as name, 20 as price, 1000 as ts
+             |  union
+             |  select 23 as id, 'p2' as partition, 'a2' as name, 20 as price, 1000 as ts
+             |  union
+             |  select 3 as id, 'p3' as partition, 'a3' as name, 30 as price, 1000 as ts
+             |  union
+             |  select 4 as id, 'p1' as partition, 'a4' as name, 40 as price, 1000 as ts
+             | ) s0
+             | on s0.id = $tableName.id and s0.partition = $tableName.partition
+             | when matched then update set *
+             | when not matched then insert *
+       """.stripMargin)
+      }
+    }
+  }
 }
