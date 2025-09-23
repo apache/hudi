@@ -19,7 +19,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.ColumnStatsIndexSupport.{composeColumnStatStructType, deserialize, tryUnpackValueWrapper}
+import org.apache.hudi.ColumnStatsIndexSupport.{composeColumnStatStructType, extractWrapperValueV1}
 import org.apache.hudi.ExpressionIndexSupport._
 import org.apache.hudi.HoodieCatalystUtils.{withPersistedData, withPersistedDataset}
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
@@ -34,6 +34,8 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.index.expression.HoodieExpressionIndex
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.stats.{SparkValueMetadataUtils, ValueMetadata, ValueType}
+import org.apache.hudi.stats.ValueMetadata.getValueMetadata
 import org.apache.hudi.util.JFunction
 
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
@@ -241,6 +243,7 @@ class ExpressionIndexSupport(spark: SparkSession,
     // of the dataset, and therefore we rely on low-level RDD API to avoid incurring encoding/decoding
     // penalty of the [[Dataset]], since it's required to adhere to its schema at all times, while
     // RDDs are not;
+    val useJava8api = spark.sessionState.conf.datetimeJava8ApiEnabled
     val transposedRows: HoodieData[Row] = colStatsRecords
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       .filter(JFunction.toJavaSerializableFunction(r => sortedTargetColumnsSet.contains(r.getColumnName)))
@@ -259,8 +262,9 @@ class ExpressionIndexSupport(spark: SparkSession,
           val colName = r.getColumnName
           val colType = tableSchemaFieldMap(colName).dataType
 
-          val minValue = deserialize(tryUnpackValueWrapper(minValueWrapper), colType)
-          val maxValue = deserialize(tryUnpackValueWrapper(maxValueWrapper), colType)
+          val valueMetadata = getValueMetadata(r.getValueType)
+          val minValue = extractExpressionIndexValue(minValueWrapper, colType, valueMetadata, useJava8api)
+          val maxValue = extractExpressionIndexValue(maxValueWrapper, colType, valueMetadata, useJava8api)
 
           // Update min-/max-value structs w/ unwrapped values in-place
           r.setMinValue(minValue)
@@ -611,6 +615,18 @@ class ExpressionIndexSupport(spark: SparkSession,
 }
 
 object ExpressionIndexSupport {
+
+  def extractExpressionIndexValue(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata, useJava8api: Boolean): Any = {
+    valueMetadata.getValueType match {
+      case ValueType.V1 => extractWrapperValueV1(valueWrapper, dataType)
+      case _ => extractExpressionIndexValueV2(valueWrapper, valueMetadata, useJava8api)
+    }
+  }
+
+  private def extractExpressionIndexValueV2(valueWrapper: AnyRef, valueMetadata: ValueMetadata, useJava8api: Boolean): Any = {
+    SparkValueMetadataUtils.convertJavaTypeToSparkType(valueMetadata.unwrapValue(valueWrapper), useJava8api)
+  }
+
   val INDEX_NAME = "EXPRESSION"
   /**
    * Target Column Stats Index columns which internally are mapped onto fields of the corresponding

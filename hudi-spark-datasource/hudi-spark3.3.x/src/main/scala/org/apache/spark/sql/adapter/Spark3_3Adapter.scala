@@ -164,5 +164,7 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
     value == LegacyBehaviorPolicy.LEGACY
   }
 
-  override def isTimestampNTZType(dataType: DataType): Boolean = false
+  override def isTimestampNTZType(dataType: DataType): Boolean = {
+    dataType.getClass.getSimpleName.startsWith("TimestampNTZType")
+  }
 }

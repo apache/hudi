@@ -224,7 +224,7 @@ public class AvroSchemaUtils {
     return atomicTypeEqualityPredicate.apply(sourceSchema, targetSchema);
   }
 
-  public static Option<Schema.Type> findNestedFieldType(Schema schema, String fieldName) {
+  public static Option<Schema> findNestedFieldSchema(Schema schema, String fieldName) {
     if (StringUtils.isNullOrEmpty(fieldName)) {
       return Option.empty();
     }
@@ -237,7 +237,11 @@ public class AvroSchemaUtils {
       }
       schema = foundField.schema();
     }
-    return Option.of(resolveNullableSchema(schema).getType());
+    return Option.of(resolveNullableSchema(schema));
+  }
+
+  public static Option<Schema.Type> findNestedFieldType(Schema schema, String fieldName) {
+    return findNestedFieldSchema(schema, fieldName).map(Schema::getType);
   }
 
   /**
@@ -403,7 +407,8 @@ public class AvroSchemaUtils {
    * @param requiredSchema the target schema that defines the desired structure and field requirements
    * @param mandatoryFields a set of top level field names that should be included from the required schema
    *                     even if they don't exist in the data schema. This allows for fields like cdc operation
-   *                     don't exist in the data schema
+   *                     don't exist in the data schema. We keep the types matching the required schema because
+   *                     timestamp partition cols can be read as a different type than the data schema
    *
    * @return a new pruned schema that matches the required schema structure while preserving
    *         data schema metadata where possible
@@ -424,17 +429,19 @@ public class AvroSchemaUtils {
         }
         List<Schema.Field> newFields = new ArrayList<>();
         for (Schema.Field requiredSchemaField : requiredSchema.getFields()) {
-          Schema.Field dataSchemaField = dataSchema.getField(requiredSchemaField.name());
-          if (dataSchemaField != null) {
-            Schema.Field newField = createNewSchemaField(
-                dataSchemaField.name(),
-                pruneDataSchema(dataSchemaField.schema(), requiredSchemaField.schema(), Collections.emptySet()),
-                dataSchemaField.doc(),
-                dataSchemaField.defaultVal()
-            );
-            newFields.add(newField);
-          } else if (mandatoryFields.contains(requiredSchemaField.name())) {
+          if (mandatoryFields.contains(requiredSchemaField.name())) {
             newFields.add(createNewSchemaField(requiredSchemaField));
+          } else {
+            Schema.Field dataSchemaField = dataSchema.getField(requiredSchemaField.name());
+            if (dataSchemaField != null) {
+              Schema.Field newField = createNewSchemaField(
+                  dataSchemaField.name(),
+                  pruneDataSchema(dataSchemaField.schema(), requiredSchemaField.schema(), Collections.emptySet()),
+                  dataSchemaField.doc(),
+                  dataSchemaField.defaultVal()
+              );
+              newFields.add(newField);
+            }
           }
         }
         Schema newRecord = Schema.createRecord(dataSchema.getName(), dataSchema.getDoc(), dataSchema.getNamespace(), false);

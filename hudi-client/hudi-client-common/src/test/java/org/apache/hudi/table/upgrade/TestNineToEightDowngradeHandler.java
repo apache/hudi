@@ -266,7 +266,7 @@ class TestNineToEightDowngradeHandler {
       )).thenAnswer(invocation -> null); // Do nothing
       
       // Mock the dropNonV1SecondaryIndexPartitions to simulate dropping V2 indexes
-      mockedUtils.when(() -> UpgradeDowngradeUtils.dropNonV1SecondaryIndexPartitions(
+      mockedUtils.when(() -> UpgradeDowngradeUtils.dropNonV1IndexPartitions(
           eq(config),
           eq(context),
           eq(table),

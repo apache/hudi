@@ -7,26 +7,28 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
-package org.apache.hudi.common.model;
+package org.apache.hudi.stats;
 
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.util.Objects;
 
-import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.stats.ValueMetadata.getEmptyValueMetadata;
 
 /**
  * Hoodie metadata for the column range of data stored in columnar format (like Parquet)
@@ -47,6 +49,7 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
   private final long valueCount;
   private final long totalSize;
   private final long totalUncompressedSize;
+  private final ValueMetadata valueMetadata;
 
   private HoodieColumnRangeMetadata(String filePath,
                                     String columnName,
@@ -55,7 +58,8 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
                                     long nullCount,
                                     long valueCount,
                                     long totalSize,
-                                    long totalUncompressedSize) {
+                                    long totalUncompressedSize,
+                                    ValueMetadata valueMetadata) {
     this.filePath = filePath;
     this.columnName = columnName;
     this.minValue = minValue;
@@ -64,6 +68,7 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     this.valueCount = valueCount;
     this.totalSize = totalSize;
     this.totalUncompressedSize = totalUncompressedSize;
+    this.valueMetadata = valueMetadata;
   }
 
   public String getFilePath() {
@@ -79,9 +84,17 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     return this.minValue;
   }
 
+  public Object getMinValueWrapped() {
+    return getValueMetadata().wrapValue(getMinValue());
+  }
+
   @Nullable
   public T getMaxValue() {
     return this.maxValue;
+  }
+
+  public Object getMaxValueWrapped() {
+    return getValueMetadata().wrapValue(getMaxValue());
   }
 
   public long getNullCount() {
@@ -98,6 +111,10 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
 
   public long getTotalUncompressedSize() {
     return totalUncompressedSize;
+  }
+
+  public ValueMetadata getValueMetadata() {
+    return valueMetadata;
   }
 
   @Override
@@ -145,29 +162,40 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
                                                                               long nullCount,
                                                                               long valueCount,
                                                                               long totalSize,
-                                                                              long totalUncompressedSize) {
-    return new HoodieColumnRangeMetadata<>(filePath, columnName, minValue, maxValue, nullCount, valueCount, totalSize, totalUncompressedSize);
+                                                                              long totalUncompressedSize,
+                                                                              ValueMetadata valueMetadata) throws IllegalArgumentException {
+    valueMetadata.validate(minValue, maxValue);
+    return new HoodieColumnRangeMetadata<>(filePath, columnName, minValue, maxValue, nullCount, valueCount, totalSize, totalUncompressedSize, valueMetadata);
   }
 
   /**
    * Converts instance of {@link HoodieMetadataColumnStats} to {@link HoodieColumnRangeMetadata}
    */
   public static HoodieColumnRangeMetadata<Comparable> fromColumnStats(HoodieMetadataColumnStats columnStats) {
+    ValueMetadata valueMetadata = ValueMetadata.getValueMetadata(columnStats.getValueType());
     return HoodieColumnRangeMetadata.<Comparable>create(
         columnStats.getFileName(),
         columnStats.getColumnName(),
-        unwrapAvroValueWrapper(columnStats.getMinValue()), // misses for special handling.
-        unwrapAvroValueWrapper(columnStats.getMaxValue()), // misses for special handling.
+        valueMetadata.unwrapValue(columnStats.getMinValue()),
+        valueMetadata.unwrapValue(columnStats.getMaxValue()),
         columnStats.getNullCount(),
         columnStats.getValueCount(),
         columnStats.getTotalSize(),
-        columnStats.getTotalUncompressedSize());
+        columnStats.getTotalUncompressedSize(),
+        valueMetadata);
   }
 
   @SuppressWarnings("rawtype")
   public static HoodieColumnRangeMetadata<Comparable> stub(String filePath,
-                                                           String columnName) {
-    return new HoodieColumnRangeMetadata<>(filePath, columnName, null, null, -1, -1, -1, -1);
+                                                           String columnName,
+                                                           HoodieIndexVersion indexVersion) {
+    return new HoodieColumnRangeMetadata<>(filePath, columnName, null, null, -1, -1, -1, -1, getEmptyValueMetadata(indexVersion));
+  }
+
+  public static HoodieColumnRangeMetadata<Comparable> createEmpty(String filePath,
+                                                                  String columnName,
+                                                                  HoodieIndexVersion indexVersion) {
+    return new HoodieColumnRangeMetadata(filePath, columnName, null, null, 0L, 0L, 0L, 0L, getEmptyValueMetadata(indexVersion));
   }
 
   /**
@@ -180,6 +208,16 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
       return left == null ? right : left;
     }
 
+    if (left.getValueMetadata().getValueType() != right.getValueMetadata().getValueType()) {
+      throw new IllegalArgumentException("Value types should be the same for merging column ranges");
+    } else if (left.getValueMetadata().getValueType() != ValueType.V1) {
+      if (left.minValue != null && right.minValue != null && left.minValue.getClass() != right.minValue.getClass()) {
+        throw new IllegalArgumentException("Value types should be the same for merging column ranges");
+      } else if (left.maxValue != null && right.maxValue != null && left.maxValue.getClass() != right.maxValue.getClass()) {
+        throw new IllegalArgumentException("Value types should be the same for merging column ranges");
+      }
+    }
+
     ValidationUtils.checkArgument(left.getColumnName().equals(right.getColumnName()),
         "Column names should be the same for merging column ranges");
     String filePath = left.getFilePath();
@@ -190,7 +228,8 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     long valueCount = left.getValueCount() + right.getValueCount();
     long totalSize = left.getTotalSize() + right.getTotalSize();
     long totalUncompressedSize = left.getTotalUncompressedSize() + right.getTotalUncompressedSize();
-    return create(filePath, columnName, min, max, nullCount, valueCount, totalSize, totalUncompressedSize);
+
+    return new HoodieColumnRangeMetadata<>(filePath, columnName, min, max, nullCount, valueCount, totalSize, totalUncompressedSize, left.getValueMetadata());
   }
 
   private static <T extends Comparable<T>> T minVal(T val1, T val2) {

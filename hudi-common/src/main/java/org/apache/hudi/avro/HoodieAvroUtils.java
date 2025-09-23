@@ -21,6 +21,7 @@ package org.apache.hudi.avro;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -1196,11 +1197,32 @@ public class HoodieAvroUtils {
         case NULL:
         case BOOLEAN:
         case INT:
-        case LONG:
         case FLOAT:
         case DOUBLE:
         case BYTES:
         case STRING:
+          return oldValue;
+        case LONG:
+          if (oldSchema.getLogicalType() != newSchema.getLogicalType()) {
+            if (oldSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
+              if (newSchema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
+                return DateTimeUtils.millisToMicros((Long) oldValue);
+              }
+            } else if (oldSchema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
+              if (newSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
+                return DateTimeUtils.microsToMillis((Long) oldValue);
+              }
+            } else if (oldSchema.getLogicalType() instanceof LogicalTypes.LocalTimestampMillis) {
+              if (newSchema.getLogicalType() instanceof LogicalTypes.LocalTimestampMicros) {
+                return DateTimeUtils.millisToMicros((Long) oldValue);
+              }
+            } else if (oldSchema.getLogicalType() instanceof LogicalTypes.LocalTimestampMicros) {
+              if (newSchema.getLogicalType() instanceof LogicalTypes.LocalTimestampMillis) {
+                return DateTimeUtils.microsToMillis((Long) oldValue);
+              }
+            }
+            throw new HoodieAvroSchemaException("Long type logical change from " + oldSchema.getLogicalType() + " to " + newSchema.getLogicalType() + " is not supported");
+          }
           return oldValue;
         case FIXED:
           if (oldSchema.getFixedSize() != newSchema.getFixedSize()) {
@@ -1267,6 +1289,9 @@ public class HoodieAvroUtils {
         }
         break;
       case BYTES:
+        if (oldSchema.getType() == Schema.Type.FIXED) {
+          return ByteBuffer.wrap(((GenericFixed) oldValue).bytes());
+        }
         if (oldSchema.getType() == Schema.Type.STRING) {
           return ByteBuffer.wrap(getUTF8Bytes(oldValue.toString()));
         }
@@ -1335,8 +1360,12 @@ public class HoodieAvroUtils {
    * This is also what Conversions.DecimalConversion.toBytes() outputs inside a byte buffer
    */
   public static BigDecimal convertBytesToBigDecimal(byte[] value, LogicalTypes.Decimal decimal) {
+    return convertBytesToBigDecimal(value, decimal.getPrecision(), decimal.getScale());
+  }
+
+  public static BigDecimal convertBytesToBigDecimal(byte[] value, int precision, int scale) {
     return new BigDecimal(new BigInteger(value),
-        decimal.getScale(), new MathContext(decimal.getPrecision(), RoundingMode.HALF_UP));
+        scale, new MathContext(precision, RoundingMode.HALF_UP));
   }
 
   public static boolean hasDecimalField(Schema schema) {
