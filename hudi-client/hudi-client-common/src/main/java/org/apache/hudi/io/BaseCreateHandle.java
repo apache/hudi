@@ -94,7 +94,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
   protected void doWrite(HoodieRecord record, Schema schema, TypedProperties props) {
     Option<Map<String, String>> recordMetadata = getRecordMetadata(record, schema, props);
     try {
-      if (!HoodieOperation.isDelete(record.getOperation()) && !record.isDelete(schema, config.getProps())) {
+      if (!HoodieOperation.isDelete(record.getOperation()) && !record.isDelete(deleteContext, config.getProps())) {
         if (record.shouldIgnore(schema, config.getProps())) {
           return;
         }

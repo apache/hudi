@@ -143,7 +143,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr,
                             TaskContextSupplier taskContextSupplier, Map<HeaderMetadataType, String> header) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier);
+    this(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier, true);
     this.useWriterSchema = true;
     this.isLogCompaction = true;
     this.header.putAll(header);
@@ -151,6 +151,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr, TaskContextSupplier taskContextSupplier) {
+    this(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier, false);
+  }
+
+  private HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                             String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr, TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     super(config, instantTime, partitionPath, fileId, hoodieTable,
         config.shouldWritePartialUpdates()
             // When enabling writing partial updates to the data blocks in log files,
@@ -159,7 +164,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             ? Option.of(new Schema.Parser().parse(config.getPartialUpdateSchema()))
             : Option.empty(),
         taskContextSupplier,
-        false);
+        preserveMetadata);
     this.recordItr = recordItr;
     this.sizeEstimator = getSizeEstimator();
     this.statuses = new ArrayList<>();
@@ -297,7 +302,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       recordProperties.put(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, String.valueOf(isUpdateRecord));
 
       // Check for delete
-      if (!hoodieRecord.isDelete(schema, recordProperties) || config.allowOperationMetadataField()) {
+      if (config.allowOperationMetadataField() || !hoodieRecord.isDelete(deleteContext, recordProperties)) {
         bufferInsertAndUpdate(schema, hoodieRecord, isUpdateRecord);
       } else {
         bufferDelete(hoodieRecord);

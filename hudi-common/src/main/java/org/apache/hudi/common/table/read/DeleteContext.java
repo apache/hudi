@@ -50,6 +50,19 @@ public class DeleteContext implements Serializable {
   }
 
   /**
+   * Creates a DeleteContext for the writer path where it is assumed the HoodieOperation field is not set in the incoming record.
+   * @param properties the properties defining how deletes are handled for the table
+   * @param recordSchema the schema of the incoming record
+   * @return the delete context
+   */
+  public static DeleteContext fromRecordSchema(Properties properties, Schema recordSchema) {
+    DeleteContext deleteContext = new DeleteContext(properties, recordSchema);
+    deleteContext.hoodieOperationPos = -1;
+    deleteContext.readerSchema = recordSchema;
+    return deleteContext;
+  }
+
+  /**
    * Returns an option pair containing delete key and corresponding marker value. Delete key represents
    * the field which contains the corresponding delete-marker if a record is deleted. If no delete key and marker
    * are configured, the function returns an empty option.
@@ -82,13 +95,13 @@ public class DeleteContext implements Serializable {
    * @return whether built-in delete field is included in the table schema
    */
   private static boolean hasBuiltInDeleteField(Schema schema) {
-    return schema.getField(HOODIE_IS_DELETED_FIELD) != null;
+    return schema.getType() != Schema.Type.NULL && schema.getField(HOODIE_IS_DELETED_FIELD) != null;
   }
 
   /**
    * Returns position of hoodie operation meta field in the schema
    */
-  private static Integer getHoodieOperationPos(Schema schema) {
+  private static int getHoodieOperationPos(Schema schema) {
     return Option.ofNullable(schema.getField(HoodieRecord.OPERATION_METADATA_FIELD)).map(Schema.Field::pos).orElse(-1);
   }
 

@@ -53,7 +53,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER;
-import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED;
 
@@ -144,8 +143,8 @@ public class ConfigUtils {
   /**
    * Ensures that the prefixed merge properties are populated for mergers.
    */
-  public static TypedProperties getMergeProps(TypedProperties props, TypedProperties tableProps) {
-    Map<String, String> mergeProps = extractWithPrefix(tableProps, RECORD_MERGE_PROPERTY_PREFIX);
+  public static TypedProperties getMergeProps(TypedProperties props, HoodieTableConfig tableConfig) {
+    Map<String, String> mergeProps = tableConfig.getTableMergeProperties();
     if (mergeProps.isEmpty()) {
       return props;
     }

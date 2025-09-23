@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.LogFileCreationCallback;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -81,6 +82,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected final Schema writeSchema;
   protected final Schema writeSchemaWithMetaFields;
   protected final HoodieRecordMerger recordMerger;
+  protected final DeleteContext deleteContext;
 
   protected HoodieTimer timer;
   protected WriteStatus writeStatus;
@@ -96,7 +98,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
    * Flag saying whether secondary index streaming writes is enabled for the table.
    */
   protected final boolean isSecondaryIndexStatsStreamingWritesEnabled;
-  List<HoodieIndexDefinition> secondaryIndexDefns = Collections.emptyList();
+  protected List<HoodieIndexDefinition> secondaryIndexDefns = Collections.emptyList();
 
   private boolean closed = false;
   protected boolean isTrackingEventTimeWatermark;
@@ -140,6 +142,9 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         && hoodieTable.getMetaClient().getTableConfig().getRecordMergeMode() == EVENT_TIME_ORDERING
         && ConfigUtils.isTrackingEventTimeWatermark(config.getProps());
     this.keepConsistentLogicalTimestamp = isTrackingEventTimeWatermark && ConfigUtils.shouldKeepConsistentLogicalTimestamp(config.getProps());
+    TypedProperties mergeProps = ConfigUtils.getMergeProps(config.getProps(), hoodieTable.getMetaClient().getTableConfig());
+    Schema deleteContextSchema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
+    this.deleteContext = new DeleteContext(mergeProps, deleteContextSchema).withReaderSchema(deleteContextSchema);
   }
 
   private void initSecondaryIndexStats(boolean preserveMetadata) {

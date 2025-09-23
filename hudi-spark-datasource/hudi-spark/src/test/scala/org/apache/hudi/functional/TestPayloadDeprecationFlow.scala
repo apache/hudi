@@ -67,10 +67,13 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (10, 2L, "rider-B", "driver-B", 27.70, "i", "10.1", 10, 1, "i"),
       (10, 3L, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"),
       (10, 4L, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
-      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))
+      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"),
+      (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
     val originalOrderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
       "_event_seq"
+    } else if (payloadClazz.equals(classOf[PostgresDebeziumAvroPayload].getName)) {
+      "_event_lsn"
     } else {
       "ts"
     }
@@ -190,17 +193,19 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     val expectedData = getExpectedResultForSnapshotQuery(payloadClazz, useOpAsDelete)
     val expectedDf = spark.createDataFrame(spark.sparkContext.parallelize(expectedData)).toDF(columns: _*).sort("_event_lsn")
     assertTrue(expectedDf.except(finalDf).isEmpty && finalDf.except(expectedDf).isEmpty)
-    // Validate time travel query.
-    val timeTravelDf = spark.read.format("hudi")
-      .option("as.of.instant", firstUpdateInstantTime).load(basePath)
-      .select("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME, DebeziumConstants.FLATTENED_OP_COL_NAME)
-      .sort("_event_lsn")
-    val expectedTimeTravelData = getExpectedResultForTimeTravelQuery(payloadClazz, useOpAsDelete)
-    val expectedTimeTravelDf = spark.createDataFrame(
-      spark.sparkContext.parallelize(expectedTimeTravelData)).toDF(columns: _*).sort("_event_lsn")
-    assertTrue(
-      expectedTimeTravelDf.except(timeTravelDf).isEmpty
-        && timeTravelDf.except(expectedTimeTravelDf).isEmpty)
+    // Validate time travel query. Reading from v8 log file will not work for MySQLDebeziumAvroPayload due to the change from a single ordering field, to two ordering fields.
+    if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name()) || !payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
+      val timeTravelDf = spark.read.format("hudi")
+        .option("as.of.instant", firstUpdateInstantTime).load(basePath)
+        .select("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME, DebeziumConstants.FLATTENED_OP_COL_NAME)
+        .sort("_event_lsn")
+      val expectedTimeTravelData = getExpectedResultForTimeTravelQuery(payloadClazz, useOpAsDelete)
+      val expectedTimeTravelDf = spark.createDataFrame(
+        spark.sparkContext.parallelize(expectedTimeTravelData)).toDF(columns: _*).sort("_event_lsn")
+      assertTrue(
+        expectedTimeTravelDf.except(timeTravelDf).isEmpty
+          && timeTravelDf.except(expectedTimeTravelDf).isEmpty)
+    }
   }
 
   @ParameterizedTest
@@ -226,7 +231,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (10, 2L, "rider-B", "driver-B", 27.70, "i", "10.1", 10, 1, "i"),
       (10, 3L, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"),
       (10, 4L, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
-      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))
+      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"),
+      (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
     val originalOrderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
       "_event_seq"
@@ -389,12 +395,14 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
         Seq(
           (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-          (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"))
+          (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
+          (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
       } else {
         Seq(
           (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"))
+          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
+          (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
       }
     } else {
       if (payloadClazz.equals(classOf[DefaultHoodieRecordPayload].getName)) {
@@ -417,7 +425,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
         (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
         (10, 3, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"),
         (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
-        (10, 5, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))
+        (10, 5, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"),
+        (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
     } else {
       Seq(
         (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),

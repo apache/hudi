@@ -194,7 +194,7 @@ public abstract class HoodieReaderContext<T> {
   }
 
   public TypedProperties getMergeProps(TypedProperties props) {
-    return ConfigUtils.getMergeProps(props, this.tableConfig.getProps());
+    return ConfigUtils.getMergeProps(props, this.tableConfig);
   }
 
   public Option<Predicate> getKeyFilterOpt() {

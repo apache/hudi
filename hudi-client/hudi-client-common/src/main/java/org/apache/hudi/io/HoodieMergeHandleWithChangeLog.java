@@ -102,7 +102,7 @@ public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieWriteMerge
     // TODO Remove these unnecessary newInstance invocations
     HoodieRecord<T> savedRecord = newRecord.newInstance();
     super.writeInsertRecord(newRecord);
-    if (!HoodieOperation.isDelete(newRecord.getOperation()) && !savedRecord.isDelete(schema, config.getPayloadConfig().getProps())) {
+    if (!HoodieOperation.isDelete(newRecord.getOperation()) && !savedRecord.isDelete(deleteContext, config.getPayloadConfig().getProps())) {
       cdcLogger.put(newRecord, null, savedRecord.toIndexedRecord(schema, config.getPayloadConfig().getProps()).map(HoodieAvroIndexedRecord::getData));
     }
   }

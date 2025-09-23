@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -216,7 +217,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  protected boolean checkIsDelete(Schema recordSchema, Properties props) {
+  protected boolean checkIsDelete(DeleteContext deleteContext, Properties props) {
     if (data == null) {
       return true;
     }
@@ -226,8 +227,15 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
     }
 
     // Use data field to decide.
-    Schema.Field deleteField = recordSchema.getField(HOODIE_IS_DELETED_FIELD);
-    return deleteField != null && data.getBoolean(deleteField.pos());
+    Schema.Field deleteField = deleteContext.getReaderSchema().getField(HOODIE_IS_DELETED_FIELD);
+    if (deleteField != null && data.getBoolean(deleteField.pos())) {
+      return true;
+    }
+    // check custom delete marker
+    return deleteContext.getCustomDeleteMarkerKeyValue().map(markerKeyValue -> {
+      Object fieldValue = getColumnValueAsJava(deleteContext.getReaderSchema(), markerKeyValue.getKey(), props, true);
+      return markerKeyValue.getValue().equals(fieldValue);
+    }).orElse(false);
   }
 
   @Override

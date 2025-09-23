@@ -34,8 +34,8 @@ import java.util.Properties;
  */
 public class BufferedRecords {
 
-  public static <T> BufferedRecord<T> fromHoodieRecord(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields) {
-    boolean isDelete = record.isDelete(schema, props);
+  public static <T> BufferedRecord<T> fromHoodieRecord(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields, DeleteContext deleteContext) {
+    boolean isDelete = record.isDelete(deleteContext, props);
     return fromHoodieRecord(record, schema, recordContext, props, orderingFields, isDelete);
   }
 
