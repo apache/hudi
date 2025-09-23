@@ -1624,12 +1624,11 @@ public class HoodieTableMetadataUtil {
     }};
 
   @VisibleForTesting
-  public static Map<String, Schema> getColumnsToIndex(
-                                               HoodieTableConfig tableConfig,
-                                               HoodieMetadataConfig metadataConfig,
-                                               Lazy<Option<Schema>> tableSchemaLazyOpt,
-                                               Option<HoodieRecordType> recordType,
-                                               HoodieIndexVersion indexVersion) {
+  public static Map<String, Schema> getColumnsToIndex(HoodieTableConfig tableConfig,
+                                                      HoodieMetadataConfig metadataConfig,
+                                                      Lazy<Option<Schema>> tableSchemaLazyOpt,
+                                                      Option<HoodieRecordType> recordType,
+                                                      HoodieIndexVersion indexVersion) {
     return getColumnsToIndex(tableConfig, metadataConfig, tableSchemaLazyOpt, false, recordType, indexVersion);
   }
 
@@ -2644,7 +2643,7 @@ public class HoodieTableMetadataUtil {
 
     // Aggregate Column Ranges
     Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = columnMetadataMap.entrySet().stream()
-        .map(entry -> FileFormatUtils.getColumnRangeInPartition(partitionPath, entry.getKey(),  entry.getValue(), colsToIndexSchemaMap,partitionStatsIndexVersion));
+        .map(entry -> FileFormatUtils.getColumnRangeInPartition(partitionPath, entry.getKey(), entry.getValue(), colsToIndexSchemaMap, partitionStatsIndexVersion));
 
     // Create Partition Stats Records
     return HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, partitionStatsRangeMetadata.collect(Collectors.toList()), false, isTightBound, indexPartitionOpt);
