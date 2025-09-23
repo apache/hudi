@@ -62,8 +62,20 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
                                        TypedProperties props,
                                        List<String> orderingFieldNames,
                                        UpdateProcessor<T> updateProcessor) {
+    this(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames,
+        updateProcessor, Option.empty());
+  }
+
+  public KeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
+                                       HoodieTableMetaClient hoodieTableMetaClient,
+                                       RecordMergeMode recordMergeMode,
+                                       Option<PartialUpdateMode> partialUpdateModeOpt,
+                                       TypedProperties props,
+                                       List<String> orderingFieldNames,
+                                       UpdateProcessor<T> updateProcessor,
+                                       Option<Schema> incomingRecordsSchemaOpt) {
     super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor,
-        Option.empty());
+        incomingRecordsSchemaOpt);
   }
 
   @Override
