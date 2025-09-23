@@ -50,18 +50,20 @@ public class BufferedRecords {
 
   public static <T> BufferedRecord<T> fromHoodieRecordWithDeflatedRecord(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props,
                                                                          String[] orderingFields, DeleteContext deleteContext) {
+    HoodieOperation hoodieOperation = record.getIgnoreIndexUpdate() ? HoodieOperation.UPDATE_BEFORE : record.getOperation();
     boolean isDelete = record.isDelete(deleteContext, props);
-    return fromHoodieRecordWithDeflatedRecord(record, schema, recordContext, props, orderingFields, isDelete);
+    return fromHoodieRecordWithDeflatedRecord(record, schema, recordContext, props, orderingFields, isDelete, hoodieOperation);
   }
 
   public static <T> BufferedRecord<T> fromHoodieRecordWithDeflatedRecord(HoodieRecord record, Schema schema, RecordContext<T> recordContext,
-                                                                         Properties props, String[] orderingFields, boolean isDelete) {
+                                                                         Properties props, String[] orderingFields, boolean isDelete,
+                                                                         HoodieOperation hoodieOperation) {
     HoodieKey hoodieKey = record.getKey();
     T data = recordContext.extractDeflatedDataFromRecord(record, schema, props);
     String recordKey = hoodieKey == null ? recordContext.getRecordKey(data, schema) : hoodieKey.getRecordKey();
     Integer schemaId = recordContext.encodeAvroSchema(schema);
     Comparable orderingValue = record.getOrderingValue(schema, props, orderingFields);
-    return new BufferedRecord<>(recordKey, recordContext.convertOrderingValueToEngineType(orderingValue), data, schemaId, inferOperation(isDelete, record.getOperation()));
+    return new BufferedRecord<>(recordKey, recordContext.convertOrderingValueToEngineType(orderingValue), data, schemaId, inferOperation(isDelete, hoodieOperation));
   }
 
   public static <T> BufferedRecord<T> fromEngineRecord(T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete) {

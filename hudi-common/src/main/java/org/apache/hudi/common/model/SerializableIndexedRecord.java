@@ -72,7 +72,7 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
 
   @Override
   public Schema getSchema() {
-    return getData().getSchema();
+    return schema != null ? schema : getData().getSchema();
   }
 
   byte[] encodeRecord() {

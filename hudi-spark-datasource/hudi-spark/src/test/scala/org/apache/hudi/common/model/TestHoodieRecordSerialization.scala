@@ -93,6 +93,8 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
 
       if (cloned.isInstanceOf[HoodieAvroIndexedRecord]) {
         cloned.asInstanceOf[HoodieAvroIndexedRecord].toIndexedRecord(schema, new Properties())
+        // by default avro is not eagerly deserialized.
+        cloned.asInstanceOf[HoodieAvroIndexedRecord].getData
       }
       assertEquals(expectedSize, originalBytes.length)
       assertEquals(record, cloned)
