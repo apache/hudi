@@ -312,7 +312,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
         field -> (Comparable<?>) HoodieAvroUtils.getNestedFieldVal((GenericRecord) data, field, true, consistentLogicalTimestampEnabled));
   }
 
-  protected void decodeRecord(Schema recordSchema) {
+  private void decodeRecord(Schema recordSchema) {
     binaryRecord.decodeRecord(recordSchema);
   }
 

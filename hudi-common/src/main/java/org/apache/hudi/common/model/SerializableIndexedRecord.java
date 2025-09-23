@@ -82,8 +82,7 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
     return recordBytes;
   }
 
-  @VisibleForTesting
-  public void decodeRecord(Schema schema) {
+  void decodeRecord(Schema schema) {
     if (record == null) {
       this.schema = schema;
     }
