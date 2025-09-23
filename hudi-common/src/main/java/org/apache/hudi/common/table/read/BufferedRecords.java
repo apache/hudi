@@ -48,8 +48,9 @@ public class BufferedRecords {
     return new BufferedRecord<>(recordKey, orderingValue, data, schemaId, inferOperation(isDelete, record.getOperation()));
   }
 
-  public static <T> BufferedRecord<T> fromHoodieRecordWithDeflatedRecord(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields) {
-    boolean isDelete = record.isDelete(schema, props);
+  public static <T> BufferedRecord<T> fromHoodieRecordWithDeflatedRecord(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props,
+                                                                         String[] orderingFields, DeleteContext deleteContext) {
+    boolean isDelete = record.isDelete(deleteContext, props);
     return fromHoodieRecordWithDeflatedRecord(record, schema, recordContext, props, orderingFields, isDelete);
   }
 
