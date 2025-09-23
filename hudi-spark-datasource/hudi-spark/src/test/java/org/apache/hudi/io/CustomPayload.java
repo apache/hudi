@@ -69,7 +69,7 @@ public class CustomPayload implements HoodieRecordPayload<CustomPayload> {
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    return Option.ofNullable(record);
+    return handleDeleteRecord(record);
   }
 
   @Override
