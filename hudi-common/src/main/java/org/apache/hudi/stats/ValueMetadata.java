@@ -109,18 +109,28 @@ public class ValueMetadata implements Serializable {
 
   public static final ValueMetadata NULL_METADATA = new ValueMetadata(ValueType.NULL);
 
+  /**
+   * decimal is encoded as a string in the format "precision,scale" in the extra info field
+   */
   interface DecimalValueMetadata {
 
     int getPrecision();
 
     int getScale();
 
+    /**
+     * Do not change how we encode decimal without
+     * handling upgrade/downgrade and backwards compatibility
+     */
     static String encodeData(DecimalValueMetadata decimalValueMetadata) {
       return String.format("%d,%d", decimalValueMetadata.getPrecision(), decimalValueMetadata.getScale());
     }
 
+    /**
+     * Do not change how we encode decimal without
+     * handling upgrade/downgrade and backwards compatibility
+     */
     static Pair<Integer, Integer> decodeData(String data) {
-      //TODO: decide if we want to store things in a better way
       String[] splits = data.split(",");
       return Pair.of(Integer.parseInt(splits[0]), Integer.parseInt(splits[1]));
     }
@@ -198,8 +208,10 @@ public class ValueMetadata implements Serializable {
 
   public static ValueMetadata getValueMetadata(GenericRecord columnStatsRecord) {
     if (columnStatsRecord == null) {
-      // TODO: Should we return V1EmptyMetadata here?
-      return NULL_METADATA;
+      // NOTE: Only legitimate reason for {@code ColumnStatsMetadata} to not be present is when
+      //       it's not been read from the storage (ie it's not been a part of projected schema).
+      //       Otherwise, it has to be present or the record would be considered invalid
+      throw new IllegalStateException("ColumnStatsMetadata is null. Handling should happen in the caller.");
     }
 
     GenericRecord valueTypeInfo = (GenericRecord) columnStatsRecord.get(COLUMN_STATS_FIELD_VALUE_TYPE);
@@ -222,7 +234,7 @@ public class ValueMetadata implements Serializable {
       return V1EmptyMetadata.get();
     }
     if (fieldSchema == null) {
-      return NULL_METADATA;
+      throw new IllegalArgumentException("Field schema cannot be null");
     }
     Schema valueSchema = resolveNullableSchema(fieldSchema);
     ValueType valueType = ValueType.fromSchema(valueSchema);
@@ -240,11 +252,11 @@ public class ValueMetadata implements Serializable {
       return V1EmptyMetadata.get();
     }
     if (primitiveType == null) {
-      return NULL_METADATA;
+      throw new IllegalArgumentException("Primitive type cannot be null");
     }
     ValueType valueType = ValueType.fromParquetPrimitiveType(primitiveType);
     if (valueType == ValueType.V1) {
-      throw new IllegalArgumentException("Unsupported original type: " + primitiveType.getOriginalType());
+      throw new IllegalStateException("Returned ValueType should never be V1 here. Primitive type: " + primitiveType);
     } else if (valueType == ValueType.DECIMAL) {
       return DecimalMetadata.create(primitiveType);
     } else {

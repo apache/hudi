@@ -171,6 +171,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
           + "{\"name\":\"dec_fixed_small\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedSmall\",\"size\":3,\"logicalType\":\"decimal\",\"precision\":5,\"scale\":2}},"
           + "{\"name\":\"dec_fixed_large\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedLarge\",\"size\":8,\"logicalType\":\"decimal\",\"precision\":18,\"scale\":9}},";
 
+  // LTS = Local Timestamp
   public static final String EXTENDED_LOGICAL_TYPES_SCHEMA_NO_LTS = "{\"name\":\"ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}},"
       + "{\"name\":\"ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},"
       + "{\"name\":\"event_date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},"
@@ -197,6 +198,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       TRIP_SCHEMA_PREFIX + EXTENDED_LOGICAL_TYPES_SCHEMA_V6 + TRIP_SCHEMA_SUFFIX;
   public static final String TRIP_LOGICAL_TYPES_SCHEMA =
       TRIP_SCHEMA_PREFIX + EXTENDED_LOGICAL_TYPES_SCHEMA + TRIP_SCHEMA_SUFFIX;
+  // LTS = Local Timestamp
   public static final String TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS =
       TRIP_SCHEMA_PREFIX + EXTENDED_LOGICAL_TYPES_SCHEMA_NO_LTS + TRIP_SCHEMA_SUFFIX;
 
@@ -443,6 +445,9 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return generateRecordForTripEncodedDecimalSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, timestamp);
   }
 
+  /**
+   * LTS = Local Timestamp
+   */
   public IndexedRecord generatePayloadForLogicalTypesSchemaNoLTS(HoodieKey key, String commitTime, boolean isDelete, long timestamp) {
     return generateRecordForTripLogicalTypesSchema(key, "rider-" + commitTime, "driver-" + commitTime, timestamp, isDelete, false, false);
   }
@@ -674,6 +679,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
                                                                long timestamp, boolean isDeleteRecord, boolean v6, boolean hasLTS) {
     GenericRecord rec;
     if (!hasLTS) {
+      // LTS = Local Timestamp
       rec = new GenericData.Record(AVRO_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS);
     } else if (v6) {
       rec = new GenericData.Record(AVRO_TRIP_LOGICAL_TYPES_SCHEMA_V6);

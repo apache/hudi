@@ -76,7 +76,7 @@ import static org.apache.parquet.schema.Type.Repetition.REPEATED;
  * to support local timestamp types by copying a few methods from 1.14.0 AvroSchemaConverter.
  */
 @SuppressWarnings("all")
-public class AvroSchemaConverterWithNTZ extends HoodieAvroParquetSchemaConverter {
+public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchemaConverter {
 
   public static final String ADD_LIST_ELEMENT_RECORDS =
       "parquet.avro.add-list-element-records";
@@ -88,7 +88,7 @@ public class AvroSchemaConverterWithNTZ extends HoodieAvroParquetSchemaConverter
   private final boolean readInt96AsFixed;
   private final Set<String> pathsToInt96;
 
-  public AvroSchemaConverterWithNTZ() {
+  public AvroSchemaConverterWithTimestampNTZ() {
     this(ADD_LIST_ELEMENT_RECORDS_DEFAULT);
   }
 
@@ -98,7 +98,7 @@ public class AvroSchemaConverterWithNTZ extends HoodieAvroParquetSchemaConverter
    *
    * @param assumeRepeatedIsListElement whether to assume 2-level lists
    */
-  AvroSchemaConverterWithNTZ(boolean assumeRepeatedIsListElement) {
+  AvroSchemaConverterWithTimestampNTZ(boolean assumeRepeatedIsListElement) {
     this.assumeRepeatedIsListElement = assumeRepeatedIsListElement;
     this.writeOldListStructure = WRITE_OLD_LIST_STRUCTURE_DEFAULT;
     this.writeParquetUUID = WRITE_PARQUET_UUID_DEFAULT;
@@ -106,7 +106,7 @@ public class AvroSchemaConverterWithNTZ extends HoodieAvroParquetSchemaConverter
     this.pathsToInt96 = Collections.emptySet();
   }
 
-  public AvroSchemaConverterWithNTZ(Configuration conf) {
+  public AvroSchemaConverterWithTimestampNTZ(Configuration conf) {
     this.assumeRepeatedIsListElement = conf.getBoolean(
         ADD_LIST_ELEMENT_RECORDS, ADD_LIST_ELEMENT_RECORDS_DEFAULT);
     this.writeOldListStructure = conf.getBoolean(

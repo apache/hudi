@@ -125,6 +125,10 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     dfList = dfList :+ inputDF
 
     metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
+    if (writeOptions.contains(HoodieWriteConfig.WRITE_TABLE_VERSION.key())) {
+      assertEquals(HoodieTableVersion.fromVersionCode(writeOptions(HoodieWriteConfig.WRITE_TABLE_VERSION.key()).toInt),
+        metaClient.getTableConfig.getTableVersion)
+    }
 
     if (params.shouldValidateColStats) {
       // Currently, routine manually validating the column stats (by actually reading every column of every file)

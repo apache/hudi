@@ -27,6 +27,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestValueMetadata {
 
+  /**
+   * Do not change how we encode decimal without
+   * handling upgrade/downgrade and backwards compatibility
+   */
   @Test
   public void testDecimalEncoding() {
     ValueMetadata.DecimalValueMetadata dm = ValueMetadata.DecimalMetadata.create(1,4);
@@ -37,6 +41,10 @@ public class TestValueMetadata {
     assertEquals("12,14", ValueMetadata.DecimalValueMetadata.encodeData(dm));
   }
 
+  /**
+   * Do not change how we encode decimal without
+   * handling upgrade/downgrade and backwards compatibility
+   */
   @Test
   public void testDecimalDecoding() {
     Pair<Integer, Integer> p = ValueMetadata.DecimalValueMetadata.decodeData("1,4");

@@ -167,7 +167,7 @@ public class SparkMetadataWriterUtils {
             functions.count(columnToIndex).alias(COLUMN_STATS_FIELD_VALUE_COUNT));
 
     // Generate column stat records using the aggregated data
-    ValueMetadata valueMetadata = getValueMetadataFromColumnRangeDataset(columnRangeMetadataDataset, indexVersion);
+    ValueMetadata valueMetadata = getValueMetadataFromColumnRangeDatasetSchema(columnRangeMetadataDataset.schema(), indexVersion);
     HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> rangeMetadataHoodieJavaRDD = HoodieJavaRDD.of(columnRangeMetadataDataset.javaRDD())
         .flatMapToPair((SerializableFunction<Row, Iterator<? extends Pair<String, HoodieColumnRangeMetadata<Comparable>>>>)
             row -> {
@@ -215,10 +215,10 @@ public class SparkMetadataWriterUtils {
         : new ExpressionIndexComputationMetadata(colStatRecords);
   }
 
-  private static ValueMetadata getValueMetadataFromColumnRangeDataset(Dataset<Row> dataset, HoodieIndexVersion indexVersion) {
+  private static ValueMetadata getValueMetadataFromColumnRangeDatasetSchema(StructType datasetSchema, HoodieIndexVersion indexVersion) {
     int baseAggregatePosition = SparkMetadataWriterUtils.getExpressionIndexColumnNames().length;
-    DataType minDataType = dataset.schema().apply(baseAggregatePosition + 1).dataType();
-    DataType maxDataType = dataset.schema().apply(baseAggregatePosition + 2).dataType();
+    DataType minDataType = datasetSchema.apply(baseAggregatePosition + 1).dataType();
+    DataType maxDataType = datasetSchema.apply(baseAggregatePosition + 2).dataType();
     if (minDataType != maxDataType) {
       throw new HoodieException(String.format("Column stats data types do not match for min (%s) and max (%s)", minDataType, maxDataType));
     }
