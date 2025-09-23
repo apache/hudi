@@ -86,7 +86,7 @@ class TestStorageBasedLockProvider {
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
     TypedProperties props = new TypedProperties();
     props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
-    props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
+    props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
     props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-default");
 
     lockProvider = spy(new StorageBasedLockProvider(
