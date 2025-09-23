@@ -42,7 +42,6 @@ public class BufferedRecords {
   public static <T> BufferedRecord<T> fromHoodieRecord(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields, boolean isDelete) {
     HoodieKey hoodieKey = record.getKey();
     T data = recordContext.extractDataFromRecord(record, schema, props);
-    //T data = (T) record.getData();
     String recordKey = hoodieKey == null ? recordContext.getRecordKey(data, schema) : hoodieKey.getRecordKey();
     Integer schemaId = recordContext.encodeAvroSchema(schema);
     Comparable orderingValue = record.getOrderingValue(schema, props, orderingFields);

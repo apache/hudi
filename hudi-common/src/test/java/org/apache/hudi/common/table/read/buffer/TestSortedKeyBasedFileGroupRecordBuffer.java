@@ -150,7 +150,8 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
         testIndexedRecord5, testIndexedRecord6).iterator()));
 
     List<IndexedRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
-    assertEquals(Arrays.asList(testIndexedRecord1, testIndexedRecord2Update, testIndexedRecord3, testIndexedRecord4, testIndexedRecord6Update), actualRecords);
+    assertEquals(Arrays.asList(getSerializableIndexedRecord(testIndexedRecord1), getSerializableIndexedRecord(testIndexedRecord2Update),
+        getSerializableIndexedRecord(testIndexedRecord3), getSerializableIndexedRecord(testIndexedRecord4), getSerializableIndexedRecord(testIndexedRecord6Update)), actualRecords);
     assertEquals(1, readStats.getNumInserts());
     assertEquals(1, readStats.getNumDeletes());
     assertEquals(2, readStats.getNumUpdates());
