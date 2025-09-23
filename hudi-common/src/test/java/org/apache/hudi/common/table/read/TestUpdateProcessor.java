@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.BaseAvroPayload;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
@@ -145,7 +146,7 @@ class TestUpdateProcessor {
     when(recordContext.seal(any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(0));
     BufferedRecord<IndexedRecord> previous = null;
     BufferedRecord<IndexedRecord> merged = getRecord("value2", null);
-    BufferedRecord<IndexedRecord> expected = getRecord("value2", HoodieOperation.INSERT);
+    BufferedRecord<IndexedRecord> expected = getRecordWithSerializableIndexedRecord("value2", HoodieOperation.INSERT);
     HoodieReadStats readStats = new HoodieReadStats();
     BaseFileUpdateCallback<IndexedRecord> updateCallback = mock(BaseFileUpdateCallback.class);
     UpdateProcessor<IndexedRecord> updateProcessor = new UpdateProcessor.CallbackProcessor<>(updateCallback, new UpdateProcessor.PayloadUpdateProcessor<>(readStats, readerContext, false,
@@ -172,6 +173,13 @@ class TestUpdateProcessor {
       verifyReadStats(readStats, 1, 0, 0);
       verify(updateCallback).onInsert(KEY, merged);
     }
+  }
+
+  private static BufferedRecord<IndexedRecord> getRecordWithSerializableIndexedRecord(String value, HoodieOperation operation) {
+    GenericRecord record = new GenericData.Record(SCHEMA);
+    record.put("key", KEY);
+    record.put("value", value);
+    return new BufferedRecord<>(KEY, 1, new HoodieAvroIndexedRecord(record).getData(), 0, operation);
   }
 
   @ParameterizedTest
