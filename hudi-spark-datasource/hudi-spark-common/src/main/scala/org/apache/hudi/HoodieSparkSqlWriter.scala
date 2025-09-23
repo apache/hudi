@@ -508,6 +508,11 @@ class HoodieSparkSqlWriterInternal {
               throw new UnsupportedOperationException(s"${writeConfig.getRecordMerger.getClass.getName} only support parquet log.")
             }
             instantTime = client.startCommit(commitActionType)
+            // if table has undergone upgrade, we need to reload table config
+            tableConfig = HoodieTableMetaClient.builder()
+              .setConf(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration))
+              .setBasePath(path)
+              .build().getTableConfig
             // Convert to RDD[HoodieRecord]
             val hoodieRecords = Try(HoodieCreateRecordUtils.createHoodieRecordRdd(
               HoodieCreateRecordUtils.createHoodieRecordRddArgs(df, writeConfig, parameters, avroRecordName,
