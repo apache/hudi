@@ -3429,7 +3429,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // Sync all 3 commits from source to target, one by one
     HoodieDeltaStreamer targetStreamer = new HoodieDeltaStreamer(targetConfig, jsc);
-    //try calling this once INSTEAD OF THREEE TIMES
     targetStreamer.sync();
 
     // Verify checkpoint is established in V1 format
@@ -3529,8 +3528,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     String finalCheckpoint = finalCommitMetadata.get().getExtraMetadata().get(STREAMER_CHECKPOINT_KEY_V1);
 
     // Checkpoint should have advanced from the pre-upgrade checkpoint
-    assertNotEquals(checkpointBeforeUpgrade, finalCheckpoint,
-        "Checkpoint should have advanced after consuming new commits");
+    assertTrue(Long.parseLong(finalCheckpoint) > Long.parseLong(checkpointBeforeUpgrade),
+            "Final checkpoint should be greater than checkpoint before upgrade");
 
     // Verify target has correct number of commits
     assertEquals(2, targetMetaClient.getActiveTimeline().getCommitsTimeline().countInstants(),
@@ -3612,7 +3611,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             .format("org.apache.hudi")
             .load(targetTablePath)
             .count();
-    
+
     assertEquals(sourceRecordCountOriginal, targetRecordCountOriginal,
             "Target should have all records from source");
 
@@ -3691,8 +3690,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     String finalCheckpoint = finalCommitMetadata.get().getExtraMetadata().get(STREAMER_CHECKPOINT_KEY);
 
     // Checkpoint should have advanced from the pre-upgrade checkpoint
-    assertNotEquals(checkpointBeforeUpgrade, finalCheckpoint,
-        "Checkpoint should have advanced after consuming new commits");
+    assertTrue(Long.parseLong(finalCheckpoint) > Long.parseLong(checkpointBeforeUpgrade),
+            "Final checkpoint should be greater than checkpoint before upgrade");
 
     // Verify target has correct number of commits
     assertEquals(3, targetMetaClient.getActiveTimeline().getCommitsTimeline().countInstants(),
