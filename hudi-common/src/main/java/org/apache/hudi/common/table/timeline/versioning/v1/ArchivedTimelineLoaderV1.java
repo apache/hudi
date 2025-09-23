@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -57,6 +56,8 @@ import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.StreamSupport;
+
+import static org.apache.hudi.common.util.DeserializationUtils.deserializeHoodieMergeArchiveFilePlan;
 
 public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
   private static final String MERGE_ARCHIVE_PLAN_NAME = "mergeArchivePlan";
@@ -136,7 +137,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
             StoragePath planPath = new StoragePath(metaClient.getArchivePath(), MERGE_ARCHIVE_PLAN_NAME);
             HoodieStorage storage = metaClient.getStorage();
             if (storage.exists(planPath)) {
-              HoodieMergeArchiveFilePlan plan = TimelineMetadataUtils.deserializeAvroMetadataLegacy(FileIOUtils.readDataFromPath(storage, planPath).get(), HoodieMergeArchiveFilePlan.class);
+              HoodieMergeArchiveFilePlan plan = deserializeHoodieMergeArchiveFilePlan(FileIOUtils.readDataFromPath(storage, planPath).get());
               String mergedArchiveFileName = plan.getMergedArchiveFileName();
               if (!StringUtils.isNullOrEmpty(mergedArchiveFileName) && fs.getPath().getName().equalsIgnoreCase(mergedArchiveFileName)) {
                 LOG.warn("Catch exception because of reading uncompleted merging archive file " + mergedArchiveFileName + ". Ignore it here.");

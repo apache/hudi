@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -35,8 +36,11 @@ import org.apache.avro.file.DataFileStream;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.file.FileReader;
 import org.apache.avro.file.SeekableByteArrayInput;
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DatumWriter;
+import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecordBase;
@@ -109,32 +113,20 @@ public class TimelineMetadataUtils {
         Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION);
   }
 
-  public static <T extends SpecificRecordBase> Option<byte[]> serializeAvroMetadata(T metadata, Class<T> clazz)
-      throws IOException {
-    DatumWriter<T> datumWriter = new SpecificDatumWriter<>(clazz);
-    try (DataFileWriter<T> fileWriter = new DataFileWriter<>(datumWriter)) {
-      ByteArrayOutputStream baos = new ByteArrayOutputStream();
-      fileWriter.create(metadata.getSchema(), baos);
-      fileWriter.append(metadata);
-      fileWriter.flush();
-      return Option.of(baos.toByteArray());
-    }
-  }
-
   public static <T extends SpecificRecordBase> T deserializeAvroMetadataLegacy(byte[] bytes, Class<T> clazz)
       throws IOException {
-    DatumReader<T> reader = new SpecificDatumReader<>(clazz);
-    FileReader<T> fileReader = DataFileReader.openReader(new SeekableByteArrayInput(bytes), reader);
+    DatumReader<GenericRecord> reader = new GenericDatumReader<>(SpecificData.getForClass(clazz).getSchema(clazz));
+    FileReader<GenericRecord> fileReader = DataFileReader.openReader(new SeekableByteArrayInput(bytes), reader);
     ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
-    return fileReader.next();
+    return HoodieAvroUtils.convertToSpecificRecord(clazz, fileReader.next());
   }
 
   public static <T extends SpecificRecordBase> T deserializeAvroMetadata(InputStream inputStream, Class<T> clazz)
       throws IOException {
-    DatumReader<T> reader = new SpecificDatumReader<>(clazz);
-    try (DataFileStream<T> fileReader = new DataFileStream<>(inputStream, reader)) {
+    DatumReader<GenericRecord> reader = new GenericDatumReader<>(SpecificData.getForClass(clazz).getSchema(clazz));
+    try (DataFileStream<GenericRecord> fileReader = new DataFileStream<>(inputStream, reader)) {
       ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
-      return fileReader.next();
+      return HoodieAvroUtils.convertToSpecificRecord(clazz, fileReader.next());
     }
   }
 }

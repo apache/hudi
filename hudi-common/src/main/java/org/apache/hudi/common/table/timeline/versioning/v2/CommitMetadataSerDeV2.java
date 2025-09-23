@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.timeline.versioning.v2;
 
-import org.apache.hudi.avro.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -36,6 +35,8 @@ import java.util.function.BooleanSupplier;
 
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertReplaceCommitMetadataToPojo;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
+import static org.apache.hudi.common.util.DeserializationUtils.deserializeHoodieCommitMetadata;
+import static org.apache.hudi.common.util.DeserializationUtils.deserializeHoodieReplaceCommitMetadata;
 
 public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
 
@@ -61,13 +62,11 @@ public class CommitMetadataSerDeV2 implements CommitMetadataSerDe {
       }
       // For commit metadata and replace commit metadata need special case handling since it requires in memory object in POJO form.
       if (org.apache.hudi.common.model.HoodieReplaceCommitMetadata.class.isAssignableFrom(clazz)) {
-        return (T) convertReplaceCommitMetadataToPojo(
-            deserializeAvroMetadata(inputStream, HoodieReplaceCommitMetadata.class));
+        return (T) convertReplaceCommitMetadataToPojo(deserializeHoodieReplaceCommitMetadata(inputStream));
       }
       // For any new commit metadata class being added, we need the corresponding logic added here
       if (org.apache.hudi.common.model.HoodieCommitMetadata.class.isAssignableFrom(clazz)) {
-        return (T) convertCommitMetadataToPojo(
-            deserializeAvroMetadata(inputStream, org.apache.hudi.avro.model.HoodieCommitMetadata.class));
+        return (T) convertCommitMetadataToPojo(deserializeHoodieCommitMetadata(inputStream));
       }
       // For all the other cases they must be SpecificRecordBase
       if (!SpecificRecordBase.class.isAssignableFrom(clazz)) {

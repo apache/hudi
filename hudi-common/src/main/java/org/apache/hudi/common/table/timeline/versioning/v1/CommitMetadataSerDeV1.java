@@ -44,7 +44,7 @@ public class CommitMetadataSerDeV1 implements CommitMetadataSerDe {
   public <T> T deserialize(HoodieInstant instant, InputStream inputStream, BooleanSupplier isEmptyInstant, Class<T> clazz) throws IOException {
     try {
       // For commit metadata we need special case handling as they are using serialized to JSON in V1
-      if (org.apache.hudi.common.model.HoodieCommitMetadata.class.isAssignableFrom(clazz)) {
+      if (HoodieCommitMetadata.class.isAssignableFrom(clazz)) {
         return JsonUtils.getObjectMapper().readValue(inputStream, clazz);
       } else {
         if (!SpecificRecordBase.class.isAssignableFrom(clazz)) {

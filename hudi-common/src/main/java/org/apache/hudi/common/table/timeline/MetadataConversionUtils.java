@@ -23,8 +23,6 @@ import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieLSMTimelineInstant;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
-import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -48,6 +46,9 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+
+import static org.apache.hudi.common.util.DeserializationUtils.deserializeHoodieRollbackMetadata;
+import static org.apache.hudi.common.util.DeserializationUtils.deserializeHoodieSavepointMetadata;
 
 /**
  * Helper class to convert between different action related payloads and {@link HoodieArchivedMetaEntry}.
@@ -233,13 +234,13 @@ public class MetadataConversionUtils {
       }
       case HoodieTimeline.ROLLBACK_ACTION: {
         archivedMetaWrapper.setHoodieRollbackMetadata(
-            TimelineMetadataUtils.deserializeAvroMetadata(new ByteArrayInputStream(instantDetails.get()), HoodieRollbackMetadata.class));
+            deserializeHoodieRollbackMetadata(new ByteArrayInputStream(instantDetails.get())));
         archivedMetaWrapper.setActionType(ActionType.rollback.name());
         break;
       }
       case HoodieTimeline.SAVEPOINT_ACTION: {
         archivedMetaWrapper.setHoodieSavePointMetadata(
-            TimelineMetadataUtils.deserializeAvroMetadata(new ByteArrayInputStream(instantDetails.get()), HoodieSavepointMetadata.class));
+            deserializeHoodieSavepointMetadata(new ByteArrayInputStream(instantDetails.get())));
         archivedMetaWrapper.setActionType(ActionType.savepoint.name());
         break;
       }

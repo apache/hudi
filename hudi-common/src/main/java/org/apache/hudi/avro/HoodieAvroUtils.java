@@ -55,6 +55,7 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
+import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificRecordBase;
 
 import javax.annotation.Nullable;
@@ -1608,5 +1609,58 @@ public class HoodieAvroUtils {
           .getType();
     }
     return schema.getType();
+  }
+
+  /**
+   * Construct a SpecificRecord based on a GenericRecord and its schema.
+   */
+  public static <T extends SpecificRecordBase> T convertToSpecificRecord(Class<T> clazz, GenericRecord genericRecord) {
+    try {
+      SpecificData specificData = new SpecificData(clazz.getClassLoader());
+      T specificRecord = clazz.newInstance();
+      Schema schema = SpecificData.getForClass(clazz).getSchema(clazz);
+      for (Field field : schema.getFields()) {
+        Object value = genericRecord.get(field.pos());
+        if (value == null) {
+          specificRecord.put(field.pos(), null);
+          continue;
+        }
+        Schema fieldSchema = getActualSchemaFromUnion(field.schema(), value);
+
+        switch (fieldSchema.getType()) {
+          case RECORD:
+            value = convertToSpecificRecord(specificData.getClass(fieldSchema), (GenericRecord) value);
+            break;
+          case ARRAY:
+            Class elementClass = specificData.getClass(fieldSchema.getElementType());
+            value = ((List<?>) value).stream().map(element -> {
+              if (element instanceof GenericRecord) {
+                return convertToSpecificRecord(elementClass, (GenericRecord) element);
+              }
+              return element;
+            }).collect(Collectors.toList());
+            break;
+          case MAP:
+            Class valueClass = specificData.getClass(fieldSchema.getValueType());
+            value = ((Map<?, ?>) value).entrySet().stream().collect(Collectors.toMap(
+                Map.Entry::getKey,
+                entry -> {
+                  Object mapValue = entry.getValue();
+                  if (mapValue instanceof GenericRecord) {
+                    return convertToSpecificRecord(valueClass, (GenericRecord) mapValue);
+                  }
+                  return mapValue;
+                }
+            ));
+            break;
+          default:
+            // no conversion required
+        }
+        specificRecord.put(field.pos(), value);
+      }
+      return specificRecord;
+    } catch (InstantiationException | IllegalAccessException e) {
+      throw new HoodieException("Failed to convert to SpecificRecord " + clazz.getName(), e);
+    }
   }
 }

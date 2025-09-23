@@ -42,7 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
+import static org.apache.hudi.common.util.DeserializationUtils.deserializeHoodieCommitMetadata;
 
 /**
  * All the metadata that gets stored along with a commit.
@@ -253,7 +253,7 @@ public class HoodieCommitMetadata implements Serializable {
    */
   public static Option<Pair<String, List<String>>> getFileSliceForFileGroupFromDeltaCommit(InputStream inputStream, HoodieFileGroupId fileGroupId) {
     try {
-      org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadata = deserializeAvroMetadata(inputStream, org.apache.hudi.avro.model.HoodieCommitMetadata.class);
+      org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadata = deserializeHoodieCommitMetadata(inputStream);
       Map<String,List<org.apache.hudi.avro.model.HoodieWriteStat>> partitionToWriteStatsMap =
               commitMetadata.getPartitionToWriteStats();
       for (Map.Entry<String, List<org.apache.hudi.avro.model.HoodieWriteStat>> partitionToWriteStat: partitionToWriteStatsMap.entrySet()) {

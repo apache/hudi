@@ -34,6 +34,9 @@ import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionV2M
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.IndexedRecord;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -43,7 +46,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
+import static org.apache.hudi.common.util.DeserializationUtils.deserializeHoodieCompactionPlan;
 
 /**
  * Helper class to generate compaction plan from FileGroup/FileSlice abstraction.
@@ -53,6 +56,10 @@ public class CompactionUtils {
   public static final Integer COMPACTION_METADATA_VERSION_1 = CompactionV1MigrationHandler.VERSION;
   public static final Integer COMPACTION_METADATA_VERSION_2 = CompactionV2MigrationHandler.VERSION;
   public static final Integer LATEST_COMPACTION_METADATA_VERSION = COMPACTION_METADATA_VERSION_2;
+
+  private static final ThreadLocal<GenericDatumReader<IndexedRecord>> COMPACT_PLAN_DESERIALIZER =
+      ThreadLocal.withInitial(() -> new GenericDatumReader<>(
+          HoodieCompactionPlan.getClassSchema()));
 
   /**
    * Generate compaction operation from file-slice.
@@ -196,7 +203,7 @@ public class CompactionUtils {
    * Util method to fetch both compaction and log compaction plan from requestedInstant.
    */
   public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, InputStream planContent) {
-    return getCompactionPlanInternal(metaClient, () -> deserializeAvroMetadata(planContent, HoodieCompactionPlan.class));
+    return getCompactionPlanInternal(metaClient, () -> deserializeHoodieCompactionPlan(planContent));
   }
 
   @FunctionalInterface

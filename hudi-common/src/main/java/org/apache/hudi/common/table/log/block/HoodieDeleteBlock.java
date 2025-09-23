@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieDeleteRecord;
 import org.apache.hudi.avro.model.HoodieDeleteRecordList;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
@@ -33,6 +34,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
@@ -170,13 +172,16 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     } else if (version == 2) {
       return SerializationUtils.deserialize(data);
     } else {
-      GenericDatumReader<IndexedRecord> reader = DELETE_RECORD_DESERIALIZER.get();
+      GenericDatumReader<IndexedRecord> reader =
+          new GenericDatumReader<>(HoodieDeleteRecordList.getClassSchema());
       BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(data, 0, data.length, null);
-      Object deleteRecordList = reader.read(null, decoder).get(0);
+      List<HoodieDeleteRecord> deleteRecordList =
+          (List<HoodieDeleteRecord>) HoodieAvroUtils.convertToSpecificRecord(
+              HoodieDeleteRecordList.class, (GenericRecord) reader.read(null, decoder)).get(0);
       ValidationUtils.checkArgument(
           deleteRecordList instanceof List,
           "The delete block has unexpected delete record encoding.");
-      return ((List<IndexedRecord>) deleteRecordList).stream()
+      return deleteRecordList.stream()
           .map(record -> DeleteRecord.create(
               (String) record.get(ORD_RECORD_KEY),
               (String) record.get(ORD_PARTITION_PATH),
