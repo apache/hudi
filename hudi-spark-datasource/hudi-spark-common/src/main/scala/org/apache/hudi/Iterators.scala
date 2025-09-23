@@ -29,7 +29,7 @@ import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieEmptyRecord, HoodieLogFile, HoodieOperation, HoodieRecord, HoodieSparkRecord}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
-import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecords}
+import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecords, DeleteContext}
 import org.apache.hudi.common.util.{FileIOUtils, HoodieRecordUtils}
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -101,6 +101,7 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
 
   protected val logFileReaderAvroSchema: Schema = AvroSchemaCache.intern(new Schema.Parser().parse(tableSchema.avroSchemaStr))
   protected val logFileReaderStructType: StructType = tableSchema.structTypeSchema
+  protected val deleteContext: DeleteContext = new DeleteContext(payloadProps, logFileReaderAvroSchema).withReaderSchema(logFileReaderAvroSchema);
 
   private val requiredSchemaAvroProjection: AvroProjection = AvroProjection.create(avroSchema)
   private val requiredSchemaRowProjection: Projection = generateUnsafeProjection(logFileReaderStructType, structTypeSchema)
@@ -311,7 +312,7 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
     recordMerger.getRecordType match {
       case HoodieRecordType.SPARK =>
         val curRecord = BufferedRecords.fromEngineRecord(curRow, baseFileReaderAvroSchema, rowRecordContext, orderingFields, newRecord.getRecordKey, false)
-        val newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, logFileReaderAvroSchema, rowRecordContext, payloadProps, orderingFields)
+        val newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, logFileReaderAvroSchema, rowRecordContext, payloadProps, orderingFields, deleteContext)
         val result = recordMerger.merge(curRecord, newBufferedRecord, rowRecordContext, payloadProps).asInstanceOf[BufferedRecord[InternalRow]]
         if (result.isDelete) {
           None
@@ -322,7 +323,7 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
         }
       case _ =>
         val curRecord = BufferedRecords.fromEngineRecord(serialize(curRow), baseFileReaderAvroSchema, avroRecordContext, orderingFields, newRecord.getRecordKey, false)
-        val newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, logFileReaderAvroSchema, avroRecordContext, payloadProps, orderingFields)
+        val newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, logFileReaderAvroSchema, avroRecordContext, payloadProps, orderingFields, deleteContext)
         val result = recordMerger.merge(curRecord, newBufferedRecord, avroRecordContext, payloadProps).asInstanceOf[BufferedRecord[IndexedRecord]]
         if (result.isDelete) {
           None

@@ -49,6 +49,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.UnaryOperator;
 
 public class HiveRecordContext extends RecordContext<ArrayWritable> {
+  private static final HiveRecordContext FIELD_ACCESSOR_INSTANCE = new HiveRecordContext();
+
+  public static HiveRecordContext getFieldAccessorInstance() {
+    return FIELD_ACCESSOR_INSTANCE;
+  }
 
   private final Map<Schema, HiveAvroSerializer> serializerCache = new ConcurrentHashMap<>();
 
@@ -58,6 +63,10 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
 
   public HiveRecordContext(HoodieTableConfig tableConfig) {
     super(tableConfig, new HiveJavaTypeConverter());
+  }
+
+  private HiveRecordContext() {
+    super(new HiveJavaTypeConverter());
   }
 
   @Override

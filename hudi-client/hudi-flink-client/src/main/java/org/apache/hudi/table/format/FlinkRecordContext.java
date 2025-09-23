@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.common.util.OrderingValues;
-import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.RecordKeyToRowDataConverter;
@@ -63,8 +62,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
 
   public FlinkRecordContext(HoodieTableConfig tableConfig, StorageConfiguration<?> storageConf) {
     super(tableConfig, new DefaultJavaTypeConverter());
-    this.utcTimezone = storageConf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE.key(),
-        FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
+    this.utcTimezone = storageConf.getBoolean("read.utc-timezone",true);
   }
 
   @Override

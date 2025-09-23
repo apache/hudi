@@ -82,8 +82,7 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
     RecordContext<T> recordContext = readerContext.getRecordContext();
     Iterator<HoodieRecord> recordIterator = inputSplit.getRecordIterator();
     String[] orderingFieldsArray = orderingFieldNames.toArray(new String[0]);
-    DeleteContext deleteContext = new DeleteContext(props, recordSchema);
-    deleteContext.withReaderSchema(recordSchema);
+    DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, recordSchema);
     while (recordIterator.hasNext()) {
       HoodieRecord<T> hoodieRecord = recordIterator.next();
       T data = recordContext.extractDataFromRecord(hoodieRecord, recordSchema, props);

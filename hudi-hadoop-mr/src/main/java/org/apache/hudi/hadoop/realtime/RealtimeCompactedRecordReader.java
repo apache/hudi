@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -70,6 +71,7 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
   private final HoodieMergedLogRecordScanner mergedLogRecordScanner;
   private final int recordKeyIndex;
   private final String[] orderingFields;
+  private final DeleteContext deleteContext;
   private Iterator<String> deltaItr;
 
   public RealtimeCompactedRecordReader(RealtimeSplit split, JobConf job,
@@ -83,6 +85,7 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         .map(HoodieVirtualKeyInfo::getRecordKeyFieldIndex)
         .orElse(HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS);
     this.orderingFields = ConfigUtils.getOrderingFields(payloadProps);
+    this.deleteContext = new DeleteContext(payloadProps, getLogScannerReaderSchema()).withReaderSchema(getLogScannerReaderSchema());
   }
 
   /**
@@ -203,7 +206,7 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     GenericRecord genericRecord = HiveAvroSerializer.rewriteRecordIgnoreResultCheck(oldRecord, getLogScannerReaderSchema());
     RecordContext<IndexedRecord> recordContext = AvroRecordContext.getFieldAccessorInstance();
     BufferedRecord record = BufferedRecords.fromEngineRecord(genericRecord, genericRecord.getSchema(), recordContext, orderingFields, newRecord.getRecordKey(), false);
-    BufferedRecord newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, getLogScannerReaderSchema(), recordContext, payloadProps, orderingFields);
+    BufferedRecord newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, getLogScannerReaderSchema(), recordContext, payloadProps, orderingFields, deleteContext);
     BufferedRecord mergeResult = merger.merge(record, newBufferedRecord, recordContext, payloadProps);
     if (mergeResult.isDelete()) {
       return Option.empty();
