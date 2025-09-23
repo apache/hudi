@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieIOException;
 
 import com.esotericsoftware.kryo.Kryo;
@@ -49,7 +50,8 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
   private Schema schema;
   private byte[] recordBytes;
 
-  static SerializableIndexedRecord createInstance(IndexedRecord record) {
+  @VisibleForTesting
+  public static SerializableIndexedRecord createInstance(IndexedRecord record) {
     return record == null ? null : new SerializableIndexedRecord(record);
   }
 
@@ -80,7 +82,8 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
     return recordBytes;
   }
 
-  void decodeRecord(Schema schema) {
+  @VisibleForTesting
+  public void decodeRecord(Schema schema) {
     if (record == null) {
       this.schema = schema;
     }
@@ -127,12 +130,14 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
 
   @Override
   public void put(String key, Object v) {
+    getData();
     Schema.Field field = record.getSchema().getField(key);
     record.put(field.pos(), v);
   }
 
   @Override
   public Object get(String key) {
+    getData();
     Schema.Field field = record.getSchema().getField(key);
     return record.get(field.pos());
   }
