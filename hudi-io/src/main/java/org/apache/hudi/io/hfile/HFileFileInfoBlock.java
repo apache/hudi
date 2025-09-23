@@ -80,6 +80,9 @@ public class HFileFileInfoBlock extends HFileBlock {
 
   public void add(String name, byte[] value) {
     fileInfoToWrite.put(name, value);
+    // For file info, all entries are put into the same map.
+    // Therefore, we should sum their size.
+    longestEntrySize += getUTF8Bytes(name).length + value.length;
   }
 
   public boolean containsKey(String name) {
@@ -87,8 +90,16 @@ public class HFileFileInfoBlock extends HFileBlock {
   }
 
   @Override
+  protected int calculateBufferCapacity() {
+    // Based on the internet search, the overhead of a BytesBytesPair is about 30 bytes.
+    // 4 bytes for magic number.
+    // To be safe, we use extra 50 bytes here.
+    return longestEntrySize + 50 * fileInfoToWrite.size();
+  }
+
+  @Override
   public ByteBuffer getUncompressedBlockDataToWrite() {
-    ByteBuffer buff = ByteBuffer.allocate(context.getBlockSize() * 2);
+    ByteBuffer buff = ByteBuffer.allocate(calculateBufferCapacity());
     HFileProtos.InfoProto.Builder builder =
         HFileProtos.InfoProto.newBuilder();
     for (Map.Entry<String, byte[]> e : fileInfoToWrite.entrySet()) {

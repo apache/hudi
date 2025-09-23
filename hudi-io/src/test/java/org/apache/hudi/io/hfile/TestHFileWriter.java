@@ -38,6 +38,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
+import java.util.Map;
 
 import static org.apache.hudi.io.hfile.HFileBlockType.DATA;
 import static org.apache.hudi.io.hfile.HFileBlockType.TRAILER;
@@ -74,15 +75,17 @@ class TestHFileWriter {
 
   @Test
   void testSameKeyLocation() throws IOException {
-    // 50 bytes for data part limit.
-    HFileContext context = new HFileContext.Builder().blockSize(100).build();
+    // 1 bytes for data part limit.
+    HFileContext context = new HFileContext.Builder().blockSize(1).build();
     String testFile = TEST_FILE;
     try (DataOutputStream outputStream =
              new DataOutputStream(Files.newOutputStream(Paths.get(testFile)));
         HFileWriter writer = new HFileWriterImpl(context, outputStream)) {
-      for (int i = 0; i < 10; i++) {
+      // All entries for key00 are stored in the first block.
+      for (int i = 0; i < 100; i++) {
         writer.append("key00", String.format("value%02d", i).getBytes());
       }
+      // Otherwise, records are put different blocks since block size is 1.
       for (int i = 1; i < 11; i++) {
         writer.append(
             String.format("key%02d", i),
@@ -99,19 +102,24 @@ class TestHFileWriter {
           new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(buf));
       HFileReaderImpl reader = new HFileReaderImpl(inputStream, channel.size());
       reader.initializeMetadata();
-      assertEquals(20, reader.getNumKeyValueEntries());
+      // Totally 110 records.
+      assertEquals(110, reader.getNumKeyValueEntries());
       HFileTrailer trailer = reader.getTrailer();
-      assertEquals(4, trailer.getDataIndexCount());
+      // Totally 11 blocks.
+      assertEquals(11, trailer.getDataIndexCount());
       int i = 0;
-      for (Key key : reader.getDataBlockIndexMap().keySet()) {
+      for (Map.Entry<Key, BlockIndexEntry> entry : reader.getDataBlockIndexMap().entrySet()) {
         assertArrayEquals(
             String.format("key%02d", i).getBytes(),
-            key.getContentInString().getBytes());
+            entry.getKey().getContentInString().getBytes());
         if (i == 0) {
-          i++;
+          // first block: 100 records * 33 bytes + 37 bytes for header and checksum = 3337.
+          assertEquals(3337, entry.getValue().getSize());
         } else {
-          i += 4;
+          // rest blocks: 1 record * 33 bytes + 37 bytes for head and checksum = 70.
+          assertEquals(70, entry.getValue().getSize());
         }
+        i++;
       }
     }
   }

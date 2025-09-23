@@ -54,6 +54,11 @@ public class HFileLeafIndexBlock extends HFileBlock {
     throw new HoodieException("HFile writer does not support leaf index block");
   }
 
+  @Override
+  protected int calculateBufferCapacity() {
+    throw new HoodieException("HFile writer does not support leaf index block");
+  }
+
   /**
    * Reads the index block and returns the block index entries.
    */

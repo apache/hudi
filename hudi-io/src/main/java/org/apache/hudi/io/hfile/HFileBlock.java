@@ -89,6 +89,7 @@ public abstract class HFileBlock {
   // Write properties
   private long startOffsetInBuffForWrite = -1;
   private long previousBlockOffsetForWrite = -1;
+  protected int longestEntrySize = 0;
 
   /**
    * Initialize HFileBlock for read.
@@ -257,6 +258,11 @@ public abstract class HFileBlock {
    * This function must be implemented by each block type separately.
    */
   protected abstract ByteBuffer getUncompressedBlockDataToWrite();
+
+  /**
+   * Calculate the capacity of the buffer for each piece of data.
+   */
+  protected abstract int calculateBufferCapacity();
 
   /**
    * Return serialized block including header, data, checksum.

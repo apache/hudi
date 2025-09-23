@@ -56,8 +56,13 @@ public class HFileMetaBlock extends HFileBlock {
   }
 
   @Override
+  protected int calculateBufferCapacity() {
+    return entryToWrite.value.length;
+  }
+
+  @Override
   public ByteBuffer getUncompressedBlockDataToWrite() {
-    ByteBuffer dataBuf = ByteBuffer.allocate(context.getBlockSize());
+    ByteBuffer dataBuf = ByteBuffer.allocate(calculateBufferCapacity());
     // Note that: only value should be store in the block.
     // The key is stored in the meta index block.
     dataBuf.put(entryToWrite.value);

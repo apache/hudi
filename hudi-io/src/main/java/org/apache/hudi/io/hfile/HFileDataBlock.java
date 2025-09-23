@@ -189,6 +189,7 @@ public class HFileDataBlock extends HFileBlock {
     KeyValueEntry kv = new KeyValueEntry(key, value);
     // Assume all entries are sorted before write.
     entriesToWrite.add(kv);
+    longestEntrySize = Math.max(longestEntrySize, key.length + value.length);
   }
 
   int getNumOfEntries() {
@@ -207,9 +208,21 @@ public class HFileDataBlock extends HFileBlock {
   }
 
   @Override
+  protected int calculateBufferCapacity() {
+    // Key length = 4,
+    // value length = 4,
+    // key length length = 2,
+    // 10 bytes for column family, timestamp, and key type,
+    // 1 byte for MVCC.
+    // Sum is 21 bytes.
+    // So the capacity of the buffer should be: longestEntrySize + 21.
+    return longestEntrySize + 21;
+  }
+
+  @Override
   protected ByteBuffer getUncompressedBlockDataToWrite() {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    ByteBuffer dataBuf = ByteBuffer.allocate(context.getBlockSize());
+    ByteBuffer dataBuf = ByteBuffer.allocate(calculateBufferCapacity());
     for (KeyValueEntry kv : entriesToWrite) {
       // Length of key + length of a short variable indicating length of key.
       // Note that 10 extra bytes are required by hbase reader.

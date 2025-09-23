@@ -100,9 +100,16 @@ public class HFileRootIndexBlock extends HFileIndexBlock {
   }
 
   @Override
+  protected int calculateBufferCapacity() {
+    // 2 bytes for length of key length.
+    // 5 bytes for maximal key length.
+    return longestEntrySize + 2 + 5;
+  }
+
+  @Override
   public ByteBuffer getUncompressedBlockDataToWrite() {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    ByteBuffer buf = ByteBuffer.allocate(context.getBlockSize());
+    ByteBuffer buf = ByteBuffer.allocate(calculateBufferCapacity());
     for (BlockIndexEntry entry : entries) {
       buf.putLong(entry.getOffset());
       buf.putInt(entry.getSize());

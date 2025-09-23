@@ -33,8 +33,14 @@ public class HFileMetaIndexBlock extends HFileIndexBlock {
   }
 
   @Override
+  protected int calculateBufferCapacity() {
+    // Use 5 since the keyLength could use 5 bytes maximally.
+    return longestEntrySize + 5;
+  }
+
+  @Override
   public ByteBuffer getUncompressedBlockDataToWrite() {
-    ByteBuffer buf = ByteBuffer.allocate(context.getBlockSize() * 2);
+    ByteBuffer buf = ByteBuffer.allocate(calculateBufferCapacity());
     for (BlockIndexEntry entry : entries) {
       buf.putLong(entry.getOffset());
       buf.putInt(entry.getSize());
