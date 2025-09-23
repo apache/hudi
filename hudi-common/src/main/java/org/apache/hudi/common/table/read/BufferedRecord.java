@@ -22,8 +22,6 @@ import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.util.OrderingValues;
 
-import org.apache.avro.Schema;
-
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
