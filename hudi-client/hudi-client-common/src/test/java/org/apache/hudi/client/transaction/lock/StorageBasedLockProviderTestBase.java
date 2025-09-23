@@ -92,7 +92,7 @@ public abstract class StorageBasedLockProviderTestBase {
   @Test
   void testLockThreadKilledShouldNotCauseOrphanedHeartbeat() throws InterruptedException {
     providerProperties.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), 10);
-    providerProperties.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), 1);
+    providerProperties.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), 1);
 
     AtomicReference<StorageBasedLockProvider> lp = new AtomicReference<>();
     // Create a thread with a new lock provider to acquire the lock

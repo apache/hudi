@@ -174,7 +174,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       Functions.Function3<String, String, TypedProperties, StorageLockClient> storageLockClientLoader,
       Logger logger) {
     StorageBasedLockConfig config = new StorageBasedLockConfig.Builder().fromProperties(properties).build();
-    long heartbeatPollSeconds = config.getHeartbeatPollSeconds();
+    long heartbeatPollSeconds = config.getRenewIntervalSecs();
     this.lockValiditySecs = config.getValiditySeconds();
     this.lockFilePath = String.format(
             "%s%s%s%s%s",
