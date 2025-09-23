@@ -3378,15 +3378,16 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   /**
-   * Test incremental source functionality when source table is upgraded from v6 to v9
+   * Test incremental source functionality when source table is upgraded from v6 to v8/v9
    * while target table remains at v6. This validates backward compatibility for cross-version
    * incremental sync scenarios.
    */
-  @Test
-  public void testIncrementalSourceWithSourceTableUpgradeFromV6ToV9() throws Exception {
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"EIGHT", "NINE"})
+  public void testIncrementalSourceWithSourceTableUpgrade(HoodieTableVersion targetUpgradeVersion) throws Exception {
     // Create unique paths for both tables
-    String sourceTablePath = basePath + "/source_table_v6_to_v9";
-    String targetTablePath = basePath + "/target_table_v6";
+    String sourceTablePath = basePath + "/source_table_v6_to_v" + targetUpgradeVersion.versionCode();
+    String targetTablePath = basePath + "/target_table_v6_" + targetUpgradeVersion.versionCode();
 
     // Phase 1: Create source table at v6 with initial commits
     HoodieDeltaStreamer.Config sourceConfig = TestHelpers.makeConfig(
@@ -3457,9 +3458,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(sourceRecordCountOriginal, targetRecordCountOriginal,
             "Target should have all records from source");
 
-    // Phase 3: Upgrade source table from v6 to v9
+    // Phase 3: Upgrade source table from v6 to target version
     HoodieDeltaStreamer.Config upgradeConfig = TestHelpers.makeConfig(sourceTablePath, WriteOperationType.BULK_INSERT);
-    upgradeConfig.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + HoodieTableVersion.NINE.versionCode());
+    upgradeConfig.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + targetUpgradeVersion.versionCode());
     upgradeConfig.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=true");
     upgradeConfig.sourceLimit = 100;
 
@@ -3467,12 +3468,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     sourceStreamer = new HoodieDeltaStreamer(upgradeConfig, jsc);
     sourceStreamer.sync();
 
-    // Verify source table is now v9 - create fresh metaclient after upgrade
+    // Verify source table is now at target version - create fresh metaclient after upgrade
     sourceMetaClient = HoodieTableMetaClient.builder()
         .setConf(HoodieTestUtils.getDefaultStorageConf())
         .setBasePath(sourceTablePath)
         .build();
-    assertEquals(HoodieTableVersion.NINE, sourceMetaClient.getTableConfig().getTableVersion());
+    assertEquals(targetUpgradeVersion, sourceMetaClient.getTableConfig().getTableVersion());
 
     // Phase 4: Add 2 more commits to upgraded source table
     // After upgrade, don't specify version - let it use the existing table version
@@ -3540,11 +3541,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, targetTablePath);
   }
 
-  @Test
-  public void testIncrementalSourceWithTargetTableUpgradeFromV6ToV9() throws Exception {
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"EIGHT", "NINE"})
+  public void testIncrementalSourceWithTargetTableUpgrade(HoodieTableVersion targetUpgradeVersion) throws Exception {
     // Create unique paths for both tables
-    String sourceTablePath = basePath + "/source_table_v6_target_upgrade";
-    String targetTablePath = basePath + "/target_table_v6_to_v9";
+    String sourceTablePath = basePath + "/source_table_v6_target_upgrade_" + targetUpgradeVersion.versionCode();
+    String targetTablePath = basePath + "/target_table_v6_to_v" + targetUpgradeVersion.versionCode();
 
     // Phase 1: Create source table at v6 with initial commits
     HoodieDeltaStreamer.Config sourceConfig = TestHelpers.makeConfig(
@@ -3615,10 +3617,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(sourceRecordCountOriginal, targetRecordCountOriginal,
             "Target should have all records from source");
 
-    // Phase 3: Upgrade target table from v6 to v9
+    // Phase 3: Upgrade target table from v6 to target version
     HoodieDeltaStreamer.Config upgradeTargetConfig = TestHelpers.makeConfigForHudiIncrSrc(
         sourceTablePath, targetTablePath, WriteOperationType.BULK_INSERT, false, null);
-    upgradeTargetConfig.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + HoodieTableVersion.NINE.versionCode());
+    upgradeTargetConfig.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + targetUpgradeVersion.versionCode());
     upgradeTargetConfig.configs.add(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key() + "=true");
     upgradeTargetConfig.configs.add("hoodie.streamer.source.hoodieincr.num_instants=3");
     upgradeTargetConfig.configs.add("hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy=READ_UPTO_LATEST_COMMIT");
@@ -3628,12 +3630,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     targetStreamer = new HoodieDeltaStreamer(upgradeTargetConfig, jsc);
     targetStreamer.sync();
 
-    // Verify target table is now v9 - create fresh metaclient after upgrade
+    // Verify target table is now at target version - create fresh metaclient after upgrade
     targetMetaClient = HoodieTableMetaClient.builder()
         .setConf(HoodieTestUtils.getDefaultStorageConf())
         .setBasePath(targetTablePath)
         .build();
-    assertEquals(HoodieTableVersion.NINE, targetMetaClient.getTableConfig().getTableVersion());
+    assertEquals(targetUpgradeVersion, targetMetaClient.getTableConfig().getTableVersion());
 
     // Phase 4: Add 2 more commits to source table (keeping it at v6)
     for (int i = 0; i < 2; i++) {
@@ -3649,7 +3651,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(5, sourceMetaClient.getActiveTimeline().getCommitsTimeline().countInstants());
     assertEquals(HoodieTableVersion.SIX, sourceMetaClient.getTableConfig().getTableVersion());
 
-    // Phase 5: Resume incremental sync from upgraded target table (now at v9)
+    // Phase 5: Resume incremental sync from upgraded target table (now at target version)
     // Create base config for resuming sync
     HoodieDeltaStreamer.Config resumeTargetConfig = TestHelpers.makeConfigForHudiIncrSrc(
         sourceTablePath, targetTablePath, WriteOperationType.BULK_INSERT, false, null);
@@ -3658,13 +3660,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     resumeTargetConfig.configs.add("hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy=READ_UPTO_LATEST_COMMIT");
     resumeTargetConfig.allowCommitOnNoCheckpointChange = true; // Allow commit even with no new data to trigger upgrade
 
-    // This should successfully pull all remaining commits from v6 source to v9 target
+    // This should successfully pull all remaining commits from v6 source to upgraded target
     targetStreamer = new HoodieDeltaStreamer(resumeTargetConfig, jsc);
     targetStreamer.sync();
 
     // Phase 6: Validate data integrity and checkpoint continuity
     targetMetaClient.reloadActiveTimeline();
-    assertEquals(HoodieTableVersion.NINE, targetMetaClient.getTableConfig().getTableVersion());
+    assertEquals(targetUpgradeVersion, targetMetaClient.getTableConfig().getTableVersion());
 
     // Verify record counts match between source and target
     long sourceRecordCount = sqlContext.read()
