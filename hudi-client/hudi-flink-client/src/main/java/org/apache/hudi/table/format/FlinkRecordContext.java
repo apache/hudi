@@ -49,9 +49,12 @@ import org.apache.flink.types.RowKind;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.function.UnaryOperator;
 
 public class FlinkRecordContext extends RecordContext<RowData> {
+  private static final FlinkRecordContext FIELD_ACCESSOR_INSTANCE_WITH_UTC_ENABLE = new FlinkRecordContext(true);
+  private static final FlinkRecordContext FIELD_ACCESSOR_INSTANCE_WITH_UTC_DISABLE = new FlinkRecordContext(false);
 
   private final boolean utcTimezone;
   // the converter is used to create a RowData contains primary key fields only
@@ -63,6 +66,16 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   public FlinkRecordContext(HoodieTableConfig tableConfig, StorageConfiguration<?> storageConf) {
     super(tableConfig, new DefaultJavaTypeConverter());
     this.utcTimezone = storageConf.getBoolean("read.utc-timezone",true);
+  }
+
+  private FlinkRecordContext(boolean utcTimezone) {
+    super(new DefaultJavaTypeConverter());
+    this.utcTimezone = utcTimezone;
+  }
+
+  public static FlinkRecordContext getFieldAccessorInstance(Properties props) {
+    boolean utcTimezone = Boolean.parseBoolean(props.getProperty("read.utc-timezone","true"));
+    return utcTimezone ? FIELD_ACCESSOR_INSTANCE_WITH_UTC_ENABLE : FIELD_ACCESSOR_INSTANCE_WITH_UTC_DISABLE;
   }
 
   @Override
