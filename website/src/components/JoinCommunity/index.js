@@ -5,6 +5,7 @@ import GitHubIcon from "@site/src/components/JoinCommunity/Icons/github.svg";
 import SlackIcon from "@site/src/components/JoinCommunity/Icons/slack.svg";
 import LinkedinIcon from "@site/src/components/JoinCommunity/Icons/linkedin.svg";
 import TwitterIcon from "@site/src/components/JoinCommunity/Icons/twitter.svg";
+import XIcon from "@site/src/components/JoinCommunity/Icons/x.svg";
 import MailIcon from "@site/src/components/JoinCommunity/Icons/mail.svg";
 import YoutubeIcon from "@site/src/components/JoinCommunity/Icons/youtube.svg";
 import Title from "@site/src/components/Title";
@@ -34,10 +35,10 @@ const JoinCommunity = () => {
       url: "https://www.linkedin.com/company/apache-hudi/?viewAsMember=true",
     },
     {
-      icon: TwitterIcon,
-      title: "Twitter",
+      icon: XIcon,
+      title: "X",
       linkText: "Join community",
-      url: "https://twitter.com/ApacheHudi",
+      url: "https://x.com/ApacheHudi",
     },
     {
       icon: YoutubeIcon,
