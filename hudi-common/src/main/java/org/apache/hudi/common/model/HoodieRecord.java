@@ -575,6 +575,6 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   }
 
   public enum HoodieRecordType {
-    AVRO, SPARK, HIVE, FLINK
+    AVRO, AVRO_BYTES, SPARK, HIVE, FLINK
   }
 }
