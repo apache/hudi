@@ -176,7 +176,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // One commit; reading one file group containing a base file only
       List<HoodieRecord> initialRecords = dataGen.generateInserts("001", 100);
-1      commitToTable(initialRecords, INSERT.value(), true, writeConfigs);
+      commitToTable(initialRecords, INSERT.value(), true, writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), true, 0, recordMergeMode,
           initialRecords, initialRecords, new String[]{ORDERING_FIELD_NAME});
@@ -279,7 +279,12 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   private static List<Pair<String, IndexedRecord>> hoodieRecordsToIndexedRecords(List<HoodieRecord> hoodieRecords, Schema schema) {
     return hoodieRecords.stream().map(r -> {
       try {
-        return r.toIndexedRecord(schema, CollectionUtils.emptyProps());
+        Option<HoodieAvroIndexedRecord> avroIndexedRecordOption = r.toIndexedRecord(schema, CollectionUtils.emptyProps());
+        if (avroIndexedRecordOption.isPresent()) {
+          // eager deser
+          avroIndexedRecordOption.get().getData().get(0);
+        }
+        return avroIndexedRecordOption;
       } catch (IOException e) {
         throw new RuntimeException(e);
       }

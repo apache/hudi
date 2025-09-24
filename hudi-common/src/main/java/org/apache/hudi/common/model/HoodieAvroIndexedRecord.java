@@ -378,7 +378,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public IndexedRecord getData() {
-    return binaryRecord.getRecord();
+    return binaryRecord;
   }
 
   public IndexedRecord getSerializableIndexedRecord() {
