@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.table.format.FlinkRecordContext;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
 import org.apache.hudi.util.RowDataAvroQueryContexts.RowDataQueryContext;
 import org.apache.hudi.util.RowProjection;
@@ -218,24 +219,11 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   protected boolean checkIsDelete(DeleteContext deleteContext, Properties props) {
-    if (data == null) {
+    if (data == null || HoodieOperation.isDelete(getOperation())) {
       return true;
     }
 
-    if (HoodieOperation.isDelete(getOperation())) {
-      return true;
-    }
-
-    // Use data field to decide.
-    Schema.Field deleteField = deleteContext.getReaderSchema().getField(HOODIE_IS_DELETED_FIELD);
-    if (deleteField != null && data.getBoolean(deleteField.pos())) {
-      return true;
-    }
-    // check custom delete marker
-    return deleteContext.getCustomDeleteMarkerKeyValue().map(markerKeyValue -> {
-      Object fieldValue = getColumnValueAsJava(deleteContext.getReaderSchema(), markerKeyValue.getKey(), props, true);
-      return markerKeyValue.getValue().equals(fieldValue);
-    }).orElse(false);
+    return FlinkRecordContext.getDeleteCheckingInstance().isDeleteRecord(data, deleteContext);
   }
 
   @Override
