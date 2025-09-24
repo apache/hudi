@@ -90,7 +90,7 @@ public class StreamingMetadataWriteHandler {
                                                              String instantTime) {
     HoodieData<WriteStatus> mdtWriteStatuses = metadataWriter.streamWriteToMetadataPartitions(dataTableWriteStatuses, instantTime);
     mdtWriteStatuses.persist("MEMORY_AND_DISK_SER", table.getContext(), HoodieData.HoodieDataCacheKey.of(table.getMetaClient().getBasePath().toString(), instantTime));
-    HoodieData<WriteStatus> allWriteStatus = dataTableWriteStatuses.coalesce(1).union(mdtWriteStatuses);
+    HoodieData<WriteStatus> allWriteStatus = dataTableWriteStatuses.repartition(1).union(mdtWriteStatuses);
     return allWriteStatus;
   }
 

@@ -209,9 +209,4 @@ public class HoodieJavaRDD<T> implements HoodieData<T> {
   public HoodieData<T> repartition(int parallelism) {
     return HoodieJavaRDD.of(rddData.repartition(parallelism));
   }
-
-  @Override
-  public HoodieData<T> coalesce(int parallelism) {
-    return HoodieJavaRDD.of(rddData.coalesce(parallelism));
-  }
 }
