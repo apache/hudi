@@ -26,9 +26,9 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
-import org.apache.hudi.common.table.checkpoint.UnresolvedStreamerCheckpointBasedOnCfg;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
+import org.apache.hudi.common.table.checkpoint.UnresolvedStreamerCheckpointBasedOnCfg;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
@@ -288,17 +288,11 @@ public class HoodieIncrSource extends RowSource {
               String.join("','", instantTimeList)));
     } else {
       // normal incremental query
-      TimelineLayout layout = TimelineLayout.fromVersion(queryContext.getActiveTimeline().getTimelineLayoutVersion());
-      String inclusiveStartCompletionTime = queryContext.getInstants().stream()
-          .min(layout.getInstantComparator().completionTimeOrderedComparator())
-          .map(HoodieInstant::getCompletionTime)
-          .get();
-
       source = reader
           .options(readOpts)
           .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
           .option(INCREMENTAL_READ_TABLE_VERSION().key(), HoodieTableVersion.EIGHT.versionCode())
-          .option(START_COMMIT().key(), inclusiveStartCompletionTime)
+          .option(START_COMMIT().key(), analyzer.getStartCompletionTime().get())
           .option(END_COMMIT().key(), endCompletionTime)
           .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
               props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),

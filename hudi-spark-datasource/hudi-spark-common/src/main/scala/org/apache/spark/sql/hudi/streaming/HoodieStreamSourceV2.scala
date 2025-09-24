@@ -186,7 +186,7 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
         startOffset.offsetCommitTime, RangeType.CLOSED_CLOSED)
       case HoodieSourceOffset(completionTime) => (
         completionTime, RangeType.OPEN_CLOSED)
-      case _=> throw new IllegalStateException("UnKnow offset type.")
+      case _=> throw new IllegalStateException("Unknown offset type.")
     }
   }
 
