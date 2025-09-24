@@ -314,6 +314,9 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    */
   public void setIgnoreIndexUpdate(boolean ignoreFlag) {
     this.ignoreIndexUpdate = ignoreFlag;
+    if (ignoreFlag) {
+      this.operation = HoodieOperation.UPDATE_BEFORE;
+    }
   }
 
   public boolean getIgnoreIndexUpdate() {

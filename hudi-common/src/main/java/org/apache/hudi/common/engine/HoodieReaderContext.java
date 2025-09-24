@@ -201,8 +201,8 @@ public abstract class HoodieReaderContext<T> {
     return keyFilterOpt;
   }
 
-  public SizeEstimator<BufferedRecord<T>> getRecordSizeEstimator(Option<Schema> recordSchemaOpt) {
-    return new HoodieRecordSizeEstimator<>(recordSchemaOpt.orElse(getSchemaHandler().getRequiredSchema()));
+  public SizeEstimator<BufferedRecord<T>> getRecordSizeEstimator() {
+    return new HoodieRecordSizeEstimator<>(getSchemaHandler().getIncomingRecordSchema());
   }
 
   public CustomSerializer<BufferedRecord<T>> getRecordSerializer() {

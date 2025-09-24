@@ -68,7 +68,6 @@ import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetada
 abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   protected final HoodieReaderContext<T> readerContext;
   protected final Schema readerSchema;
-  protected final Schema incomingRecordsSchema;
   protected final List<String> orderingFieldNames;
   protected final RecordMergeMode recordMergeMode;
   protected final Option<PartialUpdateMode> partialUpdateModeOpt;
@@ -97,12 +96,10 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
                                   Option<PartialUpdateMode> partialUpdateModeOpt,
                                   TypedProperties props,
                                   List<String> orderingFieldNames,
-                                  UpdateProcessor<T> updateProcessor,
-                                  Option<Schema> incomingRecordsSchemaOpt) {
+                                  UpdateProcessor<T> updateProcessor) {
     this.readerContext = readerContext;
     this.updateProcessor = updateProcessor;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
-    this.incomingRecordsSchema = incomingRecordsSchemaOpt.orElseGet(() -> readerSchema);
     this.recordMergeMode = recordMergeMode;
     this.partialUpdateModeOpt = partialUpdateModeOpt;
     this.recordMerger = readerContext.getRecordMerger();
@@ -132,7 +129,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     boolean isBitCaskDiskMapCompressionEnabled = props.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
     return new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),
-        readerContext.getRecordSizeEstimator(Option.of(incomingRecordsSchema)), diskMapType, readerContext.getRecordSerializer(), isBitCaskDiskMapCompressionEnabled, getClass().getSimpleName());
+        readerContext.getRecordSizeEstimator(), diskMapType, readerContext.getRecordSerializer(), isBitCaskDiskMapCompressionEnabled, getClass().getSimpleName());
   }
 
   @Override
