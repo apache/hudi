@@ -345,7 +345,7 @@ object DefaultSource {
           case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
             (hoodieTableSupportsCompletionTime, enableFileGroupReader) match {
               case (true, true) => new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(
-                sqlContext, metaClient, parameters, userSchema, isBootstrappedTable, RangeType.OPEN_CLOSED).build()
+                sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
               case (true, false) => new IncrementalRelationV2(sqlContext, parameters, userSchema, metaClient, RangeType.OPEN_CLOSED)
               case (false, true) => new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV1(
                 sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()

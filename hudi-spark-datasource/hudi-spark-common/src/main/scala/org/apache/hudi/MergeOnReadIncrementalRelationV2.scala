@@ -52,7 +52,7 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
                                             override val metaClient: HoodieTableMetaClient,
                                             private val userSchema: Option[StructType],
                                             private val prunedDataSchema: Option[StructType] = None,
-                                            override val rangeType: RangeType = RangeType.CLOSED_CLOSED)
+                                            override val rangeType: RangeType = RangeType.OPEN_CLOSED)
   extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, Seq(), userSchema, prunedDataSchema)
     with HoodieIncrementalRelationV2Trait with MergeOnReadIncrementalRelation {
 
