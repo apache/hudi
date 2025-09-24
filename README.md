@@ -134,6 +134,7 @@ Refer to the table below for building with different Spark and Scala versions.
 | `-Dspark3.4`              | hudi-spark3.4-bundle_2.12                    | For Spark 3.4.x and Scala 2.12                   |
 | `-Dspark3.5 -Dscala-2.12` | hudi-spark3.5-bundle_2.12                    | For Spark 3.5.x and Scala 2.12 (same as default) |
 | `-Dspark3.5 -Dscala-2.13` | hudi-spark3.5-bundle_2.13                    | For Spark 3.5.x and Scala 2.13                   |
+| `-Dspark4.0`              | hudi-spark4.0-bundle_2.13                    | For Spark 4.0 and Scala 2.13 (Needs java 17)     |
 | `-Dspark3`                | hudi-spark3-bundle_2.12 (legacy bundle name) | For Spark 3.5.x and Scala 2.12                   |
 
 Please note that only Spark-related bundles, i.e., `hudi-spark-bundle`, `hudi-utilities-bundle`,
