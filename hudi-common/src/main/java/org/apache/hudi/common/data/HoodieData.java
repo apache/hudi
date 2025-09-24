@@ -220,15 +220,6 @@ public interface HoodieData<T> extends Serializable {
    */
   HoodieData<T> repartition(int parallelism);
 
-  /**
-   * Coalesces underlying collection (if applicable) making sure new {@link HoodieData} has
-   * exactly {@code parallelism} partitions or less.
-   *
-   * @param parallelism target number of partitions in the underlying collection
-   * @return {@link HoodieData<T>} holding coalesced collection
-   */
-  HoodieData<T> coalesce(int parallelism);
-
   default <O> HoodieData<T> distinctWithKey(SerializableFunction<T, O> keyGetter, int parallelism) {
     return mapToPair(i -> Pair.of(keyGetter.apply(i), i))
         .reduceByKey((value1, value2) -> value1, parallelism)
