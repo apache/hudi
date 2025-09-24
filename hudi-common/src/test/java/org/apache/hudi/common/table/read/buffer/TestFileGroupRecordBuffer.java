@@ -98,7 +98,7 @@ class TestFileGroupRecordBuffer {
     when(schemaHandler.getDeleteContext()).thenReturn(new DeleteContext(props, schema));
     when(readerContext.getRecordMerger()).thenReturn(Option.empty());
     when(readerContext.getRecordSerializer()).thenReturn(new DefaultSerializer<>());
-    when(readerContext.getRecordSizeEstimator(any())).thenReturn(new DefaultSizeEstimator<>());
+    when(readerContext.getRecordSizeEstimator()).thenReturn(new DefaultSizeEstimator<>());
     when(readerContext.getIteratorMode()).thenReturn(IteratorMode.ENGINE_RECORD);
   }
 

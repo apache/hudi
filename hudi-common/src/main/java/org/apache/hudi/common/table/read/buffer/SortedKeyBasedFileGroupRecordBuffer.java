@@ -29,8 +29,6 @@ import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 
-import org.apache.avro.Schema;
-
 import java.io.IOException;
 import java.util.Comparator;
 import java.util.List;
@@ -55,20 +53,7 @@ class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuff
                                       TypedProperties props,
                                       List<String> orderingFieldNames,
                                       UpdateProcessor<T> updateProcessor) {
-    this(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor,
-        Option.empty());
-  }
-
-  SortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                             HoodieTableMetaClient hoodieTableMetaClient,
-                                             RecordMergeMode recordMergeMode,
-                                             Option<PartialUpdateMode> partialUpdateModeOpt,
-                                             TypedProperties props,
-                                             List<String> orderingFieldNames,
-                                             UpdateProcessor<T> updateProcessor,
-                                      Option<Schema> incomingRecordsSchemaOpt) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor,
-        incomingRecordsSchemaOpt);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
   }
 
   @Override

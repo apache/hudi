@@ -65,18 +65,17 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
                                                                             TypedProperties props, ReaderParameters readerParameters, HoodieReadStats readStats,
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
     Schema recordSchema = AvroSchemaCache.intern(getRecordSchema(readerContext, props));
+    readerContext.getSchemaHandler().setIncomingRecordSchema(recordSchema);
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
     Option<PartialUpdateMode> partialUpdateModeOpt = tableConfig.getPartialUpdateMode();
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback, props);
     FileGroupRecordBuffer<T> recordBuffer;
     if (readerParameters.sortOutputs()) {
       recordBuffer = new SortedKeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateModeOpt, props, orderingFieldNames, updateProcessor,
-          Option.of(recordSchema));
+          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
     } else {
       recordBuffer = new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateModeOpt, props, orderingFieldNames, updateProcessor,
-          Option.of(recordSchema));
+          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
     }
 
     RecordContext<T> recordContext = readerContext.getRecordContext();
