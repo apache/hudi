@@ -25,6 +25,7 @@ import org.apache.hudi.io.util.IOUtils;
 import com.google.protobuf.ByteString;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -80,9 +81,6 @@ public class HFileFileInfoBlock extends HFileBlock {
 
   public void add(String name, byte[] value) {
     fileInfoToWrite.put(name, value);
-    // For file info, all entries are put into the same map.
-    // Therefore, we should sum their size.
-    longestEntrySize += getUTF8Bytes(name).length + value.length;
   }
 
   public boolean containsKey(String name) {
@@ -90,16 +88,8 @@ public class HFileFileInfoBlock extends HFileBlock {
   }
 
   @Override
-  protected int calculateBufferCapacity() {
-    // Based on the internet search, the overhead of a BytesBytesPair is about 30 bytes.
-    // 4 bytes for magic number.
-    // To be safe, we use extra 50 bytes here.
-    return longestEntrySize + 50 * fileInfoToWrite.size();
-  }
-
-  @Override
-  public ByteBuffer getUncompressedBlockDataToWrite() {
-    ByteBuffer buff = ByteBuffer.allocate(calculateBufferCapacity());
+  public ByteBuffer getUncompressedBlockDataToWrite() throws IOException {
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream(context.getBlockSize());
     HFileProtos.InfoProto.Builder builder =
         HFileProtos.InfoProto.newBuilder();
     for (Map.Entry<String, byte[]> e : fileInfoToWrite.entrySet()) {
@@ -110,15 +100,14 @@ public class HFileFileInfoBlock extends HFileBlock {
           .build();
       builder.addMapEntry(bbp);
     }
-    buff.put(PB_MAGIC);
+    outputStream.write(PB_MAGIC);
     byte[] payload = builder.build().toByteArray();
     try {
-      buff.put(getVariableLengthEncodedBytes(payload.length));
+      outputStream.write(getVariableLengthEncodedBytes(payload.length));
     } catch (IOException e) {
       throw new RuntimeException("Failed to calculate File Info variable length");
     }
-    buff.put(payload);
-    buff.flip();
-    return buff;
+    outputStream.write(payload);
+    return ByteBuffer.wrap(outputStream.toByteArray());
   }
 }

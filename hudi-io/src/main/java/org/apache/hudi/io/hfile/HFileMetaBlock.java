@@ -19,6 +19,7 @@
 
 package org.apache.hudi.io.hfile;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
@@ -56,17 +57,9 @@ public class HFileMetaBlock extends HFileBlock {
   }
 
   @Override
-  protected int calculateBufferCapacity() {
-    return entryToWrite.value.length;
-  }
-
-  @Override
-  public ByteBuffer getUncompressedBlockDataToWrite() {
-    ByteBuffer dataBuf = ByteBuffer.allocate(calculateBufferCapacity());
+  public ByteBuffer getUncompressedBlockDataToWrite() throws IOException {
     // Note that: only value should be store in the block.
     // The key is stored in the meta index block.
-    dataBuf.put(entryToWrite.value);
-    dataBuf.flip();
-    return dataBuf;
+    return ByteBuffer.wrap(entryToWrite.value);
   }
 }

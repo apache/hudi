@@ -43,8 +43,6 @@ public abstract class HFileIndexBlock extends HFileBlock {
   public void add(byte[] firstKey, long offset, int size) {
     Key key = new Key(firstKey);
     entries.add(new BlockIndexEntry(key, Option.empty(), offset, size));
-    // 8 bytes for offset, 4 bytes for size.
-    longestEntrySize = Math.max(longestEntrySize, key.getContentLength() + 12);
   }
 
   public int getNumOfEntries() {

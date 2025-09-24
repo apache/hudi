@@ -39,6 +39,8 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Random;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.io.hfile.HFileBlockType.DATA;
 import static org.apache.hudi.io.hfile.HFileBlockType.TRAILER;
@@ -75,9 +77,15 @@ class TestHFileWriter {
 
   @Test
   void testSameKeyLocation() throws IOException {
-    // 1 bytes for data part limit.
-    HFileContext context = new HFileContext.Builder().blockSize(1).build();
+    // 165 bytes for data part limit.
+    HFileContext context = new HFileContext.Builder().blockSize(165).build();
     String testFile = TEST_FILE;
+    // CREATE 4 BLOCKs:
+    // Block 1: 100 records, whose keys are the same: "key00".
+    // Block 2: 5   records, whose first key is "key01"
+    // Block 3: 5   records, whose first key is "key06"
+    // Block 4: 1   record,  whose first key is "key11",
+    //              whose length is larger than the block size.
     try (DataOutputStream outputStream =
              new DataOutputStream(Files.newOutputStream(Paths.get(testFile)));
         HFileWriter writer = new HFileWriterImpl(context, outputStream)) {
@@ -85,12 +93,15 @@ class TestHFileWriter {
       for (int i = 0; i < 100; i++) {
         writer.append("key00", String.format("value%02d", i).getBytes());
       }
-      // Otherwise, records are put different blocks since block size is 1.
+      // Otherwise, 5 records in each other blocks.
       for (int i = 1; i < 11; i++) {
         writer.append(
             String.format("key%02d", i),
             String.format("value%02d", i).getBytes());
       }
+      // Adding a record whose size is larger than block size.
+      String longValue = generateRandomStringStream(200);
+      writer.append("key11", longValue.getBytes());
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -102,24 +113,31 @@ class TestHFileWriter {
           new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(buf));
       HFileReaderImpl reader = new HFileReaderImpl(inputStream, channel.size());
       reader.initializeMetadata();
-      // Totally 110 records.
-      assertEquals(110, reader.getNumKeyValueEntries());
+      // Totally 111 records.
+      assertEquals(111, reader.getNumKeyValueEntries());
       HFileTrailer trailer = reader.getTrailer();
-      // Totally 11 blocks.
-      assertEquals(11, trailer.getDataIndexCount());
+      // Totally 4 blocks.
+      assertEquals(4, trailer.getDataIndexCount());
       int i = 0;
       for (Map.Entry<Key, BlockIndexEntry> entry : reader.getDataBlockIndexMap().entrySet()) {
-        assertArrayEquals(
-            String.format("key%02d", i).getBytes(),
-            entry.getKey().getContentInString().getBytes());
         if (i == 0) {
           // first block: 100 records * 33 bytes + 37 bytes for header and checksum = 3337.
           assertEquals(3337, entry.getValue().getSize());
+          assertEquals("key00", entry.getKey().getContentInString());
+          i++;
         } else {
-          // rest blocks: 1 record * 33 bytes + 37 bytes for head and checksum = 70.
-          assertEquals(70, entry.getValue().getSize());
+          if (i == 1 || i == 6) {
+            // second and third blocks: 5 records * 33 bytes + 37 bytes for header and checksum = 202.
+            assertEquals(202, entry.getValue().getSize());
+            assertEquals(String.format("key%02d", i), entry.getKey().getContentInString());
+            i += 5;
+          } else {
+            // fourth block: 1 records * 226 bytes + 37 bytes for header and checksum = 263.
+            assertEquals(263, entry.getValue().getSize());
+            assertEquals(String.format("key%02d", i), entry.getKey().getContentInString());
+            i++;
+          }
         }
-        i++;
       }
     }
   }
@@ -149,7 +167,7 @@ class TestHFileWriter {
       reader.initializeMetadata();
       assertEquals(50, reader.getNumKeyValueEntries());
       HFileTrailer trailer = reader.getTrailer();
-      assertEquals(13, trailer.getDataIndexCount());
+      assertEquals(17, trailer.getDataIndexCount());
       reader.seekTo();
       for (int i = 0; i < 50; i++) {
         KeyValue kv = reader.getKeyValue().get();
@@ -273,5 +291,14 @@ class TestHFileWriter {
     if (!Arrays.equals(expected, actual)) {
       throw new AssertionError("Byte array mismatch");
     }
+  }
+
+  public static String generateRandomStringStream(int length) {
+    String characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    Random random = new Random();
+    return random.ints(length, 0, characters.length())
+        .mapToObj(characters::charAt)
+        .map(Object::toString)
+        .collect(Collectors.joining());
   }
 }
