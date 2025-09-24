@@ -39,6 +39,7 @@ import org.apache.avro.{Schema, SchemaBuilder}
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
@@ -117,14 +118,17 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
                              options: util.Map[String, String],
                              schemaStr: String): Unit = {
     val schema = new Schema.Parser().parse(schemaStr)
-    val genericRecords = spark.sparkContext.parallelize(recordList.asScala.map(_.toIndexedRecord(schema, CollectionUtils.emptyProps))
+    val genericRecords : RDD[GenericRecord] = spark.sparkContext.parallelize(recordList.asScala.map(_.toIndexedRecord(schema, CollectionUtils.emptyProps))
       .filter(r => r.isPresent).map(r =>  {
       val data = r.get.getData
-      // accessing a field to trigger deser of indexed record
-      data.get(0)
-      //val sIndexedRecord = r.get.getData.asInstanceOf[SerializableIndexedRecord]
-      //sIndexedRecord.decodeRecord(schema)
-      data.asInstanceOf[GenericRecord]
+      if (data.isInstanceOf[SerializableIndexedRecord])
+      {
+        // accessing a field to trigger deser of indexed record
+        data.get(0)
+        data.asInstanceOf[SerializableIndexedRecord].getData.asInstanceOf[GenericRecord]
+      } else {
+        data.asInstanceOf[GenericRecord]
+      }
     }).toSeq, 2)
     val inputDF: Dataset[Row] = AvroConversionUtils.createDataFrame(genericRecords, schemaStr, spark);
 

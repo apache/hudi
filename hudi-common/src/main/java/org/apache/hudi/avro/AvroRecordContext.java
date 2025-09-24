@@ -137,15 +137,6 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public IndexedRecord extractDeflatedDataFromRecord(HoodieRecord record, Schema schema, Properties properties) {
-    try {
-      return record.toIndexedRecord(schema, properties).map(HoodieAvroIndexedRecord::getSerializableIndexedRecord).orElse(null);
-    } catch (IOException e) {
-      throw new HoodieException("Failed to extract data from record: " + record, e);
-    }
-  }
-
-  @Override
   public IndexedRecord constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
     GenericData.Record record = new GenericData.Record(recordSchema);
     for (int i = 0; i < fieldValues.length; i++) {
