@@ -64,7 +64,6 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static io.airlift.slice.SizeOf.estimatedSizeOf;
 import static io.trino.plugin.hive.HiveErrorCode.HIVE_INVALID_METADATA;
@@ -78,7 +77,8 @@ import static io.trino.plugin.hudi.HudiErrorCode.HUDI_META_CLIENT_ERROR;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_SCHEMA_ERROR;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_UNSUPPORTED_FILE_FORMAT;
 import static java.lang.Math.toIntExact;
-import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS;
+import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
+import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_META_FIELD_ORD;
 
 public final class HudiUtil
 {
@@ -328,30 +328,22 @@ public final class HudiUtil
                 .map(HiveColumnHandle::getName)
                 .collect(Collectors.toSet());
 
-        // If all Hudi meta columns are already present, return the original list
-        if (dataColumnNames.containsAll(HOODIE_META_COLUMNS)) {
+        // If Hudi record key meta column is already present, return the original list
+        if (dataColumnNames.contains(RECORD_KEY_METADATA_FIELD)) {
             return dataColumns;
         }
 
-        // Identify only the meta columns that are missing from dataColumns to avoid duplicates
-        List<String> missingMetaColumns = HOODIE_META_COLUMNS.stream()
-                .filter(metaColumn -> !dataColumnNames.contains(metaColumn))
-                .toList();
-
         List<HiveColumnHandle> columns = new ArrayList<>();
 
-        // Create and prepend the new HiveColumnHandles for the missing meta columns
-        columns.addAll(IntStream.range(0, missingMetaColumns.size())
-                .boxed()
-                .map(i -> new HiveColumnHandle(
-                        missingMetaColumns.get(i),
-                        i,
-                        HiveType.HIVE_STRING,
-                        VarcharType.VARCHAR,
-                        Optional.empty(),
-                        HiveColumnHandle.ColumnType.REGULAR,
-                        Optional.empty()))
-                .toList());
+        // Create and prepend the new HiveColumnHandle for the record key column
+        columns.add(new HiveColumnHandle(
+                RECORD_KEY_METADATA_FIELD,
+                RECORD_KEY_META_FIELD_ORD,
+                HiveType.HIVE_STRING,
+                VarcharType.VARCHAR,
+                Optional.empty(),
+                HiveColumnHandle.ColumnType.REGULAR,
+                Optional.empty()));
 
         // Add all the original data columns after the new meta columns
         columns.addAll(dataColumns);
