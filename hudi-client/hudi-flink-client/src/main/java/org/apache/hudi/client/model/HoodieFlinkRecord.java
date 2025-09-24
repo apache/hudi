@@ -223,7 +223,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
       return true;
     }
 
-    return FlinkRecordContext.getFieldAccessorInstance(props).isDeleteRecord(data, deleteContext);
+    return FlinkRecordContext.getDeleteCheckingInstance().isDeleteRecord(data, deleteContext);
   }
 
   @Override
