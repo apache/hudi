@@ -48,7 +48,7 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, getPartitionPathFieldWriteConfig}
-import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
+import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
 import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand._
 import org.apache.spark.sql.hudi.command.PartialAssignmentMode.PartialAssignmentMode
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
@@ -124,7 +124,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   private lazy val hoodieCatalogTable = sparkAdapter.resolveHoodieTable(mergeInto.targetTable) match {
     case Some(catalogTable) => HoodieCatalogTable(sparkSession, catalogTable)
     case _ =>
-      failAnalysis(s"Failed to resolve MERGE INTO statement into the Hudi table. Got instead: ${mergeInto.targetTable}")
+      throw new HoodieAnalysisException(s"Failed to resolve MERGE INTO statement into the Hudi table. Got instead: ${mergeInto.targetTable}")
   }
 
   private lazy val targetTableType = hoodieCatalogTable.tableTypeName
@@ -499,7 +499,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     }
     if (commitInstantTime.isPresent) {
       updateCommitMetrics(metrics, hoodieCatalogTable.metaClient, commitInstantTime.get())
-      DataWritingCommand.propogateMetrics(sparkSession.sparkContext, this, metrics)
     }
   }
 
