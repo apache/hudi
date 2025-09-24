@@ -427,19 +427,21 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(override val sqlCont
                                                             override val metaClient: HoodieTableMetaClient,
                                                             override val options: Map[String, String],
                                                             override val schemaSpec: Option[StructType],
-                                                            isBootstrap: Boolean)
+                                                            isBootstrap: Boolean,
+                                                            rangeType: RangeType = RangeType.OPEN_CLOSED)
   extends HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap,
-    MergeOnReadIncrementalRelationV2(sqlContext, options, metaClient, schemaSpec, None, RangeType.OPEN_CLOSED))
+    MergeOnReadIncrementalRelationV2(sqlContext, options, metaClient, schemaSpec, None, rangeType))
 
 class HoodieCopyOnWriteCDCHadoopFsRelationFactory(override val sqlContext: SQLContext,
                                                   override val metaClient: HoodieTableMetaClient,
                                                   override val options: Map[String, String],
                                                   override val schemaSpec: Option[StructType],
-                                                  isBootstrap: Boolean)
+                                                  isBootstrap: Boolean,
+                                                  rangeType: RangeType = RangeType.OPEN_CLOSED)
   extends HoodieBaseCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
   private val hoodieCDCFileIndex = new HoodieCDCFileIndex(
-    sparkSession, metaClient, schemaSpec, options, fileStatusCache, false, RangeType.OPEN_CLOSED)
+    sparkSession, metaClient, schemaSpec, options, fileStatusCache, false, rangeType)
   override def buildFileIndex(): HoodieFileIndex = hoodieCDCFileIndex
 
   override def buildDataSchema(): StructType = hoodieCDCFileIndex.cdcRelation.schema
