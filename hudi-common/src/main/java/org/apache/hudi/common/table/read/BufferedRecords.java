@@ -50,20 +50,13 @@ public class BufferedRecords {
 
   public static <T> BufferedRecord<T> fromHoodieRecordWithDeflatedRecord(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props,
                                                                          String[] orderingFields, DeleteContext deleteContext) {
-    HoodieOperation hoodieOperation = record.getIgnoreIndexUpdate() ? HoodieOperation.UPDATE_BEFORE : record.getOperation();
-    boolean isDelete = record.isDelete(deleteContext, props);
-    return fromHoodieRecordWithDeflatedRecord(record, schema, recordContext, props, orderingFields, isDelete, hoodieOperation);
-  }
-
-  public static <T> BufferedRecord<T> fromHoodieRecordWithDeflatedRecord(HoodieRecord record, Schema schema, RecordContext<T> recordContext,
-                                                                         Properties props, String[] orderingFields, boolean isDelete,
-                                                                         HoodieOperation hoodieOperation) {
     HoodieKey hoodieKey = record.getKey();
     T data = recordContext.extractDeflatedDataFromRecord(record, schema, props);
     String recordKey = hoodieKey == null ? recordContext.getRecordKey(data, schema) : hoodieKey.getRecordKey();
     Integer schemaId = recordContext.encodeAvroSchema(schema);
     Comparable orderingValue = record.getOrderingValue(schema, props, orderingFields);
-    return new BufferedRecord<>(recordKey, recordContext.convertOrderingValueToEngineType(orderingValue), data, schemaId, inferOperation(isDelete, hoodieOperation));
+    boolean isDelete = record.isDelete(deleteContext, props);
+    return new BufferedRecord<>(recordKey, recordContext.convertOrderingValueToEngineType(orderingValue), data, schemaId, inferOperation(isDelete, record.getOperation()));
   }
 
   public static <T> BufferedRecord<T> fromEngineRecord(T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete) {
@@ -91,11 +84,6 @@ public class BufferedRecords {
 
   public static <T> BufferedRecord<T> fromDeleteRecord(DeleteRecord deleteRecord, RecordContext<T> recordContext) {
     return new BufferedRecord<>(deleteRecord.getRecordKey(), recordContext.getOrderingValue(deleteRecord), null, null, HoodieOperation.DELETE);
-  }
-
-  public static <T> BufferedRecord<T> fromDeleteRecord(DeleteRecord deleteRecord, RecordContext<T> recordContext, HoodieOperation hoodieOperation) {
-    hoodieOperation = HoodieOperation.isUpdateBefore(hoodieOperation) ? HoodieOperation.UPDATE_BEFORE : HoodieOperation.DELETE;
-    return new BufferedRecord<>(deleteRecord.getRecordKey(), recordContext.getOrderingValue(deleteRecord), null, null, hoodieOperation);
   }
 
   public static <T> BufferedRecord<T> createDelete(String recordKey, Comparable orderingValue) {
