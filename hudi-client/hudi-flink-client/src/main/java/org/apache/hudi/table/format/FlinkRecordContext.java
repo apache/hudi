@@ -47,7 +47,6 @@ import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
 
-import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
 

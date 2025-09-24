@@ -85,8 +85,7 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
     while (recordIterator.hasNext()) {
       HoodieRecord<T> hoodieRecord = recordIterator.next();
       try {
-        BufferedRecord<T> bufferedRecord = BufferedRecords.fromHoodieRecordWithDeflatedRecord(hoodieRecord, recordSchema, recordContext, props, orderingFieldsArray,
-            deleteContext);
+        BufferedRecord<T> bufferedRecord = BufferedRecords.fromHoodieRecord(hoodieRecord, recordSchema, recordContext, props, orderingFieldsArray, deleteContext);
         recordBuffer.processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       } catch (IOException e) {
         throw new HoodieIOException("Failed to process next buffered record", e);
