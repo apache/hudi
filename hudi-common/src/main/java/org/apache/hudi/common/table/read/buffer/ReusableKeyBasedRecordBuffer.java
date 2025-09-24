@@ -58,8 +58,7 @@ public class ReusableKeyBasedRecordBuffer<T> extends FileGroupRecordBuffer<T> {
                                RecordMergeMode recordMergeMode, Option<PartialUpdateMode> partialUpdateModeOpt,
                                TypedProperties props, List<String> orderingFieldNames,
                                UpdateProcessor<T> updateProcessor, Map<Serializable, BufferedRecord<T>> records) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor,
-        Option.empty());
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
     this.existingRecords = records;
     ValidationUtils.checkArgument(readerContext.getKeyFilterOpt().orElse(null) instanceof Predicates.In,
         () -> "Key filter should be of type Predicates.In, but found: " + readerContext.getKeyFilterOpt().map(filter -> filter.getClass().getSimpleName()).orElse("NULL"));
