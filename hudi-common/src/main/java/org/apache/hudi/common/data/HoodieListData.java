@@ -198,6 +198,12 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   }
 
   @Override
+  public HoodieData<T> coalesce(int parallelism) {
+    // no op
+    return this;
+  }
+
+  @Override
   public boolean isEmpty() {
     return super.isEmpty();
   }
