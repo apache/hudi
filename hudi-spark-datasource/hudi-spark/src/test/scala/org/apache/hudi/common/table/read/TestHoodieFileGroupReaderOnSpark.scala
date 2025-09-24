@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.SerializableIndexedRecord
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFileCount
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
@@ -117,7 +118,11 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
                              schemaStr: String): Unit = {
     val schema = new Schema.Parser().parse(schemaStr)
     val genericRecords = spark.sparkContext.parallelize(recordList.asScala.map(_.toIndexedRecord(schema, CollectionUtils.emptyProps))
-      .filter(r => r.isPresent).map(r => r.get.getData.asInstanceOf[GenericRecord]).toSeq, 2)
+      .filter(r => r.isPresent).map(r =>  {
+      val sIndexedRecord = r.get.getData.asInstanceOf[SerializableIndexedRecord]
+      sIndexedRecord.decodeRecord(schema)
+      sIndexedRecord.getData.asInstanceOf[GenericRecord]
+    }).toSeq, 2)
     val inputDF: Dataset[Row] = AvroConversionUtils.createDataFrame(genericRecords, schemaStr, spark);
 
     inputDF.write.format("hudi")

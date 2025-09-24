@@ -88,7 +88,8 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
     }
   }
 
-  IndexedRecord getData() {
+  @VisibleForTesting
+  public IndexedRecord getData() {
     if (record == null) {
       try {
         record = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
