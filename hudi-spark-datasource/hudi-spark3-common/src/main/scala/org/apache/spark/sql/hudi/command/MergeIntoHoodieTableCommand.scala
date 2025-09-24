@@ -43,15 +43,12 @@ import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
-import org.apache.spark.sql.catalyst.plans.{LeftOuter, QueryPlan}
+import org.apache.spark.sql.catalyst.plans.LeftOuter
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.execution.SparkPlan
-import org.apache.spark.sql.execution.command.DataWritingCommand
-import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, getPartitionPathFieldWriteConfig}
-import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
+import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
 import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand._
 import org.apache.spark.sql.hudi.command.PartialAssignmentMode.PartialAssignmentMode
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
@@ -111,29 +108,24 @@ class MergeIntoFieldTypeMismatchException(message: String)
  *
  * TODO explain workflow for MOR tables
  */
-case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
-                                       hoodieCatalogTable: HoodieCatalogTable,
-                                       sparkSession: SparkSession,
-                                       query: LogicalPlan) extends DataWritingCommand
+case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends HoodieLeafRunnableCommand
   with SparkAdapterSupport
   with ProvidesHoodieConfig
   with PredicateHelper {
 
-  override def innerChildren: Seq[QueryPlan[_]] = Seq(query)
-
-  override def outputColumnNames: Seq[String] = {
-    query.output.map(_.name)
-  }
-
-  override lazy val metrics: Map[String, SQLMetric] = HoodieCommandMetrics.metrics
-
-  override protected def withNewChildInternal(newChild: LogicalPlan): LogicalPlan = copy(query = newChild)
+  private var sparkSession: SparkSession = _
 
   /**
    * The target table schema without hoodie meta fields.
    */
   private lazy val targetTableSchema =
     removeMetaFields(mergeInto.targetTable.schema).fields
+
+  private lazy val hoodieCatalogTable = sparkAdapter.resolveHoodieTable(mergeInto.targetTable) match {
+    case Some(catalogTable) => HoodieCatalogTable(sparkSession, catalogTable)
+    case _ =>
+      failAnalysis(s"Failed to resolve MERGE INTO statement into the Hudi table. Got instead: ${mergeInto.targetTable}")
+  }
 
   private lazy val targetTableType = hoodieCatalogTable.tableTypeName
 
@@ -274,13 +266,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
       "ordering fields",
       updatingActions.flatMap(_.assignments))
 
-  override def run(sparkSession: SparkSession, inputPlan: SparkPlan): Seq[Row] = {
+  override def run(sparkSession: SparkSession): Seq[Row] = {
+    this.sparkSession = sparkSession
     // TODO move to analysis phase
     // Create the write parameters
     val props = buildMergeIntoConfig(hoodieCatalogTable)
     validate(props)
 
-    val processedInputDf: DataFrame = sparkSession.internalCreateDataFrame(inputPlan.execute(), inputPlan.schema)
+    val processedInputDf: DataFrame = getProcessedInputDf
     // Do the upsert
     executeUpsert(processedInputDf, props)
     // Refresh the table in the catalog
@@ -347,7 +340,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
    * <li>{@code ts = source.sts}</li>
    * </ul>
    */
-  def getProcessedInputPlan: LogicalPlan = {
+  private def getProcessedInputDf: DataFrame = {
     val resolver = sparkSession.sessionState.analyzer.resolver
 
     // For pkless table, we need to project the meta columns by joining with the target table;
@@ -401,7 +394,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
         case _ => attr
       }
     }
-    Project(adjustedSourceTableOutput ++ additionalColumns, inputPlan)
+
+    val amendedPlan = Project(adjustedSourceTableOutput ++ additionalColumns, inputPlan)
+
+    Dataset.ofRows(sparkSession, amendedPlan)
   }
 
   /**
@@ -735,7 +731,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
     // NOTE: We're relying on [[sourceDataset]] here instead of [[mergeInto.sourceTable]],
     //       as it could be amended to add missing primary-key and/or ordering columns.
     //       Please check [[sourceDataset]] scala-doc for more details
-    (query.output ++ mergeInto.targetTable.output).filterNot(a => isMetaField(a.name))
+    (getProcessedInputDf.queryExecution.analyzed.output ++ mergeInto.targetTable.output).filterNot(a => isMetaField(a.name))
   }
 
   private def validateInsertingAssignmentExpression(expr: Expression): Unit = {

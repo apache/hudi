@@ -438,11 +438,8 @@ case class ResolveImplementations(sparkSession: SparkSession) extends Rule[Logic
     AnalysisHelper.allowInvokingTransformsInAnalyzer {
       plan match {
         // Convert to MergeIntoHoodieTableCommand
-        case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(table), _, _) if mit.resolved =>
-          val catalogTable = HoodieCatalogTable(sparkSession, table)
-          val command = new MergeIntoHoodieTableCommand(ReplaceExpressions(mit).asInstanceOf[MergeIntoTable], catalogTable, sparkSession, null)
-          val inputPlan = command.getProcessedInputPlan
-          command.copy(query = inputPlan)
+        case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(_), _, _) if mit.resolved =>
+          MergeIntoHoodieTableCommand(ReplaceExpressions(mit).asInstanceOf[MergeIntoTable])
 
         // Convert to UpdateHoodieTableCommand
         case ut@UpdateTable(plan@ResolvesToHudiTable(_), _, _) if ut.resolved =>
