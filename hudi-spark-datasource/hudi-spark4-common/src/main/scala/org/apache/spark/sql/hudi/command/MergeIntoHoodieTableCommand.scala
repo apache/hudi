@@ -37,15 +37,15 @@ import org.apache.hudi.util.JFunction.scalaFunction1Noop
 
 import org.apache.avro.Schema
 import org.apache.spark.sql._
+import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{attributeEquals, MatchCast}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
 import org.apache.spark.sql.catalyst.plans.LeftOuter
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.classic.Dataset
-import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, getPartitionPathFieldWriteConfig}
@@ -398,7 +398,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     val amendedPlan = Project(adjustedSourceTableOutput ++ additionalColumns, inputPlan)
 
-    Dataset.ofRows(sparkSession, amendedPlan)
+    sparkAdapter.getUnsafeUtils.createDataFrameFrom(sparkSession, amendedPlan)
   }
 
   /**
