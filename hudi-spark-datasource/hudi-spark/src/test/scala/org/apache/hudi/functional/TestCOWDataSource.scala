@@ -2322,7 +2322,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // - v9: Uses close_close range (both START and END inclusive)
     val incrementalDf1 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, commit1)
+      .option(DataSourceReadOptions.START_COMMIT.key, "000")
       .option(DataSourceReadOptions.END_COMMIT.key, commit3)
       .load(basePath)
       .select("id", "value", "timestamp")
@@ -2358,7 +2358,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // Should include changes from c3, c4 and c5
     val incrementalDf2 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, commit3)
+      .option(DataSourceReadOptions.START_COMMIT.key, commit2)
       .load(basePath) // No END_COMMIT means up to latest
       .select("id", "value", "timestamp")
       .orderBy("id")
