@@ -123,7 +123,7 @@ public class RowDataUtils {
       case SMALLINT:
         return fieldVal -> (short) fieldVal;
       case DATE:
-        return fieldVal -> ((LocalDate) fieldVal).toEpochDay();
+        return fieldVal -> (int) ((LocalDate) fieldVal).toEpochDay();
       case CHAR:
       case VARCHAR:
         return fieldVal -> BinaryStringData.fromString((String) fieldVal);

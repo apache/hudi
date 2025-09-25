@@ -19,6 +19,7 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 
 import org.apache.avro.Schema;
@@ -50,7 +51,11 @@ public class OrderingValueEngineTypeConverter {
       DataType fieldType =  AvroSchemaConverter.convertToDataType(fieldSchema);
       return RowDataUtils.flinkValFunc(fieldType.getLogicalType(), utcTimezone);
     }).collect(Collectors.toList());
+  }
 
+  @VisibleForTesting
+  public List<Function<Comparable, Comparable>> getConverters() {
+    return converters;
   }
 
   public static OrderingValueEngineTypeConverter create(Schema dataSchema, List<String> orderingFieldNames, boolean utcTimezone) {
