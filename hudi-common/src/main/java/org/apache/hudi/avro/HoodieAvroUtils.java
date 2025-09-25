@@ -1703,8 +1703,12 @@ public class HoodieAvroUtils {
   }
 
   public static <T extends SpecificRecordBase> T convertToSpecificRecord(Class<T> clazz, GenericRecord genericRecord) {
+    SpecificData specificData = new SpecificData(clazz.getClassLoader());
+    return convertToSpecificRecord(clazz, genericRecord, specificData);
+  }
+
+  private static <T extends SpecificRecordBase> T convertToSpecificRecord(Class<T> clazz, GenericRecord genericRecord, SpecificData specificData) {
     try {
-      SpecificData specificData = new SpecificData(clazz.getClassLoader());
       T specificRecord = clazz.newInstance();
       Schema schema = SpecificData.getForClass(clazz).getSchema(clazz);
       for (Field field : schema.getFields()) {
@@ -1713,42 +1717,36 @@ public class HoodieAvroUtils {
           specificRecord.put(field.pos(), null);
           continue;
         }
-        Schema fieldSchema = getActualSchemaFromUnion(field.schema(), value);
-
-        switch (fieldSchema.getType()) {
-          case RECORD:
-            value = convertToSpecificRecord(specificData.getClass(fieldSchema), (GenericRecord) value);
-            break;
-          case ARRAY:
-            Class elementClass = specificData.getClass(fieldSchema.getElementType());
-            value = ((List<?>) value).stream().map(element -> {
-              if (element instanceof GenericRecord) {
-                return convertToSpecificRecord(elementClass, (GenericRecord) element);
-              }
-              return element;
-            }).collect(Collectors.toList());
-            break;
-          case MAP:
-            Class valueClass = specificData.getClass(fieldSchema.getValueType());
-            value = ((Map<?, ?>) value).entrySet().stream().collect(Collectors.toMap(
-                Map.Entry::getKey,
-                entry -> {
-                  Object mapValue = entry.getValue();
-                  if (mapValue instanceof GenericRecord) {
-                    return convertToSpecificRecord(valueClass, (GenericRecord) mapValue);
-                  }
-                  return mapValue;
-                }
-            ));
-            break;
-          default:
-            // no conversion required
-        }
+        value = convertFieldToSpecificRecordValue(field.schema(), value, specificData);
         specificRecord.put(field.pos(), value);
       }
       return specificRecord;
     } catch (InstantiationException | IllegalAccessException e) {
       throw new HoodieException("Failed to convert to SpecificRecord " + clazz.getName(), e);
     }
+  }
+
+  private static Object convertFieldToSpecificRecordValue(Schema fieldSchema, Object value, SpecificData specificData) {
+    Schema resolvedFieldSchema = getActualSchemaFromUnion(fieldSchema, value);
+    switch (resolvedFieldSchema.getType()) {
+      case RECORD:
+        value = convertToSpecificRecord(specificData.getClass(resolvedFieldSchema), (GenericRecord) value, specificData);
+        break;
+      case ARRAY:
+        value = ((List<?>) value).stream().map(element -> convertFieldToSpecificRecordValue(resolvedFieldSchema.getElementType(), element, specificData)).collect(Collectors.toList());
+        break;
+      case MAP:
+        value = ((Map<?, ?>) value).entrySet().stream().collect(Collectors.toMap(
+            Map.Entry::getKey,
+            entry -> {
+              Object mapValue = entry.getValue();
+              return convertFieldToSpecificRecordValue(resolvedFieldSchema.getValueType(), mapValue, specificData);
+            }
+        ));
+        break;
+      default:
+        // no conversion required
+    }
+    return value;
   }
 }
