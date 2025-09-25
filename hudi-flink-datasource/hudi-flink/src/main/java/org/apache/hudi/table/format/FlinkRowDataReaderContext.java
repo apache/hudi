@@ -171,6 +171,10 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   @Override
   public void setSchemaHandler(FileGroupReaderSchemaHandler<RowData> schemaHandler) {
     super.setSchemaHandler(schemaHandler);
+    Schema requiredSchema = schemaHandler.getRequiredSchema();
+    // init ordering value converter: java -> engine type
+    List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(getMergeMode(), tableConfig);
+    ((FlinkRecordContext) recordContext).initOrderingValueConverter(requiredSchema, orderingFieldNames);
 
     Option<String[]> recordKeysOpt = tableConfig.getRecordKeyFields();
     if (recordKeysOpt.isEmpty()) {
@@ -182,7 +186,6 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       return;
     }
     // get primary key field position in required schema.
-    Schema requiredSchema = schemaHandler.getRequiredSchema();
     int[] pkFieldsPos = Arrays.stream(recordKeysOpt.get())
         .map(k -> Option.ofNullable(requiredSchema.getField(k)).map(Schema.Field::pos).orElse(-1))
         .mapToInt(Integer::intValue)
@@ -194,9 +197,5 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     RecordKeyToRowDataConverter recordKeyRowConverter = new RecordKeyToRowDataConverter(
         pkFieldsPos, (RowType) RowDataAvroQueryContexts.fromAvroSchema(requiredSchema).getRowType().getLogicalType());
     ((FlinkRecordContext) recordContext).setRecordKeyRowConverter(recordKeyRowConverter);
-
-    // init ordering value converter: java -> engine type
-    List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(getMergeMode(), tableConfig);
-    ((FlinkRecordContext) recordContext).initOrderingValueConverter(requiredSchema, orderingFieldNames);
   }
 }

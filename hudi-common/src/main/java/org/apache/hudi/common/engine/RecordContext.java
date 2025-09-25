@@ -355,7 +355,7 @@ public abstract class RecordContext<T> implements Serializable {
     return OrderingValues.create(orderingFieldNames, field -> {
       Object value = getValue(record, schema, field);
       // API getDefaultOrderingValue is only used inside Comparables constructor
-      return value != null ? ((Comparable) value) : OrderingValues.getDefault();
+      return value != null ? (Comparable) value : OrderingValues.getDefault();
     });
   }
 
