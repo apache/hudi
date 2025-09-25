@@ -75,11 +75,9 @@ class TestIncrementalQueries extends SparkClientFunctionalTestHarness {
     // Run incremental query for CASE 1: last two commits are within the range.
     // Make sure the records from the second commit are included.
     // This avoids the differences between different versions. That is,
-    // the range type of table version 6 is open_close, but that of > 6 is close_close by default.
-    String startTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(1).getRight()) - 1);
-    Dataset<Row> result = spark().read().format("org.apache.hudi")
+    Dataset<Row> result = spark().read().format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
-        .option(DataSourceReadOptions.START_COMMIT().key(), startTimestamp)
+        .option(DataSourceReadOptions.START_COMMIT().key(), sortedInstants.get(0).getRight())
         .option(DataSourceReadOptions.END_COMMIT().key(), sortedInstants.get(2).getRight()).load(path);
     // Only records from the last two commits should be returned.
     assertEquals(3,
@@ -97,7 +95,7 @@ class TestIncrementalQueries extends SparkClientFunctionalTestHarness {
 
     // Run incremental query for CASE 2: start time is larger than the newest instant.
     // That is, no instances would fall into this range.
-    startTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(2).getRight()) + 100);
+    String startTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(2).getRight()) + 100);
     String endTimestamp = String.valueOf(Long.valueOf(sortedInstants.get(2).getRight()) + 200);
     result = spark().read().format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
