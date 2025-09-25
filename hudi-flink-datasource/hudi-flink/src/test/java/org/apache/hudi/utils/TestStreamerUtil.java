@@ -21,7 +21,6 @@ package org.apache.hudi.utils;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -87,7 +86,7 @@ class TestStreamerUtil {
     mergeBehavior = StreamerUtil.inferMergingBehavior(conf);
     assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, mergeBehavior.getLeft());
     assertEquals(PartialUpdateAvroPayload.class.getName(), mergeBehavior.getMiddle());
-    assertNull( mergeBehavior.getRight());
+    assertNull(mergeBehavior.getRight());
 
     // set partial update payload
     conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
