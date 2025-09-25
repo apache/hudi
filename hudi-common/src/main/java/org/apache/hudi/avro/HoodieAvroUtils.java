@@ -1709,6 +1709,9 @@ public class HoodieAvroUtils {
 
   private static <T extends SpecificRecordBase> T convertToSpecificRecord(Class<T> clazz, GenericRecord genericRecord, SpecificData specificData) {
     try {
+      if (genericRecord == null) {
+        return null;
+      }
       T specificRecord = clazz.newInstance();
       Schema schema = SpecificData.getForClass(clazz).getSchema(clazz);
       for (Field field : schema.getFields()) {
