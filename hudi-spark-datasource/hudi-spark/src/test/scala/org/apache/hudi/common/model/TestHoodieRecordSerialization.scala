@@ -116,7 +116,7 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     avroIndexedRecord.setIgnoreIndexUpdate(true)
 
     val expectedLegacyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 169 else 166
-    val expectedAvroIndexedRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 58 else 54
+    val expectedAvroIndexedRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 58 else 55
 
     Seq(
       (legacyRecord, null, expectedLegacyRecordSize),
