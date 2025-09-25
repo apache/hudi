@@ -33,7 +33,6 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
