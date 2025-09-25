@@ -64,6 +64,11 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
+  public Comparable<?> getOrderingValueAsJava(Schema recordSchema, Properties props, String[] orderingFields) {
+    return doGetOrderingValue(recordSchema, props, orderingFields);
+  }
+
+  @Override
   public HoodieRecord<T> newInstance() {
     return this;
   }
