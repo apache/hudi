@@ -112,10 +112,10 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     assertTrue(nArchivedInstants >= 3)
 
     //Anything less than 2 is a valid commit in the sense no cleanup has been done for those commit files
-    val startUnarchivedCompletionTs = completedCommits.nthInstant(1).get().getCompletionTime //C5 completion
+    val startUnarchivedCompletionTs = completedCommits.nthInstant(0).get().getCompletionTime //C5 completion
     val endUnarchivedCompletionTs = completedCommits.nthInstant(1).get().getCompletionTime //C5 completion
 
-    val startArchivedCompletionTs = archivedInstants(1).asInstanceOf[HoodieInstant].getCompletionTime //C1 completion
+    val startArchivedCompletionTs = archivedInstants(0).asInstanceOf[HoodieInstant].getCompletionTime //C1 completion
     val endArchivedCompletionTs = archivedInstants(1).asInstanceOf[HoodieInstant].getCompletionTime //C1 completion
 
     val instant = Instant.now()
@@ -152,7 +152,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
 
     // Test both start commit and end commits is not archived and not cleaned
     val reversedCommits = completedCommits.getReverseOrderedInstants.toArray
-    val startUncleanedCompletionTs = reversedCommits.apply(0).asInstanceOf[HoodieInstant].getCompletionTime
+    val startUncleanedCompletionTs = reversedCommits.apply(1).asInstanceOf[HoodieInstant].getCompletionTime
     val endUncleanedCompletionTs = reversedCommits.apply(0).asInstanceOf[HoodieInstant].getCompletionTime
     runIncrementalQueryAndCompare(startUncleanedCompletionTs, endUncleanedCompletionTs, 1, true)
     runIncrementalQueryAndCompare(startUncleanedCompletionTs, endUncleanedCompletionTs, 1, false)
