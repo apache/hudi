@@ -194,5 +194,9 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     RecordKeyToRowDataConverter recordKeyRowConverter = new RecordKeyToRowDataConverter(
         pkFieldsPos, (RowType) RowDataAvroQueryContexts.fromAvroSchema(requiredSchema).getRowType().getLogicalType());
     ((FlinkRecordContext) recordContext).setRecordKeyRowConverter(recordKeyRowConverter);
+
+    // init ordering value converter: java -> engine type
+    List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(getMergeMode(), tableConfig);
+    ((FlinkRecordContext) recordContext).initOrderingValueConverter(requiredSchema, orderingFieldNames);
   }
 }

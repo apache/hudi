@@ -41,6 +41,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -224,5 +225,12 @@ public class HoodieRecordUtils {
     return mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
         ? Collections.emptyList()
         : metaClient.getTableConfig().getOrderingFields();
+  }
+
+  public static List<String> getOrderingFieldNames(RecordMergeMode mergeMode,
+                                                   HoodieTableConfig tableConfig) {
+    return mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
+        ? Collections.emptyList()
+        : tableConfig.getOrderingFields();
   }
 }

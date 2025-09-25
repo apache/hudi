@@ -28,9 +28,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
-import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.util.AvroToRowDataConverters;
+import org.apache.hudi.util.OrderingValueEngineTypeConverter;
 import org.apache.hudi.util.RecordKeyToRowDataConverter;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
 import org.apache.hudi.util.RowDataUtils;
@@ -60,6 +60,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   // For e.g, if the pk fields are [a, b] but user only select a, then the pk
   // semantics is lost.
   private RecordKeyToRowDataConverter recordKeyRowConverter;
+  private OrderingValueEngineTypeConverter orderingValueConverter;
 
   public FlinkRecordContext(HoodieTableConfig tableConfig, StorageConfiguration<?> storageConf) {
     super(tableConfig, new DefaultJavaTypeConverter());
@@ -94,6 +95,11 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   @Override
   public Comparable convertValueToEngineType(Comparable value) {
     return (Comparable) RowDataUtils.convertValueToFlinkType(value);
+  }
+
+  @Override
+  public Comparable convertOrderingValueToEngineType(Comparable value) {
+    return orderingValueConverter.convert(value);
   }
 
   @Override
@@ -158,24 +164,6 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
-  public Comparable getOrderingValue(
-      RowData record,
-      Schema schema,
-      List<String> orderingFieldNames) {
-    if (orderingFieldNames.isEmpty()) {
-      return OrderingValues.getDefault();
-    }
-    return OrderingValues.create(orderingFieldNames, field -> {
-      if (schema.getField(field) == null) {
-        return OrderingValues.getDefault();
-      }
-      RowDataAvroQueryContexts.FieldQueryContext context = RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).getFieldQueryContext(field);
-      Comparable finalOrderingVal = (Comparable) context.getValAsJava(record, false);
-      return finalOrderingVal;
-    });
-  }
-
-  @Override
   public RowData seal(RowData rowData) {
     if (rowData instanceof BinaryRowData) {
       return ((BinaryRowData) rowData).copy();
@@ -213,5 +201,9 @@ public class FlinkRecordContext extends RecordContext<RowData> {
 
   public void setRecordKeyRowConverter(RecordKeyToRowDataConverter recordKeyRowConverter) {
     this.recordKeyRowConverter = recordKeyRowConverter;
+  }
+
+  public void initOrderingValueConverter(Schema dataSchema, List<String> orderingFieldNames) {
+    this.orderingValueConverter = OrderingValueEngineTypeConverter.create(dataSchema, orderingFieldNames, utcTimezone);
   }
 }
