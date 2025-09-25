@@ -185,3 +185,68 @@ List to check that the implementation works as expected:
 5. Hudi supports reading data by column groups.  
 7. Hudi supports compaction by column group.  
 8. Hudi supports full compaction, merging the data of all column groups to achieve data widening.  
+
+
+## Potential Approaches 
+
+### Approach A: Column Groups under File Group
+
+We map each record key to a single file group, consistently across column groups. Each column group has file slices,
+like we do today in file groups. How columns are split into column groups is fluid and can be different across file groups.
+
+
+
+```
+records 1-25 ==> file group 1 ==> [column group : c1-c10], [column group : c11-c74], [column group : c75-c100]
+
+records 26-50 ==> file group 2 ==> [column group : c1-c40], [column group : c41-c100]
+
+records 51-100 ==> file group 3 ==> [column group : c1-c20], [column group : c21-c60], [column group : c61-c80], [column group : c81-c100] 
+
+```
+_Layout for table with 100 records, 100 columns_
+
+**Indexing**: works as is, since the mapping from key to file-group is intact. 
+
+**Cleaning**: Column groups can be updated at different rates. i.e. one column group can receive more updates than others. 
+To retain versions belonging to the last `x` writes, each column group can simply enforce retention on its own file slices, 
+like today. Should work since its based off the same timeline anyway. 
+
+**Queries**: Time-travel / Snapshot queries should work as-is, filtering each column group like a normal file group today, just reading the
+columns in the projection/filter from the right column group. CDC / Incremental queries can work again by reconciling commit time across column groups.
+(Column-level change tracking is a separate problem.)
+
+**Compaction**: Works on column groups based on existing strategies. We may need to add a few different strategies for tables with blob columns. 
+
+**Clustering**: This is where we take a hit. Even when clustering across only a few column groups, we may need to rewrite all columns to preserve the 
+file-group -> column group hierarchy. Otherwise, some columns of a record may be in one file group while others are in another if clustering created new file groups.
+⸻
+
+### Approach B: File Groups under Column Groups 
+We treat column groups as separate virtual tables sharing the same timeline. But this needs pre-splitting columns into groups at the table level, losing flexibility to evolve the table. 
+Managing different ways combinations of columns split across records may be overwhelming.
+
+```
+columns 1-25 ==> column group 1 ==> [file group : c1-c10], [file group : c11-c74], [file group : c75-c100]
+
+columns 26-50 ==> column group 2 ==> [file group : c1-c40], [file group : c41-c100]
+
+columns 51-100 ==> column group 3 ==> [file group : c1-c20], [file group : c21-c60], [file group : c61-c80], [file group : c81-c100] 
+
+```
+_Layout for table with 100 records, 100 columns_
+
+
+**Indexing**: RLI (Record Location Index) needs to track multiple positions per record key, since it can be in different file groups in each column group.
+
+**Cleaning**: Achieved independently by each virtual table, enforcing cleaner retention.
+
+**Queries**: CDC / Incremental/Snapshot / Time-travel queries are all UNIONs over query results from relevant column groups.
+
+**Compaction**: works like Approach A.
+
+**Clustering**: each column group can be clustered independently, without causing any write amplification.
+
+This "virtual table" abstraction can enable other cool things e.g. Materializing the same data in multiple ways.
+
+
