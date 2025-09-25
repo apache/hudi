@@ -77,6 +77,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAV
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.common.table.PartialUpdateMode.FILL_UNAVAILABLE;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -277,7 +278,8 @@ class TestEightToNineUpgradeHandler {
           handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
       // Verify
       assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToUpdate(), result.propertiesToUpdate());
-      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToDelete(), result.propertiesToDelete());
+      assertEquals(
+          Collections.singleton(RECORD_MERGE_STRATEGY_ID), result.propertiesToDelete());
     }
   }
 
@@ -285,12 +287,13 @@ class TestEightToNineUpgradeHandler {
                                         Set<ConfigProperty> propertiesToRemove,
                                         String payloadClass) {
     if (payloadClass.equals(MySqlDebeziumAvroPayload.class.getName()) || payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
-      assertEquals(2, propertiesToRemove.size());
+      assertEquals(3, propertiesToRemove.size());
       assertTrue(propertiesToRemove.contains(HoodieTableConfig.PRECOMBINE_FIELD));
     } else {
-      assertEquals(1, propertiesToRemove.size());
+      assertEquals(2, propertiesToRemove.size());
     }
     assertTrue(propertiesToRemove.contains(PAYLOAD_CLASS_NAME));
+    assertTrue(propertiesToRemove.contains(RECORD_MERGE_STRATEGY_ID));
     assertTrue(propertiesToAdd.containsKey(LEGACY_PAYLOAD_CLASS_NAME));
     assertEquals(
         payloadClass,
@@ -342,7 +345,9 @@ class TestEightToNineUpgradeHandler {
 
       // Verify
       assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToUpdate(), result.propertiesToUpdate());
-      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToDelete(), result.propertiesToDelete());
+      assertEquals(
+          Collections.singleton(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID),
+          result.propertiesToDelete());
 
       // Verify storage methods were called correctly
       // Note: createFileInPath directly calls create() when contentWriter is present
@@ -426,7 +431,8 @@ class TestEightToNineUpgradeHandler {
           handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
       // Verify
       assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToUpdate(), result.propertiesToUpdate());
-      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToDelete(), result.propertiesToDelete());
+      assertEquals(
+          Collections.singleton(RECORD_MERGE_STRATEGY_ID), result.propertiesToDelete());
     }
   }
 
@@ -451,7 +457,8 @@ class TestEightToNineUpgradeHandler {
           handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
       // Verify
       assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToUpdate(), result.propertiesToUpdate());
-      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToDelete(), result.propertiesToDelete());
+      assertEquals(
+          Collections.singleton(RECORD_MERGE_STRATEGY_ID), result.propertiesToDelete());
     }
   }
 
@@ -492,7 +499,9 @@ class TestEightToNineUpgradeHandler {
 
       // Verify
       assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToUpdate(), result.propertiesToUpdate());
-      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToDelete(), result.propertiesToDelete());
+      assertEquals(
+          Collections.singleton(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID),
+          result.propertiesToDelete());
 
       // Verify storage methods were called correctly
       // Note: createFileInPath directly calls create() when contentWriter is present

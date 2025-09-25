@@ -21,12 +21,14 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
@@ -36,6 +38,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TestAvroOrcUtils;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.hive.HiveSyncConfigHolder;
@@ -646,6 +649,13 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
         cfg.schemaProviderClassName = defaultSchemaProviderClassName;
       }
       cfg.allowCommitOnNoCheckpointChange = allowCommitOnNoCheckpointChange;
+      Triple<RecordMergeMode, String, String> mergeCfgs =
+          HoodieTableConfig.inferMergingConfigsForWrites(
+              cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingFields,
+              HoodieTableVersion.current());
+      cfg.recordMergeMode = mergeCfgs.getLeft();
+      cfg.payloadClassName = mergeCfgs.getMiddle();
+      cfg.recordMergeStrategyId = mergeCfgs.getRight();
       return cfg;
     }
 

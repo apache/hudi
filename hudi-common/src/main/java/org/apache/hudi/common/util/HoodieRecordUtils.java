@@ -110,7 +110,7 @@ public class HoodieRecordUtils {
     return Option.fromJavaOptional(mergeImplClassList.stream()
         .map(clazz -> loadRecordMerger(clazz))
         .filter(Objects::nonNull)
-        .filter(merger -> merger.getMergingStrategy().equals(recordMergeStrategyId))
+        .filter(merger -> StringUtils.isNullOrEmpty(recordMergeStrategyId) || merger.getMergingStrategy().equals(recordMergeStrategyId))
         .filter(merger -> recordTypeCompatibleEngine(merger.getRecordType(), engineType))
         .findFirst());
   }
