@@ -309,7 +309,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   }
 
   protected long getMaxMemoryForMerge() {
-    return IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
+    return compactionOperation.isPresent() ? IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config)
+        : IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
   }
 
   private HoodieFileGroupReader<T> getFileGroupReader(boolean usePosition, Option<InternalSchema> internalSchemaOption, TypedProperties props,
