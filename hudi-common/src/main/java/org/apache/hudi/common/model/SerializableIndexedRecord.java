@@ -58,6 +58,17 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
   private SerializableIndexedRecord(IndexedRecord record) {
     this.record = record;
     this.recordBytes = null; // Initialize recordBytes to null, will be set when encodeRecord is called
+    this.schema = null;
+  }
+
+  private SerializableIndexedRecord(Schema schema, byte[] bytes) {
+    this.record = null;
+    this.recordBytes = bytes;
+    this.schema = schema;
+  }
+
+  public static SerializableIndexedRecord withSerializedRecord(Schema schema, byte[] bytes) {
+    return new SerializableIndexedRecord(schema, bytes);
   }
 
   @Override
