@@ -69,7 +69,7 @@ public class RowDataUtils {
       case SMALLINT:
         return fieldVal -> ((Short) fieldVal).intValue();
       case DATE:
-        return fieldVal -> LocalDate.ofEpochDay((Integer) fieldVal);
+        return fieldVal -> (Integer) fieldVal;
       case CHAR:
       case VARCHAR:
         return Object::toString;
@@ -123,14 +123,20 @@ public class RowDataUtils {
       case SMALLINT:
         return fieldVal -> (short) fieldVal;
       case DATE:
-        return fieldVal -> (int) ((LocalDate) fieldVal).toEpochDay();
+        return fieldVal -> {
+          if (fieldVal instanceof LocalDate) {
+            return (int) ((LocalDate) fieldVal).toEpochDay();
+          } else {
+            return (int) fieldVal;
+          }
+        };
       case CHAR:
       case VARCHAR:
         return fieldVal -> BinaryStringData.fromString((String) fieldVal);
-      // case BINARY:
-      // case VARBINARY:
+      case BINARY:
+      case VARBINARY:
         // note: byte[] is not Comparable
-        // return fieldVal -> ((ByteBuffer) fieldVal).array();
+        return fieldVal -> (ByteBuffer) fieldVal;
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
         int precision1 = precision(logicalType);
         if (precision1 <= 3) {

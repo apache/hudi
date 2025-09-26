@@ -355,8 +355,20 @@ public abstract class RecordContext<T> implements Serializable {
     return OrderingValues.create(orderingFieldNames, field -> {
       Object value = getValue(record, schema, field);
       // API getDefaultOrderingValue is only used inside Comparables constructor
-      return value != null ? convertValueToEngineType((Comparable) value) : OrderingValues.getDefault();
+      return value != null ? ensureComparability(value) : OrderingValues.getDefault();
     });
+  }
+
+  /**
+   * Ensure the given value is comparable.
+   *
+   * <p> The conversion should be aligned with HoodieRecord#getOrderingValue.
+   *
+   * @param value engine value
+   * @return the converted comparable value
+   */
+  protected Comparable ensureComparability(Object value) {
+    return (Comparable) value;
   }
 
   /**
@@ -391,7 +403,7 @@ public abstract class RecordContext<T> implements Serializable {
     return OrderingValues.create(orderingFieldNames, field -> {
       Object value = getValue(record, schema, field);
       // API getDefaultOrderingValue is only used inside Comparables constructor
-      return value != null ? convertValueToEngineType((Comparable) value) : OrderingValues.getDefault();
+      return value != null ? ensureComparability(value) : OrderingValues.getDefault();
     });
   }
 
