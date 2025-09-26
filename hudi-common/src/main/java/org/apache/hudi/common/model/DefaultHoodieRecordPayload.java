@@ -60,7 +60,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
 
   @Override
   public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue) {
-    if (oldValue.recordBytes.length == 0) {
+    if (oldValue.isEmptyRecord()) {
       // use natural order for delete record
       return this;
     }
@@ -74,7 +74,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties properties) throws IOException {
-    Option<IndexedRecord> incomingRecord = recordBytes.length == 0 ? Option.empty() : Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+    Option<IndexedRecord> incomingRecord = getRecord(schema);
 
     // Null check is needed here to support schema evolution. The record in storage may be from old schema where
     // the new ordering column might not be present and hence returns null.
@@ -93,10 +93,10 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema, Properties properties) throws IOException {
-    if (recordBytes.length == 0) {
+    if (isEmptyRecord()) {
       return Option.empty();
     }
-    GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+    GenericRecord incomingRecord = (GenericRecord) getRecord(schema).get();
 
     if (!isDeleteComputed.getAndSet(true)) {
       isDefaultRecordPayloadDeleted = isDeleteRecord(incomingRecord, properties);
@@ -105,12 +105,12 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   }
 
   public boolean isDeleted(Schema schema, Properties props) {
-    if (recordBytes.length == 0) {
+    if (isEmptyRecord()) {
       return true;
     }
     try {
       if (!isDeleteComputed.getAndSet(true)) {
-        GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+        GenericRecord incomingRecord = (GenericRecord) getRecord(schema).get();
         isDefaultRecordPayloadDeleted = isDeleteRecord(incomingRecord, props);
       }
       return isDefaultRecordPayloadDeleted;

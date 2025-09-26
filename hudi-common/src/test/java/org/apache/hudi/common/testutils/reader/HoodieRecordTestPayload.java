@@ -54,7 +54,7 @@ public class HoodieRecordTestPayload extends OverwriteWithLatestAvroPayload {
   }
 
   public HoodieRecordTestPayload preCombine(HoodieRecordTestPayload oldValue) {
-    if (oldValue.recordBytes.length == 0) {
+    if (isEmptyRecord()) {
       // use natural order for delete record
       return this;
     }
@@ -87,7 +87,7 @@ public class HoodieRecordTestPayload extends OverwriteWithLatestAvroPayload {
     }
 
     // If the new record is not a delete record.
-    GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+    GenericRecord incomingRecord = (GenericRecord) getRecord(schema).get();
 
     // Null check is needed here to support schema evolution. The record in storage may be from old schema where
     // the new ordering column might not be present and hence returns null.
@@ -111,10 +111,10 @@ public class HoodieRecordTestPayload extends OverwriteWithLatestAvroPayload {
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema, Properties properties) throws IOException {
-    if (recordBytes.length == 0) {
+    if (isEmptyRecord()) {
       return Option.empty();
     }
-    GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+    GenericRecord incomingRecord = (GenericRecord) getRecord(schema).get();
     eventTime = updateEventTime(incomingRecord, properties);
 
     if (!isDeleteComputed.getAndSet(true)) {
@@ -124,12 +124,12 @@ public class HoodieRecordTestPayload extends OverwriteWithLatestAvroPayload {
   }
 
   public boolean isDeleted(Schema schema, Properties props) {
-    if (recordBytes.length == 0) {
+    if (isEmptyRecord()) {
       return true;
     }
     try {
       if (!isDeleteComputed.getAndSet(true)) {
-        GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+        GenericRecord incomingRecord = (GenericRecord) getRecord(schema).get();
         isDefaultRecordPayloadDeleted = isDeleteRecord(incomingRecord, props);
       }
       return isDefaultRecordPayloadDeleted;
