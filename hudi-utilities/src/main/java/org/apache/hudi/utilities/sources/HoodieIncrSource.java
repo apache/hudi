@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -286,12 +287,19 @@ public class HoodieIncrSource extends RowSource {
           .filter(String.format("%s IN ('%s')", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
               String.join("','", instantTimeList)));
     } else {
+      String exclusiveStartCompletionTime = analyzer.getStartCompletionTime().isPresent()
+          ? analyzer.getStartCompletionTime().get()
+          : String.valueOf(Long.parseLong(queryContext.getInstants().stream()
+          .min(TimelineLayout.fromVersion(queryContext.getActiveTimeline().getTimelineLayoutVersion())
+              .getInstantComparator().completionTimeOrderedComparator())
+          .map(HoodieInstant::getCompletionTime)
+          .get()) - 1);
       // normal incremental query
       source = reader
           .options(readOpts)
           .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
           .option(INCREMENTAL_READ_TABLE_VERSION().key(), HoodieTableVersion.EIGHT.versionCode())
-          .option(START_COMMIT().key(), analyzer.getStartCompletionTime().get())
+          .option(START_COMMIT().key(), exclusiveStartCompletionTime)
           .option(END_COMMIT().key(), endCompletionTime)
           .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
               props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
