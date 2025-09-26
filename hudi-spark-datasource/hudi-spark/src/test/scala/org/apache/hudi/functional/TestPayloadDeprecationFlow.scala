@@ -319,13 +319,11 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     // while higher ordering values are applied
     val mixedOrderingData = Seq(
       // Update rider-C with LOWER ordering - should be IGNORED (rider-C has ts=10 originally)
-      (8, 3L, "rider-C", "driver-C-old", 30.00, "u", "8.1", 8, 1, "u"),
+      (8, 3L, "rider-CC", "driver-CC", 30.00, "u", "8.1", 8, 1, "u"),
       // Update rider-C with HIGHER ordering - should be APPLIED
-      (15, 3L, "rider-C", "driver-C-new", 35.00, "u", "15.1", 15, 1, "u"),
+      (11, 3L, "rider-CC", "driver-CC", 35.00, "u", "15.1", 15, 1, "u"),
       // Delete rider-E with LOWER ordering - should be IGNORED (rider-E has ts=10 originally)
-      (9, 5L, "rider-E", "driver-E", 17.85, "D", "9.1", 9, 1, "d"),
-      // Update rider-D with HIGHER ordering - should be APPLIED
-      (14, 4L, "rider-D", "driver-D-new", 40.00, "u", "14.1", 14, 1, "u"))
+      (9, 5L, "rider-EE", "driver-EE", 17.85, "D", "9.1", 9, 1, "d"))
     val mixedOrderingUpdate = spark.createDataFrame(mixedOrderingData).toDF(columns: _*)
     mixedOrderingUpdate.write.format("hudi").
       option(OPERATION.key(), "upsert").
@@ -344,11 +342,11 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       "false"
     }
     val secondUpdateData = Seq(
-      (12, 7L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1, "i"),
+      (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1, "i"),
       // For rider-DD we purposefully deviate and set the _event_seq to be less than the _event_bin_file and _event_pos
       // so that the test will fail if _event_seq is still used for ordering
-      (9, 8L, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
-      (12, 9L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1, "i"))
+      (9, 4L, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
+      (12, 5L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1, "i"))
     val secondUpdate = spark.createDataFrame(secondUpdateData).toDF(columns: _*)
     secondUpdate.write.format("hudi").
       option(OPERATION.key(), "upsert").
@@ -383,8 +381,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
 
     // 5. Add a delete.
     val fourthUpdateData = Seq(
-      (12, 7L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1, "i"),
-      (12, 9L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1, "i"))
+      (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1, "i"),
+      (12, 5L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1, "i"))
     val fourthUpdate = spark.createDataFrame(fourthUpdateData).toDF(columns: _*)
     fourthUpdate.write.format("hudi").
       option(OPERATION.key(), "delete").
