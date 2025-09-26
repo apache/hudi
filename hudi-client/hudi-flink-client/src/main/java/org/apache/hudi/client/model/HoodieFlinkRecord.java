@@ -103,7 +103,21 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
         if (recordSchema.getField(field) == null) {
           return OrderingValues.getDefault();
         }
-        return (Comparable<?>) getColumnValueAsJava(recordSchema, field, props, false);
+        return (Comparable<?>) getColumnValue(recordSchema, field, props);
+      });
+    }
+  }
+
+  @Override
+  public Comparable<?> getOrderingValueAsJava(Schema recordSchema, Properties props, String[] orderingFields) {
+    if (orderingFields == null) {
+      return OrderingValues.getDefault();
+    } else {
+      return OrderingValues.create(orderingFields, field -> {
+        if (recordSchema.getField(field) == null) {
+          return OrderingValues.getDefault();
+        }
+        return (Comparable<?>) getColumnValueAsJava(recordSchema, field, props);
       });
     }
   }
@@ -181,6 +195,13 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
         HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
     RowDataQueryContext rowDataQueryContext = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone);
     return rowDataQueryContext.getFieldQueryContext(column).getValAsJava(data, allowsNull);
+  }
+
+  private Object getColumnValue(Schema recordSchema, String column, Properties props) {
+    boolean utcTimezone = Boolean.parseBoolean(props.getProperty(
+        HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
+    RowDataQueryContext rowDataQueryContext = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone);
+    return rowDataQueryContext.getFieldQueryContext(column).getFieldGetter().getFieldOrNull(data);
   }
 
   @Override

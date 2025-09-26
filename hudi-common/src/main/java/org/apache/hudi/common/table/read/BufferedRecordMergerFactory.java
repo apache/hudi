@@ -83,7 +83,7 @@ public class BufferedRecordMergerFactory {
         return new CommitTimePartialRecordMerger<>(readerContext.getRecordContext(), partialUpdateModeOpt.get(), props);
       case EVENT_TIME_ORDERING:
         if (partialUpdateModeOpt.isEmpty()) {
-          return new EventTimeRecordMerger<>();
+          return new EventTimeRecordMerger<>(readerContext.getRecordContext());
         }
         return new EventTimePartialRecordMerger<>(readerContext.getRecordContext(), partialUpdateModeOpt.get(), props);
       default:
@@ -170,6 +170,12 @@ public class BufferedRecordMergerFactory {
    * based on {@code EVENT_TIME_ORDERING} merge mode.
    */
   private static class EventTimeRecordMerger<T> implements BufferedRecordMerger<T> {
+    private final RecordContext<T> recordContext;
+
+    public EventTimeRecordMerger(RecordContext<T> recordContext) {
+      this.recordContext = recordContext;
+    }
+
     @Override
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
       if (existingRecord == null || shouldKeepNewerRecord(existingRecord, newRecord)) {
@@ -180,7 +186,7 @@ public class BufferedRecordMergerFactory {
 
     @Override
     public Option<DeleteRecord> deltaMerge(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
-      return deltaMergeDeleteRecord(deleteRecord, existingRecord);
+      return deltaMergeDeleteRecord(deleteRecord, existingRecord, recordContext);
     }
 
     @Override
@@ -203,6 +209,7 @@ public class BufferedRecordMergerFactory {
     public EventTimePartialRecordMerger(RecordContext<T> recordContext,
                                         PartialUpdateMode partialUpdateMode,
                                         TypedProperties props) {
+      super(recordContext);
       this.partialUpdateHandler = new PartialUpdateHandler<>(recordContext, partialUpdateMode, props);
       this.recordContext = recordContext;
     }
@@ -456,7 +463,7 @@ public class BufferedRecordMergerFactory {
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private static <T> Option<DeleteRecord> deltaMergeDeleteRecord(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
+  private static <T> Option<DeleteRecord> deltaMergeDeleteRecord(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord, RecordContext<T> recordContext) {
     if (existingRecord == null) {
       return Option.of(deleteRecord);
     }
@@ -464,7 +471,7 @@ public class BufferedRecordMergerFactory {
       return Option.empty();
     }
     Comparable existingOrderingVal = existingRecord.getOrderingValue();
-    Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
+    Comparable deleteOrderingVal = recordContext.convertOrderingValueToEngineType(deleteRecord.getOrderingValue());
     // Checks the ordering value does not equal to 0
     // because we use 0 as the default value which means natural order
     boolean chooseExisting = !OrderingValues.isDefault(deleteOrderingVal)

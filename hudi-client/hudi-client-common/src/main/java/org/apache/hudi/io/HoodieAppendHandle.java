@@ -658,7 +658,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     hoodieRecord.seal();
     recordsDeleted++;
 
-    final Comparable<?> orderingVal = hoodieRecord.getOrderingValue(writeSchema, recordProperties, orderingFields);
+    // store ordering value with Java type.
+    final Comparable<?> orderingVal = hoodieRecord.getOrderingValueAsJava(writeSchema, recordProperties, orderingFields);
     long position = baseFileInstantTimeOfPositions.isPresent() ? hoodieRecord.getCurrentPosition() : -1L;
     recordsToDeleteWithPositions.add(Pair.of(DeleteRecord.create(hoodieRecord.getKey(), orderingVal), position));
   }

@@ -254,6 +254,10 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    */
   protected abstract Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props, String[] orderingFields);
 
+  public Comparable<?> getOrderingValueAsJava(Schema recordSchema, Properties props, String[] orderingFields) {
+    return getOrderingValue(recordSchema, props, orderingFields);
+  }
+
   public T getData() {
     if (data == null) {
       throw new IllegalStateException("Payload already deflated for record.");

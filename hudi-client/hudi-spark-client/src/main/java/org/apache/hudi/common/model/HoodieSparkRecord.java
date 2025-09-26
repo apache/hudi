@@ -360,6 +360,20 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     return OrderingValues.getDefault();
   }
 
+  @Override
+  public Comparable<?> getOrderingValueAsJava(Schema recordSchema, Properties props, String[] orderingFields) {
+    if (orderingFields == null) {
+      return OrderingValues.getDefault();
+    } else {
+      return OrderingValues.create(orderingFields, field -> {
+        if (recordSchema.getField(field) == null) {
+          return OrderingValues.getDefault();
+        }
+        return (Comparable<?>) getColumnValueAsJava(recordSchema, field, props);
+      });
+    }
+  }
+
   /**
    * NOTE: This method is declared final to make sure there's no polymorphism and therefore
    *       JIT compiler could perform more aggressive optimizations
