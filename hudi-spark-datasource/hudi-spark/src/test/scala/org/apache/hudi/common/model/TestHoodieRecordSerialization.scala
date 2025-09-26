@@ -113,7 +113,7 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     val avroIndexedRecord = new HoodieAvroIndexedRecord(key, avroRecord)
     avroIndexedRecord.setIgnoreIndexUpdate(true)
 
-    val expectedLegacyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 539 else 533
+    val expectedLegacyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 168 else 162
     val expectedAvroIndexedRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 57 else 54
 
     Seq(
@@ -192,7 +192,7 @@ object TestHoodieRecordSerialization {
     override def equals(obj: Any): Boolean =
       obj match {
         case p: OverwriteWithLatestAvroPayloadWithEquality =>
-          Objects.equals(ByteBuffer.wrap(this.recordBytes), ByteBuffer.wrap(p.recordBytes)) &&
+          Objects.equals(ByteBuffer.wrap(this.getRecordBytes), ByteBuffer.wrap(p.getRecordBytes)) &&
             Objects.equals(this.orderingVal, p.orderingVal)
         case _ =>
           false
