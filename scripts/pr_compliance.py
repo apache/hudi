@@ -298,12 +298,6 @@ class ValidateBody:
             if o == Outcomes.ERROR:
                 return False
             elif o == Outcomes.SUCCESS:
-                # Check for GitHub issue link requirement for fix PRs
-                if pr_title and (pr_title.startswith("fix:") or pr_title.startswith("fix(")):
-                    if not self._has_github_issue_link():
-                        self.section.error("", "",
-                                           "Fix PRs must include a GitHub issue link (e.g., fixes #1234, resolves #1234, or direct GitHub issue URL)")
-                        return False
                 return True
             elif o == Outcomes.NEXTSECTION:
                 self.nextSection()
@@ -316,32 +310,6 @@ class ValidateBody:
             self.section.error("", "", f"Missing section {self.section.data.identifier} at the end")
             return False
         self.section.error("","", "Please make sure you have filled out the template correctly. You can find a blank template in /.github/PULL_REQUEST_TEMPLATE.md")
-        return False
-
-    # Check if body contains GitHub issue link
-    def _has_github_issue_link(self):
-        # Look for GitHub issue patterns:
-        # - fixes #123, resolves #123, closes #123
-        # - Fixes #123, Resolves #123, Closes #123
-        # - fixes https://github.com/apache/hudi/issues/123
-        # - resolves https://github.com/apache/hudi/issues/123
-        # - closes https://github.com/apache/hudi/issues/123
-        # - Fixes https://github.com/apache/hudi/issues/123
-        # - Resolves https://github.com/apache/hudi/issues/123
-        # - Closes https://github.com/apache/hudi/issues/123
-        # - https://github.com/apache/hudi/issues/123
-        # - fix for #123, etc.
-        issue_patterns = [
-            r'(?i)(fix(?:es|ed)?|resolv(?:es?|ed?)|clos(?:es?|ed?))\s+#\d+',  # fixes #123
-            r'(?i)(fix(?:es|ed)?|resolv(?:es?|ed?)|clos(?:es?|ed?))\s+https://github\.com/apache/hudi/issues/\d+',
-            # fixes https://github.com/apache/hudi/issues/123
-            r'https://github\.com/apache/hudi/issues/\d+',  # https://github.com/apache/hudi/issues/123
-            r'(?i)fix\s+for\s+#\d+'  # fix for #123
-        ]
-
-        for pattern in issue_patterns:
-            if re.search(pattern, self.body):
-                return True
         return False
         
 #Generate the validator for the current template.
@@ -553,7 +521,7 @@ def test_body():
     fix_sections_without_issue = [good_problem_statement, fix_changelogs_without_issue, good_impact, good_risklevel,
                                   good_docs_update,
                                   template_checklist]
-    tests_passed = run_test("fix PR without issue link", build_body(fix_sections_without_issue), False,
+    tests_passed = run_test("fix PR without issue link", build_body(fix_sections_without_issue), True,
                             DEBUG_MESSAGES,
                             "fix: fix bug") and tests_passed
 
@@ -571,62 +539,10 @@ def test_body():
     return tests_passed
 
 
-def test_has_github_issue_link():
-    """Test the _has_github_issue_link method"""
-    print("Running _has_github_issue_link tests...")
-    tests_passed = True
-
-    # Helper function to test a specific body text
-    def run_issue_link_test(test_name, body, expected_result):
-        validator = make_default_validator(body, debug=False)
-        actual_result = validator._has_github_issue_link()
-        if actual_result == expected_result:
-            print(f"✓ {test_name}: PASS")
-            return True
-        else:
-            print(f"✗ {test_name}: FAIL - Expected {expected_result}, got {actual_result}")
-            return False
-
-    # Test positive cases
-    tests_passed = run_issue_link_test("fixes #123", "fixes #123", True) and tests_passed
-    tests_passed = run_issue_link_test("Fixes #456", "Fixes #456", True) and tests_passed
-    tests_passed = run_issue_link_test("resolves #789", "resolves #789", True) and tests_passed
-    tests_passed = run_issue_link_test("closes #101", "closes #101", True) and tests_passed
-    tests_passed = run_issue_link_test("Closes #101", "Closes #101", True) and tests_passed
-    tests_passed = run_issue_link_test("fixes #123 link", "fixes https://github.com/apache/hudi/issues/123",
-                                       True) and tests_passed
-    tests_passed = run_issue_link_test("resolves #789 link", "resolves https://github.com/apache/hudi/issues/789",
-                                       True) and tests_passed
-    tests_passed = run_issue_link_test("closes #101 link", "closes https://github.com/apache/hudi/issues/101",
-                                       True) and tests_passed
-    tests_passed = run_issue_link_test("fix for #202", "fix for #202", True) and tests_passed
-    tests_passed = run_issue_link_test("GitHub URL", "https://github.com/apache/hudi/issues/123", True) and tests_passed
-    tests_passed = run_issue_link_test("fixes with URL", "fixes https://github.com/apache/hudi/issues/456",
-                                       True) and tests_passed
-
-    # Test negative cases
-    tests_passed = run_issue_link_test("no issue link", "This PR adds a feature", False) and tests_passed
-    tests_passed = run_issue_link_test("fixes without #", "fixes issue 123", False) and tests_passed
-    tests_passed = run_issue_link_test("wrong repo URL", "https://github.com/other/repo/issues/123",
-                                       False) and tests_passed
-    tests_passed = run_issue_link_test("pull request URL", "https://github.com/apache/hudi/pull/123",
-                                       False) and tests_passed
-
-    print("*****")
-    if tests_passed:
-        print("All _has_github_issue_link tests passed")
-    else:
-        print("Some _has_github_issue_link tests failed")
-    print("*****")
-
-    return tests_passed
-
-
 if __name__ == '__main__':
     if len(sys.argv) > 1:
         body_tests = test_body()
-        issue_link_tests = test_has_github_issue_link()
-        if body_tests and issue_link_tests:
+        if body_tests:
             exit(0)
         else:
             exit(-1)
