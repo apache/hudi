@@ -113,6 +113,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
       .mode(SaveMode.Append)
       .save(basePath)
     val commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
+    val commitCompletionTime2 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
 
     val snapshotDf2 = spark.read.format("org.apache.hudi")
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabledOnRead)
@@ -147,7 +148,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").get(0)
     val hoodieIncViewDf1 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime1)
+      .option(DataSourceReadOptions.START_COMMIT.key, "000")
       .option(DataSourceReadOptions.END_COMMIT.key, commitCompletionTime1)
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabledOnRead)
       .load(basePath)
@@ -166,7 +167,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     // another incremental query with commit2 and commit3
     val hoodieIncViewDf2 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime3)
+      .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime2)
       .option(DataSourceReadOptions.END_COMMIT.key(), commitCompletionTime3)
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabledOnRead)
       .load(basePath)

@@ -20,21 +20,15 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, isSchemaEvolutionEnabledOnRead}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.HoodieFileIndex.getConfigProperties
-import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, HoodieReaderConfig, TypedProperties}
-import org.apache.hudi.common.config.HoodieMetadataConfig.{DEFAULT_METADATA_ENABLE_FOR_READERS, ENABLE}
+import org.apache.hudi.common.config.{ConfigProperty, HoodieReaderConfig}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
-import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.keygen.{CustomAvroKeyGenerator, CustomKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
-import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.avro.Schema
@@ -334,7 +328,7 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(override val sqlCont
                                                             override val options: Map[String, String],
                                                             override val schemaSpec: Option[StructType],
                                                             isBootstrap: Boolean,
-                                                            rangeType: RangeType = RangeType.CLOSED_CLOSED)
+                                                            rangeType: RangeType = RangeType.OPEN_CLOSED)
   extends HoodieMergeOnReadIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap,
     MergeOnReadIncrementalRelationV2(sqlContext, options, metaClient, schemaSpec, None, rangeType))
 
@@ -434,7 +428,7 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(override val sqlCont
                                                             override val options: Map[String, String],
                                                             override val schemaSpec: Option[StructType],
                                                             isBootstrap: Boolean,
-                                                            rangeType: RangeType)
+                                                            rangeType: RangeType = RangeType.OPEN_CLOSED)
   extends HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap,
     MergeOnReadIncrementalRelationV2(sqlContext, options, metaClient, schemaSpec, None, rangeType))
 

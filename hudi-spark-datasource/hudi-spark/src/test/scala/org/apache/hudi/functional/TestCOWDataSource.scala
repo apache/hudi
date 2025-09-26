@@ -637,6 +637,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = createMetaClient(spark, basePath)
+    val commit1CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
 
     val dataGen2 = new HoodieTestDataGenerator(Array("2022-01-02"))
     val records2 = recordsToStrings(dataGen2.generateInserts("002", 30)).asScala.toList
@@ -657,7 +658,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val incrementalQueryRes = spark.read.format("hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, commit2CompletionTime)
+      .option(DataSourceReadOptions.START_COMMIT.key, commit1CompletionTime)
       .option(DataSourceReadOptions.END_COMMIT.key, commit2CompletionTime)
       .load(basePath)
     assertEquals(incrementalQueryRes.where("partition = '2022-01-01'").count, 0)
@@ -1146,6 +1147,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
+    val commitCompletionTime1 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     val hoodieROViewDF1 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     assertEquals(insert1Cnt, hoodieROViewDF1.count())
 
@@ -1159,14 +1161,13 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .option(DataSourceWriteOptions.INSERT_DROP_DUPS.key, "true")
       .mode(SaveMode.Append)
       .save(basePath)
-    val commitCompletionTime2 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     val hoodieROViewDF2 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     assertEquals(hoodieROViewDF2.count(), totalUniqueKeyToGenerate)
 
     val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime2)
+      .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime1)
       .load(basePath)
     assertEquals(hoodieIncViewDF2.count(), insert2NewKeyCnt)
   }
@@ -1462,6 +1463,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
+    val commitCompletionTime1 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     val countIn20160315 = records1.asScala.count(record => record.getPartitionPath == "2016/03/15")
     val pathForReader = getPathForReader(basePath, !enableFileIndex, if (partitionEncode) 1 else 3)
     // query the partition by filter
@@ -1492,13 +1494,12 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commitCompletionTime2 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
 
     // Incremental query without "*" in path
     val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime2)
+      .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime1)
       .load(basePath)
     assertEquals(N + 1, hoodieIncViewDF1.count())
     assertEquals(false, Metrics.isInitialized(basePath))
@@ -2174,7 +2175,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     )
 
     // Helper method to get commit time based on table version
-    // v6 uses requestedTime, v9+ uses completionTime
+    // v6 uses requestedTime, v8+ uses completionTime
     def getCommitTime(tableVersion: String): String = {
       metaClient.reloadActiveTimeline()
       val lastInstant = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get()
@@ -2193,19 +2194,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         metaClient = createMetaClient(spark, basePath)
       }
       getCommitTime(tableVersion)
-    }
-
-    // Helper method to adjust start time for incremental queries based on version
-    // v6: open_close range (START exclusive, END inclusive)
-    // v9: close_close range (both START and END inclusive)
-    def getIncrementalStartTime(commitTime: String, tableVersion: String): String = {
-      if (tableVersion == "6") {
-        // v6: open_close - need to use time just before to include the commit
-        (commitTime.toLong - 1).toString
-      } else {
-        // v9: close_close - use the actual commit time
-        commitTime
-      }
     }
 
     // Commit c1 - Initial Insert (10 records with timestamp 1000)
@@ -2334,7 +2322,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // - v9: Uses close_close range (both START and END inclusive)
     val incrementalDf1 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, getIncrementalStartTime(commit1, tableVersion))
+      .option(DataSourceReadOptions.START_COMMIT.key, "000")
       .option(DataSourceReadOptions.END_COMMIT.key, commit3)
       .load(basePath)
       .select("id", "value", "timestamp")
@@ -2370,7 +2358,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // Should include changes from c3, c4 and c5
     val incrementalDf2 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, getIncrementalStartTime(commit3, tableVersion))
+      .option(DataSourceReadOptions.START_COMMIT.key, commit2)
       .load(basePath) // No END_COMMIT means up to latest
       .select("id", "value", "timestamp")
       .orderBy("id")

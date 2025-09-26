@@ -19,7 +19,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
-import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, ORDERING_FIELDS, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, RECORDKEY_FIELD}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
@@ -722,7 +722,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     val numRecordsForSecondQueryWithDataSkipping = spark.sql(secondQuery).count()
 
     if (queryType.equals(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)) {
-      createIncrementalSQLTable(commonOpts, metaClient.reloadActiveTimeline().getInstants.get(2).getCompletionTime)
+      createIncrementalSQLTable(commonOpts, metaClient.reloadActiveTimeline().getInstants.get(1).getCompletionTime)
       assertEquals(spark.sql(firstQuery).count(), if (isLastOperationDelete) 0 else 3)
       assertEquals(spark.sql(secondQuery).count(), if (isLastOperationDelete) 0 else 2)
     }

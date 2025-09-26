@@ -262,7 +262,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       val hudiIncDF1 = spark.read.format("org.apache.hudi")
         .options(readOpts)
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.START_COMMIT.key, commit1CompletionTime)
+        .option(DataSourceReadOptions.START_COMMIT.key, "000")
         .option(DataSourceReadOptions.END_COMMIT.key, commit1CompletionTime)
         .load(basePath)
       assertEquals(100, hudiIncDF1.count())
@@ -274,7 +274,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       val hudiIncDF2 = spark.read.format("org.apache.hudi")
         .options(readOpts)
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.START_COMMIT.key, commit2CompletionTime)
+        .option(DataSourceReadOptions.START_COMMIT.key, commit1CompletionTime)
         .option(DataSourceReadOptions.END_COMMIT.key, commit2CompletionTime)
         .load(basePath)
       assertEquals(100, hudiIncDF2.count())
@@ -286,7 +286,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       val hudiIncDF3 = spark.read.format("org.apache.hudi")
         .options(readOpts)
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.START_COMMIT.key, commit1CompletionTime)
+        .option(DataSourceReadOptions.START_COMMIT.key, "000")
         .option(DataSourceReadOptions.END_COMMIT.key, commit2CompletionTime)
         .load(basePath)
       assertEquals(100, hudiIncDF3.count())
@@ -331,11 +331,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Append)
       .save(basePath)
     HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
-    val commit3CompletionTime = if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-      DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
-    } else {
-      DataSourceTestUtils.latestCommitRequestTime(storage, basePath)
-    }
     val hudiSnapshotDF3 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -356,7 +351,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       val hudiIncDF4 = spark.read.format("org.apache.hudi")
         .options(readOpts)
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.START_COMMIT.key, commit3CompletionTime)
+        .option(DataSourceReadOptions.START_COMMIT.key, commit2CompletionTime)
         .load(basePath)
       assertEquals(50, hudiIncDF4.count())
 
@@ -365,7 +360,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       val hudiIncDF4SkipMerge = spark.read.format("org.apache.hudi")
         .options(readOpts)
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.START_COMMIT.key, commit1CompletionTime)
+        .option(DataSourceReadOptions.START_COMMIT.key, "000")
         .option(DataSourceReadOptions.REALTIME_MERGE.key, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL)
         .load(basePath)
       assertEquals(250, hudiIncDF4SkipMerge.count())
@@ -400,7 +395,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       val hudiIncDF5 = spark.read.format("org.apache.hudi")
         .options(readOpts)
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.START_COMMIT.key, commit3CompletionTime)
+        .option(DataSourceReadOptions.START_COMMIT.key, commit2CompletionTime)
         .load(basePath)
       assertEquals(150, hudiIncDF5.count())
     }
@@ -415,6 +410,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(writeOpts)
       .mode(SaveMode.Append)
       .save(basePath)
+    val commit5CompletionTime = if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    } else {
+      DataSourceTestUtils.latestCommitRequestTime(storage, basePath)
+    }
     HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
     val hudiSnapshotDF5 = spark.read.format("org.apache.hudi")
       .options(readOpts)
@@ -448,7 +448,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       val hudiIncDF6 = spark.read.format("org.apache.hudi")
         .options(readOpts)
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.START_COMMIT.key, commit6CompletionTime)
+        .option(DataSourceReadOptions.START_COMMIT.key, commit5CompletionTime)
         .option(DataSourceReadOptions.END_COMMIT.key, commit6CompletionTime)
         .load(basePath)
       // even though compaction updated 150 rows, since preserve commit metadata is true, they won't be part of incremental query.
@@ -510,6 +510,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
+    val commit1CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
@@ -526,7 +527,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(writeOpts)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commit2CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -550,7 +550,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val hudiIncDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, commit2CompletionTime)
+      .option(DataSourceReadOptions.START_COMMIT.key, commit1CompletionTime)
       .load(basePath)
     assertEquals(0, hudiIncDF1.count())
 
@@ -595,6 +595,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key, classOf[DefaultHoodieRecordPayload].getName)
       .mode(SaveMode.Overwrite)
       .save(basePath)
+    val commit1CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -618,7 +619,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(opts)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commit2CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -637,7 +637,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val hudiIncDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, if (tableVersion == 6) commit1Time else commit2CompletionTime)
+      .option(DataSourceReadOptions.START_COMMIT.key, if (tableVersion == 6) commit1Time else commit1CompletionTime)
       .load(basePath)
 
     // filter first commit and only read log records
@@ -905,12 +905,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commitCompletionTime2 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     // Incremental query without "*" in path
     val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime2)
+      .option(DataSourceReadOptions.START_COMMIT.key, commitCompletionTime1)
       .load(basePath)
     assertEquals(N + 1, hoodieIncViewDF1.count())
   }
@@ -1300,6 +1299,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Append)
       .save(basePath)
     val commit2Time = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
+    val commit2CompletionTime = metaClient.getActiveTimeline.lastInstant().get().getCompletionTime
 
     val records3 = recordsToStrings(dataGen2.generateUniqueUpdates("003", 20)).asScala.toSeq
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
@@ -1308,7 +1308,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Append)
       .save(basePath)
     val commit3Time = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
-    val commit3CompletionTime = metaClient.reloadActiveTimeline.lastInstant().get().getCompletionTime
+    val commit3CompletionTime = metaClient.getActiveTimeline.lastInstant().get().getCompletionTime
 
     val pathForROQuery = getPathForROQuery(basePath, !enableFileIndex, 3)
     // snapshot query
@@ -1332,7 +1332,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val incrementalQueryRes = spark.read.format("hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, commit3CompletionTime)
+      .option(DataSourceReadOptions.START_COMMIT.key, commit2CompletionTime)
       .option(DataSourceReadOptions.END_COMMIT.key, commit3CompletionTime)
       .load(basePath)
     assertEquals(0, incrementalQueryRes.where("partition = '2022-01-01'").count)
@@ -1980,19 +1980,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       getCommitTime(tableVersion)
     }
 
-    // Helper method to adjust start time for incremental queries based on version
-    // v6: open_close range (START exclusive, END inclusive)
-    // v9: close_close range (both START and END inclusive)
-    def getIncrementalStartTime(commitTime: String, tableVersion: String): String = {
-      if (tableVersion == "6") {
-        // v6: open_close - need to use time just before to include the commit
-        (commitTime.toLong - 1).toString
-      } else {
-        // v9: close_close - use the actual commit time
-        commitTime
-      }
-    }
-
     // Commit c1 - Initial Insert (10 records with timestamp 1000)
     val df1 = Seq(
       (1, "val1", 1000L, false),
@@ -2119,7 +2106,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // - v9: Uses close_close range (both START and END inclusive)
     val incrementalDf1 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, getIncrementalStartTime(commit1, tableVersion))
+      .option(DataSourceReadOptions.START_COMMIT.key, "000")
       .option(DataSourceReadOptions.END_COMMIT.key, commit3)
       .load(basePath)
       .select("id", "value", "timestamp")
@@ -2155,7 +2142,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // Should include changes from c3, c4 and c5
     val incrementalDf2 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, getIncrementalStartTime(commit3, tableVersion))
+      .option(DataSourceReadOptions.START_COMMIT.key, commit2)
       .load(basePath) // No END_COMMIT means up to latest
       .select("id", "value", "timestamp")
       .orderBy("id")

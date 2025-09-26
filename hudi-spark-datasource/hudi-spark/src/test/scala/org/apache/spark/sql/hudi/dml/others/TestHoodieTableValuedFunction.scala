@@ -129,6 +129,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
         )
 
         val fs = HadoopFSUtils.getFs(tablePath, spark.sessionState.newHadoopConf())
+        val firstCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, tablePath)
 
         checkAnswer(
           s"""select id,
@@ -150,7 +151,6 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
              | """.stripMargin
         )
         val secondCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, tablePath)
-        val secondInstant = spark.sql(s"select max(_hoodie_commit_time) as commitTime from  $tableName order by commitTime").first().getString(0)
 
         checkAnswer(
           s"""select id,
@@ -160,7 +160,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
              |from hudi_table_changes(
              |'$identifier',
              |'latest_state',
-             |'$secondCompletionTime')
+             |'$firstCompletionTime')
              |""".stripMargin
         )(
           Seq(1, "a1_1", 10.0, 1100),
@@ -184,7 +184,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
              | from hudi_table_changes(
              | '$identifier',
              | 'latest_state',
-             | '$secondCompletionTime',
+             | '$firstCompletionTime',
              | '$secondCompletionTime')
              | """.stripMargin
         )(
