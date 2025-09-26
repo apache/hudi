@@ -46,6 +46,10 @@ public class HFileWriterImpl implements HFileWriter {
   private static final String COMPARATOR_CLASS_NAME
       = "org.apache.hudi.io.storage.HoodieHBaseKVComparator";
   private static final byte HFILE_VERSION = (byte) 3;
+  // Here 21 = 4 bytes (key length) + 4 bytes (value length) + 1 byte (MVCC)
+  //           + 2 bytes (length of key length)
+  //           + 10 bytes (check sum, timestamp, key type).
+  private static final int EXTRA_BYTES_PER_DATA_ENTRY = 21;
   private final OutputStream outputStream;
   private final HFileContext context;
   // Meta Info map.
@@ -92,16 +96,15 @@ public class HFileWriterImpl implements HFileWriter {
     totalKeyLength += keyBytes.length;
     totalValueLength += value.length;
     // Records with the same key must be put into the same block.
-    // Here 9 = 4 bytes of key length + 4 bytes of value length + 1 byte MVCC.
     if (!Arrays.equals(currentDataBlock.getLastKeyContent(), keyBytes)
-        && uncompressedDataBlockBytes + keyBytes.length + value.length + 9 > blockSize) {
+        && uncompressedDataBlockBytes + keyBytes.length + value.length + EXTRA_BYTES_PER_DATA_ENTRY > blockSize) {
       flushCurrentDataBlock();
       uncompressedDataBlockBytes = 0;
     }
     currentDataBlock.add(keyBytes, value);
     int uncompressedKeyValueSize = keyBytes.length + value.length;
-    uncompressedDataBlockBytes += uncompressedKeyValueSize + 9;
-    totalUncompressedDataBlockBytes += uncompressedKeyValueSize + 9;
+    uncompressedDataBlockBytes += uncompressedKeyValueSize + EXTRA_BYTES_PER_DATA_ENTRY;
+    totalUncompressedDataBlockBytes += uncompressedKeyValueSize + EXTRA_BYTES_PER_DATA_ENTRY;
   }
 
   // Append a metadata kv pair.
