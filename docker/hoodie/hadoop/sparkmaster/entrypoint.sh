@@ -16,6 +16,8 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
+# This script is used to start the Spark Master and JupyterLab services inside a container.
+
 # Start the spark master in the background
 /opt/spark/master.sh &
 

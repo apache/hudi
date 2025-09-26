@@ -20,15 +20,6 @@ ARG HIVE_VERSION=3.1.3
 ARG SPARK_VERSION=3.5.3
 FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}-sparkbase_${SPARK_VERSION}
 
-#COPY master.sh /opt/spark
-#RUN chmod +x /opt/spark/master.sh
-
-#COPY jupyter.sh /opt/spark
-#RUN chmod +x /opt/spark/jupyter.sh
-
-#COPY entrypoint.sh /opt/spark
-#RUN chmod +x /opt/spark/entrypoint.sh
-
 COPY *.sh /opt/spark
 RUN chmod +x /opt/spark/*.sh
 
