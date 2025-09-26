@@ -811,7 +811,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
          |  hoodie.enable.data.skipping = 'true',
          |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.AWSDmsAvroPayload',
          |  hoodie.datasource.write.keygenerator.class = 'org.apache.hudi.keygen.NonpartitionedKeyGenerator',
-         |  hoodie.write.record.merge.mode = 'CUSTOM',
          |  hoodie.table.cdc.enabled = 'true',
          |  hoodie.table.cdc.supplemental.logging.mode = 'data_before_after'
          | )
