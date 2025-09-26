@@ -119,10 +119,7 @@ public abstract class BaseAvroPayload implements Serializable, KryoSerializable 
   }
 
   public Option<IndexedRecord> getIndexedRecord(Schema schema, Properties properties) throws IOException {
-    if (recordBytes.length == 0) {
-      return Option.empty();
-    }
-    return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+    return getRecord(schema);
   }
 
   protected boolean isEmptyRecord() {
@@ -139,7 +136,8 @@ public abstract class BaseAvroPayload implements Serializable, KryoSerializable 
     if (recordBytes == null || recordBytes.length == 0) {
       return Option.empty();
     }
-    return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+    record = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+    return Option.of(record);
   }
 
   private void writeObject(ObjectOutputStream out) throws IOException {
