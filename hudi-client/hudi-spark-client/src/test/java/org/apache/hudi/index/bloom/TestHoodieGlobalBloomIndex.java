@@ -297,6 +297,8 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
 
     for (HoodieRecord record : taggedRecordRDD.collect()) {
       IndexedRecord data = record.toIndexedRecord(SIMPLE_RECORD_SCHEMA, CollectionUtils.emptyProps()).get().getData();
+      // eager deser.
+      data.get(0);
       switch (record.getRecordKey()) {
         case "000":
           assertEquals(record.getCurrentLocation().getFileId(), fileId1);
