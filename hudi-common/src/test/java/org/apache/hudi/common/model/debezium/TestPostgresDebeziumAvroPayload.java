@@ -30,7 +30,6 @@ import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.avro.util.Utf8;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -202,7 +201,7 @@ public class TestPostgresDebeziumAvroPayload {
     assertEquals("valid byte value", fromUTF8Bytes(((ByteBuffer) outputRecord.get("byte_col")).array()));
     assertNull(outputRecord.get("string_null_col_1"));
     assertNull(outputRecord.get("byte_null_col_1"));
-    assertEquals("valid string value", ((Utf8) outputRecord.get("string_null_col_2")).toString());
+    assertEquals("valid string value", outputRecord.get("string_null_col_2").toString());
     assertEquals("valid byte value", fromUTF8Bytes(((ByteBuffer) outputRecord.get("byte_null_col_2")).array()));
   }
 
