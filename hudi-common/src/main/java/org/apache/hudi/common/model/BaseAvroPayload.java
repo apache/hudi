@@ -31,8 +31,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.Properties;
 
@@ -138,23 +136,6 @@ public abstract class BaseAvroPayload implements Serializable, KryoSerializable 
     }
     record = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
     return Option.of(record);
-  }
-
-  private void writeObject(ObjectOutputStream out) throws IOException {
-    byte[] bytes = getRecordBytes();
-    out.writeInt(bytes.length);
-    out.write(bytes);
-    out.writeObject(orderingVal);
-    out.writeBoolean(isDeletedRecord);
-  }
-
-  private void readObject(ObjectInputStream ois)
-      throws ClassNotFoundException, IOException {
-    int length = ois.readInt();
-    this.recordBytes = new byte[length];
-    ois.read(recordBytes, 0, length);
-    this.orderingVal = (Comparable) ois.readObject();
-    this.isDeletedRecord = ois.readBoolean();
   }
 
   @Override

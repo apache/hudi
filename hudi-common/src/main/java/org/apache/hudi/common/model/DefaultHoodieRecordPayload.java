@@ -27,6 +27,9 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -47,7 +50,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   public static final String METADATA_EVENT_TIME_KEY = "metadata.event_time.key";
   public static final String DELETE_KEY = "hoodie.payload.delete.field";
   public static final String DELETE_MARKER = "hoodie.payload.delete.marker";
-  private final AtomicBoolean isDeleteComputed = new AtomicBoolean(false);
+  private AtomicBoolean isDeleteComputed = new AtomicBoolean(false);
   private boolean isDefaultRecordPayloadDeleted = false;
 
   public DefaultHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {
@@ -177,5 +180,24 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
       return true;
     }
     return persistedOrderingVal == null || persistedOrderingVal.compareTo(incomingOrderingVal) <= 0;
+  }
+
+  @Override
+  public void write(Kryo kryo, Output output) {
+    super.write(kryo, output);
+    output.writeBoolean(isDeleteComputed.get());
+    if (isDeleteComputed.get()) {
+      output.writeBoolean(isDefaultRecordPayloadDeleted);
+    }
+  }
+
+  @Override
+  public void read(Kryo kryo, Input input) {
+    super.read(kryo, input);
+    boolean isDeleteComputedValue = input.readBoolean();
+    this.isDeleteComputed = new AtomicBoolean(isDeleteComputedValue);
+    if (isDeleteComputedValue) {
+      isDefaultRecordPayloadDeleted = input.readBoolean();
+    }
   }
 }
