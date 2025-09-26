@@ -122,6 +122,29 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     assertEquals(8, metaClient.getTableConfig.getTableVersion.versionCode())
     val firstUpdateInstantTime = metaClient.getActiveTimeline.getInstants.get(1).requestedTime()
 
+    // 2.5. Add mixed ordering test data to validate proper ordering handling
+    // This tests that updates/deletes with lower ordering values are ignored
+    // while higher ordering values are applied
+    val mixedOrderingData = Seq(
+      // Update rider-C with LOWER ordering - should be IGNORED (rider-C has ts=10 originally)
+      (8, 3L, "rider-CC", "driver-CC", 30.00, "u", "8.1", 8, 1, "u"),
+      // Update rider-C with HIGHER ordering - should be APPLIED
+      (11, 3L, "rider-CC", "driver-CC", 35.00, "u", "15.1", 15, 1, "u"),
+      // Delete rider-E with LOWER ordering - should be IGNORED (rider-E has ts=10 originally)
+      (9, 5L, "rider-EE", "driver-EE", 17.85, "D", "9.1", 9, 1, "d"))
+    val mixedOrderingUpdate = spark.createDataFrame(mixedOrderingData).toDF(columns: _*)
+    mixedOrderingUpdate.write.format("hudi").
+      option(OPERATION.key(), "upsert").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8").
+      option(HoodieTableConfig.ORDERING_FIELDS.key(), originalOrderingFields).
+      options(opts).
+      mode(SaveMode.Append).
+      save(basePath)
+    // Validate table version is still 8 after mixed ordering batch
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertEquals(8, metaClient.getTableConfig.getTableVersion.versionCode())
+
     // 3. Add an update. This is expected to trigger the upgrade
     val secondUpdateData = Seq(
       (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1, "i"),
@@ -291,6 +314,28 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     assertEquals(expectedOrderingFields, metaClient.getTableConfig.getOrderingFieldsStr.orElse(""))
     val firstUpdateInstantTime = metaClient.getActiveTimeline.getInstants.get(1).requestedTime()
 
+    // 2.5. Add mixed ordering test data to validate proper ordering handling
+    // This tests that updates/deletes with lower ordering values are ignored
+    // while higher ordering values are applied
+    val mixedOrderingData = Seq(
+      // Update rider-C with LOWER ordering - should be IGNORED (rider-C has ts=10 originally)
+      (8, 3L, "rider-C", "driver-C-old", 30.00, "u", "8.1", 8, 1, "u"),
+      // Update rider-C with HIGHER ordering - should be APPLIED
+      (15, 3L, "rider-C", "driver-C-new", 35.00, "u", "15.1", 15, 1, "u"),
+      // Delete rider-E with LOWER ordering - should be IGNORED (rider-E has ts=10 originally)
+      (9, 5L, "rider-E", "driver-E", 17.85, "D", "9.1", 9, 1, "d"),
+      // Update rider-D with HIGHER ordering - should be APPLIED
+      (14, 4L, "rider-D", "driver-D-new", 40.00, "u", "14.1", 14, 1, "u"))
+    val mixedOrderingUpdate = spark.createDataFrame(mixedOrderingData).toDF(columns: _*)
+    mixedOrderingUpdate.write.format("hudi").
+      option(OPERATION.key(), "upsert").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      options(opts).
+      mode(SaveMode.Append).
+      save(basePath)
+    // Validate table version is still 9 after mixed ordering batch
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertEquals(9, metaClient.getTableConfig.getTableVersion.versionCode())
 
     // 3. Add an update. This is expected to trigger the upgrade
     val compactionEnabled = if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
@@ -299,11 +344,11 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       "false"
     }
     val secondUpdateData = Seq(
-      (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1, "i"),
+      (12, 7L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1, "i"),
       // For rider-DD we purposefully deviate and set the _event_seq to be less than the _event_bin_file and _event_pos
       // so that the test will fail if _event_seq is still used for ordering
-      (9, 4L, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
-      (12, 5L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1, "i"))
+      (9, 8L, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
+      (12, 9L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1, "i"))
     val secondUpdate = spark.createDataFrame(secondUpdateData).toDF(columns: _*)
     secondUpdate.write.format("hudi").
       option(OPERATION.key(), "upsert").
@@ -338,8 +383,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
 
     // 5. Add a delete.
     val fourthUpdateData = Seq(
-      (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1, "i"),
-      (12, 5L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1, "i"))
+      (12, 7L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1, "i"),
+      (12, 9L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1, "i"))
     val fourthUpdate = spark.createDataFrame(fourthUpdateData).toDF(columns: _*)
     fourthUpdate.write.format("hudi").
       option(OPERATION.key(), "delete").
@@ -392,12 +437,24 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
         || payloadClazz.equals(classOf[EventTimeAvroPayload].getName)
         || payloadClazz.equals(classOf[DefaultHoodieRecordPayload].getName))
       {
+        // Expected results after all operations with _event_lsn collisions:
+        // - rider-X (_event_lsn=1): deleted with higher ordering (ts=12)
+        // - rider-Y (_event_lsn=2): updated with higher ordering (ts=11)
+        // - _event_lsn=3: DELETED by delete operation (was rider-CC with ts=12)
+        // - _event_lsn=4: rider-D stays with original data (rider-DD ts=9 < rider-D ts=10)
+        // - _event_lsn=5: DELETED by delete operation (was rider-EE with ts=12)
+        // - rider-F (_event_lsn=6): marked for deletion (original)
         Seq(
           (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
           (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
           (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
       } else {
+        // For other payload types (OverwriteWithLatestAvroPayload, OverwriteNonDefaultsWithLatestAvroPayload)
+        // These use COMMIT_TIME_ORDERING, so latest write wins regardless of ts value
+        // _event_lsn=3: rider-CC overwrites (latest commit), then deleted
+        // _event_lsn=4: rider-DD overwrites (latest commit)
+        // _event_lsn=5: rider-EE overwrites (latest commit), then deleted
         Seq(
           (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
@@ -405,34 +462,43 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
           (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
       }
     } else {
+      // For CDC payloads or when delete markers are used
       if (payloadClazz.equals(classOf[DefaultHoodieRecordPayload].getName)) {
+        // Delete markers remove records completely
+        // Note: rider-D keeps original values because rider-DD update (ts=9) was rejected (9 < 10)
+        // _event_lsn=1 (rider-X) and _event_lsn=5 (rider-EE) are deleted by delete markers
         Seq(
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
           (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"))
       } else {
+        // For other CDC payloads with delete markers (AWSDmsAvroPayload, Postgres/MySQL Debezium)
+        // These are CDC payloads that remove Op='D' records but may use different ordering
         Seq(
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"))
+          (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"))
       }
     }
   }
 
   def getExpectedResultForTimeTravelQuery(payloadClazz: String, usesDeleteMarker: Boolean):
   Seq[(Int, Long, String, String, Double, String, String, Int, Int, String)] = {
+    // Time travel query shows state after first update but BEFORE mixed ordering batch
+    // So rider-C, rider-D, rider-E should still have their original values
     if (!isCDCPayload(payloadClazz) && !usesDeleteMarker) {
       Seq(
         (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
         (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-        (10, 3, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"),
-        (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
-        (10, 5, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"),
+        (10, 3, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"), // Original rider-C before mixed ordering
+        (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),   // Original rider-D before mixed ordering
+        (10, 5, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"),   // Original rider-E before mixed ordering
         (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
     } else {
+      // For CDC payloads or when delete markers are used
       Seq(
         (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-        (10, 3, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"),
-        (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
-        (10, 5, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))
+        (10, 3, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"), // Original rider-C before mixed ordering
+        (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),   // Original rider-D before mixed ordering
+        (10, 5, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))   // Original rider-E before mixed ordering
     }
   }
 
