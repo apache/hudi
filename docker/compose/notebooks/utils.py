@@ -56,6 +56,8 @@ def get_spark_session(app_name="Hudi-Notebooks"):
     print(f"SparkSession started with app name: {app_name}")
     return spark
 
+# Initialize Spark globally so other functions can use it
+spark = get_spark_session()
 
 # S3 Utility Function
 from py4j.java_gateway import java_import
