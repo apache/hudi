@@ -129,7 +129,11 @@ public abstract class BaseAvroPayload implements Serializable, KryoSerializable 
 
   protected Option<IndexedRecord> getRecord(Schema schema) throws IOException {
     if (record != null) {
-      return Option.of(record);
+      if (record.getSchema() == schema) {
+        return Option.of(record);
+      }
+      // if the schema does not match, we need to deserialize with the proper schema to match legacy behavior
+      recordBytes = getRecordBytes();
     }
     if (recordBytes == null || recordBytes.length == 0) {
       return Option.empty();

@@ -29,6 +29,9 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -214,5 +217,18 @@ public class HoodieRecordTestPayload extends OverwriteWithLatestAvroPayload {
         orderingFields,
         field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord, field, true, consistentLogicalTimestampEnabled));
     return persistedOrderingVal == null || ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) <= 0;
+  }
+
+  @Override
+  public void read(Kryo kryo, Input input) {
+    super.read(kryo, input);
+    eventTime = (Option<Object>) kryo.readClassAndObject(input);
+    isDeleteComputed = new AtomicBoolean(false);
+  }
+
+  @Override
+  public void write(Kryo kryo, Output output) {
+    super.write(kryo, output);
+    kryo.writeClassAndObject(output, eventTime);
   }
 }
