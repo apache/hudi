@@ -215,7 +215,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
       return Option.empty();
     }
 
-    return getInsertValue(schema);
+    return getRecord(schema);
   }
 
   /**
