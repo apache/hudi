@@ -18,6 +18,8 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ArrayComparable;
@@ -25,6 +27,7 @@ import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.avro.Schema;
 import org.apache.flink.table.types.DataType;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -45,10 +48,13 @@ public class OrderingValueEngineTypeConverter {
   }
 
   public static List<Function<Comparable, Comparable>> createConverters(Schema dataSchema, List<String> orderingFieldNames, boolean utcTimezone) {
+    if (orderingFieldNames.isEmpty()) {
+      return Collections.singletonList(Function.identity());
+    }
     return orderingFieldNames.stream().map(f -> {
-      Schema fieldSchema = dataSchema.getField(f).schema();
-      ValidationUtils.checkArgument(fieldSchema != null, "ordering field " + f + " should be included in data schema: " + dataSchema);
-      DataType fieldType =  AvroSchemaConverter.convertToDataType(fieldSchema);
+      Option<Schema> fieldSchemaOpt = AvroSchemaUtils.findNestedFieldSchema(dataSchema, f);
+      ValidationUtils.checkArgument(fieldSchemaOpt.isPresent(), "ordering field " + f + " should be included in data schema: " + dataSchema);
+      DataType fieldType =  AvroSchemaConverter.convertToDataType(fieldSchemaOpt.get());
       return RowDataUtils.flinkValFunc(fieldType.getLogicalType(), utcTimezone);
     }).collect(Collectors.toList());
   }

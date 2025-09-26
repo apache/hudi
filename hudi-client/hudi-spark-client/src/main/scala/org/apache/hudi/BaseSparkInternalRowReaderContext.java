@@ -19,11 +19,13 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -90,5 +92,16 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     Function1<InternalRow, UnsafeRow> unsafeRowWriter =
         HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), Collections.emptyMap(), partitionValuesByIndex);
     return row -> (InternalRow) unsafeRowWriter.apply(row);
+  }
+
+  @Override
+  public void setSchemaHandler(FileGroupReaderSchemaHandler<InternalRow> schemaHandler) {
+    super.setSchemaHandler(schemaHandler);
+    // init ordering value converter: java -> engine type
+    List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(getMergeMode(), tableConfig);
+    Schema schema = schemaHandler.getRequiredSchema();
+    if (orderingFieldNames.stream().allMatch(f -> AvroSchemaUtils.findNestedField(schema, f).isPresent())) {
+      ((BaseSparkInternalRecordContext) recordContext).initOrderingValueConverter(schema, orderingFieldNames);
+    }
   }
 }
