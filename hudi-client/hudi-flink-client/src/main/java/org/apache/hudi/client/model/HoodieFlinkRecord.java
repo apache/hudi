@@ -109,6 +109,20 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
+  public Comparable<?> getOrderingValueAsJava(Schema recordSchema, Properties props, String[] orderingFields) {
+    if (orderingFields == null) {
+      return OrderingValues.getDefault();
+    } else {
+      return OrderingValues.create(orderingFields, field -> {
+        if (recordSchema.getField(field) == null) {
+          return OrderingValues.getDefault();
+        }
+        return (Comparable<?>) getColumnValueAsJava(recordSchema, field, props);
+      });
+    }
+  }
+
+  @Override
   public HoodieRecordType getRecordType() {
     return HoodieRecordType.FLINK;
   }

@@ -130,11 +130,6 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public Comparable<?> getOrderingValueAsJava(Schema recordSchema, Properties props, String[] orderingFields) {
-    return getOrderingValue(recordSchema, props, orderingFields);
-  }
-
-  @Override
   public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
     try {
       Option<IndexedRecord> indexedRecordOpt = getData().getInsertValue(recordSchema, props);
