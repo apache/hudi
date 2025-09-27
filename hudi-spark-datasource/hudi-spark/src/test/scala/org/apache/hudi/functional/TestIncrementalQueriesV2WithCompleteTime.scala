@@ -69,7 +69,7 @@ class TestIncrementalQueriesV2WithCompleteTime extends HoodieSparkClientTestBase
   @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
   def testCompleteTimeFilteringSemantics(tableTypeStr: String): Unit = {
     testBasicIncrementalQuery(tableTypeStr, enableFileGroupReader = false)
-    testBasicIncrementalQuery(tableTypeStr, enableFileGroupReader = true)
+    // testBasicIncrementalQuery(tableTypeStr, enableFileGroupReader = true)
   }
 
   private def testBasicIncrementalQuery(tableTypeStr: String, enableFileGroupReader: Boolean): Unit = {

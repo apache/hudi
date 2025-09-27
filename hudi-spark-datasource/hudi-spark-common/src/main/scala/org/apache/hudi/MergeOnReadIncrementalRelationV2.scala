@@ -37,7 +37,8 @@ import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.sources._
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable
@@ -80,7 +81,9 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
     val optionalFilters = filters
     val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
 
-    new HoodieMergeOnReadRDDV2(
+    val requestedToCompletionTimeMap = buildCompletionTimeMapping()
+
+    val baseRDD = new HoodieMergeOnReadRDDV2(
       sqlContext.sparkContext,
       config = jobConf,
       sqlConf = sqlContext.sparkSession.sessionState.conf,
@@ -93,7 +96,10 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
       includedInstantTimeSet = Option(includedCommits.map(_.requestedTime).toSet),
       optionalFilters = optionalFilters,
       metaClient = metaClient,
-      options = optParams)
+      options = optParams,
+      requestedToCompletionTimeMap = Option(requestedToCompletionTimeMap))
+
+    baseRDD
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
@@ -171,6 +177,20 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
       fileSlices
     }
     filteredFileSlices
+  }
+
+  private def buildCompletionTimeMapping(): Map[String, String] = {
+    includedCommits.map { instant =>
+      val requestedTime = instant.requestedTime()
+      val completionTime = Option(instant.getCompletionTime).getOrElse(requestedTime)
+      requestedTime -> completionTime
+    }.toMap
+  }
+
+
+  private def addCompletionTimeColumn(baseSchema: StructType): StructType = {
+    val completionTimeField = StructField("_hoodie_completion_time", StringType, nullable = true)
+    StructType(baseSchema.fields :+ completionTimeField)
   }
 }
 
