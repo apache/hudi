@@ -19,7 +19,6 @@
 
 package org.apache.hudi;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -100,8 +99,6 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     // init ordering value converter: java -> engine type
     List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(getMergeMode(), tableConfig);
     Schema schema = schemaHandler.getRequiredSchema();
-    if (orderingFieldNames.stream().allMatch(f -> AvroSchemaUtils.findNestedField(schema, f).isPresent())) {
-      ((BaseSparkInternalRecordContext) recordContext).initOrderingValueConverter(schema, orderingFieldNames);
-    }
+    ((BaseSparkInternalRecordContext) recordContext).initOrderingValueConverter(schema, orderingFieldNames);
   }
 }
