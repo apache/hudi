@@ -84,7 +84,7 @@ class ExpressionPayload(@transient record: GenericRecord,
                                         properties: Properties): HOption[IndexedRecord] = {
     val recordSchema = getRecordSchema(properties)
 
-    val sourceRecord = bytesToAvro(recordBytes, recordSchema)
+    val sourceRecord = getRecord(recordSchema).get()
     val joinedRecord = joinRecord(sourceRecord, targetRecord, properties)
 
     processMatchedRecord(ConvertibleRecord(joinedRecord), Some(targetRecord), properties)
@@ -272,7 +272,7 @@ class ExpressionPayload(@transient record: GenericRecord,
 
   override def getIndexedRecord(schema: Schema, properties: Properties): HOption[IndexedRecord] = {
     val recordSchema = getRecordSchema(properties)
-    val indexedRecord = bytesToAvro(recordBytes, recordSchema)
+    val indexedRecord = getRecord(recordSchema).get().asInstanceOf[GenericRecord]
 
     if (super.isDeleteRecord(indexedRecord)) {
       HOption.empty[IndexedRecord]()
@@ -283,7 +283,7 @@ class ExpressionPayload(@transient record: GenericRecord,
 
   override def getInsertValue(schema: Schema, properties: Properties): HOption[IndexedRecord] = {
     val recordSchema = getRecordSchema(properties)
-    val incomingRecord = ConvertibleRecord(bytesToAvro(recordBytes, recordSchema))
+    val incomingRecord = ConvertibleRecord(getRecord(recordSchema).get().asInstanceOf[GenericRecord])
 
     if (super.isDeleteRecord(incomingRecord.asAvro)) {
       HOption.empty[IndexedRecord]()
