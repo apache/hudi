@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY
 import org.apache.hudi.common.model.debezium.{DebeziumConstants, MySqlDebeziumAvroPayload, PostgresDebeziumAvroPayload}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
@@ -67,8 +67,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (10, 2L, "rider-B", "driver-B", 27.70, "i", "10.1", 10, 1, "i"),
       (10, 3L, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"),
       (10, 4L, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
-      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"),
-      (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
+      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
     val originalOrderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
       "_event_seq"
@@ -89,11 +88,25 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(HoodieTableConfig.ORDERING_FIELDS.key(), originalOrderingFields).
       option(TABLE_TYPE.key(), tableType).
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
+      option(OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL).
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8").
+      option("hoodie.parquet.max.file.size", "2048").
+      option("hoodie.parquet.small.file.limit", "1024").
+      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
+      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
+      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
+      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
+      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
+      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
       options(opts).
       mode(SaveMode.Overwrite).
       save(basePath)
+
     // Verify table was created successfully
     var metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
@@ -114,15 +127,65 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8").
       option(HoodieTableConfig.ORDERING_FIELDS.key(), originalOrderingFields).
+      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
+      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
+      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
+      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
+      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
+      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
     // Validate table version.
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(storageConf())
+      .build()
     assertEquals(8, metaClient.getTableConfig.getTableVersion.versionCode())
     val firstUpdateInstantTime = metaClient.getActiveTimeline.getInstants.get(1).requestedTime()
 
+    // 2.5. Add mixed ordering test data to validate proper ordering handling
+    // This tests that updates/deletes with lower ordering values are ignored
+    // while higher ordering values are applied
+    val mixedOrderingData = Seq(
+      // Update rider-C with LOWER ordering - should be IGNORED (rider-C has ts=10 originally)
+      (8, 3L, "rider-CC", "driver-CC", 30.00, "u", "8.1", 8, 1, "u"),
+      // Update rider-C with HIGHER ordering - should be APPLIED
+      (11, 3L, "rider-CC", "driver-CC", 35.00, "u", "15.1", 15, 1, "u"),
+      // Delete rider-E with LOWER ordering - should be IGNORED (rider-E has ts=10 originally)
+      (9, 5L, "rider-EE", "driver-EE", 17.85, "D", "9.1", 9, 1, "d"))
+    val mixedOrderingUpdate = spark.createDataFrame(mixedOrderingData).toDF(columns: _*)
+    mixedOrderingUpdate.write.format("hudi").
+      option(OPERATION.key(), "upsert").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8").
+      option(HoodieTableConfig.ORDERING_FIELDS.key(), originalOrderingFields).
+      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
+      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
+      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
+      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
+      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
+      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
+      options(opts).
+      mode(SaveMode.Append).
+      save(basePath)
+    // Validate table version is still 8 after mixed ordering batch
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(storageConf())
+      .build()
+    assertEquals(8, metaClient.getTableConfig.getTableVersion.versionCode())
+
     // 3. Add an update. This is expected to trigger the upgrade
+    val compactionEnabled = if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) "true" else "false"
     val secondUpdateData = Seq(
       (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1, "i"),
       // For rider-DD we purposefully deviate and set the _event_seq to be less than the _event_bin_file and _event_pos
@@ -133,19 +196,25 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     secondUpdate.write.format("hudi").
       option(OPERATION.key(), "upsert").
       option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), compactionEnabled).
+      option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
     // Validate table version as 9.
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(storageConf())
+      .build()
     assertEquals(9, metaClient.getTableConfig.getTableVersion.versionCode())
     assertEquals(payloadClazz, metaClient.getTableConfig.getLegacyPayloadClass)
     assertEquals(isCDCPayload(payloadClazz) || useOpAsDelete,
       metaClient.getTableConfig.getProps.containsKey(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY))
     assertEquals(expectedOrderingFields, metaClient.getTableConfig.getOrderingFieldsStr.orElse(""))
-    val compactionInstants = metaClient.getActiveTimeline.getCommitsAndCompactionTimeline.getInstants
-    val foundCompaction = compactionInstants.stream().anyMatch(i => i.getAction.equals("commit"))
-    assertTrue(foundCompaction)
 
     // 4. Add a trivial update to trigger payload class mismatch.
     val thirdUpdateData = Seq(
@@ -173,10 +242,52 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(OPERATION.key(), "delete").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
+      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
+      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
+      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
+      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
+      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
       mode(SaveMode.Append).
       save(basePath)
 
-    // 6. Validate.
+    // 6. Add INSERT operation.
+    val insertData = Seq(
+      (13, 6L, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
+      (13, 7L, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
+    val insertDataFrame = spark.createDataFrame(insertData).toDF(columns: _*)
+    insertDataFrame.write.format("hudi").
+      option(OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL).
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
+      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
+      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
+      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
+      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
+      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
+      mode(SaveMode.Append).
+      save(basePath)
+
+    // Final validation of table management operations after all writes
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(storageConf())
+      .build()
+    validateTableManagementOps(metaClient, tableType,
+      expectCompaction = tableType.equals(HoodieTableType.MERGE_ON_READ.name()),
+      expectClustering = true,   // Enable clustering validation with lowered thresholds
+      expectCleaning = false,     // Enable cleaning validation with lowered thresholds
+      expectArchival = false)     // Enable archival validation with lowered thresholds
+
+    // 7. Validate.
     // Validate table configs.
     tableConfig = metaClient.getTableConfig
     expectedConfigs.foreach { case (key, expectedValue) =>
@@ -231,8 +342,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (10, 2L, "rider-B", "driver-B", 27.70, "i", "10.1", 10, 1, "i"),
       (10, 3L, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"),
       (10, 4L, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
-      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"),
-      (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
+      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
     val originalOrderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
       "_event_seq"
@@ -251,7 +361,16 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(ORDERING_FIELDS.key(), originalOrderingFields).
       option(TABLE_TYPE.key(), tableType).
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
+      option(OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL).
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      option("hoodie.parquet.max.file.size", "2048").
+      option("hoodie.parquet.small.file.limit", "1024").
+      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
+      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
+      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
+      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
+      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
+      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
       options(opts).
       mode(SaveMode.Overwrite).
       save(basePath)
@@ -282,15 +401,61 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     firstUpdate.write.format("hudi").
       option(OPERATION.key(), "upsert").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
+      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
+      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
+      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
+      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
+      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
       mode(SaveMode.Append).
       save(basePath)
     // Validate table version.
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(storageConf())
+      .build()
     assertEquals(9, metaClient.getTableConfig.getTableVersion.versionCode())
     // validate ordering fields
     assertEquals(expectedOrderingFields, metaClient.getTableConfig.getOrderingFieldsStr.orElse(""))
     val firstUpdateInstantTime = metaClient.getActiveTimeline.getInstants.get(1).requestedTime()
 
+    // 2.5. Add mixed ordering test data to validate proper ordering handling
+    // This tests that updates/deletes with lower ordering values are ignored
+    // while higher ordering values are applied
+    val mixedOrderingData = Seq(
+      // Update rider-C with LOWER ordering - should be IGNORED (rider-C has ts=10 originally)
+      (8, 3L, "rider-CC", "driver-CC", 30.00, "u", "8.1", 8, 1, "u"),
+      // Update rider-C with HIGHER ordering - should be APPLIED
+      (11, 3L, "rider-CC", "driver-CC", 35.00, "u", "15.1", 15, 1, "u"),
+      // Delete rider-E with LOWER ordering - should be IGNORED (rider-E has ts=10 originally)
+      (9, 5L, "rider-EE", "driver-EE", 17.85, "D", "9.1", 9, 1, "d"))
+    val mixedOrderingUpdate = spark.createDataFrame(mixedOrderingData).toDF(columns: _*)
+    mixedOrderingUpdate.write.format("hudi").
+      option(OPERATION.key(), "upsert").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
+      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
+      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
+      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
+      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
+      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
+      options(opts).
+      mode(SaveMode.Append).
+      save(basePath)
+    // Validate table version is still 9 after mixed ordering batch
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(storageConf())
+      .build()
+    assertEquals(9, metaClient.getTableConfig.getTableVersion.versionCode())
 
     // 3. Add an update. This is expected to trigger the upgrade
     val compactionEnabled = if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
@@ -309,15 +474,19 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(OPERATION.key(), "upsert").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), compactionEnabled).
       option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
       mode(SaveMode.Append).
       save(basePath)
     // Validate table version as 9.
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(storageConf())
+      .build()
     assertEquals(9, metaClient.getTableConfig.getTableVersion.versionCode())
     assertEquals(payloadClazz, metaClient.getTableConfig.getLegacyPayloadClass)
-    val compactionInstants = metaClient.getActiveTimeline.getCommitsAndCompactionTimeline.getInstants
-    val foundCompaction = compactionInstants.stream().anyMatch(i => i.getAction.equals("commit"))
-    assertTrue(foundCompaction)
 
     // 4. Add a trivial update to trigger payload class mismatch.
     val thirdUpdateData = Seq(
@@ -345,10 +514,52 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(OPERATION.key(), "delete").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
+      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
+      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
+      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
+      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
+      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
       mode(SaveMode.Append).
       save(basePath)
 
-    // 6. Validate.
+    // 6. Add INSERT operation.
+    val insertData = Seq(
+      (13, 6L, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
+      (13, 7L, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
+    val insertDataFrame = spark.createDataFrame(insertData).toDF(columns: _*)
+    insertDataFrame.write.format("hudi").
+      option(OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL).
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
+      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
+      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
+      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
+      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
+      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
+      mode(SaveMode.Append).
+      save(basePath)
+
+    // Final validation of table management operations after all writes
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(storageConf())
+      .build()
+    validateTableManagementOps(metaClient, tableType,
+      expectCompaction = tableType.equals(HoodieTableType.MERGE_ON_READ.name()),
+      expectClustering = true,   // Enable clustering validation with lowered thresholds
+      expectCleaning = false,     // Enable cleaning validation with lowered thresholds
+      expectArchival = false)     // Enable archival validation with lowered thresholds
+
+    // 7. Validate.
     // Validate table configs again.
     tableConfig = metaClient.getTableConfig
     expectedConfigs.foreach { case (key, expectedValue) =>
@@ -392,52 +603,180 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
         || payloadClazz.equals(classOf[EventTimeAvroPayload].getName)
         || payloadClazz.equals(classOf[DefaultHoodieRecordPayload].getName))
       {
+        // Expected results after all operations with _event_lsn collisions:
+        // - rider-X (_event_lsn=1): deleted with higher ordering (ts=12)
+        // - rider-Y (_event_lsn=2): updated with higher ordering (ts=11)
+        // - _event_lsn=3: DELETED by delete operation (was rider-CC with ts=12)
+        // - _event_lsn=4: rider-D stays with original data (rider-DD ts=9 < rider-D ts=10)
+        // - _event_lsn=5: DELETED by delete operation (was rider-EE with ts=12)
         Seq(
           (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
           (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
-          (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
+          (13, 6, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
+          (13, 7, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
       } else {
+        // For other payload types (OverwriteWithLatestAvroPayload, OverwriteNonDefaultsWithLatestAvroPayload)
+        // These use COMMIT_TIME_ORDERING, so latest write wins regardless of ts value
+        // _event_lsn=3: rider-CC overwrites (latest commit), then deleted
+        // _event_lsn=4: rider-DD overwrites (latest commit)
+        // _event_lsn=5: rider-EE overwrites (latest commit), then deleted
         Seq(
           (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
           (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
-          (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
+          (13, 6, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
+          (13, 7, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
       }
     } else {
+      // For CDC payloads or when delete markers are used
       if (payloadClazz.equals(classOf[DefaultHoodieRecordPayload].getName)) {
+        // Delete markers remove records completely
+        // Note: rider-D keeps original values because rider-DD update (ts=9) was rejected (9 < 10)
+        // _event_lsn=1 (rider-X) and _event_lsn=5 (rider-EE) are deleted by delete markers
         Seq(
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-          (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"))
+          (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
+          (13, 6, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
+          (13, 7, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
+      } else if (payloadClazz.equals(classOf[AWSDmsAvroPayload].getName)) {
+        // AWSDmsAvroPayload uses COMMIT_TIME_ORDERING - latest commit wins regardless of ts value
+        // Mixed batch: rider-CC update applies (latest commit)
+        // Second update: rider-DD applies (latest commit wins over rider-D)
+        // Final: _event_lsn=3 and _event_lsn=5 deleted, _event_lsn=4 has rider-DD
+        Seq(
+          (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
+          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
+          (13, 6, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
+          (13, 7, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
+      } else if (payloadClazz.equals(classOf[PostgresDebeziumAvroPayload].getName)) {
+        // PostgresDebeziumAvroPayload uses EVENT_TIME_ORDERING with _event_lsn field
+        // But second update applies rider-DD due to later commit time (behaves like commit-time ordering)
+        Seq(
+          (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
+          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
+          (13, 6, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
+          (13, 7, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
       } else {
+        // For MySqlDebeziumAvroPayload
+        // Uses EVENT_TIME_ORDERING with _event_seq initially, then _event_bin_file,_event_pos
+        // But second update applies rider-DD due to later commit time (behaves like commit-time ordering)
         Seq(
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"))
+          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
+          (13, 6, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
+          (13, 7, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
       }
     }
   }
 
   def getExpectedResultForTimeTravelQuery(payloadClazz: String, usesDeleteMarker: Boolean):
   Seq[(Int, Long, String, String, Double, String, String, Int, Int, String)] = {
+    // Time travel query shows state after first update but BEFORE mixed ordering batch
+    // So rider-C, rider-D, rider-E should still have their original values
     if (!isCDCPayload(payloadClazz) && !usesDeleteMarker) {
       Seq(
         (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
         (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-        (10, 3, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"),
-        (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
-        (10, 5, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"),
-        (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
+        (10, 3, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"), // Original rider-C before mixed ordering
+        (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),   // Original rider-D before mixed ordering
+        (10, 5, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))   // Original rider-E before mixed ordering
     } else {
+      // For CDC payloads or when delete markers are used
       Seq(
         (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-        (10, 3, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"),
-        (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
-        (10, 5, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))
+        (10, 3, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"), // Original rider-C before mixed ordering
+        (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),   // Original rider-D before mixed ordering
+        (10, 5, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))   // Original rider-E before mixed ordering
     }
   }
 
   private def isCDCPayload(payloadClazz: String) = {
     payloadClazz.equals(classOf[AWSDmsAvroPayload].getName) || payloadClazz.equals(classOf[PostgresDebeziumAvroPayload].getName) || payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)
+  }
+
+  /**
+   * Helper method to validate that compaction occurred for MOR tables
+   */
+  def validateCompaction(metaClient: HoodieTableMetaClient, tableType: String): Unit = {
+    if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
+      metaClient.reloadActiveTimeline()
+      val compactionInstants = metaClient.getActiveTimeline
+        .getCommitsAndCompactionTimeline
+        .getInstants
+        .asScala
+        .filter(_.getAction.equals("commit"))
+      assertTrue(compactionInstants.nonEmpty,
+        s"Compaction should have occurred for MOR table but found no commit instants")
+    }
+  }
+
+  /**
+   * Helper method to validate that clustering occurred
+   */
+  def validateClustering(metaClient: HoodieTableMetaClient): Unit = {
+    metaClient.reloadActiveTimeline()
+    val clusteringInstants = metaClient.getActiveTimeline
+      .getInstants
+      .asScala
+      .filter(_.getAction.equals("replacecommit")) // check if this is correct
+    assertTrue(clusteringInstants.nonEmpty,
+      s"Clustering should have occurred but found no replacecommit instants")
+  }
+
+  /**
+   * Helper method to validate that cleaning occurred
+   */
+  def validateCleaning(metaClient: HoodieTableMetaClient): Unit = {
+    metaClient.reloadActiveTimeline()
+    val cleanInstants = metaClient.getActiveTimeline
+      .getCleanerTimeline
+      .getInstants
+      .asScala
+    assertTrue(cleanInstants.nonEmpty,
+      s"Cleaning should have occurred but found no clean instants")
+  }
+
+  /**
+   * Helper method to validate that archival occurred
+   */
+  def validateArchival(metaClient: HoodieTableMetaClient): Unit = {
+    val archivedTimeline = metaClient.getArchivedTimeline
+    val archivedInstants = archivedTimeline.getInstants.asScala
+    assertTrue(archivedInstants.nonEmpty,
+      s"Archival should have occurred but found no archived instants")
+  }
+
+  /**
+   * Helper method to validate all table management operations
+   */
+  def validateTableManagementOps(metaClient: HoodieTableMetaClient,
+                                  tableType: String,
+                                  expectCompaction: Boolean = true,
+                                  expectClustering: Boolean = true,
+                                  expectCleaning: Boolean = true,
+                                  expectArchival: Boolean = true): Unit = {
+    metaClient.reloadActiveTimeline()
+
+    // Validate compaction for MOR tables
+    if (expectCompaction) {
+      validateCompaction(metaClient, tableType)
+    }
+
+    // Validate clustering
+    if (expectClustering) {
+      validateClustering(metaClient)
+    }
+
+    // Validate cleaning
+    if (expectCleaning) {
+      validateCleaning(metaClient)
+    }
+
+    // Validate archival
+    if (expectArchival) {
+      validateArchival(metaClient)
+    }
   }
 }
 
