@@ -64,7 +64,7 @@ public class OrderingValueEngineTypeConverter {
       return Collections.singletonList(Function.identity());
     }
     return orderingFieldNames.stream().map(f -> {
-      Option<Schema> fieldSchemaOpt = AvroSchemaUtils.findNestedFieldSchema(dataSchema, f);
+      Option<Schema> fieldSchemaOpt = AvroSchemaUtils.findNestedFieldSchema(dataSchema, f, true);
       if (fieldSchemaOpt.isEmpty()) {
         return Function.<Comparable>identity();
       } else {

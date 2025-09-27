@@ -224,7 +224,7 @@ public class AvroSchemaUtils {
     return atomicTypeEqualityPredicate.apply(sourceSchema, targetSchema);
   }
 
-  public static Option<Schema> findNestedFieldSchema(Schema schema, String fieldName) {
+  public static Option<Schema> findNestedFieldSchema(Schema schema, String fieldName, boolean allowsMissingField) {
     if (StringUtils.isNullOrEmpty(fieldName)) {
       return Option.empty();
     }
@@ -233,6 +233,9 @@ public class AvroSchemaUtils {
     for (String part : parts) {
       Schema.Field foundField = resolveNullableSchema(schema).getField(part);
       if (foundField == null) {
+        if (allowsMissingField) {
+          return Option.empty();
+        }
         throw new HoodieAvroSchemaException(fieldName + " not a field in " + schema);
       }
       schema = foundField.schema();
@@ -241,7 +244,7 @@ public class AvroSchemaUtils {
   }
 
   public static Option<Schema.Type> findNestedFieldType(Schema schema, String fieldName) {
-    return findNestedFieldSchema(schema, fieldName).map(Schema::getType);
+    return findNestedFieldSchema(schema, fieldName, false).map(Schema::getType);
   }
 
   /**
