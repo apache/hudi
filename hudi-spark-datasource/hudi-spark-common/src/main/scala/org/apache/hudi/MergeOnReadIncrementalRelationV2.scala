@@ -266,3 +266,4 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
     optParams.getOrElse(DataSourceReadOptions.INCR_PATH_GLOB.key, DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)
 
 }
+
