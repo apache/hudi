@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.hudi.client;
 
 import org.apache.spark.Partitioner;
@@ -24,19 +25,12 @@ import org.apache.spark.Partitioner;
  */
 public class CoalescingPartitioner extends Partitioner {
 
-  private final int numPartitions;
-
-  CoalescingPartitioner(int dummy) {
-    this.numPartitions = 1;
-  }
-
   CoalescingPartitioner() {
-    this.numPartitions = 1;
   }
 
   @Override
   public int numPartitions() {
-    return numPartitions;
+    return 1;
   }
 
   @Override
