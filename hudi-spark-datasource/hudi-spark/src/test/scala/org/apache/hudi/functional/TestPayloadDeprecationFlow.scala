@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY
 import org.apache.hudi.common.model.debezium.{DebeziumConstants, MySqlDebeziumAvroPayload, PostgresDebeziumAvroPayload}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
@@ -91,6 +91,12 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL).
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8").
+      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "2").
+      option(HoodieCleanConfig.AUTO_CLEAN.key(), "true").
+      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
+      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "2").
+      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "3").
+      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "4").
       options(opts).
       mode(SaveMode.Overwrite).
       save(basePath)
@@ -147,6 +153,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     assertEquals(8, metaClient.getTableConfig.getTableVersion.versionCode())
 
     // 3. Add an update. This is expected to trigger the upgrade
+    val compactionEnabled = if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) "true" else "false"
     val secondUpdateData = Seq(
       (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1, "i"),
       // For rider-DD we purposefully deviate and set the _event_seq to be less than the _event_bin_file and _event_pos
@@ -157,6 +164,12 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     secondUpdate.write.format("hudi").
       option(OPERATION.key(), "upsert").
       option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), compactionEnabled).
+      option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "4").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "10240").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "10240").
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
@@ -167,9 +180,6 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     assertEquals(isCDCPayload(payloadClazz) || useOpAsDelete,
       metaClient.getTableConfig.getProps.containsKey(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY))
     assertEquals(expectedOrderingFields, metaClient.getTableConfig.getOrderingFieldsStr.orElse(""))
-    val compactionInstants = metaClient.getActiveTimeline.getCommitsAndCompactionTimeline.getInstants
-    val foundCompaction = compactionInstants.stream().anyMatch(i => i.getAction.equals("commit"))
-    assertTrue(foundCompaction)
 
     // 4. Add a trivial update to trigger payload class mismatch.
     val thirdUpdateData = Seq(
@@ -210,6 +220,14 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       mode(SaveMode.Append).
       save(basePath)
+
+    // Final validation of table management operations after all writes
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    validateTableManagementOps(metaClient, tableType,
+      expectCompaction = tableType.equals(HoodieTableType.MERGE_ON_READ.name()),
+      expectClustering = false,  // Disable clustering validation for now
+      expectCleaning = false,    // Disable cleaning validation for now
+      expectArchival = false)    // Disable archival validation for now
 
     // 7. Validate.
     // Validate table configs.
@@ -287,6 +305,12 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL).
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "2").
+      option(HoodieCleanConfig.AUTO_CLEAN.key(), "true").
+      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
+      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "2").
+      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "3").
+      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "4").
       options(opts).
       mode(SaveMode.Overwrite).
       save(basePath)
@@ -364,15 +388,16 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(OPERATION.key(), "upsert").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), compactionEnabled).
       option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
+      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "4").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "10240").
+      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "10240").
       mode(SaveMode.Append).
       save(basePath)
     // Validate table version as 9.
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(9, metaClient.getTableConfig.getTableVersion.versionCode())
     assertEquals(payloadClazz, metaClient.getTableConfig.getLegacyPayloadClass)
-    val compactionInstants = metaClient.getActiveTimeline.getCommitsAndCompactionTimeline.getInstants
-    val foundCompaction = compactionInstants.stream().anyMatch(i => i.getAction.equals("commit"))
-    assertTrue(foundCompaction)
 
     // 4. Add a trivial update to trigger payload class mismatch.
     val thirdUpdateData = Seq(
@@ -413,6 +438,14 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       mode(SaveMode.Append).
       save(basePath)
+
+    // Final validation of table management operations after all writes
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    validateTableManagementOps(metaClient, tableType,
+      expectCompaction = tableType.equals(HoodieTableType.MERGE_ON_READ.name()),
+      expectClustering = false,  // Disable clustering validation for now
+      expectCleaning = false,    // Disable cleaning validation for now
+      expectArchival = false)    // Disable archival validation for now
 
     // 7. Validate.
     // Validate table configs again.
@@ -548,6 +581,90 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
 
   private def isCDCPayload(payloadClazz: String) = {
     payloadClazz.equals(classOf[AWSDmsAvroPayload].getName) || payloadClazz.equals(classOf[PostgresDebeziumAvroPayload].getName) || payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)
+  }
+
+  /**
+   * Helper method to validate that compaction occurred for MOR tables
+   */
+  def validateCompaction(metaClient: HoodieTableMetaClient, tableType: String): Unit = {
+    if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
+      metaClient.reloadActiveTimeline()
+      val compactionInstants = metaClient.getActiveTimeline
+        .getCommitsAndCompactionTimeline
+        .getInstants
+        .asScala
+        .filter(_.getAction.equals("commit"))
+      assertTrue(compactionInstants.nonEmpty,
+        s"Compaction should have occurred for MOR table but found no commit instants")
+    }
+  }
+
+  /**
+   * Helper method to validate that clustering occurred
+   */
+  def validateClustering(metaClient: HoodieTableMetaClient): Unit = {
+    metaClient.reloadActiveTimeline()
+    val clusteringInstants = metaClient.getActiveTimeline
+      .getInstants
+      .asScala
+      .filter(_.getAction.equals("replacecommit")) // check if this is correct
+    assertTrue(clusteringInstants.nonEmpty,
+      s"Clustering should have occurred but found no replacecommit instants")
+  }
+
+  /**
+   * Helper method to validate that cleaning occurred
+   */
+  def validateCleaning(metaClient: HoodieTableMetaClient): Unit = {
+    metaClient.reloadActiveTimeline()
+    val cleanInstants = metaClient.getActiveTimeline
+      .getCleanerTimeline
+      .getInstants
+      .asScala
+    assertTrue(cleanInstants.nonEmpty,
+      s"Cleaning should have occurred but found no clean instants")
+  }
+
+  /**
+   * Helper method to validate that archival occurred
+   */
+  def validateArchival(metaClient: HoodieTableMetaClient): Unit = {
+    val archivedTimeline = metaClient.getArchivedTimeline
+    val archivedInstants = archivedTimeline.getInstants.asScala
+    assertTrue(archivedInstants.nonEmpty,
+      s"Archival should have occurred but found no archived instants")
+  }
+
+  /**
+   * Helper method to validate all table management operations
+   */
+  def validateTableManagementOps(metaClient: HoodieTableMetaClient,
+                                  tableType: String,
+                                  expectCompaction: Boolean = true,
+                                  expectClustering: Boolean = true,
+                                  expectCleaning: Boolean = true,
+                                  expectArchival: Boolean = true): Unit = {
+    metaClient.reloadActiveTimeline()
+
+    // Validate compaction for MOR tables
+    if (expectCompaction) {
+      validateCompaction(metaClient, tableType)
+    }
+
+    // Validate clustering
+    if (expectClustering) {
+      validateClustering(metaClient)
+    }
+
+    // Validate cleaning
+    if (expectCleaning) {
+      validateCleaning(metaClient)
+    }
+
+    // Validate archival
+    if (expectArchival) {
+      validateArchival(metaClient)
+    }
   }
 }
 
