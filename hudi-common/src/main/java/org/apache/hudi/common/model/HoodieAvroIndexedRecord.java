@@ -380,8 +380,4 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   public IndexedRecord getData() {
     return binaryRecord;
   }
-
-  public IndexedRecord getSerializableIndexedRecord() {
-    return binaryRecord;
-  }
 }
