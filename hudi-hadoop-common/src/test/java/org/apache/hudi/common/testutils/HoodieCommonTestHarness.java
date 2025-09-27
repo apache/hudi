@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -411,7 +410,7 @@ public class HoodieCommonTestHarness {
       case AVRO_DATA_BLOCK:
         return new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       case HFILE_DATA_BLOCK:
-        return new HoodieHFileDataBlock(records, header, HFILE_COMPRESSION_ALGORITHM_NAME.defaultValue(), pathForReader, HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue());
+        return new HoodieHFileDataBlock(records, header, HFILE_COMPRESSION_ALGORITHM_NAME.defaultValue(), pathForReader);
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, PARQUET_COMPRESSION_CODEC_NAME.defaultValue(), 0.1, true);
       default:

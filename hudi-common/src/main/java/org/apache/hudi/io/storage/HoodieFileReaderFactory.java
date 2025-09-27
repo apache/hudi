@@ -19,7 +19,6 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.Option;
@@ -134,7 +133,4 @@ public class HoodieFileReaderFactory {
     throw new UnsupportedOperationException();
   }
 
-  protected static boolean isUseNativeHFileReaderEnabled(HoodieConfig hoodieConfig) {
-    return hoodieConfig.getBooleanOrDefault(HoodieReaderConfig.USE_NATIVE_HFILE_READER);
-  }
 }

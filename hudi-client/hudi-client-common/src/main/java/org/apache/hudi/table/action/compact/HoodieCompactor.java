@@ -28,6 +28,7 @@ import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -135,7 +136,13 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
               operation -> logCompact(config, operation, compactionInstantTime, instantRange, table, taskContextSupplier))
           .flatMap(List::iterator);
     } else {
-      ReaderContextFactory<T> readerContextFactory = context.getReaderContextFactory(metaClient);
+      ReaderContextFactory<T> readerContextFactory;
+      if (!metaClient.isMetadataTable()) {
+        readerContextFactory = context.getReaderContextFactory(metaClient);
+      } else {
+        // Payload and HFile caching props are required here
+        readerContextFactory = (ReaderContextFactory<T>) context.getReaderContextFactoryForWrite(metaClient, HoodieRecordType.AVRO, config.getProps());
+      }
       return context.parallelize(operations).map(
               operation -> compact(config, operation, compactionInstantTime, readerContextFactory.getContext(), table, maxInstantTime, taskContextSupplier))
           .flatMap(List::iterator);
@@ -164,7 +171,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                       Option<InstantRange> instantRange,
                                       HoodieTable table,
                                       TaskContextSupplier taskContextSupplier) throws IOException {
-    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(table.getStorageConf(), table.getMetaClient().getTableConfig(), instantRange, Option.empty());
+    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
+        table.getStorageConf(), table.getMetaClient().getTableConfig(), instantRange, Option.empty(), writeConfig.getProps());
     FileGroupReaderBasedAppendHandle<IndexedRecord, ?, ?, ?> appendHandle = new FileGroupReaderBasedAppendHandle<>(writeConfig, instantTime, table, operation,  taskContextSupplier, readerContext);
     appendHandle.doAppend();
     return appendHandle.close();

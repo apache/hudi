@@ -363,6 +363,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       saveMode = SaveMode.Overwrite)
     insertDf.cache()
 
+    spark.sql(s"SET hoodie.hfile.block.cache.size = 200")
     spark.sql(s"CREATE TABLE IF NOT EXISTS hudi_indexed_table USING hudi OPTIONS (hoodie.metadata.enable = 'true', hoodie.metadata.record.index.enable = 'true', hoodie.write.merge.handle.class = 'org.apache.hudi.io.FileGroupReaderBasedMergeHandle') LOCATION '$basePath'")
     val existingKeys = dataGen.getExistingKeys
     spark.sql(s"DELETE FROM hudi_indexed_table WHERE _row_key IN ('${existingKeys.get(0)}', '${existingKeys.get(1)}')")

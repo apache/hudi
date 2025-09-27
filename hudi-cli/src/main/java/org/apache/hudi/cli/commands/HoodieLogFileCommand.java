@@ -231,16 +231,17 @@ public class HoodieLogFileCommand {
     List<IndexedRecord> allRecords = new ArrayList<>();
     if (shouldMerge) {
       System.out.println("===========================> MERGING RECORDS <===================");
-      HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
-          HoodieCLI.getTableMetaClient().getStorage().getConf(),
-          HoodieCLI.getTableMetaClient().getTableConfig(),
-          Option.empty(),
-          Option.empty());
       StoragePath firstLogFile = new StoragePath(logFilePaths.get(0));
       HoodieFileGroupId fileGroupId = new HoodieFileGroupId(FSUtils.getRelativePartitionPath(HoodieCLI.getTableMetaClient().getBasePath(), firstLogFile), FSUtils.getFileIdFromLogPath(firstLogFile));
       FileSlice fileSlice = new FileSlice(fileGroupId, HoodieTimeline.INIT_INSTANT_TS, null, logFilePaths.stream()
           .map(l -> new HoodieLogFile(new StoragePath(l))).collect(Collectors.toList()));
       TypedProperties fileGroupReaderProperties = buildFileGroupReaderProperties();
+      HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
+          HoodieCLI.getTableMetaClient().getStorage().getConf(),
+          HoodieCLI.getTableMetaClient().getTableConfig(),
+          Option.empty(),
+          Option.empty(),
+          fileGroupReaderProperties);
       try (HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
           .withReaderContext(readerContext)
           .withHoodieTableMetaClient(HoodieCLI.getTableMetaClient())

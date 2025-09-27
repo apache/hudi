@@ -199,7 +199,7 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
 
   @Override
   public ReaderContextFactory<IndexedRecord> getEngineReaderContextFactory(HoodieTableMetaClient metaClient) {
-    return new AvroReaderContextFactory(metaClient);
+    return new AvroReaderContextFactory(metaClient, new TypedProperties());
   }
 
   @Override

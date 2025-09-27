@@ -21,10 +21,8 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
-import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
@@ -49,6 +47,7 @@ import org.apache.hudi.common.table.read.buffer.FileGroupRecordBufferLoader;
 import org.apache.hudi.common.table.read.buffer.ReusableFileGroupRecordBufferLoader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -89,7 +88,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
@@ -97,10 +95,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
-import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
-import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
-import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FULL_SCAN_LOG_FILES;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.KEY_FIELD_NAME;
@@ -510,17 +504,16 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     Map<StoragePath, HoodieAvroFileReader> baseFileReaders = Collections.emptyMap();
     ReusableFileGroupRecordBufferLoader<IndexedRecord> recordBufferLoader = null;
     boolean shouldReuse = reuse && isFullScanAllowedForPartition(fileSlice.getPartitionPath());
+    TypedProperties fileGroupReaderProps = ConfigUtils.buildFileGroupReaderProperties(metadataConfig);
     if (shouldReuse) {
       Pair<HoodieAvroFileReader, ReusableFileGroupRecordBufferLoader<IndexedRecord>> readers =
           reusableFileReaders.computeIfAbsent(fileSlice.getFileGroupId(), fgId -> {
             try {
               HoodieAvroFileReader baseFileReader = null;
               if (fileSlice.getBaseFile().isPresent()) {
-                TypedProperties props = TypedProperties.copy(metadataConfig.getProps());
-                setHFileBlockCacheProps(props);
-                HoodieConfig newConfig = new HoodieConfig(props);
+                HoodieConfig fileGroupReaderConfig = new HoodieConfig(fileGroupReaderProps);
                 baseFileReader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-                    .getFileReader(newConfig, fileSlice.getBaseFile().get().getStoragePath(), metadataMetaClient.getTableConfig().getBaseFileFormat(), Option.empty());
+                    .getFileReader(fileGroupReaderConfig, fileSlice.getBaseFile().get().getStoragePath(), metadataMetaClient.getTableConfig().getBaseFileFormat(), Option.empty());
               }
               return Pair.of(baseFileReader, buildReusableRecordBufferLoader(fileSlice, latestMetadataInstantTime, instantRange));
             } catch (IOException ex) {
@@ -540,7 +533,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         metadataMetaClient.getTableConfig(),
         instantRange,
         Option.of(predicate),
-        baseFileReaders);
+        baseFileReaders,
+        fileGroupReaderProps);
 
     HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
         .withReaderContext(readerContext)
@@ -549,7 +543,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withFileSlice(fileSlice)
         .withDataSchema(SCHEMA)
         .withRequestedSchema(SCHEMA)
-        .withProps(buildFileGroupReaderProperties(metadataConfig, shouldReuse))
+        .withProps(fileGroupReaderProps)
         .withRecordBufferLoader(recordBufferLoader)
         .withEnableOptimizedLogBlockScan(metadataConfig.isOptimizedLogBlocksScanEnabled())
         .build();
@@ -564,7 +558,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         storageConf,
         metadataMetaClient.getTableConfig(),
         instantRangeOption,
-        Option.empty());
+        Option.empty(),
+        ConfigUtils.buildFileGroupReaderProperties(metadataConfig));
     readerContext.initRecordMerger(metadataConfig.getProps());
     readerContext.setHasBootstrapBaseFile(false);
     readerContext.setHasLogFiles(fileSlice.hasLogFiles());
@@ -857,42 +852,5 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     HoodieData<SecondaryIndexPrefixRawKey> rawKeys = secondaryKeys.map(SecondaryIndexPrefixRawKey::new);
     return readIndexRecords(rawKeys, partitionName, Option.empty())
         .mapToPair(hoodieRecord -> SecondaryIndexKeyUtils.getSecondaryKeyRecordKeyPair(hoodieRecord.getRecordKey()));
-  }
-
-  /**
-   * Derive necessary properties for FG reader.
-   */
-  TypedProperties buildFileGroupReaderProperties(HoodieMetadataConfig metadataConfig, boolean shouldReuse) {
-    HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder()
-        .fromProperties(metadataConfig.getProps()).build();
-    TypedProperties props = new TypedProperties();
-    props.setProperty(
-        MAX_MEMORY_FOR_MERGE.key(),
-        Long.toString(metadataConfig.getMaxReaderMemory()));
-    props.setProperty(
-        SPILLABLE_MAP_BASE_PATH.key(),
-        metadataConfig.getSplliableMapDir());
-    props.setProperty(
-        SPILLABLE_DISK_MAP_TYPE.key(),
-        commonConfig.getSpillableDiskMapType().name());
-    props.setProperty(
-        DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
-        Boolean.toString(commonConfig.isBitCaskDiskMapCompressionEnabled()));
-    if (shouldReuse) {
-      setHFileBlockCacheProps(props);
-    } else {
-      props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(),
-          metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED));
-    }
-    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(),
-        metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE));
-    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(),
-        metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES));
-    return props;
-  }
-
-  private void setHFileBlockCacheProps(Properties props) {
-    // Enable HFile block caching for resue and full scan usage
-    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), "true");
   }
 }

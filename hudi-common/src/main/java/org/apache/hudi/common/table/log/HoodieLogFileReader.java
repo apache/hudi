@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -198,9 +197,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
             String.format("HFile block could not be of version (%d)", HoodieLogFormatVersion.DEFAULT_VERSION));
         return new HoodieHFileDataBlock(
             () -> getDataInputStream(storage, this.logFile, bufferSize), content, true, logBlockContentLoc,
-            Option.ofNullable(readerSchema), header, footer, enableRecordLookups, logFile.getPath(),
-            storage.getConf().getBoolean(HoodieReaderConfig.USE_NATIVE_HFILE_READER.key(),
-                HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue()));
+            Option.ofNullable(readerSchema), header, footer, enableRecordLookups, logFile.getPath());
 
       case PARQUET_DATA_BLOCK:
         checkState(nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION,
