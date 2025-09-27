@@ -20,7 +20,6 @@ package org.apache.hudi.util;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 
@@ -53,9 +52,12 @@ public class OrderingValueEngineTypeConverter {
     }
     return orderingFieldNames.stream().map(f -> {
       Option<Schema> fieldSchemaOpt = AvroSchemaUtils.findNestedFieldSchema(dataSchema, f);
-      ValidationUtils.checkArgument(fieldSchemaOpt.isPresent(), "ordering field " + f + " should be included in data schema: " + dataSchema);
-      DataType fieldType =  AvroSchemaConverter.convertToDataType(fieldSchemaOpt.get());
-      return RowDataUtils.flinkValFunc(fieldType.getLogicalType(), utcTimezone);
+      if (fieldSchemaOpt.isEmpty()) {
+        return Function.<Comparable>identity();
+      } else {
+        DataType fieldType =  AvroSchemaConverter.convertToDataType(fieldSchemaOpt.get());
+        return RowDataUtils.flinkValFunc(fieldType.getLogicalType(), utcTimezone);
+      }
     }).collect(Collectors.toList());
   }
 

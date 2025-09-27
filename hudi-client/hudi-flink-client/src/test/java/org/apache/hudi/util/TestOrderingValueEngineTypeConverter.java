@@ -41,7 +41,7 @@ import java.util.List;
 /**
  * Unit tests for {@link OrderingValueEngineTypeConverter}.
  */
-public class OrderingValueEngineTypeConverterTest {
+public class TestOrderingValueEngineTypeConverter {
 
   @Test
   public void testCreateWithMultipleOrderingFields() {
