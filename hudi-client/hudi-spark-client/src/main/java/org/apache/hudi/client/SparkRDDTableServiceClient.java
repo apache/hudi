@@ -82,7 +82,8 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
       HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata,
       String instantTime) {
     if (isStreamingWriteToMetadataEnabled(table)) {
-      writeMetadata.setWriteStatuses(streamingMetadataWriteHandler.streamWriteToMetadataTable(table, writeMetadata.getWriteStatuses(), instantTime));
+      writeMetadata.setWriteStatuses(streamingMetadataWriteHandler.streamWriteToMetadataTable(table, writeMetadata.getWriteStatuses(), instantTime,
+          false));
     }
     return writeMetadata;
   }

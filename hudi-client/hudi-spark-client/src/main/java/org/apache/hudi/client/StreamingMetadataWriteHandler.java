@@ -24,13 +24,19 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.PairFunction;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import scala.Tuple2;
 
 /**
  * Class to assist with streaming writes to metadata table.
@@ -47,21 +53,23 @@ public class StreamingMetadataWriteHandler {
    * @param table                  The {@link HoodieTable} instance for data table of interest.
    * @param dataTableWriteStatuses The {@link WriteStatus} from data table writes.
    * @param instantTime            The instant time of interest.
+   * @param enforceCoalesceWithRepartition true when repartition has to be added to dag to coalesce data table write statuses to 1. false otherwise.
    *
    * @return {@link HoodieData} of {@link WriteStatus} referring to both data table writes and partial metadata table writes.
    */
-  public HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieTable table, HoodieData<WriteStatus> dataTableWriteStatuses, String instantTime) {
+  public HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieTable table, HoodieData<WriteStatus> dataTableWriteStatuses, String instantTime,
+                                                           boolean enforceCoalesceWithRepartition) {
     Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, table);
     ValidationUtils.checkState(metadataWriterOpt.isPresent(),
         "Cannot instantiate metadata writer for the table of interest " + table.getMetaClient().getBasePath());
-    return streamWriteToMetadataTable(dataTableWriteStatuses, metadataWriterOpt.get(), table, instantTime);
+    return streamWriteToMetadataTable(dataTableWriteStatuses, metadataWriterOpt.get(), table, instantTime, enforceCoalesceWithRepartition);
   }
 
   /**
    * To be invoked by write client or table service client to complete the write to metadata table.
    *
    * <p>When streaming writes is enabled, writes to left over metadata partitions
-   * which is not covered in {@link #streamWriteToMetadataTable(HoodieTable, HoodieData, String)},
+   * which is not covered in {@link #streamWriteToMetadataTable(HoodieTable, HoodieData, String, boolean)},
    * otherwise writes to metadata table in legacy way(batch update without partial updates).
    *
    * @param table       The {@link HoodieTable} instance for data table of interest.
@@ -87,11 +95,22 @@ public class StreamingMetadataWriteHandler {
   private HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieData<WriteStatus> dataTableWriteStatuses,
                                                              HoodieTableMetadataWriter metadataWriter,
                                                              HoodieTable table,
-                                                             String instantTime) {
+                                                             String instantTime,
+                                                             boolean enforceCoalesceWithRepartition) {
     HoodieData<WriteStatus> mdtWriteStatuses = metadataWriter.streamWriteToMetadataPartitions(dataTableWriteStatuses, instantTime);
     mdtWriteStatuses.persist("MEMORY_AND_DISK_SER", table.getContext(), HoodieData.HoodieDataCacheKey.of(table.getMetaClient().getBasePath().toString(), instantTime));
-    HoodieData<WriteStatus> allWriteStatus = dataTableWriteStatuses.coalesce(1).union(mdtWriteStatuses);
-    return allWriteStatus;
+    HoodieData<WriteStatus> coalescedDataWriteStatuses;
+    if (enforceCoalesceWithRepartition) {
+      // with bulk insert and NONE sort mode, simple coalesce on datatable write statuses also impact record key generation stages.
+      // and hence we are adding a partitioner to cut the chain so that coalesce(1) here does not impact record key generation stages.
+      coalescedDataWriteStatuses = HoodieJavaRDD.of(HoodieJavaRDD.getJavaRDD(dataTableWriteStatuses)
+          .mapToPair((PairFunction<WriteStatus, Boolean, WriteStatus>) writeStatus -> new Tuple2(true, writeStatus))
+          .partitionBy(new CoalescingPartitioner())
+          .map((Function<Tuple2<Boolean, WriteStatus>, WriteStatus>) booleanWriteStatusTuple2 -> booleanWriteStatusTuple2._2));
+    } else {
+      coalescedDataWriteStatuses = dataTableWriteStatuses.coalesce(1);
+    }
+    return coalescedDataWriteStatuses.union(mdtWriteStatuses);
   }
 
   /**
