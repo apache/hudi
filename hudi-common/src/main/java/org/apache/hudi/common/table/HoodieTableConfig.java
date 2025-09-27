@@ -137,24 +137,6 @@ public class HoodieTableConfig extends HoodieConfig {
   // A reader might need to read some writer properties to function as expected,
   // and Hudi stores properties with this prefix so the reader parses these properties to fetch any custom property.
   public static final String RECORD_MERGE_PROPERTY_PREFIX = "hoodie.record.merge.property.";
-  public static final Set<String> PAYLOADS_UNDER_DEPRECATION = Collections.unmodifiableSet(
-      new HashSet<>(Arrays.asList(
-          AWSDmsAvroPayload.class.getName(),
-          DefaultHoodieRecordPayload.class.getName(),
-          EventTimeAvroPayload.class.getName(),
-          MySqlDebeziumAvroPayload.class.getName(),
-          OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
-          OverwriteWithLatestAvroPayload.class.getName(),
-          PartialUpdateAvroPayload.class.getName(),
-          PostgresDebeziumAvroPayload.class.getName())));
-
-  public static final Set<String> EVENT_TIME_ORDERING_PAYLOADS = Collections.unmodifiableSet(
-      new HashSet<>(Arrays.asList(
-          DefaultHoodieRecordPayload.class.getName(),
-          EventTimeAvroPayload.class.getName(),
-          MySqlDebeziumAvroPayload.class.getName(),
-          PartialUpdateAvroPayload.class.getName(),
-          PostgresDebeziumAvroPayload.class.getName())));
 
   public static final Set<String> BUILTIN_MERGE_STRATEGIES = Collections.unmodifiableSet(
       new HashSet<>(Arrays.asList(
@@ -859,14 +841,14 @@ public class HoodieTableConfig extends HoodieConfig {
     } else {
       // For tables using payload classes.
       //   CASE 2: Custom payload class. We set these properties explicitly.
-      if (!PAYLOADS_UNDER_DEPRECATION.contains(payloadClassName)) {
+      if (!PayloadGroupings.getPayloadsUnderDeprecation().contains(payloadClassName)) {
         reconciledConfigs.put(RECORD_MERGE_MODE.key(), CUSTOM.toString());
         reconciledConfigs.put(PAYLOAD_CLASS_NAME.key(), payloadClassName);
         reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), PAYLOAD_BASED_MERGE_STRATEGY_UUID);
       } else { // CASE 3: Payload classes are under deprecation.
         // Standard merging configs.
         // NOTE: We use LEGACY_PAYLOAD_CLASS_NAME instead of PAYLOAD_CLASS_NAME here.
-        if (EVENT_TIME_ORDERING_PAYLOADS.contains(payloadClassName)) {
+        if (PayloadGroupings.getEventTimeOrderingPayloads().contains(payloadClassName)) {
           reconciledConfigs.put(RECORD_MERGE_MODE.key(), EVENT_TIME_ORDERING.name());
           reconciledConfigs.put(LEGACY_PAYLOAD_CLASS_NAME.key(), payloadClassName);
           reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
@@ -1437,4 +1419,33 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String DEFAULT_ARCHIVELOG_FOLDER = TIMELINE_HISTORY_PATH.defaultValue();
+
+  private static class PayloadGroupings {
+    public static final Set<String> PAYLOADS_UNDER_DEPRECATION = Collections.unmodifiableSet(
+        new HashSet<>(Arrays.asList(
+            AWSDmsAvroPayload.class.getName(),
+            DefaultHoodieRecordPayload.class.getName(),
+            EventTimeAvroPayload.class.getName(),
+            MySqlDebeziumAvroPayload.class.getName(),
+            OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+            OverwriteWithLatestAvroPayload.class.getName(),
+            PartialUpdateAvroPayload.class.getName(),
+            PostgresDebeziumAvroPayload.class.getName())));
+
+    public static final Set<String> EVENT_TIME_ORDERING_PAYLOADS = Collections.unmodifiableSet(
+        new HashSet<>(Arrays.asList(
+            DefaultHoodieRecordPayload.class.getName(),
+            EventTimeAvroPayload.class.getName(),
+            MySqlDebeziumAvroPayload.class.getName(),
+            PartialUpdateAvroPayload.class.getName(),
+            PostgresDebeziumAvroPayload.class.getName())));
+
+    private static Set<String> getPayloadsUnderDeprecation() {
+      return PAYLOADS_UNDER_DEPRECATION;
+    }
+
+    private static Set<String> getEventTimeOrderingPayloads() {
+      return EVENT_TIME_ORDERING_PAYLOADS;
+    }
+  }
 }
