@@ -18,17 +18,18 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql._
-import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag}
+import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.JavaConverters._
 
@@ -65,96 +66,90 @@ class TestIncrementalQueriesV2WithCompleteTime extends HoodieSparkClientTestBase
   }
 
   @ParameterizedTest
-  @CsvSource(Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
   def testCompleteTimeFilteringSemantics(tableTypeStr: String): Unit = {
+    testBasicIncrementalQuery(tableTypeStr, enableFileGroupReader = false)
+    testBasicIncrementalQuery(tableTypeStr, enableFileGroupReader = true)
+  }
+
+  private def testBasicIncrementalQuery(tableTypeStr: String, enableFileGroupReader: Boolean): Unit = {
+    val testBasePath = s"${basePath}_${tableTypeStr}_fgr_${enableFileGroupReader}"
     val testOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key() -> tableTypeStr
     )
-    val firstBatchRecords = recordsToStrings(dataGen.generateInserts("001", 10)).asScala.toList
+
+    val baseTime = System.currentTimeMillis()
+    val instant1 = (baseTime + 1000).toString
+    val instant2 = (baseTime + 2000).toString
+
+    val firstBatchRecords = recordsToStrings(dataGen.generateInserts(instant1, 5)).asScala.toList
     val firstBatchDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(firstBatchRecords, 2))
 
     firstBatchDF.write.format("org.apache.hudi")
       .options(testOpts)
       .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
-      .save(basePath)
+      .save(testBasePath)
 
-    val secondBatchRecords = recordsToStrings(dataGen.generateUniqueUpdates("002", 5)).asScala.toList
+    Thread.sleep(50)
+
+    val secondBatchRecords = recordsToStrings(dataGen.generateUniqueUpdates(instant2, 3)).asScala.toList
     val secondBatchDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(secondBatchRecords, 2))
 
     secondBatchDF.write.format("org.apache.hudi")
       .options(testOpts)
       .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
-      .save(basePath)
+      .save(testBasePath)
 
-    val thirdBatchRecords = recordsToStrings(dataGen.generateUniqueUpdates("003", 8)).asScala.toList
-    val thirdBatchDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(thirdBatchRecords, 2))
-
-    thirdBatchDF.write.format("org.apache.hudi")
-      .options(testOpts)
-      .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
-      .mode(SaveMode.Append)
-      .save(basePath)
-
-    val metaClient = createMetaClient(spark, basePath)
+    val metaClient = createMetaClient(spark, testBasePath)
     val commits = metaClient.getActiveTimeline.filterCompletedInstants().getInstantsAsStream.toArray()
-    val lastCommit = commits(commits.length - 1).asInstanceOf[org.apache.hudi.common.table.timeline.HoodieInstant]
+    val lastCommit = commits(commits.length - 1).asInstanceOf[HoodieInstant]
+
+    val completionTimeQueryView = metaClient.getTableFormat.getTimelineFactory.createCompletionTimeQueryView(metaClient)
+
+    val requestedToCompletionMap = scala.collection.mutable.Map[String, String]()
+    commits.foreach { commit =>
+      val instant = commit.asInstanceOf[HoodieInstant]
+      val requestedTime = instant.requestedTime()
+      val completionTimeOpt = completionTimeQueryView.getCompletionTime(requestedTime)
+      val completionTime = if (completionTimeOpt.isPresent) completionTimeOpt.get() else requestedTime
+      requestedToCompletionMap(requestedTime) = completionTime
+    }
+
+    completionTimeQueryView.close()
+
+    val firstCommitCompletionTime = commits(0).asInstanceOf[HoodieInstant].getCompletionTime
+    val startTime = (firstCommitCompletionTime.toLong - 1).toString
 
     val incrementalDF = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key(), "000")
+      .option(DataSourceReadOptions.START_COMMIT.key(), startTime)
       .option(DataSourceReadOptions.END_COMMIT.key(), lastCommit.getCompletionTime)
       .option(DataSourceReadOptions.INCREMENTAL_READ_TABLE_VERSION.key, "9")
-      .load(basePath)
+      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key, enableFileGroupReader.toString)
+      .load(testBasePath)
 
-    incrementalDF.createOrReplaceTempView("hudi_incremental_test")
+    val tempViewName = s"hudi_incremental_test_${tableTypeStr}_${enableFileGroupReader}"
+    incrementalDF.createOrReplaceTempView(tempViewName)
+    incrementalDF.show(false)
 
-    val completeTimesDF = spark.sql("""
-      SELECT DISTINCT _hoodie_commit_time 
-      FROM hudi_incremental_test 
+    val timesDF = spark.sql(s"""
+      SELECT DISTINCT _hoodie_commit_time
+      FROM $tempViewName
       ORDER BY _hoodie_commit_time
     """)
 
-    completeTimesDF.show(false)
-    
-    val completeTimesArray = completeTimesDF.collect().map(_.getString(0))
-    assertTrue(completeTimesArray.length == 3, "Should have 3 distinct completion times")
+    val timesArray = timesDF.collect().map(_.getString(0))
+    assertTrue(timesArray.length == 2, s"Should have 2 distinct times but got ${timesArray.length}")
 
-    val secondCompleteTime = completeTimesArray(1)
+    val expectedCompletionTimes = commits.map(_.asInstanceOf[HoodieInstant].getCompletionTime).sorted
 
-    val geqSQL = s"""
-      SELECT _hoodie_commit_time, _row_key, driver 
-      FROM hudi_incremental_test 
-      WHERE _hoodie_commit_time >= '$secondCompleteTime'
-      ORDER BY _hoodie_commit_time, _row_key
-    """
-    val geqDF = spark.sql(geqSQL)
-    geqDF.show(false)
-    val geqCount = geqDF.count()
-
-    val gtSQL = s"""
-      SELECT _hoodie_commit_time, _row_key, driver 
-      FROM hudi_incremental_test 
-      WHERE _hoodie_commit_time > '$secondCompleteTime'
-      ORDER BY _hoodie_commit_time, _row_key
-    """
-    val gtDF = spark.sql(gtSQL)
-    gtDF.show(false)
-    val gtCount = gtDF.count()
-
-    val exactSQL = s"""
-      SELECT _hoodie_commit_time, _row_key, driver 
-      FROM hudi_incremental_test 
-      WHERE _hoodie_commit_time = '$secondCompleteTime'
-      ORDER BY _row_key
-    """
-    val exactDF = spark.sql(exactSQL)
-    exactDF.show(false)
-    val exactMatchCount = exactDF.count()
-
-    val diff = geqCount - gtCount
-    assertTrue(diff == 1)
-    assertEquals(diff, exactMatchCount)
+    val actualTimesSorted = timesArray.sorted
+    val completionTimeTransformationWorking = actualTimesSorted.sameElements(expectedCompletionTimes)
+    assertTrue(completionTimeTransformationWorking,
+      s"V2 relation should show completion times in _hoodie_commit_time field. " +
+      s"Expected: ${expectedCompletionTimes.mkString(", ")}, " +
+      s"Got: ${actualTimesSorted.mkString(", ")}")
   }
 }

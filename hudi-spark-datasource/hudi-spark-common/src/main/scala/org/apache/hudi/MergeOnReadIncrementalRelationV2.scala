@@ -60,6 +60,8 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
 
   override type Relation = MergeOnReadIncrementalRelationV2
 
+  override def schema: StructType = super.schema
+
   override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
     this.copy(prunedDataSchema = Some(prunedSchema))
 
@@ -98,7 +100,7 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
       options = optParams)
     val requestedToCompletionTimeMap = buildCompletionTimeMapping()
     val broadcastTimeMap = sqlContext.sparkContext.broadcast(requestedToCompletionTimeMap)
-    transformRecordsWithCompletionTime(baseRDD, broadcastTimeMap, requiredSchema.structTypeSchema)
+    transformRecordsWithCompletionTime(baseRDD, broadcastTimeMap, super.schema)
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
@@ -188,8 +190,8 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
 
   private def transformRecordsWithCompletionTime(rdd: RDD[InternalRow],
                                                broadcastMap: Broadcast[Map[String, String]],
-                                               schema: StructType): RDD[InternalRow] = {
-    val commitTimeFieldIndex = schema.fieldNames.indexOf(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+                                               inputSchema: StructType): RDD[InternalRow] = {
+    val commitTimeFieldIndex = inputSchema.fieldNames.indexOf(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
 
     if (commitTimeFieldIndex >= 0) {
       rdd.mapPartitions { iter =>
@@ -197,9 +199,14 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
         iter.map { row =>
           val currentRequestedTime = row.getString(commitTimeFieldIndex)
           val completionTime = timeMap.getOrElse(currentRequestedTime, currentRequestedTime)
-          val updatedRow = row.copy()
-          updatedRow.update(commitTimeFieldIndex, UTF8String.fromString(completionTime))
-          updatedRow
+          val values = (0 until row.numFields).map { i =>
+            if (i == commitTimeFieldIndex) {
+              UTF8String.fromString(completionTime)
+            } else {
+              row.get(i, inputSchema.fields(i).dataType)
+            }
+          }
+          InternalRow.fromSeq(values)
         }
       }
     } else {
