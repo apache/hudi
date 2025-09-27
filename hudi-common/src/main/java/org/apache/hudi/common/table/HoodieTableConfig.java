@@ -267,7 +267,9 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Payload class to indicate the payload class that is used to create the table and is not used anymore.");
 
   // This is the default payload class used by Hudi 0.x releases (table version 6 and below)
-  public static final String DEFAULT_PAYLOAD_CLASS_NAME = DefaultHoodieRecordPayload.class.getName();
+  public static final String getDefaultPayloadClassName() {
+    return DefaultHoodieRecordPayload.class.getName();
+  }
 
   public static final ConfigProperty<String> RECORD_MERGE_STRATEGY_ID = ConfigProperty
       .key("hoodie.record.merge.strategy.id")
@@ -982,7 +984,7 @@ public class HoodieTableConfig extends HoodieConfig {
       }
       // TODO(HUDI-8925): remove this once the payload class name is no longer required
       if (isNullOrEmpty(inferredPayloadClassName)) {
-        inferredPayloadClassName = DEFAULT_PAYLOAD_CLASS_NAME;
+        inferredPayloadClassName = getDefaultPayloadClassName();
       }
     }
 
