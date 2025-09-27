@@ -24,6 +24,34 @@ import org.apache.hudi.avro.model.DateWrapper;
 import org.apache.hudi.avro.model.DecimalWrapper;
 import org.apache.hudi.avro.model.DoubleWrapper;
 import org.apache.hudi.avro.model.FloatWrapper;
+import org.apache.hudi.avro.model.HoodieActionInstant;
+import org.apache.hudi.avro.model.HoodieBootstrapFilePartitionInfo;
+import org.apache.hudi.avro.model.HoodieBootstrapIndexInfo;
+import org.apache.hudi.avro.model.HoodieBootstrapPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieCleanFileInfo;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieCommitMetadata;
+import org.apache.hudi.avro.model.HoodieCompactionOperation;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieCompactionStrategy;
+import org.apache.hudi.avro.model.HoodieDeleteRecordList;
+import org.apache.hudi.avro.model.HoodieFSPermission;
+import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
+import org.apache.hudi.avro.model.HoodieMergeArchiveFilePlan;
+import org.apache.hudi.avro.model.HoodiePath;
+import org.apache.hudi.avro.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieWriteStat;
 import org.apache.hudi.avro.model.IntWrapper;
 import org.apache.hudi.avro.model.LocalDateWrapper;
 import org.apache.hudi.avro.model.LongWrapper;
@@ -55,6 +83,7 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificRecord;
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.avro.util.Utf8;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -85,7 +114,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.Objects;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
@@ -1236,10 +1264,21 @@ public class TestHoodieAvroUtils {
   }
 
   /**
-   * Utility class for generating random GenericRecord instances and comparing records
+   * Utility class for generating random GenericRecord instances.
    */
   private static class AvroTestUtils {
-    private static final Random RANDOM = new Random(42); // Fixed seed for reproducible tests
+    private static final Random RANDOM = new Random(42);
+
+    /**
+     * Generate a list of random GenericRecord instances
+     */
+    public static List<GenericRecord> generateRandomRecords(Schema schema, int count) {
+      List<GenericRecord> records = new ArrayList<>();
+      for (int i = 0; i < count; i++) {
+        records.add(generateRandomRecord(schema));
+      }
+      return records;
+    }
 
     /**
      * Generate a random GenericRecord for the given schema
@@ -1254,44 +1293,28 @@ public class TestHoodieAvroUtils {
     }
 
     /**
-     * Generate a list of random GenericRecord instances
-     */
-    public static List<GenericRecord> generateRandomRecords(Schema schema, int count) {
-      List<GenericRecord> records = new ArrayList<>();
-      for (int i = 0; i < count; i++) {
-        records.add(generateRandomRecord(schema));
-      }
-      return records;
-    }
-
-    /**
      * Generate a random value for the given schema type
      */
     private static Object generateRandomValue(Schema schema, Object defaultValue) {
-      // Handle union types first
+      // CASE 1: Handle default value
+      if (defaultValue != null
+          && !(defaultValue instanceof org.apache.avro.JsonProperties.Null)
+          && RANDOM.nextBoolean()) {
+        return defaultValue;
+      }
+      Schema actualSchema = schema;
+      try {
+        actualSchema = resolveNullableSchema(schema);
+      } catch (Exception e) {
+        // If we can't resolve the schema, just use the original
+        // Op.
+      }
+      // CASE 2: Handle union type
       if (schema.getType() == Schema.Type.UNION) {
         List<Schema> types = schema.getTypes();
         // For nullable unions, sometimes return null
         if (types.size() == 2 && types.get(0).getType() == Schema.Type.NULL && RANDOM.nextBoolean()) {
           return null;
-        }
-        // For complex unions (more than 2 types), never return null to avoid HoodieAvroSchemaException
-        if (types.size() > 2) {
-          // Choose the first non-null type
-          Schema nonNullType = types.stream()
-              .filter(t -> t.getType() != Schema.Type.NULL)
-              .findFirst()
-              .orElse(types.get(0));
-          return generateRandomValue(nonNullType, null);
-        }
-        // For 2-type unions that are not simple nullable unions, also avoid null
-        if (types.size() == 2 && !(types.get(0).getType() == Schema.Type.NULL || types.get(1).getType() == Schema.Type.NULL)) {
-          // Choose the first non-null type
-          Schema nonNullType = types.stream()
-              .filter(t -> t.getType() != Schema.Type.NULL)
-              .findFirst()
-              .orElse(types.get(0));
-          return generateRandomValue(nonNullType, null);
         }
         // Choose a non-null type from the union
         Schema nonNullType = types.stream()
@@ -1300,25 +1323,7 @@ public class TestHoodieAvroUtils {
             .orElse(types.get(0));
         return generateRandomValue(nonNullType, null);
       }
-      // Handle default values
-      if (defaultValue != null
-          && !(defaultValue instanceof org.apache.avro.JsonProperties.Null)
-          && RANDOM.nextBoolean()) {
-        return defaultValue;
-      }
-      // For nullable fields, sometimes return null
-      if (schema.getType() == Schema.Type.UNION && schema.getTypes().size() == 2
-          && schema.getTypes().get(0).getType() == Schema.Type.NULL && RANDOM.nextBoolean()) {
-        return null;
-      }
-      Schema actualSchema = schema;
-      try {
-        actualSchema = resolveNullableSchema(schema);
-      } catch (Exception e) {
-        // If we can't resolve the schema, just use the original
-        actualSchema = schema;
-      }
-
+      // CASE 3: Handle other types.
       switch (actualSchema.getType()) {
         case NULL:
           return null;
@@ -1365,269 +1370,6 @@ public class TestHoodieAvroUtils {
           return null;
       }
     }
-
-    /**
-     * Compare a SpecificRecord with a GenericRecord using the same schema
-     */
-    public static void assertRecordsEqual(SpecificRecord specificRecord, GenericRecord genericRecord, Schema schema) {
-      assertEquals(specificRecord.getClass().getSimpleName(), genericRecord.getSchema().getName());
-
-      for (Schema.Field field : schema.getFields()) {
-        Object specificValue = specificRecord.get(field.pos());
-        Object genericValue = genericRecord.get(field.pos());
-
-        // Normalize null values - treat JsonProperties$Null as null
-        if (isNullValue(specificValue)) {
-          specificValue = null;
-        }
-        if (isNullValue(genericValue)) {
-          genericValue = null;
-        }
-        if (specificValue == null && genericValue == null) {
-          continue;
-        }
-        if (specificValue == null || genericValue == null) {
-          assertEquals(specificValue, genericValue,
-              "Field " + field.name() + " has different null values");
-          continue;
-        }
-        // Handle different types of comparisons based on field schema
-        Schema fieldSchema;
-        try {
-          fieldSchema = resolveNullableSchema(field.schema());
-        } catch (Exception e) {
-          // For complex union types that can't be resolved, do content-based comparison
-          if (specificValue instanceof SpecificRecord && genericValue instanceof GenericRecord) {
-            // Compare wrapper types by their content
-            assertWrapperRecordsEqual((SpecificRecord) specificValue, (GenericRecord) genericValue, field.name());
-          } else {
-            assertEquals(specificValue, genericValue,
-                "Field " + field.name() + " values differ");
-          }
-          continue;
-        }
-        switch (fieldSchema.getType()) {
-          case RECORD:
-            if (specificValue instanceof SpecificRecord && genericValue instanceof GenericRecord) {
-              assertRecordsEqual((SpecificRecord) specificValue, (GenericRecord) genericValue, fieldSchema);
-            } else {
-              assertEquals(specificValue, genericValue,
-                  "Field " + field.name() + " record values differ");
-            }
-            break;
-          case ARRAY:
-            assertArrayValuesEqual((List<?>) specificValue, (List<?>) genericValue, fieldSchema, field.name());
-            break;
-          case MAP:
-            assertMapValuesEqual((Map<?, ?>) specificValue, (Map<?, ?>) genericValue, fieldSchema, field.name());
-            break;
-          case ENUM:
-            assertEquals(specificValue.toString(), genericValue.toString(),
-                "Field " + field.name() + " enum values differ");
-            break;
-          case BYTES:
-            assertByteArrayEqual((ByteBuffer) specificValue, (ByteBuffer) genericValue, field.name());
-            break;
-          default:
-            assertEquals(specificValue, genericValue,
-                "Field " + field.name() + " values differ");
-        }
-      }
-    }
-
-    private static void assertArrayValuesEqual(List<?> specificArray, List<?> genericArray, Schema schema, String fieldName) {
-      assertEquals(specificArray.size(), genericArray.size(),
-          "Field " + fieldName + " array sizes differ");
-
-      Schema elementSchema = schema.getElementType();
-      for (int i = 0; i < specificArray.size(); i++) {
-        Object specificElement = specificArray.get(i);
-        Object genericElement = genericArray.get(i);
-
-        // Normalize null values
-        if (isNullValue(specificElement)) {
-          specificElement = null;
-        }
-        if (isNullValue(genericElement)) {
-          genericElement = null;
-        }
-        if (specificElement == null && genericElement == null) {
-          continue;
-        }
-        if (specificElement instanceof SpecificRecord && genericElement instanceof GenericRecord) {
-          assertRecordsEqual((SpecificRecord) specificElement, (GenericRecord) genericElement, elementSchema);
-        } else if (specificElement instanceof List && genericElement instanceof List) {
-          // Handle nested lists
-          assertListValuesEqual((List<?>) specificElement, (List<?>) genericElement, elementSchema, fieldName + "[" + i + "]");
-        } else {
-          // For other types, compare by content if they're different instances but same content
-          if (!Objects.equals(specificElement, genericElement)) {
-            // Try to compare by string representation as a fallback
-            if (specificElement != null && genericElement != null
-                && specificElement.toString().equals(genericElement.toString())) {
-              // They have the same content, so they're equivalent
-              continue;
-            }
-            assertEquals(specificElement, genericElement,
-                "Field " + fieldName + " array element " + i + " differs");
-          }
-        }
-      }
-    }
-
-    private static void assertMapValuesEqual(Map<?, ?> specificMap, Map<?, ?> genericMap, Schema schema, String fieldName) {
-      assertEquals(specificMap.size(), genericMap.size(),
-          "Field " + fieldName + " map sizes differ");
-
-      Schema valueSchema = schema.getValueType();
-      for (Map.Entry<?, ?> entry : specificMap.entrySet()) {
-        Object key = entry.getKey();
-        Object specificValue = entry.getValue();
-        Object genericValue = genericMap.get(key);
-
-        // Normalize null values
-        if (isNullValue(specificValue)) {
-          specificValue = null;
-        }
-        if (isNullValue(genericValue)) {
-          genericValue = null;
-        }
-        if (specificValue == null && genericValue == null) {
-          continue;
-        }
-        if (specificValue instanceof SpecificRecord && genericValue instanceof GenericRecord) {
-          // Handle union types by getting the actual record schema
-          Schema recordSchema = valueSchema.getType() == Schema.Type.UNION ? resolveNullableSchema(valueSchema) : valueSchema;
-          assertRecordsEqual((SpecificRecord) specificValue, (GenericRecord) genericValue, recordSchema);
-        } else if (specificValue instanceof List && genericValue instanceof List) {
-          // Handle List comparison by content
-          assertListValuesEqual((List<?>) specificValue, (List<?>) genericValue, valueSchema, fieldName + "[" + key + "]");
-        } else {
-          // For other types, compare by content if they're different instances but same content
-          if (!Objects.equals(specificValue, genericValue)) {
-            // Try to compare by string representation as a fallback
-            if (specificValue != null && genericValue != null
-                && specificValue.toString().equals(genericValue.toString())) {
-              // They have the same content, so they're equivalent
-              continue;
-            }
-            assertEquals(specificValue, genericValue, 
-                "Field " + fieldName + " map value for key " + key + " differs");
-          }
-        }
-      }
-    }
-
-    private static void assertByteArrayEqual(ByteBuffer specificBytes, ByteBuffer genericBytes, String fieldName) {
-      if (specificBytes == null && genericBytes == null) {
-        return;
-      }
-      if (specificBytes == null || genericBytes == null) {
-        assertEquals(specificBytes, genericBytes, "Field " + fieldName + " byte arrays differ");
-        return;
-      }
-      byte[] specificArray = specificBytes.array();
-      byte[] genericArray = genericBytes.array();
-      assertArrayEquals(specificArray, genericArray, "Field " + fieldName + " byte arrays differ");
-    }
-
-    /**
-     * Check if a value represents null (including JsonProperties$Null)
-     */
-    private static boolean isNullValue(Object value) {
-      return value == null || value instanceof org.apache.avro.JsonProperties.Null;
-    }
-
-    /**
-     * Compare wrapper records (like BooleanWrapper vs GenericRecord) by their content
-     */
-    private static void assertWrapperRecordsEqual(SpecificRecord specificRecord, GenericRecord genericRecord, String fieldName) {
-      // Get the schema from the specific record
-      Schema schema = specificRecord.getSchema();
-
-      // Compare each field in the wrapper
-      for (Schema.Field field : schema.getFields()) {
-        Object specificValue = specificRecord.get(field.pos());
-        Object genericValue = genericRecord.get(field.pos());
-
-        // Normalize null values
-        if (isNullValue(specificValue)) {
-          specificValue = null;
-        }
-        if (isNullValue(genericValue)) {
-          genericValue = null;
-        }
-        assertEquals(specificValue, genericValue,
-            "Field " + fieldName + "." + field.name() + " values differ");
-      }
-    }
-
-    /**
-     * Compare two lists by content (for cases where they might be different instances)
-     */
-    private static void assertListValuesEqual(List<?> list1, List<?> list2, Schema elementSchema, String fieldName) {
-      assertEquals(list1.size(), list2.size(), 
-          "Field " + fieldName + " list sizes differ");
-      
-      for (int i = 0; i < list1.size(); i++) {
-        Object element1 = list1.get(i);
-        Object element2 = list2.get(i);
-        // Normalize null values
-        if (isNullValue(element1)) {
-          element1 = null;
-        }
-        if (isNullValue(element2)) {
-          element2 = null;
-        }
-        if (element1 == null && element2 == null) {
-          continue;
-        }
-        if (element1 instanceof SpecificRecord && element2 instanceof GenericRecord) {
-          // For list elements, we need to get the element schema from the array schema
-          Schema recordSchema = elementSchema.getType() == Schema.Type.ARRAY ? elementSchema.getElementType() : elementSchema;
-          // Handle union types by getting the actual record schema
-          if (recordSchema.getType() == Schema.Type.UNION) {
-            recordSchema = resolveNullableSchema(recordSchema);
-          }
-          assertRecordsEqual((SpecificRecord) element1, (GenericRecord) element2, recordSchema);
-        } else if (element1 instanceof List && element2 instanceof List) {
-          assertListValuesEqual((List<?>) element1, (List<?>) element2, elementSchema, fieldName + "[" + i + "]");
-        } else {
-          // For other types, compare by content if they're different instances but same content
-          if (!Objects.equals(element1, element2)) {
-            // Try to compare by string representation as a fallback
-            if (element1 != null && element2 != null
-                && element1.toString().equals(element2.toString())) {
-              // They have the same content, so they're equivalent
-              continue;
-            }
-            assertEquals(element1, element2,
-                "Field " + fieldName + " list element " + i + " differs");
-          }
-        }
-      }
-    }
-  }
-
-  /**
-   * Test convertToSpecificRecord for all specified Avro model classes
-   */
-  @ParameterizedTest
-  @MethodSource("provideAvroModelClasses")
-  void testConvertToSpecificRecordForAllTypes(Class<? extends SpecificRecord> recordClass) {
-    // Get schema from the class
-    Schema schema = SpecificData.get().getSchema(recordClass);
-    // Generate random generic record
-    GenericRecord genericRecord = AvroTestUtils.generateRandomRecord(schema);
-    // Convert to specific record - cast to the expected type
-    @SuppressWarnings("unchecked")
-    Class<? extends org.apache.avro.specific.SpecificRecordBase> specificRecordBaseClass =
-        (Class<? extends org.apache.avro.specific.SpecificRecordBase>) recordClass;
-    SpecificRecord specificRecord = HoodieAvroUtils.convertToSpecificRecord(specificRecordBaseClass, genericRecord);
-    // Assert the output class
-    assertEquals(recordClass, specificRecord.getClass());
-    // Compare the records
-    AvroTestUtils.assertRecordsEqual(specificRecord, genericRecord, schema);
   }
 
   /**
@@ -1636,20 +1378,16 @@ public class TestHoodieAvroUtils {
   @ParameterizedTest
   @MethodSource("provideAvroModelClasses")
   void testConvertToSpecificRecordMultipleRecords(Class<? extends SpecificRecord> recordClass) {
-    // Get schema from the class
     Schema schema = SpecificData.get().getSchema(recordClass);
-    // Generate multiple random records
     List<GenericRecord> genericRecords = AvroTestUtils.generateRandomRecords(schema, 3);
     for (GenericRecord genericRecord : genericRecords) {
-      // Convert to specific record - cast to the expected type
-      @SuppressWarnings("unchecked")
-      Class<? extends org.apache.avro.specific.SpecificRecordBase> specificRecordBaseClass =
-          (Class<? extends org.apache.avro.specific.SpecificRecordBase>) recordClass;
-      SpecificRecord specificRecord = HoodieAvroUtils.convertToSpecificRecord(specificRecordBaseClass, genericRecord);
-      // Assert the output class
+      Class<? extends SpecificRecordBase> specificRecordBaseClass
+          = (Class<? extends SpecificRecordBase>) recordClass;
+      SpecificRecord specificRecord =
+          HoodieAvroUtils.convertToSpecificRecord(specificRecordBaseClass, genericRecord);
       assertEquals(recordClass, specificRecord.getClass());
-      // Compare the records
-      AvroTestUtils.assertRecordsEqual(specificRecord, genericRecord, schema);
+      GenericRecord copied = (GenericRecord) GenericData.get().deepCopy(schema, specificRecord);
+      assertEquals(genericRecord, copied);
     }
   }
 
@@ -1658,34 +1396,34 @@ public class TestHoodieAvroUtils {
    */
   static Stream<Arguments> provideAvroModelClasses() {
     return Stream.of(
-        Arguments.of(org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieWriteStat.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieCleanPartitionMetadata.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieCleanFileInfo.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieActionInstant.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieCompactionStrategy.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieCompactionOperation.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieFSPermission.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodiePath.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieFileStatus.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieBootstrapFilePartitionInfo.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieCompactionPlan.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieCleanerPlan.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieCleanMetadata.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieSavepointMetadata.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieMergeArchiveFilePlan.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieRollbackMetadata.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieBootstrapPartitionMetadata.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieBootstrapIndexInfo.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieIndexPlan.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieRestoreMetadata.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieRestorePlan.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieRollbackPlan.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieDeleteRecordList.class),
-        Arguments.of(org.apache.hudi.avro.model.HoodieCommitMetadata.class)
+        Arguments.of(HoodieRollbackPartitionMetadata.class),
+        Arguments.of(HoodieSavepointPartitionMetadata.class),
+        Arguments.of(HoodieWriteStat.class),
+        Arguments.of(HoodieCleanPartitionMetadata.class),
+        Arguments.of(HoodieCleanFileInfo.class),
+        Arguments.of(HoodieActionInstant.class),
+        Arguments.of(HoodieCompactionStrategy.class),
+        Arguments.of(HoodieCompactionOperation.class),
+        Arguments.of(HoodieFSPermission.class),
+        Arguments.of(HoodiePath.class),
+        Arguments.of(HoodieFileStatus.class),
+        Arguments.of(HoodieBootstrapFilePartitionInfo.class),
+        Arguments.of(HoodieCompactionPlan.class),
+        Arguments.of(HoodieCleanerPlan.class),
+        Arguments.of(HoodieCleanMetadata.class),
+        Arguments.of(HoodieReplaceCommitMetadata.class),
+        Arguments.of(HoodieSavepointMetadata.class),
+        Arguments.of(HoodieMergeArchiveFilePlan.class),
+        Arguments.of(HoodieRollbackMetadata.class),
+        Arguments.of(HoodieBootstrapPartitionMetadata.class),
+        Arguments.of(HoodieBootstrapIndexInfo.class),
+        Arguments.of(HoodieIndexPlan.class),
+        Arguments.of(HoodieRequestedReplaceMetadata.class),
+        Arguments.of(HoodieRestoreMetadata.class),
+        Arguments.of(HoodieRestorePlan.class),
+        Arguments.of(HoodieRollbackPlan.class),
+        Arguments.of(HoodieDeleteRecordList.class),
+        Arguments.of(HoodieCommitMetadata.class)
     );
   }
 }
