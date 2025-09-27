@@ -2197,7 +2197,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
   private def loadFixtureTable(testBasePath: String, version: HoodieTableVersion): HoodieTableMetaClient = {
     val fixtureName = getFixtureName(version, "")
-    val resourcePath = s"/upgrade-downgrade-fixtures/mor-tables/$fixtureName"
+    val resourcePath = s"/upgrade-downgrade-fixtures/unsupported-upgrade-tables/$fixtureName"
 
     // Create temporary directory for fixture extraction
     val tempFixtureDir = Files.createTempDirectory("hudi-fixture-")

@@ -22,15 +22,13 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FIXTURES_DIR="$SCRIPT_DIR/mor-tables"
 
 echo "Generating Hudi upgrade/downgrade test fixtures..."
-echo "Fixtures directory: $FIXTURES_DIR"
 
 # Parse command line arguments
 REQUESTED_VERSIONS=""
 HUDI_BUNDLE_PATH=""
-SCALA_SCRIPT_NAME="generate-fixture.scala"
+SCALA_SCRIPT_NAME="generate-fixture-mor.scala"
 while [[ $# -gt 0 ]]; do
     case $1 in
         --version)
@@ -50,7 +48,7 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: $0 [--version <version_list>] [--hudi-bundle-path <path>] [--script-name <script>]"
             echo "  --version <version_list>          Comma-separated list of table versions to generate (e.g., 4,5,6)"
             echo "  --hudi-bundle-path <path>         Path to locally built Hudi bundle JAR (required for version 9)"
-            echo "  --script-name <script>            Scala script name from scala-templates folder (default: generate-fixture.scala)"
+            echo "  --script-name <script>            Scala script name from scala-templates folder (default: generate-fixture-mor.scala)"
             echo ""
             echo "Examples:"
             echo "  $0                                           # Generate all versions (except 9)"
@@ -68,6 +66,19 @@ done
 # Extract suffix by removing "generate-fixture" prefix and ".scala" extension
 SCRIPT_BASE="${SCALA_SCRIPT_NAME%.scala}"  # Remove .scala extension
 SCRIPT_SUFFIX="${SCRIPT_BASE#generate-fixture}"  # Remove generate-fixture prefix
+
+# Determine output directory based on template type
+if [[ "$SCALA_SCRIPT_NAME" == *"mor"* ]]; then
+    FIXTURES_DIR="$SCRIPT_DIR/mor-tables"
+    echo "Using mor tables directory: $FIXTURES_DIR"
+elif [[ "$SCALA_SCRIPT_NAME" == *"complex-keygen"* ]]; then
+    FIXTURES_DIR="$SCRIPT_DIR/complex-keygen-tables"
+    echo "Using complex-keygen tables directory: $FIXTURES_DIR"
+else
+    # Default fallback
+    FIXTURES_DIR="$SCRIPT_DIR/complex-keygen-tables"
+    echo "Using default tables directory: $FIXTURES_DIR"
+fi
 
 # Convert comma-separated versions to array
 if [ -n "$REQUESTED_VERSIONS" ]; then
@@ -122,16 +133,6 @@ ensure_spark_binary() {
 
     # Determine exact Spark version and tarball name
     case "$spark_version" in
-        "3.2")
-            local spark_full_version="3.2.4"
-            local spark_tarball="spark-3.2.4-bin-hadoop3.2.tgz"
-            local extracted_dirname="spark-3.2.4-bin-hadoop3.2"
-            ;;
-        "3.3")
-            local spark_full_version="3.3.4"
-            local spark_tarball="spark-3.3.4-bin-hadoop3.tgz"
-            local extracted_dirname="spark-3.3.4-bin-hadoop3"
-            ;;
         "3.4")
             local spark_full_version="3.4.3"
             local spark_tarball="spark-3.4.3-bin-hadoop3.tgz"
@@ -243,6 +244,14 @@ generate_fixture() {
         actual_script_name="${SCALA_SCRIPT_NAME%.scala}-v9.scala"
     fi
 
+    # Validate template file exists
+    if [ ! -f "$SCRIPT_DIR/scala-templates/$actual_script_name" ]; then
+        echo "ERROR: Template file not found: $SCRIPT_DIR/scala-templates/$actual_script_name"
+        echo "Available templates:"
+        ls "$SCRIPT_DIR/scala-templates/"*.scala 2>/dev/null || echo "  No templates found"
+        exit 1
+    fi
+
     # Copy template and substitute variables
     cp "$SCRIPT_DIR/scala-templates/$actual_script_name" "$temp_script"
     sed -i.bak \
@@ -268,6 +277,7 @@ generate_fixture() {
             --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
             --conf "spark.jars.ivy=$ivy_cache_dir" \
             --conf 'spark.sql.warehouse.dir=/tmp/spark-warehouse' \
+            --driver-memory "2g" \
             --jars "$HUDI_BUNDLE_PATH" -i "$temp_script"
     else
         # Use Maven packages for official releases
@@ -279,6 +289,7 @@ generate_fixture() {
             --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
             --conf "spark.jars.ivy=$ivy_cache_dir" \
             --conf 'spark.sql.warehouse.dir=/tmp/spark-warehouse' \
+            --driver-memory "2g" \
             --packages "$hudi_bundle" -i "$temp_script"
     fi
 
@@ -304,17 +315,9 @@ echo "Generating fixtures for all supported versions..."
 
 echo "Hudi Version -> Spark Version -> Scala Version mapping:"
 
-# Hudi 0.11.1 (Table Version 4) -> Spark 3.2.x (default) -> Scala 2.12
-if should_generate_version "4"; then
-    echo "   0.11.1 -> Spark 3.2 -> Scala 2.12"
-    generate_fixture "0.11.1" "4" "hudi-v4-table$SCRIPT_SUFFIX" "3.2" "2.12"
-fi
 
-# Hudi 0.12.2 (Table Version 5) -> Spark 3.3.x (default) -> Scala 2.12
-if should_generate_version "5"; then
-    echo "   0.12.2 -> Spark 3.3 -> Scala 2.12"
-    generate_fixture "0.12.2" "5" "hudi-v5-table$SCRIPT_SUFFIX" "3.3" "2.12"
-fi
+# Create fixtures directory
+mkdir -p "$FIXTURES_DIR"
 
 # Hudi 0.14.0 (Table Version 6) -> Spark 3.4.x (default) -> Scala 2.12
 if should_generate_version "6"; then
