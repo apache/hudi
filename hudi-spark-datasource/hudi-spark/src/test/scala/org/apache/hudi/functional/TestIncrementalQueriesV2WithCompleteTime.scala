@@ -134,21 +134,21 @@ class TestIncrementalQueriesV2WithCompleteTime extends HoodieSparkClientTestBase
     incrementalDF.createOrReplaceTempView(tempViewName)
     incrementalDF.show(false)
 
-    val timesDF = spark.sql(s"""
-      SELECT DISTINCT _hoodie_commit_time
+    val completionTimesDF = spark.sql(s"""
+      SELECT DISTINCT _hoodie_completion_time
       FROM $tempViewName
-      ORDER BY _hoodie_commit_time
+      ORDER BY _hoodie_completion_time
     """)
 
-    val timesArray = timesDF.collect().map(_.getString(0))
-    assertTrue(timesArray.length == 2, s"Should have 2 distinct times but got ${timesArray.length}")
+    val actualCompletionTimes = completionTimesDF.collect().map(_.getString(0))
+    assertTrue(actualCompletionTimes.length == 2, s"Should have 2 distinct completion times but got ${actualCompletionTimes.length}")
 
     val expectedCompletionTimes = commits.map(_.asInstanceOf[HoodieInstant].getCompletionTime).sorted
 
-    val actualTimesSorted = timesArray.sorted
-    val completionTimeTransformationWorking = actualTimesSorted.sameElements(expectedCompletionTimes)
-    assertTrue(completionTimeTransformationWorking,
-      s"V2 relation should show completion times in _hoodie_commit_time field. " +
+    val actualTimesSorted = actualCompletionTimes.sorted
+    val completionTimeColumnWorking = actualTimesSorted.sameElements(expectedCompletionTimes)
+    assertTrue(completionTimeColumnWorking,
+      s"V2 relation should show completion times in _hoodie_completion_time field. " +
       s"Expected: ${expectedCompletionTimes.mkString(", ")}, " +
       s"Got: ${actualTimesSorted.mkString(", ")}")
   }

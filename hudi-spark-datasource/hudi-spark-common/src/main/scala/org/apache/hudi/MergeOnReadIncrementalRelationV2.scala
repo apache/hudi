@@ -32,14 +32,12 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil.getWritePartitionPaths
 import org.apache.hudi.storage.StoragePathInfo
 
 import org.apache.hadoop.fs.GlobPattern
-import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable
@@ -54,13 +52,11 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
                                             override val metaClient: HoodieTableMetaClient,
                                             private val userSchema: Option[StructType],
                                             private val prunedDataSchema: Option[StructType] = None,
-                                            override val rangeType: RangeType = RangeType.CLOSED_CLOSED)
+                                            override val rangeType: RangeType = RangeType.OPEN_CLOSED)
   extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, Seq(), userSchema, prunedDataSchema)
     with HoodieIncrementalRelationV2Trait with MergeOnReadIncrementalRelation {
 
   override type Relation = MergeOnReadIncrementalRelationV2
-
-  override def schema: StructType = super.schema
 
   override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
     this.copy(prunedDataSchema = Some(prunedSchema))
@@ -84,7 +80,7 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
     val optionalFilters = filters
     val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
 
-    val baseRDD = new HoodieMergeOnReadRDDV2(
+    new HoodieMergeOnReadRDDV2(
       sqlContext.sparkContext,
       config = jobConf,
       sqlConf = sqlContext.sparkSession.sessionState.conf,
@@ -98,9 +94,6 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
       optionalFilters = optionalFilters,
       metaClient = metaClient,
       options = optParams)
-    val requestedToCompletionTimeMap = buildCompletionTimeMapping()
-    val broadcastTimeMap = sqlContext.sparkContext.broadcast(requestedToCompletionTimeMap)
-    transformRecordsWithCompletionTime(baseRDD, broadcastTimeMap, super.schema)
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
@@ -178,40 +171,6 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
       fileSlices
     }
     filteredFileSlices
-  }
-
-  private def buildCompletionTimeMapping(): Map[String, String] = {
-    includedCommits.map { instant =>
-      val requestedTime = instant.requestedTime()
-      val completionTime = Option(instant.getCompletionTime).getOrElse(requestedTime)
-      requestedTime -> completionTime
-    }.toMap
-  }
-
-  private def transformRecordsWithCompletionTime(rdd: RDD[InternalRow],
-                                               broadcastMap: Broadcast[Map[String, String]],
-                                               inputSchema: StructType): RDD[InternalRow] = {
-    val commitTimeFieldIndex = inputSchema.fieldNames.indexOf(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
-
-    if (commitTimeFieldIndex >= 0) {
-      rdd.mapPartitions { iter =>
-        val timeMap = broadcastMap.value
-        iter.map { row =>
-          val currentRequestedTime = row.getString(commitTimeFieldIndex)
-          val completionTime = timeMap.getOrElse(currentRequestedTime, currentRequestedTime)
-          val values = (0 until row.numFields).map { i =>
-            if (i == commitTimeFieldIndex) {
-              UTF8String.fromString(completionTime)
-            } else {
-              row.get(i, inputSchema.fields(i).dataType)
-            }
-          }
-          InternalRow.fromSeq(values)
-        }
-      }
-    } else {
-      rdd
-    }
   }
 }
 
@@ -307,4 +266,3 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
     optParams.getOrElse(DataSourceReadOptions.INCR_PATH_GLOB.key, DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)
 
 }
-
