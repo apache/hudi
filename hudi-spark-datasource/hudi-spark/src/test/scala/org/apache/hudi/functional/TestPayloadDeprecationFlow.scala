@@ -200,7 +200,18 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       mode(SaveMode.Append).
       save(basePath)
 
-    // 6. Validate.
+    // 6. Add INSERT operation.
+    val insertData = Seq(
+      (13, 6L, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
+      (13, 7L, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
+    val insertDataFrame = spark.createDataFrame(insertData).toDF(columns: _*)
+    insertDataFrame.write.format("hudi").
+      option(OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL).
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      mode(SaveMode.Append).
+      save(basePath)
+
+    // 7. Validate.
     // Validate table configs.
     tableConfig = metaClient.getTableConfig
     expectedConfigs.foreach { case (key, expectedValue) =>
@@ -392,7 +403,18 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       mode(SaveMode.Append).
       save(basePath)
 
-    // 6. Validate.
+    // 6. Add INSERT operation.
+    val insertData = Seq(
+      (13, 6L, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
+      (13, 7L, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
+    val insertDataFrame = spark.createDataFrame(insertData).toDF(columns: _*)
+    insertDataFrame.write.format("hudi").
+      option(OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL).
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      mode(SaveMode.Append).
+      save(basePath)
+
+    // 7. Validate.
     // Validate table configs again.
     tableConfig = metaClient.getTableConfig
     expectedConfigs.foreach { case (key, expectedValue) =>
@@ -445,7 +467,9 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
         Seq(
           (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-          (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"))
+          (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
+          (13, 6, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
+          (13, 7, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
       } else {
         // For other payload types (OverwriteWithLatestAvroPayload, OverwriteNonDefaultsWithLatestAvroPayload)
         // These use COMMIT_TIME_ORDERING, so latest write wins regardless of ts value
@@ -455,7 +479,9 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
         Seq(
           (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"))
+          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
+          (13, 6, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
+          (13, 7, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
       }
     } else {
       // For CDC payloads or when delete markers are used
@@ -465,7 +491,9 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
         // _event_lsn=1 (rider-X) and _event_lsn=5 (rider-EE) are deleted by delete markers
         Seq(
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-          (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"))
+          (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
+          (13, 6, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
+          (13, 7, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
       } else if (payloadClazz.equals(classOf[AWSDmsAvroPayload].getName)) {
         // AWSDmsAvroPayload uses COMMIT_TIME_ORDERING - latest commit wins regardless of ts value
         // Mixed batch: rider-CC update applies (latest commit)
@@ -473,20 +501,26 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
         // Final: _event_lsn=3 and _event_lsn=5 deleted, _event_lsn=4 has rider-DD
         Seq(
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"))
+          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
+          (13, 6, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
+          (13, 7, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
       } else if (payloadClazz.equals(classOf[PostgresDebeziumAvroPayload].getName)) {
         // PostgresDebeziumAvroPayload uses EVENT_TIME_ORDERING with _event_lsn field
         // But second update applies rider-DD due to later commit time (behaves like commit-time ordering)
         Seq(
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"))
+          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
+          (13, 6, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
+          (13, 7, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
       } else {
         // For MySqlDebeziumAvroPayload
         // Uses EVENT_TIME_ORDERING with _event_seq initially, then _event_bin_file,_event_pos
         // But second update applies rider-DD due to later commit time (behaves like commit-time ordering)
         Seq(
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"))
+          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
+          (13, 6, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
+          (13, 7, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
       }
     }
   }
