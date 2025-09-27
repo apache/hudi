@@ -72,6 +72,31 @@ public class TestHoodieJavaRDD extends HoodieClientTestBase {
   }
 
   @Test
+  public void testRepartitionAndCoalesce() {
+    int numPartitions = 100;
+    // rdd parallelize
+    HoodieData<Integer> rddData = HoodieJavaRDD.of(jsc.parallelize(
+        IntStream.rangeClosed(0, 100).boxed().collect(Collectors.toList()), numPartitions));
+    assertEquals(100, rddData.getNumPartitions());
+
+    // repartition by 10.
+    rddData = rddData.repartition(10);
+    assertEquals(10, rddData.getNumPartitions());
+
+    // coalesce to 5
+    rddData = rddData.coalesce(5);
+    assertEquals(5, rddData.getNumPartitions());
+
+    // repartition to 20
+    rddData = rddData.repartition(20);
+    assertEquals(20, rddData.getNumPartitions());
+
+    // but colesce may not expand the num partitions
+    rddData = rddData.coalesce(40);
+    assertEquals(20, rddData.getNumPartitions());
+  }
+
+  @Test
   void testMapPartitionsWithCloseable() {
     String partition1 = "partition1";
     String partition2 = "partition2";
