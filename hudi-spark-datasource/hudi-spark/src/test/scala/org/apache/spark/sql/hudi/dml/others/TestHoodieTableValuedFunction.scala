@@ -688,4 +688,112 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
     }
     spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
   }
+
+  test("Test hudi_table_changes cdc ordering issue") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+
+      spark.sql("set hoodie.sql.insert.mode = upsert")
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  rider string,
+           |  driver string,
+           |  fare double,
+           |  ts long
+           |) using hudi
+           |tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'rider',
+           |  preCombineField = 'ts',
+           |  'hoodie.table.cdc.enabled' = 'true',
+           |  'hoodie.table.cdc.supplemental.logging.mode' = 'data_before_after'
+           |)
+           |location '$tablePath'
+           |""".stripMargin
+      )
+
+      spark.sql(
+        s"""
+           | insert into $tableName
+           | values
+           |   ('rider-E', 'driver-1', 10.0, 1695516137),
+           |   ('rider-G', 'driver-2', 20.0, 1695516137),
+           |   ('rider-C', 'driver-3', 30.0, 1695091554),
+           |   ('rider-A', 'driver-4', 40.0, 1695516137),
+           |   ('rider-F', 'driver-5', 50.0, 1695516137)
+           | """.stripMargin
+      )
+
+      Thread.sleep(1000)
+
+      spark.sql(
+        s"""
+           | insert into $tableName
+           | values
+           |   ('rider-G', 'driver-updated', 25.0, 1695516200),
+           |   ('rider-C', 'driver-updated', 35.0, 1695091600),
+           |   ('rider-F', 'driver-updated', 55.0, 1695516200)
+           | """.stripMargin
+      )
+
+      Thread.sleep(1000)
+
+      spark.sql(
+        s"""
+           | delete from $tableName where rider = 'rider-E'
+           | """.stripMargin
+      )
+
+      val cdcDataUnordered = spark.sql(
+        s"""select
+           | op,
+           | ts_ms,
+           | get_json_object(before, '$$.ts') AS before_ts,
+           | get_json_object(before, '$$.rider') as before_rider,
+           | get_json_object(after, '$$.rider') AS after_rider
+           |from hudi_table_changes('$tablePath', 'cdc', 'earliest')
+           |""".stripMargin
+      )
+
+      val unorderedResults = cdcDataUnordered.collect()
+      val unorderedCount = unorderedResults.length
+
+      val cdcDataOrdered = spark.sql(
+        s"""select
+           | op,
+           | ts_ms,
+           | get_json_object(before, '$$.ts') AS before_ts,
+           | get_json_object(before, '$$.rider') as before_rider,
+           | get_json_object(after, '$$.rider') AS after_rider
+           |from hudi_table_changes('$tablePath', 'cdc', 'earliest')
+           |order by ts_ms asc
+           |""".stripMargin
+      )
+
+      val orderedResults = cdcDataOrdered.collect()
+      val orderedCount = orderedResults.length
+
+      println(s"Unordered CDC results count: $unorderedCount")
+      unorderedResults.foreach(row => println(s"Unordered: ${row.mkString(", ")}"))
+
+      println(s"Ordered CDC results count: $orderedCount")
+      orderedResults.foreach(row => println(s"Ordered: ${row.mkString(", ")}"))
+
+      assert(unorderedCount == orderedCount,
+        s"CDC query ordering issue: unordered count ($unorderedCount) != ordered count ($orderedCount)")
+
+      val unorderedSet = unorderedResults.map(_.mkString(",")).toSet
+      val orderedSet = orderedResults.map(_.mkString(",")).toSet
+
+      assert(unorderedSet == orderedSet,
+        s"CDC query results differ between ordered and unordered queries")
+
+      // 5 inserts + 3 updates + 1 delete = 9 total
+      val expectedCount = 9
+      assert(orderedCount == expectedCount,
+        s"Expected $expectedCount CDC operations, but got $orderedCount")
+    }
+  }
 }
