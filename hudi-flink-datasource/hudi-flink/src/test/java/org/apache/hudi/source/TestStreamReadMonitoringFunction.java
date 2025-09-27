@@ -462,7 +462,7 @@ public class TestStreamReadMonitoringFunction {
     }
   }
 
-  // @Test disabling due to flakiness
+  @Test
   public void testCheckpointRestoreWithLimit() throws Exception {
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     conf.set(FlinkOptions.READ_SPLITS_LIMIT, 2);
