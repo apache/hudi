@@ -125,7 +125,10 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       mode(SaveMode.Append).
       save(basePath)
     // Validate table version.
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(storageConf())
+      .build()
     assertEquals(8, metaClient.getTableConfig.getTableVersion.versionCode())
     val firstUpdateInstantTime = metaClient.getActiveTimeline.getInstants.get(1).requestedTime()
 
@@ -149,7 +152,10 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       mode(SaveMode.Append).
       save(basePath)
     // Validate table version is still 8 after mixed ordering batch
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(storageConf())
+      .build()
     assertEquals(8, metaClient.getTableConfig.getTableVersion.versionCode())
 
     // 3. Add an update. This is expected to trigger the upgrade
@@ -174,7 +180,10 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       mode(SaveMode.Append).
       save(basePath)
     // Validate table version as 9.
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(storageConf())
+      .build()
     assertEquals(9, metaClient.getTableConfig.getTableVersion.versionCode())
     assertEquals(payloadClazz, metaClient.getTableConfig.getLegacyPayloadClass)
     assertEquals(isCDCPayload(payloadClazz) || useOpAsDelete,
@@ -222,7 +231,10 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       save(basePath)
 
     // Final validation of table management operations after all writes
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(storageConf())
+      .build()
     validateTableManagementOps(metaClient, tableType,
       expectCompaction = tableType.equals(HoodieTableType.MERGE_ON_READ.name()),
       expectClustering = false,  // Disable clustering validation for now
@@ -344,7 +356,10 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       mode(SaveMode.Append).
       save(basePath)
     // Validate table version.
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(storageConf())
+      .build()
     assertEquals(9, metaClient.getTableConfig.getTableVersion.versionCode())
     // validate ordering fields
     assertEquals(expectedOrderingFields, metaClient.getTableConfig.getOrderingFieldsStr.orElse(""))
@@ -368,7 +383,10 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       mode(SaveMode.Append).
       save(basePath)
     // Validate table version is still 9 after mixed ordering batch
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(storageConf())
+      .build()
     assertEquals(9, metaClient.getTableConfig.getTableVersion.versionCode())
 
     // 3. Add an update. This is expected to trigger the upgrade
@@ -395,7 +413,10 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       mode(SaveMode.Append).
       save(basePath)
     // Validate table version as 9.
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(storageConf())
+      .build()
     assertEquals(9, metaClient.getTableConfig.getTableVersion.versionCode())
     assertEquals(payloadClazz, metaClient.getTableConfig.getLegacyPayloadClass)
 
@@ -440,7 +461,10 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       save(basePath)
 
     // Final validation of table management operations after all writes
-    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(storageConf())
+      .build()
     validateTableManagementOps(metaClient, tableType,
       expectCompaction = tableType.equals(HoodieTableType.MERGE_ON_READ.name()),
       expectClustering = false,  // Disable clustering validation for now
