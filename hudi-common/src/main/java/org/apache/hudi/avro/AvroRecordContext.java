@@ -188,8 +188,8 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
 
   @Override
   public Comparable convertValueToEngineType(Comparable value) {
-    if (value instanceof Utf8) {
-      return ((Utf8) value).toString();
+    if (value instanceof String) {
+      return new Utf8((String) value);
     }
     return value;
   }

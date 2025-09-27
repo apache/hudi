@@ -318,7 +318,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       return false;
     }
     try {
-      if (!isDelete && !combineRecord.isDelete(schema, config.getProps())) {
+      if (!isDelete && !combineRecord.isDelete(deleteContext, config.getProps())) {
         // Flush the merged record.
         HoodieKey hoodieKey = newRecord.getKey();
         if (isSecondaryIndexStatsStreamingWritesEnabled) {
@@ -369,8 +369,8 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       // writing the first record. So make a copy of the record to be merged
       HoodieRecord<T> newRecord = keyToNewRecords.get(key).newInstance();
       try {
-        BufferedRecord<T> oldBufferedRecord = BufferedRecords.fromHoodieRecord(oldRecord, oldSchema, readerContext.getRecordContext(), props, orderingFields);
-        BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, newSchema, readerContext.getRecordContext(), props, orderingFields);
+        BufferedRecord<T> oldBufferedRecord = BufferedRecords.fromHoodieRecord(oldRecord, oldSchema, readerContext.getRecordContext(), props, orderingFields, false);
+        BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, newSchema, readerContext.getRecordContext(), props, orderingFields, deleteContext);
         BufferedRecord<T> mergeResult = recordMerger.merge(oldBufferedRecord, newBufferedRecord, readerContext.getRecordContext(), props);
         Schema combineRecordSchema = readerContext.getRecordContext().getSchemaFromBufferRecord(mergeResult);
         HoodieRecord combinedRecord = readerContext.getRecordContext().constructHoodieRecord(mergeResult);
@@ -407,16 +407,16 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     }
   }
 
-  protected void writeToFile(HoodieKey key, HoodieRecord<T> record, Schema schema, Properties prop, boolean shouldPreserveRecordMetadata) throws IOException {
+  protected void writeToFile(HoodieKey key, HoodieRecord<T> record, Schema schema, Properties props, boolean shouldPreserveRecordMetadata) throws IOException {
     if (shouldPreserveRecordMetadata) {
       // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
       //       file holding this record even in cases when overall metadata is preserved
       HoodieRecord populatedRecord = record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, newFilePath.getName());
-      fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
+      fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields, props);
     } else {
       // rewrite the record to include metadata fields in schema, and the values will be set later.
       record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
-      fileWriter.writeWithMetadata(key, record, writeSchemaWithMetaFields);
+      fileWriter.writeWithMetadata(key, record, writeSchemaWithMetaFields, props);
     }
   }
 

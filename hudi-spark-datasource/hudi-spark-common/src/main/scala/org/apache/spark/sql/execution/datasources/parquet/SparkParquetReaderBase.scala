@@ -74,7 +74,7 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
     conf.setBoolean(SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key, false)
     if (HoodieSparkUtils.gteqSpark3_4) {
       // PARQUET_INFER_TIMESTAMP_NTZ_ENABLED is required from Spark 3.4.0 or above
-      conf.setBoolean("spark.sql.parquet.inferTimestampNTZ.enabled", false)
+      conf.setBooleanIfUnset("spark.sql.parquet.inferTimestampNTZ.enabled", true)
     }
 
     ParquetWriteSupport.setSchema(requiredSchema, conf)

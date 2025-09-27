@@ -20,7 +20,9 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
+import org.apache.hudi.SparkFileFormatInternalRecordContext;
 import org.apache.hudi.client.model.HoodieInternalRow;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
@@ -61,10 +63,9 @@ import java.util.Properties;
 
 import scala.Function1;
 
-import static org.apache.hudi.BaseSparkInternalRecordContext.getFieldValueFromInternalRow;
+import static org.apache.hudi.BaseSparkInternalRecordContext.getFieldValueFromInternalRowAsJava;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedUnsafeProjection;
-import static org.apache.spark.sql.types.DataTypes.BooleanType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
 
 /**
@@ -204,7 +205,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
   @Override
   public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    return getFieldValueFromInternalRow(data, recordSchema, column);
+    return getFieldValueFromInternalRowAsJava(data, recordSchema, column);
   }
 
   @Override
@@ -257,26 +258,12 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  protected boolean checkIsDelete(Schema recordSchema, Properties props) {
+  protected boolean checkIsDelete(DeleteContext deleteContext, Properties props) {
     if (data == null || HoodieOperation.isDelete(getOperation())) {
       return true;
     }
 
-    // Use metadata filed to decide.
-    Schema.Field operationField = recordSchema.getField(OPERATION_METADATA_FIELD);
-    if (null != operationField
-        && HoodieOperation.isDeleteRecord((String) data.get(operationField.pos(), StringType))) {
-      return true;
-    }
-
-    // Use data field to decide.
-    if (recordSchema.getField(HOODIE_IS_DELETED_FIELD) == null) {
-      return false;
-    }
-
-    Object deleteMarker = data.get(
-        recordSchema.getField(HOODIE_IS_DELETED_FIELD).pos(), BooleanType);
-    return deleteMarker instanceof Boolean && (boolean) deleteMarker;
+    return SparkFileFormatInternalRecordContext.getFieldAccessorInstance().isDeleteRecord(data, deleteContext);
   }
 
   @Override
@@ -361,12 +348,30 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
             HoodieInternalRowUtils.getCachedPosList(structType, field);
         if (cachedNestedFieldPath.isDefined()) {
           NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
+          if (nestedFieldPath.parts()[0]._2.dataType() instanceof org.apache.spark.sql.types.StringType) {
+            return SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory()
+                .wrapUTF8String((UTF8String) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath));
+          }
           return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
         }
         return OrderingValues.getDefault();
       });
     }
     return OrderingValues.getDefault();
+  }
+
+  @Override
+  public Comparable<?> getOrderingValueAsJava(Schema recordSchema, Properties props, String[] orderingFields) {
+    if (orderingFields == null) {
+      return OrderingValues.getDefault();
+    } else {
+      return OrderingValues.create(orderingFields, field -> {
+        if (recordSchema.getField(field) == null) {
+          return OrderingValues.getDefault();
+        }
+        return (Comparable<?>) getColumnValueAsJava(recordSchema, field, props);
+      });
+    }
   }
 
   /**
@@ -433,7 +438,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
     boolean containsMetaFields = hasMetaFields(structType);
     UTF8String[] metaFields = extractMetaFields(data, structType);
-    return new HoodieInternalRow(metaFields, data, containsMetaFields);
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(metaFields, data, containsMetaFields);
   }
 
   private static UTF8String[] extractMetaFields(InternalRow row, StructType structType) {

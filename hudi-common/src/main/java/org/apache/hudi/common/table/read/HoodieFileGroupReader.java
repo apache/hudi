@@ -105,9 +105,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     if (readerContext.getHasLogFiles() && inputSplit.getStart() != 0) {
       throw new IllegalArgumentException("Filegroup reader is doing log file merge but not reading from the start of the base file");
     }
-    this.props = props;
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
-    this.props.putAll(tableConfig.getTableMergeProperties());
+    this.props = ConfigUtils.getMergeProps(props, tableConfig);
     this.partitionPathFields = tableConfig.getPartitionFields();
     readerContext.initRecordMerger(props);
     readerContext.setTablePath(tablePath);
@@ -119,7 +118,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         ? new ParquetRowIndexBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, props, metaClient)
         : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, props, metaClient));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
-    this.orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), props, hoodieTableMetaClient);
+    this.orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), hoodieTableMetaClient);
     this.readStats = new HoodieReadStats();
   }
 
@@ -197,7 +196,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         for (int i = 0; i < partitionFields.length; i++) {
           String field = partitionFields[i];
           if (dataSchema.getField(field) != null) {
-            filterFieldsAndValues.add(Pair.of(field, readerContext.getRecordContext().convertValueToEngineType((Comparable) partitionValues[i])));
+            filterFieldsAndValues.add(Pair.of(field, readerContext.getRecordContext().convertPartitionValueToEngineType((Comparable) partitionValues[i])));
           }
         }
         return filterFieldsAndValues;

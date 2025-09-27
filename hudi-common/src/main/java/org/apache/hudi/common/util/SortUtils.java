@@ -24,6 +24,8 @@ import org.apache.hudi.common.util.collection.FlatLists;
 
 import org.apache.avro.Schema;
 
+import java.util.function.Function;
+
 /**
  * Utility functions used by BULK_INSERT practitioners while sorting records.
  */
@@ -71,6 +73,40 @@ public class SortUtils {
           HoodieAvroUtils.getSortColumnValuesWithPartitionPathAndRecordKey(
               record, sortColumnNames, schema, suffixRecordKey, consistentLogicalTimestampEnabled
           ));
+    }
+    throw new IllegalArgumentException("Invalid recordType" + record.getRecordType());
+  }
+
+  /**
+   * Given a hoodie record, returns a comparable list of sorted columns.
+   *
+   * @param record                            HoodieRecord (Spark or Avro)
+   * @param sortColumnNames                   user provided sort columns
+   * @param schema                            schema for table
+   * @param suffixRecordKey                   HoodieWriteConfig.BULKINSERT_SUFFIX_RECORD_KEY_SORT_COLUMNS
+   * @param consistentLogicalTimestampEnabled KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED
+   * @param wrapUTF8StringFunc                Function to wrap UTF8String-elements of array into HoodieUTF8String (Spark only)
+   */
+  public static FlatLists.ComparableList<Comparable<HoodieRecord>> getComparableSortColumns(
+      HoodieRecord record,
+      String[] sortColumnNames,
+      Schema schema,
+      boolean suffixRecordKey,
+      boolean consistentLogicalTimestampEnabled,
+      Function<Object[], Object[]> wrapUTF8StringFunc
+  ) {
+    if (record.getRecordType() == HoodieRecord.HoodieRecordType.SPARK) {
+      Object[] columnValues = record.getColumnValues(schema, sortColumnNames, consistentLogicalTimestampEnabled);
+      if (suffixRecordKey) {
+        return FlatLists.ofComparableArray(wrapUTF8StringFunc.apply(
+            prependPartitionPathAndSuffixRecordKey(record.getPartitionPath(), record.getRecordKey(), columnValues)));
+      }
+      return FlatLists.ofComparableArray(wrapUTF8StringFunc.apply(prependPartitionPath(record.getPartitionPath(), columnValues)));
+    } else if (record.getRecordType() == HoodieRecord.HoodieRecordType.AVRO) {
+      return FlatLists.ofComparableArray(wrapUTF8StringFunc.apply(
+          HoodieAvroUtils.getSortColumnValuesWithPartitionPathAndRecordKey(
+              record, sortColumnNames, schema, suffixRecordKey, consistentLogicalTimestampEnabled
+          )));
     }
     throw new IllegalArgumentException("Invalid recordType" + record.getRecordType());
   }

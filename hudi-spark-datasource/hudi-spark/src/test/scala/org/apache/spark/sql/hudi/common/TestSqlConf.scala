@@ -66,11 +66,11 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, $partitionVal)")
 
       val metaClient = createMetaClient(spark, tablePath)
+      val commitCompletionTime1 = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getCompletionTime
 
       // Then insert another new record
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, $partitionVal)")
 
-      val commitCompletionTime2 = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getCompletionTime
       checkAnswer(s"select id, name, price, ts, year from $tableName")(
         Seq(1, "a1", 10.0, 1000, partitionVal),
         Seq(2, "a2", 10.0, 1000, partitionVal)
@@ -87,7 +87,7 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
       // Manually pass incremental configs to global configs to make sure Hudi query is able to load the
       // global configs
       DFSPropertiesConfiguration.addToGlobalProps(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      DFSPropertiesConfiguration.addToGlobalProps(START_COMMIT.key, commitCompletionTime2)
+      DFSPropertiesConfiguration.addToGlobalProps(START_COMMIT.key, commitCompletionTime1)
       spark.catalog.refreshTable(tableName)
       checkAnswer(s"select id, name, price, ts, year from $tableName")(
         Seq(2, "a2", 10.0, 1000, partitionVal)

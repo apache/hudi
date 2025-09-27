@@ -167,7 +167,7 @@ public class UtilitiesTestBase {
 
     jsc = UtilHelpers.buildSparkContext(UtilitiesTestBase.class.getName() + "-hoodie", "local[4,1]", sparkConf());
     context = new HoodieSparkEngineContext(jsc);
-    sqlContext = new SQLContext(jsc);
+    sqlContext = SQLContext.getOrCreate(jsc.sc());
     sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
   }
 

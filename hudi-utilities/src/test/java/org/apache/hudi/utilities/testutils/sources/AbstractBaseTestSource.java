@@ -29,6 +29,7 @@ import org.apache.hudi.utilities.config.SourceTestConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.AvroSource;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Row;
@@ -48,6 +49,9 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 public abstract class AbstractBaseTestSource extends AvroSource {
+
+  public static String schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+  public static Schema avroSchema = HoodieTestDataGenerator.AVRO_SCHEMA;
 
   private static final Logger LOG = LoggerFactory.getLogger(AbstractBaseTestSource.class);
 
@@ -110,7 +114,7 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     HoodieTestDataGenerator dataGenerator = dataGeneratorMap.get(partition);
 
     // generate `sourceLimit` number of upserts each time.
-    int numExistingKeys = dataGenerator.getNumExistingKeys(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    int numExistingKeys = dataGenerator.getNumExistingKeys(schemaStr);
     LOG.info("NumExistingKeys={}", numExistingKeys);
 
     int numUpdates = Math.min(numExistingKeys, sourceLimit / 2);
@@ -137,15 +141,15 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     if (!reachedMax && numUpdates >= 50) {
       LOG.info("After adjustments => NumInserts={}, NumUpdates={}, NumDeletes=50, maxUniqueRecords={}", numInserts, (numUpdates - 50), maxUniqueKeys);
       // if we generate update followed by deletes -> some keys in update batch might be picked up for deletes. Hence generating delete batch followed by updates
-      deleteStream = dataGenerator.generateUniqueDeleteRecords(instantTime, 50, 0L).stream().map(AbstractBaseTestSource::toGenericRecord);
-      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates - 50, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, 0L)
+      deleteStream = dataGenerator.generateUniqueDeleteRecordStream(instantTime, 50, false, schemaStr, 0L).map(AbstractBaseTestSource::toGenericRecord);
+      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates - 50, schemaStr, 0L)
           .map(AbstractBaseTestSource::toGenericRecord);
     } else {
       LOG.info("After adjustments => NumInserts={}, NumUpdates={}, maxUniqueRecords={}", numInserts, numUpdates, maxUniqueKeys);
-      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, 0L)
+      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates, schemaStr, 0L)
           .map(AbstractBaseTestSource::toGenericRecord);
     }
-    Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(instantTime, numInserts, false, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, 0L)
+    Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(instantTime, numInserts, false, schemaStr, 0L)
         .map(AbstractBaseTestSource::toGenericRecord);
     if (Boolean.valueOf(props.getOrDefault("hoodie.test.source.generate.inserts", "false").toString())) {
       return insertStream;

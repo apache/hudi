@@ -74,8 +74,6 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
       .putBoolean(METADATA_COL_ATTR_KEY, value = true)
       .build()
 
-  override def getCatalogUtils: HoodieSpark3CatalogUtils = HoodieSpark33CatalogUtils
-
   override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark33CatalystPlanUtils
 
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark33CatalystExpressionUtils
@@ -166,4 +164,7 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
     value == LegacyBehaviorPolicy.LEGACY
   }
 
+  override def isTimestampNTZType(dataType: DataType): Boolean = {
+    dataType.getClass.getSimpleName.startsWith("TimestampNTZType")
+  }
 }

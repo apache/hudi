@@ -22,6 +22,8 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.common.util.Option;
 
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -207,39 +209,36 @@ public class HFileDataBlock extends HFileBlock {
   }
 
   @Override
-  protected ByteBuffer getUncompressedBlockDataToWrite() {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    ByteBuffer dataBuf = ByteBuffer.allocate(context.getBlockSize());
-    for (KeyValueEntry kv : entriesToWrite) {
-      // Length of key + length of a short variable indicating length of key.
-      // Note that 10 extra bytes are required by hbase reader.
-      // That is: 1 byte for column family length, 8 bytes for timestamp, 1 bytes for key type.
-      dataBuf.putInt(kv.key.length + KEY_LENGTH_LENGTH + COLUMN_FAMILY_LENGTH + VERSION_TIMESTAMP_LENGTH + KEY_TYPE_LENGTH);
-      // Length of value.
-      dataBuf.putInt(kv.value.length);
-      // Key content length.
-      dataBuf.putShort((short)kv.key.length);
-      // Key.
-      dataBuf.put(kv.key);
-      // Column family length: constant 0.
-      dataBuf.put((byte)0);
-      // Column qualifier: assume 0 bits.
-      // Timestamp: using the latest.
-      dataBuf.putLong(LATEST_TIMESTAMP);
-      // Key type: constant Put (4) in Hudi.
-      // Minimum((byte) 0), Put((byte) 4), Delete((byte) 8),
-      // DeleteFamilyVersion((byte) 10), DeleteColumn((byte) 12),
-      // DeleteFamily((byte) 14), Maximum((byte) 255).
-      dataBuf.put((byte)4);
-      // Value.
-      dataBuf.put(kv.value);
-      // MVCC.
-      dataBuf.put((byte)0);
-
-      // Copy to output stream.
-      baos.write(dataBuf.array(), 0, dataBuf.position());
-      // Clear the buffer.
-      dataBuf.clear();
+  protected ByteBuffer getUncompressedBlockDataToWrite() throws IOException {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream(context.getBlockSize());
+    try (DataOutputStream dataOutputStream = new DataOutputStream(baos)) {
+      for (KeyValueEntry kv : entriesToWrite) {
+        // Length of key + length of a short variable indicating length of key.
+        // Note that 10 extra bytes are required by hbase reader.
+        // That is: 1 byte for column family length, 8 bytes for timestamp, 1 bytes for key type.
+        dataOutputStream.writeInt(
+            kv.key.length + KEY_LENGTH_LENGTH + COLUMN_FAMILY_LENGTH + VERSION_TIMESTAMP_LENGTH + KEY_TYPE_LENGTH);
+        // Length of value.
+        dataOutputStream.writeInt(kv.value.length);
+        // Key content length.
+        dataOutputStream.writeShort((short)kv.key.length);
+        // Key.
+        dataOutputStream.write(kv.key);
+        // Column family length: constant 0.
+        dataOutputStream.write(0);
+        // Column qualifier: assume 0 bits.
+        // Timestamp: using the latest.
+        dataOutputStream.writeLong(LATEST_TIMESTAMP);
+        // Key type: constant Put (4) in Hudi.
+        // Minimum((byte) 0), Put((byte) 4), Delete((byte) 8),
+        // DeleteFamilyVersion((byte) 10), DeleteColumn((byte) 12),
+        // DeleteFamily((byte) 14), Maximum((byte) 255).
+        dataOutputStream.write(4);
+        // Value.
+        dataOutputStream.write(kv.value);
+        // MVCC.
+        dataOutputStream.write(0);
+      }
     }
     return ByteBuffer.wrap(baos.toByteArray());
   }

@@ -96,7 +96,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     // Extract positions from data block.
     List<Long> recordPositions = extractRecordPositions(dataBlock, baseFileInstantTime);
     if (recordPositions == null) {
-      LOG.debug("Falling back to key based merge for Read");
+      LOG.debug("Falling back to key based merge for data block");
       fallbackToKeyBasedBuffer();
       super.processDataBlock(dataBlock, keySpecOpt);
       return;
@@ -181,7 +181,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
     List<Long> recordPositions = extractRecordPositions(deleteBlock, baseFileInstantTime);
     if (recordPositions == null) {
-      LOG.warn("Falling back to key based merge for Read");
+      LOG.debug("Falling back to key based merging for delete block");
       fallbackToKeyBasedBuffer();
       super.processDeleteBlock(deleteBlock);
       return;

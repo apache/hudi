@@ -176,7 +176,7 @@ public abstract class HoodieLogBlock {
   }
 
   protected void removeBaseFileInstantTimeOfPositions() {
-    LOG.warn("There are records without valid positions. "
+    LOG.info("There are records without valid positions. "
         + "Skip writing record positions to the block header.");
     logBlockHeader.remove(HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS);
   }

@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;

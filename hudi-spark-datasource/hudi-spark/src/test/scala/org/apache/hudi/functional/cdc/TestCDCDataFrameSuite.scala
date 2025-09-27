@@ -653,7 +653,6 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
       "hoodie.datasource.write.partitionpath.field" -> "",
       "hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.AWSDmsAvroPayload",
-      DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.CUSTOM.name(),
       "hoodie.table.cdc.enabled" -> "true",
       "hoodie.table.cdc.supplemental.logging.mode" -> "data_before_after"
     )
@@ -787,7 +786,6 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option("hoodie.datasource.write.operation", "upsert")
         .option("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.ComplexKeyGenerator")
         .option("hoodie.datasource.write.payload.class", "org.apache.hudi.common.model.AWSDmsAvroPayload")
-        .option(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
         .option("hoodie.table.cdc.enabled", "true")
         .option("hoodie.table.cdc.supplemental.logging.mode", loggingMode.name())
         .mode(SaveMode.Append).save(basePath)
@@ -808,7 +806,6 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option("hoodie.datasource.write.operation", "upsert")
         .option("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.ComplexKeyGenerator")
         .option("hoodie.datasource.write.payload.class", "org.apache.hudi.common.model.AWSDmsAvroPayload")
-        .option(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
         .option("hoodie.table.cdc.enabled", "true")
         .option("hoodie.table.cdc.supplemental.logging.mode", loggingMode.name())
         .mode(SaveMode.Append).save(basePath)

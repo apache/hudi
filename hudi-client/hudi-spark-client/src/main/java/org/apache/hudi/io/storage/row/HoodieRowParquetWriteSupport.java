@@ -44,6 +44,7 @@ import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.Type;
 import org.apache.parquet.schema.Types;
+import org.apache.spark.sql.HoodieUTF8StringFactory;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.SpecializedGetters;
 import org.apache.spark.sql.catalyst.util.ArrayData;
@@ -368,8 +369,17 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   }
 
   private static class HoodieBloomFilterRowWriteSupport extends HoodieBloomFilterWriteSupport<UTF8String> {
+
+    private static final HoodieUTF8StringFactory UTF8STRING_FACTORY =
+        SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory();
+
     public HoodieBloomFilterRowWriteSupport(BloomFilter bloomFilter) {
       super(bloomFilter);
+    }
+
+    @Override
+    protected int compareRecordKey(UTF8String a, UTF8String b) {
+      return UTF8STRING_FACTORY.wrapUTF8String(a).compareTo(UTF8STRING_FACTORY.wrapUTF8String(b));
     }
 
     @Override
@@ -451,7 +461,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
             .as(LogicalTypeAnnotation.timestampType(false, LogicalTypeAnnotation.TimeUnit.MICROS)).named(structField.name());
       } else if (logicalType.getName().equals(LogicalTypes.localTimestampMillis().getName())) {
         return Types.primitive(INT64, repetition)
-            .as(LogicalTypeAnnotation.timestampType(false, LogicalTypeAnnotation.TimeUnit.MICROS)).named(structField.name());
+            .as(LogicalTypeAnnotation.timestampType(false, LogicalTypeAnnotation.TimeUnit.MILLIS)).named(structField.name());
       } else {
         throw new UnsupportedOperationException("Unsupported timestamp type: " + logicalType);
       }
@@ -475,7 +485,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
     } else if (dataType instanceof ArrayType) {
       ArrayType arrayType = (ArrayType) dataType;
       DataType elementType = arrayType.elementType();
-      Schema avroElementSchema = resolvedSchema.getElementType();
+      Schema avroElementSchema = resolvedSchema == null ? null : resolvedSchema.getElementType();
       if (!writeLegacyListFormat) {
         return Types
             .buildGroup(repetition).as(LogicalTypeAnnotation.listType())

@@ -39,8 +39,10 @@ import org.apache.hudi.commit.HoodieStreamerDatasetBulkInsertCommitActionExecuto
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -60,6 +62,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieErrorTableConfig;
@@ -156,6 +159,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
 import static org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName;
 import static org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException;
+import static org.apache.hudi.utilities.UtilHelpers.buildProperties;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
 import static org.apache.hudi.utilities.config.HoodieStreamerConfig.CHECKPOINT_FORCE_SKIP;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
@@ -428,12 +432,27 @@ public class StreamSync implements Serializable, Closeable {
                             StorageConfiguration<?> storageConf) throws IOException {
     this.commitsTimelineOpt = Option.empty();
     this.allCommitsTimelineOpt = Option.empty();
+
+    RecordMergeMode mergeMode = cfg.recordMergeMode;
+    String mergeStrategyId = cfg.recordMergeStrategyId;
+    String payloadClass = cfg.payloadClassName;
+
+    // When at least one configs from cfg.configs are not null,
+    // we should try to use them since it overrides the default ones.
+    Option<Triple<RecordMergeMode, String, String>> overridingMergeConfigs =
+        parseOverridingMergeConfigs(cfg.configs);
+    if (overridingMergeConfigs.isPresent()) {
+      mergeMode = overridingMergeConfigs.get().getLeft();
+      payloadClass = overridingMergeConfigs.get().getMiddle();
+      mergeStrategyId = overridingMergeConfigs.get().getRight();
+    }
+
     return tableBuilder.setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
-        .setPayloadClassName(cfg.payloadClassName)
-        .setRecordMergeStrategyId(cfg.recordMergeStrategyId)
-        .setRecordMergeMode(cfg.recordMergeMode)
+        .setPayloadClassName(payloadClass)
+        .setRecordMergeStrategyId(mergeStrategyId)
+        .setRecordMergeMode(mergeMode)
         .setBaseFileFormat(cfg.baseFileFormat)
         .setPartitionFields(partitionColumns)
         .setTableVersion(ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION))
@@ -454,7 +473,26 @@ public class StreamSync implements Serializable, Closeable {
         .setUrlEncodePartitioning(props.getBoolean(URL_ENCODE_PARTITIONING.key(),
             Boolean.parseBoolean(URL_ENCODE_PARTITIONING.defaultValue())))
         .setTableFormat(props.getProperty(HoodieTableConfig.TABLE_FORMAT.key(), HoodieTableConfig.TABLE_FORMAT.defaultValue()))
+        .setRecordDeleteFieldAndMarker(props.getString(DefaultHoodieRecordPayload.DELETE_KEY, null),
+            props.getString(DefaultHoodieRecordPayload.DELETE_MARKER, null))
         .initTable(storageConf, cfg.targetBasePath);
+  }
+
+  static Option<Triple<RecordMergeMode, String, String>> parseOverridingMergeConfigs(List<String> configs) {
+    if (configs == null || configs.isEmpty()) {
+      return Option.empty();
+    }
+    TypedProperties overwrittenProps = buildProperties(configs);
+    if (overwrittenProps.containsKey(HoodieWriteConfig.RECORD_MERGE_MODE.key())
+        || overwrittenProps.containsKey(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key())
+        || overwrittenProps.containsKey(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key())) {
+      RecordMergeMode mergeMode = overwrittenProps.containsKey(HoodieWriteConfig.RECORD_MERGE_MODE.key())
+          ? RecordMergeMode.valueOf(overwrittenProps.getProperty(HoodieWriteConfig.RECORD_MERGE_MODE.key())) : null;
+      String mergeStrategyId = overwrittenProps.getString(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key(), null);
+      String payloadClass = overwrittenProps.getProperty(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), null);
+      return Option.of(Triple.of(mergeMode, payloadClass, mergeStrategyId));
+    }
+    return Option.empty();
   }
 
   /**

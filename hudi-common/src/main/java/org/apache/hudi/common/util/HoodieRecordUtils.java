@@ -19,7 +19,6 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
@@ -42,6 +41,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -50,7 +50,6 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -222,10 +221,16 @@ public class HoodieRecordUtils {
   }
 
   public static List<String> getOrderingFieldNames(RecordMergeMode mergeMode,
-                                                   TypedProperties props,
                                                    HoodieTableMetaClient metaClient) {
     return mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
         ? Collections.emptyList()
-        : Option.ofNullable(ConfigUtils.getOrderingFields(props)).map(Arrays::asList).orElseGet(() -> metaClient.getTableConfig().getOrderingFields());
+        : metaClient.getTableConfig().getOrderingFields();
+  }
+
+  public static List<String> getOrderingFieldNames(RecordMergeMode mergeMode,
+                                                   HoodieTableConfig tableConfig) {
+    return mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
+        ? Collections.emptyList()
+        : tableConfig.getOrderingFields();
   }
 }

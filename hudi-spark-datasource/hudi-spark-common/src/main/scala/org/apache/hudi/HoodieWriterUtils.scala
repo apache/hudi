@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, O
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.{RECORD_MERGE_MODE, SPARK_SQL_MERGE_INTO_PREPPED_KEY}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
@@ -217,28 +218,28 @@ object HoodieWriterUtils {
   }
 
   /**
-   * This function adds specific rules to choose the right config key for payload class for version 9 tables.
-   *
-   * RULE 1: When
-   *   1. table version is 9,
-   *   2. writer key is a payload class key, and
-   *   3. table config has legacy payload class configured,
-   * then
-   *   return legacy payload class key.
-   *
-   * Basic rule:
-   *   return writer key.
+   * For table version >= 9, this function finds the corresponding key in `HoodieTableConfig`
+   * for a key in `HoodieWriteConfig`, including configs related to payload class, record merge mode, merge strategy id.
    */
-  def getPayloadClassConfigKeyFromTableConfig(key: String, tableConfig: HoodieConfig): String = {
-    if (tableConfig == null) {
+  def getKeyInTableConfig(key: String, tableConfig: HoodieConfig): String = {
+    if (tableConfig == null || tableConfig.getInt(HoodieTableConfig.VERSION) < HoodieTableVersion.NINE.versionCode()) {
       key
     } else {
-      if (tableConfig.getInt(HoodieTableConfig.VERSION) == HoodieTableVersion.NINE.versionCode()
-        && !StringUtils.isNullOrEmpty(tableConfig.getStringOrDefault(
-        HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, StringUtils.EMPTY_STRING).trim)) {
-        HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key
-      } else {
-        key
+      key match {
+        case k if k == HoodieTableConfig.PAYLOAD_CLASS_NAME.key || k == PAYLOAD_CLASS_NAME.key =>
+          val legacyPayload = tableConfig.getStringOrDefault(
+            HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, StringUtils.EMPTY_STRING
+          ).trim
+          if (!StringUtils.isNullOrEmpty(legacyPayload)) {
+            HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key
+          } else {
+            HoodieTableConfig.PAYLOAD_CLASS_NAME.key
+          }
+        case k if k == HoodieWriteConfig.RECORD_MERGE_MODE.key =>
+          HoodieTableConfig.RECORD_MERGE_MODE.key
+        case k if k == HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key =>
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key
+        case _ => key
       }
     }
   }
@@ -254,11 +255,7 @@ object HoodieWriterUtils {
       val diffConfigs = StringBuilder.newBuilder
       params.foreach { case (key, value) =>
         if (!shouldIgnoreConfig(key, value, params, tableConfig)) {
-          val keyInTableConfig = if (key.equals(HoodieTableConfig.PAYLOAD_CLASS_NAME.key))  {
-            getPayloadClassConfigKeyFromTableConfig(key, tableConfig)
-          } else {
-            key
-          }
+          val keyInTableConfig = getKeyInTableConfig(key, tableConfig)
           val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, keyInTableConfig)
           if (null != existingValue && !resolver(existingValue, value)) {
             diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(keyInTableConfig)}\n")

@@ -20,7 +20,7 @@
 package org.apache.hudi.common.table.read
 
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
-import org.apache.hudi.DataSourceWriteOptions.{OPERATION, ORDERING_FIELDS, RECORDKEY_FIELD, TABLE_TYPE}
+import org.apache.hudi.DataSourceWriteOptions.{OPERATION, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
@@ -188,10 +188,10 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
         + "{\"name\": \"col1\", \"type\": \"string\" },"
         + "{\"name\": \"col2\", \"type\": \"long\" },"
         + "{ \"name\": \"col3\", \"type\": [\"null\", \"string\"], \"default\": null}]}")
-    val row = InternalRow("item", 1000L, "blue")
+    val row = InternalRow("item", 1000L, UTF8String.fromString("blue"))
     testGetOrderingValue(sparkReaderContext, row, avroSchema, orderingFieldName, 1000L)
     testGetOrderingValue(
-      sparkReaderContext, row, avroSchema, "col3", UTF8String.fromString("blue"))
+      sparkReaderContext, row, avroSchema, "col3", sparkAdapter.getUTF8StringFactory.wrapUTF8String(UTF8String.fromString("blue")))
     testGetOrderingValue(
       sparkReaderContext, row, avroSchema, "non_existent_col", OrderingValues.getDefault)
   }

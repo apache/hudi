@@ -323,6 +323,7 @@ class HoodieSparkSqlWriterInternal {
           .setRecordMergeMode(RecordMergeMode.getValue(hoodieConfig.getString(HoodieWriteConfig.RECORD_MERGE_MODE)))
           .setMultipleBaseFileFormatsEnabled(hoodieConfig.getBoolean(HoodieTableConfig.MULTIPLE_BASE_FILE_FORMATS_ENABLE))
           .setTableFormat(hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT))
+          .setRecordDeleteFieldAndMarker(parameters.getOrElse(DefaultHoodieRecordPayload.DELETE_KEY, null), parameters.getOrElse(DefaultHoodieRecordPayload.DELETE_MARKER, null))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration), path)
       }
 
@@ -780,6 +781,7 @@ class HoodieSparkSqlWriterInternal {
           .setUrlEncodePartitioning(hoodieConfig.getBoolean(URL_ENCODE_PARTITIONING))
           .setCommitTimezone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE)))
           .setPartitionMetafileUseBaseFormat(useBaseFormatMetaFile)
+          .setRecordDeleteFieldAndMarker(parameters.getOrElse(DefaultHoodieRecordPayload.DELETE_KEY, null), parameters.getOrElse(DefaultHoodieRecordPayload.DELETE_MARKER, null))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration), path)
       }
 

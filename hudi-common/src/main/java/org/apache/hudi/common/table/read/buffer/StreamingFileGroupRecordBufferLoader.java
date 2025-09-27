@@ -66,7 +66,7 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
                                                                             List<String> orderingFieldNames, HoodieTableMetaClient hoodieTableMetaClient,
                                                                             TypedProperties props, ReaderParameters readerParameters, HoodieReadStats readStats,
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
-    Schema recordSchema = AvroSchemaCache.intern(HoodieAvroUtils.removeMetadataFields(readerContext.getSchemaHandler().getRequestedSchema()));
+    Schema recordSchema = AvroSchemaCache.intern(getRecordSchema(readerContext, props));
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
     Option<PartialUpdateMode> partialUpdateModeOpt = tableConfig.getPartialUpdateMode();
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback, props);
@@ -82,8 +82,7 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
     RecordContext<T> recordContext = readerContext.getRecordContext();
     Iterator<HoodieRecord> recordIterator = inputSplit.getRecordIterator();
     String[] orderingFieldsArray = orderingFieldNames.toArray(new String[0]);
-    DeleteContext deleteContext = new DeleteContext(props, recordSchema);
-    deleteContext.withReaderSchema(recordSchema);
+    DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, recordSchema);
     while (recordIterator.hasNext()) {
       HoodieRecord<T> hoodieRecord = recordIterator.next();
       T data = recordContext.extractDataFromRecord(hoodieRecord, recordSchema, props);
@@ -107,5 +106,15 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
       }
     }
     return Pair.of(recordBuffer, Collections.emptyList());
+  }
+
+  private static <T> Schema getRecordSchema(HoodieReaderContext<T> readerContext, TypedProperties props) {
+    Option<Pair<String, String>> payloadClasses = readerContext.getPayloadClasses(props);
+    if (payloadClasses.isPresent() && payloadClasses.get().getRight().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")) {
+      String schemaStr = props.getString("hoodie.payload.record.schema");
+      return new Schema.Parser().parse(schemaStr);
+    } else {
+      return HoodieAvroUtils.removeMetadataFields(readerContext.getSchemaHandler().getRequestedSchema());
+    }
   }
 }

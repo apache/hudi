@@ -122,8 +122,6 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
       .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
-      .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, "org.apache.hudi.common.model.PartialUpdateAvroPayload")
-      .option(HoodieWriteConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
       .mode(SaveMode.Append)
       .save(basePath)
 

@@ -25,6 +25,7 @@ import org.apache.hudi.io.util.IOUtils;
 import com.google.protobuf.ByteString;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -87,8 +88,8 @@ public class HFileFileInfoBlock extends HFileBlock {
   }
 
   @Override
-  public ByteBuffer getUncompressedBlockDataToWrite() {
-    ByteBuffer buff = ByteBuffer.allocate(context.getBlockSize() * 2);
+  public ByteBuffer getUncompressedBlockDataToWrite() throws IOException {
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream(context.getBlockSize());
     HFileProtos.InfoProto.Builder builder =
         HFileProtos.InfoProto.newBuilder();
     for (Map.Entry<String, byte[]> e : fileInfoToWrite.entrySet()) {
@@ -99,15 +100,14 @@ public class HFileFileInfoBlock extends HFileBlock {
           .build();
       builder.addMapEntry(bbp);
     }
-    buff.put(PB_MAGIC);
+    outputStream.write(PB_MAGIC);
     byte[] payload = builder.build().toByteArray();
     try {
-      buff.put(getVariableLengthEncodedBytes(payload.length));
+      outputStream.write(getVariableLengthEncodedBytes(payload.length));
     } catch (IOException e) {
       throw new RuntimeException("Failed to calculate File Info variable length");
     }
-    buff.put(payload);
-    buff.flip();
-    return buff;
+    outputStream.write(payload);
+    return ByteBuffer.wrap(outputStream.toByteArray());
   }
 }

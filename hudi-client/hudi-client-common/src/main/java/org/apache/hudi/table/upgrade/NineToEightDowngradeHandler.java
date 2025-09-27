@@ -83,8 +83,8 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
         && isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig())) {
       throw new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage("downgrade"));
     }
-    // Handle secondary index.
-    UpgradeDowngradeUtils.dropNonV1SecondaryIndexPartitions(
+    // Handle index Changes
+    UpgradeDowngradeUtils.dropNonV1IndexPartitions(
         config, context, table, upgradeDowngradeHelper, "downgrading from table version nine to eight");
     // Update table properties.
     Set<ConfigProperty> propertiesToRemove = new HashSet<>();
@@ -116,10 +116,18 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
             ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY).noDefaultValue());
         propertiesToRemove.add(
             ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER).noDefaultValue());
-      }
-      if (legacyPayloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
+      } else if (legacyPayloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
         propertiesToRemove.add(
             ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE).noDefaultValue());
+        propertiesToRemove.add(
+            ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY).noDefaultValue());
+        propertiesToRemove.add(
+            ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER).noDefaultValue());
+      } else if (legacyPayloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
+        propertiesToRemove.add(
+            ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY).noDefaultValue());
+        propertiesToRemove.add(
+            ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER).noDefaultValue());
       }
     }
   }
