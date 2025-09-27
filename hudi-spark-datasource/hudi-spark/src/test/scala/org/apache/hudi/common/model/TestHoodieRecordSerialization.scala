@@ -93,6 +93,8 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
 
       if (cloned.isInstanceOf[HoodieAvroIndexedRecord]) {
         cloned.asInstanceOf[HoodieAvroIndexedRecord].toIndexedRecord(schema, new Properties())
+        // by default avro is not eagerly deserialized.
+        cloned.asInstanceOf[HoodieAvroIndexedRecord].getData
       }
       assertEquals(expectedSize, originalBytes.length)
       assertEquals(record, cloned)
@@ -113,8 +115,8 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     val avroIndexedRecord = new HoodieAvroIndexedRecord(key, avroRecord)
     avroIndexedRecord.setIgnoreIndexUpdate(true)
 
-    val expectedLegacyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 539 else 533
-    val expectedAvroIndexedRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 57 else 54
+    val expectedLegacyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 540 else 534
+    val expectedAvroIndexedRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 58 else 55
 
     Seq(
       (legacyRecord, null, expectedLegacyRecordSize),

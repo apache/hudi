@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.SerializableIndexedRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -742,8 +743,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .build();
 
     List<IndexedRecord> scannedRecords = new ArrayList<>();
+    int counter = 0;
     for (HoodieRecord record : scanner) {
-      scannedRecords.add(record.toIndexedRecord(schema, CollectionUtils.emptyProps()).get().getData());
+      Object data = record.toIndexedRecord(schema, CollectionUtils.emptyProps()).get().getData();
+      if (data instanceof SerializableIndexedRecord) {
+        scannedRecords.add((GenericRecord)((SerializableIndexedRecord)data).getData());
+      } else {
+        scannedRecords.add((GenericRecord)data);
+      }
     }
 
     assertEquals(genRecords.size(), scannedRecords.size(),

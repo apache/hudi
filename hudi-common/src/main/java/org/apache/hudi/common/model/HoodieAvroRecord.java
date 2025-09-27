@@ -253,7 +253,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     Option<IndexedRecord> avroData = getData().getIndexedRecord(recordSchema, props);
     if (avroData.isPresent()) {
       HoodieAvroIndexedRecord record =
-          new HoodieAvroIndexedRecord(key, avroData.get(), operation, getData().getMetadata(), getData().getOrderingValue());
+          new HoodieAvroIndexedRecord(key, avroData.get(), operation, getData().getMetadata(), getData().getOrderingValue(), isDelete);
       return Option.of(record);
     } else {
       return Option.empty();

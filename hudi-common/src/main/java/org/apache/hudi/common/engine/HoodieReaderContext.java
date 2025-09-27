@@ -202,7 +202,7 @@ public abstract class HoodieReaderContext<T> {
   }
 
   public SizeEstimator<BufferedRecord<T>> getRecordSizeEstimator() {
-    return new HoodieRecordSizeEstimator<>(getSchemaHandler().getRequiredSchema());
+    return new HoodieRecordSizeEstimator<>(getSchemaHandler().getIncomingRecordSchema());
   }
 
   public CustomSerializer<BufferedRecord<T>> getRecordSerializer() {

@@ -92,6 +92,10 @@ public abstract class RecordContext<T> implements Serializable {
     return (T) record.getData();
   }
 
+  public T extractDeflatedDataFromRecord(HoodieRecord record, Schema schema, Properties properties) {
+    return (T) record.getData();
+  }
+
   /**
    * Gets the schema encoded in the buffered record {@code BufferedRecord}.
    *

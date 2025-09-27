@@ -114,7 +114,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     }
 
     return HoodieRecordUtils.createHoodieRecord((GenericRecord) bufferedRecord.getRecord(), bufferedRecord.getOrderingValue(),
-        hoodieKey, payloadClass, bufferedRecord.getHoodieOperation(), Option.empty(), false);
+        hoodieKey, payloadClass, bufferedRecord.getHoodieOperation(), Option.empty(), false, bufferedRecord.isDelete());
   }
 
   @Override
@@ -131,6 +131,15 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   public IndexedRecord extractDataFromRecord(HoodieRecord record, Schema schema, Properties properties) {
     try {
       return record.toIndexedRecord(schema, properties).map(HoodieAvroIndexedRecord::getData).orElse(null);
+    } catch (IOException e) {
+      throw new HoodieException("Failed to extract data from record: " + record, e);
+    }
+  }
+
+  @Override
+  public IndexedRecord extractDeflatedDataFromRecord(HoodieRecord record, Schema schema, Properties properties) {
+    try {
+      return record.toIndexedRecord(schema, properties).map(HoodieAvroIndexedRecord::getSerializableIndexedRecord).orElse(null);
     } catch (IOException e) {
       throw new HoodieException("Failed to extract data from record: " + record, e);
     }

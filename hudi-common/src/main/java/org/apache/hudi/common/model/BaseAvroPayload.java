@@ -106,6 +106,6 @@ public abstract class BaseAvroPayload implements Serializable {
     if (recordBytes.length == 0) {
       return Option.empty();
     }
-    return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+    return Option.of(SerializableIndexedRecord.withSerializedRecord(schema, recordBytes));
   }
 }
