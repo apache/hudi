@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.SerializableIndexedRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -89,6 +90,10 @@ public class BaseTestFileGroupRecordBuffer {
   protected static List<HoodieRecord> convertToHoodieRecordsListForDeletes(List<IndexedRecord> indexedRecords, boolean defaultOrderingValue) {
     return indexedRecords.stream().map(rec -> new HoodieEmptyRecord<>(new HoodieKey(rec.get(0).toString(), ""),
         HoodieOperation.DELETE, defaultOrderingValue ? 0 : (Comparable) rec.get(2), HoodieRecord.HoodieRecordType.AVRO)).collect(Collectors.toList());
+  }
+
+  protected SerializableIndexedRecord getSerializableIndexedRecord(IndexedRecord indexedRecord) {
+    return SerializableIndexedRecord.createInstance(indexedRecord);
   }
 
   protected static KeyBasedFileGroupRecordBuffer<IndexedRecord> buildKeyBasedFileGroupRecordBuffer(HoodieReaderContext<IndexedRecord> readerContext,

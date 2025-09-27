@@ -66,7 +66,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation hoodieOperation) {
-    this(key, data, hoodieOperation, Option.empty(), null);
+    this(key, data, hoodieOperation, Option.empty(), null, null);
   }
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation hoodieOperation, HoodieRecordLocation currentLocation) {
@@ -83,7 +83,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     this.orderingValue = orderingValue;
   }
 
-  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, Comparable<?> orderingValue, HoodieOperation operation, boolean isDelete) {
+  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, Comparable<?> orderingValue, HoodieOperation operation, Boolean isDelete) {
     this(key, data, operation);
     this.orderingValue = orderingValue;
     this.isDelete = isDelete;
@@ -103,10 +103,12 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       IndexedRecord data,
       HoodieOperation operation,
       Option<Map<String, String>> metaData,
-      Comparable orderingValue) {
+      Comparable orderingValue,
+      Boolean isDelete) {
     super(key, SerializableIndexedRecord.createInstance(data), operation, metaData);
     this.binaryRecord = (SerializableIndexedRecord) this.data;
     this.orderingValue = orderingValue;
+    this.isDelete = isDelete;
   }
 
   private HoodieAvroIndexedRecord(
@@ -126,6 +128,8 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     this.newLocation = record.getNewLocation();
     this.ignoreIndexUpdate = record.getIgnoreIndexUpdate();
     this.binaryRecord = (SerializableIndexedRecord) this.data;
+    this.isDelete = record.isDelete;
+    this.orderingValue = record.orderingValue;
   }
 
   public HoodieAvroIndexedRecord() {
@@ -192,7 +196,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
     decodeRecord(targetSchema);
     GenericRecord record = HoodieAvroUtils.stitchRecords((GenericRecord) data, (GenericRecord) other.getData(), targetSchema);
-    return new HoodieAvroIndexedRecord(key, record, operation, metaData, orderingValue);
+    return new HoodieAvroIndexedRecord(key, record, operation, metaData, orderingValue, isDelete);
   }
 
   @Override
@@ -202,7 +206,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     int metaFieldSize = targetSchema.getFields().size() - genericRecord.getSchema().getFields().size();
     GenericRecord newAvroRecord = metaFieldSize == 0 ? genericRecord : new JoinedGenericRecord(genericRecord, metaFieldSize, targetSchema);
     updateMetadataValuesInternal(newAvroRecord, metadataValues);
-    HoodieAvroIndexedRecord newRecord = new HoodieAvroIndexedRecord(key, newAvroRecord, operation, metaData, orderingValue);
+    HoodieAvroIndexedRecord newRecord = new HoodieAvroIndexedRecord(key, newAvroRecord, operation, metaData, orderingValue, isDelete);
     newRecord.setNewLocation(this.newLocation);
     newRecord.setCurrentLocation(this.currentLocation);
     return newRecord;
@@ -212,14 +216,14 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
     decodeRecord(recordSchema);
     data.put(ordinal, value);
-    return new HoodieAvroIndexedRecord(key, data, operation, metaData, orderingValue);
+    return new HoodieAvroIndexedRecord(key, data, operation, metaData, orderingValue, isDelete);
   }
 
   @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
     decodeRecord(recordSchema);
     GenericRecord record = HoodieAvroUtils.rewriteRecordWithNewSchema(data, newSchema, renameCols);
-    return new HoodieAvroIndexedRecord(key, record, operation, metaData, orderingValue);
+    return new HoodieAvroIndexedRecord(key, record, operation, metaData, orderingValue, isDelete);
   }
 
   @Override
@@ -374,6 +378,6 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public IndexedRecord getData() {
-    return binaryRecord.getRecord();
+    return binaryRecord;
   }
 }

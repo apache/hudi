@@ -279,7 +279,12 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   private static List<Pair<String, IndexedRecord>> hoodieRecordsToIndexedRecords(List<HoodieRecord> hoodieRecords, Schema schema) {
     return hoodieRecords.stream().map(r -> {
       try {
-        return r.toIndexedRecord(schema, CollectionUtils.emptyProps());
+        Option<HoodieAvroIndexedRecord> avroIndexedRecordOption = r.toIndexedRecord(schema, CollectionUtils.emptyProps());
+        if (avroIndexedRecordOption.isPresent()) {
+          // eager deser
+          avroIndexedRecordOption.get().getData().get(0);
+        }
+        return avroIndexedRecordOption;
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
