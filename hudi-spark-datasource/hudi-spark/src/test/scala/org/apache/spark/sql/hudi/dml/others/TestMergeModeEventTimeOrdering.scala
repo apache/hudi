@@ -62,23 +62,29 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
     } else {
       ""
     }
-    val writeTableVersionClause = if (tableVersion.toInt == 6) {
-      s"hoodie.write.table.version = $tableVersion,"
-    } else {
-      ""
+    val writeTableVersionClause = tableVersion.toInt match {
+      case 6 => s"hoodie.write.table.version = $tableVersion,"
+      case 8 => s"hoodie.write.table.version = $tableVersion,"
+      case _ => ""
     }
-    val expectedMergeConfigs = if (tableVersion.toInt == 6) {
-      Map(
-        HoodieTableConfig.VERSION.key -> "6",
-        HoodieTableConfig.PAYLOAD_CLASS_NAME.key -> classOf[DefaultHoodieRecordPayload].getName,
-        HoodieTableConfig.ORDERING_FIELDS.key -> "ts"
-      )
-    } else {
-      Map(
-        HoodieTableConfig.VERSION.key -> String.valueOf(HoodieTableVersion.current().versionCode()),
-        HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
-        HoodieTableConfig.RECORD_MERGE_MODE.key -> EVENT_TIME_ORDERING.name(),
-        HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key -> EVENT_TIME_BASED_MERGE_STRATEGY_UUID)
+    val expectedMergeConfigs: Map[String, String] = tableVersion.toInt match {
+      case 6 =>
+        Map(
+          HoodieTableConfig.VERSION.key -> "6",
+          HoodieTableConfig.PAYLOAD_CLASS_NAME.key -> classOf[DefaultHoodieRecordPayload].getName,
+          HoodieTableConfig.ORDERING_FIELDS.key -> "ts"
+        )
+      case 8 =>
+        Map(
+          HoodieTableConfig.VERSION.key -> "8",
+          HoodieTableConfig.RECORD_MERGE_MODE.key -> EVENT_TIME_ORDERING.name(),
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key -> EVENT_TIME_BASED_MERGE_STRATEGY_UUID
+        )
+      case _ =>
+        Map(
+          HoodieTableConfig.VERSION.key -> "9",
+          HoodieTableConfig.RECORD_MERGE_MODE.key -> EVENT_TIME_ORDERING.name()
+        )
     }
     val nonExistentConfigs = if (tableVersion.toInt == 6) {
       Seq(HoodieTableConfig.RECORD_MERGE_MODE.key)

@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions.{DROP_INSERT_DUP_POLICY, FAIL_INSERT_DUP_POLICY, INSERT_DROP_DUPS, INSERT_DUP_POLICY}
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig}
+import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieReplaceCommitMetadata, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.TimelineUtils
@@ -618,10 +618,20 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       .setPartitionFields(fooTableParams(DataSourceWriteOptions.PARTITIONPATH_FIELD.key))
       .setKeyGeneratorClassProp(fooTableParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key,
         DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.defaultValue()))
-      if(addBootstrapPath) {
-        tableMetaClientBuilder
-          .setBootstrapBasePath(fooTableParams(HoodieBootstrapConfig.BASE_PATH.key))
-      }
+    if (fooTableParams.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key())) {
+      tableMetaClientBuilder.setPayloadClassName(fooTableParams(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key))
+    }
+    if (fooTableParams.contains(HoodieWriteConfig.RECORD_MERGE_MODE.key)) {
+      tableMetaClientBuilder.setRecordMergeMode(RecordMergeMode.valueOf(
+        fooTableParams(HoodieWriteConfig.RECORD_MERGE_MODE.key)))
+    }
+    if (fooTableParams.contains(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key)) {
+      tableMetaClientBuilder.setRecordMergeStrategyId(fooTableParams(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key))
+    }
+    if(addBootstrapPath) {
+      tableMetaClientBuilder
+        .setBootstrapBasePath(fooTableParams(HoodieBootstrapConfig.BASE_PATH.key))
+    }
     if (initBasePath) {
       tableMetaClientBuilder.initTable(HadoopFSUtils.getStorageConfWithCopy(sc.hadoopConfiguration), tempBasePath)
     }

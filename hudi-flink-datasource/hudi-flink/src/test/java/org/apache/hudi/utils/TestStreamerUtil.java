@@ -21,7 +21,6 @@ package org.apache.hudi.utils;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -52,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -70,7 +70,7 @@ class TestStreamerUtil {
     Triple<RecordMergeMode, String, String> mergeBehavior = StreamerUtil.inferMergingBehavior(conf);
     assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, mergeBehavior.getLeft());
     assertEquals(EventTimeAvroPayload.class.getName(), mergeBehavior.getMiddle());
-    assertEquals(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID, mergeBehavior.getRight());
+    assertNull(mergeBehavior.getRight());
 
     // set commit time merge mode
     conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
@@ -78,7 +78,7 @@ class TestStreamerUtil {
     mergeBehavior = StreamerUtil.inferMergingBehavior(conf);
     assertEquals(RecordMergeMode.COMMIT_TIME_ORDERING, mergeBehavior.getLeft());
     assertEquals(OverwriteWithLatestAvroPayload.class.getName(), mergeBehavior.getMiddle());
-    assertEquals(HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, mergeBehavior.getRight());
+    assertNull(mergeBehavior.getRight());
 
     // set partial update merger.
     conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
@@ -86,7 +86,7 @@ class TestStreamerUtil {
     mergeBehavior = StreamerUtil.inferMergingBehavior(conf);
     assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, mergeBehavior.getLeft());
     assertEquals(PartialUpdateAvroPayload.class.getName(), mergeBehavior.getMiddle());
-    assertEquals(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID, mergeBehavior.getRight());
+    assertNull(mergeBehavior.getRight());
 
     // set partial update payload
     conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
@@ -94,7 +94,7 @@ class TestStreamerUtil {
     mergeBehavior = StreamerUtil.inferMergingBehavior(conf);
     assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, mergeBehavior.getLeft());
     assertEquals(PartialUpdateAvroPayload.class.getName(), mergeBehavior.getMiddle());
-    assertEquals(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID, mergeBehavior.getRight());
+    assertNull(mergeBehavior.getRight());
 
     // set partial update payload
     conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
@@ -103,7 +103,7 @@ class TestStreamerUtil {
     mergeBehavior = StreamerUtil.inferMergingBehavior(conf);
     assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, mergeBehavior.getLeft());
     assertEquals(PartialUpdateAvroPayload.class.getName(), mergeBehavior.getMiddle());
-    assertEquals(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID, mergeBehavior.getRight());
+    assertNull(mergeBehavior.getRight());
   }
 
   @Test
