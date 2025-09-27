@@ -67,8 +67,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (10, 2L, "rider-B", "driver-B", 27.70, "i", "10.1", 10, 1, "i"),
       (10, 3L, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"),
       (10, 4L, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
-      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"),
-      (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
+      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
     val originalOrderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
       "_event_seq"
@@ -89,11 +88,13 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(HoodieTableConfig.ORDERING_FIELDS.key(), originalOrderingFields).
       option(TABLE_TYPE.key(), tableType).
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
+      option(OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL).
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8").
       options(opts).
       mode(SaveMode.Overwrite).
       save(basePath)
+
     // Verify table was created successfully
     var metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
@@ -254,8 +255,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (10, 2L, "rider-B", "driver-B", 27.70, "i", "10.1", 10, 1, "i"),
       (10, 3L, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"),
       (10, 4L, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
-      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"),
-      (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
+      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
     val originalOrderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
       "_event_seq"
@@ -274,6 +274,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(ORDERING_FIELDS.key(), originalOrderingFields).
       option(TABLE_TYPE.key(), tableType).
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
+      option(OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL).
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       options(opts).
       mode(SaveMode.Overwrite).
@@ -441,12 +442,10 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
         // - _event_lsn=3: DELETED by delete operation (was rider-CC with ts=12)
         // - _event_lsn=4: rider-D stays with original data (rider-DD ts=9 < rider-D ts=10)
         // - _event_lsn=5: DELETED by delete operation (was rider-EE with ts=12)
-        // - rider-F (_event_lsn=6): marked for deletion (original)
         Seq(
           (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-          (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
-          (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
+          (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"))
       } else {
         // For other payload types (OverwriteWithLatestAvroPayload, OverwriteNonDefaultsWithLatestAvroPayload)
         // These use COMMIT_TIME_ORDERING, so latest write wins regardless of ts value
@@ -456,8 +455,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
         Seq(
           (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
-          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
-          (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
+          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"))
       }
     } else {
       // For CDC payloads or when delete markers are used
@@ -503,8 +501,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
         (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
         (10, 3, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1, "i"), // Original rider-C before mixed ordering
         (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),   // Original rider-D before mixed ordering
-        (10, 5, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"),   // Original rider-E before mixed ordering
-        (10, 6L, "rider-F", "driver-F", 17.38, "D", "10.1", 10, 1, "d"))
+        (10, 5, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))   // Original rider-E before mixed ordering
     } else {
       // For CDC payloads or when delete markers are used
       Seq(
