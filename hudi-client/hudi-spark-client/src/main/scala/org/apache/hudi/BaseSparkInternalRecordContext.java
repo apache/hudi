@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
+import org.apache.hudi.util.OrderingValueEngineTypeConverter;
 
 import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
@@ -51,6 +52,8 @@ import scala.Function1;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 
 public abstract class BaseSparkInternalRecordContext extends RecordContext<InternalRow> {
+
+  private OrderingValueEngineTypeConverter orderingValueConverter;
 
   protected BaseSparkInternalRecordContext(HoodieTableConfig tableConfig) {
     super(tableConfig, new DefaultJavaTypeConverter());
@@ -162,6 +165,11 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   }
 
   @Override
+  public Comparable convertOrderingValueToEngineType(Comparable value) {
+    return orderingValueConverter.convert(value);
+  }
+
+  @Override
   protected Comparable ensureComparability(Object value) {
     // Spark reads String field values as UTF8String.
     // To foster value comparison, if the value is of String type, e.g., from
@@ -215,5 +223,9 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
     Function1<InternalRow, UnsafeRow> unsafeRowWriter =
         HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), renamedColumns, Collections.emptyMap());
     return row -> (InternalRow) unsafeRowWriter.apply(row);
+  }
+
+  public void initOrderingValueConverter(Schema dataSchema, List<String> orderingFieldNames) {
+    this.orderingValueConverter = OrderingValueEngineTypeConverter.create(dataSchema, orderingFieldNames);
   }
 }

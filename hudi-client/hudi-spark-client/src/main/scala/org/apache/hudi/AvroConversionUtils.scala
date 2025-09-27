@@ -181,6 +181,20 @@ object AvroConversionUtils {
   }
 
   /**
+   * Converts Avro's [[Schema]] to Catalyst's [[DataType]]
+   */
+  def convertAvroSchemaToDataType(avroSchema: Schema): DataType = {
+    try {
+      val schemaConverters = sparkAdapter.getAvroSchemaConverters
+      schemaConverters.toSqlType(avroSchema) match {
+        case (dataType, _) => dataType
+      }
+    } catch {
+      case e: Exception => throw new HoodieSchemaException("Failed to convert avro schema to DataType: " + avroSchema, e)
+    }
+  }
+
+  /**
    *
    * Method to add default value of null to nullable fields in given avro schema
    *
