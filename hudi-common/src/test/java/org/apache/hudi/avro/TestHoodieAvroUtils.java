@@ -1298,10 +1298,11 @@ public class TestHoodieAvroUtils {
     private static Object generateRandomValue(Schema schema, Object defaultValue) {
       // CASE 1: Handle default value
       if (defaultValue != null
-          && !(defaultValue instanceof org.apache.avro.JsonProperties.Null)
+          && !(defaultValue instanceof JsonProperties.Null)
           && RANDOM.nextBoolean()) {
         return defaultValue;
       }
+      // Handle Union type.
       Schema actualSchema = schema;
       try {
         actualSchema = resolveNullableSchema(schema);
@@ -1309,21 +1310,7 @@ public class TestHoodieAvroUtils {
         // If we can't resolve the schema, just use the original
         // Op.
       }
-      // CASE 2: Handle union type
-      if (schema.getType() == Schema.Type.UNION) {
-        List<Schema> types = schema.getTypes();
-        // For nullable unions, sometimes return null
-        if (types.size() == 2 && types.get(0).getType() == Schema.Type.NULL && RANDOM.nextBoolean()) {
-          return null;
-        }
-        // Choose a non-null type from the union
-        Schema nonNullType = types.stream()
-            .filter(t -> t.getType() != Schema.Type.NULL)
-            .findFirst()
-            .orElse(types.get(0));
-        return generateRandomValue(nonNullType, null);
-      }
-      // CASE 3: Handle other types.
+      // CASE 2: Handle different types
       switch (actualSchema.getType()) {
         case NULL:
           return null;
