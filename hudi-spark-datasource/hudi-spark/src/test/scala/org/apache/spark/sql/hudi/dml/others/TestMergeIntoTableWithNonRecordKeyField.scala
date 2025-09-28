@@ -98,7 +98,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
              |merge into $tableName as oldData
              |using $tableName2
              |on oldData.id = $tableName2.id and oldData.price = $tableName2.price
-             |when matched then update set oldData.name = $tableName2.name
+             |when matched then update set oldData.name = $tableName2.name, oldData.ts = $tableName2.ts
              |when not matched then insert *
              |""".stripMargin)
 
@@ -271,6 +271,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
              |    (1, 'a1', 10, 100)
              |""".stripMargin)
 
+        val updateStr = if (withPrecombine) "price = s0.price, ts = s0.ts" else "price = s0.price"
         spark.sql(
           s"""
              | merge into $tableName
@@ -280,7 +281,7 @@ class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase wit
              |  select 2 as id, 'a1' as name, 30 as price, 100 as ts
              | ) s0
              | on $tableName.name = s0.name
-             | when matched then update set price = s0.price
+             | when matched then update set $updateStr
              | when not matched then insert *
          """.stripMargin)
         if (withPrecombine) {

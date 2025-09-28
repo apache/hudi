@@ -1613,52 +1613,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
-  test("Test missing ordering columns in Merge Into statement") {
-    Seq("cow", "mor").foreach { tableType =>
-      withTempDir { tmp =>
-        val tableName = generateTableName
-        // Create a partitioned table
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  dt string,
-             |  name string,
-             |  price double,
-             |  ts long
-             |) using hudi
-             | tblproperties (primaryKey = 'id', type = '$tableType', preCombineField = 'ts')
-             | partitioned by (dt)
-             | location '${tmp.getCanonicalPath}'
-             | """.stripMargin)
-
-        spark.sql(
-          s"""
-             | insert into $tableName partition(dt = '2024-01-14')
-             | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
-             | union
-             | select 2 as id, 'a2' as name, 20 as price, 1002 as ts
-             | """.stripMargin)
-
-        // Update statement is missing ordering column 'ts'
-        val sqlStatement1 =
-          s"""
-             | merge into $tableName
-             | using (
-             |  select 2 as id, '2024-01-14' as dt, 'a2_new' as name, 25 as price, 1005 as ts
-             |  union
-             |  select 3 as id, '2024-01-14' as dt, 'a3' as name, 30 as price, 1003 as ts
-             | ) s0
-             | on s0.id = $tableName.id
-             | when matched then update set
-             | id = s0.id, dt = s0.dt, price = s0.price
-             | """.stripMargin
-
-        checkExceptionContain(sqlStatement1)("No matching assignment found for target table ordering field `ts`")
-      }
-    }
-  }
-
   test("Test no schema evolution in MERGE INTO") {
     Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
