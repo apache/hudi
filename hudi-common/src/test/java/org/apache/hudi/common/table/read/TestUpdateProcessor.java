@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.BaseAvroPayload;
@@ -261,7 +260,7 @@ class TestUpdateProcessor {
       if (isSentinel) {
         return Option.of(SENTINEL);
       }
-      return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+      return getRecord(schema);
     }
   }
 }
