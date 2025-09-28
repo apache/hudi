@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
-import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.OrderingValueEngineTypeConverter;
@@ -162,24 +161,6 @@ public class FlinkRecordContext extends RecordContext<RowData> {
       }
     }
     return genericRowData;
-  }
-
-  @Override
-  public Comparable getOrderingValue(
-      RowData record,
-      Schema schema,
-      List<String> orderingFieldNames) {
-    if (orderingFieldNames.isEmpty()) {
-      return OrderingValues.getDefault();
-    }
-    return OrderingValues.create(orderingFieldNames, field -> {
-      if (schema.getField(field) == null) {
-        return OrderingValues.getDefault();
-      }
-      RowDataAvroQueryContexts.FieldQueryContext context = RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).getFieldQueryContext(field);
-      Comparable finalOrderingVal = (Comparable) context.getValAsJava(record, false);
-      return finalOrderingVal;
-    });
   }
 
   @Override

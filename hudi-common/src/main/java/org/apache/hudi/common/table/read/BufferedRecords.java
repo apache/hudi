@@ -44,17 +44,17 @@ public class BufferedRecords {
     T data = recordContext.extractDataFromRecord(record, schema, props);
     String recordKey = hoodieKey == null ? recordContext.getRecordKey(data, schema) : hoodieKey.getRecordKey();
     Integer schemaId = recordContext.encodeAvroSchema(schema);
-    Comparable orderingValue = record.getOrderingValue(schema, props, orderingFields);
+    Comparable orderingValue = record.getCachedOrderingValue() != null ?  record.getCachedOrderingValue() : recordContext.getOrderingValue(data, schema, orderingFields);
     return new BufferedRecord<>(recordKey, orderingValue, data, schemaId, inferOperation(isDelete, record.getOperation()));
   }
 
   public static <T> BufferedRecord<T> fromHoodieRecordWithDeflatedRecord(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props,
-                                                                         String[] orderingFields, DeleteContext deleteContext) {
+                                                                         List<String> orderingFields, DeleteContext deleteContext) {
     HoodieKey hoodieKey = record.getKey();
     T data = recordContext.extractDeflatedDataFromRecord(record, schema, props);
     String recordKey = hoodieKey == null ? recordContext.getRecordKey(data, schema) : hoodieKey.getRecordKey();
     Integer schemaId = recordContext.encodeAvroSchema(schema);
-    Comparable orderingValue = record.getOrderingValue(schema, props, orderingFields);
+    Comparable orderingValue = record.getCachedOrderingValue() != null ? record.getCachedOrderingValue() : recordContext.getOrderingValue(data, schema, orderingFields);
     boolean isDelete = record.isDelete(deleteContext, props);
     return new BufferedRecord<>(recordKey, orderingValue, data, schemaId, inferOperation(isDelete, record.getOperation()));
   }
