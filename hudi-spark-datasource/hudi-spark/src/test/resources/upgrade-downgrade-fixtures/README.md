@@ -35,8 +35,12 @@ Tables that use complex key generators for testing key generator compatibility:
 - `hudi-v8-table-complex-keygen.zip` - Hudi 1.0.2, Table Version 8
 - `hudi-v9-table-complex-keygen.zip` - Hudi 1.1.0, Table Version 9
 
-## Table Schema
+### Unsupported Tables (`unsupported-upgrade-tables`)
+Tables that are not supported for upgrade/downgrade testing such as v4 and v5. (We support v6 and above)
+- `hudi-v4-mor-table.zip` - Hudi 0.14.0, Table Version 4
+- `hudi-v5-mor-table.zip` - Hudi 0.14.0, Table Version 5
 
+## Table Schema
 All fixture tables use a consistent simple schema:
 - `id` (string) - Record identifier
 - `name` (string) - Record name  
