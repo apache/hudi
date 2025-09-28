@@ -20,7 +20,7 @@ SCRIPT_PATH=$(cd `dirname $0`; pwd)
 HUDI_DEMO_ENV=$1
 # set up root directory
 WS_ROOT=`dirname $SCRIPT_PATH`
-COMPOSE_FILE_NAME="docker-compose_hadoop284_hive233_spark353_amd64.yml"
+COMPOSE_FILE_NAME="docker-compose_hadoop334_hive313_spark353_amd64.yml"
 if [ "$(uname -m)" = "arm64" ]; then
   COMPOSE_FILE_NAME="docker-compose_hadoop334_hive313_spark353_arm64.yml"
 fi

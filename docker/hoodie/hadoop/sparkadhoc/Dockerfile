@@ -31,6 +31,8 @@ ENV PRESTO_VERSION ${PRESTO_VERSION}
 ENV TRINO_VERSION ${TRINO_VERSION}
 ENV BASE_URL=https://repo1.maven.org/maven2
 
+ENV SPARK_BUNDLE_JAR=/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-spark-bundle.jar
+
 RUN apt-get update
 RUN apt-get install -y \
     curl \
