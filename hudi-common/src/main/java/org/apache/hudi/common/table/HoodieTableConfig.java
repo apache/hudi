@@ -109,7 +109,6 @@ import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_
 import static org.apache.hudi.common.model.HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
-import static org.apache.hudi.common.table.HoodieTableConfig.PayloadGroupings.EVENT_TIME_ORDERING_PAYLOADS;
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
