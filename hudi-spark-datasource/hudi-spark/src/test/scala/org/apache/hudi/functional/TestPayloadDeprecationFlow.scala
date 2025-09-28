@@ -348,11 +348,25 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       }
     }
 
-    // Validate data consistency after downgrade
+    // 9. Add post-downgrade upsert to verify table functionality
+    val postDowngradeData = Seq(
+      (14, 10L, "rider-Z", "driver-Z", 45.50, "i", "14.1", 14, 1, "i"))
+    val postDowngradeUpdate = spark.createDataFrame(postDowngradeData).toDF(columns: _*)
+    postDowngradeUpdate.write.format("hudi")
+      .option(OPERATION.key(), "upsert")
+      .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Validate data consistency after downgrade including new row
     val downgradeDf = spark.read.format("hudi").load(basePath)
     val downgradeFinalDf = downgradeDf.select("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME, DebeziumConstants.FLATTENED_OP_COL_NAME).sort("_event_lsn")
-    assertTrue(expectedDf.except(downgradeFinalDf).isEmpty && downgradeFinalDf.except(expectedDf).isEmpty,
-      "Data should remain consistent after downgrade")
+
+    // Create expected data including the new post-downgrade row
+    val expectedDataWithNewRow = expectedData ++ Seq((14, 10L, "rider-Z", "driver-Z", 45.50, "i", "14.1", 14, 1, "i"))
+    val expectedDfWithNewRow = spark.createDataFrame(spark.sparkContext.parallelize(expectedDataWithNewRow)).toDF(columns: _*).sort("_event_lsn")
+    assertTrue(expectedDfWithNewRow.except(downgradeFinalDf).isEmpty && downgradeFinalDf.except(expectedDfWithNewRow).isEmpty,
+      "Data should remain consistent after downgrade including new row")
   }
 
   @ParameterizedTest
@@ -653,11 +667,25 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       }
     }
 
-    // Validate data consistency after downgrade
+    // 9. Add post-downgrade upsert to verify table functionality
+    val postDowngradeData = Seq(
+      (14, 10L, "rider-Z", "driver-Z", 45.50, "i", "14.1", 14, 1, "i"))
+    val postDowngradeUpdate = spark.createDataFrame(postDowngradeData).toDF(columns: _*)
+    postDowngradeUpdate.write.format("hudi")
+      .option(OPERATION.key(), "upsert")
+      .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Validate data consistency after downgrade including new row
     val downgradeDf = spark.read.format("hudi").load(basePath)
     val downgradeFinalDf = downgradeDf.select("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME, DebeziumConstants.FLATTENED_OP_COL_NAME).sort("_event_lsn")
-    assertTrue(expectedDf.except(downgradeFinalDf).isEmpty && downgradeFinalDf.except(expectedDf).isEmpty,
-      "Data should remain consistent after downgrade")
+
+    // Create expected data including the new post-downgrade row
+    val expectedDataWithNewRow = expectedData ++ Seq((14, 10L, "rider-Z", "driver-Z", 45.50, "i", "14.1", 14, 1, "i"))
+    val expectedDfWithNewRow = spark.createDataFrame(spark.sparkContext.parallelize(expectedDataWithNewRow)).toDF(columns: _*).sort("_event_lsn")
+    assertTrue(expectedDfWithNewRow.except(downgradeFinalDf).isEmpty && downgradeFinalDf.except(expectedDfWithNewRow).isEmpty,
+      "Data should remain consistent after downgrade including new row")
   }
 
   def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {
