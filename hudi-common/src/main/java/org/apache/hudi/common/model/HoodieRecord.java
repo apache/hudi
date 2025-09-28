@@ -244,6 +244,10 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return orderingValue;
   }
 
+  public Comparable<?> getCachedOrderingValue() {
+    return orderingValue;
+  }
+
   /**
    * Extracting the ordering value from the record.
    *
