@@ -225,7 +225,7 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
     return row -> (InternalRow) unsafeRowWriter.apply(row);
   }
 
-  public void initOrderingValueConverter(Schema dataSchema, List<String> orderingFieldNames) {
+  void initOrderingValueConverter(Schema dataSchema, List<String> orderingFieldNames) {
     this.orderingValueConverter = OrderingValueEngineTypeConverter.create(dataSchema, orderingFieldNames);
   }
 }
