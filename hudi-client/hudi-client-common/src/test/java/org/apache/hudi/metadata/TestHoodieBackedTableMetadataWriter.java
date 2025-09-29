@@ -129,7 +129,9 @@ class TestHoodieBackedTableMetadataWriter {
 
     instants.add(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "20250925012523368", "20250925015000000"));
 
-    instants.add(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "20250925013447468", "20250925014634434"));
+    // a deltacommit instant requested before the compaction request time and finished after it.
+    HoodieInstant instantToRollback = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "20250925012123804", "20250925014634434");
+    instants.add(instantToRollback);
 
     HoodieActiveTimeline timeline = createMockTimeline(instants);
 
@@ -142,12 +144,10 @@ class TestHoodieBackedTableMetadataWriter {
     metadataMetaClientField.setAccessible(true);
     metadataMetaClientField.set(writer, mockMetaClient);
 
-    String rollbackCommitTime = "20250925012123905";
-
-    java.lang.reflect.Method validateRollbackMethod = HoodieBackedTableMetadataWriter.class.getDeclaredMethod("validateRollback", String.class);
+    java.lang.reflect.Method validateRollbackMethod = HoodieBackedTableMetadataWriter.class.getDeclaredMethod("validateRollback", HoodieInstant.class);
     validateRollbackMethod.setAccessible(true);
 
-    assertDoesNotThrow(() -> validateRollbackMethod.invoke(writer, rollbackCommitTime));
+    assertDoesNotThrow(() -> validateRollbackMethod.invoke(writer, instantToRollback));
   }
 
   @SuppressWarnings("deprecation")
