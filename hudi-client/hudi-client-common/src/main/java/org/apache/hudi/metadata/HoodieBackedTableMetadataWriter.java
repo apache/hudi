@@ -63,7 +63,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -117,7 +116,6 @@ import static org.apache.hudi.avro.HoodieAvroUtils.getRecordKeySchema;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.createMetadataWriteConfig;
@@ -1654,26 +1652,71 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   private void validateRollback(String commitToRollbackInstantTime) {
-    // Find the deltacommits since the last compaction
-    Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfo =
-        CompactionUtils.getDeltaCommitsSinceLatestCompaction(metadataMetaClient.getActiveTimeline());
-
-    // This could be a compaction or deltacommit instant (See CompactionUtils.getDeltaCommitsSinceLatestCompaction)
-    HoodieInstant compactionInstant = deltaCommitsInfo.get().getValue();
-    HoodieTimeline deltacommitsSinceCompaction = deltaCommitsInfo.get().getKey();
-
-    // The commit being rolled back should not be earlier than the latest compaction on the MDT because the latest file slice does not change after all.
-    // Compaction on MDT only occurs when all actions are completed on the dataset.
-    // Hence, this case implies a rollback of completed commit which should actually be handled using restore.
-    if (compactionInstant.getAction().equals(COMMIT_ACTION)) {
-      final String compactionInstantTime = compactionInstant.requestedTime();
-      if (commitToRollbackInstantTime.length() == compactionInstantTime.length() && LESSER_THAN_OR_EQUALS.test(commitToRollbackInstantTime, compactionInstantTime)) {
-        throw new HoodieMetadataException(
-            String.format("Commit being rolled back %s is earlier than the latest compaction %s. There are %d deltacommits after this compaction: %s",
-                commitToRollbackInstantTime, compactionInstantTime, deltacommitsSinceCompaction.countInstants(), deltacommitsSinceCompaction.getInstants())
-        );
-      }
+    HoodieActiveTimeline activeTimeline = metadataMetaClient.getActiveTimeline();
+    HoodieTimeline compactionTimeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
+    if (compactionTimeline.empty()) {
+      LOG.info("No compactions found, allowing rollback of commit {}", commitToRollbackInstantTime);
+      return;
     }
+
+    Option<HoodieInstant> relevantCompaction = compactionTimeline.getReverseOrderedInstants()
+        .filter(compaction -> {
+          String compactionTime = compaction.requestedTime();
+          return commitToRollbackInstantTime.length() == compactionTime.length()
+              && LESSER_THAN_OR_EQUALS.test(commitToRollbackInstantTime, compactionTime);
+        })
+        .findFirst()
+        .map(Option::of)
+        .orElse(Option.empty());
+
+    if (!relevantCompaction.isPresent()) {
+      LOG.info("Commit {} is newer than all compactions, allowing rollback", commitToRollbackInstantTime);
+      return;
+    }
+
+    HoodieInstant compaction = relevantCompaction.get();
+    String compactionTime = compaction.requestedTime();
+
+    if (wasCommitInCompactionScope(commitToRollbackInstantTime, compaction, activeTimeline)) {
+      HoodieTimeline instantsAfterCompaction = activeTimeline.getDeltaCommitTimeline()
+          .findInstantsModifiedAfterByCompletionTime(compactionTime);
+      throw new HoodieMetadataException(
+          String.format("Commit being rolled back %s was included in compaction %s. Use restore instead of rollback. There are %d deltacommits after this compaction: %s",
+              commitToRollbackInstantTime, compactionTime, instantsAfterCompaction.countInstants(), instantsAfterCompaction.getInstants())
+      );
+    }
+    LOG.info("Commit {} was not in compaction scope for compaction {}, allowing rollback",
+        commitToRollbackInstantTime, compactionTime);
+  }
+
+  private boolean wasCommitInCompactionScope(String commitToRollbackInstantTime,
+                                             HoodieInstant compaction,
+                                             HoodieActiveTimeline activeTimeline) {
+    String compactionCompletionTime = compaction.getCompletionTime();
+    if (compactionCompletionTime == null) {
+      compactionCompletionTime = compaction.requestedTime();
+    }
+    Option<HoodieInstant> commitInstant = activeTimeline.getDeltaCommitTimeline()
+        .filterCompletedInstants()
+        .getInstants()
+        .stream()
+        .filter(instant -> instant.requestedTime().equals(commitToRollbackInstantTime))
+        .findFirst()
+        .map(Option::of)
+        .orElse(Option.empty());
+    if (!commitInstant.isPresent()) {
+      LOG.info("Commit {} not found in completed deltacommits, allowing rollback", commitToRollbackInstantTime);
+      return false;
+    }
+    HoodieInstant commit = commitInstant.get();
+    String commitCompletionTime = commit.getCompletionTime();
+    if (commitCompletionTime == null) {
+      commitCompletionTime = commit.requestedTime();
+    }
+    boolean wasInScope = compareTimestamps(commitCompletionTime, LESSER_THAN_OR_EQUALS, compactionCompletionTime);
+    LOG.info("Commit {} completion time: {}, Compaction {} completion time: {}, was in scope: {}", 
+        commitToRollbackInstantTime, commitCompletionTime, compaction.requestedTime(), compactionCompletionTime, wasInScope);
+    return wasInScope;
   }
 
   @Override

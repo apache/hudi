@@ -22,6 +22,9 @@ import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
@@ -30,6 +33,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.MockedStatic;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
@@ -107,5 +115,45 @@ class TestHoodieBackedTableMetadataWriter {
         .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER).build())
         .build();
     assertSame(mockMetaClient, HoodieBackedTableMetadataWriter.rollbackFailedWrites(lazyWriteConfig, mockWriteClient, mockMetaClient));
+  }
+
+  @Test
+  void testValidateRollbackForMDT() throws Exception {
+    List<HoodieInstant> instants = new ArrayList<>();
+
+    instants.add(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION, "20250925012123905"));
+
+    instants.add(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "20250925012447357", "20250925013432341"));
+    instants.add(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "20250925012518125", "20250925012831379"));
+    instants.add(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "20250925012851950", "20250925013157886"));
+
+    instants.add(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "20250925012523368", "20250925015000000"));
+
+    instants.add(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "20250925013447468", "20250925014634434"));
+
+    HoodieActiveTimeline timeline = createMockTimeline(instants);
+
+    HoodieBackedTableMetadataWriter<?, ?> writer = mock(HoodieBackedTableMetadataWriter.class);
+
+    HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
+    when(mockMetaClient.getActiveTimeline()).thenReturn(timeline);
+
+    java.lang.reflect.Field metadataMetaClientField = HoodieBackedTableMetadataWriter.class.getDeclaredField("metadataMetaClient");
+    metadataMetaClientField.setAccessible(true);
+    metadataMetaClientField.set(writer, mockMetaClient);
+
+    String rollbackCommitTime = "20250925012123905";
+
+    java.lang.reflect.Method validateRollbackMethod = HoodieBackedTableMetadataWriter.class.getDeclaredMethod("validateRollback", String.class);
+    validateRollbackMethod.setAccessible(true);
+
+    assertDoesNotThrow(() -> validateRollbackMethod.invoke(writer, rollbackCommitTime));
+  }
+
+  @SuppressWarnings("deprecation")
+  private HoodieActiveTimeline createMockTimeline(List<HoodieInstant> instants) {
+    ActiveTimelineV2 timeline = new ActiveTimelineV2();
+    timeline.setInstants(instants);
+    return timeline;
   }
 }
