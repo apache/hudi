@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -84,6 +85,9 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
    */
   private final String firstNonSavepointCommit;
 
+  private final AtomicBoolean isFirstLoad = new AtomicBoolean(true);
+  private final String firstLoadInstant;
+
   /**
    * The constructor.
    *
@@ -102,7 +106,14 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
   public CompletionTimeQueryViewV2(HoodieTableMetaClient metaClient, String eagerLoadInstant) {
     this.metaClient = metaClient;
     this.instantTimeToCompletionTimeMap = new ConcurrentHashMap<>();
-    this.cursorInstant = InstantComparison.minInstant(eagerLoadInstant, metaClient.getActiveTimeline().firstInstant().map(HoodieInstant::requestedTime).orElse(""));
+    this.cursorInstant = metaClient.getActiveTimeline().firstInstant().map(HoodieInstant::requestedTime).orElse("");
+    if (InstantComparison.compareTimestamps(cursorInstant, LESSER_THAN_OR_EQUALS, eagerLoadInstant)) {
+      // case where active timeline contains the eager load instant
+      isFirstLoad.set(false); // set to false so the archive timeline is not inspected for the eagerLoadInstant
+      firstLoadInstant = null;
+    } else {
+      firstLoadInstant = eagerLoadInstant;
+    }
     // Note: use getWriteTimeline() to keep sync with the fs view visibleCommitsAndCompactionTimeline, see AbstractTableFileSystemView.refreshTimeline.
     this.firstNonSavepointCommit = metaClient.getActiveTimeline().getWriteTimeline().getFirstNonSavepointCommit().map(HoodieInstant::requestedTime).orElse("");
     load();
@@ -283,38 +294,44 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
   //  Utilities
   // -------------------------------------------------------------------------
 
+  /**
+   * Loads the completion times incrementally from archived timeline, if required.
+   * If the provided startTime is greater than the cursorInstant,
+   * then the completion is already present in memory and no additional loading is required.
+   * @param startTime The start time of the instant.
+   */
   private void loadCompletionTimeIncrementally(String startTime) {
     // the 'startTime' should be out of the eager loading range, switch to a lazy loading.
     // This operation is resource costly.
     synchronized (this) {
       if (InstantComparison.compareTimestamps(startTime, LESSER_THAN, this.cursorInstant)) {
+        HoodieArchivedTimeline.TimeRangeFilter filter;
+        if (isFirstLoad.get()) {
+          isFirstLoad.set(false);
+          String startingInstant = InstantComparison.minInstant(startTime, firstLoadInstant);
+          this.cursorInstant = startingInstant;
+          filter = new HoodieArchivedTimeline.StartTsFilter(startingInstant);
+        } else {
+          filter = new HoodieArchivedTimeline.ClosedOpenTimeRangeFilter(startTime, this.cursorInstant);
+          this.cursorInstant = startTime;
+        }
         metaClient.getTableFormat().getTimelineFactory().createArchivedTimelineLoader().loadInstants(metaClient,
-            new HoodieArchivedTimeline.ClosedOpenTimeRangeFilter(startTime, this.cursorInstant),
+            filter,
             HoodieArchivedTimeline.LoadMode.TIME,
             r -> true,
             this::readCompletionTime);
       }
-      // refresh the start instant
-      this.cursorInstant = startTime;
     }
   }
 
   /**
-   * This is method to read instant completion time.
-   * This would also update 'startToCompletionInstantTimeMap' map with start time/completion time pairs.
-   * Only instants starts from 'startInstant' (inclusive) are considered.
+   * Reads the completion times from the active timeline.
    */
   private void load() {
     // load active instants first.
     this.metaClient.getActiveTimeline()
         .filterCompletedInstants().getInstantsAsStream()
         .forEach(instant -> setCompletionTime(instant.requestedTime(), instant.getCompletionTime()));
-    // then load the archived instants.
-    metaClient.getTableFormat().getTimelineFactory().createArchivedTimelineLoader().loadInstants(metaClient,
-        new HoodieArchivedTimeline.StartTsFilter(this.cursorInstant),
-        HoodieArchivedTimeline.LoadMode.TIME,
-        r -> true,
-        this::readCompletionTime);
   }
 
   private void readCompletionTime(String instantTime, GenericRecord record) {
