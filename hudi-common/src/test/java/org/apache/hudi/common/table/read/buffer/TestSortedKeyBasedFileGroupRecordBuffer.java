@@ -51,7 +51,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
@@ -152,9 +151,8 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
         testIndexedRecord5, testIndexedRecord6).iterator()));
 
     List<IndexedRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
-    assertEquals(Stream.of(testIndexedRecord1, testIndexedRecord2Update,
-        testIndexedRecord3, testIndexedRecord4, testIndexedRecord6Update)
-        .map(record -> getSerializableIndexedRecord(record)).collect(Collectors.toList()), actualRecords);
+    assertEquals(convertGenRecordsToSerializableIndexedRecord(Stream.of(testIndexedRecord1, testIndexedRecord2Update,
+        testIndexedRecord3, testIndexedRecord4, testIndexedRecord6Update)), actualRecords);
     assertEquals(1, readStats.getNumInserts());
     assertEquals(1, readStats.getNumDeletes());
     assertEquals(2, readStats.getNumUpdates());

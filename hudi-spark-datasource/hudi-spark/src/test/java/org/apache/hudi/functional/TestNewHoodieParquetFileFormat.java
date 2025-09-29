@@ -26,7 +26,9 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -49,8 +51,8 @@ public class TestNewHoodieParquetFileFormat extends TestBootstrapReadBase {
     return b.build();
   }
 
-  //@ParameterizedTest
-  //@MethodSource("testArgs") Disabling to target green CI w/o this flaky test. Will revert before opening it up for review.
+  @ParameterizedTest
+  @MethodSource("testArgs")
   public void testNewParquetFileFormat(HoodieTableType tableType, Integer nPartitions) {
     this.bootstrapType = nPartitions == 0 ? "metadata" : "mixed";
     this.dashPartitions = true;

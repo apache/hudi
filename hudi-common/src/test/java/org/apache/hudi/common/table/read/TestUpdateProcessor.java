@@ -21,9 +21,9 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.BaseAvroPayload;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.SerializableIndexedRecord;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
@@ -145,7 +145,7 @@ class TestUpdateProcessor {
     when(readerContext.getRecordContext()).thenReturn(recordContext);
     when(recordContext.seal(any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(0));
     BufferedRecord<IndexedRecord> previous = null;
-    BufferedRecord<IndexedRecord> merged = getRecord("value2", null);
+    BufferedRecord<IndexedRecord> merged = getRecordWithSerializableIndexedRecord("value2", null);
     BufferedRecord<IndexedRecord> expected = getRecordWithSerializableIndexedRecord("value2", HoodieOperation.INSERT);
     HoodieReadStats readStats = new HoodieReadStats();
     BaseFileUpdateCallback<IndexedRecord> updateCallback = mock(BaseFileUpdateCallback.class);
@@ -154,11 +154,13 @@ class TestUpdateProcessor {
 
     // mock record creation
     when(recordContext.decodeAvroSchema(merged.getSchemaId())).thenReturn(SCHEMA);
-    when(recordContext.convertToAvroRecord(merged.getRecord(), SCHEMA)).thenReturn((GenericRecord) merged.getRecord());
+    when(recordContext.convertToAvroRecord(merged.getRecord(), SCHEMA))
+        .thenReturn((GenericRecord) ((SerializableIndexedRecord) merged.getRecord()).getData());
     if (shouldIgnore) {
       when(recordContext.convertToAvroRecord(merged.getRecord(), SCHEMA)).thenReturn(SENTINEL);
     } else {
-      when(recordContext.convertToAvroRecord(merged.getRecord(), SCHEMA)).thenReturn((GenericRecord) merged.getRecord());
+      when(recordContext.convertToAvroRecord(merged.getRecord(), SCHEMA))
+          .thenReturn((GenericRecord) ((SerializableIndexedRecord) merged.getRecord()).getData());
       when(readerContext.getSchemaHandler().getRequestedSchema()).thenReturn(SCHEMA);
       when(recordContext.convertAvroRecord(any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(0));
     }
@@ -179,7 +181,7 @@ class TestUpdateProcessor {
     GenericRecord record = new GenericData.Record(SCHEMA);
     record.put("key", KEY);
     record.put("value", value);
-    return new BufferedRecord<>(KEY, 1, new HoodieAvroIndexedRecord(record).getData(), 0, operation);
+    return new BufferedRecord<>(KEY, 1, SerializableIndexedRecord.createInstance(record), 0, operation);
   }
 
   @ParameterizedTest

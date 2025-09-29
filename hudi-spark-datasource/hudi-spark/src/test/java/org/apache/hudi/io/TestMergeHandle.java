@@ -506,8 +506,8 @@ public class TestMergeHandle extends BaseTestHandle {
     }
 
     // Generate records to update
-    GenericRecord genericRecord1 = (GenericRecord) ((SerializableIndexedRecord)newRecords.get(0).getData()).getData();
-    GenericRecord genericRecord2 = (GenericRecord) ((SerializableIndexedRecord)newRecords.get(1).getData()).getData();
+    GenericRecord genericRecord1 = (GenericRecord) ((SerializableIndexedRecord) newRecords.get(0).getData()).getData();
+    GenericRecord genericRecord2 = (GenericRecord) ((SerializableIndexedRecord) newRecords.get(1).getData()).getData();
     genericRecord1.put(ORDERING_FIELD, 20L);
     genericRecord2.put(ORDERING_FIELD, 2L);
     recordsToUpdate.add(genericRecord1);

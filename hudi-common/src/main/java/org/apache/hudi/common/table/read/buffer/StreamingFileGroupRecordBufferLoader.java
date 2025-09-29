@@ -65,7 +65,7 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
                                                                             TypedProperties props, ReaderParameters readerParameters, HoodieReadStats readStats,
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
     Schema recordSchema = AvroSchemaCache.intern(getRecordSchema(readerContext, props));
-    readerContext.getSchemaHandler().setIncomingRecordSchema(recordSchema);
+    readerContext.getSchemaHandler().setRecordSchemaForUpdates(recordSchema);
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
     Option<PartialUpdateMode> partialUpdateModeOpt = tableConfig.getPartialUpdateMode();
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback, props);

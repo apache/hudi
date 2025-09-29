@@ -60,6 +60,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
@@ -94,6 +95,10 @@ public class BaseTestFileGroupRecordBuffer {
 
   protected SerializableIndexedRecord getSerializableIndexedRecord(IndexedRecord indexedRecord) {
     return SerializableIndexedRecord.createInstance(indexedRecord);
+  }
+
+  protected List<SerializableIndexedRecord> convertGenRecordsToSerializableIndexedRecord(Stream<IndexedRecord> indexedRecordStream) {
+    return indexedRecordStream.map(record -> getSerializableIndexedRecord(record)).collect(Collectors.toList());
   }
 
   protected static KeyBasedFileGroupRecordBuffer<IndexedRecord> buildKeyBasedFileGroupRecordBuffer(HoodieReaderContext<IndexedRecord> readerContext,

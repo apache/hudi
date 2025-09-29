@@ -36,7 +36,7 @@ import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.avro.{Schema, SchemaBuilder}
-import org.apache.avro.generic.GenericRecord
+import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
 import org.apache.spark.rdd.RDD
@@ -121,14 +121,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val genericRecords : RDD[GenericRecord] = spark.sparkContext.parallelize(recordList.asScala.map(_.toIndexedRecord(schema, CollectionUtils.emptyProps))
       .filter(r => r.isPresent).map(r =>  {
       val data = r.get.getData
-      if (data.isInstanceOf[SerializableIndexedRecord])
-      {
-        // accessing a field to trigger deser of indexed record
-        data.get(0)
-        data.asInstanceOf[SerializableIndexedRecord].getData.asInstanceOf[GenericRecord]
-      } else {
-        data.asInstanceOf[GenericRecord]
-      }
+      fetchGenericRecord(data)
     }).toSeq, 2)
     val inputDF: Dataset[Row] = AvroConversionUtils.createDataFrame(genericRecords, schemaStr, spark);
 
@@ -139,6 +132,17 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       .option("hoodie.datasource.write.table.type", "MERGE_ON_READ")
       .mode(if (firstCommit) SaveMode.Overwrite else SaveMode.Append)
       .save(getBasePath)
+  }
+
+  def fetchGenericRecord(data: IndexedRecord) : GenericRecord = {
+    if (data.isInstanceOf[SerializableIndexedRecord])
+    {
+      // accessing a field to trigger deser of indexed record
+      data.get(0)
+      data.asInstanceOf[SerializableIndexedRecord].getData.asInstanceOf[GenericRecord]
+    } else {
+      data.asInstanceOf[GenericRecord]
+    }
   }
 
   override def getCustomPayload: String = classOf[CustomPayloadForTesting].getName

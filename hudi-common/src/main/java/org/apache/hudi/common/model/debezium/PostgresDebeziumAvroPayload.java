@@ -108,7 +108,7 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
     fields.forEach(field -> {
       // There are only four avro data types that have unconstrained sizes, which are
       // NON-NULLABLE STRING, NULLABLE STRING, NON-NULLABLE BYTES, NULLABLE BYTES
-      if (((GenericRecord)incomingRecord).get(field.name()) != null
+      if (((GenericRecord) incomingRecord).get(field.name()) != null
           && (containsStringToastedValues(incomingRecord, field) || containsBytesToastedValues(incomingRecord, field))) {
         ((GenericRecord) incomingRecord).put(field.name(), ((GenericData.Record) currentRecord).get(field.name()));
       }

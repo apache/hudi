@@ -426,7 +426,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
 
   protected Dataset<Row> toDataset(List<HoodieRecord> records, Schema schema) {
     List<GenericRecord> avroRecords = records.stream()
-        .map(r -> (GenericRecord) ((SerializableIndexedRecord)r.getData()).getData())
+        .map(r -> (GenericRecord) ((SerializableIndexedRecord) r.getData()).getData())
         .collect(Collectors.toList());
     JavaRDD<GenericRecord> jrdd = jsc.parallelize(avroRecords, 2);
     return AvroConversionUtils.createDataFrame(jrdd.rdd(), schema.toString(), spark);
