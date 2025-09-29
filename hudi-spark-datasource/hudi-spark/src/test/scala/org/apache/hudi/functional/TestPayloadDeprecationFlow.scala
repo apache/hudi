@@ -150,10 +150,10 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     // This tests that updates/deletes with lower ordering values are ignored
     // while higher ordering values are applied
     val mixedOrderingData = Seq(
-      // Update rider-C with LOWER ordering - should be IGNORED (rider-C has ts=10 originally)
-      (8, 3L, "rider-CC", "driver-CC", 30.00, "u", "8.1", 8, 1, "u"),
       // Update rider-C with HIGHER ordering - should be APPLIED
       (11, 3L, "rider-CC", "driver-CC", 35.00, "u", "15.1", 15, 1, "u"),
+      // Update rider-C with LOWER ordering - should be IGNORED (rider-C has ts=10 originally)
+      (8, 3L, "rider-CC", "driver-CC", 30.00, "u", "8.1", 8, 1, "u"),
       // Delete rider-E with LOWER ordering - should be IGNORED (rider-E has ts=10 originally)
       (9, 5L, "rider-EE", "driver-EE", 17.85, "D", "9.1", 9, 1, "d"))
     val mixedOrderingUpdate = spark.createDataFrame(mixedOrderingData).toDF(columns: _*)
@@ -446,10 +446,10 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     // This tests that updates/deletes with lower ordering values are ignored
     // while higher ordering values are applied
     val mixedOrderingData = Seq(
-      // Update rider-C with LOWER ordering - should be IGNORED (rider-C has ts=10 originally)
-      (8, 3L, "rider-CC", "driver-CC", 30.00, "u", "8.1", 8, 1, "u"),
       // Update rider-C with HIGHER ordering - should be APPLIED
       (11, 3L, "rider-CC", "driver-CC", 35.00, "u", "15.1", 15, 1, "u"),
+      // Update rider-C with LOWER ordering - should be IGNORED (rider-C has ts=10 originally)
+      (8, 3L, "rider-CC", "driver-CC", 30.00, "u", "8.1", 8, 1, "u"),
       // Delete rider-E with LOWER ordering - should be IGNORED (rider-E has ts=10 originally)
       (9, 5L, "rider-EE", "driver-EE", 17.85, "D", "9.1", 9, 1, "d"))
     val mixedOrderingUpdate = spark.createDataFrame(mixedOrderingData).toDF(columns: _*)
