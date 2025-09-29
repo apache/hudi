@@ -28,8 +28,8 @@ import org.apache.hudi.common.model.debezium.{DebeziumConstants, MySqlDebeziumAv
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
-import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.spark.sql.SaveMode
