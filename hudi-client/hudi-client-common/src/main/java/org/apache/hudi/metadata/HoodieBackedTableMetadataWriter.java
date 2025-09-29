@@ -1679,7 +1679,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   private boolean wasCommitInCompactionScope(String commitToRollbackInstantTime,
                                              HoodieInstant compaction,
                                              HoodieActiveTimeline activeTimeline) {
-    String compactionCompletionTime = compaction.getCompletionTime();
+    String compactionCompletionTime = compaction.requestedTime();
     Option<HoodieInstant> commitInstant = activeTimeline.getDeltaCommitTimeline()
         .filterCompletedInstants()
         .getInstants()
@@ -1691,7 +1691,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     if (!commitInstant.isPresent()) {
       return false;
     }
-    return compareTimestamps(commitInstant.get().getCompletionTime(), LESSER_THAN_OR_EQUALS, compactionCompletionTime);
+    return compareTimestamps(commitInstant.get().requestedTime(), LESSER_THAN_OR_EQUALS, compactionCompletionTime);
   }
 
   @Override
