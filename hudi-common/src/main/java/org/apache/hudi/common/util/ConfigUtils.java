@@ -768,14 +768,11 @@ public class ConfigUtils {
   public static HoodieReaderConfig getHFileCacheConfigs(Map<String, String> options) {
     HoodieReaderConfig config = new HoodieReaderConfig();
     config.setValue(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED,
-        options.getOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(),
-            HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.defaultValue().toString()));
+        getStringWithAltKeys(options, HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED));
     config.setValue(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE,
-        options.getOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(),
-            HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.defaultValue().toString()));
+        getStringWithAltKeys(options, HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE));
     config.setValue(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES,
-        options.getOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(),
-            HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.defaultValue().toString()));
+        getStringWithAltKeys(options, HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES));
     return config;
   }
 
