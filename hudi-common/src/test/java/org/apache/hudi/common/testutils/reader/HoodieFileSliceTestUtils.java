@@ -21,7 +21,6 @@ package org.apache.hudi.common.testutils.reader;
 
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
@@ -198,8 +197,7 @@ public class HoodieFileSliceTestUtils {
             records,
             header,
             HFILE_COMPRESSION_ALGORITHM_NAME.defaultValue(),
-            pathForReader,
-            HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue());
+            pathForReader);
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(
             records,

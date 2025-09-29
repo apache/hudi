@@ -21,6 +21,7 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -34,6 +35,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordSerializer;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
@@ -81,8 +83,17 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig,
       Option<InstantRange> instantRangeOpt,
+      Option<Predicate> filterOpt,
+      TypedProperties props) {
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, Collections.emptyMap(), tableConfig.getPayloadClass(), new HoodieConfig(props));
+  }
+
+  public HoodieAvroReaderContext(
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt) {
-    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, Collections.emptyMap());
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, Collections.emptyMap(), tableConfig.getPayloadClass(), ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER);
   }
 
   /**
@@ -100,8 +111,9 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       HoodieTableConfig tableConfig,
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt,
-      Map<StoragePath, HoodieAvroFileReader> reusableFileReaders) {
-    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, reusableFileReaders, tableConfig.getPayloadClass());
+      Map<StoragePath, HoodieAvroFileReader> reusableFileReaders,
+      TypedProperties props) {
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, reusableFileReaders, tableConfig.getPayloadClass(), new HoodieConfig(props));
   }
 
   /**
@@ -110,12 +122,14 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
    * @param storageConfiguration the storage configuration to use for reading files
    * @param tableConfig          the configuration of the Hudi table being read
    * @param payloadClassName     the payload class for the writer
+   * @param props                the reader configurations that should be used when performing reads
    */
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig,
-      String payloadClassName) {
-    this(storageConfiguration, tableConfig, Option.empty(), Option.empty(), Collections.emptyMap(), payloadClassName);
+      String payloadClassName,
+      TypedProperties props) {
+    this(storageConfiguration, tableConfig, Option.empty(), Option.empty(), Collections.emptyMap(), payloadClassName, new HoodieConfig(props));
   }
 
   private HoodieAvroReaderContext(
@@ -124,8 +138,9 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt,
       Map<StoragePath, HoodieAvroFileReader> reusableFileReaders,
-      String payloadClassName) {
-    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, new AvroRecordContext(tableConfig, payloadClassName));
+      String payloadClassName,
+      HoodieConfig hoodieReaderConfig) {
+    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, new AvroRecordContext(tableConfig, payloadClassName), hoodieReaderConfig);
     this.reusableFileReaders = reusableFileReaders;
     this.isMultiFormat = tableConfig.isMultipleBaseFileFormatsEnabled();
   }
@@ -138,7 +153,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     HoodieAvroFileReader reader = getOrCreateFileReader(storagePathInfo.getPath(), isLogFile, format -> {
       try {
         return (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
-            .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
+            .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(hoodieReaderConfig,
                 storagePathInfo, format, Option.empty());
       } catch (IOException e) {
         throw new HoodieIOException("Failed to create avro records iterator from file path " + storagePathInfo.getPath(), e);
@@ -160,7 +175,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     HoodieAvroFileReader reader = getOrCreateFileReader(filePath, isLogFile, format -> {
       try {
         return (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
-            .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
+            .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(hoodieReaderConfig,
                 filePath, format, Option.empty());
       } catch (IOException e) {
         throw new HoodieIOException("Failed to create avro records iterator from file path " + filePath, e);
