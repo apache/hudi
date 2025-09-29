@@ -27,6 +27,9 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -47,7 +50,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   public static final String METADATA_EVENT_TIME_KEY = "metadata.event_time.key";
   public static final String DELETE_KEY = "hoodie.payload.delete.field";
   public static final String DELETE_MARKER = "hoodie.payload.delete.marker";
-  private final AtomicBoolean isDeleteComputed = new AtomicBoolean(false);
+  private AtomicBoolean isDeleteComputed = new AtomicBoolean(false);
   private boolean isDefaultRecordPayloadDeleted = false;
 
   public DefaultHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {
@@ -60,7 +63,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
 
   @Override
   public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue) {
-    if (oldValue.recordBytes.length == 0) {
+    if (oldValue.isEmptyRecord()) {
       // use natural order for delete record
       return this;
     }
@@ -74,7 +77,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties properties) throws IOException {
-    Option<IndexedRecord> incomingRecord = recordBytes.length == 0 ? Option.empty() : Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+    Option<IndexedRecord> incomingRecord = getRecord(schema);
 
     // Null check is needed here to support schema evolution. The record in storage may be from old schema where
     // the new ordering column might not be present and hence returns null.
@@ -93,10 +96,10 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema, Properties properties) throws IOException {
-    if (recordBytes.length == 0) {
+    if (isEmptyRecord()) {
       return Option.empty();
     }
-    GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+    GenericRecord incomingRecord = (GenericRecord) getRecord(schema).get();
 
     if (!isDeleteComputed.getAndSet(true)) {
       isDefaultRecordPayloadDeleted = isDeleteRecord(incomingRecord, properties);
@@ -105,12 +108,12 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   }
 
   public boolean isDeleted(Schema schema, Properties props) {
-    if (recordBytes.length == 0) {
+    if (isEmptyRecord()) {
       return true;
     }
     try {
       if (!isDeleteComputed.getAndSet(true)) {
-        GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+        GenericRecord incomingRecord = (GenericRecord) getRecord(schema).get();
         isDefaultRecordPayloadDeleted = isDeleteRecord(incomingRecord, props);
       }
       return isDefaultRecordPayloadDeleted;
@@ -177,5 +180,24 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
       return true;
     }
     return persistedOrderingVal == null || persistedOrderingVal.compareTo(incomingOrderingVal) <= 0;
+  }
+
+  @Override
+  public void write(Kryo kryo, Output output) {
+    super.write(kryo, output);
+    output.writeBoolean(isDeleteComputed.get());
+    if (isDeleteComputed.get()) {
+      output.writeBoolean(isDefaultRecordPayloadDeleted);
+    }
+  }
+
+  @Override
+  public void read(Kryo kryo, Input input) {
+    super.read(kryo, input);
+    boolean isDeleteComputedValue = input.readBoolean();
+    this.isDeleteComputed = new AtomicBoolean(isDeleteComputedValue);
+    if (isDeleteComputedValue) {
+      isDefaultRecordPayloadDeleted = input.readBoolean();
+    }
   }
 }

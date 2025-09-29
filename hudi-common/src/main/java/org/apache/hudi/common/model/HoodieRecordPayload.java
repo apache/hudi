@@ -23,6 +23,7 @@ import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -35,7 +36,6 @@ import java.io.Serializable;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 
@@ -196,7 +196,7 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
         .equals(RecordMergeMode.COMMIT_TIME_ORDERING.name())) {
       return OverwriteWithLatestAvroPayload.class.getName();
     }
-    return DEFAULT_PAYLOAD_CLASS_NAME;
+    return HoodieTableConfig.getDefaultPayloadClassName();
   }
 
   // NOTE: PAYLOAD_CLASS_NAME is before LEGACY_PAYLOAD_CLASS_NAME to make sure

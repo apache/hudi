@@ -580,7 +580,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
          | preCombineField = '_ts'
          |)""".stripMargin)
 
-    val failedToResolveErrorMessage = "Failed to resolve ordering fields `_ts` w/in the source-table output"
+    val failedToResolveErrorMessage = "No matching assignment found for target table ordering field `_ts"
 
     checkExceptionContain(
       s"""

@@ -19,7 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
 import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
@@ -45,7 +45,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     PARTITIONPATH_FIELD.key -> "partition",
     HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
     HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "15",
-    "hoodie.hfile.block.cache.enabled" -> "true"
+    HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key() -> "200"
   ) ++ baseOpts ++ metadataOpts
 
   val secondaryIndexOpts: Map[String, String] = Map(
@@ -128,7 +128,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
                                              deletedDf: DataFrame = sparkSession.emptyDataFrame): Unit = {
     val writeConfig = getWriteConfig(hudiOpts)
     val metadata = metadataWriter(writeConfig).getTableMetadata
-    val readDf = spark.read.format("hudi").load(basePath)
+    val readDf = spark.read.options(hudiOpts).format("hudi").load(basePath)
     readDf.cache()
     val rowArr = readDf.collect()
     val recordIndexMap = HoodieDataUtils.dedupeAndCollectAsMap(metadata.readRecordIndexLocationsWithKeys(

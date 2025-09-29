@@ -56,6 +56,7 @@ import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonEncoder;
+import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificRecordBase;
 
 import javax.annotation.Nullable;
@@ -1699,5 +1700,56 @@ public class HoodieAvroUtils {
       return new String((byte[]) defaultValue, StandardCharsets.ISO_8859_1);
     }
     return defaultValue;
+  }
+
+  public static <T extends SpecificRecordBase> T convertToSpecificRecord(Class<T> clazz, GenericRecord genericRecord) {
+    SpecificData specificData = new SpecificData(clazz.getClassLoader());
+    return convertToSpecificRecord(clazz, genericRecord, specificData);
+  }
+
+  private static <T extends SpecificRecordBase> T convertToSpecificRecord(Class<T> clazz, GenericRecord genericRecord, SpecificData specificData) {
+    try {
+      if (genericRecord == null) {
+        return null;
+      }
+      T specificRecord = clazz.newInstance();
+      Schema schema = SpecificData.getForClass(clazz).getSchema(clazz);
+      for (Field field : schema.getFields()) {
+        Object value = genericRecord.get(field.pos());
+        if (value == null) {
+          specificRecord.put(field.pos(), null);
+          continue;
+        }
+        value = convertFieldToSpecificRecordValue(field.schema(), value, specificData);
+        specificRecord.put(field.pos(), value);
+      }
+      return specificRecord;
+    } catch (InstantiationException | IllegalAccessException e) {
+      throw new HoodieException("Failed to convert to SpecificRecord " + clazz.getName(), e);
+    }
+  }
+
+  private static Object convertFieldToSpecificRecordValue(Schema fieldSchema, Object value, SpecificData specificData) {
+    Schema resolvedFieldSchema = getActualSchemaFromUnion(fieldSchema, value);
+    switch (resolvedFieldSchema.getType()) {
+      case RECORD:
+        value = convertToSpecificRecord(specificData.getClass(resolvedFieldSchema), (GenericRecord) value, specificData);
+        break;
+      case ARRAY:
+        value = ((List<?>) value).stream().map(element -> convertFieldToSpecificRecordValue(resolvedFieldSchema.getElementType(), element, specificData)).collect(Collectors.toList());
+        break;
+      case MAP:
+        value = ((Map<?, ?>) value).entrySet().stream().collect(Collectors.toMap(
+            Map.Entry::getKey,
+            entry -> {
+              Object mapValue = entry.getValue();
+              return convertFieldToSpecificRecordValue(resolvedFieldSchema.getValueType(), mapValue, specificData);
+            }
+        ));
+        break;
+      default:
+        // no conversion required
+    }
+    return value;
   }
 }

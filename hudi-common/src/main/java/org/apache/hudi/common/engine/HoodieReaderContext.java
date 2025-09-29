@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.engine;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -94,18 +95,29 @@ public abstract class HoodieReaderContext<T> {
   private FileGroupReaderSchemaHandler<T> schemaHandler = null;
   // the default iterator mode is engine-specific record mode
   private IteratorMode iteratorMode = IteratorMode.ENGINE_RECORD;
+  protected final HoodieConfig hoodieReaderConfig;
+
+  protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt,
+      Option<Predicate> keyFilterOpt,
+      RecordContext<T> recordContext) {
+    this(storageConfiguration, tableConfig, instantRangeOpt, keyFilterOpt, recordContext, ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER);
+  }
 
   protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
                                 HoodieTableConfig tableConfig,
                                 Option<InstantRange> instantRangeOpt,
                                 Option<Predicate> keyFilterOpt,
-                                RecordContext<T> recordContext) {
+                                RecordContext<T> recordContext,
+                                HoodieConfig hoodieReaderConfig) {
     this.tableConfig = tableConfig;
     this.storageConfiguration = storageConfiguration;
     this.baseFileFormat = tableConfig.getBaseFileFormat();
     this.instantRangeOpt = instantRangeOpt;
     this.keyFilterOpt = keyFilterOpt;
     this.recordContext = recordContext;
+    this.hoodieReaderConfig = hoodieReaderConfig;
   }
 
   // Getter and Setter for schemaHandler
@@ -211,6 +223,10 @@ public abstract class HoodieReaderContext<T> {
 
   public RecordContext<T> getRecordContext() {
     return recordContext;
+  }
+
+  public HoodieConfig getHoodieReaderConfig() {
+    return hoodieReaderConfig;
   }
 
   /**
