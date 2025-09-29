@@ -201,13 +201,12 @@ public class HoodieMetadataWriteUtils {
           writeConfig.getMetricReporterMetricsNamePrefix() + METADATA_TABLE_NAME_SUFFIX);
     }
     // HFile caching properties
-    properties.put(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), writeConfig.getProps()
-        .getOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.defaultValue()));
-    properties.put(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(), writeConfig.getProps()
-        .getOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(), HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.defaultValue()));
-    properties.put(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(), writeConfig.getProps()
-        .getOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(), HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.defaultValue()));
-
+    properties.put(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(),
+        writeConfig.getBooleanOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED));
+    properties.put(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(),
+        writeConfig.getIntOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE));
+    properties.put(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(),
+        writeConfig.getIntOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES));
     builder.withProperties(properties);
 
     if (writeConfig.isMetricsOn()) {
