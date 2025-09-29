@@ -147,7 +147,7 @@ public abstract class HoodieEngineContext {
                                                                  TypedProperties properties) {
     if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
       String payloadClass = ConfigUtils.getPayloadClass(properties);
-      return new AvroReaderContextFactory(metaClient, payloadClass);
+      return new AvroReaderContextFactory(metaClient, payloadClass, properties);
     }
     return getEngineReaderContextFactory(metaClient);
   }

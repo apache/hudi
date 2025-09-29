@@ -31,7 +31,6 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
@@ -65,7 +64,6 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieDataUtils;
@@ -1982,12 +1980,9 @@ public class HoodieMetadataTableValidator implements Serializable {
       StoragePath path = new StoragePath(
           FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath).toString(), filename);
       BloomFilter bloomFilter;
-      HoodieConfig hoodieConfig = new HoodieConfig();
-      hoodieConfig.setValue(HoodieReaderConfig.USE_NATIVE_HFILE_READER,
-          Boolean.toString(ConfigUtils.getBooleanWithAltKeys(props, HoodieReaderConfig.USE_NATIVE_HFILE_READER)));
       try (HoodieFileReader fileReader = getHoodieSparkIOFactory(metaClient.getStorage())
           .getReaderFactory(HoodieRecordType.AVRO)
-          .getFileReader(hoodieConfig, path)) {
+          .getFileReader(new HoodieConfig(), path)) {
         bloomFilter = fileReader.readBloomFilter();
         if (bloomFilter == null) {
           LOG.error("Failed to read bloom filter for {}", path);
