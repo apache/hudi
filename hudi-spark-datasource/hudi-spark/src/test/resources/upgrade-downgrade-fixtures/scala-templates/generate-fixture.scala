@@ -15,9 +15,8 @@
  * limitations under the License.
  */
 
-import org.apache.spark.sql.SaveMode
 import org.apache.hudi.DataSourceWriteOptions._
-import spark.implicits._
+import org.apache.spark.sql.SaveMode
 
 val tableName = "${TABLE_NAME}"
 val basePath = "${BASE_PATH}"

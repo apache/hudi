@@ -38,7 +38,6 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -48,7 +47,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -71,12 +69,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
 
   private static final Logger LOG = LoggerFactory.getLogger(TestUpgradeDowngrade.class);
-  private static final String FIXTURES_BASE_PATH = "/upgrade-downgrade-fixtures/mor-tables/";
   
   @TempDir
   java.nio.file.Path tempDir;
   
   private HoodieTableMetaClient metaClient;
+
+  private static String getFixturesBasePath(String suffix) {
+    if (suffix.contains("complex-keygen")) {
+      return "/upgrade-downgrade-fixtures/complex-keygen-tables/";
+    } else if (suffix.contains("mor")) {
+      return "/upgrade-downgrade-fixtures/mor-tables/";
+    } else {
+      return "/upgrade-downgrade-fixtures/unsupported-upgrade-tables/";
+    }
+  }
 
   @ParameterizedTest
   @MethodSource("upgradeDowngradeVersionPairs")
@@ -85,7 +92,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     String operation = isUpgrade ? "upgrade" : "downgrade";
     LOG.info("Testing {} from version {} to {}", operation, fromVersion, toVersion);
     
-    HoodieTableMetaClient originalMetaClient = loadFixtureTable(fromVersion);
+    HoodieTableMetaClient originalMetaClient = loadFixtureTable(fromVersion, "-mor");
     assertEquals(fromVersion, originalMetaClient.getTableConfig().getTableVersion(),
         "Fixture table should be at expected version");
     
@@ -162,7 +169,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   public void testAutoUpgradeDisabledForVersionsSixAndAbove(HoodieTableVersion originalVersion) throws Exception {
     LOG.info("Testing auto-upgrade disabled for version {} (SIX and above)", originalVersion);
     
-    HoodieTableMetaClient originalMetaClient = loadFixtureTable(originalVersion);
+    HoodieTableMetaClient originalMetaClient = loadFixtureTable(originalVersion, "-mor");
     
     Option<HoodieTableVersion> targetVersionOpt = getNextVersion(originalVersion);
     if (!targetVersionOpt.isPresent()) {
@@ -213,7 +220,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   public void testAutoUpgradeWithWriteTableVersionConfiguration(
       Option<HoodieTableVersion> writeTableVersion, HoodieTableVersion expectedVersion, String description) throws Exception {
     LOG.info("Testing auto-upgrade configuration: {}", description);
-    HoodieTableMetaClient originalMetaClient = loadFixtureTable(HoodieTableVersion.SIX);
+    HoodieTableMetaClient originalMetaClient = loadFixtureTable(HoodieTableVersion.SIX, "-mor");
     assertEquals(HoodieTableVersion.SIX, originalMetaClient.getTableConfig().getTableVersion(),
         "Fixture table should start at version SIX");
     
@@ -253,7 +260,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     
     // Test case: Table at version 6, write version set to 8, auto-upgrade disabled
     // Expected: needsUpgrade should return false and set write version to match table version
-    HoodieTableMetaClient metaClient = loadFixtureTable(HoodieTableVersion.SIX);
+    HoodieTableMetaClient metaClient = loadFixtureTable(HoodieTableVersion.SIX, "-mor");
     assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion(),
         "Fixture table should be at version SIX");
     
@@ -308,47 +315,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         "Exception message should match expected blocked downgrade format");
   }
 
-  @Disabled
-  @ParameterizedTest
-  @MethodSource("metadataTableCorruptionTestVersionPairs")
-  public void testMetadataTableUpgradeDowngradeFailure(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) throws Exception {
-    boolean isUpgrade = fromVersion.lesserThan(toVersion);
-    String operation = isUpgrade ? "upgrade" : "downgrade";
-    LOG.info("Testing metadata table failure during {} from version {} to {}", operation, fromVersion, toVersion);
-
-    HoodieTableMetaClient originalMetaClient = loadFixtureTable(fromVersion);
-    assertEquals(fromVersion, originalMetaClient.getTableConfig().getTableVersion(),
-        "Fixture table should be at expected version");
-
-    HoodieWriteConfig cfg = createWriteConfig(originalMetaClient, true);
-
-    String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(
-        originalMetaClient.getBasePath().toString());
-    StoragePath metadataHoodiePath = new StoragePath(metadataTablePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    StoragePath propsPath = new StoragePath(metadataHoodiePath, HoodieTableConfig.HOODIE_PROPERTIES_FILE);
-    StoragePath backupPropsPath = new StoragePath(metadataHoodiePath, HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP);
-
-    String corruptedContent = "CORRUPTED_INVALID_CONTENT\n\nTHIS_IS_NOT_VALID_PROPERTIES_FORMAT";
-    try (OutputStream propsOut = originalMetaClient.getStorage().create(propsPath, true);
-         OutputStream backupOut = originalMetaClient.getStorage().create(backupPropsPath, true)) {
-      propsOut.write(corruptedContent.getBytes());
-      backupOut.write(corruptedContent.getBytes());
-    }
-
-    HoodieUpgradeDowngradeException exception = assertThrows(
-        HoodieUpgradeDowngradeException.class,
-        () -> new UpgradeDowngrade(originalMetaClient, cfg, context(), SparkUpgradeDowngradeHelper.getInstance())
-            .run(toVersion, null)
-    );
-    
-    // Verify the specific exception message for metadata table failures
-    String expectedMessage = "Upgrade/downgrade for the Hudi metadata table failed. "
-        + "Please try again. If the failure repeats for metadata table, it is recommended to disable "
-        + "the metadata table so that the upgrade and downgrade can continue for the data table.";
-    assertTrue(exception.getMessage().contains(expectedMessage),
-        "Exception message should contain metadata table failure message");
-  }
-
   private static Stream<Arguments> testComplexKeygenValidationDuringUpgradeDowngrade() {
     return Stream.of(
         Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.NINE, true),
@@ -386,8 +352,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
           () -> new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance()).run(toVersion, null),
           "Expected HoodieUpgradeDowngradeException for upgrade with complex keygen validation enabled");
 
-      assertEquals(getComplexKeygenErrorMessage(operation), exception.getMessage(),
-          "Exception message should mention complex key generator issue");
+      assertEquals(getComplexKeygenErrorMessage(operation), exception.getMessage(), "Exception message should mention complex key generator issue");
     } else {
       // Should succeed
       new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
@@ -404,6 +369,9 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     }
   }
 
+  /**
+   * Load a fixture table from resources and copy it to a temporary location for testing.
+   */
   private HoodieTableMetaClient loadFixtureTable(HoodieTableVersion version) throws IOException {
     return loadFixtureTable(version, "");
   }
@@ -413,7 +381,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
    */
   private HoodieTableMetaClient loadFixtureTable(HoodieTableVersion version, String suffix) throws IOException {
     String fixtureName = getFixtureName(version, suffix);
-    String resourcePath = FIXTURES_BASE_PATH + fixtureName;
+    String resourcePath = getFixturesBasePath(suffix) + fixtureName;
     
     LOG.info("Loading fixture from resource path: {}", resourcePath);
     HoodieTestUtils.extractZipToDirectory(resourcePath, tempDir, getClass());
@@ -467,27 +435,37 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
    * Get fixture zip file name for a given table version.
    */
   public static String getFixtureName(HoodieTableVersion version, String suffix) {
-    String zipSuffix = suffix + ".zip";
+    String baseName;
     switch (version) {
       case FOUR:
-        return "hudi-v4-table" + zipSuffix;
+        baseName = "hudi-v4";
+        break;
       case FIVE:
-        return "hudi-v5-table" + zipSuffix;
+        baseName = "hudi-v5";
+        break;
       case SIX:
-        return "hudi-v6-table" + zipSuffix;
+        baseName = "hudi-v6";
+        break;
       case EIGHT:
-        return "hudi-v8-table" + zipSuffix;
+        baseName = "hudi-v8";
+        break;
       case NINE:
-        return "hudi-v9-table" + zipSuffix;
+        baseName = "hudi-v9";
+        break;
       default:
         throw new IllegalArgumentException("Unsupported fixture version: " + version);
+    }
+
+    // Handle different naming patterns based on suffix
+    if (suffix.isEmpty()) {
+      return baseName + "-table.zip";
+    }  else {
+      return baseName + "-table" + suffix + ".zip";
     }
   }
 
   private static Stream<Arguments> tableVersions() {
     return Stream.of(
-        Arguments.of(HoodieTableVersion.FOUR),   // Hudi 0.11.1
-        Arguments.of(HoodieTableVersion.FIVE),   // Hudi 0.12.2
         Arguments.of(HoodieTableVersion.SIX),    // Hudi 0.14
         Arguments.of(HoodieTableVersion.EIGHT),  // Hudi 1.0.2
         Arguments.of(HoodieTableVersion.NINE)    // Hudi 1.1
@@ -518,21 +496,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         // Downgrade test cases til six
         Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.EIGHT),  // V9 -> V8
         Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX)   // V8 -> V6
-    );
-  }
-
-  /**
-   * Version pairs for testing metadata failure when trying to upgrade/downgrade. Note these version pairs
-   * are ones that do invoke rollbackFailedWritesAndCompact() which this method causes the metadata table to be disabled
-   */
-  private static Stream<Arguments> metadataTableCorruptionTestVersionPairs() {
-    return Stream.of(
-        // Non-rollback upgrade pairs
-        Arguments.of(HoodieTableVersion.FOUR, HoodieTableVersion.FIVE),   // V4 -> V5 (works)
-        Arguments.of(HoodieTableVersion.FIVE, HoodieTableVersion.SIX),    // V5 -> V6 (works)
-
-        // Non-rollback downgrade pairs  
-        Arguments.of(HoodieTableVersion.FIVE, HoodieTableVersion.FOUR)    // V5 -> V4 (works)
     );
   }
 
@@ -572,12 +535,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     
     // Validate properties for the version
     switch (version) {
-      case FOUR:
-        validateVersion4Properties(metaClient, tableConfig);
-        break;
-      case FIVE:
-        validateVersion5Properties(metaClient, tableConfig);
-        break;
       case SIX:
         validateVersion6Properties(metaClient);
         break;
