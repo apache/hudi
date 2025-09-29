@@ -1691,9 +1691,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     if (!commitInstant.isPresent()) {
       return false;
     }
-    HoodieInstant commit = commitInstant.get();
-    String commitCompletionTime = commit.getCompletionTime();
-    return compareTimestamps(commitCompletionTime, LESSER_THAN_OR_EQUALS, compactionCompletionTime);
+    return compareTimestamps(commitInstant.get().getCompletionTime(), LESSER_THAN_OR_EQUALS, compactionCompletionTime);
   }
 
   @Override
