@@ -821,8 +821,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     List<IndexedRecord> scannedAvroRecords = new ArrayList<>();
     for (HoodieRecord record : scanner) {
       scannedHoodieRecords.add(record);
-      scannedAvroRecords.add((IndexedRecord)
-          ((HoodieAvroRecord) record).getData().getInsertValue(schema).get());
+      scannedAvroRecords.add((IndexedRecord) ((SerializableIndexedRecord)
+          ((HoodieAvroRecord) record).getData().getInsertValue(schema).get()).getData());
     }
 
     assertEquals(sort(sampledRecords), sort(scannedAvroRecords));
@@ -906,8 +906,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     List<IndexedRecord> scannedAvroRecords = new ArrayList<>();
     for (HoodieRecord record : scanner) {
       scannedHoodieRecords.add(record);
-      scannedAvroRecords.add((IndexedRecord)
-          ((HoodieAvroRecord) record).getData().getInsertValue(schema).get());
+      scannedAvroRecords.add((IndexedRecord) ((SerializableIndexedRecord)
+          ((HoodieAvroRecord) record).getData().getInsertValue(schema).get()).getData());
     }
 
     assertEquals(sort(sampledRecords), sort(scannedAvroRecords));
