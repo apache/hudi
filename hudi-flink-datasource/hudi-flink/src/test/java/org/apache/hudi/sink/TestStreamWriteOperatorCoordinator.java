@@ -450,9 +450,9 @@ public class TestStreamWriteOperatorCoordinator {
 
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(metadataPartitions + 3));
-    assertThat(completedTimeline.nthFromLastInstant(1).get().requestedTime(), is(instant));
+    assertThat(completedTimeline.lastInstant().get().requestedTime(), is(instant));
     assertThat("The pending instant should be rolled back first",
-        completedTimeline.lastInstant().get().getAction(), is(HoodieTimeline.ROLLBACK_ACTION));
+        completedTimeline.nthFromLastInstant(1).get().getAction(), is(HoodieTimeline.ROLLBACK_ACTION));
   }
 
   @Test
