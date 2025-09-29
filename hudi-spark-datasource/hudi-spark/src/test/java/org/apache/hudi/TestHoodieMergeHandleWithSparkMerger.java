@@ -38,6 +38,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -91,7 +92,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
   }
 
-  // @Test yet to triage the failure.
+  @Test
   public void testDefaultMerger() throws Exception {
     HoodieWriteConfig writeConfig = buildDefaultWriteConfig(SCHEMA);
     HoodieRecordMerger merger = writeConfig.getRecordMerger();
@@ -134,7 +135,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   public List<HoodieRecord> generateEmptyRecords(List<HoodieKey> keys) {
     List<HoodieRecord> records = new ArrayList<>();
     for (HoodieKey key : keys) {
-      records.add(new HoodieEmptyRecord(key, HoodieOperation.DELETE, key.getRecordKey(), HoodieRecord.HoodieRecordType.SPARK));
+      records.add(new HoodieEmptyRecord(key, HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecord.HoodieRecordType.SPARK));
     }
     return records;
   }
