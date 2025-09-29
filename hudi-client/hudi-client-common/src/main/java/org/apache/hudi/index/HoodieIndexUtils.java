@@ -536,8 +536,6 @@ public class HoodieIndexUtils {
     // define the buffered record merger.
     TypedProperties properties = readerContext.getMergeProps(updatedConfig.getProps());
     RecordContext<R> incomingRecordContext = readerContext.getRecordContext();
-
-
     // Create a reader context for the existing records. In the case of merge-into commands, the incoming records
     // can be using an expression payload so here we rely on the table's configured payload class if it is required.
     ReaderContextFactory<R> readerContextFactoryForExistingRecords = (ReaderContextFactory<R>) hoodieTable.getContext()
@@ -562,7 +560,6 @@ public class HoodieIndexUtils {
         properties,
         hoodieTable.getMetaClient().getTableConfig().getPartialUpdateMode());
     String[] orderingFieldsArray = orderingFieldNames.toArray(new String[0]);
-
     DeleteContext deleteContext = DeleteContext.fromRecordSchema(properties, writerSchema.get());
     HoodieData<HoodieRecord<R>> taggedUpdatingRecords = untaggedUpdatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
         .leftOuterJoin(existingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)))

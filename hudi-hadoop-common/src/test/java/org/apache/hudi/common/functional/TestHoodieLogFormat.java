@@ -743,13 +743,12 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .build();
 
     List<IndexedRecord> scannedRecords = new ArrayList<>();
-    int counter = 0;
     for (HoodieRecord record : scanner) {
       Object data = record.toIndexedRecord(schema, CollectionUtils.emptyProps()).get().getData();
       if (data instanceof SerializableIndexedRecord) {
-        scannedRecords.add((GenericRecord)((SerializableIndexedRecord)data).getData());
+        scannedRecords.add((GenericRecord) ((SerializableIndexedRecord) data).getData());
       } else {
-        scannedRecords.add((GenericRecord)data);
+        scannedRecords.add((GenericRecord) data);
       }
     }
 
