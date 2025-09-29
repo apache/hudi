@@ -504,7 +504,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     Map<StoragePath, HoodieAvroFileReader> baseFileReaders = Collections.emptyMap();
     ReusableFileGroupRecordBufferLoader<IndexedRecord> recordBufferLoader = null;
     boolean shouldReuse = reuse && isFullScanAllowedForPartition(fileSlice.getPartitionPath());
-    TypedProperties fileGroupReaderProps = ConfigUtils.buildFileGroupReaderProperties(metadataConfig);
+    TypedProperties fileGroupReaderProps = ConfigUtils.buildFileGroupReaderProperties(metadataConfig, shouldReuse);
     if (shouldReuse) {
       Pair<HoodieAvroFileReader, ReusableFileGroupRecordBufferLoader<IndexedRecord>> readers =
           reusableFileReaders.computeIfAbsent(fileSlice.getFileGroupId(), fgId -> {
@@ -559,7 +559,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         metadataMetaClient.getTableConfig(),
         instantRangeOption,
         Option.empty(),
-        ConfigUtils.buildFileGroupReaderProperties(metadataConfig));
+        ConfigUtils.buildFileGroupReaderProperties(metadataConfig, true));
     readerContext.initRecordMerger(metadataConfig.getProps());
     readerContext.setHasBootstrapBaseFile(false);
     readerContext.setHasLogFiles(fileSlice.hasLogFiles());
