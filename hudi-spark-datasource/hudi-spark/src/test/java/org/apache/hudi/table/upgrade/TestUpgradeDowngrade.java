@@ -755,6 +755,27 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   }
 
   private void validateVersion9Properties(HoodieTableMetaClient metaClient, HoodieTableConfig tableConfig) {
+    Option<TimelineLayoutVersion> layoutVersion = tableConfig.getTimelineLayoutVersion();
+    assertTrue(layoutVersion.isPresent(), "Timeline layout version should be present for V8+");
+    assertEquals(TimelineLayoutVersion.LAYOUT_VERSION_2, layoutVersion.get(),
+        "Timeline layout should be V2 for V8+");
+    assertTrue(tableConfig.contains(HoodieTableConfig.TIMELINE_PATH),
+        "Timeline path should be set for V9");
+    assertEquals(HoodieTableConfig.TIMELINE_PATH.defaultValue(),
+        tableConfig.getString(HoodieTableConfig.TIMELINE_PATH),
+        "Timeline path should have default value");
+    assertTrue(tableConfig.contains(HoodieTableConfig.RECORD_MERGE_MODE),
+        "Record merge mode should be set for V9");
+    RecordMergeMode mergeMode = tableConfig.getRecordMergeMode();
+    assertNotNull(mergeMode, "Merge mode should not be null");
+
+    assertTrue(tableConfig.contains(HoodieTableConfig.INITIAL_VERSION),
+        "Initial version should be set for V9");
+    if (tableConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)) {
+      assertTrue(tableConfig.contains(HoodieTableConfig.KEY_GENERATOR_TYPE),
+          "Key generator type should be set when key generator class is present");
+    }
+
     // Check if index metadata exists and has proper version information
     Option<HoodieIndexMetadata> indexMetadata = metaClient.getIndexMetadata();
     if (indexMetadata.isPresent()) {
