@@ -61,6 +61,20 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> payloadClazz,
       HoodieMetadataConfig.ENABLE.key() -> "false") ++ deleteOpts
 
+    // Common table service configurations
+    val serviceOpts: Map[String, String] = Map(
+      HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "3",
+      HoodieCleanConfig.AUTO_CLEAN.key() -> "false",
+      HoodieArchivalConfig.AUTO_ARCHIVE.key() -> "true",
+      HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key() -> "1",
+      HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key() -> "2",
+      HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key() -> "3",
+      HoodieClusteringConfig.INLINE_CLUSTERING.key() -> "true",
+      HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key() -> "2",
+      HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key() -> "512000",
+      HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key() -> "512000"
+    )
+
     val columns = Seq("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq",
       DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME, DebeziumConstants.FLATTENED_OP_COL_NAME)
     // 1. Add an insert.
@@ -95,16 +109,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8").
       option("hoodie.parquet.max.file.size", "2048").
       option("hoodie.parquet.small.file.limit", "1024").
-      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
-      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
-      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
-      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
-      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
-      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
+      options(serviceOpts).
       options(opts).
       mode(SaveMode.Overwrite).
       save(basePath)
@@ -129,16 +134,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8").
       option(HoodieTableConfig.ORDERING_FIELDS.key(), originalOrderingFields).
-      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
-      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
-      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
-      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
-      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
-      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
+      options(serviceOpts).
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
@@ -166,16 +162,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8").
       option(HoodieTableConfig.ORDERING_FIELDS.key(), originalOrderingFields).
-      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
-      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
-      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
-      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
-      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
-      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
+      options(serviceOpts).
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
@@ -200,10 +187,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), compactionEnabled).
       option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
+      options(serviceOpts).
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
@@ -244,16 +228,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(OPERATION.key(), "delete").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
-      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
-      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
-      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
-      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
-      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
-      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
+      options(serviceOpts).
       mode(SaveMode.Append).
       save(basePath)
 
@@ -265,16 +240,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     insertDataFrame.write.format("hudi").
       option(OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL).
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
-      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
-      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
-      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
-      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
-      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
-      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
+      options(serviceOpts).
       mode(SaveMode.Append).
       save(basePath)
 
@@ -355,6 +321,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     postDowngradeUpdate.write.format("hudi")
       .option(OPERATION.key(), "upsert")
       .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false")
+      .options(serviceOpts)
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -385,6 +352,21 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     val opts: Map[String, String] = Map(
       HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> payloadClazz,
       HoodieMetadataConfig.ENABLE.key() -> "false") ++ deleteOpts
+
+    // Common table service configurations
+    val serviceOpts: Map[String, String] = Map(
+      HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "3",
+      HoodieCleanConfig.AUTO_CLEAN.key() -> "false",
+      HoodieArchivalConfig.AUTO_ARCHIVE.key() -> "true",
+      HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key() -> "1",
+      HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key() -> "2",
+      HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key() -> "3",
+      HoodieClusteringConfig.INLINE_CLUSTERING.key() -> "true",
+      HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key() -> "2",
+      HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key() -> "512000",
+      HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key() -> "512000"
+    )
+
     val columns = Seq("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq",
       DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME, DebeziumConstants.FLATTENED_OP_COL_NAME)
     // 1. Add an insert.
@@ -416,12 +398,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       option("hoodie.parquet.max.file.size", "2048").
       option("hoodie.parquet.small.file.limit", "1024").
-      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
-      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
-      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
-      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
-      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
-      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
+      options(serviceOpts).
       options(opts).
       mode(SaveMode.Overwrite).
       save(basePath)
@@ -452,16 +429,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     firstUpdate.write.format("hudi").
       option(OPERATION.key(), "upsert").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
-      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
-      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
-      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
-      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
-      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
-      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
+      options(serviceOpts).
       mode(SaveMode.Append).
       save(basePath)
     // Validate table version.
@@ -488,16 +456,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     mixedOrderingUpdate.write.format("hudi").
       option(OPERATION.key(), "upsert").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
-      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
-      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
-      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
-      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
-      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
-      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
+      options(serviceOpts).
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
@@ -525,10 +484,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(OPERATION.key(), "upsert").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), compactionEnabled).
       option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
+      options(serviceOpts).
       mode(SaveMode.Append).
       save(basePath)
     // Validate table version as 9.
@@ -565,16 +521,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(OPERATION.key(), "delete").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
-      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
-      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
-      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
-      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
-      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
-      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
+      options(serviceOpts).
       mode(SaveMode.Append).
       save(basePath)
 
@@ -586,16 +533,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     insertDataFrame.write.format("hudi").
       option(OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL).
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
-      option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "3").
-      option(HoodieCleanConfig.AUTO_CLEAN.key(), "false").
-      option(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "true").
-      option(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key(), "1").
-      option(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2").
-      option(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "3").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true").
-      option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key(), "512000").
-      option(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES.key(), "512000").
+      options(serviceOpts).
       mode(SaveMode.Append).
       save(basePath)
 
@@ -674,6 +612,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     postDowngradeUpdate.write.format("hudi")
       .option(OPERATION.key(), "upsert")
       .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false")
+      .options(serviceOpts)
       .mode(SaveMode.Append)
       .save(basePath)
 
