@@ -30,18 +30,6 @@ import javax.annotation.concurrent.Immutable;
     description = "Configurations that control file group reading.")
 public class HoodieReaderConfig extends HoodieConfig {
 
-  /**
-   * This configuration was used to indicate if HFile's native reader should be used.
-   * Since 1.1.0, Hudi has its own reader for reading HFiles and is no longer dependent on HFile's native reader.
-   */
-  @Deprecated
-  public static final ConfigProperty<Boolean> USE_NATIVE_HFILE_READER = ConfigProperty
-      .key("_hoodie.hfile.use.native.reader")
-      .defaultValue(true)
-      .markAdvanced()
-      .sinceVersion("1.0.0")
-      .withDocumentation("When enabled, the native HFile reader is used to read HFiles.  This is an internal config.");
-
   public static final ConfigProperty<String> COMPACTION_LAZY_BLOCK_READ_ENABLE = ConfigProperty
       .key("hoodie.compaction.lazy.block.read")
       .defaultValue("true")

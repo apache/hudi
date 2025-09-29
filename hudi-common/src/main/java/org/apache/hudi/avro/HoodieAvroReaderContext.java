@@ -154,7 +154,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       try {
         return (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
             .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(hoodieReaderConfig,
-                storagePathInfo.getPath(), format, Option.empty());
+                storagePathInfo, format, Option.empty());
       } catch (IOException e) {
         throw new HoodieIOException("Failed to create avro records iterator from file path " + storagePathInfo.getPath(), e);
       }
