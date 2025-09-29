@@ -59,6 +59,7 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
@@ -1135,16 +1136,21 @@ public class StreamSync implements Serializable, Closeable {
                     .withInlineCompaction(cfg.isInlineCompactionEnabled())
                     .build()
             )
-            .withPayloadConfig(
-                HoodiePayloadConfig.newBuilder()
-                    .withPayloadClass(cfg.payloadClassName)
-                    .withPayloadOrderingFields(cfg.sourceOrderingFields)
-                    .build())
             .withRecordMergeMode(cfg.recordMergeMode)
-            .withRecordMergeStrategyId(cfg.recordMergeStrategyId)
             .withRecordMergeImplClasses(cfg.recordMergeImplClasses)
             .forTable(cfg.targetTableName)
             .withProps(props);
+    // Merge strategy id can be NULL.
+    if (!StringUtils.isNullOrEmpty(cfg.recordMergeStrategyId)) {
+      builder.withRecordMergeStrategyId(cfg.recordMergeStrategyId);
+    }
+    HoodiePayloadConfig.Builder payloadConfigBuilder =
+        HoodiePayloadConfig.newBuilder().withPayloadOrderingFields(cfg.sourceOrderingFields);
+    // Payload class can be NULL.
+    if (!StringUtils.isNullOrEmpty(cfg.payloadClassName)) {
+      payloadConfigBuilder.withPayloadClass(cfg.payloadClassName);
+    }
+    builder.withPayloadConfig(payloadConfigBuilder.build());
 
     // If schema is required in the config, we need to handle the case where the target schema is null and should be fetched from previous commits
     final Schema returnSchema;
