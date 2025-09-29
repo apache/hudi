@@ -314,7 +314,16 @@ object HoodieWriterUtils {
           && currentPartitionFields != tableConfigPartitionFields) {
           diffConfigs.append(s"PartitionPath:\t$currentPartitionFields\t$tableConfigPartitionFields\n")
         }
-      }
+        // When we get here, the value of `HoodieTableConfig.RECORD_MERGE_STRATEGY_ID` should be null in table config.
+        // For >= v9 table, if parameters contains non-null merge strategy id, it should throw.
+        // For < v9 table, we skip check for backward compatibility.
+        if (tableConfig.getInt(HoodieTableConfig.VERSION) >= HoodieTableVersion.NINE.versionCode()) {
+          val mergeStrategyId = params.getOrElse(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key(), null)
+          if (!StringUtils.isNullOrEmpty(mergeStrategyId)) {
+            diffConfigs.append(s"${HoodieTableConfig.RECORD_MERGE_STRATEGY_ID}:\t$mergeStrategyId\tnull\n")
+          }
+        }
+       }
 
       if (diffConfigs.nonEmpty) {
         diffConfigs.insert(0, "\nConfig conflict(key\tcurrent value\texisting value):\n")

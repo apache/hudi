@@ -433,7 +433,9 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     assertEquals(tableVersion, metaClient.getTableConfig.getTableVersion.versionCode())
     assertEquals(mergeMode, metaClient.getTableConfig.getRecordMergeMode)
-    assertEquals(strategyId, metaClient.getTableConfig.getRecordMergeStrategyId)
+    if (tableVersion < 9) {
+      assertEquals(strategyId, metaClient.getTableConfig.getRecordMergeStrategyId)
+    }
 
     val df1 = df.limit(1)
     val diffMergeMode = if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {
@@ -445,35 +447,51 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
       df1.write.format("hudi")
         .option(HoodieWriteConfig.RECORD_MERGE_MODE.key, diffMergeMode.name)
         .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
+        .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key, "false")
         .mode(SaveMode.Append)
         .save(basePath)
       val finalDf = spark.read.format("hudi")
         .options(readOpts)
         .load(basePath)
+      df1.write.format("hudi")
+        .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, "any_other_payload")
+        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
+        .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key, "false")
+        .mode(SaveMode.Append)
+        .save(basePath)
+      df1.write.format("hudi")
+        .option(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key, "any_other_strategy_id")
+        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
+        .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key, "false")
+        .mode(SaveMode.Append)
+        .save(basePath)
       assertEquals(399, finalDf.count())
     } else {
       Assertions.assertThrows(classOf[HoodieException], () => {
         df1.write.format("hudi")
           .option(HoodieWriteConfig.RECORD_MERGE_MODE.key, "any_other_payload")
           .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
+          .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key, "false")
+          .mode(SaveMode.Append)
+          .save(basePath)
+      })
+      Assertions.assertThrows(classOf[HoodieException], () => {
+        df1.write.format("hudi")
+          .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, "any_other_payload")
+          .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
+          .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key, "false")
+          .mode(SaveMode.Append)
+          .save(basePath)
+      })
+      Assertions.assertThrows(classOf[HoodieException], () => {
+        df1.write.format("hudi")
+          .option(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key, "any_other_strategy_id")
+          .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
+          .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key, "false")
           .mode(SaveMode.Append)
           .save(basePath)
       })
     }
-    Assertions.assertThrows(classOf[HoodieException], () => {
-      df1.write.format("hudi")
-        .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, "any_other_payload")
-        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
-        .mode(SaveMode.Append)
-        .save(basePath)
-    })
-    Assertions.assertThrows(classOf[HoodieException], () => {
-      df1.write.format("hudi")
-        .option(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key, "any_other_strategy_id")
-        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
-        .mode(SaveMode.Append)
-        .save(basePath)
-    })
   }
 
   def ingestNewBatch(tableType: HoodieTableType, recordsToUpdate: Integer, structType: StructType, inserts: java.util.List[Row],
