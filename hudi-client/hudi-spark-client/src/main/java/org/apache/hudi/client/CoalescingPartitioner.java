@@ -25,16 +25,23 @@ import org.apache.spark.Partitioner;
  */
 public class CoalescingPartitioner extends Partitioner {
 
-  CoalescingPartitioner() {
+  private final int numPartitions;
+
+  CoalescingPartitioner(int numPartitions) {
+    this.numPartitions = numPartitions;
   }
 
   @Override
   public int numPartitions() {
-    return 1;
+    return numPartitions;
   }
 
   @Override
   public int getPartition(Object key) {
-    return 0;
+    if (numPartitions == 1) {
+      return 0;
+    } else {
+      return key.hashCode() % numPartitions;
+    }
   }
 }

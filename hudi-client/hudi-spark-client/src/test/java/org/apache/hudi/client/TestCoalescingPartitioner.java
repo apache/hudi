@@ -38,15 +38,22 @@ public class TestCoalescingPartitioner extends HoodieClientTestBase {
         IntStream.rangeClosed(0, 100).boxed().collect(Collectors.toList()), numPartitions));
 
     // 100 keys spread across 100 partitions.
-    CoalescingPartitioner coalescingPartitioner = new CoalescingPartitioner();
-    assertEquals(1, coalescingPartitioner.numPartitions());
+    CoalescingPartitioner coalescingPartitioner = new CoalescingPartitioner(10);
+    assertEquals(10, coalescingPartitioner.numPartitions());
     rddData.collectAsList().forEach(entry -> {
-      assertEquals(0, coalescingPartitioner.getPartition(entry));
+      assertEquals(entry.hashCode() % 10, coalescingPartitioner.getPartition(entry));
+    });
+
+    // 1 partition
+    CoalescingPartitioner coalescingPartitioner1 = new CoalescingPartitioner(1);
+    assertEquals(1, coalescingPartitioner1.numPartitions());
+    rddData.collectAsList().forEach(entry -> {
+      assertEquals(0, coalescingPartitioner1.getPartition(entry));
     });
 
     // empty rdd
     rddData = HoodieJavaRDD.of(jsc.emptyRDD());
-    CoalescingPartitioner coalescingPartitioner2 = new CoalescingPartitioner();
+    CoalescingPartitioner coalescingPartitioner2 = new CoalescingPartitioner(1);
     assertEquals(1, coalescingPartitioner2.numPartitions());
     rddData.collectAsList().forEach(entry -> {
       // since there is only one partition, any getPartition will return just the same partition index

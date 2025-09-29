@@ -111,7 +111,7 @@ public class SparkRDDWriteClient<T> extends
       // this code block is expected to create a new Metadata Writer, start a new commit in metadata table and trigger streaming write to metadata table.
       boolean enforceCoalesceWithRepartition = getOperationType() == WriteOperationType.BULK_INSERT && config.getBulkInsertSortMode() == BulkInsertSortMode.NONE;
       writeStatuses = HoodieJavaRDD.getJavaRDD(streamingMetadataWriteHandler.streamWriteToMetadataTable(table, HoodieJavaRDD.of(rawWriteStatuses), instantTime,
-          enforceCoalesceWithRepartition));
+          enforceCoalesceWithRepartition, config.getMetadataConfig().getStreamingWritesCoalesceDividentForDataTableWrites()));
     } else {
       writeStatuses = rawWriteStatuses;
     }

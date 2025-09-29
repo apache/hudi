@@ -81,6 +81,15 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "in streaming manner rather than two disjoint writes. By default "
           + "streaming writes to metadata table is enabled for SPARK engine for incremental operations and disabled for all other cases.");
 
+  public static final ConfigProperty<Integer> STREAMING_WRITE_DATATABLE_WRITE_STATUSES_COALESCE_DIVIDENT = ConfigProperty
+      .key(METADATA_PREFIX + ".streaming.write.datatable.write.statuses.coalesce.divident")
+      .defaultValue(5000)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("When streaming writes to metadata table is enabled via hoodie.metadata.streaming.write.enabled, we had union data table write statuses "
+          + "with metadata table write statuses before triggering the entire write dag. While doing so, we had to downscale the data table tasks using "
+          + "coalesce so that we don't trigger 1000s of no-op tasks(data table writes). The parallelism to use for such coalescing will be determined using this config");
+
   public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = true;
 
   // Enable metrics for internal Metadata Table
@@ -607,6 +616,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean isStreamingWriteEnabled() {
     return getBoolean(STREAMING_WRITE_ENABLED);
+  }
+
+  public int getStreamingWritesCoalesceDividentForDataTableWrites() {
+    return getInt(HoodieMetadataConfig.STREAMING_WRITE_DATATABLE_WRITE_STATUSES_COALESCE_DIVIDENT);
   }
 
   public boolean isBloomFilterIndexEnabled() {

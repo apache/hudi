@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -58,11 +59,12 @@ public class StreamingMetadataWriteHandler {
    * @return {@link HoodieData} of {@link WriteStatus} referring to both data table writes and partial metadata table writes.
    */
   public HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieTable table, HoodieData<WriteStatus> dataTableWriteStatuses, String instantTime,
-                                                           boolean enforceCoalesceWithRepartition) {
+                                                           boolean enforceCoalesceWithRepartition, int coalesceDividentForDataTableWrites) {
     Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, table);
     ValidationUtils.checkState(metadataWriterOpt.isPresent(),
         "Cannot instantiate metadata writer for the table of interest " + table.getMetaClient().getBasePath());
-    return streamWriteToMetadataTable(dataTableWriteStatuses, metadataWriterOpt.get(), table, instantTime, enforceCoalesceWithRepartition);
+    return streamWriteToMetadataTable(dataTableWriteStatuses, metadataWriterOpt.get(), table, instantTime, enforceCoalesceWithRepartition,
+        coalesceDividentForDataTableWrites);
   }
 
   /**
@@ -96,19 +98,21 @@ public class StreamingMetadataWriteHandler {
                                                              HoodieTableMetadataWriter metadataWriter,
                                                              HoodieTable table,
                                                              String instantTime,
-                                                             boolean enforceCoalesceWithRepartition) {
+                                                             boolean enforceCoalesceWithRepartition,
+                                                             int coalesceDividentForDataTableWrites) {
     HoodieData<WriteStatus> mdtWriteStatuses = metadataWriter.streamWriteToMetadataPartitions(dataTableWriteStatuses, instantTime);
     mdtWriteStatuses.persist("MEMORY_AND_DISK_SER", table.getContext(), HoodieData.HoodieDataCacheKey.of(table.getMetaClient().getBasePath().toString(), instantTime));
     HoodieData<WriteStatus> coalescedDataWriteStatuses;
+    int coalesceParallelism = Math.max(1, dataTableWriteStatuses.getNumPartitions() / coalesceDividentForDataTableWrites);
     if (enforceCoalesceWithRepartition) {
       // with bulk insert and NONE sort mode, simple coalesce on datatable write statuses also impact record key generation stages.
       // and hence we are adding a partitioner to cut the chain so that coalesce(1) here does not impact record key generation stages.
       coalescedDataWriteStatuses = HoodieJavaRDD.of(HoodieJavaRDD.getJavaRDD(dataTableWriteStatuses)
           .mapToPair((PairFunction<WriteStatus, Boolean, WriteStatus>) writeStatus -> new Tuple2(true, writeStatus))
-          .partitionBy(new CoalescingPartitioner())
+          .partitionBy(new CoalescingPartitioner(coalesceParallelism))
           .map((Function<Tuple2<Boolean, WriteStatus>, WriteStatus>) booleanWriteStatusTuple2 -> booleanWriteStatusTuple2._2));
     } else {
-      coalescedDataWriteStatuses = dataTableWriteStatuses.coalesce(1);
+      coalescedDataWriteStatuses = dataTableWriteStatuses.coalesce(coalesceParallelism);
     }
     return coalescedDataWriteStatuses.union(mdtWriteStatuses);
   }
@@ -121,7 +125,8 @@ public class StreamingMetadataWriteHandler {
    *
    * @return The metadata writer option.
    */
-  private synchronized Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstant, HoodieTable table) {
+  @VisibleForTesting
+  synchronized Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstant, HoodieTable table) {
 
     if (!table.getMetaClient().getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       return Option.empty();

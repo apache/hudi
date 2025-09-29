@@ -59,4 +59,27 @@ class TestHoodieMetadataConfig {
         .build();
     assertEquals(-50, configWithNegativeValue.getRecordPreparationParallelism());
   }
+
+  @Test
+  void testStreamingWritesCoalesceDividentForDataTableWrites() {
+    // Test default value
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
+    assertEquals(5000, config.getStreamingWritesCoalesceDividentForDataTableWrites());
+
+    // Test custom value
+    Properties props = new Properties();
+    props.put(HoodieMetadataConfig.STREAMING_WRITE_DATATABLE_WRITE_STATUSES_COALESCE_DIVIDENT.key(), "1");
+    HoodieMetadataConfig configWithCustomValue = HoodieMetadataConfig.newBuilder()
+        .fromProperties(props)
+        .build();
+    assertEquals(1, configWithCustomValue.getStreamingWritesCoalesceDividentForDataTableWrites());
+
+    Properties propsZero = new Properties();
+    propsZero.put(HoodieMetadataConfig.STREAMING_WRITE_DATATABLE_WRITE_STATUSES_COALESCE_DIVIDENT.key(), "10000");
+    HoodieMetadataConfig configWithZeroValue = HoodieMetadataConfig.newBuilder()
+        .fromProperties(propsZero)
+        .build();
+    assertEquals(10000, configWithZeroValue.getStreamingWritesCoalesceDividentForDataTableWrites());
+  }
+
 }
