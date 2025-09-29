@@ -314,12 +314,16 @@ object HoodieWriterUtils {
           && currentPartitionFields != tableConfigPartitionFields) {
           diffConfigs.append(s"PartitionPath:\t$currentPartitionFields\t$tableConfigPartitionFields\n")
         }
-        // When we get here, the value of `HoodieTableConfig.RECORD_MERGE_STRATEGY_ID` should be NULL in table config.
-        // If the write config contains non-null merge strategy id, it should throw. Here are two exclusions:
+        // The value of `HoodieTableConfig.RECORD_MERGE_STRATEGY_ID` can be NULL or non-NULL.
+        // The non-NULL value has been validated above in the regular code path.
+        // Here we check the NULL case since if the value is NULL, the check is skipped above.
+        // So here we check if the write config contains non-null merge strategy id. If so, throw.
+        // Here are two exclusions:
         // CASE 1: For < v9 tables, we skip check completely for backward compatibility.
         // CASE 2: For >= v9 tables, merge-into queries.
         if (tableConfig.getInt(HoodieTableConfig.VERSION) >= HoodieTableVersion.NINE.versionCode()
-          && !params.getOrElse(PAYLOAD_CLASS_NAME.key(), "").equals(EXPRESSION_PAYLOAD_CLASS_NAME)) {
+          && !params.getOrElse(PAYLOAD_CLASS_NAME.key(), "").equals(EXPRESSION_PAYLOAD_CLASS_NAME)
+          && StringUtils.isNullOrEmpty(tableConfig.getStringOrDefault(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key, null))) {
           val mergeStrategyId = params.getOrElse(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key(), null)
           if (!StringUtils.isNullOrEmpty(mergeStrategyId)) {
             diffConfigs.append(s"${HoodieTableConfig.RECORD_MERGE_STRATEGY_ID}:\t$mergeStrategyId\tnull\n")
