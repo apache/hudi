@@ -324,6 +324,7 @@ public class HoodieTableMetaClient implements Serializable {
       // Ensure we write out valid index metadata.
       indexMetadata.getIndexDefinitions().values().forEach(d ->
           ValidationUtils.checkArgument(isValidIndexDefinition(tableVersion, d), "Found invalid index definition " + d));
+      HoodieIndexMetadata.validateIndexMetadata(indexMetadata);
       // TODO[HUDI-9094]: should not write byte array directly
       FileIOUtils.createFileInPath(storage, new StoragePath(indexDefinitionPath),
           Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes(indexMetadata.toJson()))));

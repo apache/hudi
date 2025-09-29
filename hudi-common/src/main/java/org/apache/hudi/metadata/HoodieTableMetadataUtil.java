@@ -2867,7 +2867,20 @@ public class HoodieTableMetadataUtil {
         .orElseThrow(() -> new HoodieIndexException("Expression Index definition is not present for index: " + indexName));
   }
 
-  public static Option<HoodieIndexVersion> getIndexVersionOption(String metadataPartitionPath, HoodieTableMetaClient metaClient) {
+  @VisibleForTesting
+  static Option<HoodieIndexVersion> getIndexVersionOption(String metadataPartitionPath, HoodieTableMetaClient metaClient) {
+    if (PARTITION_NAME_COLUMN_STATS.equals(metadataPartitionPath)) {
+      return getIndexVersionOptionHelper(PARTITION_NAME_COLUMN_STATS, metaClient)
+          .or(getIndexVersionOptionHelper(PARTITION_NAME_PARTITION_STATS, metaClient));
+    } else if (PARTITION_NAME_PARTITION_STATS.equals(metadataPartitionPath)) {
+      return getIndexVersionOptionHelper(PARTITION_NAME_PARTITION_STATS, metaClient)
+          .or(getIndexVersionOptionHelper(PARTITION_NAME_COLUMN_STATS, metaClient));
+    } else {
+      return getIndexVersionOptionHelper(metadataPartitionPath, metaClient);
+    }
+  }
+
+  private static Option<HoodieIndexVersion> getIndexVersionOptionHelper(String metadataPartitionPath, HoodieTableMetaClient metaClient) {
     Option<HoodieIndexMetadata> indexMetadata = metaClient.getIndexMetadata();
     if (indexMetadata.isEmpty()) {
       return Option.empty();

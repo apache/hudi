@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -32,6 +33,9 @@ import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.StringJoiner;
+
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS;
 
 /**
  * Represents the metadata for all functional and secondary indexes in Hudi.
@@ -50,6 +54,7 @@ public class HoodieIndexMetadata implements Serializable {
 
   public HoodieIndexMetadata(Map<String, HoodieIndexDefinition> indexDefinitions) {
     this.indexDefinitions = indexDefinitions;
+    validateIndexMetadata(this);
   }
 
   public Map<String, HoodieIndexDefinition> getIndexDefinitions() {
@@ -58,6 +63,7 @@ public class HoodieIndexMetadata implements Serializable {
 
   public void setIndexDefinitions(Map<String, HoodieIndexDefinition> indexDefinitions) {
     this.indexDefinitions = indexDefinitions;
+    validateIndexMetadata(this);
   }
 
   /**
@@ -119,5 +125,15 @@ public class HoodieIndexMetadata implements Serializable {
     return new StringJoiner(", ", HoodieIndexMetadata.class.getSimpleName() + "[", "]")
         .add("indexDefinitions=" + indexDefinitions)
         .toString();
+  }
+
+  public static void validateIndexMetadata(HoodieIndexMetadata indexMetadata) {
+    // validate col stats and partition stats are on the same version
+    Option<HoodieIndexDefinition> colStatsDef = indexMetadata.getIndex(PARTITION_NAME_COLUMN_STATS);
+    Option<HoodieIndexDefinition> partitionStatsDef = indexMetadata.getIndex(PARTITION_NAME_PARTITION_STATS);
+    if (colStatsDef.isPresent() && partitionStatsDef.isPresent()) {
+      ValidationUtils.checkArgument(colStatsDef.get().getVersion().equals(partitionStatsDef.get().getVersion()),
+          "Column stats and partition stats are not on the same version");
+    }
   }
 }

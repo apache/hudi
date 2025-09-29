@@ -31,11 +31,17 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Test cases for {@link HoodieIndexMetadata}.
@@ -135,5 +141,52 @@ public class TestHoodieIndexMetadata {
     HoodieIndexMetadata emptyMetadata = new HoodieIndexMetadata();
     Option<HoodieIndexDefinition> emptyOpt = emptyMetadata.getIndex("any_index");
     assertFalse(emptyOpt.isPresent());
+  }
+
+  @Test
+  void testNoColStatsNoPartitionStats() {
+    HoodieIndexMetadata metadata = mock(HoodieIndexMetadata.class);
+    when(metadata.getIndex(PARTITION_NAME_COLUMN_STATS)).thenReturn(Option.empty());
+    when(metadata.getIndex(PARTITION_NAME_PARTITION_STATS)).thenReturn(Option.empty());
+    assertDoesNotThrow(() -> HoodieIndexMetadata.validateIndexMetadata(metadata));
+  }
+
+  @Test
+  void testColStatsNoPartitionStats() {
+    HoodieIndexMetadata metadata = mock(HoodieIndexMetadata.class);
+    HoodieIndexDefinition colStats = mock(HoodieIndexDefinition.class);
+    when(metadata.getIndex(PARTITION_NAME_COLUMN_STATS)).thenReturn(Option.of(colStats));
+    when(metadata.getIndex(PARTITION_NAME_PARTITION_STATS)).thenReturn(Option.empty());
+
+    assertDoesNotThrow(() -> HoodieIndexMetadata.validateIndexMetadata(metadata));
+  }
+
+  @Test
+  void testColStatsPartitionStatsSameVersion() {
+    HoodieIndexMetadata metadata = mock(HoodieIndexMetadata.class);
+    HoodieIndexDefinition colStats = mock(HoodieIndexDefinition.class);
+    HoodieIndexDefinition partitionStats = mock(HoodieIndexDefinition.class);
+
+    when(metadata.getIndex(PARTITION_NAME_COLUMN_STATS)).thenReturn(Option.of(colStats));
+    when(metadata.getIndex(PARTITION_NAME_PARTITION_STATS)).thenReturn(Option.of(partitionStats));
+    when(colStats.getVersion()).thenReturn(HoodieIndexVersion.V1);
+    when(partitionStats.getVersion()).thenReturn(HoodieIndexVersion.V1);
+
+    assertDoesNotThrow(() -> HoodieIndexMetadata.validateIndexMetadata(metadata));
+  }
+
+  @Test
+  void testColStatsPartitionStatsDifferentVersions() {
+    HoodieIndexMetadata metadata = mock(HoodieIndexMetadata.class);
+    HoodieIndexDefinition colStats = mock(HoodieIndexDefinition.class);
+    HoodieIndexDefinition partitionStats = mock(HoodieIndexDefinition.class);
+
+    when(metadata.getIndex(PARTITION_NAME_COLUMN_STATS)).thenReturn(Option.of(colStats));
+    when(metadata.getIndex(PARTITION_NAME_PARTITION_STATS)).thenReturn(Option.of(partitionStats));
+    when(colStats.getVersion()).thenReturn(HoodieIndexVersion.V1);
+    when(partitionStats.getVersion()).thenReturn(HoodieIndexVersion.V2);
+
+    assertThrows(IllegalArgumentException.class,
+        () -> HoodieIndexMetadata.validateIndexMetadata(metadata));
   }
 }
