@@ -919,7 +919,18 @@ public class HoodieTableConfig extends HoodieConfig {
                                                                                      String recordMergeStrategyId,
                                                                                      String orderingFieldNamesAsString,
                                                                                      HoodieTableVersion tableVersion) {
-    return inferMergingConfigsForPreV9Table(recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldNamesAsString, tableVersion);
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
+      Map<String, String> inferredMergingConfigs = inferMergingConfigsForV9TableCreation(
+          recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldNamesAsString, tableVersion);
+      checkArgument(inferredMergingConfigs.containsKey(HoodieTableConfig.RECORD_MERGE_MODE.key()));
+      return Triple.of(
+          RecordMergeMode.valueOf(inferredMergingConfigs.get(RECORD_MERGE_MODE.key())),
+          inferredMergingConfigs.getOrDefault(PAYLOAD_CLASS_NAME.key(), null),
+          inferredMergingConfigs.getOrDefault(RECORD_MERGE_STRATEGY_ID.key(), null));
+    }
+    // For table version <= 8.
+    return inferMergingConfigsForPreV9Table(
+        recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldNamesAsString, tableVersion);
   }
 
   /**
@@ -965,7 +976,9 @@ public class HoodieTableConfig extends HoodieConfig {
         inferredRecordMergeMode = modeBasedOnPayload != null ? modeBasedOnPayload : modeBasedOnStrategyId;
       }
     }
-    if (recordMergeMode != null) {
+
+    if (recordMergeMode != null && (!tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)
+        || !PayloadGroupings.getPayloadsUnderDeprecation().contains(payloadClassName))) {
       checkArgument(inferredRecordMergeMode == recordMergeMode,
           String.format("Configured record merge mode (%s) is inconsistent with payload class (%s) "
                   + "or record merge strategy ID (%s) configured. Please revisit the configs.",
