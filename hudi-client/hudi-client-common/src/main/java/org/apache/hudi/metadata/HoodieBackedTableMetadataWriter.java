@@ -1648,9 +1648,21 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           throw new HoodieMetadataException(String.format("Failed to rollback deltacommit at %s", commitToRollbackInstantTime));
         }
       } else {
-        // if the instant is pending on MDT or not even exists the timeline, just ignore.
-        LOG.info("Ignoring rollback of instant {} at {}. The commit to rollback is not found in MDT",
-            commitToRollbackInstantTime, instantTime);
+        // Check for pending instants (inflight or requested)
+        Option<HoodieInstant> pendingInstantOpt = metadataMetaClient.getActiveTimeline()
+            .getDeltaCommitTimeline()
+            .filter(instant -> !instant.isCompleted() && instant.requestedTime().equals(commitToRollbackInstantTime))
+            .firstInstant();
+        if (pendingInstantOpt.isPresent()) {
+          // Rollback pending instant without validation
+          LOG.info("Rolling back MDT pending deltacommit {} at {}", commitToRollbackInstantTime, instantTime);
+          if (!getWriteClient().rollback(commitToRollbackInstantTime, instantTime)) {
+            throw new HoodieMetadataException(String.format("Failed to rollback pending deltacommit at %s", commitToRollbackInstantTime));
+          }
+        } else {
+          LOG.info("Ignoring rollback of instant {} at {}. The commit to rollback is not found in MDT",
+              commitToRollbackInstantTime, instantTime);
+        }
       }
       closeInternal();
     }
