@@ -937,6 +937,17 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     if (hoodieCatalogTable.orderingFields.isEmpty && updateActions.nonEmpty) {
       logWarning(s"Updates without precombine can have nondeterministic behavior")
     }
+    if (isEventTimeOrdering(props)) {
+      // validate ordering fields are set for update
+      updateActions.foreach(action =>
+        validateTargetTableAttrExistsInAssignments(
+          sparkSession.sessionState.conf.resolver,
+          mergeInto.targetTable,
+          hoodieCatalogTable.orderingFields.asScala.toSeq,
+          "ordering field",
+          action.assignments)
+      )
+    }
     updateActions.foreach(update =>
       assert(update.assignments.length <= targetTableSchema.length,
         s"The number of update assignments[${update.assignments.length}] must be less than or equal to the " +
