@@ -18,18 +18,13 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.common.config.HoodieMemoryConfig;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
@@ -40,7 +35,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Iterator;
-import java.util.stream.Stream;
 
 /**
  * A {@link FileGroupReaderBasedMergeHandle} that supports MERGE write incrementally(small data buffers).
@@ -75,12 +69,10 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O>
   }
 
   @Override
-  protected HoodieFileGroupReader<T> getFileGroupReader(boolean usePosition, Option<InternalSchema> internalSchemaOption, TypedProperties props,
-                                                        Option<Stream<HoodieLogFile>> logFileStreamOpt, Iterator<HoodieRecord<T>> incomingRecordsItr) {
+  protected long getMaxMemoryForMerge() {
     // the incoming records are already buffered on heap, and the underlying bytes are managed by memory pool
     // in Flink write buffer, so there is no need to spill.
-    props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(Long.MAX_VALUE));
-    return super.getFileGroupReader(usePosition, internalSchemaOption, props, logFileStreamOpt, incomingRecordsItr);
+    return Long.MAX_VALUE;
   }
 
   /**
