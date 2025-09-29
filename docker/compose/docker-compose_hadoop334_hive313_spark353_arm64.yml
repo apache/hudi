@@ -137,7 +137,7 @@ services:
       - ${HUDI_WS}:/var/hoodie/ws
 
   zookeeper:
-    image: 'bitnami/zookeeper:3.6.4'
+    image: 'bitnamilegacy/zookeeper:3.6.4'
     hostname: zookeeper
     container_name: zookeeper
     ports:
@@ -146,7 +146,7 @@ services:
       - ALLOW_ANONYMOUS_LOGIN=yes
 
   kafka:
-    image: 'bitnami/kafka:3.4.1'
+    image: 'bitnamilegacy/kafka:3.4.1'
     hostname: kafkabroker
     container_name: kafkabroker
     ports:
