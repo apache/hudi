@@ -46,7 +46,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
    */
   @ParameterizedTest
   @MethodSource(Array("providePayloadClassTestCases"))
-  def testMergerBuiltinPayloadUpgradePath(tableType: String,
+  def testMergerBuiltinPayloadUpgradeDowngradePath(tableType: String,
                                           payloadClazz: String,
                                           useOpAsDeleteStr: String,
                                           expectedConfigs: Map[String, String],
