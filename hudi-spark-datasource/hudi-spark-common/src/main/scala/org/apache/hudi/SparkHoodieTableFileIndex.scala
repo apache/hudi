@@ -113,8 +113,6 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
   protected lazy val shouldFastBootstrap = configProperties.getBoolean(DATA_QUERIES_ONLY.key, false)
 
-  private lazy val sparkParsePartitionUtil = sparkAdapter.getSparkParsePartitionUtil
-
   /**
    * Get the partition schema from the hoodie.properties.
    */
@@ -153,7 +151,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     } else {
       // If the partition columns have not stored in hoodie.properties(the table that was
       // created earlier), we trait it as a non-partitioned table.
-      logWarning("No partition columns available from hoodie.properties." +
+      logDebug("No partition columns available from hoodie.properties." +
         " Partition pruning will not work")
       new StructType()
     }
@@ -417,7 +415,6 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       schema,
       metaClient.getTableConfig.propsMap,
       configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
-      sparkParsePartitionUtil,
       shouldValidatePartitionColumns(spark))
   }
 

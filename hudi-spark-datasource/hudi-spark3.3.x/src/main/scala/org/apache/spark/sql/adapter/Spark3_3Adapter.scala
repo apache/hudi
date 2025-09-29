@@ -39,6 +39,7 @@ import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Sp
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_3ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
@@ -72,8 +73,6 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
     new MetadataBuilder()
       .putBoolean(METADATA_COL_ATTR_KEY, value = true)
       .build()
-
-  override def getCatalogUtils: HoodieSpark3CatalogUtils = HoodieSpark33CatalogUtils
 
   override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark33CatalystPlanUtils
 
@@ -156,4 +155,16 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
     jssc.stop()
   }
 
+
+  override def getDateTimeRebaseMode(): LegacyBehaviorPolicy.Value = {
+    LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.PARQUET_REBASE_MODE_IN_WRITE))
+  }
+
+  override def isLegacyBehaviorPolicy(value: Object): Boolean = {
+    value == LegacyBehaviorPolicy.LEGACY
+  }
+
+  override def isTimestampNTZType(dataType: DataType): Boolean = {
+    dataType.getClass.getSimpleName.startsWith("TimestampNTZType")
+  }
 }

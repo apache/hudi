@@ -19,6 +19,7 @@
 
 package org.apache.hudi.client.transaction.lock;
 
+import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
@@ -89,6 +90,10 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     if (!customSupportedFSs.contains(this.storage.getScheme()) && !StorageSchemes.isAtomicCreationSupported(this.storage.getScheme())) {
       throw new HoodieLockException("Unsupported scheme :" + this.storage.getScheme() + ", since this fs can not support atomic creation");
     }
+  }
+
+  public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> configuration, final HoodieLockMetrics lockMetrics) {
+    this(lockConfiguration, configuration);
   }
 
   @Override

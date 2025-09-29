@@ -41,6 +41,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.slf4j.Logger;
@@ -244,10 +245,6 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
       List<Expression> children = ((Predicates.In) keyFilterOpt.get()).getRightChildren();
       keys = children.stream().map(e -> (String) e.eval(null)).collect(Collectors.toList());
     }
-
-    if (keys.isEmpty() && keyFilterOpt.isPresent()) {
-      LOG.warn("Cannot extract valid keys from predicate: {}", keyFilterOpt.get());
-    }
     return keys;
   }
 
@@ -259,9 +256,6 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
       List<Expression> children = ((Predicates.StringStartsWithAny) keyFilterOpt.get()).getRightChildren();
       keyPrefixes = children.stream()
           .map(e -> (String) e.eval(null)).collect(Collectors.toList());
-    }
-    if (keyPrefixes.isEmpty() && keyFilterOpt.isPresent()) {
-      LOG.warn("Cannot extract valid key prefixes from predicate: {}", keyFilterOpt.get());
     }
     return keyPrefixes;
   }
@@ -276,14 +270,14 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   }
 
   private static GenericRecord getRecordFromKeyValue(KeyValue keyValue,
-                                                     Schema writerSchema,
-                                                     Schema readerSchema) throws IOException {
+                                                     GenericDatumReader<GenericRecord> datumReader,
+                                                     Schema.Field keyFieldSchema) throws IOException {
     byte[] bytes = keyValue.getBytes();
     return deserialize(
         bytes, keyValue.getKeyContentOffset(), keyValue.getKeyContentLength(),
         bytes, keyValue.getValueOffset(), keyValue.getValueLength(),
-        writerSchema,
-        readerSchema);
+        datumReader,
+        keyFieldSchema);
   }
 
   private byte[] getHFileMetaInfoFromCache(String key) throws IOException {
@@ -339,17 +333,16 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {
     private final HFileReader reader;
-
-    private final Schema writerSchema;
-    private final Schema readerSchema;
+    private final GenericDatumReader<GenericRecord> datumReader;
+    private final Schema.Field keyFieldSchema;
 
     private IndexedRecord next = null;
     private boolean eof = false;
 
     RecordIterator(HFileReader reader, Schema writerSchema, Schema readerSchema) {
       this.reader = reader;
-      this.writerSchema = writerSchema;
-      this.readerSchema = readerSchema;
+      this.datumReader = new GenericDatumReader<>(writerSchema, readerSchema);
+      this.keyFieldSchema = getKeySchema(readerSchema).orElse(null);
     }
 
     @Override
@@ -376,7 +369,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
           return false;
         }
 
-        this.next = getRecordFromKeyValue(reader.getKeyValue().get(), writerSchema, readerSchema);
+        this.next = getRecordFromKeyValue(reader.getKeyValue().get(), datumReader, keyFieldSchema);
         return true;
       } catch (IOException io) {
         throw new HoodieIOException("unable to read next record from hfile ", io);
@@ -402,12 +395,10 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   private static class RecordByKeyIterator implements ClosableIterator<IndexedRecord> {
     private final Iterator<String> sortedKeyIterator;
-
     private final HFileReader reader;
-
-    private final Schema readerSchema;
-    private final Schema writerSchema;
     private final Option<BloomFilter> bloomFilterOption;
+    private final GenericDatumReader<GenericRecord> datumReader;
+    private final Schema.Field keyFieldSchema;
 
     private IndexedRecord next = null;
 
@@ -417,8 +408,6 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
       this.reader = reader;
       this.reader.seekTo(); // position at the beginning of the file
 
-      this.writerSchema = writerSchema;
-      this.readerSchema = readerSchema;
       BloomFilter bloomFilter = null;
       if (useBloomFilter) {
         try {
@@ -428,6 +417,8 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
         }
       }
       this.bloomFilterOption = Option.ofNullable(bloomFilter);
+      this.datumReader = new GenericDatumReader<>(writerSchema, readerSchema);
+      this.keyFieldSchema = getKeySchema(readerSchema).orElse(null);
     }
 
     @Override
@@ -452,7 +443,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
             next = deserialize(
                 key.getBytes(), key.getContentOffset(), key.getContentLength(),
                 keyValue.getBytes(), keyValue.getValueOffset(), keyValue.getValueLength(),
-                writerSchema, readerSchema);
+                datumReader, keyFieldSchema);
             return true;
           }
         }
@@ -582,6 +573,8 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
           }
         }
       }
+      GenericDatumReader<GenericRecord> datumReader = new GenericDatumReader<>(writerSchema, readerSchema);
+      Schema.Field keyFieldSchema = getKeySchema(readerSchema).orElse(null);
 
       class KeyPrefixIterator implements Iterator<IndexedRecord> {
         private IndexedRecord next = null;
@@ -607,7 +600,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
                 deserialize(
                     bytes, keyValue.getKeyContentOffset(), keyValue.getKeyContentLength(),
                     bytes, keyValue.getValueOffset(), keyValue.getValueLength(),
-                    writerSchema, readerSchema);
+                    datumReader, keyFieldSchema);
             // In case scanner is not able to advance, it means we reached EOF
             eof = !reader.next();
           } catch (IOException e) {

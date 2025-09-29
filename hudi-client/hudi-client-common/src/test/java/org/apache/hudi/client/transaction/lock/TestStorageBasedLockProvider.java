@@ -94,7 +94,7 @@ class TestStorageBasedLockProvider {
     when(mockLockService.readObject(anyString(), anyBoolean())).thenReturn(Option.empty());
     TypedProperties props = new TypedProperties();
     props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
-    props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
+    props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
     props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-default");
 
     lockProvider = spy(new StorageBasedLockProvider(
@@ -669,7 +669,7 @@ class TestStorageBasedLockProvider {
     // Create test configuration
     TypedProperties props = new TypedProperties();
     props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
-    props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
+    props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
     props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-default");
     LockConfiguration lockConfiguration = new LockConfiguration(props);
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
@@ -715,7 +715,7 @@ class TestStorageBasedLockProvider {
     // Create test configuration
     TypedProperties props = new TypedProperties();
     props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
-    props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
+    props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
     props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-default");
     LockConfiguration lockConfiguration = new LockConfiguration(props);
     StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
@@ -758,7 +758,7 @@ class TestStorageBasedLockProvider {
     // Test that lock provider works correctly when audit config is not present
     TypedProperties props = new TypedProperties();
     props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
-    props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
+    props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
     props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-audit-test");
 
     // Mock client that returns empty for audit config
@@ -802,7 +802,7 @@ class TestStorageBasedLockProvider {
     // Test that lock provider works correctly when audit is explicitly disabled
     TypedProperties props = new TypedProperties();
     props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
-    props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
+    props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
     props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-audit-disabled");
 
     // Mock client that returns disabled config
@@ -847,7 +847,7 @@ class TestStorageBasedLockProvider {
     // Test that lock provider works correctly when audit is enabled
     TypedProperties props = new TypedProperties();
     props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
-    props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
+    props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
     props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-audit-enabled");
 
     // Mock client that returns enabled config

@@ -3361,7 +3361,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
             s"""
                |insert into ${targetTable}
                |select '1' as id, 'aa' as name, 1234 as dt, '2024-02-19' as `day`, 10 as `hour`
-               |""".stripMargin))(s"Duplicate key found for insert statement, key is: 1")
+               |""".stripMargin))(s"Duplicate key found for insert statement, key is: id:1")
         } else {
           spark.sql(s"set hoodie.datasource.write.operation=insert")
           spark.sql(

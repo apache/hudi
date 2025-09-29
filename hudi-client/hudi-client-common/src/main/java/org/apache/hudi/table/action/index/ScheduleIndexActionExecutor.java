@@ -94,9 +94,10 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     requestedPartitions.removeAll(indexesInflightOrCompleted);
 
     if (!requestedPartitions.isEmpty()) {
-      LOG.warn("Following partitions already exist or inflight: {}. Going to schedule indexing of only these partitions: {}", indexesInflightOrCompleted, requestedPartitions);
+      LOG.info("Some index partitions already exist: {}. Scheduling indexing of only these remaining partitions: {}",
+          indexesInflightOrCompleted, requestedPartitions);
     } else {
-      LOG.error("All requested index types are inflight or completed: {}", partitionIndexTypes);
+      LOG.info("All requested index partitions exist (either inflight or built): {}", partitionIndexTypes);
       return Option.empty();
     }
     List<MetadataPartitionType> finalPartitionsToIndex = partitionIndexTypes.stream()

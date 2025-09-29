@@ -105,7 +105,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     // HoodieKey is not required so do not generate it if partitionPath is null
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
 
-    if (bufferedRecord.isDelete()) {
+    if (bufferedRecord.getRecord() == null && bufferedRecord.isDelete()) {
       return generateEmptyAvroRecord(
           hoodieKey,
           bufferedRecord.getOrderingValue(),
@@ -124,7 +124,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     if (bufferedRecord.isDelete()) {
       return new HoodieEmptyRecord<>(hoodieKey, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), HoodieRecord.HoodieRecordType.AVRO);
     }
-    return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord(), bufferedRecord.getOrderingValue(), bufferedRecord.getHoodieOperation());
+    return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord(), bufferedRecord.getOrderingValue(), bufferedRecord.getHoodieOperation(), bufferedRecord.isDelete());
   }
 
   @Override
@@ -188,8 +188,8 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
 
   @Override
   public Comparable convertValueToEngineType(Comparable value) {
-    if (value instanceof Utf8) {
-      return ((Utf8) value).toString();
+    if (value instanceof String) {
+      return new Utf8((String) value);
     }
     return value;
   }

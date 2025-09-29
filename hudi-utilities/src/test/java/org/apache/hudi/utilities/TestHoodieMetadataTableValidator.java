@@ -19,9 +19,9 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
@@ -29,7 +29,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -61,6 +60,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -112,9 +113,9 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.apache.hudi.common.util.StringUtils.toStringWithThreshold;
 import static org.apache.hudi.common.util.TestStringUtils.generateRandomString;
+import static org.apache.hudi.utilities.HoodieMetadataTableValidator.computeDiffSummary;
 import static org.apache.spark.sql.types.DataTypes.IntegerType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
-import static org.apache.hudi.utilities.HoodieMetadataTableValidator.computeDiffSummary;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -158,13 +159,13 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   @Test
   public void testAggregateColumnStats() {
     HoodieColumnRangeMetadata<Comparable> fileColumn1Range1 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", "col1", 1, 5, 0, 10, 100, 200);
+        "path/to/file1", "col1", 1, 5, 0, 10, 100, 200, ValueMetadata.V1EmptyMetadata.get());
     HoodieColumnRangeMetadata<Comparable> fileColumn1Range2 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", "col1", 1, 10, 5, 10, 100, 200);
+        "path/to/file1", "col1", 1, 10, 5, 10, 100, 200, ValueMetadata.V1EmptyMetadata.get());
     HoodieColumnRangeMetadata<Comparable> fileColumn2Range1 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", "col2", 3, 8, 1, 15, 120, 250);
+        "path/to/file1", "col2", 3, 8, 1, 15, 120, 250, ValueMetadata.V1EmptyMetadata.get());
     HoodieColumnRangeMetadata<Comparable> fileColumn2Range2 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", "col2", 5, 9, 4, 5, 80, 150);
+        "path/to/file1", "col2", 5, 9, 4, 5, 80, 150, ValueMetadata.V1EmptyMetadata.get());
     List<HoodieColumnRangeMetadata<Comparable>> colStats = new ArrayList<>();
     colStats.add(fileColumn1Range1);
     colStats.add(fileColumn1Range2);
@@ -1230,34 +1231,34 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         HoodieColumnRangeMetadata<Integer> intMetadata = HoodieColumnRangeMetadata.create(
             generateRandomString(30), generateRandomString(5),
             RANDOM.nextInt() % 30, RANDOM.nextInt() % 1000_000_000 + 30,
-            count / 3L, count, size, size / 8L);
+            count / 3L, count, size, size / 8L, ValueMetadata.V1EmptyMetadata.get());
         return Pair.of(intMetadata,
             HoodieColumnRangeMetadata.create(
                 new String(intMetadata.getFilePath()), new String(intMetadata.getColumnName()),
                 (int) intMetadata.getMinValue(), (int) intMetadata.getMaxValue(),
-                count / 3L, count, size, size / 8L));
+                count / 3L, count, size, size / 8L, ValueMetadata.V1EmptyMetadata.get()));
       case 1:
         HoodieColumnRangeMetadata<Long> longMetadata = HoodieColumnRangeMetadata.create(
             generateRandomString(30), generateRandomString(5),
             RANDOM.nextLong() % 30L, RANDOM.nextInt() % 1000_000_000_000_000L + 30L,
-            count / 3L, count, size, size / 8L);
+            count / 3L, count, size, size / 8L, ValueMetadata.V1EmptyMetadata.get());
         return Pair.of(longMetadata,
             HoodieColumnRangeMetadata.create(
                 new String(longMetadata.getFilePath()), new String(longMetadata.getColumnName()),
                 (long) longMetadata.getMinValue(), (long) longMetadata.getMaxValue(),
-                count / 3L, count, size, size / 8L));
+                count / 3L, count, size, size / 8L, ValueMetadata.V1EmptyMetadata.get()));
       default:
         String stringValue1 = generateRandomString(20);
         String stringValue2 = generateRandomString(20);
         HoodieColumnRangeMetadata<String> stringMetadata = HoodieColumnRangeMetadata.create(
             generateRandomString(30), generateRandomString(5),
             stringValue1, stringValue2,
-            count / 3L, count, size, size / 8L);
+            count / 3L, count, size, size / 8L, ValueMetadata.V1EmptyMetadata.get());
         return Pair.of(stringMetadata,
             HoodieColumnRangeMetadata.create(
                 new String(stringMetadata.getFilePath()), new String(stringMetadata.getColumnName()),
                 new String(stringValue1), new String(stringValue2),
-                count / 3L, count, size, size / 8L));
+                count / 3L, count, size, size / 8L, ValueMetadata.V1EmptyMetadata.get()));
     }
   }
 

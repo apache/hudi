@@ -83,7 +83,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     bufferedReaderContext
   }
 
-  private lazy val orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode, props, metaClient)
+  private lazy val orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode, metaClient)
   private lazy val payloadClass: Option[String] = if (recordMerger.getMergingStrategy == PAYLOAD_BASED_MERGE_STRATEGY_UUID) {
     Option.of(metaClient.getTableConfig.getPayloadClass)
   } else {
@@ -93,7 +93,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   private var isPartialMergeEnabled = false
   private var bufferedRecordMerger = getBufferedRecordMerger
   private def getBufferedRecordMerger: BufferedRecordMerger[InternalRow] = BufferedRecordMergerFactory.create(readerContext,
-    readerContext.getMergeMode, isPartialMergeEnabled, Option.of(recordMerger), orderingFieldNames,
+    readerContext.getMergeMode, isPartialMergeEnabled, Option.of(recordMerger),
     payloadClass, avroSchema, props, partialUpdateModeOpt)
 
   private lazy val storage = metaClient.getStorage

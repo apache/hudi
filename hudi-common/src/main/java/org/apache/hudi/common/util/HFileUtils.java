@@ -21,7 +21,7 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieReaderConfig;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -37,6 +37,8 @@ import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -165,7 +167,7 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   @Override
-  public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(HoodieStorage storage, StoragePath filePath, List<String> columnList) {
+  public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(HoodieStorage storage, StoragePath filePath, List<String> columnList, HoodieIndexVersion indexVersion) {
     throw new UnsupportedOperationException(
         "Reading column statistics from metadata is not supported for HFile format yet");
   }
@@ -201,6 +203,7 @@ public class HFileUtils extends FileFormatUtils {
 
     Iterator<HoodieRecord> itr = records.iterator();
     int id = 0;
+    Option<Schema.Field> keyField = Option.ofNullable(writerSchema.getField(keyFieldName));
     while (itr.hasNext()) {
       HoodieRecord<?> record = itr.next();
       String recordKey;
@@ -210,7 +213,7 @@ public class HFileUtils extends FileFormatUtils {
         recordKey = getRecordKey(record, readerSchema, keyFieldName).get();
       }
 
-      final byte[] recordBytes = serializeRecord(record, writerSchema, keyFieldName);
+      final byte[] recordBytes = serializeRecord(record, writerSchema, keyField);
       if (sortedRecordsMap.containsKey(recordKey)) {
         LOG.error("Found duplicate record with recordKey: {} ", recordKey);
         logRecordMetadata("Previous record", sortedRecordsMap.get(recordKey), writerSchema);
@@ -272,12 +275,10 @@ public class HFileUtils extends FileFormatUtils {
     return Option.ofNullable(record.getRecordKey(readerSchema, keyFieldName));
   }
 
-  private static byte[] serializeRecord(HoodieRecord<?> record, Schema schema, String keyFieldName) throws IOException {
-    Option<Schema.Field> keyField = Option.ofNullable(schema.getField(keyFieldName));
-    // Reset key value w/in the record to avoid duplicating the key w/in payload
-    if (keyField.isPresent()) {
-      record.truncateRecordKey(schema, new Properties(), keyField.get().name());
-    }
-    return HoodieAvroUtils.recordToBytes(record, schema).get();
+  private static byte[] serializeRecord(HoodieRecord<?> record, Schema schema, Option<Schema.Field> keyField) throws IOException {
+    return record.toIndexedRecord(schema, CollectionUtils.emptyProps()).map(HoodieAvroIndexedRecord::getData).map(indexedRecord -> {
+      keyField.ifPresent(field -> indexedRecord.put(field.pos(), StringUtils.EMPTY_STRING));
+      return HoodieAvroUtils.avroToBytes(indexedRecord);
+    }).orElseThrow(() -> new HoodieException("Unable to convert record to indexed record"));
   }
 }

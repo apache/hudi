@@ -56,7 +56,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieIndexVersion;
-import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -285,23 +284,15 @@ public class UpgradeDowngradeUtils {
    * @param table         Hoodie table
    * @param operationType Type of operation (upgrade/downgrade)
    */
-  public static void dropNonV1SecondaryIndexPartitions(HoodieWriteConfig config, HoodieEngineContext context,
-                                                       HoodieTable table, SupportsUpgradeDowngrade upgradeDowngradeHelper, String operationType) {
+  public static void dropNonV1IndexPartitions(HoodieWriteConfig config, HoodieEngineContext context,
+                                              HoodieTable table, SupportsUpgradeDowngrade upgradeDowngradeHelper, String operationType) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
     try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(config, context)) {
       List<String> mdtPartitions = metaClient.getTableConfig().getMetadataPartitions()
           .stream()
-          .filter(partition -> {
-            // Only drop secondary indexes that are not V1
-            return metaClient.getIndexForMetadataPartition(partition)
-                .map(indexDef -> {
-                  if (MetadataPartitionType.fromPartitionPath(indexDef.getIndexName()).equals(MetadataPartitionType.SECONDARY_INDEX)) {
-                    return HoodieIndexVersion.V1.lowerThan(indexDef.getVersion());
-                  }
-                  return false;
-                })
-                .orElse(false);
-          })
+          .filter(partition -> metaClient.getIndexForMetadataPartition(partition)
+              .map(indexDef -> HoodieIndexVersion.V1.lowerThan(indexDef.getVersion()))
+              .orElse(false))
           .collect(Collectors.toList());
       LOG.info("Dropping from MDT partitions for {}: {}", operationType, mdtPartitions);
       if (!mdtPartitions.isEmpty()) {

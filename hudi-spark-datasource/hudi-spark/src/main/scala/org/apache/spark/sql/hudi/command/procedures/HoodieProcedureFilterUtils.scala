@@ -335,6 +335,21 @@ object HoodieProcedureFilterUtils {
               } else {
                 unresolvedFunc
               }
+            case "between" =>
+              // This is needed for Spark 4 to properly parse BETWEEN expression
+              if (unresolvedFunc.arguments.length == 3) {
+                // Convert BETWEEN to >= AND <=
+                // between(expr, lower, upper) -> (expr >= lower) AND (expr <= upper)
+                val expr = unresolvedFunc.arguments(0)
+                val lower = unresolvedFunc.arguments(1)
+                val upper = unresolvedFunc.arguments(2)
+                org.apache.spark.sql.catalyst.expressions.And(
+                  org.apache.spark.sql.catalyst.expressions.GreaterThanOrEqual(expr, lower),
+                  org.apache.spark.sql.catalyst.expressions.LessThanOrEqual(expr, upper)
+                )
+              } else {
+                unresolvedFunc
+              }
             case _ => unresolvedFunc
           }
       }

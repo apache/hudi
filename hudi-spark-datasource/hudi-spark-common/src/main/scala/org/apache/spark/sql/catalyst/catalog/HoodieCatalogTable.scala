@@ -38,12 +38,13 @@ import org.apache.hudi.util.SparkConfigUtils
 import org.apache.hudi.util.SparkConfigUtils.getStringWithAltKeys
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.hudi.HoodieOptionConfig._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.types.{StructField, StructType}
 
 import java.util.Locale
@@ -153,7 +154,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
     } else if (table.schema.nonEmpty) {
       addMetaFields(table.schema)
     } else {
-      throw new AnalysisException(
+      throw new HoodieAnalysisException(
         s"$catalogTableName does not contains schema fields.")
     }
   }
@@ -277,7 +278,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         (addMetaFields(schema), options)
 
       case (CatalogTableType.MANAGED, true) =>
-        throw new AnalysisException(s"Can not create the managed table('$catalogTableName')" +
+        throw new HoodieAnalysisException(s"Can not create the managed table('$catalogTableName')" +
           s". The associated location('$tableLocation') already exists.")
     }
     HoodieOptionConfig.validateTable(spark, finalSchema,
@@ -379,7 +380,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
             val errMsg = "Cannot create a table having a nested column whose name contains " +
             s"invalid characters ($invalidCharsString) in Hive metastore. Table: $tableIdentifier; " +
             s"Column: ${f.name}"
-            throw new AnalysisException(errMsg)
+            throw new HoodieAnalysisException(errMsg)
           case _ =>
         }
       }
@@ -388,7 +389,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         f.dataType match {
           // Checks top-level column names
           case _ if f.name.contains(",") =>
-            throw new AnalysisException("Cannot create a table having a column whose name " +
+            throw new HoodieAnalysisException("Cannot create a table having a column whose name " +
             s"contains commas in Hive metastore. Table: $tableIdentifier; Column: ${f.name}")
           // Checks nested column names
           case st: StructType =>

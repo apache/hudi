@@ -183,7 +183,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       Logger logger,
       HoodieLockMetrics hoodieLockMetrics) {
     StorageBasedLockConfig config = new StorageBasedLockConfig.Builder().fromProperties(properties).build();
-    long heartbeatPollSeconds = config.getHeartbeatPollSeconds();
+    long heartbeatPollSeconds = config.getRenewIntervalSecs();
     this.lockValiditySecs = config.getValiditySeconds();
     this.basePath = config.getHudiTableBasePath();
     String lockFolderPath = StorageLockClient.getLockFolderPath(basePath);

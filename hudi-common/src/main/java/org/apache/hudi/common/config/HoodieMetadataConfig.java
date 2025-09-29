@@ -521,7 +521,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> METADATA_FILE_CACHE_MAX_SIZE_MB = ConfigProperty
       .key(METADATA_PREFIX + ".file.cache.max.size.mb")
-      .defaultValue(0)
+      .defaultValue(50)
       .markAdvanced()
       .sinceVersion("1.1.0")
       .withDocumentation("Max size in MB below which metadata file (HFile) will be downloaded "
@@ -810,8 +810,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   }
 
   public boolean isSecondaryIndexEnabled() {
-    // Secondary index is enabled only iff record index (primary key index) is also enabled
-    return isRecordIndexEnabled() && getBoolean(SECONDARY_INDEX_ENABLE_PROP) && !isDropMetadataIndex(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath());
+    // Secondary index is enabled only iff record index (primary key index) is also enabled and a secondary index column is specified.
+    return isRecordIndexEnabled() && getBoolean(SECONDARY_INDEX_ENABLE_PROP) && StringUtils.nonEmpty(getSecondaryIndexColumn())
+        && !isDropMetadataIndex(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath());
   }
 
   public int getSecondaryIndexParallelism() {

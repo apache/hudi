@@ -74,7 +74,6 @@ import org.apache.hadoop.hive.shims.ShimLoader
 import org.apache.spark.{SPARK_VERSION, SparkContext}
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.sql._
-import org.apache.spark.sql.HoodieDataTypeUtils.tryOverrideParquetWriteLegacyFormatProperty
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.execution.{QueryExecution, SQLExecution}
@@ -158,11 +157,6 @@ object HoodieSparkSqlWriter {
       optsWithoutSchema ++ Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key -> writerSchemaStr)
     } else {
       optsWithoutSchema
-    }
-
-    if (writerSchema.isPresent) {
-      // Auto set the value of "hoodie.parquet.writelegacyformat.enabled"
-      tryOverrideParquetWriteLegacyFormatProperty(opts.asJava, convertAvroSchemaToStructType(writerSchema.get))
     }
 
     DataSourceUtils.createHoodieConfig(writerSchemaStr, basePath, tblName, opts.asJava)
@@ -329,6 +323,7 @@ class HoodieSparkSqlWriterInternal {
           .setRecordMergeMode(RecordMergeMode.getValue(hoodieConfig.getString(HoodieWriteConfig.RECORD_MERGE_MODE)))
           .setMultipleBaseFileFormatsEnabled(hoodieConfig.getBoolean(HoodieTableConfig.MULTIPLE_BASE_FILE_FORMATS_ENABLE))
           .setTableFormat(hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT))
+          .setRecordDeleteFieldAndMarker(parameters.getOrElse(DefaultHoodieRecordPayload.DELETE_KEY, null), parameters.getOrElse(DefaultHoodieRecordPayload.DELETE_MARKER, null))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration), path)
       }
 
@@ -786,6 +781,7 @@ class HoodieSparkSqlWriterInternal {
           .setUrlEncodePartitioning(hoodieConfig.getBoolean(URL_ENCODE_PARTITIONING))
           .setCommitTimezone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE)))
           .setPartitionMetafileUseBaseFormat(useBaseFormatMetaFile)
+          .setRecordDeleteFieldAndMarker(parameters.getOrElse(DefaultHoodieRecordPayload.DELETE_KEY, null), parameters.getOrElse(DefaultHoodieRecordPayload.DELETE_MARKER, null))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration), path)
       }
 

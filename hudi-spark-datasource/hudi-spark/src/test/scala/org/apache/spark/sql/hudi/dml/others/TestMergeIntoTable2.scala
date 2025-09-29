@@ -137,6 +137,11 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
         Seq(0)
       )
 
+      val errorMsg = if (HoodieSparkUtils.gteqSpark4_0)
+        "[INTERNAL_ERROR] Eagerly executed command failed. You hit a bug in Spark or the Spark plugins you use. Please, report this bug to the corresponding communities or vendors, and provide the full stack trace. SQLSTATE: XX000"
+      else
+        "assertion failed: Target table's field(price) cannot be the right-value of the update clause for MOR table."
+
       checkException(
         s"""
            | merge into $tableName as t0
@@ -147,7 +152,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            | when matched and s0.id % 2 = 1 then update set id = s0.id, name = s0.name,
            |  price = s0.price + t0.price, ts = s0.ts, dt = s0.dt
          """.stripMargin
-      )("assertion failed: Target table's field(price) cannot be the right-value of the update clause for MOR table.")
+      )(errorMsg)
     })
   }
 
@@ -369,8 +374,9 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts
            | when not matched and flag = '1' then insert *
            |""".stripMargin
-
-      if (HoodieSparkUtils.isSpark3) {
+      if (HoodieSparkUtils.gteqSpark4_0) {
+        checkExceptionContain(mergeSql)("[COLUMN_ALIASES_NOT_ALLOWED] Column aliases are not allowed in MERGE")
+      } else if (HoodieSparkUtils.gteqSpark3_3_2) {
         checkExceptionContain(mergeSql)("Columns aliases are not allowed in MERGE")
       } else {
         spark.sql(mergeSql)
@@ -1203,7 +1209,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
             // assignment clause. Covered by test class org/apache/spark/sql/hudi/dml/TestPartialUpdateForMergeInto.scala.
 
             // Test case 3: Precombine key column is not mandatory in the update assignment clause.
-            spark.sql(
+            val updateStatement =
               s"""
                  |merge into $tableName h0
                  |using (
@@ -1211,11 +1217,22 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                  | ) s0
                  | on h0.id = s0.id
                  | when matched then update set h0.id = s0.id
-                 |""".stripMargin)
+                 |""".stripMargin
 
-            checkAnswer(s"select id, name, value, ts from $tableName")(
-              Seq(1, "a1", 10, 1000)
-            )
+
+            if (mergeMode == "EVENT_TIME_ORDERING") {
+              // For EVENT_TIME_ORDERING, the ordering field is required
+              checkException(updateStatement)(
+                "MERGE INTO field resolution error: No matching assignment found for target table ordering field `ts`"
+              )
+            } else {
+              spark.sql(
+                updateStatement)
+              // For COMMIT_TIME_ORDERING, ts should be updated to 1003
+              checkAnswer(s"select id, name, value, ts from $tableName")(
+                Seq(1, "a1", 10, 1000)
+              )
+            }
           }
         }
       }

@@ -18,12 +18,13 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hadoop.fs.Path
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.execution.command.PartitionStatistics
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.util.ThreadUtils
 
 import java.util.concurrent.TimeUnit.MILLISECONDS
@@ -53,12 +54,12 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
     val table = catalog.getTableMetadata(tableName)
     val tableIdentWithDB = table.identifier.quotedString
     if (table.partitionColumnNames.isEmpty) {
-      throw new AnalysisException(
+      throw new HoodieAnalysisException(
         s"Operation not allowed: $cmd only works on partitioned tables: $tableIdentWithDB")
     }
 
     if (table.storage.locationUri.isEmpty) {
-      throw new AnalysisException(s"Operation not allowed: $cmd only works on table with " +
+      throw new HoodieAnalysisException(s"Operation not allowed: $cmd only works on table with " +
         s"location provided: $tableIdentWithDB")
     }
 
@@ -83,7 +84,7 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
     val addedAmount = if (enableAddPartitions) {
       val total = partitionSpecsAndLocs.length
       val partitionList = partitionSpecsAndLocs.map(_._2.toString)
-      val partitionStats = if (spark.sqlContext.conf.gatherFastStats && total > 0) {
+      val partitionStats = if (spark.sessionState.conf.gatherFastStats && total > 0) {
         HoodieSqlCommonUtils.getFilesInPartitions(spark, table, hoodieCatalogTable.metaClient, partitionList)
           .mapValues(statuses => PartitionStatistics(statuses.length, statuses.map(_.getLength).sum))
       } else {

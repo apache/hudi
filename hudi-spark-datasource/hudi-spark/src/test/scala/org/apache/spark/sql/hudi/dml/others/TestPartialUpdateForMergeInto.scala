@@ -580,7 +580,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
          | preCombineField = '_ts'
          |)""".stripMargin)
 
-    val failedToResolveErrorMessage = "Failed to resolve ordering fields `_ts` w/in the source-table output"
+    val failedToResolveErrorMessage = "No matching assignment found for target table ordering field `_ts"
 
     checkExceptionContain(
       s"""
@@ -681,9 +681,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
   test("Test MergeInto Partial Updates should fail with CUSTOM payload and merge mode") {
     withTempDir { tmp =>
       withSQLConf(
-        "hoodie.index.type" -> "GLOBAL_SIMPLE",
-        "hoodie.write.record.merge.mode" -> "CUSTOM",
-        "hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.testutils.reader.HoodieRecordTestPayload") {
+        "hoodie.index.type" -> "GLOBAL_SIMPLE") {
         val tableName = generateTableName
         spark.sql(
           s"""
@@ -700,6 +698,8 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
              | TBLPROPERTIES (
              |   type = 'mor',
              |   primaryKey = 'record_key',
+             |   hoodie.write.record.merge.mode = 'CUSTOM',
+             |   hoodie.datasource.write.payload.class = 'org.apache.hudi.common.testutils.reader.HoodieRecordTestPayload',
              |   preCombineField = 'ts')""".stripMargin)
 
         spark.sql(

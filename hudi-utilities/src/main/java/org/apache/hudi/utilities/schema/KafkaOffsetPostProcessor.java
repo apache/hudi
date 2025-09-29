@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.schema;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
@@ -33,6 +34,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 
 /**
@@ -71,7 +73,7 @@ public class KafkaOffsetPostProcessor extends SchemaPostProcessor {
     }
     try {
       List<Schema.Field> newFieldList = fieldList.stream()
-          .map(f -> new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal())).collect(Collectors.toList());
+          .map(HoodieAvroUtils::createNewSchemaField).collect(Collectors.toList());
       // handle case where source schema provider may have already set 1 or more of these fields
       if (!fieldNames.contains(KAFKA_SOURCE_OFFSET_COLUMN)) {
         newFieldList.add(new Schema.Field(KAFKA_SOURCE_OFFSET_COLUMN, Schema.create(Schema.Type.LONG), "offset column", 0));

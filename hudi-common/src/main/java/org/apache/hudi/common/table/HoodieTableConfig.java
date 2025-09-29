@@ -41,6 +41,7 @@ import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -136,24 +137,6 @@ public class HoodieTableConfig extends HoodieConfig {
   // A reader might need to read some writer properties to function as expected,
   // and Hudi stores properties with this prefix so the reader parses these properties to fetch any custom property.
   public static final String RECORD_MERGE_PROPERTY_PREFIX = "hoodie.record.merge.property.";
-  public static final Set<String> PAYLOADS_UNDER_DEPRECATION = Collections.unmodifiableSet(
-      new HashSet<>(Arrays.asList(
-          AWSDmsAvroPayload.class.getName(),
-          DefaultHoodieRecordPayload.class.getName(),
-          EventTimeAvroPayload.class.getName(),
-          MySqlDebeziumAvroPayload.class.getName(),
-          OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
-          OverwriteWithLatestAvroPayload.class.getName(),
-          PartialUpdateAvroPayload.class.getName(),
-          PostgresDebeziumAvroPayload.class.getName())));
-
-  public static final Set<String> EVENT_TIME_ORDERING_PAYLOADS = Collections.unmodifiableSet(
-      new HashSet<>(Arrays.asList(
-          DefaultHoodieRecordPayload.class.getName(),
-          EventTimeAvroPayload.class.getName(),
-          MySqlDebeziumAvroPayload.class.getName(),
-          PartialUpdateAvroPayload.class.getName(),
-          PostgresDebeziumAvroPayload.class.getName())));
 
   public static final Set<String> BUILTIN_MERGE_STRATEGIES = Collections.unmodifiableSet(
       new HashSet<>(Arrays.asList(
@@ -284,7 +267,9 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Payload class to indicate the payload class that is used to create the table and is not used anymore.");
 
   // This is the default payload class used by Hudi 0.x releases (table version 6 and below)
-  public static final String DEFAULT_PAYLOAD_CLASS_NAME = DefaultHoodieRecordPayload.class.getName();
+  public static final String getDefaultPayloadClassName() {
+    return DefaultHoodieRecordPayload.class.getName();
+  }
 
   public static final ConfigProperty<String> RECORD_MERGE_STRATEGY_ID = ConfigProperty
       .key("hoodie.record.merge.strategy.id")
@@ -858,14 +843,14 @@ public class HoodieTableConfig extends HoodieConfig {
     } else {
       // For tables using payload classes.
       //   CASE 2: Custom payload class. We set these properties explicitly.
-      if (!PAYLOADS_UNDER_DEPRECATION.contains(payloadClassName)) {
+      if (!PayloadGroupings.getPayloadsUnderDeprecation().contains(payloadClassName)) {
         reconciledConfigs.put(RECORD_MERGE_MODE.key(), CUSTOM.toString());
         reconciledConfigs.put(PAYLOAD_CLASS_NAME.key(), payloadClassName);
         reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), PAYLOAD_BASED_MERGE_STRATEGY_UUID);
       } else { // CASE 3: Payload classes are under deprecation.
         // Standard merging configs.
         // NOTE: We use LEGACY_PAYLOAD_CLASS_NAME instead of PAYLOAD_CLASS_NAME here.
-        if (EVENT_TIME_ORDERING_PAYLOADS.contains(payloadClassName)) {
+        if (PayloadGroupings.getEventTimeOrderingPayloads().contains(payloadClassName)) {
           reconciledConfigs.put(RECORD_MERGE_MODE.key(), EVENT_TIME_ORDERING.name());
           reconciledConfigs.put(LEGACY_PAYLOAD_CLASS_NAME.key(), payloadClassName);
           reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
@@ -884,10 +869,17 @@ public class HoodieTableConfig extends HoodieConfig {
           reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.FILL_UNAVAILABLE.name());
         }
         // Additional custom merge properties.
-        // Cretain payloads are migrated to non payload way from 1.1 Hudi binary and the reader might need certain properties for the
+        // Certain payloads are migrated to non payload way from 1.1 Hudi binary and the reader might need certain properties for the
         // merge to function as expected. Handing such special cases here.
         if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
           reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE, DEBEZIUM_UNAVAILABLE_VALUE);
+          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, DebeziumConstants.FLATTENED_OP_COL_NAME);
+          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DebeziumConstants.DELETE_OP);
+          reconciledConfigs.put(ORDERING_FIELDS.key(), DebeziumConstants.FLATTENED_LSN_COL_NAME);
+        } else if (payloadClassName.equals(MySqlDebeziumAvroPayload.class.getName())) {
+          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, DebeziumConstants.FLATTENED_OP_COL_NAME);
+          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DebeziumConstants.DELETE_OP);
+          reconciledConfigs.put(ORDERING_FIELDS.key(), DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME);
         } else if (payloadClassName.equals(AWSDmsAvroPayload.class.getName())) {
           reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, OP_FIELD);
           reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DELETE_OPERATION_VALUE);
@@ -992,7 +984,7 @@ public class HoodieTableConfig extends HoodieConfig {
       }
       // TODO(HUDI-8925): remove this once the payload class name is no longer required
       if (isNullOrEmpty(inferredPayloadClassName)) {
-        inferredPayloadClassName = DEFAULT_PAYLOAD_CLASS_NAME;
+        inferredPayloadClassName = getDefaultPayloadClassName();
       }
     }
 
@@ -1313,7 +1305,18 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public Map<String, String> getTableMergeProperties() {
-    return ConfigUtils.extractWithPrefix(this.props, RECORD_MERGE_PROPERTY_PREFIX);
+    Map<String, String> configs = ConfigUtils.extractWithPrefix(this.props, RECORD_MERGE_PROPERTY_PREFIX);
+    if (getTableVersion().lesserThan(HoodieTableVersion.NINE)) {
+      // Convert legacy payload properties do delete key and delete marker properties
+      if (getPayloadClass().equals(AWSDmsAvroPayload.class.getName())) {
+        configs.put(DELETE_KEY, OP_FIELD);
+        configs.put(DELETE_MARKER, DELETE_OPERATION_VALUE);
+      } else if (getPayloadClass().equals(MySqlDebeziumAvroPayload.class.getName()) || getPayloadClass().equals(PostgresDebeziumAvroPayload.class.getName())) {
+        configs.put(DELETE_KEY, DebeziumConstants.FLATTENED_OP_COL_NAME);
+        configs.put(DELETE_MARKER, DebeziumConstants.DELETE_OP);
+      }
+    }
+    return configs;
   }
 
   public Map<String, String> propsMap() {
@@ -1418,4 +1421,33 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String DEFAULT_ARCHIVELOG_FOLDER = TIMELINE_HISTORY_PATH.defaultValue();
+
+  private static class PayloadGroupings {
+    public static final Set<String> PAYLOADS_UNDER_DEPRECATION = Collections.unmodifiableSet(
+        new HashSet<>(Arrays.asList(
+            AWSDmsAvroPayload.class.getName(),
+            DefaultHoodieRecordPayload.class.getName(),
+            EventTimeAvroPayload.class.getName(),
+            MySqlDebeziumAvroPayload.class.getName(),
+            OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+            OverwriteWithLatestAvroPayload.class.getName(),
+            PartialUpdateAvroPayload.class.getName(),
+            PostgresDebeziumAvroPayload.class.getName())));
+
+    public static final Set<String> EVENT_TIME_ORDERING_PAYLOADS = Collections.unmodifiableSet(
+        new HashSet<>(Arrays.asList(
+            DefaultHoodieRecordPayload.class.getName(),
+            EventTimeAvroPayload.class.getName(),
+            MySqlDebeziumAvroPayload.class.getName(),
+            PartialUpdateAvroPayload.class.getName(),
+            PostgresDebeziumAvroPayload.class.getName())));
+
+    private static Set<String> getPayloadsUnderDeprecation() {
+      return PAYLOADS_UNDER_DEPRECATION;
+    }
+
+    private static Set<String> getEventTimeOrderingPayloads() {
+      return EVENT_TIME_ORDERING_PAYLOADS;
+    }
+  }
 }

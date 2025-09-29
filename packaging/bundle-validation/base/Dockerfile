@@ -52,7 +52,7 @@ RUN wget https://archive.apache.org/dist/flink/flink-$FLINK_VERSION/flink-$FLINK
     && rm $WORKDIR/flink-$FLINK_VERSION-bin-scala_2.12.tgz
 ENV FLINK_HOME=$WORKDIR/flink-$FLINK_VERSION
 
-RUN if [ "$SCALA_VERSION" = "2.13" ]; then \
+RUN if [ "$SPARK_VERSION" != 4.* && "$SCALA_VERSION" = "2.13" ]; then \
       wget https://archive.apache.org/dist/spark/spark-$SPARK_VERSION/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION-scala2.13.tgz -P "$WORKDIR" \
         && tar -xf $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION-scala2.13.tgz -C $WORKDIR/ \
         && rm $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION-scala2.13.tgz; \

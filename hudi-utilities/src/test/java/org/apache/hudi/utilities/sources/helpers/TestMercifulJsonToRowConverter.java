@@ -19,8 +19,10 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.MercifulJsonConverterTestBase;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.stats.ValueType;
 import org.apache.hudi.utilities.exception.HoodieJsonToRowConversionException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -60,7 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
+public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final MercifulJsonToRowConverter CONVERTER = new MercifulJsonToRowConverter(true, "__");
 
@@ -79,7 +81,7 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
   }
 
   @AfterAll
-  public static void clear() {
+  public static void clear() throws IOException {
     spark.close();
   }
 
@@ -318,10 +320,10 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
     if (groundTruthRow == null) {
       return;
     }
-    Row rec = RowFactory.create(java.sql.Date.valueOf(groundTruthRow));
+    Row rec = RowFactory.create(java.sql.Date.valueOf(groundTruthRow).toLocalDate());
     Row realRow = CONVERTER.convertToRow(json, schema);
     validateSchemaCompatibility(Collections.singletonList(realRow), schema);
-    assertEquals(rec.getDate(0).toString(), realRow.getDate(0).toString());
+    assertEquals(rec.getLocalDate(0).toString(), realRow.getLocalDate(0).toString());
   }
 
   /**
@@ -344,6 +346,33 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
 
   private static final String LOCAL_TIME_AVRO_FILE_PATH = "/local-timestamp-logical-type.avsc";
 
+  @FunctionalInterface
+  public interface ThrowingRunnable {
+    void run() throws Exception;
+  }
+
+  public static void timestampNTZCompatibility(ThrowingRunnable r) throws Exception {
+    // TODO: Remove this when we get rid of spark3.3. TimestampNTZ needs this config
+    //  to be set to true to work.
+    boolean isSpark33 = HoodieSparkUtils.isSpark3_3();
+    String propertyValue = null;
+    if (isSpark33) {
+      propertyValue = System.getProperty("spark.testing");
+      System.setProperty("spark.testing", "true");
+    }
+    try {
+      r.run();
+    } finally {
+      if (isSpark33) {
+        if (propertyValue == null) {
+          System.clearProperty("spark.testing");
+        } else {
+          System.setProperty("spark.testing", propertyValue);
+        }
+      }
+    }
+  }
+
   /**
    * Covered case:
    * Avro Logical Type: localTimestampMillisField & localTimestampMillisField
@@ -354,23 +383,25 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
   @ParameterizedTest
   @MethodSource("localTimestampGoodCaseProvider")
   void localTimestampLogicalTypeGoodCaseTest(
-      Long expectedMicroSecOfDay, Object timeMilli, Object timeMicro) throws IOException {
-    // Example inputs
-    long microSecOfDay = expectedMicroSecOfDay;
-    long milliSecOfDay = expectedMicroSecOfDay / 1000; // Represents 12h 30 min since the start of the day
+      Long expectedMicroSecOfDay, Object timeMilli, Object timeMicro) throws Exception {
+    timestampNTZCompatibility(() -> {
+      // Example inputs
+      long microSecOfDay = expectedMicroSecOfDay;
+      long milliSecOfDay = expectedMicroSecOfDay / 1000; // Represents 12h 30 min since the start of the day
 
-    // Define the schema for the date logical type
-    Schema schema = SchemaTestUtil.getSchema(LOCAL_TIME_AVRO_FILE_PATH);
+      // Define the schema for the date logical type
+      Schema schema = SchemaTestUtil.getSchema(LOCAL_TIME_AVRO_FILE_PATH);
 
-    Map<String, Object> data = new HashMap<>();
-    data.put("localTimestampMillisField", timeMilli);
-    data.put("localTimestampMicrosField", timeMicro);
-    String json = MAPPER.writeValueAsString(data);
+      Map<String, Object> data = new HashMap<>();
+      data.put("localTimestampMillisField", timeMilli);
+      data.put("localTimestampMicrosField", timeMicro);
+      String json = MAPPER.writeValueAsString(data);
 
-    Row rec = RowFactory.create(milliSecOfDay, microSecOfDay);
-    Row actualRow = CONVERTER.convertToRow(json, schema);
-    validateSchemaCompatibility(Collections.singletonList(actualRow), schema);
-    assertEquals(rec, actualRow);
+      Row rec = RowFactory.create(ValueType.castToLocalTimestampMillis(milliSecOfDay, null), ValueType.castToLocalTimestampMicros(microSecOfDay, null));
+      Row actualRow = CONVERTER.convertToRow(json, schema);
+      validateSchemaCompatibility(Collections.singletonList(actualRow), schema);
+      assertEquals(rec, actualRow);
+    });
   }
 
   @ParameterizedTest

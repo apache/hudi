@@ -27,6 +27,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -191,6 +192,7 @@ public class SecondaryIndexRecordGenerationUtils {
     }
     ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(metaClient);
     engineContext.setJobStatus(activeModule, "Secondary Index: reading secondary keys from " + partitionFileSlicePairs.size() + " file slices");
+    HoodieFileFormat baseFileFormat = metaClient.getTableConfig().getBaseFileFormat();
     return engineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(partitionAndBaseFile -> {
       final String partition = partitionAndBaseFile.getKey();
       final FileSlice fileSlice = partitionAndBaseFile.getValue();
@@ -198,7 +200,7 @@ public class SecondaryIndexRecordGenerationUtils {
       Schema readerSchema;
       if (dataFilePath.isPresent()) {
         readerSchema = HoodieIOFactory.getIOFactory(metaClient.getStorage())
-            .getFileFormatUtils(metaClient.getTableConfig().getBaseFileFormat())
+            .getFileFormatUtils(baseFileFormat)
             .readAvroSchema(metaClient.getStorage(), dataFilePath.get());
       } else {
         readerSchema = tableSchema;

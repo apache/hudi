@@ -15,10 +15,8 @@
  * limitations under the License.
  */
 
-import org.apache.spark.sql.SaveMode
-import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.DataSourceWriteOptions._
-import spark.implicits._
+import org.apache.spark.sql.SaveMode
 
 val tableName = "${TABLE_NAME}"
 val basePath = "${BASE_PATH}"
@@ -36,7 +34,7 @@ val df = testData.toDF("id", "name", "ts", "partition")
 
 // Write initial batch (creates base files)
 df.write.format("hudi").
-  option(HoodieTableConfig.ORDERING_FIELDS.key, "ts").
+  option(PRECOMBINE_FIELD.key, "ts").
   option(RECORDKEY_FIELD.key, "id").
   option(PARTITIONPATH_FIELD.key, "partition").
   option("hoodie.table.name", tableName).
@@ -62,7 +60,7 @@ val updateData = Seq(
 val updateDf = updateData.toDF("id", "name", "ts", "partition")
 
 updateDf.write.format("hudi").
-  option(HoodieTableConfig.ORDERING_FIELDS.key, "ts").
+  option(PRECOMBINE_FIELD.key, "ts").
   option(RECORDKEY_FIELD.key, "id").
   option(PARTITIONPATH_FIELD.key, "partition").
   option("hoodie.table.name", tableName).
@@ -87,7 +85,7 @@ val insertData = Seq(
 val insertDf = insertData.toDF("id", "name", "ts", "partition")
 
 insertDf.write.format("hudi").
-  option(HoodieTableConfig.ORDERING_FIELDS.key, "ts").
+  option(PRECOMBINE_FIELD.key, "ts").
   option(RECORDKEY_FIELD.key, "id").
   option(PARTITIONPATH_FIELD.key, "partition").
   option("hoodie.table.name", tableName).

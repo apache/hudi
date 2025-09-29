@@ -265,7 +265,7 @@ public class TableSchemaResolver {
               .map(writeStat -> new StoragePath(metaClient.getBasePath(), writeStat.getPath()));
           return Option.of(fetchSchemaFromFiles(filePaths));
         } else {
-          LOG.warn("Could not find any data file written for commit, so could not get schema for table {}", metaClient.getBasePath());
+          LOG.debug("Could not find any data file written for commit, so could not get schema for table {}", metaClient.getBasePath());
           return Option.empty();
         }
       default:

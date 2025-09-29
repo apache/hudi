@@ -18,14 +18,14 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions, PartitionStatsIndexSupport}
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions, HoodieSparkUtils, PartitionStatsIndexSupport}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.avro.model.DecimalWrapper
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieFileGroup, HoodieLogFile, HoodieTableType}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams}
@@ -125,6 +125,10 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     dfList = dfList :+ inputDF
 
     metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
+    if (writeOptions.contains(HoodieWriteConfig.WRITE_TABLE_VERSION.key())) {
+      assertEquals(HoodieTableVersion.fromVersionCode(writeOptions(HoodieWriteConfig.WRITE_TABLE_VERSION.key()).toInt),
+        metaClient.getTableConfig.getTableVersion)
+    }
 
     if (params.shouldValidateColStats) {
       // Currently, routine manually validating the column stats (by actually reading every column of every file)
@@ -152,7 +156,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       allPartitions.flatMap(partition => {
         val df = spark.read.format("hudi").load(tablePath) // assumes its partition table, but there is only one partition.
         val exprs: Seq[String] =
-          s"'${typedLit("")}' AS file" +:
+          s"${if (HoodieSparkUtils.gteqSpark4_0) typedLit("") else "'" + typedLit("") + "'"} AS file" +:
             s"sum(1) AS valueCount" +:
             df.columns
               .filter(col => includedCols.contains(col))
@@ -199,7 +203,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       baseFiles.flatMap(file => {
         val df = spark.read.schema(sourceTableSchema).parquet(file.toString)
         val exprs: Seq[String] =
-          s"'${typedLit(file.getName)}' AS fileName" +:
+          s"${if (HoodieSparkUtils.gteqSpark4_0) typedLit(file.getName) else "'" + typedLit(file.getName) + "'"} AS fileName" +:
             s"sum(1) AS valueCount" +:
             includedCols.union(indexedCols).distinct.sorted.flatMap(col => {
           val minColName = s"`${col}_minValue`"
@@ -334,16 +338,16 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     val metadataConfig = HoodieMetadataConfig.newBuilder()
       .fromProperties(toProperties(metadataOpts))
       .build()
-
-    val pStatsIndex = new PartitionStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
-
     val schemaUtil = new TableSchemaResolver(metaClient)
     val tableSchema = schemaUtil.getTableAvroSchema(false)
+    val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
+
+    val pStatsIndex = new PartitionStatsIndexSupport(spark, localSourceTableSchema, metadataConfig, metaClient)
     val indexedColumnswithMeta: Set[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSet
     val pIndexedColumns = indexedColumnswithMeta.filter(colName => !HoodieTableMetadataUtil.META_COL_SET_TO_INDEX.contains(colName))
       .toSeq.sorted
 
-    val (pExpectedColStatsSchema, _) = composeIndexSchema(pIndexedColumns, pIndexedColumns, sourceTableSchema)
+    val (pExpectedColStatsSchema, _) = composeIndexSchema(pIndexedColumns, pIndexedColumns, localSourceTableSchema)
     val pValidationSortColumns = if (pIndexedColumns.contains("c5")) {
       Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue", "c3_maxValue",
         "c3_minValue", "c5_maxValue", "c5_minValue")
@@ -351,7 +355,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue", "c3_maxValue", "c3_minValue")
     }
 
-    pStatsIndex.loadTransposed(sourceTableSchema.fieldNames, testCase.shouldReadInMemory) { pTransposedColStatsDF =>
+    pStatsIndex.loadTransposed(localSourceTableSchema.fieldNames, testCase.shouldReadInMemory) { pTransposedColStatsDF =>
       // Match against expected column stats table
       val pExpectedColStatsIndexTableDf = {
         spark.read
@@ -443,52 +447,128 @@ object ColumnStatIndexTestBase {
 
   case class ColumnStatsTestCase(tableType: HoodieTableType, shouldReadInMemory: Boolean, tableVersion: Int)
 
+  // General providers (both in-memory and on-disk variants)
   def testMetadataColumnStatsIndexParams: java.util.stream.Stream[Arguments] = {
-    java.util.stream.Stream.of(HoodieTableType.values().toStream.flatMap(tableType =>
-      Seq(Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = 6)),
-        Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false, tableVersion = 6)),
-        Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = 8)),
-        Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false, tableVersion = 8))
-      )
-    ): _*)
+    testMetadataColumnStatsIndexParams(true)
   }
 
+  def testMetadataPartitionStatsIndexParams: java.util.stream.Stream[Arguments] = {
+    testMetadataColumnStatsIndexParams(false)
+  }
+
+  def testMetadataColumnStatsIndexParams(testV6: Boolean): java.util.stream.Stream[Arguments] = {
+    val currentVersionCode = HoodieTableVersion.current().versionCode()
+    java.util.stream.Stream.of(
+      HoodieTableType.values().toStream.flatMap { tableType =>
+        val v6Seq = if (testV6) {
+          Seq(
+            Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = 6)),
+            Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false, tableVersion = 6))
+          )
+        } else {
+          Seq.empty
+        }
+
+        v6Seq ++ Seq(
+          Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = 8)),
+          Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false, tableVersion = 8)),
+          Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = currentVersionCode)),
+          Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false, tableVersion = currentVersionCode))
+        )
+      }: _*
+    )
+  }
+
+  // In-memory providers (only shouldReadInMemory = true)
   def testMetadataColumnStatsIndexParamsInMemory: java.util.stream.Stream[Arguments] = {
-    java.util.stream.Stream.of(HoodieTableType.values().toStream.flatMap(tableType =>
-      Seq(Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = 6)),
-        Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = 8))
-      )
-    ): _*)
+    testMetadataColumnStatsIndexParamsInMemory(true)
   }
 
+  def testMetadataPartitionStatsIndexParamsInMemory: java.util.stream.Stream[Arguments] = {
+    testMetadataColumnStatsIndexParamsInMemory(false)
+  }
+
+  def testMetadataColumnStatsIndexParamsInMemory(testV6: Boolean): java.util.stream.Stream[Arguments] = {
+    val currentVersionCode = HoodieTableVersion.current().versionCode()
+    java.util.stream.Stream.of(
+      HoodieTableType.values().toStream.flatMap { tableType =>
+        val v6Seq = if (testV6) {
+          Seq(Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = 6)))
+        } else {
+          Seq.empty
+        }
+
+        v6Seq ++ Seq(
+          Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = 8)),
+          Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = currentVersionCode))
+        )
+      }: _*
+    )
+  }
+
+
+  // MOR-only providers
   def testMetadataColumnStatsIndexParamsForMOR: java.util.stream.Stream[Arguments] = {
-    java.util.stream.Stream.of(
-      Seq(Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = true, tableVersion = 6)),
-        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = false, tableVersion = 6)),
-        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = true, tableVersion = 8)),
-        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = false, tableVersion = 8))
-      )
-        : _*)
+    testMetadataColumnStatsIndexParamsForMOR(true)
   }
 
-  def testTableTypePartitionTypeParams: java.util.stream.Stream[Arguments] = {
+  def testMetadataPartitionStatsIndexParamsForMOR: java.util.stream.Stream[Arguments] = {
+    testMetadataColumnStatsIndexParamsForMOR(false)
+  }
+
+  def testMetadataColumnStatsIndexParamsForMOR(testV6: Boolean): java.util.stream.Stream[Arguments] = {
+    val currentVersionCode = HoodieTableVersion.current().versionCode()
     java.util.stream.Stream.of(
+      (if (testV6) Seq(
+        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = true, tableVersion = 6)),
+        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = false, tableVersion = 6))
+      ) else Seq.empty) ++ Seq(
+        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = true, tableVersion = 8)),
+        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = false, tableVersion = 8)),
+        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = true, tableVersion = currentVersionCode)),
+        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = false, tableVersion = currentVersionCode))
+      ): _*
+    )
+  }
+
+
+  // TableType / partition column providers (tableVersion encoded as String like your original)
+  def testTableTypePartitionTypeParams: java.util.stream.Stream[Arguments] = {
+    testTableTypePartitionTypeParams(true)
+  }
+
+  def testTableTypePartitionTypeParamsNoV6: java.util.stream.Stream[Arguments] = {
+    testTableTypePartitionTypeParams(false)
+  }
+
+  def testTableTypePartitionTypeParams(testV6: Boolean): java.util.stream.Stream[Arguments] = {
+    val currentVersionCode = HoodieTableVersion.current().versionCode().toString
+    val v6Seq = if (testV6) {
       Seq(
-        // Table version 6
         Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "c8", "6"),
-        // empty partition col represents non-partitioned table.
         Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "", "6"),
         Arguments.arguments(HoodieTableType.MERGE_ON_READ, "c8", "6"),
-        Arguments.arguments(HoodieTableType.MERGE_ON_READ, "", "6"),
+        Arguments.arguments(HoodieTableType.MERGE_ON_READ, "", "6")
+      )
+    } else {
+      Seq.empty
+    }
 
+    java.util.stream.Stream.of(
+      (v6Seq ++ Seq(
         // Table version 8
         Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "c8", "8"),
-        // empty partition col represents non-partitioned table.
         Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "", "8"),
         Arguments.arguments(HoodieTableType.MERGE_ON_READ, "c8", "8"),
-        Arguments.arguments(HoodieTableType.MERGE_ON_READ, "", "8")
-      )
-        : _*)
+        Arguments.arguments(HoodieTableType.MERGE_ON_READ, "", "8"),
+
+        // Table version current
+        Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "c8", currentVersionCode),
+        Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "", currentVersionCode),
+        Arguments.arguments(HoodieTableType.MERGE_ON_READ, "c8", currentVersionCode),
+        Arguments.arguments(HoodieTableType.MERGE_ON_READ, "", currentVersionCode)
+      )): _*
+    )
   }
 
   trait WrapperCreator {

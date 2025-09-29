@@ -58,6 +58,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -731,7 +732,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                 .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList()))
         .withReaderSchema(schema)
         .withLatestInstantTime("200")
-        .withMaxMemorySizeInBytes(10240L)
+        .withMaxMemorySizeInBytes(1024000L)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
@@ -742,8 +743,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     List<IndexedRecord> scannedRecords = new ArrayList<>();
     for (HoodieRecord record : scanner) {
-      scannedRecords.add((IndexedRecord)
-          ((HoodieAvroRecord) record).getData().getInsertValue(schema).get());
+      scannedRecords.add(record.toIndexedRecord(schema, CollectionUtils.emptyProps()).get().getData());
     }
 
     assertEquals(genRecords.size(), scannedRecords.size(),
@@ -777,7 +777,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                 .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList()))
         .withReaderSchema(schema)
         .withLatestInstantTime("100")
-        .withMaxMemorySizeInBytes(10240L)
+        .withMaxMemorySizeInBytes(1024000L)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
@@ -865,7 +865,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                 .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList()))
         .withReaderSchema(schema)
         .withLatestInstantTime("100")
-        .withMaxMemorySizeInBytes(10240L)
+        .withMaxMemorySizeInBytes(1024000L)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
@@ -1379,7 +1379,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withLogFilePaths(allLogFiles)
         .withReaderSchema(schema)
         .withLatestInstantTime("102")
-        .withMaxMemorySizeInBytes(10240L)
+        .withMaxMemorySizeInBytes(1024000L)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
@@ -1426,7 +1426,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withLogFilePaths(allLogFiles)
         .withReaderSchema(schema)
         .withLatestInstantTime("103")
-        .withMaxMemorySizeInBytes(10240L)
+        .withMaxMemorySizeInBytes(1024000L)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
@@ -1538,7 +1538,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withLogFilePaths(allLogFiles)
         .withReaderSchema(schema)
         .withLatestInstantTime("103")
-        .withMaxMemorySizeInBytes(10240L)
+        .withMaxMemorySizeInBytes(1024000L)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
@@ -1664,7 +1664,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withLogFilePaths(allLogFiles)
         .withReaderSchema(schema)
         .withLatestInstantTime("104")
-        .withMaxMemorySizeInBytes(10240L)
+        .withMaxMemorySizeInBytes(1024000L)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
@@ -2005,7 +2005,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withLogFilePaths(allLogFiles)
         .withReaderSchema(schema)
         .withLatestInstantTime("103")
-        .withMaxMemorySizeInBytes(10240L)
+        .withMaxMemorySizeInBytes(1024000L)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)
@@ -2361,7 +2361,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withLogFilePaths(allLogFiles)
         .withReaderSchema(schema)
         .withLatestInstantTime("108")
-        .withMaxMemorySizeInBytes(10240L)
+        .withMaxMemorySizeInBytes(1024000L)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
         .withSpillableMapBasePath(spillableBasePath)

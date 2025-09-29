@@ -21,6 +21,7 @@ import org.apache.hudi.AvroConversionUtils.getAvroSchemaWithDefaults
 import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, createHFileReader, isSchemaEvolutionEnabledOnRead, metaFieldNames, projectSchema, sparkAdapter, BaseFileReader}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.{ConfigProperty, HoodieConfig, HoodieMetadataConfig}
 import org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER
@@ -502,7 +503,6 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
         tableStructSchema,
         tableConfig.propsMap,
         timeZoneId,
-        sparkAdapter.getSparkParsePartitionUtil,
         conf.getBoolean("spark.sql.sources.validatePartitionColumns", true))
       if(rowValues.length != partitionColumns.length) {
         throw new HoodieException("Failed to get partition column values from the partition-path:"
@@ -819,7 +819,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
           val f = fieldMap(col)
           // We have to create a new [[Schema.Field]] since Avro schemas can't share field
           // instances (and will throw "org.apache.avro.AvroRuntimeException: Field already used")
-          new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())
+          createNewSchemaField(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())
         }.toList
         val requiredAvroSchema = Schema.createRecord(avroSchema.getName, avroSchema.getDoc,
           avroSchema.getNamespace, avroSchema.isError, requiredFields.asJava)
