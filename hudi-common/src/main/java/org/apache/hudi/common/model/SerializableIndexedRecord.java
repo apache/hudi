@@ -67,7 +67,7 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
     this.schema = schema;
   }
 
-  public static SerializableIndexedRecord withSerializedRecord(Schema schema, byte[] bytes) {
+  public static SerializableIndexedRecord fromAvroBytes(Schema schema, byte[] bytes) {
     return new SerializableIndexedRecord(schema, bytes);
   }
 

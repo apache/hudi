@@ -74,9 +74,9 @@ public class FileGroupReaderSchemaHandler<T> {
   // requiredSchema: the requestedSchema with any additional columns required for merging etc
   protected final Schema requiredSchema;
 
-  // the schema for incoming records, usually it equals with the requiredSchema,
-  // the only exception is for COW merge cases and MOR small file handling, which do not include the metadata fields.
-  protected Schema recordSchemaForUpdates;
+  // the schema for updates, usually it equals with the requiredSchema,
+  // the only exception is for incoming records, which do not include the metadata fields.
+  protected Schema schemaForUpdates;
 
   protected final InternalSchema internalSchema;
 
@@ -103,7 +103,7 @@ public class FileGroupReaderSchemaHandler<T> {
     this.hoodieTableConfig = metaClient.getTableConfig();
     this.deleteContext = new DeleteContext(properties, tableSchema);
     this.requiredSchema = AvroSchemaCache.intern(prepareRequiredSchema(this.deleteContext));
-    this.recordSchemaForUpdates = requiredSchema;
+    this.schemaForUpdates = requiredSchema;
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
     this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
     this.metaClient = metaClient;
@@ -121,15 +121,15 @@ public class FileGroupReaderSchemaHandler<T> {
     return this.requiredSchema;
   }
 
-  public Schema getRecordSchemaForUpdates() {
-    return this.recordSchemaForUpdates;
+  public Schema getSchemaForUpdates() {
+    return this.schemaForUpdates;
   }
 
   /**
    * This is a special case for incoming records, which do not have metadata fields in schema.
    */
-  public void setRecordSchemaForUpdates(Schema schema) {
-    this.recordSchemaForUpdates = schema;
+  public void setSchemaForUpdates(Schema schema) {
+    this.schemaForUpdates = schema;
   }
 
   public InternalSchema getInternalSchema() {
