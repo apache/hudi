@@ -55,16 +55,17 @@ public class StreamingMetadataWriteHandler {
    * @param dataTableWriteStatuses The {@link WriteStatus} from data table writes.
    * @param instantTime            The instant time of interest.
    * @param enforceCoalesceWithRepartition true when repartition has to be added to dag to coalesce data table write statuses to 1. false otherwise.
-   *
+   * @param coalesceDivisorForDataTableWrites assist with determining the coalesce parallelism for data table write statuses. N data table write status
+   *                                          spark partitions will be divied by this value to find the coalesce parallelism.
    * @return {@link HoodieData} of {@link WriteStatus} referring to both data table writes and partial metadata table writes.
    */
   public HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieTable table, HoodieData<WriteStatus> dataTableWriteStatuses, String instantTime,
-                                                           boolean enforceCoalesceWithRepartition, int coalesceDividentForDataTableWrites) {
+                                                           boolean enforceCoalesceWithRepartition, int coalesceDivisorForDataTableWrites) {
     Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, table);
     ValidationUtils.checkState(metadataWriterOpt.isPresent(),
         "Cannot instantiate metadata writer for the table of interest " + table.getMetaClient().getBasePath());
     return streamWriteToMetadataTable(dataTableWriteStatuses, metadataWriterOpt.get(), table, instantTime, enforceCoalesceWithRepartition,
-        coalesceDividentForDataTableWrites);
+        coalesceDivisorForDataTableWrites);
   }
 
   /**
@@ -99,11 +100,11 @@ public class StreamingMetadataWriteHandler {
                                                              HoodieTable table,
                                                              String instantTime,
                                                              boolean enforceCoalesceWithRepartition,
-                                                             int coalesceDividentForDataTableWrites) {
+                                                             int coalesceDivisorForDataTableWrites) {
     HoodieData<WriteStatus> mdtWriteStatuses = metadataWriter.streamWriteToMetadataPartitions(dataTableWriteStatuses, instantTime);
     mdtWriteStatuses.persist("MEMORY_AND_DISK_SER", table.getContext(), HoodieData.HoodieDataCacheKey.of(table.getMetaClient().getBasePath().toString(), instantTime));
     HoodieData<WriteStatus> coalescedDataWriteStatuses;
-    int coalesceParallelism = Math.max(1, dataTableWriteStatuses.getNumPartitions() / coalesceDividentForDataTableWrites);
+    int coalesceParallelism = Math.max(1, dataTableWriteStatuses.getNumPartitions() / coalesceDivisorForDataTableWrites);
     if (enforceCoalesceWithRepartition) {
       // with bulk insert and NONE sort mode, simple coalesce on datatable write statuses also impact record key generation stages.
       // and hence we are adding a partitioner to cut the chain so that coalesce(1) here does not impact record key generation stages.

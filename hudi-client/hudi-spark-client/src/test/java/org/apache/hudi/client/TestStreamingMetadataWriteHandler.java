@@ -58,7 +58,7 @@ public class TestStreamingMetadataWriteHandler extends SparkClientFunctionalTest
     when(mockHoodieTable.getContext()).thenReturn(engineContext);
   }
 
-  private static Stream<Arguments> coalesceDividentTestArgs() {
+  private static Stream<Arguments> coalesceDivisorTestArgs() {
     return Arrays.stream(new Object[][] {
         {100, 20, 1000, true},
         {100, 20, 1000, false},
@@ -72,7 +72,7 @@ public class TestStreamingMetadataWriteHandler extends SparkClientFunctionalTest
   }
 
   @ParameterizedTest
-  @MethodSource("coalesceDividentTestArgs")
+  @MethodSource("coalesceDivisorTestArgs")
   public void testCoalesceDividentConfig(int numDataTableWriteStatuses, int numMdtWriteStatus, int coalesceDividentForDataTableWrites,
                                          boolean enforceCoalesceWithRepartition) {
     HoodieData<WriteStatus> dataTableWriteStatus = mockWriteStatuses(numDataTableWriteStatuses);

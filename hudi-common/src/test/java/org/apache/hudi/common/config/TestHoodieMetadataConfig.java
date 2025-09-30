@@ -61,25 +61,25 @@ class TestHoodieMetadataConfig {
   }
 
   @Test
-  void testStreamingWritesCoalesceDividentForDataTableWrites() {
+  void testStreamingWritesCoalesceDivisorForDataTableWrites() {
     // Test default value
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
-    assertEquals(5000, config.getStreamingWritesCoalesceDividentForDataTableWrites());
+    assertEquals(5000, config.getStreamingWritesCoalesceDivisorForDataTableWrites());
 
     // Test custom value
     Properties props = new Properties();
-    props.put(HoodieMetadataConfig.STREAMING_WRITE_DATATABLE_WRITE_STATUSES_COALESCE_DIVIDENT.key(), "1");
+    props.put(HoodieMetadataConfig.STREAMING_WRITE_DATATABLE_WRITE_STATUSES_COALESCE_DIVISOR.key(), "1");
     HoodieMetadataConfig configWithCustomValue = HoodieMetadataConfig.newBuilder()
         .fromProperties(props)
         .build();
-    assertEquals(1, configWithCustomValue.getStreamingWritesCoalesceDividentForDataTableWrites());
+    assertEquals(1, configWithCustomValue.getStreamingWritesCoalesceDivisorForDataTableWrites());
 
     Properties propsZero = new Properties();
-    propsZero.put(HoodieMetadataConfig.STREAMING_WRITE_DATATABLE_WRITE_STATUSES_COALESCE_DIVIDENT.key(), "10000");
+    propsZero.put(HoodieMetadataConfig.STREAMING_WRITE_DATATABLE_WRITE_STATUSES_COALESCE_DIVISOR.key(), "10000");
     HoodieMetadataConfig configWithZeroValue = HoodieMetadataConfig.newBuilder()
         .fromProperties(propsZero)
         .build();
-    assertEquals(10000, configWithZeroValue.getStreamingWritesCoalesceDividentForDataTableWrites());
+    assertEquals(10000, configWithZeroValue.getStreamingWritesCoalesceDivisorForDataTableWrites());
   }
 
 }
