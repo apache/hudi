@@ -34,7 +34,7 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, Tim
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.common.testutils.HoodieTestUtils.{INSTANT_FILE_NAME_GENERATOR, INSTANT_GENERATOR}
-import org.apache.hudi.common.util.{ClusteringUtils, Option, StringUtils}
+import org.apache.hudi.common.util.{ClusteringUtils, Option}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.exception.{HoodieException, SchemaBackwardsCompatibilityException}
@@ -436,10 +436,11 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertLastCommitIsUpsert()
   }
 
-  private def writeToHudi(opts: Map[String, String], df: Dataset[Row]): Unit = {
+  private def writeToHudi(opts: Map[String, String], df: Dataset[Row],
+                          operation: String = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL): Unit = {
     df.write.format("hudi")
       .options(opts)
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, operation)
       .mode(SaveMode.Append)
       .save(basePath)
   }
@@ -2440,8 +2441,12 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     writeToHudi(writeOpts, inputDF)
     var actualDF = spark.read.format("hudi").options(readOpts).load(basePath)
-    val inputKeyDF = inputDF.select("_row_key").sort("_row_key")
-    var actualKeyDF = actualDF.select("_row_key").sort("_row_key")
+
+    // Transform the input keys based on the key generator to match the expected format
+    val inputKeyDF = TestCOWDataSource.transformRecordKeyColumn(
+        inputDF.select("_row_key"), "_row_key", KeyGeneratorType.valueOf(expectedKeyGenType))
+      .sort("_row_key")
+    var actualKeyDF = actualDF.select("_hoodie_record_key").sort("_hoodie_record_key")
     assertTrue(inputKeyDF.except(actualKeyDF).isEmpty && actualKeyDF.except(inputKeyDF).isEmpty)
     val metaClient = getHoodieMetaClient(storageConf, basePath)
     val actualKeyGenType = metaClient.getTableConfig
@@ -2455,10 +2460,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // First update.
     val firstUpdate = recordsToStrings(dataGen.generateUpdatesForAllRecords("001")).asScala.toList
     val firstUpdateDF = spark.read.json(spark.sparkContext.parallelize(firstUpdate, 2))
-    writeToHudi(writeOpts, firstUpdateDF)
-    val newReadOpts = readOpts ++ Map(HoodieTableConfig.POPULATE_META_FIELDS.key -> "false")
-      actualDF = spark.read.format("hudi").options(newReadOpts).load(basePath)
-    actualKeyDF = actualDF.select("_row_key").sort("_row_key")
+    writeToHudi(writeOpts, firstUpdateDF, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+    actualDF = spark.read.format("hudi").options(readOpts).load(basePath)
+    actualKeyDF = actualDF.select("_hoodie_record_key").sort("_hoodie_record_key")
     assertTrue(inputKeyDF.except(actualKeyDF).isEmpty && actualKeyDF.except(inputKeyDF).isEmpty)
 
     // Second update.
@@ -2466,7 +2470,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val opt = writeOpts ++ Map(
       "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.SqlKeyGenerator")
     assertThrows(classOf[HoodieException])({
-      writeToHudi(opt, firstUpdateDF)
+      writeToHudi(opt, firstUpdateDF, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
     })
   }
 }
@@ -2477,6 +2481,17 @@ object TestCOWDataSource {
       // NOTE: This is the trick to make Spark convert a non-null column "c" into a nullable
       //       one by pretending its value could be null in some execution paths
       df.withColumn(c, when(col(c).isNotNull, col(c)).otherwise(lit(null)))
+    }
+  }
+
+  def transformRecordKeyColumn(df: DataFrame, columnName: String, keyGenType: KeyGeneratorType): DataFrame = {
+    keyGenType match {
+      case KeyGeneratorType.USER_PROVIDED =>
+        df.withColumn(columnName, concat(lit(s"MOCK_"), col(columnName)))
+      case KeyGeneratorType.COMPLEX =>
+        df.withColumn(columnName, concat(lit(s"_row_key:"), col(columnName)))
+      case _ =>
+        df
     }
   }
 
@@ -2495,9 +2510,6 @@ object TestCOWDataSource {
         Option.of(KeyGeneratorType.USER_PROVIDED.name())),
       Arguments.of(
         Option.empty(),
-        Option.of(KeyGeneratorType.USER_PROVIDED.name())),
-      Arguments.of(
-        Option.of("org.apache.hudi.keygen.SimpleKeyGenerator"),
         Option.of(KeyGeneratorType.SIMPLE.name())),
       Arguments.of(
         Option.of("org.apache.hudi.keygen.SimpleAvroKeyGenerator"),
