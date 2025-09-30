@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
@@ -93,7 +94,8 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
       PostgresDebeziumAvroPayload.class.getName()));
   private static final Set<String> PAYLOADS_MAPPED_TO_COMMIT_TIME_MERGE_MODE = new HashSet<>(Arrays.asList(
       AWSDmsAvroPayload.class.getName(),
-      OverwriteNonDefaultsWithLatestAvroPayload.class.getName()));
+      OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+      OverwriteWithLatestAvroPayload.class.getName()));
   public static final Set<String> BUILTIN_MERGE_STRATEGIES = Collections.unmodifiableSet(
       new HashSet<>(Arrays.asList(
           COMMIT_TIME_BASED_MERGE_STRATEGY_UUID,
