@@ -91,8 +91,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -133,8 +131,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests hoodie avro utilities.
  */
 public class TestHoodieAvroUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieAvroUtils.class);
 
   private static final String EVOLVED_SCHEMA = "{\"type\": \"record\",\"name\": \"testrec1\",\"fields\": [ "
       + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
@@ -268,6 +264,20 @@ public class TestHoodieAvroUtils {
       + "{\"name\":\"firstname\",\"type\":[\"null\" ,\"string\"],\"default\": null},{\"name\":\"lastname\",\"type\":[\"null\" ,\"string\"],\"default\": null}]}}]}";
 
   public static Schema SCHEMA_WITH_NESTED_FIELD_LARGE = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_LARGE_STR);
+
+  @Test
+  void testAddMetaFields() {
+    // validate null schema does not throw errors
+    assertNull(HoodieAvroUtils.addMetadataFields(null));
+    Schema nullSchema = Schema.create(Schema.Type.NULL);
+    assertEquals(nullSchema, HoodieAvroUtils.addMetadataFields(nullSchema));
+    // test with non-null schema
+    Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(EXAMPLE_SCHEMA));
+    assertEquals(NUM_FIELDS_IN_EXAMPLE_SCHEMA + HoodieRecord.HOODIE_META_COLUMNS.size(), schema.getFields().size());
+    for (String metaCol : HoodieRecord.HOODIE_META_COLUMNS) {
+      assertNotNull(schema.getField(metaCol));
+    }
+  }
 
   @Test
   public void testPropsPresent() {

@@ -282,6 +282,9 @@ public class HoodieAvroUtils {
    * @param withOperationField Whether to include the '_hoodie_operation' field
    */
   public static Schema addMetadataFields(Schema schema, boolean withOperationField) {
+    if (isSchemaNull(schema)) {
+      return schema;
+    }
     int newFieldsSize = HoodieRecord.HOODIE_META_COLUMNS.size() + (withOperationField ? 1 : 0);
     List<Schema.Field> parentFields = new ArrayList<>(schema.getFields().size() + newFieldsSize);
 
