@@ -31,7 +31,7 @@ public interface RunsTableService {
   default boolean tableServicesEnabled(HoodieWriteConfig config) {
     boolean enabled = config.areTableServicesEnabled();
     if (!enabled) {
-      LOG.info("Table services are disabled. Set `{}` to enable.", HoodieWriteConfig.TABLE_SERVICES_ENABLED);
+      LOG.warn("Table services are disabled. Set `{}` to enable.", HoodieWriteConfig.TABLE_SERVICES_ENABLED);
     }
     return enabled;
   }

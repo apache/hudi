@@ -189,7 +189,7 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
             }
             return isValidSchemaStr;
           } catch (IOException e) {
-            LOG.error("Failed to parse commit metadata for instant {} ", s, e);
+            LOG.warn("Failed to parse commit metadata for instant {} ", s, e);
           }
           return false;
         })

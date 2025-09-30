@@ -213,7 +213,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
 
     // Call synchronized method after releasing the semaphore
     if (!heartbeatExecutionSuccessful) {
-      logger.info("Owner {}: Heartbeat function did not succeed.", ownerId);
+      logger.warn("Owner {}: Heartbeat function did not succeed.", ownerId);
       // Unschedule self from further execution if heartbeat was unsuccessful.
       heartbeatTaskUnscheduleItself();
     }
@@ -310,11 +310,11 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
       // means we wait any inflight task execution to finish synchronously.
       heartbeatStillInflight = !heartbeatSemaphore.tryAcquire(stopHeartbeatTimeoutMs, TimeUnit.MILLISECONDS);
       if (heartbeatStillInflight) {
-        logger.info("Owner {}: Timed out while waiting for heartbeat termination.", ownerId);
+        logger.warn("Owner {}: Timed out while waiting for heartbeat termination.", ownerId);
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      logger.info("Owner {}: Interrupted while waiting for heartbeat termination.", ownerId);
+      logger.warn("Owner {}: Interrupted while waiting for heartbeat termination.", ownerId);
     }
     // If we successfully acquired the semaphore before, return it here.
     heartbeatSemaphore.release(heartbeatStillInflight ? 0 : 1);

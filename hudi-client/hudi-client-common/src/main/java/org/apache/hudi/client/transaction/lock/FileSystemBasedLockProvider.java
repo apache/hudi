@@ -115,7 +115,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
         if (storage.exists(this.lockFile)) {
           if (checkIfExpired()) {
             storage.deleteFile(this.lockFile);
-            LOG.info("Delete expired lock file: {}", this.lockFile);
+            LOG.warn("Delete expired lock file: {}", this.lockFile);
           } else {
             reloadCurrentOwnerLockInfo();
             return false;

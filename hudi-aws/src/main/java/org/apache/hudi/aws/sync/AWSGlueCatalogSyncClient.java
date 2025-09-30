@@ -958,9 +958,9 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       // therefore we call this at each commit as a workaround
       managePartitionIndexes(tableName);
     } catch (ExecutionException e) {
-      LOG.error("An indexation process is currently running.", e);
+      LOG.warn("An indexation process is currently running.", e);
     } catch (Exception e) {
-      LOG.error("Something went wrong with partition index", e);
+      LOG.warn("Something went wrong with partition index", e);
     }
   }
 

@@ -188,16 +188,16 @@ public class S3StorageLockClient implements StorageLockClient {
   private LockUpsertResult handleUpsertS3Exception(S3Exception e) {
     int status = e.statusCode();
     if (status == PRECONDITION_FAILURE_ERROR_CODE) {
-      logger.error("OwnerId: {}, Lockfile modified by another process: {}", ownerId, lockFilePath);
+      logger.warn("OwnerId: {}, Lockfile modified by another process: {}", ownerId, lockFilePath);
       return LockUpsertResult.ACQUIRED_BY_OTHERS;
     } else if (status == CONDITIONAL_REQUEST_CONFLICT_ERROR_CODE) {
-      logger.error("OwnerId: {}, Retriable conditional request conflict error: {}", ownerId, lockFilePath);
+      logger.warn("OwnerId: {}, Retriable conditional request conflict error: {}", ownerId, lockFilePath);
     } else if (status == RATE_LIMIT_ERROR_CODE) {
-      logger.error("OwnerId: {}, Rate limit exceeded for: {}", ownerId, lockFilePath);
+      logger.warn("OwnerId: {}, Rate limit exceeded for: {}", ownerId, lockFilePath);
     } else if (status >= INTERNAL_SERVER_ERROR_CODE_MIN) {
-      logger.error("OwnerId: {}, internal server error for: {}", ownerId, lockFilePath, e);
+      logger.warn("OwnerId: {}, internal server error for: {}", ownerId, lockFilePath, e);
     } else {
-      logger.error("OwnerId: {}, Error writing lock file: {}", ownerId, lockFilePath, e);
+      logger.warn("OwnerId: {}, Error writing lock file: {}", ownerId, lockFilePath, e);
     }
 
     return LockUpsertResult.UNKNOWN_ERROR;

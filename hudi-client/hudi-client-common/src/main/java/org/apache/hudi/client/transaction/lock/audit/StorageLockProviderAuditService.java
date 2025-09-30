@@ -155,10 +155,10 @@ public class StorageLockProviderAuditService implements AuditService {
       if (success) {
         LOG.debug("Successfully wrote audit records to: {}", auditFilePath);
       } else {
-        LOG.error("Failed to write audit records to: {}", auditFilePath);
+        LOG.warn("Failed to write audit records to: {}", auditFilePath);
       }
     } catch (Exception e) {
-      LOG.error("Failed to write audit records to: {}", auditFilePath, e);
+      LOG.warn("Failed to write audit records to: {}", auditFilePath, e);
       // Don't throw exception - audit failures should not break lock operations
     }
   }

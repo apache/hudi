@@ -86,7 +86,7 @@ public class HoodieWriteCommitHttpCallbackClient implements Closeable {
         LOG.info("Sent Callback data with {} custom headers to {} successfully !", customHeaders.size(), url);
       }
     } catch (IOException e) {
-      LOG.error("Failed to send callback.", e);
+      LOG.warn("Failed to send callback.", e);
     }
   }
 

@@ -250,7 +250,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       try {
         tryRemoveShutdownHook();
       } catch (IllegalStateException e) {
-        logger.info("Owner {}: Failed to remove shutdown hook, JVM is already shutting down.", ownerId, e);
+        logger.warn("Owner {}: Failed to remove shutdown hook, JVM is already shutting down.", ownerId, e);
       }
     }
     try {
@@ -515,7 +515,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     try {
       // If we don't hold the lock, no-op.
       if (!believesLockMightBeHeld()) {
-        logger.info("Owner {}: Cannot renew, no lock held by this process", ownerId);
+        logger.warn("Owner {}: Cannot renew, no lock held by this process", ownerId);
         // No need to extend lock lease.
         return false;
       }
@@ -641,7 +641,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         service.recordOperation(state, timestamp);
       } catch (Exception e) {
         // Log but don't fail the lock operation due to recording failures
-        logger.error("Owner {}: Failed to record audit operation {}: {}", ownerId, state, e.getMessage());
+        logger.warn("Owner {}: Failed to record audit operation {}: {}", ownerId, state, e.getMessage());
       }
     });
   }

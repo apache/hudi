@@ -85,7 +85,7 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
         LOG.info("Clustering executor shutting down properly");
       } catch (InterruptedException ie) {
         hasError = true;
-        LOG.error("Clustering executor got interrupted exception! Stopping", ie);
+        LOG.warn("Clustering executor got interrupted exception! Stopping", ie);
       } catch (IOException e) {
         hasError = true;
         LOG.error("Clustering executor failed due to IOException", e);
