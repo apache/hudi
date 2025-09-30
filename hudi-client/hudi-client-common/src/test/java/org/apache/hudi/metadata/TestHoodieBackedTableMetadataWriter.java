@@ -187,7 +187,7 @@ class TestHoodieBackedTableMetadataWriter {
       columnsMap.put("col1", null);
       columnsMap.put("col2", null);
       mockedUtil.when(() -> HoodieTableMetadataUtil.getColumnsToIndex(
-              any(), any(), any(), eq(false), any()))
+              any(), any(), any(), eq(false), any(), any()))
           .thenReturn(columnsMap);
 
       // Mock convertFilesToColumnStatsRecords to return empty HoodieData
@@ -232,7 +232,7 @@ class TestHoodieBackedTableMetadataWriter {
       columnsMap.put("col2", null);
       columnsMap.put("col3", null);
       mockedUtil.when(() -> HoodieTableMetadataUtil.getColumnsToIndex(
-              any(), any(), any(), eq(false), any()))
+              any(), any(), any(), eq(false), any(), any()))
           .thenReturn(columnsMap);
 
       // Mock convertFilesToColumnStatsRecords to return empty HoodieData
