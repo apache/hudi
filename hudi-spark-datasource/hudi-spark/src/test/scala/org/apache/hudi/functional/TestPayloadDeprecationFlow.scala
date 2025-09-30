@@ -121,16 +121,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (11, 1L, "rider-X", "driver-X", 19.10, "i", "11.1", 11, 1, "i"),
       (12, 1L, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
       (11, 2L, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"))
-    val firstUpdate = spark.createDataFrame(firstUpdateData).toDF(columns: _*)
-    firstUpdate.write.format("hudi").
-      option(OPERATION.key(), "upsert").
-      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
-      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8").
-      option(HoodieTableConfig.ORDERING_FIELDS.key(), originalOrderingFields).
-      options(serviceOpts).
-      options(opts).
-      mode(SaveMode.Append).
-      save(basePath)
+    performUpsert(firstUpdateData, columns, serviceOpts, opts, basePath,
+      tableVersion = Some("8"), orderingFields = Some(originalOrderingFields))
     // Validate table version.
     metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
@@ -149,16 +141,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (8, 3L, "rider-CC", "driver-CC", 30.00, "u", "8.1", 8, 1, "u"),
       // Delete rider-E with LOWER ordering - should be IGNORED (rider-E has ts=10 originally)
       (9, 5L, "rider-EE", "driver-EE", 17.85, "D", "9.1", 9, 1, "d"))
-    val mixedOrderingUpdate = spark.createDataFrame(mixedOrderingData).toDF(columns: _*)
-    mixedOrderingUpdate.write.format("hudi").
-      option(OPERATION.key(), "upsert").
-      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
-      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8").
-      option(HoodieTableConfig.ORDERING_FIELDS.key(), originalOrderingFields).
-      options(serviceOpts).
-      options(opts).
-      mode(SaveMode.Append).
-      save(basePath)
+    performUpsert(mixedOrderingData, columns, serviceOpts, opts, basePath,
+      tableVersion = Some("8"), orderingFields = Some(originalOrderingFields))
     // Validate table version is still 8 after mixed ordering batch
     metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
@@ -174,16 +158,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       // so that the test will fail if _event_seq is still used for ordering
       (9, 4L, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
       (12, 5L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1, "i"))
-    val secondUpdate = spark.createDataFrame(secondUpdateData).toDF(columns: _*)
-    secondUpdate.write.format("hudi").
-      option(OPERATION.key(), "upsert").
-      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9").
-      option(HoodieCompactionConfig.INLINE_COMPACT.key(), compactionEnabled).
-      option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
-      options(serviceOpts).
-      options(opts).
-      mode(SaveMode.Append).
-      save(basePath)
+    performUpsert(secondUpdateData, columns, serviceOpts, opts, basePath,
+      tableVersion = Some("9"), compactionEnabled = compactionEnabled)
     // Validate table version as 9.
     metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
@@ -229,13 +205,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     val insertData = Seq(
       (13, 6L, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
       (13, 7L, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
-    val insertDataFrame = spark.createDataFrame(insertData).toDF(columns: _*)
-    insertDataFrame.write.format("hudi").
-      option(OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL).
-      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
-      options(serviceOpts).
-      mode(SaveMode.Append).
-      save(basePath)
+    performInsert(insertDataFrame, columns, serviceOpts, basePath)
 
     // Final validation of table management operations after all writes
     metaClient = HoodieTableMetaClient.builder()
@@ -308,15 +278,9 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     }
 
     // 10. Add post-downgrade upsert to verify table functionality
-    val postDowngradeData = Seq(
-      (14, 10L, "rider-Z", "driver-Z", 45.50, "i", "14.1", 14, 1, "i"))
-    val postDowngradeUpdate = spark.createDataFrame(postDowngradeData).toDF(columns: _*)
-    postDowngradeUpdate.write.format("hudi")
-      .option(OPERATION.key(), "upsert")
-      .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false")
-      .options(serviceOpts)
-      .mode(SaveMode.Append)
-      .save(basePath)
+    performUpsert(
+      Seq((14, 10L, "rider-Z", "driver-Z", 45.50, "i", "14.1", 14, 1, "i")),
+      columns, serviceOpts, Map.empty, basePath)
 
     // Validate data consistency after downgrade including new row
     val downgradeDf = spark.read.format("hudi").load(basePath)
@@ -412,13 +376,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (11, 1L, "rider-X", "driver-X", 19.10, "i", "11.1", 11, 1, "i"),
       (12, 1L, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
       (11, 2L, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"))
-    val firstUpdate = spark.createDataFrame(firstUpdateData).toDF(columns: _*)
-    firstUpdate.write.format("hudi").
-      option(OPERATION.key(), "upsert").
-      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
-      options(serviceOpts).
-      mode(SaveMode.Append).
-      save(basePath)
+    performUpsert(firstUpdateData, columns, serviceOpts, Map.empty, basePath)
     // Validate table version.
     metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
@@ -439,14 +397,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (8, 3L, "rider-CC", "driver-CC", 30.00, "u", "8.1", 8, 1, "u"),
       // Delete rider-E with LOWER ordering - should be IGNORED (rider-E has ts=10 originally)
       (9, 5L, "rider-EE", "driver-EE", 17.85, "D", "9.1", 9, 1, "d"))
-    val mixedOrderingUpdate = spark.createDataFrame(mixedOrderingData).toDF(columns: _*)
-    mixedOrderingUpdate.write.format("hudi").
-      option(OPERATION.key(), "upsert").
-      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
-      options(serviceOpts).
-      options(opts).
-      mode(SaveMode.Append).
-      save(basePath)
+    performUpsert(mixedOrderingData, columns, serviceOpts, opts, basePath)
     // Validate table version is still 9 after mixed ordering batch
     metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
@@ -466,14 +417,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       // so that the test will fail if _event_seq is still used for ordering
       (9, 4L, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
       (12, 5L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1, "i"))
-    val secondUpdate = spark.createDataFrame(secondUpdateData).toDF(columns: _*)
-    secondUpdate.write.format("hudi").
-      option(OPERATION.key(), "upsert").
-      option(HoodieCompactionConfig.INLINE_COMPACT.key(), compactionEnabled).
-      option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
-      options(serviceOpts).
-      mode(SaveMode.Append).
-      save(basePath)
+    performUpsert(secondUpdateData, columns, serviceOpts, Map.empty, basePath,
+      compactionEnabled = compactionEnabled)
     // Validate table version as 9.
     metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
@@ -516,13 +461,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     val insertData = Seq(
       (13, 6L, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
       (13, 7L, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
-    val insertDataFrame = spark.createDataFrame(insertData).toDF(columns: _*)
-    insertDataFrame.write.format("hudi").
-      option(OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL).
-      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
-      options(serviceOpts).
-      mode(SaveMode.Append).
-      save(basePath)
+    performInsert(insertData, columns, serviceOpts, basePath)
 
     // Final validation of table management operations after all writes
     metaClient = HoodieTableMetaClient.builder()
@@ -593,15 +532,9 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     }
 
     // 10. Add post-downgrade upsert to verify table functionality
-    val postDowngradeData = Seq(
-      (14, 10L, "rider-Z", "driver-Z", 45.50, "i", "14.1", 14, 1, "i"))
-    val postDowngradeUpdate = spark.createDataFrame(postDowngradeData).toDF(columns: _*)
-    postDowngradeUpdate.write.format("hudi")
-      .option(OPERATION.key(), "upsert")
-      .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false")
-      .options(serviceOpts)
-      .mode(SaveMode.Append)
-      .save(basePath)
+    performUpsert(
+      Seq((14, 10L, "rider-Z", "driver-Z", 45.50, "i", "14.1", 14, 1, "i")),
+      columns, serviceOpts, Map.empty, basePath)
 
     // Validate data consistency after downgrade including new row
     val downgradeDf = spark.read.format("hudi").load(basePath)
@@ -620,6 +553,56 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       .withProps(props)
       .withPath(basePath())
       .build()
+  }
+
+  /**
+   * Helper method to perform upsert operations with configurable options
+   */
+  def performUpsert(data: Seq[(Int, Long, String, String, Double, String, String, Int, Int, String)],
+                    columns: Seq[String],
+                    serviceOpts: Map[String, String],
+                    opts: Map[String, String],
+                    basePath: String,
+                    tableVersion: Option[String] = None,
+                    orderingFields: Option[String] = None,
+                    compactionEnabled: String = "false",
+                    compactionNumDeltaCommits: String = "1"): Unit = {
+    val dataFrame = spark.createDataFrame(data).toDF(columns: _*)
+    val writer = dataFrame.write.format("hudi")
+      .option(OPERATION.key(), "upsert")
+      .option(HoodieCompactionConfig.INLINE_COMPACT.key(), compactionEnabled)
+      .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), compactionNumDeltaCommits)
+      .options(serviceOpts)
+
+    val writerWithVersion = tableVersion match {
+      case Some(version) => writer.option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), version)
+      case None => writer
+    }
+
+    val writerWithOrdering = orderingFields match {
+      case Some(fields) => writerWithVersion.option(HoodieTableConfig.ORDERING_FIELDS.key(), fields)
+      case None => writerWithVersion
+    }
+
+    writerWithOrdering.options(opts)
+      .mode(SaveMode.Append)
+      .save(basePath)
+  }
+
+  /**
+   * Helper method to perform insert operations
+   */
+  def performInsert(data: Seq[(Int, Long, String, String, Double, String, String, Int, Int, String)],
+                    columns: Seq[String],
+                    serviceOpts: Map[String, String],
+                    basePath: String): Unit = {
+    val dataFrame = spark.createDataFrame(data).toDF(columns: _*)
+    dataFrame.write.format("hudi")
+      .option(OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false")
+      .options(serviceOpts)
+      .mode(SaveMode.Append)
+      .save(basePath)
   }
 
   def getExpectedResultForSnapshotQuery(payloadClazz: String, usesDeleteMarker: Boolean): Seq[(Int, Long, String, String, Double, String, String, Int, Int, String)] = {
