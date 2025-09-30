@@ -977,7 +977,7 @@ public class HoodieTableConfig extends HoodieConfig {
       }
     }
 
-    if (recordMergeMode != null && (!tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)
+    if (recordMergeMode != null && (tableVersion.lesserThan(HoodieTableVersion.NINE)
         || !PayloadGroupings.getPayloadsUnderDeprecation().contains(payloadClassName))) {
       checkArgument(inferredRecordMergeMode == recordMergeMode,
           String.format("Configured record merge mode (%s) is inconsistent with payload class (%s) "

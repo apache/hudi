@@ -21,7 +21,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, HoodieRecordMerger, HoodieTableType, OverwriteWithLatestAvroPayload, PartialUpdateAvroPayload}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, EventTimeAvroPayload, HoodieRecord, HoodieRecordMerger, HoodieTableType, OverwriteWithLatestAvroPayload, PartialUpdateAvroPayload}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.CustomPayloadForTesting
@@ -454,13 +454,13 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
         .options(readOpts)
         .load(basePath)
       df1.write.format("hudi")
-        .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, "any_other_payload")
+        .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, classOf[EventTimeAvroPayload].getName)
         .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
         .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key, "false")
         .mode(SaveMode.Append)
         .save(basePath)
       df1.write.format("hudi")
-        .option(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key, "any_other_strategy_id")
+        .option(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key, classOf[EventTimeAvroPayload].getName)
         .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
         .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key, "false")
         .mode(SaveMode.Append)
@@ -469,7 +469,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     } else {
       Assertions.assertThrows(classOf[HoodieException], () => {
         df1.write.format("hudi")
-          .option(HoodieWriteConfig.RECORD_MERGE_MODE.key, "any_other_payload")
+          .option(HoodieWriteConfig.RECORD_MERGE_MODE.key, diffMergeMode.name)
           .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
           .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key, "false")
           .mode(SaveMode.Append)
@@ -477,7 +477,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
       })
       Assertions.assertThrows(classOf[HoodieException], () => {
         df1.write.format("hudi")
-          .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, "any_other_payload")
+          .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, classOf[EventTimeAvroPayload].getName)
           .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
           .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key, "false")
           .mode(SaveMode.Append)
@@ -485,7 +485,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
       })
       Assertions.assertThrows(classOf[HoodieException], () => {
         df1.write.format("hudi")
-          .option(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key, "any_other_strategy_id")
+          .option(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key, HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID)
           .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
           .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key, "false")
           .mode(SaveMode.Append)
