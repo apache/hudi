@@ -78,9 +78,4 @@ public class TimelineV1Factory extends TimelineFactory {
   public CompletionTimeQueryView createCompletionTimeQueryView(HoodieTableMetaClient metaClient) {
     return new CompletionTimeQueryViewV1(metaClient);
   }
-
-  @Override
-  public CompletionTimeQueryView createCompletionTimeQueryView(HoodieTableMetaClient metaClient, String eagerInstant) {
-    return new CompletionTimeQueryViewV1(metaClient, eagerInstant);
-  }
 }

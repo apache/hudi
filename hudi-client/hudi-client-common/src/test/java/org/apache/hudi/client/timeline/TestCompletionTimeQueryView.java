@@ -82,7 +82,7 @@ public class TestCompletionTimeQueryView {
         HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareTimeline(tablePath, metaClient);
     try (CompletionTimeQueryView view =
-             metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
+             metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
       // query completion time from LSM timeline
       for (int i = 3; i < 7; i++) {
         assertThat(view.getCompletionTime(String.format("%08d", i)).orElse(""), is(String.format("%08d", i + 1000)));
@@ -113,7 +113,7 @@ public class TestCompletionTimeQueryView {
         HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareTimeline(tablePath, metaClient);
     try (CompletionTimeQueryView view =
-             metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
+             metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
       // query start time from LSM timeline
       assertThat(getInstantTimeSetFormattedString(view, 3 + 1000, 6 + 1000), is("00000003,00000004,00000005,00000006"));
       // query start time from active timeline
@@ -136,7 +136,7 @@ public class TestCompletionTimeQueryView {
         HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareTimeline(tablePath, metaClient);
     try (CompletionTimeQueryView view =
-             metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
+             metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
       // Fetch instant matching the completion time provided
       assertEquals(Collections.singletonList("00000009"), view.getInstantTimes(metaClient.getActiveTimeline(), Option.empty(), Option.of("00001009"), InstantRange.RangeType.CLOSED_CLOSED));
       // Fetch instant just before the completion time provided
@@ -167,10 +167,9 @@ public class TestCompletionTimeQueryView {
       assertEquals(instantRequestedAndCompletionTime.get(8).getRight(), view.getCompletionTime(instantRequestedAndCompletionTime.get(8).getLeft()).get());
       // cursor should be the earliest instant in the active timeline
       assertEquals(instantRequestedAndCompletionTime.get(6).getLeft(), view.getCursorInstant());
-      // fetch completion time for the first archived instant should trigger loading of 3 days of history
+      // fetch completion time for the first archived instant should update the cursor instant to it.
       assertEquals(instantRequestedAndCompletionTime.get(5).getRight(), view.getCompletionTime(instantRequestedAndCompletionTime.get(5).getLeft()).get());
-      long diff = Math.abs(now.minus(3, ChronoUnit.DAYS).toEpochMilli() - HoodieInstantTimeGenerator.parseDateFromInstantTime(view.getCursorInstant()).toInstant().toEpochMilli());
-      assertTrue(diff < 10_000); // diff is within 10s to account for any possible slowness in tests
+      assertEquals(instantRequestedAndCompletionTime.get(5).getLeft(), view.getCursorInstant());
     }
   }
 
