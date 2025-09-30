@@ -132,7 +132,7 @@ public class FileStatsIndex implements ColumnStatsIndex {
       final List<RowData> statsRows = readColumnStatsIndexByColumns(targetColumns);
       return candidatesInMetadataTable(probe, statsRows, allFiles);
     } catch (Throwable t) {
-      LOG.warn("Read {} for data skipping error", getIndexPartitionName(), t);
+      LOG.error("Failed to read metadata index: {} for data skipping", getIndexPartitionName(), t);
       return null;
     }
   }

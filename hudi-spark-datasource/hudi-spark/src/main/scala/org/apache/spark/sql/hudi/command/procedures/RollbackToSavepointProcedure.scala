@@ -73,11 +73,11 @@ class RollbackToSavepointProcedure extends BaseProcedure with ProcedureBuilder w
       if (tableName.isDefined) {
         spark.catalog.refreshTable(tableName.get.asInstanceOf[String])
       }
-      logInfo("The commit $instantTime rolled back.")
+      logInfo(s"The commit $instantTime rolled back.")
       result = true
     } catch {
       case _: HoodieSavepointException =>
-        logWarning(s"The commit $instantTime failed to roll back.")
+        logError(s"Failed to roll back commit at instant time: $instantTime")
     } finally {
       client.close()
     }

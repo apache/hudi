@@ -157,7 +157,7 @@ object AlterHoodieTableAddColumnsCommand extends SparkAdapterSupport with Loggin
       session.catalog.uncacheTable(tableId.quotedString)
     } catch {
       case NonFatal(e) =>
-        log.warn(s"Exception when attempting to uncache table ${tableId.quotedString}", e)
+        log.error(s"Exception when attempting to uncache table ${tableId.quotedString}", e)
     }
     session.catalog.refreshTable(tableId.unquotedString)
     session.sessionState.catalog.alterTableDataSchema(tableId, dataSchema)

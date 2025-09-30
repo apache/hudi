@@ -602,7 +602,7 @@ public class UtilHelpers {
         return tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false);
       }
     } catch (Exception e) {
-      LOG.warn("Failed to fetch latest table's schema", e);
+      LOG.error("Failed to fetch latest table's schema", e);
     }
 
     return Option.empty();

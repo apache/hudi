@@ -280,10 +280,10 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     shutdownThread = new Thread() {
       public void run() {
         try {
-          LOG.warn("running HoodieLogFormatWriter shutdown hook to close output stream for log file: {}", logFile);
+          LOG.info("running HoodieLogFormatWriter shutdown hook to close output stream for log file: {}", logFile);
           closeStream();
         } catch (Exception e) {
-          LOG.warn("unable to close output stream for log file: {}", logFile, e);
+          LOG.error("unable to close output stream for log file: {}", logFile, e);
           // fail silently for any sort of exception
         }
       }

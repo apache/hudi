@@ -227,7 +227,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
           throw new HoodieIOException("Could not delete instant " + instant + " with path " + commitFilePath);
         }
       } else {
-        LOG.warn("The commit {} to remove does not exist", commitFilePath);
+        LOG.info("The commit {} to remove does not exist", commitFilePath);
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not remove commit " + commitFilePath, e);

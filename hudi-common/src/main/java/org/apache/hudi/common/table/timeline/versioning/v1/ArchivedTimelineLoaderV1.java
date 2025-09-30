@@ -139,7 +139,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
               HoodieMergeArchiveFilePlan plan = TimelineMetadataUtils.deserializeAvroMetadataLegacy(FileIOUtils.readDataFromPath(storage, planPath).get(), HoodieMergeArchiveFilePlan.class);
               String mergedArchiveFileName = plan.getMergedArchiveFileName();
               if (!StringUtils.isNullOrEmpty(mergedArchiveFileName) && fs.getPath().getName().equalsIgnoreCase(mergedArchiveFileName)) {
-                LOG.warn("Catch exception because of reading uncompleted merging archive file " + mergedArchiveFileName + ". Ignore it here.");
+                LOG.debug("Catch exception because of reading uncompleted merging archive file {}. Ignore it here.", mergedArchiveFileName);
                 continue;
               }
             }
@@ -174,7 +174,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
         }
       } catch (NumberFormatException e) {
         // log and ignore any format warnings
-        LOG.warn("error getting suffix for archived file: " + f.getPath());
+        LOG.warn("error getting suffix for archived file: {}", f.getPath());
       }
 
       // return default value in case of any errors

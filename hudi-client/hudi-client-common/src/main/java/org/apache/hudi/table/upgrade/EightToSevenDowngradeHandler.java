@@ -228,7 +228,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
             flusher);
       }
     } catch (Exception e) {
-      LOG.warn("Failed to downgrade LSM timeline to old archived format");
+      LOG.warn("Failed to downgrade LSM timeline to old archived format", e);
       if (config.isFailOnTimelineArchivingEnabled()) {
         throw new HoodieException("Failed to downgrade LSM timeline to old archived format", e);
       }

@@ -144,7 +144,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
             shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal);
       }
     } catch (Exception ex) {
-      LOG.warn("PartialUpdateAvroPayload precombine failed with ", ex);
+      LOG.error("PartialUpdateAvroPayload precombine failed with ", ex);
       return this;
     }
     return this;

@@ -385,7 +385,7 @@ public class StreamSync implements Serializable, Closeable {
         }
         return metaClient;
       } catch (HoodieIOException e) {
-        LOG.warn("Full exception msg " + e.getMessage());
+        LOG.info("Full exception msg {}", e.getMessage());
         if (e.getMessage().contains("Could not load Hoodie properties") && e.getMessage().contains(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
           String basePathWithForwardSlash = cfg.targetBasePath.endsWith("/") ? cfg.targetBasePath :
               String.format("%s/", cfg.targetBasePath);
@@ -1392,8 +1392,8 @@ public class StreamSync implements Serializable, Closeable {
       boolean hasErrorRecords = totalErroredRecords > 0;
       if (!hasErrorRecords || commitOnErrors) {
         if (hasErrorRecords) {
-          LOG.warn("Some records failed to be merged but forcing commit since commitOnErrors set. Errors/Total="
-              + totalErroredRecords + "/" + totalRecords);
+          LOG.warn("Some records failed to be merged but forcing commit since commitOnErrors set. Errors/Total={}/{}",
+              totalErroredRecords, totalRecords);
         }
       }
 

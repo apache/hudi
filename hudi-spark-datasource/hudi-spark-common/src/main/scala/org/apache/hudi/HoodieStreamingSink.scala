@@ -66,7 +66,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
         .build())
     } catch {
       case _: TableNotFoundException =>
-        log.warn("Ignore TableNotFoundException as it is first microbatch.")
+        log.info("Ignore TableNotFoundException as it is first microbatch.")
         Option.empty
     }
   }
@@ -106,7 +106,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     val queryId = sqlContext.sparkContext.getLocalProperty(StreamExecution.QUERY_ID_KEY)
     checkArgument(queryId != null, "queryId is null")
     if (metaClient.isDefined && canSkipBatch(batchId, options.getOrElse(OPERATION.key, UPSERT_OPERATION_OPT_VAL))) {
-      log.warn(s"Skipping already completed batch $batchId in query $queryId")
+      log.info(s"Skipping already completed batch $batchId in query $queryId")
       // scalastyle:off return
       return
       // scalastyle:on return
@@ -170,12 +170,12 @@ class HoodieStreamingSink(sqlContext: SQLContext,
                 try {
                   rdd.unpersist()
                 } catch {
-                  case t: Exception => log.warn("Got excepting trying to unpersist rdd", t)
+                  case t: Exception => log.error("Got excepting trying to unpersist rdd", t)
                 }
             }
           log.error(s"Micro batch id=$batchId threw following exception: ", e)
           if (ignoreFailedBatch) {
-            log.warn(s"Ignore the exception and move on streaming as per " +
+            log.info(s"Ignore the exception and move on streaming as per " +
               s"${STREAMING_IGNORE_FAILED_BATCH.key} configuration")
             Success((true, None, None))
           } else {

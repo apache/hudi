@@ -114,7 +114,7 @@ public class PushGatewayReporter extends ScheduledReporter {
       handleLabeledMetrics();
       pushGatewayClient.pushAdd(collectorRegistry, jobName, labels);
     } catch (IOException e) {
-      LOG.warn("Can't push monitoring information to pushGateway", e);
+      LOG.error("Can't push monitoring information to pushGateway", e);
     }
   }
 
@@ -136,7 +136,7 @@ public class PushGatewayReporter extends ScheduledReporter {
         }
       }
     } catch (IOException e) {
-      LOG.warn("Failed to delete metrics from pushGateway with jobName {" + jobName + "}", e);
+      LOG.warn("Failed to delete metrics from pushGateway with jobName {{}}", jobName, e);
     }
   }
 

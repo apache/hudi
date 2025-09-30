@@ -65,7 +65,7 @@ public class Hive3Shim implements HiveShim {
       TIMESTAMP_WRITEABLE_V2_CONSTRUCTOR = TIMESTAMP_WRITABLE_V2_CLASS.getConstructor(TIMESTAMP_CLASS);
     } catch (ClassNotFoundException | NoSuchMethodException e) {
       // This will be printed out when Hive3Shim initialization as a singleton fails
-      LOG.warn("cannot find hive3 timestampv2 class or method, use hive2 class!", e);
+      LOG.error("cannot find hive3 timestampv2 class or method, use hive2 class!", e);
     }
 
     // date
@@ -75,7 +75,7 @@ public class Hive3Shim implements HiveShim {
       DATE_WRITEABLE_V2_CONSTRUCTOR = DATE_WRITEABLE_CLASS.getConstructor(int.class);
     } catch (ClassNotFoundException | NoSuchMethodException e) {
       // This will be printed out when Hive3Shim initialization as a singleton fails
-      LOG.warn("cannot find hive3 datev2 class or method, use hive2 class!", e);
+      LOG.error("cannot find hive3 datev2 class or method, use hive2 class!", e);
     }
   }
 

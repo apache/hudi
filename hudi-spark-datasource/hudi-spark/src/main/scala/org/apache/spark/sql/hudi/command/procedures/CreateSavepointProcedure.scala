@@ -74,7 +74,7 @@ class CreateSavepointProcedure extends BaseProcedure with ProcedureBuilder with 
       result = true
     } catch {
       case _: HoodieSavepointException =>
-        logWarning(s"Failed: Could not create savepoint $commitTime.")
+        logError(s"Could not create savepoint $commitTime.")
     } finally {
       client.close()
     }

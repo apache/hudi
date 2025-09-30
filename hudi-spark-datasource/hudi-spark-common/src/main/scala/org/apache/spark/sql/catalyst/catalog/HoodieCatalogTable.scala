@@ -362,7 +362,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
     })
     catch {
       case cause: Throwable =>
-        logWarning("Failed to load table schema from meta client.", cause)
+        logError("Failed to load table schema from meta client.", cause)
         None
     }
   }

@@ -181,7 +181,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
         throw new HoodieMetadataIndexException("Scheduling of index action did not return any instant.");
       }
     } catch (Throwable t) {
-      LOG.warn("Error while creating index: {}. So drop it.", indexDefinition.getIndexName(), t);
+      LOG.error("Error while creating index: {}. Index will be dropped.", indexDefinition.getIndexName(), t);
       drop(metaClient, indexDefinition.getIndexName(), Option.ofNullable(indexDefinition));
       throw t;
     }

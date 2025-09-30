@@ -59,7 +59,7 @@ public class CloseableIteratorListener implements TaskCompletionListener {
       try {
         ((AutoCloseable) iterator).close();
       } catch (Exception ex) {
-        LOG.warn("Failed to properly close iterator", ex);
+        LOG.error("Failed to properly close iterator", ex);
       }
     }
   }

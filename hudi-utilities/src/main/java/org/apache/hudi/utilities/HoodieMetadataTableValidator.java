@@ -239,7 +239,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           .build());
     } catch (TableNotFoundException tbe) {
       // Suppress the TableNotFound exception, table not yet created for a new stream
-      LOG.warn("Data table is not found. Skip current validation for: " + cfg.basePath);
+      LOG.warn("Data table is not found. Skip current validation for: {}", cfg.basePath);
     }
 
     this.asyncMetadataTableValidateService = cfg.continuous ? Option.of(new AsyncMetadataTableValidateService()) : Option.empty();
@@ -517,7 +517,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   public boolean run() {
     if (!metaClientOpt.isPresent()) {
-      LOG.warn("Data table is not available to read for now, skip current validation for: " + cfg.basePath);
+      LOG.warn("Data table is not available to read for now, skip current validation for: {}", cfg.basePath);
       return true;
     }
     boolean result = false;
@@ -678,7 +678,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         LOG.info("Metadata table validation succeeded ({}).", taskLabels);
         return true;
       } else {
-        LOG.warn("Metadata table validation failed ({}).", taskLabels);
+        LOG.error("Metadata table validation failed ({}).", taskLabels);
         return false;
       }
     } catch (HoodieValidationException validationException) {
@@ -769,7 +769,7 @@ public class HoodieMetadataTableValidator implements Serializable {
                 Option<HoodieInstant> lastInstant = completedTimeline.lastInstant();
                 if (lastInstant.isPresent()
                     && InstantComparison.compareTimestamps(partitionCreationTimeOpt.get(), GREATER_THAN, lastInstant.get().requestedTime())) {
-                  LOG.warn("Ignoring additional partition {}, as it was deduced to be part of a "
+                  LOG.info("Ignoring additional partition {}, as it was deduced to be part of a "
                       + "latest completed commit which was inflight when FS based listing was polled.", partitionFromMDT);
                   actualAdditionalPartitionsInMDT.remove(partitionFromMDT);
                 }
@@ -797,7 +797,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         }).collect(Collectors.toList());
         additionalFromFS.removeAll(emptyPartitions);
         if (additionalFromFS.isEmpty()) {
-          LOG.warn("All out of sync partitions turned out to be empty {}", emptyPartitions);
+          LOG.info("All out of sync partitions turned out to be empty {}", emptyPartitions);
           misMatch.set(false);
         } else {
           misMatch.set(true);
@@ -1514,7 +1514,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           mismatch = true;
           break;
         } else {
-          LOG.warn("There are uncommitted log files in the latest file slices but the committed log files match: {} {}", fileSlice1, fileSlice2);
+          LOG.error("There are uncommitted log files in the latest file slices but the committed log files match: {} {}", fileSlice1, fileSlice2);
         }
       }
     }
@@ -1566,7 +1566,7 @@ public class HoodieMetadataTableValidator implements Serializable {
                 LOG.warn("Missing commit ({}) is part of rollback plan: {}", rollbackPlan.getInstantToRollback().getCommitTime(), rollbackPlan);
               }
             } catch (IOException ex) {
-              LOG.warn("Failed to deserialize rollback plan for instant: {}", requestedInstant, ex);
+              LOG.error("Failed to deserialize rollback plan for instant: {}", requestedInstant, ex);
             }
           });
         }

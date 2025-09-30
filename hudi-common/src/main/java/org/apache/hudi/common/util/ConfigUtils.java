@@ -403,9 +403,7 @@ public class ConfigUtils {
     }
     for (String alternative : configProperty.getAlternatives()) {
       if (props.containsKey(alternative)) {
-        LOG.warn(String.format("The configuration key '%s' has been deprecated "
-                + "and may be removed in the future. Please use the new key '%s' instead.",
-            alternative, configProperty.key()));
+        deprecationWarning(alternative, configProperty);
         return Option.ofNullable(props.get(alternative));
       }
     }
@@ -528,13 +526,16 @@ public class ConfigUtils {
     for (String alternative : configProperty.getAlternatives()) {
       value = keyMapper.apply(alternative);
       if (value != null) {
-        LOG.warn(String.format("The configuration key '%s' has been deprecated "
-                + "and may be removed in the future. Please use the new key '%s' instead.",
-            alternative, configProperty.key()));
+        deprecationWarning(alternative, configProperty);
         return value.toString();
       }
     }
     return configProperty.hasDefaultValue() ? configProperty.defaultValue().toString() : null;
+  }
+
+  private static void deprecationWarning(String alternative, ConfigProperty<?> configProperty) {
+    LOG.warn("The configuration key '{}' has been deprecated and may be removed in the future."
+        + " Please use the new key '{}' instead.", alternative, configProperty.key());
   }
 
   /**
@@ -679,9 +680,9 @@ public class ConfigUtils {
           }
           return props;
         } catch (IOException e) {
-          LOG.warn(String.format("Could not read properties from %s: %s", path, e));
+          LOG.error("Could not read properties from {}: {}", path, e);
         } catch (IllegalArgumentException e) {
-          LOG.warn(String.format("Invalid properties file %s: %s", path, props));
+          LOG.error("Invalid properties file {}: {}", path, props);
         }
       }
 
@@ -730,7 +731,7 @@ public class ConfigUtils {
           // need to delete the backup as anyway reads will also fail
           // subsequent writes will recover and update
           storage.deleteFile(backupCfgPath);
-          LOG.warn("Invalid properties file {}: {}", backupCfgPath, backupProps);
+          LOG.error("Invalid properties file {}: {}", backupCfgPath, backupProps);
           throw new IOException("Corrupted backup file");
         }
         // copy over from backup

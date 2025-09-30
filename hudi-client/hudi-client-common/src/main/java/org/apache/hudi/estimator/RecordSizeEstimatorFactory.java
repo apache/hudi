@@ -38,7 +38,7 @@ public class RecordSizeEstimatorFactory {
     try {
       return (RecordSizeEstimator) ReflectionUtils.loadClass(recordSizeEstimatorClass, writeConfig);
     } catch (Throwable e) {
-      LOG.warn("Unable to instantiate the record estimator implementation {}. Falling back to use default AverageRecordSizeEstimator.\" ", recordSizeEstimatorClass, e);
+      LOG.error("Unable to instantiate the record estimator implementation {}. Falling back to use default AverageRecordSizeEstimator.\" ", recordSizeEstimatorClass, e);
     }
     return new AverageRecordSizeEstimator(writeConfig);
   }

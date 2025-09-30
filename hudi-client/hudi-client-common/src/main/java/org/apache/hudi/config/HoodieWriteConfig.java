@@ -3601,8 +3601,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       if (writeConfig.isAutoAdjustLockConfigs() && writeConfig.getWriteConcurrencyMode() == WriteConcurrencyMode.SINGLE_WRITER && !writeConfig.areAnyTableServicesAsync()) {
         if (writeConfig.getLockProviderClass() != null && !writeConfig.getLockProviderClass().equals(InProcessLockProvider.class.getCanonicalName())) {
           // add logs only when explicitly overridden by the user.
-          LOG.warn(String.format("For a single writer mode, overriding lock provider class (%s) to %s. So, user configured lock provider %s may not take effect",
-              HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName(), writeConfig.getLockProviderClass()));
+          LOG.warn("For a single writer mode, overriding lock provider class ({}) to {}. So, user configured lock provider {} may not take effect",
+              HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName(), writeConfig.getLockProviderClass());
           writeConfig.setValue(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
               InProcessLockProvider.class.getName());
         }
@@ -3708,7 +3708,7 @@ public class HoodieWriteConfig extends HoodieConfig {
             return MarkerType.TIMELINE_SERVER_BASED.toString();
           } else {
             if (!HoodieTableMetadata.isMetadataTable(writeConfig.getBasePath())) {
-              LOG.warn("Embedded timeline server is disabled, fallback to use direct marker type for spark");
+              LOG.info("Embedded timeline server is disabled, fallback to use direct marker type for spark");
             }
             return MarkerType.DIRECT.toString();
           }

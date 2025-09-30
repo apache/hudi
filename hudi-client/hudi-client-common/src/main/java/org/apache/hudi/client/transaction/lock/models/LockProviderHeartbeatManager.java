@@ -179,7 +179,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
     }
 
     if (this.hasActiveHeartbeat()) {
-      logger.warn("Owner {}: Heartbeat is already running.", ownerId);
+      logger.info("Owner {}: Heartbeat is already running.", ownerId);
       return false;
     }
     try {
@@ -213,7 +213,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
 
     // Call synchronized method after releasing the semaphore
     if (!heartbeatExecutionSuccessful) {
-      logger.warn("Owner {}: Heartbeat function did not succeed.", ownerId);
+      logger.info("Owner {}: Heartbeat function did not succeed.", ownerId);
       // Unschedule self from further execution if heartbeat was unsuccessful.
       heartbeatTaskUnscheduleItself();
     }
@@ -228,7 +228,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
   private boolean executeHeartbeat(Thread threadToMonitor) {
     // Check if monitored thread is dead
     if (!threadToMonitor.isAlive()) {
-      logger.warn("Owner {}: Monitored thread is no longer alive.", ownerId);
+      logger.info("Owner {}: Monitored thread is no longer alive.", ownerId);
       return false;
     }
 
@@ -268,7 +268,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
     if (heartbeatStillInflight) {
       // If waiting for cancellation was interrupted, do not log an error.
       if (Thread.currentThread().isInterrupted()) {
-        logger.warn("Owner {}: Heartbeat is still in flight due to interruption!", ownerId);
+        logger.info("Owner {}: Heartbeat is still in flight due to interruption!", ownerId);
       } else {
         logger.error("Owner {}: Heartbeat is still in flight!", ownerId);
       }
@@ -290,7 +290,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
    */
   private synchronized boolean cancelRecurringHeartbeatTask(boolean mayInterruptIfRunning) {
     if (!this.hasActiveHeartbeat()) {
-      logger.warn("Owner {}: No active heartbeat task to stop.", ownerId);
+      logger.info("Owner {}: No active heartbeat task to stop.", ownerId);
       return true;
     }
 
@@ -310,11 +310,11 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
       // means we wait any inflight task execution to finish synchronously.
       heartbeatStillInflight = !heartbeatSemaphore.tryAcquire(stopHeartbeatTimeoutMs, TimeUnit.MILLISECONDS);
       if (heartbeatStillInflight) {
-        logger.warn("Owner {}: Timed out while waiting for heartbeat termination.", ownerId);
+        logger.info("Owner {}: Timed out while waiting for heartbeat termination.", ownerId);
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      logger.warn("Owner {}: Interrupted while waiting for heartbeat termination.", ownerId);
+      logger.info("Owner {}: Interrupted while waiting for heartbeat termination.", ownerId);
     }
     // If we successfully acquired the semaphore before, return it here.
     heartbeatSemaphore.release(heartbeatStillInflight ? 0 : 1);

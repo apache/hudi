@@ -299,7 +299,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
             // fragments to the partition columns and therefore return an empty tuple. We don't
             // fail outright so that in some cases we can fallback to reading the table as non-partitioned
             // one
-            logWarning(s"Failed to parse partition values: found partition fragments" +
+            logError(s"Failed to parse partition values: found partition fragments" +
               s" (${partitionFragments.mkString(",")}) are not aligned with expected partition columns" +
               s" (${partitionColumns.mkString(",")})")
             Array.empty

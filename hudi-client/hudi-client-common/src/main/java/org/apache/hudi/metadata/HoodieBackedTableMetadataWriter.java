@@ -447,7 +447,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     while (iterator.hasNext()) {
       MetadataPartitionType partitionType = iterator.next();
       if (partitionType == PARTITION_STATS && !dataMetaClient.getTableConfig().isTablePartitioned()) {
-        LOG.warn("Partition stats index cannot be enabled for a non-partitioned table. Removing from initialization list. Please disable {}",
+        LOG.error("Partition stats index cannot be enabled for a non-partitioned table. Removing from initialization list. Please disable {}",
             HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key());
         iterator.remove();
         this.enabledPartitionTypes.remove(partitionType);
@@ -486,7 +486,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
             Set<String> expressionIndexPartitionsToInit = getExpressionIndexPartitionsToInit(partitionType, dataWriteConfig.getMetadataConfig(), dataMetaClient);
             if (expressionIndexPartitionsToInit.size() != 1) {
               if (expressionIndexPartitionsToInit.size() > 1) {
-                LOG.warn("Skipping expression index initialization as only one expression index bootstrap at a time is supported for now. Provided: {}", expressionIndexPartitionsToInit);
+                LOG.error("Skipping expression index initialization as only one expression index bootstrap at a time is supported for now. Provided: {}", expressionIndexPartitionsToInit);
               }
               continue;
             }
@@ -497,7 +497,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           case PARTITION_STATS:
             // For PARTITION_STATS, COLUMN_STATS should also be enabled
             if (!dataWriteConfig.isMetadataColumnStatsIndexEnabled()) {
-              LOG.warn("Skipping partition stats initialization as column stats index is not enabled. Please enable {}",
+              LOG.error("Skipping partition stats initialization as column stats index is not enabled. Please enable {}",
                   HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
               continue;
             }
@@ -508,7 +508,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
             Set<String> secondaryIndexPartitionsToInit = getSecondaryIndexPartitionsToInit(partitionType, dataWriteConfig.getMetadataConfig(), dataMetaClient);
             if (secondaryIndexPartitionsToInit.size() != 1) {
               if (secondaryIndexPartitionsToInit.size() > 1) {
-                LOG.warn("Skipping secondary index initialization as only one secondary index bootstrap at a time is supported for now. Provided: {}", secondaryIndexPartitionsToInit);
+                LOG.error("Skipping secondary index initialization as only one secondary index bootstrap at a time is supported for now. Provided: {}", secondaryIndexPartitionsToInit);
               }
               continue;
             }
@@ -1100,7 +1100,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     try {
       final List<StoragePathInfo> existingFiles = storage.listDirectEntries(partitionPath);
       if (!existingFiles.isEmpty()) {
-        LOG.warn("Deleting all existing files found in MDT partition {}", relativePartitionPath);
+        LOG.info("Deleting all existing files found in MDT partition {}", relativePartitionPath);
         storage.deleteDirectory(partitionPath);
         ValidationUtils.checkState(!storage.exists(partitionPath),
             "Failed to delete MDT partition " + relativePartitionPath);
@@ -1112,11 +1112,11 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
   public void dropMetadataPartitions(List<String> metadataPartitions) throws IOException {
     for (String partitionPath : metadataPartitions) {
-      LOG.warn("Deleting Metadata Table partition: {}", partitionPath);
+      LOG.info("Deleting Metadata Table partition: {}", partitionPath);
       dataMetaClient.getStorage()
           .deleteDirectory(new StoragePath(metadataWriteConfig.getBasePath(), partitionPath));
       // delete corresponding pending indexing instant file in the timeline
-      LOG.warn("Deleting pending indexing instant from the timeline for partition: {}", partitionPath);
+      LOG.info("Deleting pending indexing instant from the timeline for partition: {}", partitionPath);
       deletePendingIndexingInstant(dataMetaClient, partitionPath);
     }
     closeInternal();
@@ -1186,7 +1186,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
   public void buildMetadataPartitions(HoodieEngineContext engineContext, List<HoodieIndexPartitionInfo> indexPartitionInfos, String instantTime) throws IOException {
     if (indexPartitionInfos.isEmpty()) {
-      LOG.warn("No partition to index in the plan");
+      LOG.debug("No partition to index in the plan");
       return;
     }
     String indexUptoInstantTime = indexPartitionInfos.get(0).getIndexUptoInstant();
@@ -2042,7 +2042,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       Option<HoodieInstant> pendingCompactionInstant =
           metadataMetaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
       if (pendingLogCompactionInstant.isPresent() || pendingCompactionInstant.isPresent()) {
-        LOG.warn("Not scheduling compaction or logCompaction, since a pending compaction instant {} or logCompaction {} instant is present",
+        LOG.info("Not scheduling compaction or logCompaction, since a pending compaction instant {} or logCompaction {} instant is present",
             pendingCompactionInstant, pendingLogCompactionInstant);
         return false;
       }

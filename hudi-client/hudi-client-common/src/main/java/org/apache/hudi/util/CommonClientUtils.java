@@ -84,7 +84,7 @@ public class CommonClientUtils {
     if (tableVersion.greaterThan(HoodieTableVersion.SIX)
         && writeVersion.versionCode() < tableVersion.versionCode()
         && writeVersion.greaterThanOrEquals(HoodieTableVersion.SIX)) {
-      LOG.warn("Table version is greater than 6, and writer version is lower than table version and must be >= 6.");
+      LOG.warn("Table downgrade required as version is {}, and writer version is {}", tableVersion.versionCode(), writeVersion.versionCode());
       return true;
     }
     return false;

@@ -108,10 +108,10 @@ object HoodieWriterUtils {
       && df.schema.fieldNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
       // with pk less table, writes using spark-ds writer can potentially use the prepped path if meta fields are present in the incoming df.
       if (operation == WriteOperationType.UPSERT) {
-        log.warn("Changing operation type to UPSERT PREPPED for pk less table upserts ")
+        log.info("Changing operation type to UPSERT PREPPED for pk less table upserts ")
         isPrepped = true
       } else if (operation == WriteOperationType.DELETE) {
-        log.warn("Changing operation type to DELETE PREPPED for pk less table deletes ")
+        log.info("Changing operation type to DELETE PREPPED for pk less table deletes ")
         isPrepped = true
       }
     }

@@ -599,8 +599,8 @@ public class StreamWriteOperatorCoordinator
       StreamerUtil.addFlinkCheckpointIdIntoMetaData(conf, checkpointCommitMetadata, checkpointId);
 
       if (hasErrors) {
-        LOG.warn("Some records failed to merge but forcing commit since commitOnErrors set to true. Errors/Total="
-            + totalErrorRecords + "/" + totalRecords);
+        LOG.warn("Some records failed to merge but forcing commit since commitOnErrors set to true. Errors/Total={}/{}",
+            totalErrorRecords, totalRecords);
       }
 
       final Map<String, List<String>> partitionToReplacedFileIds = tableState.isOverwrite
@@ -615,20 +615,23 @@ public class StreamWriteOperatorCoordinator
         throw new HoodieException(String.format("Commit instant [%s] failed!", instant));
       }
     } else {
-      LOG.error("Error when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
-      LOG.error("The first 10 files with write errors:");
-      writeResults.stream().filter(WriteStatus::hasErrors).limit(10).forEach(ws -> {
-        if (ws.getGlobalError() != null) {
-          LOG.error("Global error for partition path {} and fileID {}: {}",
-              ws.getPartitionPath(), ws.getFileId(), ws.getGlobalError());
-        }
-        if (!ws.getErrors().isEmpty()) {
-          LOG.error("The first 100 records-level errors for partition path {} and fileID {}:",
-              ws.getPartitionPath(), ws.getFileId());
-          ws.getErrors().entrySet().stream().limit(100).forEach(entry -> LOG.error("Error for key: "
-              + entry.getKey() + " and Exception: " + entry.getValue().getMessage()));
-        }
-      });
+      if (LOG.isErrorEnabled()) {
+        LOG.error("Error when writing. Errors/Total={}/{}", totalErrorRecords, totalRecords);
+        LOG.error("The first 10 files with write errors:");
+        writeResults.stream().filter(WriteStatus::hasErrors).limit(10).forEach(ws -> {
+          if (ws.getGlobalError() != null) {
+            LOG.error("Global error for partition path {} and fileID {}: {}",
+                ws.getPartitionPath(), ws.getFileId(), ws.getGlobalError());
+          }
+          if (!ws.getErrors().isEmpty()) {
+            LOG.error("The first 100 records-level errors for partition path {} and fileID {}:",
+                ws.getPartitionPath(), ws.getFileId());
+            ws.getErrors().entrySet().stream().limit(100).forEach(entry ->
+                LOG.error("Error for key: {} and Exception: {}", entry.getKey(), entry.getValue().getMessage()));
+          }
+        });
+      }
+
       // Rolls back instant
       writeClient.rollback(instant);
       throw new HoodieException(String.format("Commit instant [%s] failed and rolled back !", instant));

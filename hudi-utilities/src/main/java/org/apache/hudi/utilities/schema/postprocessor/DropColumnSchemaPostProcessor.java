@@ -69,8 +69,8 @@ public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
         this.config, SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN);
 
     if (StringUtils.isNullOrEmpty(columnToDeleteStr)) {
-      LOG.warn(String.format("Param %s is null or empty, return original schema",
-          SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key()));
+      LOG.warn("Param {} is null or empty, return original schema",
+          SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key());
     }
 
     // convert field to lowerCase for compare purpose

@@ -570,7 +570,7 @@ public class RequestHandler {
       try {
         ugi = UserGroupInformation.getCurrentUser();
       } catch (Exception e) {
-        LOG.warn("Fail to get ugi", e);
+        LOG.error("Fail to get ugi", e);
         throw new HoodieException(e);
       }
     }
@@ -619,7 +619,7 @@ public class RequestHandler {
           if (re instanceof BadRequestResponse) {
             LOG.warn("Bad request response due to client view behind server view. {}", re.getMessage());
           } else {
-            LOG.error(String.format("Got runtime exception servicing request %s", context.queryString()), re);
+            LOG.error("Got runtime exception servicing request {}", context.queryString(), re);
           }
           throw re;
         } finally {

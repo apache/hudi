@@ -178,7 +178,7 @@ public class SparkStreamCopyClusteringPlanStrategy<T>
             getHoodieTable().getStorage(),
             new StoragePath(filePath));
       } catch (Exception e) {
-        LOG.warn("Failed to read schema hash from file: {}", filePath, e);
+        LOG.error("Failed to read schema hash from file: {}", filePath, e);
         // Return a default hash if we can't read the schema
         return 0;
       }

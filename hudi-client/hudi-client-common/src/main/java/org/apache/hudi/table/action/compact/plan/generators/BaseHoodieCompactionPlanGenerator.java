@@ -168,12 +168,12 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     LOG.info("Total number of file slices {} for table {}", totalFileSlices.value(), hoodieTable.getConfig().getBasePath());
 
     if (operations.isEmpty()) {
-      LOG.warn("No operations are retrieved for {} for table {}", metaClient.getBasePath(), hoodieTable.getConfig().getBasePath());
+      LOG.info("No operations are retrieved for {} for table {}", metaClient.getBasePath(), hoodieTable.getConfig().getBasePath());
       return null;
     }
 
     if (totalLogFiles.value() <= 0) {
-      LOG.warn("No log files are retrieved for {} for table {}", metaClient.getBasePath(), hoodieTable.getConfig().getBasePath());
+      LOG.info("No log files are retrieved for {} for table {}", metaClient.getBasePath(), hoodieTable.getConfig().getBasePath());
       return null;
     }
 
@@ -186,7 +186,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
             + "Please fix your strategy implementation. FileIdsWithPendingCompactions :" + fgIdsInPendingCompactionAndClustering
             + ", Selected workload :" + compactionPlan);
     if (compactionPlan.getOperations().isEmpty()) {
-      LOG.warn("After filtering, Nothing to compact for {} for table {}", metaClient.getBasePath(), hoodieTable.getConfig().getBasePath());
+      LOG.info("After filtering, Nothing to compact for {} for table {}", metaClient.getBasePath(), hoodieTable.getConfig().getBasePath());
     }
     compactionPlan.setExtraMetadata(getExtraMetadata(operations, compactionPlan));
     return compactionPlan;

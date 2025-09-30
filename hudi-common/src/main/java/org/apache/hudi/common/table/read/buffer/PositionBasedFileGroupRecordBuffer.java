@@ -299,7 +299,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     }
     Roaring64NavigableMap positions = logBlock.getRecordPositions();
     if (positions == null || positions.isEmpty()) {
-      LOG.warn("No record position info is found when attempt to do position based merge.");
+      LOG.info("No record position info is found when attempting to do position based merge.");
       return null;
     }
 
@@ -309,7 +309,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     }
 
     if (blockPositions.isEmpty()) {
-      LOG.warn("No positions are extracted.");
+      LOG.info("No positions are extracted.");
       return null;
     }
 

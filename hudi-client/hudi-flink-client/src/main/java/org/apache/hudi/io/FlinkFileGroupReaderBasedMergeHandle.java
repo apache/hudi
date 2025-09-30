@@ -147,13 +147,14 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O>
     try {
       close();
     } catch (Throwable throwable) {
-      LOG.warn("Error while trying to dispose the MERGE handle", throwable);
+      LOG.error("Failed to close the MERGE handle", throwable);
       try {
         storage.deleteFile(newFilePath);
-        LOG.info("Deleting the intermediate MERGE data file: {} success!", newFilePath);
+        LOG.info("Successfully deleted the intermediate MERGE data file: {}", newFilePath);
       } catch (IOException e) {
         // logging a warning and ignore the exception.
-        LOG.warn("Deleting the intermediate MERGE data file: {} failed", newFilePath, e);
+        LOG.warn("Failed to delete the intermediate MERGE data file: {}", newFilePath, e);
+
       }
     }
   }

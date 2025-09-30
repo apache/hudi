@@ -155,7 +155,7 @@ public abstract class DiskMap<T extends Serializable, R> implements Map<T, R>, K
       try {
         FileIOUtils.deleteDirectory(new File(directoryPath));
       } catch (IOException exception) {
-        CLEANER_LOG.warn("Error while deleting the disk map directory=" + directoryPath, exception);
+        CLEANER_LOG.warn("Error while deleting the disk map directory={}", directoryPath, exception);
       }
     }
   }

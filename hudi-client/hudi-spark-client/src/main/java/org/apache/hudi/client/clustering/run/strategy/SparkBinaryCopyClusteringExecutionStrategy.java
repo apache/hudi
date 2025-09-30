@@ -159,7 +159,7 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndS
    */
   public boolean supportBinaryStreamCopy(List<ClusteringGroupInfo> inputGroups, Map<String, String> strategyParams) {
     if (getHoodieTable().getMetaClient().getTableType() != COPY_ON_WRITE) {
-      LOG.warn("Only support CoW table. Will fall back to common clustering execution strategy.");
+      LOG.warn("SparkBinaryCopyClusteringExecutionStrategy is only supported for COW tables. Will fall back to common clustering execution strategy.");
       return false;
     }
     Option<String[]> orderByColumnsOpt =
@@ -167,12 +167,12 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndS
             .map(listStr -> listStr.split(","));
 
     if (orderByColumnsOpt.isPresent()) {
-      LOG.warn("Not support to sort input records. Will fall back to common clustering execution strategy.");
+      LOG.warn("SparkBinaryCopyClusteringExecutionStrategy does not support sort by columns. Will fall back to common clustering execution strategy.");
       return false;
     }
 
     if (!getHoodieTable().getMetaClient().getTableConfig().getBaseFileFormat().equals(PARQUET)) {
-      LOG.warn("Binary Copy only support parquet as base file format for now.");
+      LOG.warn("SparkBinaryCopyClusteringExecutionStrategy only supports parquet base files. Will fall back to common clustering execution strategy.");
       return false;
     }
 

@@ -244,8 +244,8 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
       lastHeartbeatForWriter.getTimer().cancel();
     }
     if (currentTime - lastHeartbeatForWriter.getLastHeartbeatTime() > this.maxAllowableHeartbeatIntervalInMs) {
-      LOG.warn("Heartbeat expired, currentTime = " + currentTime + ", last heartbeat = " + lastHeartbeatForWriter
-          + ", heartbeat interval = " + this.heartbeatIntervalInMs);
+      LOG.warn("Heartbeat expired, currentTime = {}, last heartbeat = {}, heartbeat interval = {}", currentTime,
+          lastHeartbeatForWriter, this.heartbeatIntervalInMs);
       return true;
     }
     return false;
@@ -260,7 +260,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
       outputStream.close();
       Heartbeat heartbeat = instantToHeartbeatMap.get(instantTime);
       if (heartbeat.getLastHeartbeatTime() != null && isHeartbeatExpired(instantTime)) {
-        LOG.error("Aborting, missed generating heartbeat within allowable interval " + this.maxAllowableHeartbeatIntervalInMs);
+        LOG.error("Aborting, missed generating heartbeat within allowable interval {}", this.maxAllowableHeartbeatIntervalInMs);
         // Since TimerTask allows only java.lang.Runnable, cannot throw an exception and bubble to the caller thread, hence
         // explicitly interrupting the timer thread.
         Thread.currentThread().interrupt();
@@ -271,7 +271,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     } catch (IOException io) {
       Boolean isHeartbeatStopped = instantToHeartbeatMap.get(instantTime).isHeartbeatStopped;
       if (isHeartbeatStopped) {
-        LOG.warn(String.format("update heart beat failed, because the instant time %s was stopped ? : %s", instantTime, isHeartbeatStopped));
+        LOG.warn("update heart beat failed, because the instant time {} was stopped", instantTime);
         return;
       }
       throw new HoodieHeartbeatException("Unable to generate heartbeat for instant " + instantTime, io);

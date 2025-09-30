@@ -188,7 +188,7 @@ class HoodieSparkSqlWriterInternal {
         try {
           toReturn = writeInternal(sqlContext, mode, optParams, sourceDf, streamingWritesParamsOpt, hoodieWriteClient)
           if (counter > 0) {
-            log.warn(s"Succeeded with attempt no $counter")
+            log.info(s"Succeeded with attempt no $counter")
           }
           succeeded = true
         } catch {
@@ -268,7 +268,7 @@ class HoodieSparkSqlWriterInternal {
     val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(TypedProperties.copy(hoodieConfig.getProps))
     val tableVersion = Integer.valueOf(getStringWithAltKeys(parameters, HoodieWriteConfig.WRITE_TABLE_VERSION))
     if (mode == SaveMode.Ignore && tableExists) {
-      log.warn(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
+      log.info(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
       (false, common.util.Option.empty(), common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
     } else {
       // Handle various save modes
@@ -725,7 +725,7 @@ class HoodieSparkSqlWriterInternal {
     }
 
     if (mode == SaveMode.Ignore && tableExists) {
-      log.warn(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
+      log.error(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
       if (!hoodieWriteClient.isEmpty) {
         hoodieWriteClient.get.close()
       }

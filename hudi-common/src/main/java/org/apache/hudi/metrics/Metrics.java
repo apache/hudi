@@ -125,7 +125,7 @@ public class Metrics {
     if (!fromShutdownHook) {
       Runtime.getRuntime().removeShutdownHook(shutdownThread);
     } else {
-      LOG.warn("Shutting down the metrics reporter from shutdown hook.");
+      LOG.debug("Shutting down the metrics reporter from shutdown hook.");
     }
     if (initialized) {
       try {
@@ -134,7 +134,7 @@ public class Metrics {
         LOG.info("Stopping the metrics reporter...");
         reporters.forEach(MetricsReporter::stop);
       } catch (Exception e) {
-        LOG.warn("Error while closing reporter", e);
+        LOG.error("Error while closing reporter", e);
       } finally {
         METRICS_INSTANCE_PER_BASEPATH.remove(basePath);
         initialized = false;

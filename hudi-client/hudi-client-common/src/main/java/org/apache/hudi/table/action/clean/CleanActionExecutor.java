@@ -154,7 +154,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
           deleteFileAndGetResult(table.getStorage(), table.getMetaClient().getBasePath() + "/" + entry);
         }
       } catch (IOException e) {
-        LOG.warn("Partition deletion failed {}", entry);
+        LOG.error("Partition deletion failed {}", entry);
       }
     });
 
@@ -246,8 +246,8 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
         FileBasedInternalSchemaStorageManager fss = new FileBasedInternalSchemaStorageManager(table.getMetaClient());
         fss.cleanOldFiles(pendingCleanInstants.stream().map(is -> is.requestedTime()).collect(Collectors.toList()));
       } catch (Exception e) {
-        // we should not affect original clean logic. Swallow exception and log warn.
-        LOG.warn("failed to clean old history schema");
+        // we should not affect original clean logic. Swallow exception and log.
+        LOG.error("failed to clean old history schema");
       }
 
       for (HoodieInstant hoodieInstant : pendingCleanInstants) {
@@ -279,7 +279,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
   private void checkIfOtherWriterCommitted(HoodieInstant hoodieInstant, HoodieIOException e) {
     table.getMetaClient().reloadActiveTimeline();
     if (table.getCleanTimeline().filterCompletedInstants().containsInstant(hoodieInstant.requestedTime())) {
-      LOG.warn("Clean operation was completed by another writer for instant: {}", hoodieInstant);
+      LOG.info("Clean operation was completed by another writer for instant: {}", hoodieInstant);
     } else {
       LOG.error("Failed to perform previous clean operation, instant: {}", hoodieInstant, e);
       throw e;

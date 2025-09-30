@@ -84,7 +84,7 @@ public class DataSourceUtils {
           return tablePath.get().toString();
         }
       } catch (HoodieException he) {
-        LOG.warn("Error trying to get table path from " + path.toString(), he);
+        LOG.error("Error trying to get table path from {}", path.toString(), he);
       }
     }
 

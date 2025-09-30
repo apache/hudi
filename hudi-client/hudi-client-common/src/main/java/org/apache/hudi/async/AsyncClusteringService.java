@@ -77,15 +77,15 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
         while (!isShutdownRequested()) {
           final String instant = fetchNextAsyncServiceInstant();
           if (null != instant) {
-            LOG.info("Starting clustering for instant " + instant);
+            LOG.info("Starting clustering for instant {}", instant);
             clusteringClient.cluster(instant);
-            LOG.info("Finished clustering for instant " + instant);
+            LOG.info("Finished clustering for instant {}", instant);
           }
         }
         LOG.info("Clustering executor shutting down properly");
       } catch (InterruptedException ie) {
         hasError = true;
-        LOG.warn("Clustering executor got interrupted exception! Stopping", ie);
+        LOG.error("Clustering executor got interrupted exception! Stopping", ie);
       } catch (IOException e) {
         hasError = true;
         LOG.error("Clustering executor failed due to IOException", e);

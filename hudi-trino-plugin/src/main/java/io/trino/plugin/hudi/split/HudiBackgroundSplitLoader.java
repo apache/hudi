@@ -206,7 +206,7 @@ public class HudiBackgroundSplitLoader
                                 Function.identity()));
 
                 if (metadataPartitions.isEmpty()) {
-                    log.warn("No partitions found via metadata table for %s.%s, switching to metastore-based listing.",
+                    log.info("No partitions found via metadata table for %s.%s, switching to metastore-based listing.",
                             tableHandle.getSchemaName(), tableHandle.getTableName());
                     metadataPartitions = lazyPartitionMap.get();
                 }

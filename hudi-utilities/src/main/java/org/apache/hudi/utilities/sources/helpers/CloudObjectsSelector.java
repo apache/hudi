@@ -220,7 +220,7 @@ public class CloudObjectsSelector {
             .map(BatchResultErrorEntry::id)
             .collect(Collectors.toList());
     if (!deleteFailures.isEmpty()) {
-      log.warn(
+      log.error(
           "Failed to delete {} messages out of {} from queue.", deleteFailures.size(), deleteEntries.size());
     } else {
       log.info("Successfully deleted {} messages from queue.", deleteEntries.size());

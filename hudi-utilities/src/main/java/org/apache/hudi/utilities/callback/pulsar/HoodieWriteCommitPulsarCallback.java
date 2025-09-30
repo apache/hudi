@@ -165,7 +165,7 @@ public class HoodieWriteCommitPulsarCallback implements HoodieWriteCommitCallbac
       try {
         producer.close();
       } catch (Throwable t) {
-        LOG.warn("Could not properly close the producer.", t);
+        LOG.error("Could not properly close the producer.", t);
       }
     }
 
@@ -173,7 +173,7 @@ public class HoodieWriteCommitPulsarCallback implements HoodieWriteCommitCallbac
       try {
         client.close();
       } catch (Throwable t) {
-        LOG.warn("Could not properly close the client.", t);
+        LOG.error("Could not properly close the client.", t);
       }
     }
   }

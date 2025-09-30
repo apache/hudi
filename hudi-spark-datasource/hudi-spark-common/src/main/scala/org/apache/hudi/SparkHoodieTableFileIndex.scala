@@ -263,7 +263,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
         prunedPartitionPaths
       } else {
-        logWarning(s"Unable to apply partition pruning, due to failure to parse partition values from the" +
+        logError(s"Unable to apply partition pruning, due to failure to parse partition values from the" +
           s" following path(s): ${partitionPaths.find(_.values.length == 0).map(e => e.getPath)}")
 
         partitionPaths.toSeq

@@ -413,7 +413,7 @@ public class ExpressionEvaluators {
 
       if (vals.length > IN_PREDICATE_LIMIT) {
         // skip evaluating the predicate if the number of values is too big
-        LOGGER.warn("Skip evaluating in predicate because the number of values is too big!");
+        LOGGER.warn("Skipping evaluation of  `in` predicate because the number of values is too big!");
         return true;
       }
 

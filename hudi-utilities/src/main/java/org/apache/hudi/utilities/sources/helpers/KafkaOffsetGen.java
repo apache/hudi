@@ -433,7 +433,7 @@ public class KafkaOffsetGen {
       Long.parseUnsignedLong(lastCheckpointStr.get().getCheckpointKey());
       return true;
     } catch (NumberFormatException ex) {
-      LOG.warn("Checkpoint type is set to single_offset, but provided value of checkpoint=\"{}\" is not a valid number", lastCheckpointStr.get());
+      LOG.error("Checkpoint type is set to single_offset, but provided value of checkpoint=\"{}\" is not a valid number", lastCheckpointStr.get());
       return false;
     }
   }
@@ -541,7 +541,7 @@ public class KafkaOffsetGen {
                 skippedOffsetsPerPartition.put(entry.getKey(), Math.max(newOffset - offset, 0));
                 return newOffset;
               }));
-      LOG.warn("Adjusted fromOffsets with retention; oldFromOffsets: {}, newFromOffsets: {}, "
+      LOG.info("Adjusted fromOffsets with retention; oldFromOffsets: {}, newFromOffsets: {}, "
           + "skippedOffsetsPerPartition: {}", fromOffsets, newFromOffsets, skippedOffsetsPerPartition);
       return newFromOffsets;
     } catch (KafkaException e) {
@@ -606,7 +606,7 @@ public class KafkaOffsetGen {
       if (committedOffsetAndMetadata != null) {
         fromOffsets.put(topicPartition, committedOffsetAndMetadata.offset());
       } else {
-        LOG.warn("There are no commits associated with this consumer group, starting to consume from latest offset");
+        LOG.info("There are no commits associated with this consumer group, starting to consume from latest offset");
         fromOffsets = consumer.endOffsets(topicPartitions);
         break;
       }

@@ -154,17 +154,17 @@ public class KafkaConnectControlAgent implements KafkaControlAgent {
                   partitionWorker.processControlEvent(message);
                 }
               } else {
-                LOG.warn(String.format("Failed to send message for unregistered participants for topic %s", senderTopic));
+                LOG.error("Failed to send message for unregistered participants for topic {}", senderTopic);
               }
             } else if (message.getReceiverType().equals(ControlMessage.EntityType.COORDINATOR)) {
               if (topicCoordinators.containsKey(senderTopic)) {
                 topicCoordinators.get(senderTopic).processControlEvent(message);
               }
             } else {
-              LOG.warn(String.format("Sender type of Control Message unknown %s", message.getSenderType().name()));
+              LOG.warn("Sender type of Control Message unknown {}", message.getSenderType().name());
             }
           } catch (Exception e) {
-            LOG.error(String.format("Fatal error while consuming a kafka record for topic = %s partition = %s", record.topic(), record.partition()), e);
+            LOG.error("Fatal error while consuming a kafka record for topic = {} partition = {}", record.topic(), record.partition(), e);
           }
         }
         try {
