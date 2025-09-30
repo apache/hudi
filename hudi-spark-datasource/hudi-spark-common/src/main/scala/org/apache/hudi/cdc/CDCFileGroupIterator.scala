@@ -181,6 +181,8 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
    */
   protected var recordToLoad: InternalRow = _
 
+  private var nextRecordLoaded: Boolean = false
+
   /**
    * The list of files to which 'beforeImageRecords' belong.
    * Use it to determine if 'beforeImageRecords' contains all the required data that extract
@@ -221,6 +223,9 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   }
 
   @tailrec final def hasNextInternal: Boolean = {
+    if (nextRecordLoaded) {
+      return true
+    }
     if (needLoadNextFile) {
       loadCdcFile()
     }
@@ -253,6 +258,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   override def hasNext: Boolean = hasNextInternal
 
   override final def next(): InternalRow = {
+    nextRecordLoaded = false
     projection(recordToLoad)
   }
 
@@ -316,6 +322,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
         recordToLoad.update(2, convertBufferedRecordToJsonString(originRecord))
         loaded = true
     }
+    nextRecordLoaded = loaded
     loaded
   }
 

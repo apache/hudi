@@ -775,10 +775,8 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
       val orderedResults = cdcDataOrdered.collect()
       val orderedCount = orderedResults.length
 
-      println(s"Unordered CDC results count: $unorderedCount")
       unorderedResults.foreach(row => println(s"Unordered: ${row.mkString(", ")}"))
 
-      println(s"Ordered CDC results count: $orderedCount")
       orderedResults.foreach(row => println(s"Ordered: ${row.mkString(", ")}"))
 
       assert(unorderedCount == orderedCount,
