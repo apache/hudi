@@ -1648,7 +1648,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         metadataConfig,
         tableSchema,
         false,
-        recordTypeOpt).keySet());
+        recordTypeOpt,
+        HoodieTableMetadataUtil.existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, dataMetaClient)).keySet());
     if (columnsToIndex.isEmpty()) {
       LOG.info("Since there are no columns to index, stop to generate ColumnStats records.");
       return Collections.emptyMap();
