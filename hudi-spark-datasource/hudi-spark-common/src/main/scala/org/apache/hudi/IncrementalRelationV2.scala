@@ -311,7 +311,7 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
   private def buildCompletionTimeMapping(): Map[String, String] = {
     commitsToReturn.map { instant =>
       val requestedTime = instant.requestedTime()
-      val completionTime = Option(instant.getCompletionTime).getOrElse(requestedTime)
+      val completionTime = Option(instant.getCompletionTime).orNull
       requestedTime -> completionTime
     }.toMap
   }
@@ -325,7 +325,7 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
   private def addCompletionTimeColumn(rdd: RDD[Row],
                                     broadcastMap: org.apache.spark.broadcast.Broadcast[Map[String, String]]): RDD[Row] = {
     val commitTimeFieldIndex = schema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
-    val completionTimeFieldIndex = schema.fieldIndex("_hoodie_completion_time")
+    val completionTimeFieldIndex = schema.fieldIndex(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD)
     
     rdd.map { row =>
       val currentRequestedTime = row.getString(commitTimeFieldIndex)
@@ -343,7 +343,7 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
 
   private def addCompletionTimeColumn(baseSchema: StructType): StructType = {
     import org.apache.spark.sql.types.{StringType, StructField}
-    val completionTimeField = StructField("_hoodie_completion_time", StringType, nullable = true)
+    val completionTimeField = StructField(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD, StringType, nullable = true)
     StructType(baseSchema.fields :+ completionTimeField)
   }
 }

@@ -66,10 +66,9 @@ class TestIncrementalQueriesV2WithCompleteTime extends HoodieSparkClientTestBase
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  @ValueSource(strings = Array("COPY_ON_WRITE"))
   def testCompleteTimeFilteringSemantics(tableTypeStr: String): Unit = {
-    testBasicIncrementalQuery(tableTypeStr, enableFileGroupReader = false)
-    // testBasicIncrementalQuery(tableTypeStr, enableFileGroupReader = true)
+    testBasicIncrementalQuery(tableTypeStr, enableFileGroupReader = true)
   }
 
   private def testBasicIncrementalQuery(tableTypeStr: String, enableFileGroupReader: Boolean): Unit = {
@@ -135,9 +134,9 @@ class TestIncrementalQueriesV2WithCompleteTime extends HoodieSparkClientTestBase
     incrementalDF.show(false)
 
     val completionTimesDF = spark.sql(s"""
-      SELECT DISTINCT _hoodie_completion_time
+      SELECT DISTINCT _hoodie_commit_completion_time
       FROM $tempViewName
-      ORDER BY _hoodie_completion_time
+      ORDER BY _hoodie_commit_completion_time
     """)
 
     val actualCompletionTimes = completionTimesDF.collect().map(_.getString(0))

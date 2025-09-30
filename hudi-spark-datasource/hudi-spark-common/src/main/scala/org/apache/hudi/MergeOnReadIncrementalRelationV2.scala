@@ -189,7 +189,7 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
 
 
   private def addCompletionTimeColumn(baseSchema: StructType): StructType = {
-    val completionTimeField = StructField("_hoodie_completion_time", StringType, nullable = true)
+    val completionTimeField = StructField(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD, StringType, nullable = true)
     StructType(baseSchema.fields :+ completionTimeField)
   }
 }

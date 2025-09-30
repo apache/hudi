@@ -69,7 +69,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
 
   private lazy val tableName: String = metaClient.getTableConfig.getTableName
   private lazy val tableConfig: HoodieTableConfig = metaClient.getTableConfig
-  private lazy val basePath: StoragePath = metaClient.getBasePath
+  protected lazy val basePath: StoragePath = metaClient.getBasePath
   private lazy val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
   // very much not recommended to use a partition column as the precombine
@@ -157,7 +157,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     (avroSchema, internalSchemaOpt)
   }
 
-  private lazy val validCommits: String = if (internalSchemaOpt.nonEmpty) {
+  protected lazy val validCommits: String = if (internalSchemaOpt.nonEmpty) {
     val instantFileNameGenerator = metaClient.getTimelineLayout.getInstantFileNameGenerator
     timeline.getInstants.iterator.asScala.map(instant => instantFileNameGenerator.getFileName(instant)).mkString(",")
   } else {
@@ -205,9 +205,9 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath || isBootstrap
   }
 
-  private lazy val shouldUseRecordPosition: Boolean = checkIfAConfigurationEnabled(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS)
+  protected lazy val shouldUseRecordPosition: Boolean = checkIfAConfigurationEnabled(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS)
 
-  private lazy val queryTimestamp: Option[String] =
+  protected lazy val queryTimestamp: Option[String] =
     specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.requestedTime))
 
   private lazy val timeline: HoodieTimeline =
@@ -330,7 +330,56 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(override val sqlCont
                                                             isBootstrap: Boolean,
                                                             rangeType: RangeType = RangeType.OPEN_CLOSED)
   extends HoodieMergeOnReadIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap,
-    MergeOnReadIncrementalRelationV2(sqlContext, options, metaClient, schemaSpec, None, rangeType))
+    MergeOnReadIncrementalRelationV2(sqlContext, options, metaClient, schemaSpec, None, rangeType)) {
+
+  override def buildDataSchema(): StructType = {
+    val baseSchema = super.buildDataSchema()
+    extendSchemaForCompletionTime(baseSchema)
+  }
+
+  override def buildFileFormat(): FileFormat = {
+    val tableConfig = metaClient.getTableConfig
+    val extendedAvroSchema = extendAvroSchemaForCompletionTime(tableAvroSchema)
+    val extendedStructSchema = buildDataSchema()
+
+    new HoodieFileGroupReaderBasedFileFormat(basePath.toString,
+      HoodieTableSchema(extendedStructSchema, extendedAvroSchema.toString, internalSchemaOpt),
+      tableConfig.getTableName, queryTimestamp.get, getMandatoryFields, isMOR, isBootstrap,
+      isIncremental, validCommits, shouldUseRecordPosition, getRequiredFilters,
+      tableConfig.isMultipleBaseFileFormatsEnabled, tableConfig.getBaseFileFormat)
+  }
+
+  private def extendSchemaForCompletionTime(baseSchema: StructType): StructType = {
+    import org.apache.spark.sql.types.{StringType, StructField}
+    val completionTimeField = StructField(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD, StringType, nullable = true)
+    StructType(baseSchema.fields :+ completionTimeField)
+  }
+
+  private def extendAvroSchemaForCompletionTime(baseAvroSchema: Schema): Schema = {
+    import org.apache.avro.Schema
+    import com.fasterxml.jackson.databind.JsonNode
+    import scala.collection.JavaConverters._
+
+    // Check if completion time field already exists
+    if (baseAvroSchema.getFields.asScala.exists(_.name() == HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD)) {
+      return baseAvroSchema
+    }
+
+    // Create new field objects for the new schema (Avro fields are immutable and schema-bound)
+    val newFields = baseAvroSchema.getFields.asScala.map { originalField =>
+      new Schema.Field(originalField.name(), originalField.schema(), originalField.doc(), originalField.defaultVal())
+    }.toBuffer
+
+    // Add the completion time field
+    val completionTimeField = new Schema.Field(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD,
+      Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)),
+      "Completion time of the commit", null.asInstanceOf[JsonNode])
+    newFields += completionTimeField
+
+    Schema.createRecord(baseAvroSchema.getName, baseAvroSchema.getDoc,
+      baseAvroSchema.getNamespace, baseAvroSchema.isError, newFields.asJava)
+  }
+}
 
 class HoodieMergeOnReadCDCHadoopFsRelationFactory(override val sqlContext: SQLContext,
                                                   override val metaClient: HoodieTableMetaClient,
@@ -430,7 +479,57 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(override val sqlCont
                                                             isBootstrap: Boolean,
                                                             rangeType: RangeType = RangeType.OPEN_CLOSED)
   extends HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap,
-    MergeOnReadIncrementalRelationV2(sqlContext, options, metaClient, schemaSpec, None, rangeType))
+    MergeOnReadIncrementalRelationV2(sqlContext, options, metaClient, schemaSpec, None, rangeType)) {
+
+  override def buildDataSchema(): StructType = {
+    val baseSchema = super.buildDataSchema()
+    extendSchemaForCompletionTime(baseSchema)
+  }
+
+  override def buildFileFormat(): FileFormat = {
+    val tableConfig = metaClient.getTableConfig
+    val extendedAvroSchema = extendAvroSchemaForCompletionTime(tableAvroSchema)
+    val extendedStructSchema = buildDataSchema()
+
+    new HoodieFileGroupReaderBasedFileFormat(basePath.toString,
+      HoodieTableSchema(extendedStructSchema, extendedAvroSchema.toString, internalSchemaOpt),
+      tableConfig.getTableName, queryTimestamp.get, getMandatoryFields, isMOR, isBootstrap,
+      isIncremental, validCommits, shouldUseRecordPosition, getRequiredFilters,
+      tableConfig.isMultipleBaseFileFormatsEnabled, tableConfig.getBaseFileFormat)
+  }
+
+  private def extendSchemaForCompletionTime(baseSchema: StructType): StructType = {
+    import org.apache.spark.sql.types.{StringType, StructField}
+    // Add completion time field for V2 relations
+    val completionTimeField = StructField(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD, StringType, nullable = true)
+    StructType(baseSchema.fields :+ completionTimeField)
+  }
+
+  private def extendAvroSchemaForCompletionTime(baseAvroSchema: Schema): Schema = {
+    import org.apache.avro.Schema
+    import com.fasterxml.jackson.databind.JsonNode
+    import scala.collection.JavaConverters._
+
+    // Check if completion time field already exists
+    if (baseAvroSchema.getFields.asScala.exists(_.name() == HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD)) {
+      return baseAvroSchema
+    }
+
+    // Create new field objects for the new schema (Avro fields are immutable and schema-bound)
+    val newFields = baseAvroSchema.getFields.asScala.map { originalField =>
+      new Schema.Field(originalField.name(), originalField.schema(), originalField.doc(), originalField.defaultVal())
+    }.toBuffer
+
+    // Add the completion time field
+    val completionTimeField = new Schema.Field(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD,
+      Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)),
+      "Completion time of the commit", null.asInstanceOf[JsonNode])
+    newFields += completionTimeField
+
+    Schema.createRecord(baseAvroSchema.getName, baseAvroSchema.getDoc,
+      baseAvroSchema.getNamespace, baseAvroSchema.isError, newFields.asJava)
+  }
+}
 
 class HoodieCopyOnWriteCDCHadoopFsRelationFactory(override val sqlContext: SQLContext,
                                                   override val metaClient: HoodieTableMetaClient,
