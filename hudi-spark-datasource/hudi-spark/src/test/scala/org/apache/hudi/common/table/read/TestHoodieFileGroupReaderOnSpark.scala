@@ -121,8 +121,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val schema = new Schema.Parser().parse(schemaStr)
     val genericRecords = spark.sparkContext.parallelize((hoodieRecordsToIndexedRecords(recordList, schema)
       .stream().map[GenericRecord](entry => entry.getValue.asInstanceOf[GenericRecord])
-      .collect(Collectors.toList[GenericRecord])).asScala,
-      2)
+      .collect(Collectors.toList[GenericRecord])).asScala.toSeq, 2)
     val inputDF: Dataset[Row] = AvroConversionUtils.createDataFrame(genericRecords, schemaStr, spark);
 
     inputDF.write.format("hudi")
