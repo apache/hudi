@@ -1638,31 +1638,20 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       // The deltacommit that will be rolled back
       Option<HoodieInstant> deltaCommitInstantOpt = metadataMetaClient.getActiveTimeline()
           .getDeltaCommitTimeline()
-          .filterCompletedInstants()
           .filter(s -> s.requestedTime().equals(commitToRollbackInstantTime))
           .firstInstant();
       if (deltaCommitInstantOpt.isPresent()) {
-        validateRollback(deltaCommitInstantOpt.get());
+        HoodieInstant deltaCommitInstant = deltaCommitInstantOpt.get();
+        if (deltaCommitInstant.isCompleted()) {
+          validateRollback(deltaCommitInstant);
+        }
         LOG.info("Rolling back MDT deltacommit {}", commitToRollbackInstantTime);
         if (!getWriteClient().rollback(commitToRollbackInstantTime, instantTime)) {
           throw new HoodieMetadataException(String.format("Failed to rollback deltacommit at %s", commitToRollbackInstantTime));
         }
       } else {
-        // Check for pending instants (inflight or requested)
-        Option<HoodieInstant> pendingInstantOpt = metadataMetaClient.getActiveTimeline()
-            .getDeltaCommitTimeline()
-            .filter(instant -> !instant.isCompleted() && instant.requestedTime().equals(commitToRollbackInstantTime))
-            .firstInstant();
-        if (pendingInstantOpt.isPresent()) {
-          // Rollback pending instant without validation
-          LOG.info("Rolling back MDT pending deltacommit {} at {}", commitToRollbackInstantTime, instantTime);
-          if (!getWriteClient().rollback(commitToRollbackInstantTime, instantTime)) {
-            throw new HoodieMetadataException(String.format("Failed to rollback pending deltacommit at %s", commitToRollbackInstantTime));
-          }
-        } else {
-          LOG.info("Ignoring rollback of instant {} at {}. The commit to rollback is not found in MDT",
-              commitToRollbackInstantTime, instantTime);
-        }
+        LOG.info("Ignoring rollback of instant {} at {}. The commit to rollback is not found in MDT",
+            commitToRollbackInstantTime, instantTime);
       }
       closeInternal();
     }
