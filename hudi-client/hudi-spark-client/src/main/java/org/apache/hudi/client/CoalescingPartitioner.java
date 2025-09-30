@@ -41,7 +41,7 @@ public class CoalescingPartitioner extends Partitioner {
     if (numPartitions == 1) {
       return 0;
     } else {
-      return key.hashCode() % numPartitions;
+      return Math.abs(key.hashCode()) % numPartitions;
     }
   }
 }

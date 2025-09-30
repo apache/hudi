@@ -19,10 +19,13 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.PairFunction;
 import org.junit.jupiter.api.Test;
@@ -30,15 +33,21 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.client.TestCoalescingPartitioner.FlatMapFunc.getWriteStatusForPartition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestCoalescingPartitioner extends HoodieClientTestBase {
 
@@ -78,6 +87,8 @@ public class TestCoalescingPartitioner extends HoodieClientTestBase {
         {1, 1},
         {1000, 10},
         {100, 7},
+        {1200, 50},
+        {1000, 23},
         {10, 2}
     }).map(Arguments::of);
   }
@@ -85,26 +96,91 @@ public class TestCoalescingPartitioner extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("coalesceTestArgs")
   public void testCoalescingPartitionerWithRDD(int inputNumPartitions, int targetPartitions) {
-    List<Integer> inputData = IntStream.rangeClosed(0, inputNumPartitions).boxed().collect(Collectors.toList());
-    JavaRDD<Integer> data = jsc.parallelize(inputData, inputNumPartitions);
-    JavaRDD<Integer> coalescedData = data.mapToPair(new PairFunc()).partitionBy(new CoalescingPartitioner(targetPartitions)).map(new MapFunc());
+    int totalHudiPartitions = Math.max(1, inputNumPartitions / targetPartitions);
+    String partitionPathPrefix = "pPath";
+    List<String> partitionPaths = IntStream.rangeClosed(1, totalHudiPartitions).boxed().map(integer -> partitionPathPrefix + "_" + integer).collect(Collectors.toList());
+    List<WriteStatus> writeStatuses = new ArrayList<>(jsc.parallelize(partitionPaths, partitionPaths.size()).flatMap(new FlatMapFunc(targetPartitions != 1
+        ? inputNumPartitions / totalHudiPartitions : targetPartitions)).collect());
 
+    // for pending files, add to last partition.
+    if (targetPartitions != 1 && inputNumPartitions - writeStatuses.size() > 0) {
+      writeStatuses.addAll(getWriteStatusForPartition("/tmp/", partitionPathPrefix + "_" + (totalHudiPartitions - 1), inputNumPartitions - writeStatuses.size()));
+    }
+
+    assertEquals(writeStatuses.size(), inputNumPartitions);
+
+    JavaRDD<WriteStatus> data = jsc.parallelize(writeStatuses, inputNumPartitions);
+    JavaRDD<WriteStatus> coalescedData = data.mapToPair(new PairFunc()).partitionBy(new CoalescingPartitioner(targetPartitions)).map(new MapFunc());
+    coalescedData.cache();
+
+    List<Pair<Integer, Integer>> countsPerPartition = coalescedData.mapPartitionsWithIndex((partitionIndex, rows) -> {
+      int count = 0;
+      while (rows.hasNext()) {
+        rows.next();
+        count++;
+      }
+      return Collections.singletonList(Pair.of(partitionIndex, count)).iterator();
+    }, true).collect();
+
+    assertEquals(targetPartitions, countsPerPartition.size());
+    // lets validate that atleast we have 50% of data in each spark partition compared to ideal scenario (we can't assume hash of strings will evenly distribute).
+    countsPerPartition.forEach(pair -> {
+      int numElements = pair.getValue();
+      int idealExpectedCount = inputNumPartitions / targetPartitions;
+      assertTrue(numElements > idealExpectedCount * 0.5);
+    });
     assertEquals(targetPartitions, coalescedData.getNumPartitions());
-    List<Integer> result = coalescedData.collect();
-    assertEquals(inputData, result);
+    List<WriteStatus> result = new ArrayList<>(coalescedData.collect());
+    // lets validate all paths from input are present in output as well.
+    List<String> expectedInputPaths = writeStatuses.stream().map(writeStatus -> writeStatus.getStat().getPath()).collect(Collectors.toList());
+    List<String> actualPaths = result.stream().map(writeStatus -> writeStatus.getStat().getPath()).collect(Collectors.toList());
+    Collections.sort(expectedInputPaths);
+    Collections.sort(actualPaths);
+    assertEquals(expectedInputPaths, actualPaths);
+    coalescedData.unpersist();
   }
 
-  static class PairFunc implements PairFunction<Integer, Boolean, Integer> {
+  static class FlatMapFunc implements FlatMapFunction<String, WriteStatus> {
+
+    private int numWriteStatuses;
+
+    FlatMapFunc(int numWriteStatuses) {
+      this.numWriteStatuses = numWriteStatuses;
+    }
+
     @Override
-    public Tuple2<Boolean, Integer> call(Integer integer) throws Exception {
-      return Tuple2.apply(true, integer);
+    public Iterator<WriteStatus> call(String s) throws Exception {
+      return getWriteStatusForPartition("/tmp", s, numWriteStatuses).iterator();
+    }
+
+    static List<WriteStatus> getWriteStatusForPartition(String basePath, String partititionPath, int numWriteStatuses) {
+      String randomPrefix = UUID.randomUUID().toString() + "_";
+      List<WriteStatus> writeStatuses = new ArrayList<>();
+      for (int i = 0; i < numWriteStatuses; i++) {
+        String fileName = randomPrefix + i;
+        HoodieWriteStat writeStat = new HoodieWriteStat();
+        writeStat.setPartitionPath(partititionPath);
+        String fullFilePath = basePath + "/" + partititionPath + "/" + fileName;
+        writeStat.setPath(fullFilePath);
+        WriteStatus writeStatus = new WriteStatus();
+        writeStatus.setStat(writeStat);
+        writeStatuses.add(writeStatus);
+      }
+      return writeStatuses;
     }
   }
 
-  static class MapFunc implements Function<Tuple2<Boolean, Integer>, Integer> {
+  static class PairFunc implements PairFunction<WriteStatus, String, WriteStatus> {
+    @Override
+    public Tuple2<String, WriteStatus> call(WriteStatus writeStatus) throws Exception {
+      return Tuple2.apply(writeStatus.getStat().getPath(), writeStatus);
+    }
+  }
+
+  static class MapFunc implements Function<Tuple2<String, WriteStatus>, WriteStatus> {
 
     @Override
-    public Integer call(Tuple2<Boolean, Integer> booleanIntegerTuple2) throws Exception {
+    public WriteStatus call(Tuple2<String, WriteStatus> booleanIntegerTuple2) throws Exception {
       return booleanIntegerTuple2._2;
     }
   }

@@ -72,7 +72,7 @@ public class StreamingMetadataWriteHandler {
    * To be invoked by write client or table service client to complete the write to metadata table.
    *
    * <p>When streaming writes is enabled, writes to left over metadata partitions
-   * which is not covered in {@link #streamWriteToMetadataTable(HoodieTable, HoodieData, String, boolean)},
+   * which is not covered in {@link #streamWriteToMetadataTable(HoodieTable, HoodieData, String, Boolean, Integer)},
    * otherwise writes to metadata table in legacy way(batch update without partial updates).
    *
    * @param table       The {@link HoodieTable} instance for data table of interest.
@@ -109,9 +109,9 @@ public class StreamingMetadataWriteHandler {
       // with bulk insert and NONE sort mode, simple coalesce on datatable write statuses also impact record key generation stages.
       // and hence we are adding a partitioner to cut the chain so that coalesce(1) here does not impact record key generation stages.
       coalescedDataWriteStatuses = HoodieJavaRDD.of(HoodieJavaRDD.getJavaRDD(dataTableWriteStatuses)
-          .mapToPair((PairFunction<WriteStatus, Boolean, WriteStatus>) writeStatus -> new Tuple2(true, writeStatus))
+          .mapToPair((PairFunction<WriteStatus, String, WriteStatus>) writeStatus -> new Tuple2(writeStatus.getStat().getPath(), writeStatus))
           .partitionBy(new CoalescingPartitioner(coalesceParallelism))
-          .map((Function<Tuple2<Boolean, WriteStatus>, WriteStatus>) booleanWriteStatusTuple2 -> booleanWriteStatusTuple2._2));
+          .map((Function<Tuple2<String, WriteStatus>, WriteStatus>) entry -> entry._2));
     } else {
       coalescedDataWriteStatuses = dataTableWriteStatuses.coalesce(coalesceParallelism);
     }
