@@ -224,33 +224,34 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
   @tailrec final def hasNextInternal: Boolean = {
     if (nextRecordLoaded) {
-      return true
-    }
-    if (needLoadNextFile) {
-      loadCdcFile()
-    }
-    if (currentCDCFileSplit == null) {
-      false
+      true
     } else {
-      currentCDCFileSplit.getCdcInferCase match {
-        case BASE_FILE_INSERT | BASE_FILE_DELETE | REPLACE_COMMIT =>
-          if (recordIter.hasNext && loadNext()) {
-            true
-          } else {
-            hasNextInternal
-          }
-        case LOG_FILE =>
-          if (logRecordIter.hasNext && loadNext()) {
-            true
-          } else {
-            hasNextInternal
-          }
-        case AS_IS =>
-          if (cdcLogRecordIterator.hasNext && loadNext()) {
-            true
-          } else {
-            hasNextInternal
-          }
+      if (needLoadNextFile) {
+        loadCdcFile()
+      }
+      if (currentCDCFileSplit == null) {
+        false
+      } else {
+        currentCDCFileSplit.getCdcInferCase match {
+          case BASE_FILE_INSERT | BASE_FILE_DELETE | REPLACE_COMMIT =>
+            if (recordIter.hasNext && loadNext()) {
+              true
+            } else {
+              hasNextInternal
+            }
+          case LOG_FILE =>
+            if (logRecordIter.hasNext && loadNext()) {
+              true
+            } else {
+              hasNextInternal
+            }
+          case AS_IS =>
+            if (cdcLogRecordIterator.hasNext && loadNext()) {
+              true
+            } else {
+              hasNextInternal
+            }
+        }
       }
     }
   }
