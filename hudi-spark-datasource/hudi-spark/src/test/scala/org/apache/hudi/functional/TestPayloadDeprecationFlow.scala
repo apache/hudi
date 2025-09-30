@@ -21,17 +21,16 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, ORDERING_FIELDS, RECORDKEY_FIELD, TABLE_TYPE}
-import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.model.{AWSDmsAvroPayload, DefaultHoodieRecordPayload, EventTimeAvroPayload, HoodieRecordMerger, HoodieTableType, OverwriteNonDefaultsWithLatestAvroPayload, OverwriteWithLatestAvroPayload, PartialUpdateAvroPayload}
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY
 import org.apache.hudi.common.model.debezium.{DebeziumConstants, MySqlDebeziumAvroPayload, PostgresDebeziumAvroPayload}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX
-import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
-
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
@@ -63,12 +62,6 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
 
     // Common table service configurations
     val serviceOpts: Map[String, String] = Map(
-      HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "3",
-      HoodieCleanConfig.AUTO_CLEAN.key() -> "false",
-      HoodieArchivalConfig.AUTO_ARCHIVE.key() -> "true",
-      HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key() -> "1",
-      HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key() -> "2",
-      HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key() -> "3",
       HoodieClusteringConfig.INLINE_CLUSTERING.key() -> "true",
       HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key() -> "2",
       HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key() -> "512000",
@@ -107,8 +100,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL).
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8").
-      option("hoodie.parquet.max.file.size", "2048").
-      option("hoodie.parquet.small.file.limit", "1024").
+      option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(), "2048").
+      option(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "1024").
       options(serviceOpts).
       options(opts).
       mode(SaveMode.Overwrite).
@@ -146,7 +139,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     assertEquals(8, metaClient.getTableConfig.getTableVersion.versionCode())
     val firstUpdateInstantTime = metaClient.getActiveTimeline.getInstants.get(1).requestedTime()
 
-    // 2.5. Add mixed ordering test data to validate proper ordering handling
+    // 3. Add mixed ordering test data to validate proper ordering handling
     // This tests that updates/deletes with lower ordering values are ignored
     // while higher ordering values are applied
     val mixedOrderingData = Seq(
@@ -173,7 +166,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       .build()
     assertEquals(8, metaClient.getTableConfig.getTableVersion.versionCode())
 
-    // 3. Add an update. This is expected to trigger the upgrade
+    // 4. Add an update. This is expected to trigger the upgrade
     val compactionEnabled = if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) "true" else "false"
     val secondUpdateData = Seq(
       (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1, "i"),
@@ -202,7 +195,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       metaClient.getTableConfig.getProps.containsKey(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY))
     assertEquals(expectedOrderingFields, metaClient.getTableConfig.getOrderingFieldsStr.orElse(""))
 
-    // 4. Add a trivial update to trigger payload class mismatch.
+    // 5. Add a trivial update to trigger payload class mismatch.
     val thirdUpdateData = Seq(
       (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1, "i"))
     val thirdUpdate = spark.createDataFrame(thirdUpdateData).toDF(columns: _*)
@@ -219,7 +212,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       }
     }
 
-    // 5. Add a delete.
+    // 6. Add a delete.
     val fourthUpdateData = Seq(
       (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1, "i"),
       (12, 5L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1, "i"))
@@ -232,7 +225,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       mode(SaveMode.Append).
       save(basePath)
 
-    // 6. Add INSERT operation.
+    // 7. Add INSERT operation.
     val insertData = Seq(
       (13, 6L, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
       (13, 7L, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
@@ -252,10 +245,10 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     validateTableManagementOps(metaClient, tableType,
       expectCompaction = tableType.equals(HoodieTableType.MERGE_ON_READ.name()),
       expectClustering = true,   // Enable clustering validation with lowered thresholds
-      expectCleaning = false,     // Enable cleaning validation with lowered thresholds
-      expectArchival = false)     // Enable archival validation with lowered thresholds
+      expectCleaning = false,
+      expectArchival = false)
 
-    // 7. Validate.
+    // 8. Validate.
     // Validate table configs.
     tableConfig = metaClient.getTableConfig
     expectedConfigs.foreach { case (key, expectedValue) =>
@@ -286,7 +279,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
           && timeTravelDf.except(expectedTimeTravelDf).isEmpty)
     }
 
-    // 8. Downgrade from v9 to v8
+    // 9. Downgrade from v9 to v8
     val writeConfig = HoodieWriteConfig.newBuilder()
       .withPath(basePath)
       .withSchema(spark.read.format("hudi").load(basePath).schema.json)
@@ -314,7 +307,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       }
     }
 
-    // 9. Add post-downgrade upsert to verify table functionality
+    // 10. Add post-downgrade upsert to verify table functionality
     val postDowngradeData = Seq(
       (14, 10L, "rider-Z", "driver-Z", 45.50, "i", "14.1", 14, 1, "i"))
     val postDowngradeUpdate = spark.createDataFrame(postDowngradeData).toDF(columns: _*)
@@ -355,12 +348,6 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
 
     // Common table service configurations
     val serviceOpts: Map[String, String] = Map(
-      HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "3",
-      HoodieCleanConfig.AUTO_CLEAN.key() -> "false",
-      HoodieArchivalConfig.AUTO_ARCHIVE.key() -> "true",
-      HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.key() -> "1",
-      HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key() -> "2",
-      HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key() -> "3",
       HoodieClusteringConfig.INLINE_CLUSTERING.key() -> "true",
       HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key() -> "2",
       HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT.key() -> "512000",
@@ -396,8 +383,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL).
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
-      option("hoodie.parquet.max.file.size", "2048").
-      option("hoodie.parquet.small.file.limit", "1024").
+      option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(), "2048").
+      option(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "1024").
       options(serviceOpts).
       options(opts).
       mode(SaveMode.Overwrite).
@@ -442,7 +429,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     assertEquals(expectedOrderingFields, metaClient.getTableConfig.getOrderingFieldsStr.orElse(""))
     val firstUpdateInstantTime = metaClient.getActiveTimeline.getInstants.get(1).requestedTime()
 
-    // 2.5. Add mixed ordering test data to validate proper ordering handling
+    // 3. Add mixed ordering test data to validate proper ordering handling
     // This tests that updates/deletes with lower ordering values are ignored
     // while higher ordering values are applied
     val mixedOrderingData = Seq(
@@ -467,7 +454,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       .build()
     assertEquals(9, metaClient.getTableConfig.getTableVersion.versionCode())
 
-    // 3. Add an update. This is expected to trigger the upgrade
+    // 4. Add an update. This is expected to trigger the upgrade
     val compactionEnabled = if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
       "true"
     } else {
@@ -495,7 +482,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     assertEquals(9, metaClient.getTableConfig.getTableVersion.versionCode())
     assertEquals(payloadClazz, metaClient.getTableConfig.getLegacyPayloadClass)
 
-    // 4. Add a trivial update to trigger payload class mismatch.
+    // 5. Add a trivial update to trigger payload class mismatch.
     val thirdUpdateData = Seq(
       (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1, "i"))
     val thirdUpdate = spark.createDataFrame(thirdUpdateData).toDF(columns: _*)
@@ -512,7 +499,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       }
     }
 
-    // 5. Add a delete.
+    // 6. Add a delete.
     val fourthUpdateData = Seq(
       (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1, "i"),
       (12, 5L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1, "i"))
@@ -525,7 +512,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       mode(SaveMode.Append).
       save(basePath)
 
-    // 6. Add INSERT operation.
+    // 7. Add INSERT operation.
     val insertData = Seq(
       (13, 6L, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
       (13, 7L, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
@@ -545,10 +532,10 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     validateTableManagementOps(metaClient, tableType,
       expectCompaction = tableType.equals(HoodieTableType.MERGE_ON_READ.name()),
       expectClustering = true,   // Enable clustering validation with lowered thresholds
-      expectCleaning = false,     // Enable cleaning validation with lowered thresholds
-      expectArchival = false)     // Enable archival validation with lowered thresholds
+      expectCleaning = false,
+      expectArchival = false)
 
-    // 7. Validate.
+    // 8. Validate.
     // Validate table configs again.
     tableConfig = metaClient.getTableConfig
     expectedConfigs.foreach { case (key, expectedValue) =>
@@ -577,7 +564,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       expectedTimeTravelDf.except(timeTravelDf).isEmpty
         && timeTravelDf.except(expectedTimeTravelDf).isEmpty)
 
-    // 8. Downgrade from v9 to v8
+    // 9. Downgrade from v9 to v8
     val writeConfig = HoodieWriteConfig.newBuilder()
       .withPath(basePath)
       .withSchema(spark.read.format("hudi").load(basePath).schema.json)
@@ -605,7 +592,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       }
     }
 
-    // 9. Add post-downgrade upsert to verify table functionality
+    // 10. Add post-downgrade upsert to verify table functionality
     val postDowngradeData = Seq(
       (14, 10L, "rider-Z", "driver-Z", 45.50, "i", "14.1", 14, 1, "i"))
     val postDowngradeUpdate = spark.createDataFrame(postDowngradeData).toDF(columns: _*)
