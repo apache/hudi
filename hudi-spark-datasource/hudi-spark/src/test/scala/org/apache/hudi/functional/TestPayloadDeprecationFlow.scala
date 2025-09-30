@@ -205,7 +205,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     val insertData = Seq(
       (13, 6L, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
       (13, 7L, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
-    performInsert(insertDataFrame, columns, serviceOpts, basePath)
+    performInsert(insertData, columns, serviceOpts, basePath)
 
     // Final validation of table management operations after all writes
     metaClient = HoodieTableMetaClient.builder()
@@ -249,48 +249,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
           && timeTravelDf.except(expectedTimeTravelDf).isEmpty)
     }
 
-    // 9. Downgrade from v9 to v8
-    val writeConfig = HoodieWriteConfig.newBuilder()
-      .withPath(basePath)
-      .withSchema(spark.read.format("hudi").load(basePath).schema.json)
-      .build()
-
-    new UpgradeDowngrade(metaClient, writeConfig, context, SparkUpgradeDowngradeHelper.getInstance)
-      .run(HoodieTableVersion.EIGHT, null)
-
-    // Reload metaClient to get updated table config
-    metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(storageConf())
-      .build()
-
-    // Validate table version is 8
-    assertEquals(8, metaClient.getTableConfig.getTableVersion.versionCode())
-
-    // Validate downgrade configs
-    val downgradedTableConfig = metaClient.getTableConfig
-    expectedDowngradeConfigs.foreach { case (key, expectedValue) =>
-      if (expectedValue != null) {
-        assertEquals(expectedValue, downgradedTableConfig.getString(key), s"Config $key should be $expectedValue after downgrade")
-      } else {
-        assertFalse(downgradedTableConfig.contains(key), s"Config $key should not be present after downgrade")
-      }
-    }
-
-    // 10. Add post-downgrade upsert to verify table functionality
-    performUpsert(
-      Seq((14, 10L, "rider-Z", "driver-Z", 45.50, "i", "14.1", 14, 1, "i")),
-      columns, serviceOpts, Map.empty, basePath)
-
-    // Validate data consistency after downgrade including new row
-    val downgradeDf = spark.read.format("hudi").load(basePath)
-    val downgradeFinalDf = downgradeDf.select("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME, DebeziumConstants.FLATTENED_OP_COL_NAME).sort("_event_lsn")
-
-    // Create expected data including the new post-downgrade row
-    val expectedDataWithNewRow = expectedData ++ Seq((14, 10L, "rider-Z", "driver-Z", 45.50, "i", "14.1", 14, 1, "i"))
-    val expectedDfWithNewRow = spark.createDataFrame(spark.sparkContext.parallelize(expectedDataWithNewRow)).toDF(columns: _*).sort("_event_lsn")
-    assertTrue(expectedDfWithNewRow.except(downgradeFinalDf).isEmpty && downgradeFinalDf.except(expectedDfWithNewRow).isEmpty,
-      "Data should remain consistent after downgrade including new row")
+    // 9-10. Perform downgrade and validation
+    performDowngradeAndValidate(metaClient, basePath, expectedDowngradeConfigs, expectedData, columns, serviceOpts)
   }
 
   @ParameterizedTest
@@ -503,48 +463,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       expectedTimeTravelDf.except(timeTravelDf).isEmpty
         && timeTravelDf.except(expectedTimeTravelDf).isEmpty)
 
-    // 9. Downgrade from v9 to v8
-    val writeConfig = HoodieWriteConfig.newBuilder()
-      .withPath(basePath)
-      .withSchema(spark.read.format("hudi").load(basePath).schema.json)
-      .build()
-
-    new UpgradeDowngrade(metaClient, writeConfig, context, SparkUpgradeDowngradeHelper.getInstance)
-      .run(HoodieTableVersion.EIGHT, null)
-
-    // Reload metaClient to get updated table config
-    metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(storageConf())
-      .build()
-
-    // Validate table version is 8
-    assertEquals(8, metaClient.getTableConfig.getTableVersion.versionCode())
-
-    // Validate downgrade configs
-    val downgradedTableConfig = metaClient.getTableConfig
-    expectedDowngradeConfigs.foreach { case (key, expectedValue) =>
-      if (expectedValue != null) {
-        assertEquals(expectedValue, downgradedTableConfig.getString(key), s"Config $key should be $expectedValue after downgrade")
-      } else {
-        assertFalse(downgradedTableConfig.contains(key), s"Config $key should not be present after downgrade")
-      }
-    }
-
-    // 10. Add post-downgrade upsert to verify table functionality
-    performUpsert(
-      Seq((14, 10L, "rider-Z", "driver-Z", 45.50, "i", "14.1", 14, 1, "i")),
-      columns, serviceOpts, Map.empty, basePath)
-
-    // Validate data consistency after downgrade including new row
-    val downgradeDf = spark.read.format("hudi").load(basePath)
-    val downgradeFinalDf = downgradeDf.select("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME, DebeziumConstants.FLATTENED_OP_COL_NAME).sort("_event_lsn")
-
-    // Create expected data including the new post-downgrade row
-    val expectedDataWithNewRow = expectedData ++ Seq((14, 10L, "rider-Z", "driver-Z", 45.50, "i", "14.1", 14, 1, "i"))
-    val expectedDfWithNewRow = spark.createDataFrame(spark.sparkContext.parallelize(expectedDataWithNewRow)).toDF(columns: _*).sort("_event_lsn")
-    assertTrue(expectedDfWithNewRow.except(downgradeFinalDf).isEmpty && downgradeFinalDf.except(expectedDfWithNewRow).isEmpty,
-      "Data should remain consistent after downgrade including new row")
+    // 9-10. Perform downgrade and validation
+    performDowngradeAndValidate(metaClient, basePath, expectedDowngradeConfigs, expectedData, columns, serviceOpts)
   }
 
   def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {
@@ -603,6 +523,59 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       .options(serviceOpts)
       .mode(SaveMode.Append)
       .save(basePath)
+  }
+
+  /**
+   * Helper method to perform downgrade from v9 to v8 and validate the results
+   */
+  def performDowngradeAndValidate(metaClient: HoodieTableMetaClient,
+                                   basePath: String,
+                                   expectedDowngradeConfigs: Map[String, String],
+                                   expectedData: Seq[(Int, Long, String, String, Double, String, String, Int, Int, String)],
+                                   columns: Seq[String],
+                                   serviceOpts: Map[String, String]): Unit = {
+    // 9. Downgrade from v9 to v8
+    val writeConfig = HoodieWriteConfig.newBuilder()
+      .withPath(basePath)
+      .withSchema(spark.read.format("hudi").load(basePath).schema.json)
+      .build()
+
+    new UpgradeDowngrade(metaClient, writeConfig, context, SparkUpgradeDowngradeHelper.getInstance)
+      .run(HoodieTableVersion.EIGHT, null)
+
+    // Reload metaClient to get updated table config
+    val downgradedMetaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(storageConf())
+      .build()
+
+    // Validate table version is 8
+    assertEquals(8, downgradedMetaClient.getTableConfig.getTableVersion.versionCode())
+
+    // Validate downgrade configs
+    val downgradedTableConfig = downgradedMetaClient.getTableConfig
+    expectedDowngradeConfigs.foreach { case (key, expectedValue) =>
+      if (expectedValue != null) {
+        assertEquals(expectedValue, downgradedTableConfig.getString(key), s"Config $key should be $expectedValue after downgrade")
+      } else {
+        assertFalse(downgradedTableConfig.contains(key), s"Config $key should not be present after downgrade")
+      }
+    }
+
+    // 10. Add post-downgrade upsert to verify table functionality
+    performUpsert(
+      Seq((14, 10L, "rider-Z", "driver-Z", 45.50, "i", "14.1", 14, 1, "i")),
+      columns, serviceOpts, Map.empty, basePath)
+
+    // Validate data consistency after downgrade including new row
+    val downgradeDf = spark.read.format("hudi").load(basePath)
+    val downgradeFinalDf = downgradeDf.select("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME, DebeziumConstants.FLATTENED_OP_COL_NAME).sort("_event_lsn")
+
+    // Create expected data including the new post-downgrade row
+    val expectedDataWithNewRow = expectedData ++ Seq((14, 10L, "rider-Z", "driver-Z", 45.50, "i", "14.1", 14, 1, "i"))
+    val expectedDfWithNewRow = spark.createDataFrame(spark.sparkContext.parallelize(expectedDataWithNewRow)).toDF(columns: _*).sort("_event_lsn")
+    assertTrue(expectedDfWithNewRow.except(downgradeFinalDf).isEmpty && downgradeFinalDf.except(expectedDfWithNewRow).isEmpty,
+      "Data should remain consistent after downgrade including new row")
   }
 
   def getExpectedResultForSnapshotQuery(payloadClazz: String, usesDeleteMarker: Boolean): Seq[(Int, Long, String, String, Double, String, String, Int, Int, String)] = {
