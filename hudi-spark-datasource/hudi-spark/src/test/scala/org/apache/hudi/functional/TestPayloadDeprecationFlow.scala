@@ -31,6 +31,7 @@ import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, H
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
