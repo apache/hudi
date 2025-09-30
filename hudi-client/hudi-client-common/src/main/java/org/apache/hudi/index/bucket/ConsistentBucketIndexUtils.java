@@ -209,9 +209,9 @@ public class ConsistentBucketIndexUtils {
         }
       } catch (IOException e2) {
         // ignore the exception and return false
-        LOG.error("Failed to check the existence of bucket metadata file: {}", fullPath, e2);
+        LOG.warn("Failed to check the existence of bucket metadata file: {}", fullPath, e2);
       }
-      LOG.error("Failed to update bucket metadata: {}", metadata, e1);
+      LOG.warn("Failed to update bucket metadata: {}", metadata, e1);
       return false;
     }
   }

@@ -3708,7 +3708,7 @@ public class HoodieWriteConfig extends HoodieConfig {
             return MarkerType.TIMELINE_SERVER_BASED.toString();
           } else {
             if (!HoodieTableMetadata.isMetadataTable(writeConfig.getBasePath())) {
-              LOG.info("Embedded timeline server is disabled, fallback to use direct marker type for spark");
+              LOG.warn("Embedded timeline server is disabled, fallback to use direct marker type for spark");
             }
             return MarkerType.DIRECT.toString();
           }

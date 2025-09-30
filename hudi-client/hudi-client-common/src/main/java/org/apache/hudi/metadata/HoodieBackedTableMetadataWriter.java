@@ -447,7 +447,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     while (iterator.hasNext()) {
       MetadataPartitionType partitionType = iterator.next();
       if (partitionType == PARTITION_STATS && !dataMetaClient.getTableConfig().isTablePartitioned()) {
-        LOG.error("Partition stats index cannot be enabled for a non-partitioned table. Removing from initialization list. Please disable {}",
+        LOG.debug("Partition stats index cannot be enabled for a non-partitioned table. Removing from initialization list. Please disable {}",
             HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key());
         iterator.remove();
         this.enabledPartitionTypes.remove(partitionType);
@@ -486,7 +486,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
             Set<String> expressionIndexPartitionsToInit = getExpressionIndexPartitionsToInit(partitionType, dataWriteConfig.getMetadataConfig(), dataMetaClient);
             if (expressionIndexPartitionsToInit.size() != 1) {
               if (expressionIndexPartitionsToInit.size() > 1) {
-                LOG.error("Skipping expression index initialization as only one expression index bootstrap at a time is supported for now. Provided: {}", expressionIndexPartitionsToInit);
+                LOG.warn("Skipping expression index initialization as only one expression index bootstrap at a time is supported for now. Provided: {}", expressionIndexPartitionsToInit);
               }
               continue;
             }
@@ -497,7 +497,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           case PARTITION_STATS:
             // For PARTITION_STATS, COLUMN_STATS should also be enabled
             if (!dataWriteConfig.isMetadataColumnStatsIndexEnabled()) {
-              LOG.error("Skipping partition stats initialization as column stats index is not enabled. Please enable {}",
+              LOG.debug("Skipping partition stats initialization as column stats index is not enabled. Please enable {}",
                   HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
               continue;
             }
@@ -508,7 +508,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
             Set<String> secondaryIndexPartitionsToInit = getSecondaryIndexPartitionsToInit(partitionType, dataWriteConfig.getMetadataConfig(), dataMetaClient);
             if (secondaryIndexPartitionsToInit.size() != 1) {
               if (secondaryIndexPartitionsToInit.size() > 1) {
-                LOG.error("Skipping secondary index initialization as only one secondary index bootstrap at a time is supported for now. Provided: {}", secondaryIndexPartitionsToInit);
+                LOG.warn("Skipping secondary index initialization as only one secondary index bootstrap at a time is supported for now. Provided: {}", secondaryIndexPartitionsToInit);
               }
               continue;
             }

@@ -93,7 +93,7 @@ public class AverageRecordSizeEstimator extends RecordSizeEstimator {
             });
       }
     } catch (Throwable t) {
-      LOG.error("Got error while trying to compute average bytes/record but will proceed to use the computed value "
+      LOG.info("Got error while trying to compute average bytes/record but will proceed to use the computed value "
           + "or fallback to default config value ", t);
     }
     return averageRecordSizeStats.computeAverageRecordSize();
