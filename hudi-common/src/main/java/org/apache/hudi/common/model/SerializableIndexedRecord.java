@@ -163,6 +163,7 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
     }
     if (o instanceof SerializableIndexedRecord) {
       SerializableIndexedRecord that = (SerializableIndexedRecord) o;
+      getData();
       ValidationUtils.checkArgument(record != null && that.record != null, "Records must be deserialized before equality check");
       return record.equals(that.record);
     } else if (o instanceof IndexedRecord) {

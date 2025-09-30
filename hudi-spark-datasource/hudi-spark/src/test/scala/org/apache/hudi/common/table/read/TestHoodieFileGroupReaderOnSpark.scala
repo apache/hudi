@@ -26,8 +26,8 @@ import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.model.SerializableIndexedRecord
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderBase.hoodieRecordsToIndexedRecords
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFileCount
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.util.{CollectionUtils, Option => HOption, OrderingValues}
@@ -57,6 +57,7 @@ import org.mockito.Mockito.when
 
 import java.util
 import java.util.Collections
+import java.util.stream.Collectors
 
 import scala.collection.JavaConverters._
 
@@ -118,11 +119,10 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
                              options: util.Map[String, String],
                              schemaStr: String): Unit = {
     val schema = new Schema.Parser().parse(schemaStr)
-    val genericRecords : RDD[GenericRecord] = spark.sparkContext.parallelize(recordList.asScala.map(_.toIndexedRecord(schema, CollectionUtils.emptyProps))
-      .filter(r => r.isPresent).map(r =>  {
-      val data = r.get.getData
-      fetchGenericRecord(data)
-    }).toSeq, 2)
+    val genericRecords = spark.sparkContext.parallelize((hoodieRecordsToIndexedRecords(recordList, schema)
+      .stream().map[GenericRecord](entry => entry.getValue.asInstanceOf[GenericRecord])
+      .collect(Collectors.toList[GenericRecord])).asScala,
+      2)
     val inputDF: Dataset[Row] = AvroConversionUtils.createDataFrame(genericRecords, schemaStr, spark);
 
     inputDF.write.format("hudi")
@@ -132,17 +132,6 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       .option("hoodie.datasource.write.table.type", "MERGE_ON_READ")
       .mode(if (firstCommit) SaveMode.Overwrite else SaveMode.Append)
       .save(getBasePath)
-  }
-
-  def fetchGenericRecord(data: IndexedRecord) : GenericRecord = {
-    if (data.isInstanceOf[SerializableIndexedRecord])
-    {
-      // accessing a field to trigger deser of indexed record
-      data.get(0)
-      data.asInstanceOf[SerializableIndexedRecord].getData.asInstanceOf[GenericRecord]
-    } else {
-      data.asInstanceOf[GenericRecord]
-    }
   }
 
   override def getCustomPayload: String = classOf[CustomPayloadForTesting].getName

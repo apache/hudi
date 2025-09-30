@@ -97,7 +97,7 @@ public class BaseTestFileGroupRecordBuffer {
     return SerializableIndexedRecord.createInstance(indexedRecord);
   }
 
-  protected List<SerializableIndexedRecord> convertGenRecordsToSerializableIndexedRecord(Stream<IndexedRecord> indexedRecordStream) {
+  protected List<SerializableIndexedRecord> convertGenRecordsToSerializableIndexedRecords(Stream<IndexedRecord> indexedRecordStream) {
     return indexedRecordStream.map(record -> getSerializableIndexedRecord(record)).collect(Collectors.toList());
   }
 

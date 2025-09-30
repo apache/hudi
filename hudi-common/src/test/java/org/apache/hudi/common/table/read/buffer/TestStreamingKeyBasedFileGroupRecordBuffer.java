@@ -134,7 +134,7 @@ class TestStreamingKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecord
         testRecord5, testRecord6).iterator()));
 
     List<IndexedRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
-    assertEquals(convertGenRecordsToSerializableIndexedRecord(Stream.of(testRecord1UpdateWithSameTime, testRecord2Update,
+    assertEquals(convertGenRecordsToSerializableIndexedRecords(Stream.of(testRecord1UpdateWithSameTime, testRecord2Update,
         testRecord3Update, testRecord4EarlierUpdate, testRecord7)), actualRecords);
     assertEquals(1, readStats.getNumInserts());
     assertEquals(2, readStats.getNumDeletes());
