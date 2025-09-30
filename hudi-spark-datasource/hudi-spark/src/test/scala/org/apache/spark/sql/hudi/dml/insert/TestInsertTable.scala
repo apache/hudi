@@ -818,7 +818,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         ("date", "DATE'2021-05-20'")
       )
       typeAndValue.foreach { case (partitionType, partitionValue) =>
-        val tableName = generateTableName
+        val tableName = s"${generateTableName}_timestamp_type"
         spark.sql(s"set hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled=true")
         validateDifferentTypesOfPartitionColumn(tmp, partitionType, partitionValue, tableName)
       }
@@ -1010,7 +1010,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     withSQLConf("hoodie.sql.insert.mode" -> "non-strict") {
       withRecordType()(withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
-          withTable(generateTableName) { tableMultiPartition =>
+          withTable(s"${generateTableName}_multi_partition") { tableMultiPartition =>
             spark.sql(
               s"""
                  |create table $tableMultiPartition (
