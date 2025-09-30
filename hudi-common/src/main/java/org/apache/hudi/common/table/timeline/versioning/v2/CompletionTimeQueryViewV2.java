@@ -32,15 +32,12 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.Serializable;
-import java.time.Instant;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -56,8 +53,6 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THA
  */
 public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Serializable {
   private static final long serialVersionUID = 1L;
-
-  private static final long MILLI_SECONDS_IN_THREE_DAYS = 3 * 24 * 3600 * 1000;
 
   private static final long MILLI_SECONDS_IN_ONE_DAY = 24 * 3600 * 1000;
 
@@ -85,35 +80,15 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
    */
   private final String firstNonSavepointCommit;
 
-  private final AtomicBoolean isFirstLoad = new AtomicBoolean(true);
-  private final String firstLoadInstant;
-
   /**
    * The constructor.
    *
    * @param metaClient The table meta client.
    */
   public CompletionTimeQueryViewV2(HoodieTableMetaClient metaClient) {
-    this(metaClient, HoodieInstantTimeGenerator.formatDate(new Date(Instant.now().minusMillis(MILLI_SECONDS_IN_THREE_DAYS).toEpochMilli())));
-  }
-
-  /**
-   * The constructor.
-   *
-   * @param metaClient       The table meta client.
-   * @param eagerLoadInstant The earliest instant time to eagerly load from, by default load last N days of completed instants.
-   */
-  public CompletionTimeQueryViewV2(HoodieTableMetaClient metaClient, String eagerLoadInstant) {
     this.metaClient = metaClient;
     this.instantTimeToCompletionTimeMap = new ConcurrentHashMap<>();
     this.cursorInstant = metaClient.getActiveTimeline().firstInstant().map(HoodieInstant::requestedTime).orElse("");
-    if (InstantComparison.compareTimestamps(cursorInstant, LESSER_THAN_OR_EQUALS, eagerLoadInstant)) {
-      // case where active timeline contains the eager load instant
-      isFirstLoad.set(false); // set to false so the archive timeline is not inspected for the eagerLoadInstant
-      firstLoadInstant = null;
-    } else {
-      firstLoadInstant = eagerLoadInstant;
-    }
     // Note: use getWriteTimeline() to keep sync with the fs view visibleCommitsAndCompactionTimeline, see AbstractTableFileSystemView.refreshTimeline.
     this.firstNonSavepointCommit = metaClient.getActiveTimeline().getWriteTimeline().getFirstNonSavepointCommit().map(HoodieInstant::requestedTime).orElse("");
     load();
@@ -305,22 +280,14 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
     // This operation is resource costly.
     synchronized (this) {
       if (InstantComparison.compareTimestamps(startTime, LESSER_THAN, this.cursorInstant)) {
-        HoodieArchivedTimeline.TimeRangeFilter filter;
-        if (isFirstLoad.get()) {
-          isFirstLoad.set(false);
-          String startingInstant = InstantComparison.minInstant(startTime, firstLoadInstant);
-          this.cursorInstant = startingInstant;
-          filter = new HoodieArchivedTimeline.StartTsFilter(startingInstant);
-        } else {
-          filter = new HoodieArchivedTimeline.ClosedOpenTimeRangeFilter(startTime, this.cursorInstant);
-          this.cursorInstant = startTime;
-        }
         metaClient.getTableFormat().getTimelineFactory().createArchivedTimelineLoader().loadInstants(metaClient,
-            filter,
+            new HoodieArchivedTimeline.ClosedOpenTimeRangeFilter(startTime, this.cursorInstant),
             HoodieArchivedTimeline.LoadMode.TIME,
             r -> true,
             this::readCompletionTime);
       }
+      // refresh the start instant
+      this.cursorInstant = startTime;
     }
   }
 
