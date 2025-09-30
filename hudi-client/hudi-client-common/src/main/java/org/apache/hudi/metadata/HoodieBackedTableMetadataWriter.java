@@ -1636,16 +1636,20 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       // The commit which is being rolled back on the dataset
       final String commitToRollbackInstantTime = rollbackMetadata.getCommitsRollback().get(0);
       // The deltacommit that will be rolled back
-      HoodieInstant deltaCommitInstant = metadataMetaClient.createNewInstant(HoodieInstant.State.COMPLETED,
-          HoodieTimeline.DELTA_COMMIT_ACTION, commitToRollbackInstantTime);
-      if (metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().containsInstant(deltaCommitInstant.requestedTime())) {
-        validateRollback(commitToRollbackInstantTime);
+      Option<HoodieInstant> deltaCommitInstantOpt = metadataMetaClient.getActiveTimeline()
+          .getDeltaCommitTimeline()
+          .filter(s -> s.requestedTime().equals(commitToRollbackInstantTime))
+          .firstInstant();
+      if (deltaCommitInstantOpt.isPresent()) {
+        HoodieInstant deltaCommitInstant = deltaCommitInstantOpt.get();
+        if (deltaCommitInstant.isCompleted()) {
+          validateRollback(deltaCommitInstant);
+        }
         LOG.info("Rolling back MDT deltacommit {}", commitToRollbackInstantTime);
         if (!getWriteClient().rollback(commitToRollbackInstantTime, instantTime)) {
           throw new HoodieMetadataException(String.format("Failed to rollback deltacommit at %s", commitToRollbackInstantTime));
         }
       } else {
-        // if the instant is pending on MDT or not even exists the timeline, just ignore.
         LOG.info("Ignoring rollback of instant {} at {}. The commit to rollback is not found in MDT",
             commitToRollbackInstantTime, instantTime);
       }
@@ -1653,7 +1657,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     }
   }
 
-  private void validateRollback(String commitToRollbackInstantTime) {
+  private void validateRollback(HoodieInstant commitToRollbackInstant) {
     // Find the deltacommits since the last compaction
     Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfo =
         CompactionUtils.getDeltaCommitsSinceLatestCompaction(metadataMetaClient.getActiveTimeline());
@@ -1667,7 +1671,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     // Hence, this case implies a rollback of completed commit which should actually be handled using restore.
     if (compactionInstant.getAction().equals(COMMIT_ACTION)) {
       final String compactionInstantTime = compactionInstant.requestedTime();
-      if (commitToRollbackInstantTime.length() == compactionInstantTime.length() && LESSER_THAN_OR_EQUALS.test(commitToRollbackInstantTime, compactionInstantTime)) {
+      final String commitToRollbackInstantTime = commitToRollbackInstant.requestedTime();
+      if (commitToRollbackInstantTime.length() == compactionInstantTime.length()
+          && compareTimestamps(commitToRollbackInstant.getCompletionTime(), LESSER_THAN_OR_EQUALS, compactionInstantTime)) {
         throw new HoodieMetadataException(
             String.format("Commit being rolled back %s is earlier than the latest compaction %s. There are %d deltacommits after this compaction: %s",
                 commitToRollbackInstantTime, compactionInstantTime, deltacommitsSinceCompaction.countInstants(), deltacommitsSinceCompaction.getInstants())
