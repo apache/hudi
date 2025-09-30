@@ -41,7 +41,7 @@ import org.apache.hudi.exception.{HoodieException, SchemaBackwardsCompatibilityE
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, GlobalDeleteKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
 import org.apache.hudi.metrics.{Metrics, MetricsReporterType}
 import org.apache.hudi.storage.{StoragePath, StoragePathFilter}
 import org.apache.hudi.table.HoodieSparkTable
@@ -436,10 +436,11 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertLastCommitIsUpsert()
   }
 
-  private def writeToHudi(opts: Map[String, String], df: Dataset[Row]): Unit = {
+  private def writeToHudi(opts: Map[String, String], df: Dataset[Row],
+                          operation: String = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL): Unit = {
     df.write.format("hudi")
       .options(opts)
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, operation)
       .mode(SaveMode.Append)
       .save(basePath)
   }
@@ -2112,7 +2113,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .save(basePath)
   }
 
-
   @Test
   def testReadOfAnEmptyTable(): Unit = {
     val (writeOpts, _) = getWriterReaderOpts(HoodieRecordType.AVRO)
@@ -2412,6 +2412,67 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }
   }
 
+  @ParameterizedTest
+  @MethodSource(Array("provideParamsForKeyGenTest"))
+  def testUserProvidedKeyGeneratorClass(keyGenClass: Option[String],
+                                        keyGenType: Option[String]): Unit = {
+    val recordType = HoodieRecordType.AVRO
+    var opts: Map[String, String] = Map()
+    if (keyGenClass.isPresent) {
+      opts = opts ++ Map(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key -> keyGenClass.get)
+    }
+    if (keyGenType.isPresent) {
+      opts = opts ++ Map(HoodieWriteConfig.KEYGENERATOR_TYPE.key -> keyGenType.get)
+    }
+    val (writeOpts, readOpts) = getWriterReaderOpts(
+      recordType,
+      CommonOptionUtils.commonOpts ++ opts ++ Map(
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition")
+    )
+    val expectedKeyGenType = if (keyGenClass.isEmpty) {
+      // By default SIMPLE type is returned when no class is provided.
+      KeyGeneratorType.SIMPLE.name
+    } else {
+      KeyGeneratorType.fromClassName(keyGenClass.get()).name
+    }
+
+    // Insert.
+    val records = recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    writeToHudi(writeOpts, inputDF)
+    var actualDF = spark.read.format("hudi").options(readOpts).load(basePath)
+
+    // Transform the input keys based on the key generator to match the expected format
+    val inputKeyDF = TestCOWDataSource.transformRecordKeyColumn(
+        inputDF.select("_row_key"), "_row_key", KeyGeneratorType.valueOf(expectedKeyGenType))
+      .sort("_row_key")
+    var actualKeyDF = actualDF.select("_hoodie_record_key").sort("_hoodie_record_key")
+    assertTrue(inputKeyDF.except(actualKeyDF).isEmpty && actualKeyDF.except(inputKeyDF).isEmpty)
+    val metaClient = getHoodieMetaClient(storageConf, basePath)
+    val actualKeyGenType = metaClient.getTableConfig
+      .getProps.getString(HoodieTableConfig.KEY_GENERATOR_TYPE.key, null)
+    assertEquals(expectedKeyGenType, actualKeyGenType)
+    // For USER_PROVIDED type, the class should exist in table config.
+    if (KeyGeneratorType.USER_PROVIDED.name == actualKeyGenType) {
+      assertEquals(keyGenClass.get(), metaClient.getTableConfig.getKeyGeneratorClassName)
+    }
+
+    // First update.
+    val firstUpdate = recordsToStrings(dataGen.generateUpdatesForAllRecords("001")).asScala.toList
+    val firstUpdateDF = spark.read.json(spark.sparkContext.parallelize(firstUpdate, 2))
+    writeToHudi(writeOpts, firstUpdateDF, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+    actualDF = spark.read.format("hudi").options(readOpts).load(basePath)
+    actualKeyDF = actualDF.select("_hoodie_record_key").sort("_hoodie_record_key")
+    assertTrue(inputKeyDF.except(actualKeyDF).isEmpty && actualKeyDF.except(inputKeyDF).isEmpty)
+
+    // Second update.
+    // Change keyGenerator class name to generate exception.
+    val opt = writeOpts ++ Map(
+      "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.SqlKeyGenerator")
+    assertThrows(classOf[HoodieException])({
+      writeToHudi(opt, firstUpdateDF, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+    })
+  }
 }
 
 object TestCOWDataSource {
@@ -2423,11 +2484,39 @@ object TestCOWDataSource {
     }
   }
 
+  def transformRecordKeyColumn(df: DataFrame, columnName: String, keyGenType: KeyGeneratorType): DataFrame = {
+    keyGenType match {
+      case KeyGeneratorType.USER_PROVIDED =>
+        df.withColumn(columnName, concat(lit(s"MOCK_"), col(columnName)))
+      case KeyGeneratorType.COMPLEX =>
+        df.withColumn(columnName, concat(lit(s"_row_key:"), col(columnName)))
+      case _ =>
+        df
+    }
+  }
+
   def tableVersionCreationTestCases = {
     val autoUpgradeValues = Array("true", "false")
     val targetVersions = Array("1", "2", "3", "4", "5", "6", "7", "8", "9", "null")
     autoUpgradeValues.flatMap(
       (autoUpgrade: String) => targetVersions.map(
         (targetVersion: String) => Arguments.of(autoUpgrade, targetVersion)))
+  }
+
+  def provideParamsForKeyGenTest(): java.util.List[Arguments] = {
+    java.util.Arrays.asList(
+      Arguments.of(
+        Option.of("org.apache.hudi.keygen.MockUserProvidedKeyGenerator"),
+        Option.of(KeyGeneratorType.USER_PROVIDED.name())),
+      Arguments.of(
+        Option.empty(),
+        Option.of(KeyGeneratorType.SIMPLE.name())),
+      Arguments.of(
+        Option.of("org.apache.hudi.keygen.SimpleAvroKeyGenerator"),
+        Option.of(KeyGeneratorType.SIMPLE.name())),
+      Arguments.of(
+        Option.of("org.apache.hudi.keygen.ComplexKeyGenerator"),
+        Option.empty())
+    )
   }
 }

@@ -22,11 +22,18 @@ package org.apache.hudi.keygen.constant;
 import org.apache.hudi.common.config.HoodieConfig;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestKeyGeneratorType {
   @Test
@@ -88,5 +95,47 @@ public class TestKeyGeneratorType {
     HoodieConfig config = new HoodieConfig();
 
     assertFalse(KeyGeneratorType.isComplexKeyGenerator(config));
+  }
+
+  private static Stream<Arguments> testFromClassNameParams() {
+    return Stream.of(
+        Arguments.of("org.apache.hudi.keygen.SimpleKeyGenerator", KeyGeneratorType.SIMPLE),
+        Arguments.of("org.apache.hudi.keygen.SimpleAvroKeyGenerator", KeyGeneratorType.SIMPLE_AVRO),
+        Arguments.of("org.apache.hudi.keygen.ComplexKeyGenerator", KeyGeneratorType.COMPLEX),
+        Arguments.of("org.apache.hudi.keygen.ComplexAvroKeyGenerator", KeyGeneratorType.COMPLEX_AVRO),
+        Arguments.of("org.apache.hudi.keygen.TimestampBasedKeyGenerator", KeyGeneratorType.TIMESTAMP),
+        Arguments.of("org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator", KeyGeneratorType.TIMESTAMP_AVRO),
+        Arguments.of("org.apache.hudi.keygen.CustomKeyGenerator", KeyGeneratorType.CUSTOM),
+        Arguments.of("org.apache.hudi.keygen.CustomAvroKeyGenerator", KeyGeneratorType.CUSTOM_AVRO),
+        Arguments.of("org.apache.hudi.keygen.NonpartitionedKeyGenerator", KeyGeneratorType.NON_PARTITION),
+        Arguments.of("org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator", KeyGeneratorType.NON_PARTITION_AVRO),
+        Arguments.of("org.apache.hudi.keygen.GlobalDeleteKeyGenerator", KeyGeneratorType.GLOBAL_DELETE),
+        Arguments.of("org.apache.hudi.keygen.GlobalAvroDeleteKeyGenerator", KeyGeneratorType.GLOBAL_DELETE_AVRO),
+        Arguments.of("org.apache.hudi.keygen.AutoRecordGenWrapperKeyGenerator", KeyGeneratorType.AUTO_RECORD),
+        Arguments.of("org.apache.hudi.keygen.AutoRecordGenWrapperAvroKeyGenerator", KeyGeneratorType.AUTO_RECORD_AVRO),
+        Arguments.of("org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator", KeyGeneratorType.HOODIE_TABLE_METADATA),
+        Arguments.of("org.apache.spark.sql.hudi.command.SqlKeyGenerator", KeyGeneratorType.SPARK_SQL),
+        Arguments.of("org.apache.spark.sql.hudi.command.UuidKeyGenerator", KeyGeneratorType.SPARK_SQL_UUID),
+        Arguments.of("org.apache.spark.sql.hudi.command.MergeIntoKeyGenerator", KeyGeneratorType.SPARK_SQL_MERGE_INTO),
+        Arguments.of("org.apache.hudi.keygen.CustomUserProvidedKeyGenerator", KeyGeneratorType.USER_PROVIDED),
+        Arguments.of("com.example.CustomKeyGenerator", KeyGeneratorType.USER_PROVIDED)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("testFromClassNameParams")
+  void testFromClassName(String className, KeyGeneratorType expectedType) {
+    KeyGeneratorType result = KeyGeneratorType.fromClassName(className);
+    assertEquals(expectedType, result);
+  }
+
+  @Test
+  void testFromClassNameWithNull() {
+    assertThrows(IllegalArgumentException.class, () -> KeyGeneratorType.fromClassName(null));
+  }
+
+  @Test
+  void testFromClassNameWithEmpty() {
+    assertThrows(IllegalArgumentException.class, () -> KeyGeneratorType.fromClassName(""));
   }
 }

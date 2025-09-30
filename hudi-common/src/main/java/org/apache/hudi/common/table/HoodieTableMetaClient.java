@@ -104,6 +104,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
+import static org.apache.hudi.keygen.constant.KeyGeneratorType.USER_PROVIDED;
 import static org.apache.hudi.metadata.HoodieIndexVersion.isValidIndexDefinition;
 
 /**
@@ -1563,9 +1564,17 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       }
       if (null != keyGeneratorClassProp) {
-        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, KeyGeneratorType.fromClassName(keyGeneratorClassProp).name());
+        KeyGeneratorType type = KeyGeneratorType.fromClassName(keyGeneratorClassProp);
+        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, type.name());
+        if (USER_PROVIDED == type) {
+          tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGeneratorClassProp);
+        }
       } else if (null != keyGeneratorType) {
-        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, keyGeneratorType);
+        checkArgument(!keyGeneratorType.equals(USER_PROVIDED.name()),
+            String.format("When key generator type is %s, the key generator class must be set properly",
+                USER_PROVIDED.name()));
+        KeyGeneratorType type = KeyGeneratorType.valueOf(keyGeneratorType);
+        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, type.name());
       }
       if (null != hiveStylePartitioningEnable) {
         tableConfig.setValue(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE, Boolean.toString(hiveStylePartitioningEnable));

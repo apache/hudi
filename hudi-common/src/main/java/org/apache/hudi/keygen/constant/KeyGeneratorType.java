@@ -23,6 +23,10 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.StringUtils;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -96,10 +100,11 @@ public enum KeyGeneratorType {
   @EnumFieldDescription("Meant to be used internally for the spark sql MERGE INTO command.")
   SPARK_SQL_MERGE_INTO("org.apache.spark.sql.hudi.command.MergeIntoKeyGenerator"),
 
-  @EnumFieldDescription("A test KeyGenerator for deltastreamer tests.")
-  STREAMER_TEST("org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer$TestGenerator");
+  @EnumFieldDescription("A KeyGenerator specified from the configuration.")
+  USER_PROVIDED(StringUtils.EMPTY_STRING);
 
-  private final String className;
+  private String className;
+  private static final Logger LOG = LoggerFactory.getLogger(KeyGeneratorType.class);
 
   KeyGeneratorType(String className) {
     this.className = className;
@@ -110,12 +115,15 @@ public enum KeyGeneratorType {
   }
 
   public static KeyGeneratorType fromClassName(String className) {
+    if (StringUtils.isNullOrEmpty(className)) {
+      throw new IllegalArgumentException("Invalid keyGenerator class: " + className);
+    }
     for (KeyGeneratorType type : KeyGeneratorType.values()) {
       if (type.getClassName().equals(className)) {
         return type;
       }
     }
-    throw new IllegalArgumentException("No KeyGeneratorType found for class name: " + className);
+    return USER_PROVIDED;
   }
 
   public static List<String> getNames() {
@@ -126,29 +134,36 @@ public enum KeyGeneratorType {
   }
 
   @Nullable
+  public static String getKeyGeneratorClassName(TypedProperties props) {
+    // For USER_PROVIDED type, since we set key generator class only for this type.
+    if (ConfigUtils.containsConfigProperty(props, KEY_GENERATOR_CLASS_NAME)) {
+      return ConfigUtils.getStringWithAltKeys(props, KEY_GENERATOR_CLASS_NAME);
+    }
+    // For other types.
+    KeyGeneratorType keyGeneratorType;
+    if (ConfigUtils.containsConfigProperty(props, KEY_GENERATOR_TYPE)) {
+      keyGeneratorType = KeyGeneratorType.valueOf(ConfigUtils.getStringWithAltKeys(props, KEY_GENERATOR_TYPE));
+      // For USER_PROVIDED type, the key generator class has to be provided.
+      if (USER_PROVIDED == keyGeneratorType) {
+        throw new IllegalArgumentException("No key generator class is provided properly for type: " + USER_PROVIDED.name());
+      }
+      return keyGeneratorType.getClassName();
+    }
+    // No key generator information is provided.
+    LOG.warn("No key generator type is set properly");
+    return null;
+  }
+
+  @Nullable
   public static String getKeyGeneratorClassName(HoodieConfig config) {
     return getKeyGeneratorClassName(config.getProps());
   }
 
   @Nullable
-  public static String getKeyGeneratorClassName(TypedProperties props) {
-    if (ConfigUtils.containsConfigProperty(props, KEY_GENERATOR_CLASS_NAME)) {
-      return ConfigUtils.getStringWithAltKeys(props, KEY_GENERATOR_CLASS_NAME);
-    }
-    if (ConfigUtils.containsConfigProperty(props, KEY_GENERATOR_TYPE)) {
-      return KeyGeneratorType.valueOf(ConfigUtils.getStringWithAltKeys(props, KEY_GENERATOR_TYPE)).getClassName();
-    }
-    return null;
-  }
-
-  @Nullable
   public static String getKeyGeneratorClassName(Map<String, String> config) {
-    if (config.containsKey(KEY_GENERATOR_CLASS_NAME.key())) {
-      return config.get(KEY_GENERATOR_CLASS_NAME.key());
-    } else if (config.containsKey(KEY_GENERATOR_TYPE.key())) {
-      return KeyGeneratorType.valueOf(config.get(KEY_GENERATOR_TYPE.key())).getClassName();
-    }
-    return null;
+    TypedProperties props = new TypedProperties();
+    config.forEach(props::setProperty);
+    return getKeyGeneratorClassName(props);
   }
 
   public static boolean isComplexKeyGenerator(HoodieConfig config) {
