@@ -593,8 +593,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     LOG.info("Indexing {} columns for column stats index", columnsToIndex.size());
 
     // during initialization, we need stats for base and log files.
-    HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToColumnStatsRecords(
-        engineContext, Collections.emptyMap(), partitionIdToAllFilesMap, dataMetaClient, dataWriteConfig.getMetadataConfig(),
+    HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToColumnStatsRecords(engineContext, Collections.emptyMap(), partitionIdToAllFilesMap,
+        dataMetaClient, dataWriteConfig.getMetadataConfig(),
         dataWriteConfig.getColumnStatsIndexParallelism(),
         dataWriteConfig.getMetadataConfig().getMaxReaderBufferSize(),
         columnsToIndex);
@@ -1611,12 +1611,57 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       // We need to choose a timestamp which would be a validInstantTime for MDT. This is either a commit timestamp completed on the dataset
       // or a new timestamp which we use for MDT clean, compaction etc.
       String syncCommitTime = createRestoreInstantTime();
-      processAndCommit(syncCommitTime, () -> HoodieTableMetadataUtil.convertMissingPartitionRecords(engineContext,
-          partitionsToDelete, partitionFilesToAdd, partitionFilesToDelete, syncCommitTime));
+      processAndCommit(syncCommitTime, () -> {
+        // For Files partition.
+        Map<String, HoodieData<HoodieRecord>> partitionRecords = new HashMap<>();
+        partitionRecords.putAll(HoodieTableMetadataUtil.convertMissingPartitionRecords(engineContext,
+            partitionsToDelete, partitionFilesToAdd, partitionFilesToDelete, syncCommitTime));
+        // For ColumnStats partition if enabled.
+        if (dataMetaClient.getTableConfig().getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath())) {
+          partitionRecords.putAll(convertToColumnStatsRecord(
+              partitionFilesToAdd, partitionFilesToDelete, engineContext, dataMetaClient,
+              dataWriteConfig.getMetadataConfig(), Option.of(dataWriteConfig.getRecordMerger().getRecordType()),
+              dataWriteConfig.getMetadataConfig().getColumnStatsIndexParallelism()));
+        }
+        return partitionRecords;
+      });
       closeInternal();
     } catch (IOException e) {
       throw new HoodieMetadataException("IOException during MDT restore sync", e);
     }
+  }
+
+  static Map<String, HoodieData<HoodieRecord>> convertToColumnStatsRecord(Map<String, Map<String, Long>> partitionFilesToAdd,
+                                                                          Map<String, List<String>> partitionFilesToDelete,
+                                                                          HoodieEngineContext engineContext,
+                                                                          HoodieTableMetaClient dataMetaClient,
+                                                                          HoodieMetadataConfig metadataConfig,
+                                                                          Option<HoodieRecord.HoodieRecordType> recordTypeOpt,
+                                                                          int columnStatsIndexParallelism) {
+    if (partitionFilesToDelete.isEmpty() && partitionFilesToAdd.isEmpty()) {
+      return Collections.emptyMap();
+    }
+    Lazy<Option<Schema>> tableSchema =
+        Lazy.lazily(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(dataMetaClient));
+    final List<String> columnsToIndex = new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(
+        dataMetaClient.getTableConfig(),
+        metadataConfig,
+        tableSchema,
+        false,
+        recordTypeOpt,
+        HoodieTableMetadataUtil.existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, dataMetaClient)).keySet());
+    if (columnsToIndex.isEmpty()) {
+      LOG.info("Since there are no columns to index, stop to generate ColumnStats records.");
+      return Collections.emptyMap();
+    }
+    HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToColumnStatsRecords(
+        engineContext, partitionFilesToDelete,
+        partitionFilesToAdd, dataMetaClient,
+        metadataConfig,
+        columnStatsIndexParallelism,
+        metadataConfig.getMaxReaderBufferSize(),
+        columnsToIndex);
+    return Collections.singletonMap(COLUMN_STATS.getPartitionPath(), records);
   }
 
   String createRestoreInstantTime() {
