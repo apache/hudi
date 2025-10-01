@@ -94,8 +94,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
       PostgresDebeziumAvroPayload.class.getName()));
   private static final Set<String> PAYLOADS_MAPPED_TO_COMMIT_TIME_MERGE_MODE = new HashSet<>(Arrays.asList(
       AWSDmsAvroPayload.class.getName(),
-      OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
-      OverwriteWithLatestAvroPayload.class.getName()));
+      OverwriteNonDefaultsWithLatestAvroPayload.class.getName()));
   public static final Set<String> BUILTIN_MERGE_STRATEGIES = Collections.unmodifiableSet(
       new HashSet<>(Arrays.asList(
           COMMIT_TIME_BASED_MERGE_STRATEGY_UUID,
