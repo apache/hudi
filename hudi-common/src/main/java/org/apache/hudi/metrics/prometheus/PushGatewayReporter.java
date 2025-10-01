@@ -114,7 +114,7 @@ public class PushGatewayReporter extends ScheduledReporter {
       handleLabeledMetrics();
       pushGatewayClient.pushAdd(collectorRegistry, jobName, labels);
     } catch (IOException e) {
-      LOG.error("Can't push monitoring information to pushGateway", e);
+      LOG.warn("Can't push monitoring information to pushGateway", e);
     }
   }
 

@@ -100,7 +100,7 @@ public class CleanFunctionV2<T> extends ProcessFunctionAdapter<T, RowData>
         this.isCleaning = true;
       } catch (Throwable throwable) {
         // catch the exception to not affect the normal checkpointing
-        LOG.error("Unable to start async cleaning", throwable);
+        LOG.warn("Unable to start async cleaning", throwable);
       }
     }
   }

@@ -1514,7 +1514,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           mismatch = true;
           break;
         } else {
-          LOG.error("There are uncommitted log files in the latest file slices but the committed log files match: {} {}", fileSlice1, fileSlice2);
+          LOG.info("There are uncommitted log files in the latest file slices but the committed log files match: {} {}", fileSlice1, fileSlice2);
         }
       }
     }
@@ -1566,7 +1566,7 @@ public class HoodieMetadataTableValidator implements Serializable {
                 LOG.warn("Missing commit ({}) is part of rollback plan: {}", rollbackPlan.getInstantToRollback().getCommitTime(), rollbackPlan);
               }
             } catch (IOException ex) {
-              LOG.error("Failed to deserialize rollback plan for instant: {}", requestedInstant, ex);
+              LOG.warn("Failed to deserialize rollback plan for instant: {}", requestedInstant, ex);
             }
           });
         }

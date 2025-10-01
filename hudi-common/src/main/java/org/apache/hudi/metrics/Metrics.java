@@ -134,7 +134,7 @@ public class Metrics {
         LOG.info("Stopping the metrics reporter...");
         reporters.forEach(MetricsReporter::stop);
       } catch (Exception e) {
-        LOG.error("Error while closing reporter", e);
+        LOG.warn("Error while closing reporter", e);
       } finally {
         METRICS_INSTANCE_PER_BASEPATH.remove(basePath);
         initialized = false;

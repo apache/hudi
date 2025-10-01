@@ -586,7 +586,7 @@ public class HoodieCatalog extends AbstractCatalog {
         HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(path, hadoopConf);
         return new TableSchemaResolver(metaClient).getTableAvroSchema(false); // change log mode is not supported now
       } catch (Throwable throwable) {
-        LOG.error("Failed to resolve the latest table schema.", throwable);
+        LOG.warn("Failed to resolve the latest table schema.", throwable);
         // ignored
       }
     }

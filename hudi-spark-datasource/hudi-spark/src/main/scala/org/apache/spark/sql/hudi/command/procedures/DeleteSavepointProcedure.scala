@@ -76,7 +76,7 @@ class DeleteSavepointProcedure extends BaseProcedure with ProcedureBuilder with 
         logInfo(s"The commit $instantTime has been deleted savepoint.")
       } catch {
         case _: HoodieSavepointException =>
-          logError(s"Could not delete savepoint $currentInstant.")
+          logWarning(s"Could not delete savepoint $currentInstant.")
           result = false
       } finally {
         client.close()

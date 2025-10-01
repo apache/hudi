@@ -95,7 +95,7 @@ public class CleanFunction<T> extends AbstractRichFunctionAdapter
         this.isCleaning = true;
       } catch (Throwable throwable) {
         // catch the exception to not affect the normal checkpointing
-        LOG.error("Failed to start async cleaning", throwable);
+        LOG.warn("Failed to start async cleaning", throwable);
       }
     }
   }

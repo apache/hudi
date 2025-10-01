@@ -77,7 +77,7 @@ class RollbackToSavepointProcedure extends BaseProcedure with ProcedureBuilder w
       result = true
     } catch {
       case _: HoodieSavepointException =>
-        logError(s"Failed to roll back commit at instant time: $instantTime")
+        logWarning(s"Failed to roll back commit at instant time: $instantTime")
     } finally {
       client.close()
     }

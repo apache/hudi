@@ -750,7 +750,7 @@ public class HoodieStreamer implements Serializable {
           properties.get().forEach((k, v) -> propsToValidate.put(k.toString(), v.toString()));
           HoodieWriterUtils.validateTableConfig(this.sparkSession, org.apache.hudi.HoodieConversionUtils.mapAsScalaImmutableMap(propsToValidate), meta.getTableConfig());
         } catch (HoodieIOException e) {
-          LOG.error("Full exception msg {},  msg {}", e.getLocalizedMessage(), e.getMessage());
+          LOG.warn("Full exception msg {},  msg {}", e.getLocalizedMessage(), e.getMessage());
           if (e.getMessage().contains("Could not load Hoodie properties") && e.getMessage().contains(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
             initializeTableTypeAndBaseFileFormat();
           } else {

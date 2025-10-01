@@ -307,8 +307,6 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
         this.tracer.countDown(bucketToFlush.getBufferSize());
         disposeBucket(bucketToFlush);
       } else {
-        // this doesn't seem to match what is happening? I don't see anything about the buffer. The failure case seems to be
-        // that the instant can't be found
         LOG.warn("The buffer size hits the threshold {}, but still flush the max size data bucket failed!", this.tracer.maxBufferSize);
       }
       // 2.2 try to write row again

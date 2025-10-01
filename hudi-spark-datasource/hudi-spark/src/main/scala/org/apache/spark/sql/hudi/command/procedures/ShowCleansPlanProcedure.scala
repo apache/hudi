@@ -239,7 +239,7 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
     } match {
       case Success(row) => row
       case Failure(exception) =>
-        logError(s"Failed to read cleaner plan for instant ${cleanInstant.requestedTime()}", exception)
+        logWarning(s"Failed to read cleaner plan for instant ${cleanInstant.requestedTime()}", exception)
         createErrorRow(cleanInstant)
     }
   }

@@ -117,7 +117,7 @@ public class DatadogReporter extends ScheduledReporter {
       try {
         client.close();
       } catch (IOException e) {
-        LOG.error("Error disconnecting from Datadog.", e);
+        LOG.warn("Error disconnecting from Datadog.", e);
       }
     }
   }

@@ -237,7 +237,7 @@ public class TableSizeStats implements Serializable {
       TableSizeStats tableSizeStats = new TableSizeStats(jsc, cfg);
       tableSizeStats.run();
     } catch (TableNotFoundException e) {
-      LOG.error("The Hudi data table is not found: [{}].", cfg.basePath, e);
+      LOG.warn("The Hudi data table is not found: [{}].", cfg.basePath, e);
     } catch (Throwable throwable) {
       LOG.error("Failed to get table size stats for {}", cfg, throwable);
     } finally {

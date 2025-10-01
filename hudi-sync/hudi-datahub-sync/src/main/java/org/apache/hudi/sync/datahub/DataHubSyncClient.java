@@ -266,7 +266,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
               .build();
       return attachDomainProposal;
     } catch (URISyntaxException e) {
-      LOG.error("Failed to create domain URN from string: {}", config.getDomainIdentifier());
+      LOG.warn("Failed to create domain URN from string: {}", config.getDomainIdentifier());
     }
     return null;
   }

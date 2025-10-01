@@ -217,7 +217,7 @@ public class ExpressionPredicates {
       if (literalObject instanceof Serializable) {
         this.literal = (Serializable) literalObject;
       } else {
-        LOG.error("Encountered a non-serializable literal. "
+        LOG.warn("Encountered a non-serializable literal. "
             + "Cannot push predicate with value literal [{}] into FileInputFormat. "
             + "This is a bug and should be reported.", valueLiteral);
         this.literal = null;
@@ -439,7 +439,7 @@ public class ExpressionPredicates {
         if (literalObject instanceof Serializable) {
           return (Serializable) literalObject;
         } else {
-          LOG.error("Encountered a non-serializable literal. "
+          LOG.warn("Encountered a non-serializable literal. "
               + "Cannot push predicate with value literal [{}] into FileInputFormat. "
               + "This is a bug and should be reported.", valueLiteral);
           return null;

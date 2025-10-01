@@ -108,7 +108,7 @@ public class DatadogHttpClient implements Closeable {
         LOG.debug("Sent metrics data (size: {}) to {}", payload.length(), seriesUrl);
       }
     } catch (IOException e) {
-      LOG.error("Failed to send to Datadog.", e);
+      LOG.warn("Failed to send to Datadog.", e);
     }
   }
 
