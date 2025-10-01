@@ -105,11 +105,15 @@ public class FileGroupReaderSchemaHandler<T> {
     this.deleteContext = new DeleteContext(properties, tableSchema);
     this.metaClient = metaClient;
 
-    this.shouldAddCompletionTime = !metaClient.isMetadataTable()
+    boolean shouldAddCompletionTimeField = !metaClient.isMetadataTable()
         && metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.SIX);
 
-    this.requestedSchemaWithCompletionTime = this.requestedSchema;
-    this.commitTimeToCompletionTimeMap = shouldAddCompletionTime
+    this.shouldAddCompletionTime = shouldAddCompletionTimeField
+        && readerContext.getInstantRange().isPresent();
+    this.requestedSchemaWithCompletionTime = shouldAddCompletionTimeField
+        ? addCompletionTimeField(this.requestedSchema)
+        : this.requestedSchema;
+    this.commitTimeToCompletionTimeMap = this.shouldAddCompletionTime
         ? buildCompletionTimeMapping(metaClient)
         : Collections.emptyMap();
     this.requiredSchema = AvroSchemaCache.intern(prepareRequiredSchema(this.deleteContext));
@@ -167,18 +171,21 @@ public class FileGroupReaderSchemaHandler<T> {
           requestedSchema,
           HoodieRecord.COMMIT_TIME_METADATA_FIELD
       );
-      if (commitTimeObj == null) {
-        return record;
+      String completionTime = null;
+      if (commitTimeObj != null) {
+        String commitTime = commitTimeObj.toString();
+        completionTime = commitTimeToCompletionTimeMap.getOrDefault(commitTime, null);
       }
-      String commitTime = commitTimeObj.toString();
-      String completionTime = commitTimeToCompletionTimeMap.getOrDefault(commitTime, commitTime);
-      Map<Integer, Object> updateValues = new HashMap<>();
-      Option<Schema.Field> completionTimeFieldOpt = findNestedField(requestedSchemaWithCompletionTime, HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD);
+      Option<Schema.Field> completionTimeFieldOpt = findNestedField(
+          requestedSchemaWithCompletionTime,
+          HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD
+      );
       if (!completionTimeFieldOpt.isPresent()) {
         return record;
       }
-      Schema.Field completionTimeField = completionTimeFieldOpt.get();
-      updateValues.put(completionTimeField.pos(), completionTime);
+      int completionTimePos = completionTimeFieldOpt.get().pos();
+      Map<Integer, Object> updateValues = new HashMap<>();
+      updateValues.put(completionTimePos, completionTime);
       BufferedRecord<T> bufferedRecord = BufferedRecords.fromEngineRecord(
           record,
           requestedSchema,
@@ -402,5 +409,18 @@ public class FileGroupReaderSchemaHandler<T> {
             HoodieInstant::requestedTime,
             instant -> instant.getCompletionTime() != null ? instant.getCompletionTime() : instant.requestedTime()
         ));
+  }
+
+  private Schema addCompletionTimeField(Schema schema) {
+    if (findNestedField(schema, HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD).isPresent()) {
+      return schema;
+    }
+    Schema.Field completionTimeField = new Schema.Field(
+        HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD,
+        Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)),
+        "Completion time of the commit",
+        null
+    );
+    return appendFieldsToSchemaDedupNested(schema, Collections.singletonList(completionTimeField));
   }
 }
