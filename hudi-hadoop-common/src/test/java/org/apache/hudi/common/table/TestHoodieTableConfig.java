@@ -599,11 +599,11 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
         // Test case: Version 9 table with null payload class and event time ordering
         arguments("Version 9 with event time ordering", EVENT_TIME_ORDERING, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", HoodieTableVersion.NINE,
-            2, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null, null, null, null, null),
+            1, EVENT_TIME_ORDERING.name(), null, null, null, null, null, null, null),
 
         // Test case: Version 9 table with null payload class and commit time ordering
         arguments("Version 9 with commit time ordering", COMMIT_TIME_ORDERING, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null, HoodieTableVersion.NINE,
-            2, COMMIT_TIME_ORDERING.name(), null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null, null, null, null, null),
+            1, COMMIT_TIME_ORDERING.name(), null, null, null, null, null, null, null),
 
         // Test case: Version 9 table with null payload class and custom merge mode
         arguments("Version 9 with custom merge mode", CUSTOM, null, CUSTOM_MERGE_STRATEGY_UUID, null, HoodieTableVersion.NINE,
@@ -615,38 +615,38 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
         // Test case: Version 9 table with event time based payload (DefaultHoodieRecordPayload)
         arguments("Version 9 with DefaultHoodieRecordPayload", null, DefaultHoodieRecordPayload.class.getName(), null, "ts", HoodieTableVersion.NINE,
-            3, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, DefaultHoodieRecordPayload.class.getName(), null, null, null, null),
+            2, EVENT_TIME_ORDERING.name(), null, null, DefaultHoodieRecordPayload.class.getName(), null, null, null, null),
 
         // Test case: Version 9 table with commit time based payload (OverwriteWithLatestAvroPayload)
         arguments("Version 9 with OverwriteWithLatestAvroPayload", null, OverwriteWithLatestAvroPayload.class.getName(), null, null, HoodieTableVersion.NINE,
-            3, COMMIT_TIME_ORDERING.name(), null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, OverwriteWithLatestAvroPayload.class.getName(), null, null, null, null),
+            2, COMMIT_TIME_ORDERING.name(), null, null, OverwriteWithLatestAvroPayload.class.getName(), null, null, null, null),
 
         // Test case: Version 9 table with PartialUpdateAvroPayload (should set partial update mode)
         arguments("Version 9 with PartialUpdateAvroPayload", null, PartialUpdateAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE,
-            4, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, PartialUpdateAvroPayload.class.getName(), PartialUpdateMode.IGNORE_DEFAULTS.name(),
+            3, EVENT_TIME_ORDERING.name(), null, null, PartialUpdateAvroPayload.class.getName(), PartialUpdateMode.IGNORE_DEFAULTS.name(),
             null, null, null),
 
         // Test case: Version 9 table with OverwriteNonDefaultsWithLatestAvroPayload (should set partial update mode)
         arguments("Version 9 with OverwriteNonDefaultsWithLatestAvroPayload", null, OverwriteNonDefaultsWithLatestAvroPayload.class.getName(), null, null, HoodieTableVersion.NINE,
-            4, COMMIT_TIME_ORDERING.name(), null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+            3, COMMIT_TIME_ORDERING.name(), null, null, OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
             PartialUpdateMode.IGNORE_DEFAULTS.name(), null, null, null),
 
         // Test case: Version 9 table with PostgresDebeziumAvroPayload (should set partial update mode and custom properties)
         arguments("Version 9 with PostgresDebeziumAvroPayload", null, PostgresDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE,
-            8, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, PostgresDebeziumAvroPayload.class.getName(),
+            7, EVENT_TIME_ORDERING.name(), null, null, PostgresDebeziumAvroPayload.class.getName(),
             PartialUpdateMode.FILL_UNAVAILABLE.name(), HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE, "_change_operation_type", "d"),
 
         // Test case: Version 9 table with AWSDmsAvroPayload (should set custom delete properties)
         arguments("Version 9 with AWSDmsAvroPayload", null, AWSDmsAvroPayload.class.getName(), null, null, HoodieTableVersion.NINE,
-            5, COMMIT_TIME_ORDERING.name(), null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, AWSDmsAvroPayload.class.getName(), null, null, "Op", "D"),
+            4, COMMIT_TIME_ORDERING.name(), null, null, AWSDmsAvroPayload.class.getName(), null, null, "Op", "D"),
 
         // Test case: Version 9 table with EventTimeAvroPayload (event time based payload)
         arguments("Version 9 with EventTimeAvroPayload", null, EventTimeAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE,
-            3, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, EventTimeAvroPayload.class.getName(), null, null, null, null),
+            2, EVENT_TIME_ORDERING.name(), null, null, EventTimeAvroPayload.class.getName(), null, null, null, null),
 
         // Test case: Version 9 table with MySqlDebeziumAvroPayload (event time based payload)
         arguments("Version 9 with MySqlDebeziumAvroPayload", null, MySqlDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE,
-            6, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, MySqlDebeziumAvroPayload.class.getName(), null, null, "_change_operation_type", "d")
+            5, EVENT_TIME_ORDERING.name(), null, null, MySqlDebeziumAvroPayload.class.getName(), null, null, "_change_operation_type", "d")
     );
   }
 
@@ -747,9 +747,8 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     // Test case: Empty string payload class should be treated as null
     Map<String, String> configs = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
         EVENT_TIME_ORDERING, "", EVENT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", HoodieTableVersion.NINE);
-    assertEquals(2, configs.size());
+    assertEquals(1, configs.size());
     assertEquals(EVENT_TIME_ORDERING.name(), configs.get(RECORD_MERGE_MODE.key()));
-    assertEquals(EVENT_TIME_BASED_MERGE_STRATEGY_UUID, configs.get(RECORD_MERGE_STRATEGY_ID.key()));
 
     // Test case: Non-version 9 table with all parameters should throw
     assertExceptionWithInferMergingConfigsForV9TableCreation(EVENT_TIME_ORDERING, DefaultHoodieRecordPayload.class.getName(),
@@ -758,9 +757,8 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     // Test case: Version 9 table with null ordering field for event time ordering should still work
     configs = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
         EVENT_TIME_ORDERING, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null, HoodieTableVersion.NINE);
-    assertEquals(2, configs.size());
+    assertEquals(1, configs.size());
     assertEquals(EVENT_TIME_ORDERING.name(), configs.get(RECORD_MERGE_MODE.key()));
-    assertEquals(EVENT_TIME_BASED_MERGE_STRATEGY_UUID, configs.get(RECORD_MERGE_STRATEGY_ID.key()));
   }
 
   @Test
@@ -774,7 +772,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
         Map<String, String> configs = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
             EVENT_TIME_ORDERING, DefaultHoodieRecordPayload.class.getName(),
             EVENT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", version);
-        assertEquals(3, configs.size(), "Table version 9 and above should return 3 configs");
+        assertEquals(2, configs.size(), "Table version 9 and above should return 2 configs");
       }
     }
   }

@@ -726,36 +726,13 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   }
 
   private void validateVersion8Properties(HoodieTableConfig tableConfig) {
-    Option<TimelineLayoutVersion> layoutVersion = tableConfig.getTimelineLayoutVersion();
-    assertTrue(layoutVersion.isPresent(), "Timeline layout version should be present for V8+");
-    assertEquals(TimelineLayoutVersion.LAYOUT_VERSION_2, layoutVersion.get(),
-        "Timeline layout should be V2 for V8+");
-
-    assertTrue(tableConfig.contains(HoodieTableConfig.TIMELINE_PATH),
-        "Timeline path should be set for V8");
-    assertEquals(HoodieTableConfig.TIMELINE_PATH.defaultValue(),
-        tableConfig.getString(HoodieTableConfig.TIMELINE_PATH),
-        "Timeline path should have default value");
-    
-    assertTrue(tableConfig.contains(HoodieTableConfig.RECORD_MERGE_MODE),
-        "Record merge mode should be set for V8");
-    RecordMergeMode mergeMode = tableConfig.getRecordMergeMode();
-    assertNotNull(mergeMode, "Merge mode should not be null");
-    
+    validatePropertiesForV8Plus(tableConfig);
     assertTrue(tableConfig.contains(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID),
         "Record merge strategy ID should be set for V8");
-    
-    assertTrue(tableConfig.contains(HoodieTableConfig.INITIAL_VERSION),
-        "Initial version should be set for V8");
-    
-    if (tableConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)) {
-      assertTrue(tableConfig.contains(HoodieTableConfig.KEY_GENERATOR_TYPE),
-          "Key generator type should be set when key generator class is present");
-    }
   }
 
   private void validateVersion9Properties(HoodieTableMetaClient metaClient, HoodieTableConfig tableConfig) {
-    validateVersion8Properties(tableConfig);
+    validatePropertiesForV8Plus(tableConfig);
 
     // Check if index metadata exists and has proper version information
     Option<HoodieIndexMetadata> indexMetadata = metaClient.getIndexMetadata();
@@ -764,6 +741,28 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         assertNotNull(indexDef.getVersion(), 
             "Index " + indexName + " should have version information in V9");
       });
+    }
+  }
+
+  private void validatePropertiesForV8Plus(HoodieTableConfig tableConfig) {
+    Option<TimelineLayoutVersion> layoutVersion = tableConfig.getTimelineLayoutVersion();
+    assertTrue(layoutVersion.isPresent(), "Timeline layout version should be present for V8+");
+    assertEquals(TimelineLayoutVersion.LAYOUT_VERSION_2, layoutVersion.get(),
+        "Timeline layout should be V2 for V8+");
+    assertTrue(tableConfig.contains(HoodieTableConfig.TIMELINE_PATH),
+        "Timeline path should be set for V8+");
+    assertEquals(HoodieTableConfig.TIMELINE_PATH.defaultValue(),
+        tableConfig.getString(HoodieTableConfig.TIMELINE_PATH),
+        "Timeline path should have default value");
+    assertTrue(tableConfig.contains(HoodieTableConfig.RECORD_MERGE_MODE),
+        "Record merge mode should be set for V8+");
+    RecordMergeMode mergeMode = tableConfig.getRecordMergeMode();
+    assertNotNull(mergeMode, "Merge mode should not be null");
+    assertTrue(tableConfig.contains(HoodieTableConfig.INITIAL_VERSION),
+        "Initial version should be set for V8+");
+    if (tableConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)) {
+      assertTrue(tableConfig.contains(HoodieTableConfig.KEY_GENERATOR_TYPE),
+          "Key generator type should be set when key generator class is present");
     }
   }
 
@@ -780,15 +779,15 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
           .load(basePath);
 
       assertNotNull(tableData, "Table read should not return null " + stage);
-      
+
       // Force execution to ensure data is read immediately (not lazily)
       List<Row> rows = tableData.collectAsList();
       long rowCount = rows.size();
       assertTrue(rowCount >= 0, "Row count should be non-negative " + stage);
-      
+
       // Convert collected rows back to Dataset for use in validation
       Dataset<Row> materializedData = sqlContext().createDataFrame(rows, tableData.schema());
-      
+
       LOG.info("Successfully read and materialized table data {} ({} rows)", stage, rowCount);
       return materializedData;
     } catch (Exception e) {

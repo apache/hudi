@@ -127,7 +127,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
           metaClient.getTableConfig().getTableVersion());
     }
     // Handle merge mode config.
-    reconcileMergeModeConfig(tablePropsToAdd, tableConfig);
+    reconcileMergeModeConfig(tablePropsToAdd, tablePropsToRemove, tableConfig);
     // Handle partial update mode config.
     reconcilePartialUpdateModeConfig(tablePropsToAdd, tableConfig);
     // Handle merge properties config.
@@ -140,12 +140,18 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
   }
 
   private void reconcileMergeModeConfig(Map<ConfigProperty, String> tablePropsToAdd,
+                                        Set<ConfigProperty> tablePropsToRemove,
                                         HoodieTableConfig tableConfig) {
     String payloadClass = tableConfig.getPayloadClass();
-    String mergeStrategy = tableConfig.getRecordMergeStrategyId();
-    if (!BUILTIN_MERGE_STRATEGIES.contains(mergeStrategy) || StringUtils.isNullOrEmpty(payloadClass)) {
+    RecordMergeMode mergeMode = tableConfig.getRecordMergeMode();
+    if (mergeMode != RecordMergeMode.CUSTOM) {
+      // For commit time or event time based table, remove merge strategy id.
+      tablePropsToRemove.add(RECORD_MERGE_STRATEGY_ID);
+    } else if (StringUtils.isNullOrEmpty(payloadClass)) {
+      // For table using custom merger, keep their configs.
       return;
     }
+
     if (PAYLOADS_MAPPED_TO_COMMIT_TIME_MERGE_MODE.contains(payloadClass)) {
       tablePropsToAdd.put(RECORD_MERGE_MODE, RecordMergeMode.COMMIT_TIME_ORDERING.name());
       tablePropsToAdd.put(RECORD_MERGE_STRATEGY_ID, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
@@ -160,8 +166,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
                                            Set<ConfigProperty> tablePropsToRemove,
                                            HoodieTableConfig tableConfig) {
     String payloadClass = tableConfig.getPayloadClass();
-    String mergeStrategy = tableConfig.getRecordMergeStrategyId();
-    if (!BUILTIN_MERGE_STRATEGIES.contains(mergeStrategy) || StringUtils.isNullOrEmpty(payloadClass)) {
+    if (StringUtils.isNullOrEmpty(payloadClass)) {
       return;
     }
     if (PAYLOAD_CLASSES_TO_HANDLE.contains(payloadClass)) {
@@ -173,8 +178,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
   private void reconcilePartialUpdateModeConfig(Map<ConfigProperty, String> tablePropsToAdd,
                                                 HoodieTableConfig tableConfig) {
     String payloadClass = tableConfig.getPayloadClass();
-    String mergeStrategy = tableConfig.getRecordMergeStrategyId();
-    if (!BUILTIN_MERGE_STRATEGIES.contains(mergeStrategy) || StringUtils.isNullOrEmpty(payloadClass)) {
+    if (StringUtils.isNullOrEmpty(payloadClass)) {
       return;
     }
     if (payloadClass.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())
@@ -187,8 +191,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
 
   private void reconcileMergePropertiesConfig(Map<ConfigProperty, String> tablePropsToAdd, HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     String payloadClass = tableConfig.getPayloadClass();
-    String mergeStrategy = tableConfig.getRecordMergeStrategyId();
-    if (!BUILTIN_MERGE_STRATEGIES.contains(mergeStrategy) || StringUtils.isNullOrEmpty(payloadClass)) {
+    if (StringUtils.isNullOrEmpty(payloadClass)) {
       return;
     }
     if (payloadClass.equals(AWSDmsAvroPayload.class.getName())) {
