@@ -545,6 +545,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
       // disable this config to avoid affect other test in this class.
       spark.sql(s"set hoodie.sql.insert.mode=upsert")
+      spark.sql("set hoodie.merge.allow.duplicate.on.inserts=true")
     }
   }
 
