@@ -225,30 +225,35 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
 
   private static Stream<Arguments> streamingMetadataWritesTestArgs() {
     return Arrays.stream(new Object[][] {
-        {true, "COMPACT", "NONE", false, false},
-        {true, "COMPACT", "NONE", true, false},
-        {true, "COMPACT", "GLOBAL_SORT", true, false},
-        {true, "COMPACT", "GLOBAL_SORT", false, false},
-        {true, "LOG_COMPACT", "NONE", true, false},
-        {true, "LOG_COMPACT", "NONE", false, false},
-        {true, "LOG_COMPACT", "GLOBAL_SORT", true, false},
-        {true, "LOG_COMPACT", "GLOBAL_SORT", false, false},
-        {true, "CLUSTER", "NONE", true, false},
-        {true, "CLUSTER", "NONE", false, true},
-        {true, "CLUSTER", "GLOBAL_SORT", true, false},
-        {true, "CLUSTER", "GLOBAL_SORT", false, false},
+        {"COMPACT", "NONE", false, false, false},
+        {"COMPACT", "NONE", true, false, false},
+        {"COMPACT", "GLOBAL_SORT", true, false, false},
+        {"COMPACT", "GLOBAL_SORT", false, false, false},
+        {"LOG_COMPACT", "NONE", true, false, false},
+        {"LOG_COMPACT", "NONE", false, false, false},
+        {"LOG_COMPACT", "GLOBAL_SORT", true, false, false},
+        {"LOG_COMPACT", "GLOBAL_SORT", false, false, false},
+        {"CLUSTER", "NONE", true, false, true},
+        {"CLUSTER", "NONE", false, false, true},
+        {"CLUSTER", "GLOBAL_SORT", true, false, false},
+        {"CLUSTER", "GLOBAL_SORT", false, false, false},
+        {"CLUSTER", "NONE", true, true, false},
+        {"CLUSTER", "NONE", false, true, true},
+        {"CLUSTER", "GLOBAL_SORT", true, true, false},
+        {"CLUSTER", "GLOBAL_SORT", false, true, false},
     }).map(Arguments::of);
   }
 
   @ParameterizedTest
   @MethodSource("streamingMetadataWritesTestArgs")
-  public void testStreamingMetadataWrites(boolean streamingWritesEnable, WriteOperationType writeOperationType,
+  public void testStreamingMetadataWrites(WriteOperationType writeOperationType,
                                           String bulkInsertSortMode, boolean setSortColsinClusteringPlan,
+                                          boolean setNonEmptyValueForSortcols,
                                           boolean expectedEnforceRepartitionWithCoalesce) throws IOException {
     HoodieTableMetaClient metaClient =
         getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
     HoodieWriteConfig writeConfig = getConfigBuilder(true)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withStreamingWriteEnabled(streamingWritesEnable).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withStreamingWriteEnabled(true).build())
         .withBulkInsertSortMode(bulkInsertSortMode)
         .withPath(metaClient.getBasePath())
         .build();
@@ -260,7 +265,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
       when(clusteringPlan.getStrategy()).thenReturn(clusteringStrategy);
       Map<String, String> strategyParams = new HashMap<>();
       if (setSortColsinClusteringPlan) {
-        strategyParams.put(PLAN_STRATEGY_SORT_COLUMNS.key(), "abc");
+        strategyParams.put(PLAN_STRATEGY_SORT_COLUMNS.key(), setNonEmptyValueForSortcols ? "abc" : "");
       }
       when(clusteringStrategy.getStrategyParams()).thenReturn(strategyParams);
 

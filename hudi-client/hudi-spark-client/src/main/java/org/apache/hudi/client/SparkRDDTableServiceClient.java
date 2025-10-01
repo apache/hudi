@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
@@ -103,18 +104,26 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
     if (isStreamingWriteToMetadataEnabled(table)) {
       boolean enforceCoalesceWithRepartition = writeOperationType == WriteOperationType.CLUSTER; // for other table services, enforceCoalesceWithRepartition will be false.
       if (enforceCoalesceWithRepartition) {
-        // check clustering plan for sort columns. only if there are no sort columns, then fallback to sort mode from write config.
-        HoodieClusteringPlan clusteringPlan = ClusteringUtils.getClusteringPlan(
-                table.getMetaClient(), ClusteringUtils.getRequestedClusteringInstant(instantTime, table.getActiveTimeline(), table.getInstantGenerator()).get())
-            .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
-                "Unable to read clustering plan for instant: " + instantTime));
-        enforceCoalesceWithRepartition = (!clusteringPlan.getStrategy().getStrategyParams().containsKey(PLAN_STRATEGY_SORT_COLUMNS.key())
-            && config.getBulkInsertSortMode() == BulkInsertSortMode.NONE);
+        enforceCoalesceWithRepartition = computeEnforceCoalesceWithRepartitionForClustering(table, instantTime);
       }
       writeMetadata.setWriteStatuses(streamingMetadataWriteHandler.streamWriteToMetadataTable(table, writeMetadata.getWriteStatuses(), instantTime,
           enforceCoalesceWithRepartition, config.getMetadataConfig().getStreamingWritesCoalesceDivisorForDataTableWrites()));
     }
     return writeMetadata;
+  }
+
+  private boolean computeEnforceCoalesceWithRepartitionForClustering(HoodieTable table, String instantTime) {
+    // check clustering plan for sort columns. only if there are no sort columns, then fallback to sort mode from write config.
+    HoodieClusteringPlan clusteringPlan = ClusteringUtils.getClusteringPlan(
+            table.getMetaClient(), ClusteringUtils.getRequestedClusteringInstant(instantTime, table.getActiveTimeline(), table.getInstantGenerator()).get())
+        .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
+            "Unable to read clustering plan for instant: " + instantTime));
+    if (clusteringPlan.getStrategy().getStrategyParams().containsKey(PLAN_STRATEGY_SORT_COLUMNS.key())
+        && !StringUtils.isNullOrEmpty(clusteringPlan.getStrategy().getStrategyParams().get(PLAN_STRATEGY_SORT_COLUMNS.key()))) {
+      // sorting enabled.
+      return false;
+    }
+    return config.getBulkInsertSortMode() == BulkInsertSortMode.NONE;
   }
 
   @Override
