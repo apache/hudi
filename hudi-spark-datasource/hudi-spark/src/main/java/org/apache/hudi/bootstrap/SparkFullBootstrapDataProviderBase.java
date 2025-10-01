@@ -81,7 +81,7 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
             gr, orderingFieldsStr, false, props.getBoolean(
                 KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
                 Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue())));
-        return HoodieRecordUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr), ConfigUtils.getPayloadClass(props), false);
+        return HoodieRecordUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr), ConfigUtils.getPayloadClass(props), false, null);
       });
     } else if (recordType == HoodieRecordType.SPARK) {
       SparkKeyGeneratorInterface sparkKeyGenerator = (SparkKeyGeneratorInterface) keyGenerator;

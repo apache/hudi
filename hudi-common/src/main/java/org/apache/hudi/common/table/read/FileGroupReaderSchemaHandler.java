@@ -74,6 +74,10 @@ public class FileGroupReaderSchemaHandler<T> {
   // requiredSchema: the requestedSchema with any additional columns required for merging etc
   protected final Schema requiredSchema;
 
+  // the schema for updates, usually it equals with the requiredSchema,
+  // the only exception is for incoming records, which do not include the metadata fields.
+  protected Schema schemaForUpdates;
+
   protected final InternalSchema internalSchema;
 
   protected final Option<InternalSchema> internalSchemaOpt;
@@ -99,6 +103,7 @@ public class FileGroupReaderSchemaHandler<T> {
     this.hoodieTableConfig = metaClient.getTableConfig();
     this.deleteContext = new DeleteContext(properties, tableSchema);
     this.requiredSchema = AvroSchemaCache.intern(prepareRequiredSchema(this.deleteContext));
+    this.schemaForUpdates = requiredSchema;
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
     this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
     this.metaClient = metaClient;
@@ -114,6 +119,17 @@ public class FileGroupReaderSchemaHandler<T> {
 
   public Schema getRequiredSchema() {
     return this.requiredSchema;
+  }
+
+  public Schema getSchemaForUpdates() {
+    return this.schemaForUpdates;
+  }
+
+  /**
+   * This is a special case for incoming records, which do not have metadata fields in schema.
+   */
+  public void setSchemaForUpdates(Schema schema) {
+    this.schemaForUpdates = schema;
   }
 
   public InternalSchema getInternalSchema() {

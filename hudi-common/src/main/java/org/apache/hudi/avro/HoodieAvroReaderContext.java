@@ -253,7 +253,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public SizeEstimator<BufferedRecord<IndexedRecord>> getRecordSizeEstimator() {
-    return new AvroRecordSizeEstimator(getSchemaHandler().getRequiredSchema());
+    return new AvroRecordSizeEstimator(getSchemaHandler().getSchemaForUpdates());
   }
 
   @Override

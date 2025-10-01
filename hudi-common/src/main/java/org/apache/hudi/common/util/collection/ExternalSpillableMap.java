@@ -102,7 +102,7 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
     this.isCompressionEnabled = isCompressionEnabled;
     this.valueSerializer = valueSerializer;
     this.loggingContext = loggingContext;
-    LOG.debug("Initializing ExternalSpillableMap with baseFilePath = {}, maxInMemorySizeInBytes = {}, diskMapType = {}", maxInMemorySizeInBytes, baseFilePath, diskMapType);
+    LOG.debug("{} : Initializing ExternalSpillableMap with baseFilePath = {}, maxInMemorySizeInBytes = {}, diskMapType = {}", loggingContext, baseFilePath, maxInMemorySizeInBytes, diskMapType);
   }
 
   private void initDiskBasedMap() {
@@ -239,6 +239,7 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
       this.inMemoryMap.put(key, value);
     } else {
       if (diskBasedMap == null) {
+        LOG.info("{} : Initializing disk based map as max memory threshold {} is reached", loggingContext, maxInMemorySizeInBytes);
         initDiskBasedMap();
       }
       diskBasedMap.put(key, value);

@@ -75,11 +75,6 @@ public class BufferedRecords {
     return new BufferedRecord<>(deleteRecord.getRecordKey(), recordContext.getOrderingValue(deleteRecord), null, null, HoodieOperation.DELETE);
   }
 
-  public static <T> BufferedRecord<T> fromDeleteRecord(DeleteRecord deleteRecord, RecordContext<T> recordContext, HoodieOperation hoodieOperation) {
-    hoodieOperation = HoodieOperation.isUpdateBefore(hoodieOperation) ? HoodieOperation.UPDATE_BEFORE : HoodieOperation.DELETE;
-    return new BufferedRecord<>(deleteRecord.getRecordKey(), recordContext.getOrderingValue(deleteRecord), null, null, hoodieOperation);
-  }
-
   public static <T> BufferedRecord<T> createDelete(String recordKey, Comparable orderingValue) {
     return new BufferedRecord<>(recordKey, orderingValue, null, null, HoodieOperation.DELETE);
   }

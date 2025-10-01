@@ -40,6 +40,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.SerializableIndexedRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -505,13 +506,13 @@ public class TestMergeHandle extends BaseTestHandle {
     }
 
     // Generate records to update
-    GenericRecord genericRecord1 = (GenericRecord) newRecords.get(0).getData();
-    GenericRecord genericRecord2 = (GenericRecord) newRecords.get(1).getData();
+    GenericRecord genericRecord1 = (GenericRecord) ((SerializableIndexedRecord) newRecords.get(0).getData()).getData();
+    GenericRecord genericRecord2 = (GenericRecord) ((SerializableIndexedRecord) newRecords.get(1).getData()).getData();
     genericRecord1.put(ORDERING_FIELD, 20L);
     genericRecord2.put(ORDERING_FIELD, 2L);
     recordsToUpdate.add(genericRecord1);
     recordsToUpdate.add(genericRecord2);
-    List<HoodieRecord> hoodieRecordsToUpdate = getHoodieRecords(payloadClass, recordsToUpdate, partitionPath);
+    List<HoodieRecord> hoodieRecordsToUpdate = getHoodieRecords(payloadClass, recordsToUpdate, partitionPath, false);
     if (!mergeMode.equals("CUSTOM_MERGER") && !mergeMode.equals("CUSTOM")) {
       // Custom merger chooses record with lower ordering value
       validUpdates.add(hoodieRecordsToUpdate.get(0));
@@ -569,28 +570,30 @@ public class TestMergeHandle extends BaseTestHandle {
   private List<HoodieRecord> overrideOrderingValue(List<HoodieRecord> hoodieRecords, HoodieWriteConfig config, String payloadClass, String partitionPath, long orderingValue) {
 
     List<GenericRecord> genericRecords = hoodieRecords.stream().map(insertRecord -> {
-      GenericRecord genericRecord = (GenericRecord) insertRecord.getData();
+      GenericRecord genericRecord = (GenericRecord) ((SerializableIndexedRecord) insertRecord.getData()).getData();
       genericRecord.put(ORDERING_FIELD, orderingValue);
       return genericRecord;
     }).collect(Collectors.toList());
 
-    return getHoodieRecords(payloadClass, genericRecords, partitionPath);
+    return getHoodieRecords(payloadClass, genericRecords, partitionPath, false);
   }
 
   private List<HoodieRecord> generateDeletes(List<HoodieRecord> hoodieRecords, HoodieWriteConfig config, String payloadClass, String partitionPath, long orderingValue) {
     List<GenericRecord> genericRecords = hoodieRecords.stream().map(deleteRecord -> {
-      GenericRecord genericRecord = (GenericRecord) deleteRecord.getData();
+      GenericRecord genericRecord = (GenericRecord) ((SerializableIndexedRecord) deleteRecord.getData()).getData();
       genericRecord.put(ORDERING_FIELD, orderingValue);
       genericRecord.put(HoodieRecord.HOODIE_IS_DELETED_FIELD, true);
       return genericRecord;
     }).collect(Collectors.toList());
-    return getHoodieRecords(payloadClass, genericRecords, partitionPath);
+    return getHoodieRecords(payloadClass, genericRecords, partitionPath, true);
   }
 
-  private List<HoodieRecord> getHoodieRecords(String payloadClass, List<GenericRecord> genericRecords, String partitionPath) {
+  private List<HoodieRecord> getHoodieRecords(String payloadClass, List<GenericRecord> genericRecords, String partitionPath,
+                                              boolean isDelete) {
     return genericRecords.stream().map(genericRecord -> {
       return (HoodieRecord) new HoodieAvroRecord<>(new HoodieKey(genericRecord.get("_row_key").toString(), partitionPath),
-          HoodieRecordUtils.loadPayload(payloadClass, genericRecord, (Comparable) genericRecord.get(ORDERING_FIELD)));
+          HoodieRecordUtils.loadPayload(payloadClass, genericRecord, (Comparable) genericRecord.get(ORDERING_FIELD)), null,
+          (Comparable) genericRecord.get(ORDERING_FIELD), isDelete);
     }).collect(Collectors.toList());
   }
 

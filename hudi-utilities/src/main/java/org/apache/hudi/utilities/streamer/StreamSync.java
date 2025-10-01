@@ -837,7 +837,7 @@ public class StreamSync implements Serializable, Closeable {
     try {
       Option<String> scheduledCompactionInstant = Option.empty();
       // write to hudi and fetch result
-      WriteClientWriteResult writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
+      WriteClientWriteResult writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter, metaClient);
       Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
       JavaRDD<WriteStatus> writeStatusRDD = writeClientWriteResult.getWriteStatusRDD();
       Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt = Option.empty();
@@ -937,7 +937,7 @@ public class StreamSync implements Serializable, Closeable {
     throw lastException;
   }
 
-  private WriteClientWriteResult writeToSink(InputBatch inputBatch, String instantTime, boolean useRowWriter) {
+  private WriteClientWriteResult writeToSink(InputBatch inputBatch, String instantTime, boolean useRowWriter, HoodieTableMetaClient metaClient) {
     WriteClientWriteResult writeClientWriteResult = null;
 
     if (useRowWriter) {
@@ -946,8 +946,9 @@ public class StreamSync implements Serializable, Closeable {
       BaseDatasetBulkInsertCommitActionExecutor executor = new HoodieStreamerDatasetBulkInsertCommitActionExecutor(hoodieWriteConfig, writeClient);
       writeClientWriteResult = new WriteClientWriteResult(executor.execute(df, !HoodieStreamerUtils.getPartitionColumns(props).isEmpty()).getWriteStatuses());
     } else {
-      HoodieRecordType recordType = createRecordMerger(props).getRecordType();
-      Option<JavaRDD<HoodieRecord>> recordsOption = HoodieStreamerUtils.createHoodieRecords(cfg, props, inputBatch.getBatch(), inputBatch.getSchemaProvider(),
+      TypedProperties mergeProps = ConfigUtils.getMergeProps(props, metaClient.getTableConfig());
+      HoodieRecordType recordType = createRecordMerger(mergeProps).getRecordType();
+      Option<JavaRDD<HoodieRecord>> recordsOption = HoodieStreamerUtils.createHoodieRecords(cfg, mergeProps, inputBatch.getBatch(), inputBatch.getSchemaProvider(),
           recordType, autoGenerateRecordKeys, instantTime, errorTableWriter);
       JavaRDD<HoodieRecord> records = recordsOption.orElseGet(() -> hoodieSparkContext.emptyRDD());
       // filter dupes if needed

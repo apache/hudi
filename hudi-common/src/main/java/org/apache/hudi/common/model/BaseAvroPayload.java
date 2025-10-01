@@ -138,7 +138,7 @@ public abstract class BaseAvroPayload implements Serializable, KryoSerializable 
     if (recordBytes == null || recordBytes.length == 0) {
       return Option.empty();
     }
-    record = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+    record = SerializableIndexedRecord.fromAvroBytes(schema, recordBytes);
     return Option.of(record);
   }
 
