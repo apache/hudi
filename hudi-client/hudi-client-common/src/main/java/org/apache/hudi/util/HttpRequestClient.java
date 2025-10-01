@@ -65,7 +65,7 @@ public class HttpRequestClient {
       try {
         return executeRequest(requestPath, queryParameters, reference, method);
       } catch (IOException e) {
-        LOG.error("Failed to execute request ({}) to timeline server", requestPath, e);
+        LOG.warn("Failed to execute request ({}) to timeline server", requestPath, e);
       }
     }
     throw new HoodieException("Failed to execute timeline server request (" + requestPath + ")");

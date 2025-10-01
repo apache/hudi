@@ -185,7 +185,7 @@ public class UpgradeDowngradeUtils {
       long millis = Long.parseLong(completionTime.substring(completionTime.length() - 3));
       return ldtInSecs.atZone(zoneId).toEpochSecond() * 1000 + millis;
     } catch (Exception e) {
-      LOG.error("Failed to parse completion time string for instant {}", instant, e);
+      LOG.warn("Failed to parse completion time string for instant {}", instant, e);
       return -1;
     }
   }
