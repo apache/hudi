@@ -131,7 +131,7 @@ class TestCallbackHttpClient {
 
     verify(appender).append(logCaptor.capture());
     assertEquals("Failed to send callback message. Response was " + RESPONSE_UNAUTHORIZED, logCaptor.getValue().getMessage().getFormattedMessage());
-    assertEquals(Level.WARN, logCaptor.getValue().getLevel());
+    assertEquals(Level.ERROR, logCaptor.getValue().getLevel());
   }
 
   @Test
