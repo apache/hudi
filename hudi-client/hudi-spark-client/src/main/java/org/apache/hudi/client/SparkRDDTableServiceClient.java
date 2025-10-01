@@ -101,14 +101,15 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
       String instantTime,
       WriteOperationType writeOperationType) {
     if (isStreamingWriteToMetadataEnabled(table)) {
-      boolean enforceCoalesceWithRepartition = writeOperationType == WriteOperationType.CLUSTER && config.getBulkInsertSortMode() == BulkInsertSortMode.NONE;
+      boolean enforceCoalesceWithRepartition = writeOperationType == WriteOperationType.CLUSTER; // for other table services, enforceCoalesceWithRepartition will be false.
       if (enforceCoalesceWithRepartition) {
-        // check clustering plan for sort columns. only if there are no sort columns, then we might still set enforceCoalesceWithRepartition to true.
+        // check clustering plan for sort columns. only if there are no sort columns, then fallback to sort mode from write config.
         HoodieClusteringPlan clusteringPlan = ClusteringUtils.getClusteringPlan(
                 table.getMetaClient(), ClusteringUtils.getRequestedClusteringInstant(instantTime, table.getActiveTimeline(), table.getInstantGenerator()).get())
             .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
                 "Unable to read clustering plan for instant: " + instantTime));
-        enforceCoalesceWithRepartition = !clusteringPlan.getStrategy().getStrategyParams().containsKey(PLAN_STRATEGY_SORT_COLUMNS.key());
+        enforceCoalesceWithRepartition = (!clusteringPlan.getStrategy().getStrategyParams().containsKey(PLAN_STRATEGY_SORT_COLUMNS.key())
+            && config.getBulkInsertSortMode() == BulkInsertSortMode.NONE);
       }
       writeMetadata.setWriteStatuses(streamingMetadataWriteHandler.streamWriteToMetadataTable(table, writeMetadata.getWriteStatuses(), instantTime,
           enforceCoalesceWithRepartition, config.getMetadataConfig().getStreamingWritesCoalesceDivisorForDataTableWrites()));
