@@ -19,20 +19,29 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.avro.model.HoodieClusteringStrategy;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
@@ -42,20 +51,29 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.MockedStatic;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getCommitTimeAtUTC;
+import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.when;
 
 class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
 
@@ -205,6 +223,62 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
     testAndAssertCompletionIsEarlierThanRequested(basePath, props);
   }
 
+  private static Stream<Arguments> streamingMetadataWritesTestArgs() {
+    return Arrays.stream(new Object[][] {
+        {true, "COMPACT", "NONE", false, false},
+        {true, "COMPACT", "NONE", true, false},
+        {true, "COMPACT", "GLOBAL_SORT", true, false},
+        {true, "COMPACT", "GLOBAL_SORT", false, false},
+        {true, "LOG_COMPACT", "NONE", true, false},
+        {true, "LOG_COMPACT", "NONE", false, false},
+        {true, "LOG_COMPACT", "GLOBAL_SORT", true, false},
+        {true, "LOG_COMPACT", "GLOBAL_SORT", false, false},
+        {true, "CLUSTER", "NONE", true, false},
+        {true, "CLUSTER", "NONE", false, true},
+        {true, "CLUSTER", "GLOBAL_SORT", true, false},
+        {true, "CLUSTER", "GLOBAL_SORT", false, false},
+    }).map(Arguments::of);
+  }
+
+  @ParameterizedTest
+  @MethodSource("streamingMetadataWritesTestArgs")
+  public void testStreamingMetadataWrites(boolean streamingWritesEnable, WriteOperationType writeOperationType,
+                                          String bulkInsertSortMode, boolean setSortColsinClusteringPlan,
+                                          boolean expectedEnforceRepartitionWithCoalesce) throws IOException {
+    HoodieTableMetaClient metaClient =
+        getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+    HoodieWriteConfig writeConfig = getConfigBuilder(true)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withStreamingWriteEnabled(streamingWritesEnable).build())
+        .withBulkInsertSortMode(bulkInsertSortMode)
+        .withPath(metaClient.getBasePath())
+        .build();
+    MockStreamingMetadataWriteHandler mockMetadataWriteHandler = new MockStreamingMetadataWriteHandler();
+
+    try (MockedStatic<ClusteringUtils> mocked = mockStatic(ClusteringUtils.class);) {
+      HoodieClusteringPlan clusteringPlan = mock(HoodieClusteringPlan.class);
+      HoodieClusteringStrategy clusteringStrategy = mock(HoodieClusteringStrategy.class);
+      when(clusteringPlan.getStrategy()).thenReturn(clusteringStrategy);
+      Map<String, String> strategyParams = new HashMap<>();
+      if (setSortColsinClusteringPlan) {
+        strategyParams.put(PLAN_STRATEGY_SORT_COLUMNS.key(), "abc");
+      }
+      when(clusteringStrategy.getStrategyParams()).thenReturn(strategyParams);
+
+      HoodieInstant hoodieInstant = mock(HoodieInstant.class);
+      mocked.when(() -> ClusteringUtils.getClusteringPlan(any(), any())).thenReturn(Option.of(Pair.of(hoodieInstant, clusteringPlan)));
+      mocked.when(() -> ClusteringUtils.getRequestedClusteringInstant(any(), any(), any())).thenReturn(Option.of(hoodieInstant));
+
+      SparkRDDTableServiceClient tableServiceClient = new SparkRDDTableServiceClient(context(), writeConfig, Option.empty(), mockMetadataWriteHandler);
+      HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = mock(HoodieWriteMetadata.class);
+      HoodieData<WriteStatus> hoodieData = mock(HoodieData.class);
+      when(writeMetadata.getWriteStatuses()).thenReturn(hoodieData);
+      HoodieTable table = mock(HoodieTable.class);
+      when(table.getMetaClient()).thenReturn(metaClient);
+      tableServiceClient.partialUpdateTableMetadata(table, writeMetadata, "00001", writeOperationType);
+      assertEquals(expectedEnforceRepartitionWithCoalesce, mockMetadataWriteHandler.enforceCoalesceWithRepartition);
+    }
+  }
+
   private void testAndAssertCompletionIsEarlierThanRequested(String basePath, Properties properties) throws IOException {
     HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), basePath, properties);
 
@@ -223,6 +297,20 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
     metaClient.getActiveTimeline().filterCompletedInstants().getInstants().forEach(hoodieInstant -> {
       assertTrue(InstantComparison.compareTimestamps(hoodieInstant.requestedTime(), InstantComparison.LESSER_THAN, hoodieInstant.getCompletionTime()));
     });
+  }
+
+  class MockStreamingMetadataWriteHandler extends StreamingMetadataWriteHandler {
+
+    boolean enforceCoalesceWithRepartition;
+    int coalesceDivisorForDataTableWrites;
+
+    @Override
+    public HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieTable table, HoodieData<WriteStatus> dataTableWriteStatuses, String instantTime,
+                                                              boolean enforceCoalesceWithRepartition, int coalesceDivisorForDataTableWrites) {
+      this.enforceCoalesceWithRepartition = enforceCoalesceWithRepartition;
+      this.coalesceDivisorForDataTableWrites = coalesceDivisorForDataTableWrites;
+      return dataTableWriteStatuses;
+    }
   }
 
 }

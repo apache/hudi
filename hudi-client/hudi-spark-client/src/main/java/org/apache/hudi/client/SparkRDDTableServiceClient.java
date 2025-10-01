@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.SparkReleaseResources;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
@@ -26,10 +27,16 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieClusteringException;
+import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -42,13 +49,24 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
+
 public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<HoodieData<HoodieRecord<T>>, HoodieData<WriteStatus>, JavaRDD<WriteStatus>> {
 
-  private final StreamingMetadataWriteHandler streamingMetadataWriteHandler = new StreamingMetadataWriteHandler();
+  private final StreamingMetadataWriteHandler streamingMetadataWriteHandler;
   protected SparkRDDTableServiceClient(HoodieEngineContext context,
                                        HoodieWriteConfig clientConfig,
                                        Option<EmbeddedTimelineService> timelineService) {
+    this(context, clientConfig, timelineService, new StreamingMetadataWriteHandler());
+  }
+
+  @VisibleForTesting
+  public SparkRDDTableServiceClient(HoodieEngineContext context,
+                                       HoodieWriteConfig clientConfig,
+                                       Option<EmbeddedTimelineService> timelineService,
+                                       StreamingMetadataWriteHandler streamingMetadataWriteHandler) {
     super(context, clientConfig, timelineService);
+    this.streamingMetadataWriteHandler = streamingMetadataWriteHandler;
   }
 
   @Override
@@ -80,9 +98,20 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   protected HoodieWriteMetadata<HoodieData<WriteStatus>> partialUpdateTableMetadata(
       HoodieTable table,
       HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata,
-      String instantTime) {
+      String instantTime,
+      WriteOperationType writeOperationType) {
     if (isStreamingWriteToMetadataEnabled(table)) {
-      writeMetadata.setWriteStatuses(streamingMetadataWriteHandler.streamWriteToMetadataTable(table, writeMetadata.getWriteStatuses(), instantTime));
+      boolean enforceCoalesceWithRepartition = writeOperationType == WriteOperationType.CLUSTER && config.getBulkInsertSortMode() == BulkInsertSortMode.NONE;
+      if (enforceCoalesceWithRepartition) {
+        // check clustering plan for sort columns. only if there are no sort columns, then we might still set enforceCoalesceWithRepartition to true.
+        HoodieClusteringPlan clusteringPlan = ClusteringUtils.getClusteringPlan(
+                table.getMetaClient(), ClusteringUtils.getRequestedClusteringInstant(instantTime, table.getActiveTimeline(), table.getInstantGenerator()).get())
+            .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
+                "Unable to read clustering plan for instant: " + instantTime));
+        enforceCoalesceWithRepartition = !clusteringPlan.getStrategy().getStrategyParams().containsKey(PLAN_STRATEGY_SORT_COLUMNS.key());
+      }
+      writeMetadata.setWriteStatuses(streamingMetadataWriteHandler.streamWriteToMetadataTable(table, writeMetadata.getWriteStatuses(), instantTime,
+          enforceCoalesceWithRepartition, config.getMetadataConfig().getStreamingWritesCoalesceDivisorForDataTableWrites()));
     }
     return writeMetadata;
   }
