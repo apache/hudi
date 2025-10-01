@@ -136,6 +136,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     // This tests that updates/deletes with lower ordering values are ignored
     // while higher ordering values are applied
     val mixedOrderingData = Seq(
+      // Update rider-B with LOWER ordering - EVENT_TIME: IGNORED, COMMIT_TIME: APPLIED
+      (8, 2L, "rider-BB", "driver-BB", 25.00, "u", "8.1", 8, 1, "u"),
       // Update rider-C with HIGHER ordering - should be APPLIED
       (11, 3L, "rider-CC", "driver-CC", 35.00, "u", "15.1", 15, 1, "u"),
       // Update rider-C with LOWER ordering - should be IGNORED (rider-C has ts=10 originally)
@@ -352,6 +354,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     // This tests that updates/deletes with lower ordering values are ignored
     // while higher ordering values are applied
     val mixedOrderingData = Seq(
+      // Update rider-B with LOWER ordering - EVENT_TIME: IGNORED, COMMIT_TIME: APPLIED
+      (8, 2L, "rider-BB", "driver-BB", 25.00, "u", "8.1", 8, 1, "u"),
       // Update rider-C with HIGHER ordering - should be APPLIED
       (11, 3L, "rider-CC", "driver-CC", 35.00, "u", "15.1", 15, 1, "u"),
       // Update rider-C with LOWER ordering - should be IGNORED (rider-C has ts=10 originally)
@@ -587,7 +591,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       {
         // Expected results after all operations with _event_lsn collisions:
         // - rider-X (_event_lsn=1): deleted with higher ordering (ts=12)
-        // - rider-Y (_event_lsn=2): updated with higher ordering (ts=11)
+        // - rider-Y (_event_lsn=2): updated with higher ordering (ts=11), lower ordering rider-BB rejected (ts=8 < 11)
         // - _event_lsn=3: DELETED by delete operation (was rider-CC with ts=12)
         // - _event_lsn=4: rider-D stays with original data (rider-DD ts=9 < rider-D ts=10)
         // - _event_lsn=5: DELETED by delete operation (was rider-EE with ts=12)
@@ -600,12 +604,13 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       } else {
         // For other payload types (OverwriteWithLatestAvroPayload, OverwriteNonDefaultsWithLatestAvroPayload)
         // These use COMMIT_TIME_ORDERING, so latest write wins regardless of ts value
+        // _event_lsn=2: rider-BB overwrites rider-Y (latest commit wins even though ts=8 < ts=11)
         // _event_lsn=3: rider-CC overwrites (latest commit), then deleted
         // _event_lsn=4: rider-DD overwrites (latest commit)
         // _event_lsn=5: rider-EE overwrites (latest commit), then deleted
         Seq(
           (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
-          (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
+          (8, 2, "rider-BB", "driver-BB", 25.00, "u", "8.1", 8, 1, "u"),
           (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
           (13, 6, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
           (13, 7, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
@@ -614,6 +619,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       // For CDC payloads or when delete markers are used
       if (payloadClazz.equals(classOf[DefaultHoodieRecordPayload].getName)) {
         // Delete markers remove records completely
+        // Note: rider-B keeps original values because rider-BB update (ts=8) was rejected (8 < 11) for EVENT_TIME
         // Note: rider-D keeps original values because rider-DD update (ts=9) was rejected (9 < 10)
         // _event_lsn=1 (rider-X) and _event_lsn=5 (rider-EE) are deleted by delete markers
         Seq(
@@ -623,26 +629,28 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
           (13, 7, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
       } else if (payloadClazz.equals(classOf[AWSDmsAvroPayload].getName)) {
         // AWSDmsAvroPayload uses COMMIT_TIME_ORDERING - latest commit wins regardless of ts value
-        // Mixed batch: rider-CC update applies (latest commit)
+        // Mixed batch: rider-BB applies (latest commit wins even though ts=8 < ts=11), rider-CC update applies (latest commit)
         // Second update: rider-DD applies (latest commit wins over rider-D)
-        // Final: _event_lsn=3 and _event_lsn=5 deleted, _event_lsn=4 has rider-DD
+        // Final: _event_lsn=2 has rider-BB, _event_lsn=3 and _event_lsn=5 deleted, _event_lsn=4 has rider-DD
         Seq(
-          (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
+          (8, 2, "rider-BB", "driver-BB", 25.00, "u", "8.1", 8, 1, "u"),
           (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
           (13, 6, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
           (13, 7, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
       } else if (payloadClazz.equals(classOf[PostgresDebeziumAvroPayload].getName)) {
         // PostgresDebeziumAvroPayload uses EVENT_TIME_ORDERING with _event_lsn field
         // But second update applies rider-DD due to later commit time (behaves like commit-time ordering)
+        // rider-BB behaves like commit-time ordering too (latest commit wins)
         Seq(
-          (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
+          (8, 2, "rider-BB", "driver-BB", 25.00, "u", "8.1", 8, 1, "u"),
           (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
           (13, 6, "rider-G", "driver-G", 25.50, "i", "13.1", 13, 1, "i"),
           (13, 7, "rider-H", "driver-H", 30.25, "i", "13.1", 13, 1, "i"))
       } else {
         // For MySqlDebeziumAvroPayload
-        // Uses EVENT_TIME_ORDERING with _event_seq initially, then _event_bin_file,_event_pos
-        // But second update applies rider-DD due to later commit time (behaves like commit-time ordering)
+        // Uses EVENT_TIME_ORDERING with _event_seq in v8, then _event_bin_file,_event_pos in v9
+        // Mixed ordering batch (v8): rider-BB has lower _event_seq (8.1 < 11.1) so REJECTED, rider-Y stays
+        // Second update (v9): rider-DD has higher _event_bin_file (12 > 10) so APPLIED
         Seq(
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"),
           (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 12, 1, "i"),
