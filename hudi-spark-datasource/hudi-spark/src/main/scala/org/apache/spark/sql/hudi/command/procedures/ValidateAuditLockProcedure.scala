@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
+import java.io.FileNotFoundException
 import java.util.function.Supplier
 
 import scala.collection.JavaConverters._
@@ -70,13 +71,13 @@ class ValidateAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
    */
   case class TransactionWindow(
     ownerId: String,
-    transactionStartTime: Long,
-    startTimestamp: Long,
-    endTimestamp: Option[Long],
-    lastExpirationTime: Option[Long],
+    transactionCreationTime: Long,
+    lockAcquisitionTime: Long,
+    lockReleaseTime: Option[Long],
+    lockExpirationTime: Option[Long],
     filename: String
   ) {
-    def effectiveEndTime: Long = endTimestamp.orElse(lastExpirationTime).getOrElse(startTimestamp)
+    def effectiveEndTime: Long = lockReleaseTime.orElse(lockExpirationTime).getOrElse(lockAcquisitionTime)
   }
 
   /**
@@ -117,35 +118,47 @@ class ValidateAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
       val auditFolderPath = new StoragePath(StorageLockProviderAuditService.getAuditFolderPath(basePath))
       val storage = metaClient.getStorage
 
-      // Check if audit folder exists
-      if (!storage.exists(auditFolderPath)) {
-        Seq(Row(displayName, "PASSED", 0, 0, "No audit folder found - nothing to validate"))
-      } else {
+      // Get all audit files
+      val allFilesResult = try {
+        Some(storage.listDirectEntries(auditFolderPath).asScala)
+      } catch {
+        case _: FileNotFoundException =>
+          None
+      }
 
-        // Get all audit files
-        val allFiles = storage.listDirectEntries(auditFolderPath).asScala
-        val auditFiles = allFiles.filter(pathInfo => pathInfo.isFile && pathInfo.getPath.getName.endsWith(".jsonl"))
+      allFilesResult match {
+        case None =>
+          Seq(Row(displayName, "PASSED", 0, 0, "No audit folder found - nothing to validate"))
+        case Some(allFiles) =>
+          val auditFiles = allFiles.filter(pathInfo => pathInfo.isFile && pathInfo.getPath.getName.endsWith(".jsonl"))
 
-        if (auditFiles.isEmpty) {
-          Seq(Row(displayName, "PASSED", 0, 0, "No audit files found - nothing to validate"))
-        } else {
-
-          // Parse all audit files into transaction windows
-          val windows = auditFiles.flatMap(pathInfo => parseAuditFile(pathInfo, storage)).toSeq
-
-          if (windows.isEmpty) {
-            Seq(Row(displayName, "FAILED", 0, auditFiles.size, "Failed to parse any audit files"))
+          if (auditFiles.isEmpty) {
+            Seq(Row(displayName, "PASSED", 0, 0, "No audit files found - nothing to validate"))
           } else {
 
-            // Validate transactions
-            val validationResults = validateTransactionWindows(windows)
+            // Parse all audit files into transaction windows
+            val parseResults = auditFiles.map(pathInfo => (pathInfo, parseAuditFile(pathInfo, storage)))
+            val windows = parseResults.flatMap(_._2).toSeq
+            val parseErrors = parseResults.filter(_._2.isEmpty).map(p =>
+              s"[ERROR] Failed to parse audit file: ${p._1.getPath.getName}")
 
-            // Generate result
-            val (result, issuesFound, details) = formatValidationResults(validationResults)
+            if (windows.isEmpty) {
+              Seq(Row(displayName, "FAILED", 0, auditFiles.size, "Failed to parse any audit files"))
+            } else {
 
-            Seq(Row(displayName, result, windows.size, issuesFound, details))
+              // Validate transactions
+              val validationResults = validateTransactionWindows(windows)
+
+              // Add parse errors to validation results
+              val allErrors = validationResults.errors ++ parseErrors
+              val resultsWithParseErrors = validationResults.copy(errors = allErrors.toList)
+
+              // Generate result
+              val (result, issuesFound, details) = formatValidationResults(resultsWithParseErrors, auditFiles.size, windows.size, parseErrors.size)
+
+              Seq(Row(displayName, result, windows.size, issuesFound, details))
+            }
           }
-        }
       }
     } catch {
       case e: Exception =>
@@ -161,61 +174,54 @@ class ValidateAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
     val filename = pathInfo.getPath.getName
 
     Try {
-      // Read file content using Hudi storage API
+      // Read and parse JSONL content
       val inputStream = storage.open(pathInfo.getPath)
-      val content = try {
-        scala.io.Source.fromInputStream(inputStream).mkString
+      val jsonNodes = try {
+        val content = scala.io.Source.fromInputStream(inputStream).mkString
+        val lines = content.split('\n').filter(_.trim.nonEmpty)
+        lines.map(line => OBJECT_MAPPER.readTree(line)).toSeq
       } finally {
         inputStream.close()
       }
 
-      // Parse JSONL content
-      val lines = content.split('\n').filter(_.trim.nonEmpty)
-      val jsonObjects = lines.map(OBJECT_MAPPER.readTree)
-
-      if (jsonObjects.isEmpty) {
+      if (jsonNodes.isEmpty) {
         None
       } else {
 
-        // Extract transaction metadata
-        val firstObject = jsonObjects.head
-        val ownerId = firstObject.get("ownerId").asText()
-        val transactionStartTime = firstObject.get("transactionStartTime").asLong()
+        // Extract transaction metadata from first entry
+        val firstNode = jsonNodes.head
+        val ownerId = firstNode.get("ownerId").asText()
+        val transactionCreationTime = firstNode.get("transactionStartTime").asLong()
 
-      // Find first START timestamp
-      val startRecords = jsonObjects.filter(_.get("state").asText() == "START")
-      val startTimestamp = if (startRecords.nonEmpty) {
-        startRecords.head.get("timestamp").asLong()
+        // Find first START timestamp
+        val startNodes = jsonNodes.filter(node => node.get("state").asText() == "START")
+        val lockAcquisitionTime = if (startNodes.nonEmpty) {
+          startNodes.head.get("timestamp").asLong()
         } else {
-          transactionStartTime // fallback to transaction start time
+          transactionCreationTime // fallback to transaction creation time
         }
 
         // Find last END timestamp
-        val endRecords = jsonObjects.filter(_.get("state").asText() == "END")
-        val endTimestamp = if (endRecords.nonEmpty) {
-          Some(endRecords.last.get("timestamp").asLong())
+        val endNodes = jsonNodes.filter(node => node.get("state").asText() == "END")
+        val lockReleaseTime = if (endNodes.nonEmpty) {
+          Some(endNodes.last.get("timestamp").asLong())
         } else {
           None
         }
 
         // Find last expiration time as fallback
-        val lastExpirationTime = if (jsonObjects.nonEmpty) {
-          val lastObject = jsonObjects.last
-          if (lastObject.has("lockExpiration")) {
-            Some(lastObject.get("lockExpiration").asLong())
-          } else {
-            None
-          }
+        val lockExpirationTime = if (jsonNodes.nonEmpty) {
+          Some(jsonNodes.last.get("lockExpiration").asLong())
         } else {
           None
         }
 
         Some(TransactionWindow(
-        ownerId = ownerId,
-        transactionStartTime = transactionStartTime,
-        startTimestamp = startTimestamp,
-        endTimestamp = endTimestamp,
-        lastExpirationTime = lastExpirationTime,
+          ownerId = ownerId,
+          transactionCreationTime = transactionCreationTime,
+          lockAcquisitionTime = lockAcquisitionTime,
+          lockReleaseTime = lockReleaseTime,
+          lockExpirationTime = lockExpirationTime,
           filename = filename
         ))
       }
@@ -234,13 +240,13 @@ class ValidateAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
 
     // Check for transactions without proper END
     windows.foreach { window =>
-      if (window.endTimestamp.isEmpty) {
+      if (window.lockReleaseTime.isEmpty) {
         warnings += s"[WARNING] ${window.filename} => transaction did not end gracefully. This could be due to driver OOM or non-graceful shutdown."
       }
     }
 
     // Sort windows by start time for overlap detection
-    val sortedWindows = windows.sortBy(_.startTimestamp)
+    val sortedWindows = windows.sortBy(_.lockAcquisitionTime)
 
     // Check for overlaps
     for (i <- sortedWindows.indices) {
@@ -250,7 +256,7 @@ class ValidateAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
       // Check all subsequent windows for overlaps
       for (j <- (i + 1) until sortedWindows.length) {
         val otherWindow = sortedWindows(j)
-        val otherStart = otherWindow.startTimestamp
+        val otherStart = otherWindow.lockAcquisitionTime
 
         // Check if windows overlap
         if (otherStart < currentEnd) {
@@ -265,14 +271,15 @@ class ValidateAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
   /**
    * Formats validation results into the output format.
    */
-  private def formatValidationResults(results: ValidationResults): (String, Int, String) = {
+  private def formatValidationResults(results: ValidationResults, totalFiles: Int, parsedFiles: Int, failedFiles: Int): (String, Int, String) = {
     val totalIssues = results.errors.size + results.warnings.size
 
     if (totalIssues == 0) {
-      ("PASSED", 0, "All audit lock transactions validated successfully")
+      ("PASSED", 0, s"All audit lock transactions validated successfully. Audit Files: $totalFiles total, $parsedFiles parsed successfully, $failedFiles failed to parse")
     } else {
       val resultType = if (results.errors.nonEmpty) "FAILED" else "WARNING"
-      val details = (results.errors ++ results.warnings).mkString(", ")
+      val fileInfo = s"Audit Files: $totalFiles total, $parsedFiles parsed successfully, $failedFiles failed to parse. "
+      val details = fileInfo + (results.errors ++ results.warnings).mkString(", ")
       (resultType, totalIssues, details)
     }
   }

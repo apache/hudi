@@ -25,6 +25,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -35,6 +37,7 @@ import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
 
 import java.io.BufferedReader;
+import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -52,28 +55,89 @@ public class LockAuditingCommand {
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   /**
+   * Represents a single audit log entry in the JSONL file.
+   * Maps to the structure written by StorageLockProviderAuditService.
+   */
+  public static class AuditRecord {
+    private final String ownerId;
+    private final long transactionStartTime;
+    private final long timestamp;
+    private final String state;
+    private final long lockExpiration;
+    private final boolean lockHeld;
+
+    @JsonCreator
+    public AuditRecord(
+        @JsonProperty("ownerId") String ownerId,
+        @JsonProperty("transactionStartTime") long transactionStartTime,
+        @JsonProperty("timestamp") long timestamp,
+        @JsonProperty("state") String state,
+        @JsonProperty("lockExpiration") long lockExpiration,
+        @JsonProperty("lockHeld") boolean lockHeld) {
+      this.ownerId = ownerId;
+      this.transactionStartTime = transactionStartTime;
+      this.timestamp = timestamp;
+      this.state = state;
+      this.lockExpiration = lockExpiration;
+      this.lockHeld = lockHeld;
+    }
+
+    /**
+     * Convenience constructor with lockHeld defaulting to true.
+     */
+    public AuditRecord(String ownerId, long transactionStartTime, long timestamp,
+                       String state, long lockExpiration) {
+      this(ownerId, transactionStartTime, timestamp, state, lockExpiration, true);
+    }
+
+    public String getOwnerId() {
+      return ownerId;
+    }
+
+    public long getTransactionStartTime() {
+      return transactionStartTime;
+    }
+
+    public long getTimestamp() {
+      return timestamp;
+    }
+
+    public String getState() {
+      return state;
+    }
+
+    public long getLockExpiration() {
+      return lockExpiration;
+    }
+
+    public boolean isLockHeld() {
+      return lockHeld;
+    }
+  }
+
+  /**
    * Represents a transaction window with start time, end time, and metadata.
    */
   static class TransactionWindow {
     final String ownerId;
-    final long transactionStartTime;
-    final long startTimestamp;
-    final Option<Long> endTimestamp;
-    final Option<Long> lastExpirationTime;
+    final long transactionCreationTime;
+    final long lockAcquisitionTime;
+    final Option<Long> lockReleaseTime;
+    final Option<Long> lockExpirationTime;
     final String filename;
 
-    TransactionWindow(String ownerId, long transactionStartTime, long startTimestamp,
-                      Option<Long> endTimestamp, Option<Long> lastExpirationTime, String filename) {
+    TransactionWindow(String ownerId, long transactionCreationTime, long lockAcquisitionTime,
+                      Option<Long> lockReleaseTime, Option<Long> lockExpirationTime, String filename) {
       this.ownerId = ownerId;
-      this.transactionStartTime = transactionStartTime;
-      this.startTimestamp = startTimestamp;
-      this.endTimestamp = endTimestamp;
-      this.lastExpirationTime = lastExpirationTime;
+      this.transactionCreationTime = transactionCreationTime;
+      this.lockAcquisitionTime = lockAcquisitionTime;
+      this.lockReleaseTime = lockReleaseTime;
+      this.lockExpirationTime = lockExpirationTime;
       this.filename = filename;
     }
 
     long getEffectiveEndTime() {
-      return endTimestamp.orElse(lastExpirationTime.orElse(startTimestamp));
+      return lockReleaseTime.orElse(lockExpirationTime.orElse(lockAcquisitionTime));
     }
   }
 
@@ -181,18 +245,20 @@ public class LockAuditingCommand {
     try {
       // Create the audit config file path
       String auditConfigPath = StorageLockProviderAuditService.getAuditConfigPath(HoodieCLI.basePath);
-      
-      // Check if config file exists
       StoragePath configPath = new StoragePath(auditConfigPath);
-      if (!HoodieCLI.storage.exists(configPath)) {
+
+      // Check if config file exists by attempting to get its info
+      try {
+        HoodieCLI.storage.getPathInfo(configPath);
+      } catch (FileNotFoundException e) {
         return "Lock audit is already disabled (no configuration file found).";
       }
-      
+
       // Create the JSON content with audit disabled
       ObjectNode configJson = OBJECT_MAPPER.createObjectNode();
       configJson.put(StorageLockProviderAuditService.STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD, false);
       String jsonContent = OBJECT_MAPPER.writeValueAsString(configJson);
-      
+
       // Write the config file
       try (OutputStream outputStream = HoodieCLI.storage.create(configPath, true)) {
         outputStream.write(jsonContent.getBytes());
@@ -239,21 +305,18 @@ public class LockAuditingCommand {
     try {
       // Create the audit config file path
       String auditConfigPath = StorageLockProviderAuditService.getAuditConfigPath(HoodieCLI.basePath);
-      
-      // Check if config file exists
       StoragePath configPath = new StoragePath(auditConfigPath);
-      if (!HoodieCLI.storage.exists(configPath)) {
-        return String.format("Lock Audit Status: DISABLED\n"
-            + "Table: %s\n"
-            + "Config file: %s (not found)\n"
-            + "Use 'locks audit enable' to enable audit logging.", 
-            HoodieCLI.basePath, auditConfigPath);
-      }
-      
+
       // Read and parse the configuration
       String configContent;
       try (InputStream inputStream = HoodieCLI.storage.open(configPath)) {
         configContent = new String(FileIOUtils.readAsByteArray(inputStream));
+      } catch (FileNotFoundException e) {
+        return String.format("Lock Audit Status: DISABLED\n"
+            + "Table: %s\n"
+            + "Config file: %s (not found)\n"
+            + "Use 'locks audit enable' to enable audit logging.",
+            HoodieCLI.basePath, auditConfigPath);
       }
       JsonNode rootNode = OBJECT_MAPPER.readTree(configContent);
       JsonNode enabledNode = rootNode.get(StorageLockProviderAuditService.STORAGE_LOCK_AUDIT_SERVICE_ENABLED_FIELD);
@@ -290,17 +353,17 @@ public class LockAuditingCommand {
     try {
       String auditFolderPath = StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath);
       StoragePath auditFolder = new StoragePath(auditFolderPath);
-      
-      // Check if audit folder exists
-      if (!HoodieCLI.storage.exists(auditFolder)) {
+
+      // Get all audit files
+      List<StoragePathInfo> allFiles;
+      try {
+        allFiles = HoodieCLI.storage.listDirectEntries(auditFolder);
+      } catch (FileNotFoundException e) {
         return "Validation Result: PASSED\n"
             + "Transactions Validated: 0\n"
             + "Issues Found: 0\n"
             + "Details: No audit folder found - nothing to validate";
       }
-      
-      // Get all audit files
-      List<StoragePathInfo> allFiles = HoodieCLI.storage.listDirectEntries(auditFolder);
       List<StoragePathInfo> auditFiles = new ArrayList<>();
       for (StoragePathInfo pathInfo : allFiles) {
         if (pathInfo.isFile() && pathInfo.getPath().getName().endsWith(".jsonl")) {
@@ -317,22 +380,28 @@ public class LockAuditingCommand {
       
       // Parse all audit files into transaction windows
       List<TransactionWindow> windows = new ArrayList<>();
+      List<String> parseErrors = new ArrayList<>();
       for (StoragePathInfo pathInfo : auditFiles) {
         Option<TransactionWindow> window = parseAuditFile(pathInfo);
         if (window.isPresent()) {
           windows.add(window.get());
+        } else {
+          parseErrors.add(String.format("[ERROR] Failed to parse audit file: %s", pathInfo.getPath().getName()));
         }
       }
-      
+
       if (windows.isEmpty()) {
         return String.format("Validation Result: FAILED\n"
             + "Transactions Validated: 0\n"
             + "Issues Found: %d\n"
             + "Details: Failed to parse any audit files", auditFiles.size());
       }
-      
+
       // Validate transactions
       ValidationResults validationResults = validateTransactionWindows(windows);
+
+      // Add parse errors to the validation results
+      validationResults.errors.addAll(parseErrors);
       
       // Generate result
       int totalIssues = validationResults.errors.size() + validationResults.warnings.size();
@@ -351,9 +420,10 @@ public class LockAuditingCommand {
       }
       
       return String.format("Validation Result: %s\n"
+          + "Audit Files: %d total, %d parsed successfully, %d failed to parse\n"
           + "Transactions Validated: %d\n"
           + "Issues Found: %d\n"
-          + "Details: %s", result, windows.size(), totalIssues, details);
+          + "Details: %s", result, auditFiles.size(), windows.size(), parseErrors.size(), windows.size(), totalIssues, details);
       
     } catch (Exception e) {
       LOG.error("Error validating audit locks", e);
@@ -407,15 +477,10 @@ public class LockAuditingCommand {
    * Internal method to perform audit cleanup. Used by both the CLI command and disable method.
    *
    * @param dryRun Whether to perform a dry run (preview changes without deletion)
-   * @param ageDays Number of days to keep audit files (0 means delete all)
+   * @param ageDays Number of days to keep audit files (0 means delete all, must be non-negative)
    * @return CleanupResult containing cleanup operation details
    */
   private CleanupResult performAuditCleanup(boolean dryRun, int ageDays) {
-    if (ageDays < 0) {
-      String message = "Error: ageDays must be non-negative (>= 0).";
-      return new CleanupResult(false, 0, 0, 0, message, dryRun);
-    }
-
     try {
       if (HoodieCLI.storage == null) {
         String message = "Storage not initialized.";
@@ -425,22 +490,22 @@ public class LockAuditingCommand {
       String auditFolderPath = StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath);
       StoragePath auditFolder = new StoragePath(auditFolderPath);
 
-      // Check if audit folder exists
-      if (!HoodieCLI.storage.exists(auditFolder)) {
+      // Calculate cutoff timestamp (ageDays ago)
+      long cutoffTime = System.currentTimeMillis() - (ageDays * 24L * 60L * 60L * 1000L);
+
+      // List all files in audit folder and filter by modification time
+      List<StoragePathInfo> allFiles;
+      try {
+        allFiles = HoodieCLI.storage.listDirectEntries(auditFolder);
+      } catch (FileNotFoundException e) {
         String message = "No audit folder found - nothing to cleanup.";
         return new CleanupResult(true, 0, 0, 0, message, dryRun);
       }
-      
-      // Calculate cutoff timestamp (ageDays ago)
-      long cutoffTime = System.currentTimeMillis() - (ageDays * 24L * 60L * 60L * 1000L);
-      
-      // List all files in audit folder and filter by modification time
-      List<StoragePathInfo> allFiles = HoodieCLI.storage.listDirectEntries(auditFolder);
       List<StoragePathInfo> auditFiles = new ArrayList<>();
       List<StoragePathInfo> oldFiles = new ArrayList<>();
       
       // Filter to get only .jsonl files
-      for (org.apache.hudi.storage.StoragePathInfo pathInfo : allFiles) {
+      for (StoragePathInfo pathInfo : allFiles) {
         if (pathInfo.isFile() && pathInfo.getPath().getName().endsWith(".jsonl")) {
           auditFiles.add(pathInfo);
           if (pathInfo.getModificationTime() < cutoffTime) {
@@ -448,14 +513,14 @@ public class LockAuditingCommand {
           }
         }
       }
-      
+
       if (oldFiles.isEmpty()) {
         String message = String.format("No audit files older than %d days found.", ageDays);
         return new CleanupResult(true, 0, 0, auditFiles.size(), message, dryRun);
       }
-      
+
       int fileCount = oldFiles.size();
-      
+
       if (dryRun) {
         String message = String.format("Dry run: Would delete %d audit files older than %d days.", fileCount, ageDays);
         return new CleanupResult(true, 0, 0, fileCount, message, dryRun);
@@ -463,8 +528,8 @@ public class LockAuditingCommand {
         // Actually delete the files
         int deletedCount = 0;
         int failedCount = 0;
-        
-        for (org.apache.hudi.storage.StoragePathInfo pathInfo : oldFiles) {
+
+        for (StoragePathInfo pathInfo : oldFiles) {
           try {
             HoodieCLI.storage.deleteFile(pathInfo.getPath());
             deletedCount++;
@@ -495,78 +560,67 @@ public class LockAuditingCommand {
    */
   private Option<TransactionWindow> parseAuditFile(StoragePathInfo pathInfo) {
     String filename = pathInfo.getPath().getName();
-    
+
     try {
-      // Read file content using Hudi storage API
-      String content;
+      // Read and parse JSONL content
+      List<AuditRecord> entries = new ArrayList<>();
       try (InputStream inputStream = HoodieCLI.storage.open(pathInfo.getPath());
            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
-        StringBuilder sb = new StringBuilder();
         String line;
         while ((line = reader.readLine()) != null) {
-          sb.append(line).append("\n");
-        }
-        content = sb.toString();
-      }
-      
-      // Parse JSONL content
-      String[] lines = content.split("\n");
-      List<JsonNode> jsonObjects = new ArrayList<>();
-      for (String line : lines) {
-        if (line.trim().isEmpty()) {
-          continue;
-        }
-        try {
-          jsonObjects.add(OBJECT_MAPPER.readTree(line));
-        } catch (Exception e) {
-          LOG.warn("Failed to parse JSON line in file " + filename + ": " + line, e);
+          if (line.trim().isEmpty()) {
+            continue;
+          }
+          try {
+            AuditRecord entry = OBJECT_MAPPER.readValue(line, AuditRecord.class);
+            entries.add(entry);
+          } catch (Exception e) {
+            LOG.warn("Failed to parse JSON line in file " + filename + ": " + line, e);
+          }
         }
       }
-      
-      if (jsonObjects.isEmpty()) {
+
+      if (entries.isEmpty()) {
         return Option.empty();
       }
-      
-      // Extract transaction metadata
-      JsonNode firstObject = jsonObjects.get(0);
-      String ownerId = firstObject.has("ownerId") ? firstObject.get("ownerId").asText() : "unknown";
-      long transactionStartTime = firstObject.has("transactionStartTime") 
-          ? firstObject.get("transactionStartTime").asLong() : 0L;
-      
+
+      // Extract transaction metadata from first entry
+      AuditRecord firstEntry = entries.get(0);
+      String ownerId = firstEntry.getOwnerId();
+      long transactionCreationTime = firstEntry.getTransactionStartTime();
+
       // Find first START timestamp
-      long startTimestamp = transactionStartTime; // default to transaction start time
-      for (JsonNode obj : jsonObjects) {
-        if (obj.has("state") && "START".equals(obj.get("state").asText())) {
-          startTimestamp = obj.has("timestamp") ? obj.get("timestamp").asLong() : transactionStartTime;
+      long lockAcquisitionTime = transactionCreationTime; // default to transaction creation time
+      for (AuditRecord entry : entries) {
+        if ("START".equals(entry.getState())) {
+          lockAcquisitionTime = entry.getTimestamp();
           break;
         }
       }
-      
+
       // Find last END timestamp
-      Option<Long> endTimestamp = Option.empty();
-      for (int i = jsonObjects.size() - 1; i >= 0; i--) {
-        JsonNode obj = jsonObjects.get(i);
-        if (obj.has("state") && "END".equals(obj.get("state").asText())) {
-          endTimestamp = Option.of(obj.has("timestamp") ? obj.get("timestamp").asLong() : 0L);
+      Option<Long> lockReleaseTime = Option.empty();
+      for (int i = entries.size() - 1; i >= 0; i--) {
+        AuditRecord entry = entries.get(i);
+        if ("END".equals(entry.getState())) {
+          lockReleaseTime = Option.of(entry.getTimestamp());
           break;
         }
       }
-      
+
       // Find last expiration time as fallback
-      Option<Long> lastExpirationTime = Option.empty();
-      if (!jsonObjects.isEmpty()) {
-        JsonNode lastObject = jsonObjects.get(jsonObjects.size() - 1);
-        if (lastObject.has("lockExpiration")) {
-          lastExpirationTime = Option.of(lastObject.get("lockExpiration").asLong());
-        }
+      Option<Long> lockExpirationTime = Option.empty();
+      if (!entries.isEmpty()) {
+        AuditRecord lastEntry = entries.get(entries.size() - 1);
+        lockExpirationTime = Option.of(lastEntry.getLockExpiration());
       }
-      
+
       return Option.of(new TransactionWindow(
           ownerId,
-          transactionStartTime,
-          startTimestamp,
-          endTimestamp,
-          lastExpirationTime,
+          transactionCreationTime,
+          lockAcquisitionTime,
+          lockReleaseTime,
+          lockExpirationTime,
           filename
       ));
     } catch (Exception e) {
@@ -584,26 +638,26 @@ public class LockAuditingCommand {
     
     // Check for transactions without proper END
     for (TransactionWindow window : windows) {
-      if (!window.endTimestamp.isPresent()) {
-        warnings.add(String.format("[WARNING] %s => transaction did not end gracefully. This could be due to driver OOM or non-graceful shutdown.", 
+      if (!window.lockReleaseTime.isPresent()) {
+        warnings.add(String.format("[WARNING] %s => transaction did not end gracefully. This could be due to driver OOM or non-graceful shutdown.",
             window.filename));
       }
     }
-    
+
     // Sort windows by start time for overlap detection
     List<TransactionWindow> sortedWindows = new ArrayList<>(windows);
-    sortedWindows.sort(Comparator.comparingLong(w -> w.startTimestamp));
-    
+    sortedWindows.sort(Comparator.comparingLong(w -> w.lockAcquisitionTime));
+
     // Check for overlaps
     for (int i = 0; i < sortedWindows.size(); i++) {
       TransactionWindow currentWindow = sortedWindows.get(i);
       long currentEnd = currentWindow.getEffectiveEndTime();
-      
+
       // Check all subsequent windows for overlaps
       for (int j = i + 1; j < sortedWindows.size(); j++) {
         TransactionWindow otherWindow = sortedWindows.get(j);
-        long otherStart = otherWindow.startTimestamp;
-        
+        long otherStart = otherWindow.lockAcquisitionTime;
+
         // Check if windows overlap
         if (otherStart < currentEnd) {
           errors.add(String.format("[ERROR] %s => overlaps with %s",
