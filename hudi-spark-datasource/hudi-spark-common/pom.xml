@@ -46,7 +46,7 @@
           <configuration>
             <args>
               <arg>-nobootcp</arg>
-              <arg>-target:jvm-1.8</arg>
+              <arg>-target:jvm-${spark.java.target}</arg>
             </args>
             <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
           </configuration>
@@ -54,6 +54,10 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-compiler-plugin</artifactId>
+          <configuration>
+            <source>${java.version}</source>
+            <target>${spark.java.target}</target>
+           </configuration>
         </plugin>
       </plugins>
     </pluginManagement>
