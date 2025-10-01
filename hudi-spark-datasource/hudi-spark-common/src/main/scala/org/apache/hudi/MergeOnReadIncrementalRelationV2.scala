@@ -59,8 +59,10 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
 
   override type Relation = MergeOnReadIncrementalRelationV2
 
-  override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
-    this.copy(prunedDataSchema = Some(prunedSchema))
+  override def updatePrunedDataSchema(prunedSchema: StructType): Relation = {
+    val filteredSchema = StructType(prunedSchema.fields.filterNot(_.name == HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD))
+    this.copy(prunedDataSchema = Some(filteredSchema))
+  }
 
   override protected def timeline: HoodieTimeline = {
     if (fullTableScan) {
@@ -75,11 +77,20 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
                                     requiredSchema: HoodieTableSchema,
                                     requestedColumns: Array[String],
                                     filters: Array[Filter]): RDD[InternalRow] = {
+    val filteredRequestedColumns = requestedColumns.filterNot(_ == HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD)
+
+    val filteredRequiredSchema = if (requestedColumns.contains(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD)) {
+      val filteredStructType = StructType(requiredSchema.structTypeSchema.fields.filterNot(_.name == HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD))
+      HoodieTableSchema(filteredStructType, requiredSchema.avroSchemaStr, requiredSchema.internalSchema)
+    } else {
+      requiredSchema
+    }
+
     // The only required filters are ones that make sure we're only fetching records that
     // fall into incremental span of the timeline being queried
     val requiredFilters = incrementalSpanRecordFilters
     val optionalFilters = filters
-    val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
+    val readers = createBaseFileReaders(tableSchema, filteredRequiredSchema, filteredRequestedColumns, requiredFilters, optionalFilters)
 
     val requestedToCompletionTimeMap = buildCompletionTimeMapping()
 
@@ -100,6 +111,15 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
       requestedToCompletionTimeMap = Option(requestedToCompletionTimeMap))
 
     baseRDD
+  }
+
+  override lazy val schema: StructType = {
+    val baseSchema = super.schema
+    if (metaClient.getTableConfig.getTableVersion.versionCode() > 6 && includedCommits.nonEmpty) {
+      addCompletionTimeColumn(baseSchema)
+    } else {
+      baseSchema
+    }
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
