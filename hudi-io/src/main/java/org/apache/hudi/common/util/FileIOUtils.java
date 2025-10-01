@@ -161,7 +161,7 @@ public class FileIOUtils {
     try {
       closeable.close();
     } catch (IOException e) {
-      LOG.error("Failed to close the closeable", e);
+      LOG.warn("Failed to close the closeable", e);
     }
   }
 
@@ -177,9 +177,10 @@ public class FileIOUtils {
         storage.createNewFile(fullPath);
       }
     } catch (IOException e) {
-      LOG.error("Failed to create file {}", fullPath, e);
       if (!ignoreIOE) {
         throw new HoodieIOException("Failed to create file " + fullPath, e);
+      } else {
+        LOG.warn("Failed to create file {}", fullPath, e);
       }
     }
   }
@@ -237,9 +238,10 @@ public class FileIOUtils {
     try (InputStream is = storage.open(detailPath)) {
       return Option.of(FileIOUtils.readAsByteArray(is));
     } catch (IOException e) {
-      LOG.error("Could not read commit details from {}", detailPath, e);
       if (!ignoreIOE) {
         throw new HoodieIOException("Could not read commit details from " + detailPath, e);
+      } else {
+        LOG.warn("Could not read commit details from {}", detailPath, e);
       }
       return Option.empty();
     }

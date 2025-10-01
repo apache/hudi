@@ -249,7 +249,7 @@ object HoodieHadoopFSUtils extends Logging {
       // InMemoryFileIndex construction. However, it's still a net improvement to detect and
       // fail-fast on the non-root cases. For more info see the SPARK-27676 review discussion.
       case _: FileNotFoundException if isRootPath || ignoreMissingFiles =>
-        logError(s"The directory $path was not found. Was it deleted very recently?")
+        logWarning(s"The directory $path was not found. Was it deleted very recently?")
         Array.empty[FileStatus]
     }
 

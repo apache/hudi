@@ -83,7 +83,6 @@ public class OptimisticConsistencyGuard extends FailSafeConsistencyGuard {
         Thread.sleep(consistencyGuardConfig.getOptimisticConsistencyGuardSleepTimeMs());
       }
     } catch (InterruptedException ie) {
-      // should we be catching here?
       LOG.warn("Got InterruptedException waiting for file visibility. Ignoring", ie);
     }
   }

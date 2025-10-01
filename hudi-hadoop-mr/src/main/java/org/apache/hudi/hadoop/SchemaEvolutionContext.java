@@ -157,7 +157,7 @@ public class SchemaEvolutionContext {
     try {
       return parser.apply(cachedJson);
     } catch (Exception e) {
-      LOG.error("Failed to parse data from cache with key: {}", cacheKey, e);
+      LOG.warn("Failed to parse data from cache with key: {}", cacheKey, e);
       return Option.empty();
     }
   }
@@ -194,7 +194,7 @@ public class SchemaEvolutionContext {
    */
   public void doEvolutionForRealtimeInputFormat(AbstractRealtimeRecordReader realtimeRecordReader) throws Exception {
     if (!(split instanceof RealtimeSplit)) {
-      LOG.error("Expected realtime split for mor table. Found split: {}", split);
+      LOG.warn("Expected realtime split for mor table. Found split: {}", split);
       return;
     }
     if (internalSchemaOption.isPresent()) {

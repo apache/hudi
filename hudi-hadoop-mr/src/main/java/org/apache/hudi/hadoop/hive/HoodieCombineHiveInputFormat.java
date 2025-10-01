@@ -419,7 +419,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
           }
         }
       } catch (Exception e) {
-        LOG.error("Failed to set schema cache", e);
+        LOG.warn("Failed to set schema cache", e);
       }
     }
 

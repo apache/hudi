@@ -165,7 +165,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       } match {
         case Success(internalSchemaOpt) => toScalaOption(internalSchemaOpt)
         case Failure(e) =>
-          logError("Failed to fetch internal-schema from the table", e)
+          logWarning("Failed to fetch internal-schema from the table", e)
           None
       }
     }

@@ -188,7 +188,7 @@ class HoodieSparkSqlWriterInternal {
         try {
           toReturn = writeInternal(sqlContext, mode, optParams, sourceDf, streamingWritesParamsOpt, hoodieWriteClient)
           if (counter > 0) {
-            log.info(s"Succeeded with attempt no $counter")
+            log.info(s"Write Succeeded after $counter attempts")
           }
           succeeded = true
         } catch {
@@ -551,7 +551,6 @@ class HoodieSparkSqlWriterInternal {
     val asyncCompactionEnabled = isAsyncCompactionEnabled(writeClient, tableConfig, parameters, configuration)
     val asyncClusteringEnabled = isAsyncClusteringEnabled(writeClient, parameters)
     if (!asyncCompactionEnabled && !asyncClusteringEnabled) {
-      log.info("Closing write client")
       writeClient.close()
     }
   }

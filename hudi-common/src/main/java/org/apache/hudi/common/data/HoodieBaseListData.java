@@ -100,7 +100,7 @@ public abstract class HoodieBaseListData<T> {
         try {
           ((AutoCloseable) iterator).close();
         } catch (Exception ex) {
-          LOG.info("Failed to properly close iterator", ex);
+          LOG.warn("Failed to properly close iterator", ex);
         }
       }
     }

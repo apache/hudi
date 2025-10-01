@@ -142,7 +142,7 @@ public class GCSStorageLockClient implements StorageLockClient {
       } else if (e.getCode() == RATE_LIMIT_ERROR_CODE) {
         logger.warn("OwnerId: {}, Rate limit exceeded for lock file: {}", ownerId, lockFilePath);
       } else if (e.getCode() >= INTERNAL_SERVER_ERROR_CODE_MIN) {
-        logger.error("OwnerId: {}, GCS returned internal server error code for lock file: {}",
+        logger.warn("OwnerId: {}, GCS returned internal server error code for lock file: {}",
             ownerId, lockFilePath, e);
       } else {
         throw e;
@@ -171,7 +171,7 @@ public class GCSStorageLockClient implements StorageLockClient {
     } else if (e.getCode() == RATE_LIMIT_ERROR_CODE) {
       logger.warn("OwnerId: {}, Rate limit exceeded for lock file: {}", ownerId, lockFilePath);
     } else if (e.getCode() >= INTERNAL_SERVER_ERROR_CODE_MIN) {
-      logger.error("OwnerId: {}, GCS returned internal server error code for lock file: {}", ownerId, lockFilePath, e);
+      logger.warn("OwnerId: {}, GCS returned internal server error code for lock file: {}", ownerId, lockFilePath, e);
     } else {
       throw e;
     }
@@ -245,11 +245,11 @@ public class GCSStorageLockClient implements StorageLockClient {
       if (e.getCode() == NOT_FOUND_ERROR_CODE) {
         logger.debug("JSON config file not found: {}", filePath);
       } else {
-        logger.error("Error reading JSON config file: {}", filePath, e);
+        logger.warn("Error reading JSON config file: {}", filePath, e);
       }
       return Option.empty();
     } catch (Exception e) {
-      logger.error("Error reading JSON config file: {}", filePath, e);
+      logger.warn("Error reading JSON config file: {}", filePath, e);
       return Option.empty();
     }
   }

@@ -215,7 +215,7 @@ public class HoodiePartitionMetadata {
       }
       return Option.of(props.getProperty(COMMIT_TIME_KEY));
     } catch (IOException ioe) {
-      LOG.error("Error fetch Hoodie partition metadata for {}", partitionPath, ioe);
+      LOG.warn("Error fetch Hoodie partition metadata for {}", partitionPath, ioe);
       return Option.empty();
     }
   }

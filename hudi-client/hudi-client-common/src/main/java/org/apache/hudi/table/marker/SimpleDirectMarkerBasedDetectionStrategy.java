@@ -66,7 +66,7 @@ public class SimpleDirectMarkerBasedDetectionStrategy extends DirectMarkerBasedD
       return checkMarkerConflict(basePath, maxAllowableHeartbeatIntervalInMs)
           || (checkCommitConflict && MarkerUtils.hasCommitConflict(activeTimeline, Stream.of(fileId).collect(Collectors.toSet()), completedCommitInstants));
     } catch (IOException e) {
-      LOG.warn("Exception occurs during create marker file in eager conflict detection mode.", e);
+      LOG.error("Exception occurs during create marker file in eager conflict detection mode.", e);
       throw new HoodieIOException("Exception occurs during create marker file in eager conflict detection mode.", e);
     }
   }

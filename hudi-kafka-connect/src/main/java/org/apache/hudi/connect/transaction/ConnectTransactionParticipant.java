@@ -151,7 +151,7 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
       ongoingTransactionInfo = new TransactionInfo<>(currentCommitTime, writerProvider.getWriter(currentCommitTime));
       ongoingTransactionInfo.setExpectedKafkaOffset(committedKafkaOffset);
     } catch (Exception exception) {
-      LOG.error("Failed to start a new transaction", exception);
+      LOG.warn("Failed to start a new transaction", exception);
     }
   }
 
@@ -228,7 +228,7 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
           }
           buffer.poll();
         } catch (Exception exception) {
-          LOG.error("Failed to write records for transaction [{}] in partition [{}]",
+          LOG.warn("Failed to write records for transaction [{}] in partition [{}]",
               ongoingTransactionInfo.getCommitTime(), partition.partition(), exception);
         }
       }
@@ -241,7 +241,7 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
         ongoingTransactionInfo.getWriter().close();
         ongoingTransactionInfo = null;
       } catch (HoodieIOException exception) {
-        LOG.error("Failed to cleanup existing transaction", exception);
+        LOG.warn("Failed to cleanup existing transaction", exception);
       }
     }
   }

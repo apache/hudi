@@ -2162,7 +2162,7 @@ public class HoodieTableMetadataUtil {
                   factory.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION,
                       instant.requestedTime()));
           commitsToRollback = Collections.singletonList(rollbackPlan.getInstantToRollback().getCommitTime());
-          LOG.info("Had to fetch rollback info from requested instant since completed file is empty {}", instant);
+          LOG.info("Fetching rollback info from requested instant as the completed file is empty {}", instant);
         }
         return commitsToRollback;
       }

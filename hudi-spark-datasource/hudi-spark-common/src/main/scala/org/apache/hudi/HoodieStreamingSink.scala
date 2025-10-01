@@ -170,15 +170,15 @@ class HoodieStreamingSink(sqlContext: SQLContext,
                 try {
                   rdd.unpersist()
                 } catch {
-                  case t: Exception => log.error("Got excepting trying to unpersist rdd", t)
+                  case t: Exception => log.warn("Got excepting trying to unpersist rdd", t)
                 }
             }
-          log.error(s"Micro batch id=$batchId threw following exception: ", e)
           if (ignoreFailedBatch) {
             log.info(s"Ignore the exception and move on streaming as per " +
               s"${STREAMING_IGNORE_FAILED_BATCH.key} configuration")
             Success((true, None, None))
           } else {
+            log.error(s"Micro batch id=$batchId threw following exception: ", e)
             if (retryCnt > 1) log.info(s"Retrying the failed micro batch id=$batchId ...")
             Failure(e)
           }

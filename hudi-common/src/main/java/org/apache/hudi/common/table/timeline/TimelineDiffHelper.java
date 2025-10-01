@@ -90,7 +90,7 @@ public class TimelineDiffHelper {
           .map(Pair::getKey).collect(Collectors.toList());
       return new TimelineDiffResult(newInstants, finishedCompactionInstants, finishedOrRemovedLogCompactionInstants, true);
     } else {
-      // Timelines?????
+      // One or more timelines is empty
       LOG.warn("One or more timelines is empty");
       return TimelineDiffResult.UNSAFE_SYNC_RESULT;
     }

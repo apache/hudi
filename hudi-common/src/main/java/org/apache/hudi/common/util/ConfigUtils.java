@@ -680,9 +680,9 @@ public class ConfigUtils {
           }
           return props;
         } catch (IOException e) {
-          LOG.error("Could not read properties from {}: {}", path, e);
+          LOG.warn("Could not read properties from {}: {}", path, e);
         } catch (IllegalArgumentException e) {
-          LOG.error("Invalid properties file {}: {}", path, props);
+          LOG.warn("Invalid properties file {}: {}", path, props);
         }
       }
 

@@ -158,7 +158,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             .setBasePath(metadataBasePath)
             .build();
       } catch (TableNotFoundException e) {
-        // Should the branches just be combined here?
         LOG.warn("Metadata table was not found at path {}", metadataBasePath);
         this.isMetadataTableInitialized = false;
         this.metadataMetaClient = null;

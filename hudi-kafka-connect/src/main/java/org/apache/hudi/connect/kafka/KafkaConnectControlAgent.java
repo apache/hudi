@@ -154,7 +154,7 @@ public class KafkaConnectControlAgent implements KafkaControlAgent {
                   partitionWorker.processControlEvent(message);
                 }
               } else {
-                LOG.error("Failed to send message for unregistered participants for topic {}", senderTopic);
+                LOG.warn("Failed to send message for unregistered participants for topic {}", senderTopic);
               }
             } else if (message.getReceiverType().equals(ControlMessage.EntityType.COORDINATOR)) {
               if (topicCoordinators.containsKey(senderTopic)) {

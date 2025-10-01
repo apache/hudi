@@ -353,7 +353,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     try {
       kafkaControlClient.publishMessage(buildControlMessage(ControlMessage.EventType.ACK_COMMIT));
     } catch (Exception exception) {
-      LOG.error("Could not send ACK_COMMIT message for partition {} and commitTime {}", partition, currentCommitTime, exception);
+      LOG.warn("Could not send ACK_COMMIT message for partition {} and commitTime {}", partition, currentCommitTime, exception);
     }
     currentState = State.ACKED_COMMIT;
 
