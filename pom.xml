@@ -95,8 +95,6 @@
     <maven-docker-plugin.version>0.45.0</maven-docker-plugin.version>
 
     <java.version>8</java.version>
-    <java.target>8</java.target>
-    <spark.java.target>${java.target}</spark.java.target>
     <kryo.shaded.version>4.0.2</kryo.shaded.version>
     <fasterxml.spark3.version>2.10.0</fasterxml.spark3.version>
     <fasterxml.spark4.version>2.17.1</fasterxml.spark4.version>
@@ -362,7 +360,7 @@
         <version>${maven-compiler-plugin.version}</version>
         <configuration>
           <source>${java.version}</source>
-          <target>${java.target}</target>
+          <target>${java.version}</target>
         </configuration>
       </plugin>
       <plugin>
@@ -2182,7 +2180,7 @@
             <artifactId>maven-compiler-plugin</artifactId>
             <configuration>
               <source>${java.version}</source>
-              <target>${java.target}</target>
+              <target>${java.version}</target>
             </configuration>
           </plugin>
           <plugin>
@@ -2569,8 +2567,6 @@
     <profile>
       <id>spark4.0</id>
       <properties>
-        <java.version>17</java.version>
-        <spark.java.target>17</spark.java.target>
         <spark4.version>${spark40.version}</spark4.version>
         <spark.version>${spark4.version}</spark.version>
         <sparkbundle.version>4.0</sparkbundle.version>

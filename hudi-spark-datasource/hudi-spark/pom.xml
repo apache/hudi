@@ -48,7 +48,7 @@
           <configuration>
             <args>
               <arg>-nobootcp</arg>
-              <arg>-target:jvm-${spark.java.target}</arg>
+              <arg>-target:jvm-1.8</arg>
             </args>
             <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
           </configuration>
