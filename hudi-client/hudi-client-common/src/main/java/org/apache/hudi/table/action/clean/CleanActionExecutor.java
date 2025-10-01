@@ -154,7 +154,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
           deleteFileAndGetResult(table.getStorage(), table.getMetaClient().getBasePath() + "/" + entry);
         }
       } catch (IOException e) {
-        LOG.error("Partition deletion failed {}", entry);
+        LOG.warn("Partition deletion failed: {}", entry, e);
       }
     });
 
@@ -247,7 +247,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
         fss.cleanOldFiles(pendingCleanInstants.stream().map(is -> is.requestedTime()).collect(Collectors.toList()));
       } catch (Exception e) {
         // we should not affect original clean logic. Swallow exception and log.
-        LOG.error("failed to clean old history schema");
+        LOG.warn("failed to clean old history schema");
       }
 
       for (HoodieInstant hoodieInstant : pendingCleanInstants) {

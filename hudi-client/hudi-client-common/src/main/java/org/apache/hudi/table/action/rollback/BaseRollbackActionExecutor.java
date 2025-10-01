@@ -360,7 +360,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
         LOG.info("Copied instant {} to backup dir {} during rollback at {}", instant, backupDir, instantTime);
       } catch (HoodieIOException e) {
         // Ignoring error in backing up
-        LOG.error("Failed to backup rollback instant", e);
+        LOG.warn("Failed to backup rollback instant", e);
       }
     }
   }
