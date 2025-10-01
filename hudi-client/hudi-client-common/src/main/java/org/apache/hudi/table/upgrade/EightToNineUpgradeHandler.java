@@ -94,7 +94,8 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
       PostgresDebeziumAvroPayload.class.getName()));
   private static final Set<String> PAYLOADS_MAPPED_TO_COMMIT_TIME_MERGE_MODE = new HashSet<>(Arrays.asList(
       AWSDmsAvroPayload.class.getName(),
-      OverwriteNonDefaultsWithLatestAvroPayload.class.getName()));
+      OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+      OverwriteWithLatestAvroPayload.class.getName()));
   public static final Set<String> BUILTIN_MERGE_STRATEGIES = Collections.unmodifiableSet(
       new HashSet<>(Arrays.asList(
           COMMIT_TIME_BASED_MERGE_STRATEGY_UUID,
@@ -159,16 +160,6 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     } else if (PAYLOADS_MAPPED_TO_EVENT_TIME_MERGE_MODE.contains(payloadClass)) {
       tablePropsToAdd.put(RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
       tablePropsToAdd.put(RECORD_MERGE_STRATEGY_ID, EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
-    } else if (OverwriteWithLatestAvroPayload.class.getName().equals(payloadClass)) {
-      // Special case: OverwriteWithLatestAvroPayload with preCombine field uses EVENT_TIME_ORDERING
-      Option<String> orderingFieldsOpt = tableConfig.getOrderingFieldsStr();
-      if (orderingFieldsOpt.isPresent()) {
-        tablePropsToAdd.put(RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
-        tablePropsToAdd.put(RECORD_MERGE_STRATEGY_ID, EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
-      } else {
-        tablePropsToAdd.put(RECORD_MERGE_MODE, RecordMergeMode.COMMIT_TIME_ORDERING.name());
-        tablePropsToAdd.put(RECORD_MERGE_STRATEGY_ID, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
-      }
     }
     // else: No op, which means merge strategy id and merge mode are not changed.
   }
