@@ -79,24 +79,31 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (10, 4L, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
       (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
-    val originalOrderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
-      "_event_seq"
+    val originalOrderingFields: Option[String] = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
+      Some("_event_seq")
     } else if (payloadClazz.equals(classOf[PostgresDebeziumAvroPayload].getName)) {
-      "_event_lsn"
+      Some("_event_lsn")
+    } else if (payloadClazz.equals(classOf[OverwriteWithLatestAvroPayload].getName)
+      || payloadClazz.equals(classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName)
+      || payloadClazz.equals(classOf[AWSDmsAvroPayload].getName)) {
+      None  // Don't set ordering fields for commit-time ordering payloads
     } else {
-      "ts"
+      Some("ts")
     }
     val expectedOrderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
       "_event_bin_file,_event_pos"
     } else if (payloadClazz.equals(classOf[PostgresDebeziumAvroPayload].getName)) {
       "_event_lsn"
     } else {
-      originalOrderingFields
+      originalOrderingFields.orNull
     }
-    inserts.write.format("hudi").
-      option(RECORDKEY_FIELD.key(), "_event_lsn").
-      option(HoodieTableConfig.ORDERING_FIELDS.key(), originalOrderingFields).
-      option(TABLE_TYPE.key(), tableType).
+    val insertWriter = inserts.write.format("hudi").
+      option(RECORDKEY_FIELD.key(), "_event_lsn")
+    val writerWithOrdering = originalOrderingFields match {
+      case Some(fields) => insertWriter.option(HoodieTableConfig.ORDERING_FIELDS.key(), fields)
+      case None => insertWriter
+    }
+    writerWithOrdering.option(TABLE_TYPE.key(), tableType).
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL).
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
@@ -123,7 +130,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (12, 1L, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
       (11, 2L, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"))
     performUpsert(firstUpdateData, columns, serviceOpts, opts, basePath,
-      tableVersion = Some("8"), orderingFields = Some(originalOrderingFields))
+      tableVersion = Some("8"), orderingFields = originalOrderingFields)
     // Validate table version.
     metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
@@ -145,7 +152,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       // Delete rider-E with LOWER ordering - should be IGNORED (rider-E has ts=10 originally)
       (9, 5L, "rider-EE", "driver-EE", 17.85, "D", "9.1", 9, 1, "d"))
     performUpsert(mixedOrderingData, columns, serviceOpts, opts, basePath,
-      tableVersion = Some("8"), orderingFields = Some(originalOrderingFields))
+      tableVersion = Some("8"), orderingFields = originalOrderingFields)
     // Validate table version is still 8 after mixed ordering batch
     metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
@@ -172,7 +179,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     assertEquals(payloadClazz, metaClient.getTableConfig.getLegacyPayloadClass)
     assertEquals(isCDCPayload(payloadClazz) || useOpAsDelete,
       metaClient.getTableConfig.getProps.containsKey(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY))
-    assertEquals(expectedOrderingFields, metaClient.getTableConfig.getOrderingFieldsStr.orElse(""))
+    assertEquals(expectedOrderingFields, metaClient.getTableConfig.getOrderingFieldsStr.orElse(null))
 
     // 5. Add a trivial update to trigger payload class mismatch.
     val thirdUpdateData = Seq(
@@ -291,22 +298,29 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (10, 4L, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
       (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1, "i"))
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
-    val originalOrderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
-      "_event_seq"
+    val originalOrderingFields: Option[String] = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
+      Some("_event_seq")
+    } else if (payloadClazz.equals(classOf[OverwriteWithLatestAvroPayload].getName)
+      || payloadClazz.equals(classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName)
+      || payloadClazz.equals(classOf[AWSDmsAvroPayload].getName)) {
+      None  // Don't set ordering fields for commit-time ordering payloads
     } else {
-      "ts"
+      Some("ts")
     }
     val expectedOrderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
       "_event_bin_file,_event_pos"
     } else if (payloadClazz.equals(classOf[PostgresDebeziumAvroPayload].getName)) {
       "_event_lsn"
     } else {
-      originalOrderingFields
+      originalOrderingFields.orNull
     }
-    inserts.write.format("hudi").
-      option(RECORDKEY_FIELD.key(), "_event_lsn").
-      option(ORDERING_FIELDS.key(), originalOrderingFields).
-      option(TABLE_TYPE.key(), tableType).
+    val insertWriter = inserts.write.format("hudi").
+      option(RECORDKEY_FIELD.key(), "_event_lsn")
+    val writerWithOrdering = originalOrderingFields match {
+      case Some(fields) => insertWriter.option(ORDERING_FIELDS.key(), fields)
+      case None => insertWriter
+    }
+    writerWithOrdering.option(TABLE_TYPE.key(), tableType).
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL).
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
@@ -347,7 +361,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       .build()
     assertEquals(9, metaClient.getTableConfig.getTableVersion.versionCode())
     // validate ordering fields
-    assertEquals(expectedOrderingFields, metaClient.getTableConfig.getOrderingFieldsStr.orElse(""))
+    assertEquals(expectedOrderingFields, metaClient.getTableConfig.getOrderingFieldsStr.orElse(null))
     val firstUpdateInstantTime = metaClient.getActiveTimeline.getInstants.get(1).requestedTime()
 
     // 3. Add mixed ordering test data to validate proper ordering handling
