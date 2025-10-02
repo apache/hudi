@@ -74,6 +74,9 @@ if [[ "$SCALA_SCRIPT_NAME" == *"mor"* ]]; then
 elif [[ "$SCALA_SCRIPT_NAME" == *"complex-keygen"* ]]; then
     FIXTURES_DIR="$SCRIPT_DIR/complex-keygen-tables"
     echo "Using complex-keygen tables directory: $FIXTURES_DIR"
+elif [[ "$SCALA_SCRIPT_NAME" == *"payload"* ]]; then
+    FIXTURES_DIR="$SCRIPT_DIR/payload-tables"
+    echo "Using payload tables directory: $FIXTURES_DIR"
 else
     # Default fallback
     FIXTURES_DIR="$SCRIPT_DIR/complex-keygen-tables"
@@ -254,11 +257,20 @@ generate_fixture() {
 
     # Copy template and substitute variables
     cp "$SCRIPT_DIR/scala-templates/$actual_script_name" "$temp_script"
-    sed -i.bak \
-        -e "s/\${FIXTURE_NAME}/$fixture_name/g" \
-        -e "s/\${TABLE_NAME}/$table_name/g" \
-        -e "s|\${BASE_PATH}|$fixture_path|g" \
-        "$temp_script"
+    # For payload tables, use the fixtures directory as base path, not the specific fixture path
+    if [[ "$SCALA_SCRIPT_NAME" == *"payload"* ]]; then
+        sed -i.bak \
+            -e "s/\${FIXTURE_NAME}/$fixture_name/g" \
+            -e "s/\${TABLE_NAME}/$table_name/g" \
+            -e "s|\${BASE_PATH}|$FIXTURES_DIR|g" \
+            "$temp_script"
+    else
+        sed -i.bak \
+            -e "s/\${FIXTURE_NAME}/$fixture_name/g" \
+            -e "s/\${TABLE_NAME}/$table_name/g" \
+            -e "s|\${BASE_PATH}|$fixture_path|g" \
+            "$temp_script"
+    fi
     rm -f "${temp_script}.bak"
 
     # Run Spark shell directly to generate the fixture
@@ -345,21 +357,42 @@ echo "Fixture generation completed!"
 echo ""
 echo "Compressing fixture tables..."
 
-for fixture_dir in "$FIXTURES_DIR"/hudi-v*-table"$SCRIPT_SUFFIX"; do
-    if [ -d "$fixture_dir" ]; then
-        fixture_name=$(basename "$fixture_dir")
-        echo "Compressing $fixture_name..."
-        zip_name="${fixture_name}.zip"
-        (cd "$FIXTURES_DIR" && zip -r -q -X "$zip_name" "$fixture_name")
-        if [ $? -eq 0 ]; then
-            rm -rf "$fixture_dir"
-            echo "Created $zip_name"
-        else
-            echo "ERROR: Failed to compress $fixture_name"
-            exit 1
+# Handle payload tables differently (multiple tables created by one script)
+if [[ "$SCALA_SCRIPT_NAME" == *"payload"* ]]; then
+    # For payload tables, compress each individual payload table directory
+    for fixture_dir in "$FIXTURES_DIR"/hudi-v*-table-payload-*; do
+        if [ -d "$fixture_dir" ]; then
+            fixture_name=$(basename "$fixture_dir")
+            echo "Compressing $fixture_name..."
+            zip_name="${fixture_name}.zip"
+            (cd "$FIXTURES_DIR" && zip -r -q -X "$zip_name" "$fixture_name")
+            if [ $? -eq 0 ]; then
+                rm -rf "$fixture_dir"
+                echo "Created $zip_name"
+            else
+                echo "ERROR: Failed to compress $fixture_name"
+                exit 1
+            fi
         fi
-    fi
-done
+    done
+else
+    # Handle regular tables (one table per script)
+    for fixture_dir in "$FIXTURES_DIR"/hudi-v*-table"$SCRIPT_SUFFIX"; do
+        if [ -d "$fixture_dir" ]; then
+            fixture_name=$(basename "$fixture_dir")
+            echo "Compressing $fixture_name..."
+            zip_name="${fixture_name}.zip"
+            (cd "$FIXTURES_DIR" && zip -r -q -X "$zip_name" "$fixture_name")
+            if [ $? -eq 0 ]; then
+                rm -rf "$fixture_dir"
+                echo "Created $zip_name"
+            else
+                echo "ERROR: Failed to compress $fixture_name"
+                exit 1
+            fi
+        fi
+    done
+fi
 
 echo ""
 echo "Compression completed!"
