@@ -63,7 +63,8 @@ public class TestAverageRecordSizeEstimator {
   private static final String PARTITION1 = "partition1";
   private static final String TEST_WRITE_TOKEN = "1-0-1";
   private static final Integer DEFAULT_MAX_COMMITS = 2;
-  private static final Integer DEFAULT_MAX_PARQUET_METADATA_SIZE = 1000;
+  // needs to be big enough to skew the estimate
+  private static final Integer DEFAULT_AVERAGE_PARQUET_METADATA_SIZE = 10000000;
   private static final Double DEFAULT_RECORD_SIZE_ESTIMATE_THRESHOLD = 0.1;
 
   @Test
@@ -102,7 +103,7 @@ public class TestAverageRecordSizeEstimator {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
         .withRecordSizeEstimator(AverageRecordSizeEstimator.class.getName())
         .withRecordSizeEstimatorMaxCommits(DEFAULT_MAX_COMMITS)
-        .withRecordSizeEstimatorAverageMetadataSize(DEFAULT_MAX_PARQUET_METADATA_SIZE)
+        .withRecordSizeEstimatorAverageMetadataSize(DEFAULT_AVERAGE_PARQUET_METADATA_SIZE)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .compactionRecordSizeEstimateThreshold(DEFAULT_RECORD_SIZE_ESTIMATE_THRESHOLD)
             .build())
@@ -152,85 +153,85 @@ public class TestAverageRecordSizeEstimator {
 
   private static Stream<Arguments> testCases() {
     Long baseInstant = 20231204194919610L;
+    Long standardCount = 10000000L;
     List<Arguments> arguments = new ArrayList<>();
     // Note the avg record estimate is based on a parquet metadata size of 500Bytes per file.
     // 1. straight forward. just 1 instant.
     arguments.add(Arguments.of(
         Arrays.asList(Pair.of(generateCompletedInstant(HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant)),
-            Collections.singletonList(generateBaseWriteStat(baseInstant, 10000000L, 100L)))), 99L));
+            Collections.singletonList(generateBaseWriteStat(baseInstant, standardCount, 100L)))), 99L));
 
-    // 2. two instants. avg of both the instants
+    // 2. two instants. latest instant should be honored
     arguments.add(Arguments.of(
         Arrays.asList(Pair.of(generateCompletedInstant(HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant)),
-                Collections.singletonList(generateBaseWriteStat(baseInstant, 10000000L, 100L))),
+                Collections.singletonList(generateBaseWriteStat(baseInstant, standardCount, 100L))),
             Pair.of(generateCompletedInstant(HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant + 100)),
-                Collections.singletonList(generateBaseWriteStat(baseInstant + 100, 1000000L, 200L)))), 109L));
+                Collections.singletonList(generateBaseWriteStat(baseInstant + 100, standardCount, 200L)))), 199L));
 
-    // 3. two instants, latest commit has a small file thats just above threshold, while earliest commit is fully ignored,
-    // since it below the threshold size limit
+    // 3. two instants, while 2nd one is smaller in size so as to not meet the threshold. So, 1st one should be honored
     arguments.add(Arguments.of(
         Arrays.asList(Pair.of(generateCompletedInstant(HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant)),
-                Collections.singletonList(generateBaseWriteStat(baseInstant, 9000L, 1000L))),
+                Collections.singletonList(generateBaseWriteStat(baseInstant, standardCount, 100L))),
             Pair.of(generateCompletedInstant(HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant + 100)),
-                Collections.singletonList(generateBaseWriteStat(baseInstant + 100, 110000, 100L)))), 99L));
+                Collections.singletonList(generateBaseWriteStat(baseInstant + 100, 1000L, 200L)))), 99L));
 
-    // 4. 2nd instance is replace commit, it shld be excluded and should be avg of both commits.
+    // 4. 2nd instance is replace commit, it should be excluded
     arguments.add(Arguments.of(
         Arrays.asList(Pair.of(generateCompletedInstant(HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant)),
-                Collections.singletonList(generateBaseWriteStat(baseInstant, 10000000L, 100L))),
+                Collections.singletonList(generateBaseWriteStat(baseInstant, standardCount, 200L))),
             Pair.of(generateCompletedInstant(HoodieTimeline.REPLACE_COMMIT_ACTION, Long.toString(baseInstant + 100)),
-                Collections.singletonList(generateBaseWriteStat(baseInstant + 100, 10000000L, 200L)))), 99L));
+                Collections.singletonList(generateBaseWriteStat(baseInstant + 100, standardCount, 100L)))), 199L));
 
     // 5. for delta commits, only parquet files should be accounted for.
     arguments.add(Arguments.of(
         Arrays.asList(Pair.of(generateCompletedInstant(HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant)),
-                Collections.singletonList(generateBaseWriteStat(baseInstant, 10000000L, 100L))),
+                Collections.singletonList(generateBaseWriteStat(baseInstant, standardCount, 100L))),
             Pair.of(generateCompletedInstant(HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant + 100)),
-                Collections.singletonList(generateBaseWriteStat(baseInstant + 100, 10000000L, 200L)))), 149L));
+                Collections.singletonList(generateBaseWriteStat(baseInstant + 100, standardCount, 200L)))), 199L));
 
     // 6. delta commit has a mix of parquet and log files. only parquet files should be accounted for.
     arguments.add(Arguments.of(
         Arrays.asList(Pair.of(generateCompletedInstant(HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant)),
-                Collections.singletonList(generateBaseWriteStat(baseInstant, 1000000L, 100L))),
+                Collections.singletonList(generateBaseWriteStat(baseInstant, standardCount, 100L))),
             Pair.of(generateCompletedInstant(HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant + 100)),
-                Arrays.asList(generateBaseWriteStat(baseInstant + 100, 10000000L, 200L),
-                    generateLogWriteStat(baseInstant + 100, 10000000L, 300L)))), 190L));
+                Arrays.asList(generateBaseWriteStat(baseInstant + 100, standardCount, 200L),
+                    generateLogWriteStat(baseInstant + 100, standardCount, 300L)))), 199L));
 
     // 7. 2nd delta commit only has log files. and so we honor 1st delta commit size.
     arguments.add(Arguments.of(
         Arrays.asList(Pair.of(generateCompletedInstant(HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant)),
-                Collections.singletonList(generateBaseWriteStat(baseInstant, 10000000L, 100L))),
+                Collections.singletonList(generateBaseWriteStat(baseInstant, standardCount, 100L))),
             Pair.of(generateCompletedInstant(HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant + 100)),
-                Arrays.asList(generateLogWriteStat(baseInstant + 100, 1000000L, 200L),
-                    generateLogWriteStat(baseInstant + 100, 10000000L, 300L)))), 99L));
+                Arrays.asList(generateLogWriteStat(baseInstant + 100, standardCount, 200L),
+                    generateLogWriteStat(baseInstant + 100, standardCount, 300L)))), 99L));
 
     // 8. since default max commits is overriden to 2 commits, ignore the earliest commit here since there are total 3 commits
     arguments.add(Arguments.of(
         Arrays.asList(Pair.of(generateCompletedInstant(HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant)),
-                Collections.singletonList(generateBaseWriteStat(baseInstant, 10000000L, 1000L))),
+                Collections.singletonList(generateBaseWriteStat(baseInstant, standardCount, 200L))),
             Pair.of(generateCompletedInstant(HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant + 100)),
-                Collections.singletonList(generateBaseWriteStat(baseInstant + 100, 10000000L, 50L))),
+                Collections.singletonList(generateBaseWriteStat(baseInstant + 100, 1L, 50L))),
             Pair.of(generateCompletedInstant(HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant + 200)),
-                Collections.singletonList(generateBaseWriteStat(baseInstant + 200, 10000000L, 100L)))), 74L));
+                Collections.singletonList(generateBaseWriteStat(baseInstant + 200, 1L, 100L)))), Long.valueOf(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.defaultValue())));
 
     // 9. replace commits should be ignored despite being the latest commits.
     arguments.add(Arguments.of(
         Arrays.asList(Pair.of(generateCompletedInstant(HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant)),
-                Collections.singletonList(generateBaseWriteStat(baseInstant, 1000000L, 100L))),
+                Collections.singletonList(generateBaseWriteStat(baseInstant, standardCount, 100L))),
             Pair.of(generateCompletedInstant(HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant + 100)),
-                Arrays.asList(generateLogWriteStat(baseInstant + 100, 1000000L, 200L),
+                Arrays.asList(generateLogWriteStat(baseInstant + 100, standardCount, 200L),
                     generateLogWriteStat(baseInstant + 100, 1000000L, 300L))),
             Pair.of(generateCompletedInstant(HoodieTimeline.REPLACE_COMMIT_ACTION, Long.toString(baseInstant)),
-                Collections.singletonList(generateBaseWriteStat(baseInstant + 200, 1000000L, 2000L))),
+                Collections.singletonList(generateBaseWriteStat(baseInstant + 200, standardCount, 2000L))),
             Pair.of(generateCompletedInstant(HoodieTimeline.REPLACE_COMMIT_ACTION, Long.toString(baseInstant)),
-                Collections.singletonList(generateBaseWriteStat(baseInstant + 300, 1000000L, 3000L)))), 99L));
+                Collections.singletonList(generateBaseWriteStat(baseInstant + 300, standardCount, 3000L)))), 99L));
 
     // 10. Ignore commit stat with 0 records
     arguments.add(Arguments.of(
         Arrays.asList(Pair.of(generateCompletedInstant(HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant)),
-                Collections.singletonList(generateBaseWriteStat(baseInstant, 10000000L, 1000L))),
+                Collections.singletonList(generateBaseWriteStat(baseInstant, standardCount, 1000L))),
             Pair.of(generateCompletedInstant(HoodieTimeline.COMMIT_ACTION, Long.toString(baseInstant + 100)),
-                Collections.singletonList(generateBaseWriteStat(baseInstant + 100, 10000000L, 50L))),
+                Collections.singletonList(generateBaseWriteStat(baseInstant + 100, standardCount, 50L))),
             Pair.of(generateCompletedInstant(HoodieTimeline.DELTA_COMMIT_ACTION, Long.toString(baseInstant + 200)),
                 Collections.singletonList(generateBaseWriteStat(baseInstant + 200, 0L, 1000L)))), 49L));
 
