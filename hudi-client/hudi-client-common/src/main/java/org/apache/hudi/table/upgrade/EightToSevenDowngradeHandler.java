@@ -244,6 +244,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     private final int batchSize;
     private final StoragePath archivePath;
     private final HoodieTableMetaClient metaClient;
+    private final Object lock = new Object();
 
     public ArchiveEntryFlusher(HoodieTableMetaClient metaClient, TimelineArchiverV1 archiverV1, int batchSize, StoragePath archivePath) {
       this.metaClient = metaClient;
@@ -255,24 +256,28 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
 
     @Override
     public void accept(String s, GenericRecord archiveEntry) {
-      if (buffer.size() >= batchSize) {
-        archiverV1.flushArchiveEntries(new ArrayList<>(buffer), archivePath);
-        buffer.clear();
-      } else {
-        try {
-          GenericRecord legacyArchiveEntry = MetadataConversionUtils.createMetaWrapper(metaClient, archiveEntry);
-          buffer.add(legacyArchiveEntry);
-        } catch (IOException e) {
-          throw new HoodieException("Convert lsm archive entry to legacy error", e);
+      synchronized (lock) {
+        if (buffer.size() >= batchSize) {
+          archiverV1.flushArchiveEntries(new ArrayList<>(buffer), archivePath);
+          buffer.clear();
+        } else {
+          try {
+            GenericRecord legacyArchiveEntry = MetadataConversionUtils.createMetaWrapper(metaClient, archiveEntry);
+            buffer.add(legacyArchiveEntry);
+          } catch (IOException e) {
+            throw new HoodieException("Convert lsm archive entry to legacy error", e);
+          }
         }
       }
     }
 
     @Override
     public void close() {
-      if (!buffer.isEmpty()) {
-        archiverV1.flushArchiveEntries(new ArrayList<>(buffer), this.archivePath);
-        buffer.clear();
+      synchronized (lock) {
+        if (!buffer.isEmpty()) {
+          archiverV1.flushArchiveEntries(new ArrayList<>(buffer), this.archivePath);
+          buffer.clear();
+        }
       }
     }
   }
