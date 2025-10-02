@@ -86,7 +86,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     } else if (payloadClazz.equals(classOf[PostgresDebeziumAvroPayload].getName)) {
       Some("_event_lsn")
     } else if (payloadClazz.equals(classOf[OverwriteWithLatestAvroPayload].getName)) {
-      if (setOrderingField) Some("ts") else None  // Event-time ordering when flag is true, commit-time when false
+      if (setOrderingField) Some("ts") else None
     } else if (payloadClazz.equals(classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName)
       || payloadClazz.equals(classOf[AWSDmsAvroPayload].getName)) {
       None  // Always commit-time ordering
@@ -827,8 +827,7 @@ object TestPayloadDeprecationFlow {
         "false",
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "COMMIT_TIME_ORDERING",
-          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName),
         Map(
           HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName,
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
@@ -983,8 +982,7 @@ object TestPayloadDeprecationFlow {
         "false",
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "COMMIT_TIME_ORDERING",
-          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName),
         Map(
           HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName,
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
