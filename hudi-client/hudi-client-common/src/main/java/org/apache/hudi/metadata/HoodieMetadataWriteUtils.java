@@ -457,20 +457,19 @@ public class HoodieMetadataWriteUtils {
       LOG.debug("Indexing following columns for partition stats index: {}", columnsToIndexSchemaMap.keySet());
       // Group by partitionPath and then gather write stats lists,
       // where each inner list contains HoodieWriteStat objects that have the same partitionPath.
-      Map<String, List<HoodieWriteStat>> partitionedWriteStats = allWriteStats.stream()
-          .collect(Collectors.groupingBy(HoodieWriteStat::getPartitionPath));
+      List<List<HoodieWriteStat>> partitionedWriteStats = new ArrayList<>(allWriteStats.stream()
+          .collect(Collectors.groupingBy(HoodieWriteStat::getPartitionPath))
+          .values());
 
       int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
 
       HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> columnRangeMetadata =
-          engineContext.parallelize(new ArrayList<>(partitionedWriteStats.entrySet()), parallelism).mapToPair(entry -> {
-            String partitionName = entry.getKey();
-            List<HoodieWriteStat> partitionedWriteStat = entry.getValue();
-
+          engineContext.parallelize(partitionedWriteStats, parallelism).mapToPair(partitionedWriteStat -> {
+            final String partitionName = partitionedWriteStat.get(0).getPartitionPath();
             checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
             // Get the latest merged file slices based on the commited files part of the latest snapshot and the new files of the current commit metadata
             List<StoragePathInfo> consolidatedPathInfos = new ArrayList<>();
-            allWriteStats.forEach(
+            partitionedWriteStat.forEach(
                 stat -> consolidatedPathInfos.add(
                     new StoragePathInfo(new StoragePath(dataMetaClient.getBasePath(), stat.getPath()), stat.getFileSizeInBytes(), false, (short) 0, 0, 0)));
             SyncableFileSystemView fileSystemViewForCommitedFiles = FileSystemViewManager.createViewManager(new HoodieLocalEngineContext(dataMetaClient.getStorageConf()),
