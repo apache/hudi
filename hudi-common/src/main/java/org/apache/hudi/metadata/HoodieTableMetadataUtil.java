@@ -39,6 +39,7 @@ import org.apache.hudi.avro.model.StringWrapper;
 import org.apache.hudi.avro.model.TimeMicrosWrapper;
 import org.apache.hudi.avro.model.TimestampMicrosWrapper;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
@@ -90,7 +91,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.SpillableMapBasedFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
@@ -496,8 +499,8 @@ public class HoodieTableMetadataUtil {
           "Column stats partition must be enabled to generate partition stats. Please enable: " + HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
       // Generate Hoodie Pair data of partition name and list of column range metadata for all the files in that partition
       boolean isDeletePartition = commitMetadata.getOperationType().equals(WriteOperationType.DELETE_PARTITION);
-      final HoodieData<HoodieRecord> partitionStatsRDD = convertMetadataToPartitionStatRecords(commitMetadata, context,
-          dataMetaClient, tableMetadata, metadataConfig, recordTypeOpt, isDeletePartition);
+      final HoodieData<HoodieRecord> partitionStatsRDD = convertMetadataToPartitionStatRecords(
+          commitMetadata, instantTime, context, dataMetaClient, tableMetadata, metadataConfig, recordTypeOpt, isDeletePartition);
       partitionToRecordsMap.put(MetadataPartitionType.PARTITION_STATS.getPartitionPath(), partitionStatsRDD);
     }
     if (enabledPartitionTypes.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath())) {
@@ -2755,7 +2758,8 @@ public class HoodieTableMetadataUtil {
     }
   }
 
-  public static HoodieData<HoodieRecord> convertMetadataToPartitionStatRecords(HoodieCommitMetadata commitMetadata, HoodieEngineContext engineContext, HoodieTableMetaClient dataMetaClient,
+  public static HoodieData<HoodieRecord> convertMetadataToPartitionStatRecords(HoodieCommitMetadata commitMetadata, String instantTime,
+                                                                               HoodieEngineContext engineContext, HoodieTableMetaClient dataMetaClient,
                                                                                HoodieTableMetadata tableMetadata, HoodieMetadataConfig metadataConfig,
                                                                                Option<HoodieRecordType> recordTypeOpt, boolean isDeletePartition) {
     try {
@@ -2808,49 +2812,78 @@ public class HoodieTableMetadataUtil {
       LOG.debug("Indexing following columns for partition stats index: {}", columnsToIndexSchemaMap.keySet());
       // Group by partitionPath and then gather write stats lists,
       // where each inner list contains HoodieWriteStat objects that have the same partitionPath.
-      List<List<HoodieWriteStat>> partitionedWriteStats = new ArrayList<>(allWriteStats.stream()
-          .collect(Collectors.groupingBy(HoodieWriteStat::getPartitionPath))
-          .values());
+      // TODO(yihua): only invoke FSV resolution if needed based on shouldScanColStatsForTightBound?
+      Map<String, List<HoodieWriteStat>> partitionedWriteStats = allWriteStats.stream()
+          .collect(Collectors.groupingBy(HoodieWriteStat::getPartitionPath));
 
       int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
       boolean shouldScanColStatsForTightBound = isShouldScanColStatsForTightBound(dataMetaClient);
 
-      HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> columnRangeMetadata = engineContext.parallelize(partitionedWriteStats, parallelism).mapToPair(partitionedWriteStat -> {
-        final String partitionName = partitionedWriteStat.get(0).getPartitionPath();
-        // Step 1: Collect Column Metadata for Each File part of current commit metadata
-        List<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata = partitionedWriteStat.stream()
-            .flatMap(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, colsToIndex, partitionStatsIndexVersion).stream()).collect(toList());
+      List<StoragePathInfo> consolidatedPathInfos = new ArrayList<>();
+      //final Map<String, Stream<FileSlice>> consolidatedFileSliceMap;
 
-        if (shouldScanColStatsForTightBound) {
-          checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
-          // Collect Column Metadata for Each File part of active file system view of latest snapshot
-          // Get all file names, including log files, in a set from the file slices
-          Set<String> fileNames = getPartitionLatestFileSlicesIncludingInflight(dataMetaClient, Option.empty(), partitionName).stream()
-              .flatMap(fileSlice -> Stream.concat(
-                  Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
-                  fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
-              .filter(Objects::nonNull)
-              .collect(Collectors.toSet());
-          // Fetch metadata table COLUMN_STATS partition records for above files
-          List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata
-              .getRecordsByKeyPrefixes(
-                  HoodieListData.lazy(generateColumnStatsKeys(colsToIndex, partitionName)),
-                  MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
-              // schema and properties are ignored in getInsertValue, so simply pass as null
-              .map(record -> ((HoodieMetadataPayload)record.getData()).getColumnStatMetadata())
-              .filter(Option::isPresent)
-              .map(colStatsOpt -> colStatsOpt.get())
-              .filter(stats -> fileNames.contains(stats.getFileName()))
-              .map(HoodieColumnRangeMetadata::fromColumnStats).collectAsList();
-          if (!partitionColumnMetadata.isEmpty()) {
-            // incase of shouldScanColStatsForTightBound = true, we compute stats for the partition of interest for all files from getLatestFileSlice() excluding current commit here
-            // already fileColumnMetadata contains stats for files from the current infliht commit. so, we are adding both together and sending it to collectAndProcessColumnMetadata
-            fileColumnMetadata.addAll(partitionColumnMetadata);
-          }
-        }
+      // TODO(yihua): refactor usage of shouldScanColStatsForTightBound
+      // if (shouldScanColStatsForTightBound) {
 
-        return Pair.of(partitionName, fileColumnMetadata);
-      });
+      // TODO(yihua): seems not possible to directly get latest merged file slices without constructing another FSV
+      tableMetadata.getAllFilesInPartitions(
+              partitionedWriteStats.keySet().stream()
+                  .map(partition -> new StoragePath(dataMetaClient.getBasePath(), partition).toString()).collect(toList()))
+          .values().forEach(consolidatedPathInfos::addAll);
+      allWriteStats.forEach(
+          stat -> consolidatedPathInfos.add(
+              new StoragePathInfo(new StoragePath(dataMetaClient.getBasePath(), stat.getPath()), stat.getFileSizeInBytes(), false, (short) 0, 0, 0)));
+      // TODO(yihua): check config constructed here
+      // TODO(yihua): explore this approach vs RDD based data partitions and fetching files in partition from table metadata
+      //  and construct FSV per partition (this alleviates driver memory at the cost of increasing FS calls to MDT?)
+      SpillableMapBasedFileSystemView fileSystemView = new SpillableMapBasedFileSystemView(
+          tableMetadata, dataMetaClient, dataMetaClient.getActiveTimeline(),
+          consolidatedPathInfos, FileSystemViewStorageConfig.newBuilder().fromProperties(metadataConfig.getProps()).build(),
+          HoodieCommonConfig.newBuilder().fromProperties(metadataConfig.getProps()).build());
+      Map<String, List<FileSlice>> consolidatedFileSliceMap = partitionedWriteStats.keySet().stream()
+          .collect(Collectors.toMap(
+              e -> e,
+              partition -> fileSystemView.getLatestMergedFileSlicesBeforeOrOn(partition, instantTime).collect(toList())));
+
+      HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> columnRangeMetadata =
+          engineContext.parallelize(partitionedWriteStats.entrySet().stream().collect(Collectors.toList()), parallelism).mapToPair(entry -> {
+            List<HoodieWriteStat> partitionedWriteStat = entry.getValue();
+            final String partitionName = partitionedWriteStat.get(0).getPartitionPath();
+            // Step 1: Collect Column Metadata for Each File part of current commit metadata
+            List<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata = partitionedWriteStat.stream()
+                .flatMap(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, colsToIndex, partitionStatsIndexVersion).stream()).collect(toList());
+            Set<String> filesWithColumnStats = partitionedWriteStat.stream().map(stat -> stat.getPath()).collect(Collectors.toSet());
+
+            if (shouldScanColStatsForTightBound) {
+              checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
+              // Collect Column Metadata for Each File part of active file system view of latest snapshot
+              // Get all file names, including log files, in a set from the file slices
+              Set<String> fileNames = consolidatedFileSliceMap.get(partitionName).stream()
+                  .flatMap(fileSlice -> Stream.concat(
+                      Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
+                      fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
+                  .filter(e -> Objects.nonNull(e) && !filesWithColumnStats.contains(e))
+                  .collect(Collectors.toSet());
+              // Fetch metadata table COLUMN_STATS partition records for above files
+              List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata
+                  .getRecordsByKeyPrefixes(
+                      HoodieListData.lazy(generateColumnStatsKeys(colsToIndex, partitionName)),
+                      MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
+                  // schema and properties are ignored in getInsertValue, so simply pass as null
+                  .map(record -> ((HoodieMetadataPayload) record.getData()).getColumnStatMetadata())
+                  .filter(Option::isPresent)
+                  .map(colStatsOpt -> colStatsOpt.get())
+                  .filter(stats -> fileNames.contains(stats.getFileName()))
+                  .map(HoodieColumnRangeMetadata::fromColumnStats).collectAsList();
+              if (!partitionColumnMetadata.isEmpty()) {
+                // incase of shouldScanColStatsForTightBound = true, we compute stats for the partition of interest for all files from getLatestFileSlice() excluding current commit here
+                // already fileColumnMetadata contains stats for files from the current infliht commit. so, we are adding both together and sending it to collectAndProcessColumnMetadata
+                fileColumnMetadata.addAll(partitionColumnMetadata);
+              }
+            }
+
+            return Pair.of(partitionName, fileColumnMetadata);
+          });
 
       return convertMetadataToPartitionStatsRecords(columnRangeMetadata, dataMetaClient, columnsToIndexSchemaMap, partitionStatsIndexVersion);
     } catch (Exception e) {
