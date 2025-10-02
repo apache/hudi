@@ -441,7 +441,7 @@ public class HoodieTableSource implements
             final List<MergeOnReadInputSplit> inputSplits = buildInputSplits();
             if (inputSplits.isEmpty()) {
               // When there is no input splits, just return an empty source.
-              LOG.warn("No input splits generate for MERGE_ON_READ input format, returns empty collection instead");
+              LOG.info("No input splits generate for MERGE_ON_READ input format. Returning empty collection");
               return InputFormats.EMPTY_INPUT_FORMAT;
             }
             return mergeOnReadInputFormat(rowType, requiredRowType, tableAvroSchema,
@@ -465,7 +465,7 @@ public class HoodieTableSource implements
         final IncrementalInputSplits.Result result = incrementalInputSplits.inputSplits(metaClient, cdcEnabled);
         if (result.isEmpty()) {
           // When there is no input splits, just return an empty source.
-          LOG.warn("No input splits generate for incremental read, returns empty collection instead");
+          LOG.info("No input splits generated for incremental read. Returning empty collection");
           return InputFormats.EMPTY_INPUT_FORMAT;
         } else if (cdcEnabled) {
           return cdcInputFormat(rowType, requiredRowType, tableAvroSchema, rowDataType, result.getInputSplits());
@@ -645,7 +645,7 @@ public class HoodieTableSource implements
       return schemaResolver.getTableAvroSchema();
     } catch (Throwable e) {
       // table exists but has no written data
-      LOG.warn("Get table avro schema error, use schema from the DDL instead", e);
+      LOG.warn("Unable to resolve schema from table, using schema from the DDL", e);
       return inferSchemaFromDdl();
     }
   }

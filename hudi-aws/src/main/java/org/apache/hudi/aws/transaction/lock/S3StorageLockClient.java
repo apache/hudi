@@ -143,7 +143,7 @@ public class S3StorageLockClient implements StorageLockClient {
     } catch (S3Exception e) {
       result = handleUpsertS3Exception(e);
     } catch (AwsServiceException | SdkClientException e) {
-      logger.warn("OwnerId: {}, Unexpected SDK error while writing lock file: {}", ownerId, lockFilePath, e);
+      logger.error("OwnerId: {}, Unexpected SDK error while writing lock file: {}", ownerId, lockFilePath, e);
       if (!isLockRenewal) {
         // We should always throw errors early when we are creating the lock file.
         // This is likely indicative of a larger issue that should bubble up sooner.
@@ -188,16 +188,16 @@ public class S3StorageLockClient implements StorageLockClient {
   private LockUpsertResult handleUpsertS3Exception(S3Exception e) {
     int status = e.statusCode();
     if (status == PRECONDITION_FAILURE_ERROR_CODE) {
-      logger.warn("OwnerId: {}, Lockfile modified by another process: {}", ownerId, lockFilePath);
+      logger.info("OwnerId: {}, Lockfile modified by another process: {}", ownerId, lockFilePath);
       return LockUpsertResult.ACQUIRED_BY_OTHERS;
     } else if (status == CONDITIONAL_REQUEST_CONFLICT_ERROR_CODE) {
-      logger.warn("OwnerId: {}, Retriable conditional request conflict error: {}", ownerId, lockFilePath);
+      logger.info("OwnerId: {}, Retriable conditional request conflict error: {}", ownerId, lockFilePath);
     } else if (status == RATE_LIMIT_ERROR_CODE) {
       logger.warn("OwnerId: {}, Rate limit exceeded for: {}", ownerId, lockFilePath);
     } else if (status >= INTERNAL_SERVER_ERROR_CODE_MIN) {
       logger.warn("OwnerId: {}, internal server error for: {}", ownerId, lockFilePath, e);
     } else {
-      logger.error("OwnerId: {}, Error writing lock file: {}", ownerId, lockFilePath, e);
+      logger.warn("OwnerId: {}, Error writing lock file: {}", ownerId, lockFilePath, e);
     }
 
     return LockUpsertResult.UNKNOWN_ERROR;
@@ -291,10 +291,10 @@ public class S3StorageLockClient implements StorageLockClient {
         logger.debug("JSON config file not found: {}", filePath);
         return Option.empty();
       }
-      logger.warn("Error reading JSON config file: {}", filePath, e);
+      logger.error("Error reading JSON config file: {}", filePath, e);
       return Option.empty();
     } catch (Exception e) {
-      logger.warn("Error reading JSON config file: {}", filePath, e);
+      logger.error("Error reading JSON config file: {}", filePath, e);
       return Option.empty();
     }
   }
@@ -318,7 +318,7 @@ public class S3StorageLockClient implements StorageLockClient {
       logger.debug("Successfully wrote object to: {}", filePath);
       return true;
     } catch (Exception e) {
-      logger.warn("Error writing object to: {}", filePath, e);
+      logger.error("Error writing object to: {}", filePath, e);
       return false;
     }
   }

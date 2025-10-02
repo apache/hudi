@@ -750,7 +750,7 @@ public class HoodieStreamer implements Serializable {
           properties.get().forEach((k, v) -> propsToValidate.put(k.toString(), v.toString()));
           HoodieWriterUtils.validateTableConfig(this.sparkSession, org.apache.hudi.HoodieConversionUtils.mapAsScalaImmutableMap(propsToValidate), meta.getTableConfig());
         } catch (HoodieIOException e) {
-          LOG.warn("Full exception msg " + e.getLocalizedMessage() + ",  msg " + e.getMessage());
+          LOG.warn("Full exception msg {},  msg {}", e.getLocalizedMessage(), e.getMessage());
           if (e.getMessage().contains("Could not load Hoodie properties") && e.getMessage().contains(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
             initializeTableTypeAndBaseFileFormat();
           } else {
@@ -859,7 +859,7 @@ public class HoodieStreamer implements Serializable {
               Option<HoodieData<WriteStatus>> lastWriteStatuses = Option.ofNullable(
                   scheduledCompactionInstantAndRDD.isPresent() ? HoodieJavaRDD.of(scheduledCompactionInstantAndRDD.get().getRight()) : null);
               if (requestShutdownIfNeeded(lastWriteStatuses)) {
-                LOG.warn("Closing and shutting down ingestion service");
+                LOG.info("Closing and shutting down ingestion service");
                 error = true;
                 onIngestionCompletes(false);
                 shutdown(true);
@@ -901,13 +901,13 @@ public class HoodieStreamer implements Serializable {
      * Shutdown async services like compaction/clustering as DeltaSync is shutdown.
      */
     private void shutdownAsyncServices(boolean error) {
-      LOG.info("Delta Sync shutdown. Error ?" + error);
+      LOG.info("Delta Sync shutdown. Error ?{}", error);
       if (asyncCompactService.isPresent()) {
-        LOG.warn("Gracefully shutting down compactor");
+        LOG.info("Gracefully shutting down compactor");
         asyncCompactService.get().shutdown(false);
       }
       if (asyncClusteringService.isPresent()) {
-        LOG.warn("Gracefully shutting down clustering service");
+        LOG.info("Gracefully shutting down clustering service");
         asyncClusteringService.get().shutdown(false);
       }
     }

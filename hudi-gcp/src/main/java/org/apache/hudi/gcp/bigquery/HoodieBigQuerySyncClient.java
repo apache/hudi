@@ -328,7 +328,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
       boolean isTableBasePathUpdated = sourceUris.stream()
           .noneMatch(sourceUri -> sourceUri.startsWith(basePathWithTrailingSlash));
       if (isTableBasePathUpdated) {
-        LOG.warn("Base path in table source uris: {}, new base path: {}", sourceUris, basePathWithTrailingSlash);
+        LOG.warn("Table base path from source uri updated from: {}, to new base path: {}", sourceUris, basePathWithTrailingSlash);
       }
       return isTableBasePathUpdated;
     }
@@ -336,7 +336,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     basePathInTableDefinition = StringUtils.stripEnd(basePathInTableDefinition, "/");
     boolean isTableBasePathUpdated = !basePathInTableDefinition.equals(basePath);
     if (isTableBasePathUpdated) {
-      LOG.warn("Base path in table definition: {}, new base path: {}", basePathInTableDefinition, basePath);
+      LOG.warn("Table base path from table definition updated from: {}, to new base path: {}", basePathInTableDefinition, basePath);
     }
     return isTableBasePathUpdated;
   }

@@ -256,7 +256,7 @@ public class LSMTimeline {
       }
     } catch (NumberFormatException e) {
       // log and ignore any format warnings
-      LOG.warn("error getting file layout for archived file: {}", fileName);
+      LOG.warn("error getting file layout for archived file: {}", fileName, e);
     }
 
     // return default value in case of any errors

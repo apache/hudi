@@ -102,7 +102,7 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
           LOG.error(message, e);
           throw e;
         }
-        LOG.warn("Catch Exception for " + taskInfo + ", current retry number " + retries + ", will retry after " + waitTime + " ms.", e);
+        LOG.warn("Task [{}] failed. current retry number {}, will retry after {} ms.", taskInfo, retries, waitTime, e);
         try {
           Thread.sleep(waitTime);
         } catch (InterruptedException ex) {

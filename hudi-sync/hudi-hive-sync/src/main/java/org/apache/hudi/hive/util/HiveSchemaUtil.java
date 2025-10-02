@@ -100,7 +100,7 @@ public class HiveSchemaUtil {
             continue;
           }
           // We will log this and continue. Hive schema is a superset of all parquet schemas
-          LOG.warn("Ignoring table column " + fieldName + " as its not present in the parquet schema");
+          LOG.info("Ignoring table column {} as its not present in the parquet schema", fieldName);
           continue;
         }
         tableColumnType = tableColumnType.replaceAll("\\s+", "");

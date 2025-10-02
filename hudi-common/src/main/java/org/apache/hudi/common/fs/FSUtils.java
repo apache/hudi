@@ -772,7 +772,7 @@ public class FSUtils {
             if (!ignoreFailed) {
               throw new HoodieIOException("Failed to delete : " + file, e);
             } else {
-              LOG.warn("Ignore failed deleting : " + file);
+              LOG.info("Ignore failed deleting : {}", file);
               return true;
             }
           }

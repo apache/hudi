@@ -77,7 +77,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
       ValidationUtils.checkState(getTotalFileGroupCount(fileGroupSize) > 0, "Record index should have at least one file group");
     } catch (TableNotFoundException | IllegalStateException e) {
       // This means that record index has not been initialized.
-      LOG.warn("Record index not initialized so falling back to {} for tagging records", getFallbackIndexType().name());
+      LOG.warn("Record index not initialized. Falling back to {} for tagging records", getFallbackIndexType().name());
 
       // Fallback to another index so that tagLocation is still accurate and there are no duplicates.
       HoodieWriteConfig otherConfig = HoodieWriteConfig.newBuilder().withProperties(config.getProps())

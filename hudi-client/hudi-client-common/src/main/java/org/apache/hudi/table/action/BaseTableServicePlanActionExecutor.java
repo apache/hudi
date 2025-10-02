@@ -76,19 +76,19 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
     if (config.isIncrementalTableServiceEnabled() && strategy instanceof IncrementalPartitionAwareStrategy) {
       try {
         // get incremental partitions.
-        LOG.info("Start to fetch incremental partitions for " + type);
+        LOG.info("Start to fetch incremental partitions for {}", type);
         Pair<Option<HoodieInstant>, Set<String>> lastInstantAndIncrPartitions = getIncrementalPartitions(type);
         Option<HoodieInstant> lastCompleteTableServiceInstant = lastInstantAndIncrPartitions.getLeft();
         Set<String> incrementalPartitions = lastInstantAndIncrPartitions.getRight();
 
         if (lastCompleteTableServiceInstant.isPresent()) {
           if (!incrementalPartitions.isEmpty()) {
-            LOG.info("Fetched incremental partitions for " + type + ". " + incrementalPartitions + ". Instant " + instantTime);
+            LOG.info("Fetched incremental partitions for {}. {}. Instant {}", type, incrementalPartitions, instantTime);
             return new ArrayList<>(incrementalPartitions);
           } else {
             // handle the case the writer just commits the empty commits continuously
             // the incremental partition list is empty we just skip the scheduling
-            LOG.info("Incremental partitions are empty. Skip current schedule " + instantTime);
+            LOG.info("Incremental partitions are empty. Skip current schedule {}", instantTime);
             return Collections.emptyList();
           }
         }
@@ -101,7 +101,7 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
     }
 
     // get all partitions
-    LOG.info("Start to fetch all partitions for " + type + ". Instant " + instantTime);
+    LOG.info("Start to fetch all partitions for {}. Instant {}", type, instantTime);
     return FSUtils.getAllPartitionPaths(context, table.getMetaClient(), config.getMetadataConfig());
   }
 

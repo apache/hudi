@@ -356,7 +356,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       Table table = client.getTable(databaseName, tableName);
       return Option.ofNullable(table.getParameters().getOrDefault(GLOBALLY_CONSISTENT_READ_TIMESTAMP, null));
     } catch (NoSuchObjectException e) {
-      LOG.warn("the said table not found in hms " + tableId(databaseName, tableName));
+      LOG.error("database.table [{}.{}] not found in hms", databaseName, tableName);
       return Option.empty();
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to get the last replicated time from the table " + tableName, e);

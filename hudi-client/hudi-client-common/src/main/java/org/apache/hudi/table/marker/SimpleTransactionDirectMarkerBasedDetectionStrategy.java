@@ -57,7 +57,7 @@ public class SimpleTransactionDirectMarkerBasedDetectionStrategy
       super.detectAndResolveConflictIfNecessary();
 
     } catch (Exception e) {
-      LOG.warn("Exception occurs during create marker file in early conflict detection mode within transaction.");
+      LOG.error("Exception occurs during create marker file in early conflict detection mode within transaction.", e);
       throw e;
     } finally {
       // End transaction after created marker file.

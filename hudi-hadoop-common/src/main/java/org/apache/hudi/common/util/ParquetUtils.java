@@ -246,7 +246,7 @@ public class ParquetUtils extends FileFormatUtils {
       MessageType schema = parquetUtils.readSchema(storage, parquetFilePath);
       return schema.hashCode();
     } catch (Exception e) {
-      LOG.warn("Failed to read schema hash from file: " + parquetFilePath, e);
+      LOG.warn("Failed to read schema hash from file: {}", parquetFilePath, e);
       return 0;
     }
   }

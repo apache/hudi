@@ -144,7 +144,7 @@ public abstract class AbstractRealtimeRecordReader {
       this.serializer = new HiveAvroSerializer(new ArrayWritableObjectInspector(rowTypeInfo), columnNameList, columnTypeList);
     } catch (Exception e) {
       // fallback to origin logical
-      LOG.warn("fall to init HiveAvroSerializer to support payload merge", e);
+      LOG.warn("Failed to init HiveAvroSerializer to support payload merge. Fallback to origin logical", e);
       this.supportPayload = false;
     }
   }

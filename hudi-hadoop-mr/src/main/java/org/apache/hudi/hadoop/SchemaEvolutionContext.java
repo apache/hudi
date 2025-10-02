@@ -181,7 +181,7 @@ public class SchemaEvolutionContext {
       return HoodieTableMetaClient.builder().setBasePath(tablePath.get().toString())
           .setConf(HadoopFSUtils.getStorageConfWithCopy(job)).build();
     } catch (Exception e) {
-      LOG.warn(String.format("Not a valid hoodie table, table path: %s", ((FileSplit) split).getPath()), e);
+      LOG.error("Not a valid hoodie table, table path: {}", ((FileSplit) split).getPath(), e);
       return null;
     }
   }
@@ -194,7 +194,7 @@ public class SchemaEvolutionContext {
    */
   public void doEvolutionForRealtimeInputFormat(AbstractRealtimeRecordReader realtimeRecordReader) throws Exception {
     if (!(split instanceof RealtimeSplit)) {
-      LOG.warn("expect realtime split for mor table, but find other type split {}", split);
+      LOG.warn("Expected realtime split for mor table. Found split: {}", split);
       return;
     }
     if (internalSchemaOption.isPresent()) {

@@ -106,7 +106,7 @@ public class SchedulerConfGenerator {
       String sparkSchedulingConfFile = generateAndStoreConfig(cfg.deltaSyncSchedulingWeight,
           cfg.compactSchedulingWeight, cfg.deltaSyncSchedulingMinShare, cfg.compactSchedulingMinShare,
           cfg.clusterSchedulingWeight, cfg.clusterSchedulingMinShare);
-      LOG.warn("Spark scheduling config file " + sparkSchedulingConfFile);
+      LOG.info("Spark scheduling config file {}", sparkSchedulingConfFile);
       additionalSparkConfigs.put(SparkConfigs.SPARK_SCHEDULER_ALLOCATION_FILE_KEY(), sparkSchedulingConfFile);
     } else {
       LOG.warn("Job Scheduling Configs will not be in effect as spark.scheduler.mode "

@@ -581,7 +581,7 @@ object HoodieFileIndex extends Logging {
           }
         } catch {
           case NonFatal(e) =>
-            logWarning("Fail to convert filters for TimestampBaseAvroKeyGenerator", e)
+            logWarning("Failed to convert filters for TimestampBaseAvroKeyGenerator", e)
             partitionFilters
         }
       }

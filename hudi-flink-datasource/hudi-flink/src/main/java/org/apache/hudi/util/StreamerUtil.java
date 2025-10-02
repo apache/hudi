@@ -622,7 +622,7 @@ public class StreamerUtil {
       HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(path, hadoopConf);
       return getTableAvroSchema(metaClient, false);
     } catch (Exception e) {
-      LOG.warn("Error while resolving the latest table schema", e);
+      LOG.error("Failed to resolve the latest table schema", e);
     }
     return null;
   }

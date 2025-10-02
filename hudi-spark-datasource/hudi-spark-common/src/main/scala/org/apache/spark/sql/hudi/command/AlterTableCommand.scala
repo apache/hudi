@@ -188,7 +188,7 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     // ignore NonExist unset
     propKeys.foreach { k =>
       if (!table.properties.contains(k) && k != TableCatalog.PROP_COMMENT) {
-        logWarning(s"find non exist unset property: ${k} , ignore it")
+        logWarning(s"Cannot remove property [$k] because it is not currently set for the table.")
       }
     }
     val tableComment = if (propKeys.contains(TableCatalog.PROP_COMMENT)) None else table.comment

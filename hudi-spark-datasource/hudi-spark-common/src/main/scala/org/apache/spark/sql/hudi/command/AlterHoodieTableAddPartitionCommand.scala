@@ -86,7 +86,7 @@ case class AlterHoodieTableAddPartitionCommand(
       }
     } catch {
       case NonFatal(e) =>
-        logWarning("Failed to add partitions in external catalog", e)
+        logError("Failed to add partitions in external catalog", e)
     }
     sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
 

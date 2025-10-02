@@ -282,7 +282,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
       if (config.isFailOnTimelineArchivingEnabled()) {
         throw new HoodieException("Failed to upgrade to LSM timeline", e);
       } else {
-        LOG.warn("Failed to upgrade to LSM timeline");
+        LOG.warn("Failed to upgrade to LSM timeline", e);
       }
     }
   }
@@ -306,7 +306,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     try {
       return rewriteTimelineV1InstantFileToV2Format(instant, metaClient, originalFileName, replacedFileName, commitMetadataSerDeV1, commitMetadataSerDeV2, activeTimelineV2);
     } catch (IOException e) {
-      LOG.warn("Can not to complete the upgrade from version seven to version eight. The reason for failure is {}", e.getMessage());
+      LOG.warn("Can not to complete the upgrade from version seven to version eight", e);
     }
     return false;
   }
