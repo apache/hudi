@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.read.{HoodieFileGroupReader, IncrementalQueryAnalyzer}
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.exception.HoodieNotSupportedException
@@ -178,7 +179,9 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                            options: Map[String, String],
                            path: Path): Boolean = false
   private def supportsCompletionTime(metaClient: HoodieTableMetaClient): Boolean = {
-    !metaClient.isMetadataTable && metaClient.getTableConfig.getTableVersion.greaterThanOrEquals(HoodieTableVersion.SIX)
+    !metaClient.isMetadataTable &&
+      metaClient.getTableConfig.getTableVersion.greaterThanOrEquals(HoodieTableVersion.SIX) &&
+      metaClient.getTimelineLayoutVersion.getVersion >= TimelineLayoutVersion.VERSION_2
   }
 
   private def shouldTransformCommitTimeValues(metaClient: HoodieTableMetaClient): Boolean = {
@@ -195,20 +198,28 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       if (startCommit.isEmpty) {
         Map.empty
       } else {
-        val endCommit = options.getOrElse(DataSourceReadOptions.END_COMMIT.key(), null)
-        val queryContext = IncrementalQueryAnalyzer.builder()
-          .metaClient(metaClient)
-          .startCompletionTime(startCommit.get)
-          .endCompletionTime(endCommit)
-          .rangeType(InstantRange.RangeType.OPEN_CLOSED)
-          .build()
-          .analyze()
-        import scala.collection.JavaConverters._
-        queryContext.getInstants.asScala.map { instant =>
-          val requestedTime = instant.requestedTime()
-          val completionTime = Option(instant.getCompletionTime).getOrElse(requestedTime)
-          requestedTime -> completionTime
-        }.toMap
+        try {
+          val endCommit = options.getOrElse(DataSourceReadOptions.END_COMMIT.key(), null)
+          val queryContext = IncrementalQueryAnalyzer.builder()
+            .metaClient(metaClient)
+            .startCompletionTime(startCommit.get)
+            .endCompletionTime(endCommit)
+            .rangeType(InstantRange.RangeType.OPEN_CLOSED)
+            .build()
+            .analyze()
+          import scala.collection.JavaConverters._
+          queryContext.getInstants.asScala.map { instant =>
+            val requestedTime = instant.requestedTime()
+            val completionTime = Option(instant.getCompletionTime).getOrElse(requestedTime)
+            requestedTime -> completionTime
+          }.toMap
+        } catch {
+          case _: RuntimeException =>
+            logWarning(s"Completion time query not supported for table ${metaClient.getBasePath}, " +
+              s"timeline version ${metaClient.getTableConfig.getTimelineLayoutVersion}. " +
+              s"Falling back to requested time semantics.")
+            Map.empty
+        }
       }
     }
   }
@@ -344,16 +355,27 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     }
 
     val instantRangeOpt: org.apache.hudi.common.util.Option[InstantRange] = if (isIncremental && options.contains(DataSourceReadOptions.START_COMMIT.key())) {
-      val startCommit = options(DataSourceReadOptions.START_COMMIT.key())
-      val endCommit = options.get(DataSourceReadOptions.END_COMMIT.key()).orNull
-      val queryContext = IncrementalQueryAnalyzer.builder()
-        .metaClient(metaClient)
-        .startCompletionTime(startCommit)
-        .endCompletionTime(endCommit)
-        .rangeType(InstantRange.RangeType.OPEN_CLOSED)
-        .build()
-        .analyze()
-      queryContext.getInstantRange
+      if (supportsCompletionTime(metaClient)) {
+        try {
+          val startCommit = options(DataSourceReadOptions.START_COMMIT.key())
+          val endCommit = options.get(DataSourceReadOptions.END_COMMIT.key()).orNull
+          val queryContext = IncrementalQueryAnalyzer.builder()
+            .metaClient(metaClient)
+            .startCompletionTime(startCommit)
+            .endCompletionTime(endCommit)
+            .rangeType(InstantRange.RangeType.OPEN_CLOSED)
+            .build()
+            .analyze()
+          queryContext.getInstantRange
+        } catch {
+          case _: RuntimeException =>
+            logWarning(s"Failed to build instant range using completion time for table ${metaClient.getBasePath}. " +
+              s"Timeline version ${metaClient.getTimelineLayoutVersion}. Using empty range.")
+            org.apache.hudi.common.util.Option.empty[InstantRange]()
+        }
+      } else {
+        org.apache.hudi.common.util.Option.empty[InstantRange]()
+      }
     } else {
       org.apache.hudi.common.util.Option.empty[InstantRange]()
     }
@@ -494,7 +516,10 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                             from: StructType,
                             to: StructType): Iterator[InternalRow] = {
     val unsafeProjection = generateUnsafeProjection(from, to)
-    makeCloseableFileGroupMappingRecordIterator(iter, d => unsafeProjection(d))
+    makeCloseableFileGroupMappingRecordIterator(iter, d => {
+      val convertedRow = convertStringFieldsToUTF8String(d, from)
+      unsafeProjection(convertedRow)
+    })
   }
 
   private def makeCloseableFileGroupMappingRecordIterator(closeableFileGroupRecordIterator: ClosableIterator[InternalRow],
