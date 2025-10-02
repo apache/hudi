@@ -493,7 +493,7 @@ public class HoodieMetadataWriteUtils {
             Set<String> filesWithColumnStats = partitionedWriteStat.stream()
                 .map(stat -> new StoragePath(stat.getPath()).getName()).collect(Collectors.toSet());
             // Collect column metadata of each file that does not have column stats provided by the write stat in the commit metadata
-            Set<String> filesToFetchColumnStats = consolidatedFileSystemView.getLatestMergedFileSlicesBeforeOrOn(partitionName, instantTime)
+            Set<String> filesToFetchColumnStats = consolidatedFileSystemView.getLatestMergedFileSlicesBeforeOrOnIncludingInflight(partitionName, instantTime)
                 .flatMap(fileSlice -> Stream.concat(
                     Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
                     fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
