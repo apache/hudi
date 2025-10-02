@@ -69,7 +69,7 @@ class TestIncrementalQueriesV2WithCompleteTime extends HoodieSparkClientTestBase
   @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
   def testCompleteTimeFilteringSemantics(tableTypeStr: String): Unit = {
     testBasicIncrementalQuery(tableTypeStr, enableFileGroupReader = true)
-    // testBasicIncrementalQuery(tableTypeStr, enableFileGroupReader = false) // Base MOR doesn't support this mode
+    // testBasicIncrementalQuery(tableTypeStr, enableFileGroupReader = false) // Base MOR doesn't support this mode because of buildScan() being final and not overidable
   }
 
   private def testBasicIncrementalQuery(tableTypeStr: String, enableFileGroupReader: Boolean): Unit = {
@@ -142,7 +142,7 @@ class TestIncrementalQueriesV2WithCompleteTime extends HoodieSparkClientTestBase
     """)
 
     val actualCompletionTimes = completionTimesDF.collect().map(_.getString(0))
-    assertTrue(actualCompletionTimes.length == 5, s"Should have length of 5 but got ${actualCompletionTimes.length}")
+    assertTrue(actualCompletionTimes.length == 2, s"Should have length of 2 but got ${actualCompletionTimes.length}")
 
     val expectedCompletionTimes = commits.map(_.asInstanceOf[HoodieInstant].getCompletionTime).sorted
 

@@ -33,7 +33,7 @@ import org.apache.hudi.storage.StoragePath
 
 import org.apache.avro.Schema
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{SQLContext, SparkSession}
+import org.apache.spark.sql.{SparkSession, SQLContext}
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.execution.datasources._
@@ -345,7 +345,8 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(override val sqlCont
 
   private lazy val extendedSchemaSpec: Option[StructType] = {
     if (!metaClient.isMetadataTable) {
-      schemaSpec.map(extendSchemaForCompletionTime)
+      val baseSchema = schemaSpec.getOrElse(tableStructSchema)
+      Some(extendSchemaForCompletionTime(baseSchema))
     } else {
       schemaSpec
     }
@@ -378,24 +379,24 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(override val sqlCont
   }
 
   private def extendSchemaForCompletionTime(baseSchema: StructType): StructType = {
-    import org.apache.spark.sql.types.{StringType, StructField}
     val completionTimeField = StructField(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD, StringType, nullable = true)
     StructType(baseSchema.fields :+ completionTimeField)
   }
 
   private def extendAvroSchemaForCompletionTime(baseAvroSchema: Schema): Schema = {
     if (baseAvroSchema.getFields.asScala.exists(_.name() == HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD)) {
-      return baseAvroSchema
-    }
-    val newFields = baseAvroSchema.getFields.asScala.map { originalField =>
+      baseAvroSchema
+    } else {
+      val newFields = baseAvroSchema.getFields.asScala.map { originalField =>
       new Schema.Field(originalField.name(), originalField.schema(), originalField.doc(), originalField.defaultVal())
     }.toBuffer
     val completionTimeField = new Schema.Field(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD,
       Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)),
       "Completion time of the commit", org.apache.avro.JsonProperties.NULL_VALUE)
-    newFields += completionTimeField
-    Schema.createRecord(baseAvroSchema.getName, baseAvroSchema.getDoc,
-      baseAvroSchema.getNamespace, baseAvroSchema.isError, newFields.asJava)
+      newFields += completionTimeField
+      Schema.createRecord(baseAvroSchema.getName, baseAvroSchema.getDoc,
+        baseAvroSchema.getNamespace, baseAvroSchema.isError, newFields.asJava)
+    }
   }
 }
 
@@ -548,17 +549,18 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(override val sqlCont
 
   private def extendAvroSchemaForCompletionTime(baseAvroSchema: Schema): Schema = {
     if (baseAvroSchema.getFields.asScala.exists(_.name() == HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD)) {
-      return baseAvroSchema
-    }
-    val newFields = baseAvroSchema.getFields.asScala.map { originalField =>
+      baseAvroSchema
+    } else {
+      val newFields = baseAvroSchema.getFields.asScala.map { originalField =>
       new Schema.Field(originalField.name(), originalField.schema(), originalField.doc(), originalField.defaultVal())
     }.toBuffer
     val completionTimeField = new Schema.Field(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD,
       Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)),
       "Completion time of the commit", org.apache.avro.JsonProperties.NULL_VALUE)
-    newFields += completionTimeField
-    Schema.createRecord(baseAvroSchema.getName, baseAvroSchema.getDoc,
-      baseAvroSchema.getNamespace, baseAvroSchema.isError, newFields.asJava)
+      newFields += completionTimeField
+      Schema.createRecord(baseAvroSchema.getName, baseAvroSchema.getDoc,
+        baseAvroSchema.getNamespace, baseAvroSchema.isError, newFields.asJava)
+    }
   }
 }
 

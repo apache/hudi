@@ -58,6 +58,13 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     super(storageConfig, tableConfig, Option.empty(), Option.empty(), recordContext);
   }
 
+  protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig,
+                                              HoodieTableConfig tableConfig,
+                                              Option<org.apache.hudi.common.table.log.InstantRange> instantRange,
+                                              BaseSparkInternalRecordContext recordContext) {
+    super(storageConfig, tableConfig, instantRange, Option.empty(), recordContext);
+  }
+
   @Override
   public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
     // TODO(HUDI-7843):

@@ -47,7 +47,6 @@ import org.apache.avro.Schema;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -107,6 +106,7 @@ public class FileGroupReaderSchemaHandler<T> {
 
     boolean hasInstantRange = readerContext.getInstantRange().isPresent();
     boolean shouldAddCompletionTimeField = !metaClient.isMetadataTable()
+        && metaClient.getTableConfig() != null && metaClient.getTableConfig().getTableVersion() != null
         && metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.SIX)
         && hasInstantRange;
 
@@ -146,10 +146,11 @@ public class FileGroupReaderSchemaHandler<T> {
     Schema targetSchema = shouldAddCompletionTime ? requestedSchemaWithCompletionTime : requestedSchema;
     UnaryOperator<T> projectionConverter = null;
     UnaryOperator<T> completionTimeConverter = null;
-    if (!AvroSchemaUtils.areSchemasProjectionEquivalent(requiredSchema, targetSchema)) {
+    boolean schemasEquivalent = AvroSchemaUtils.areSchemasProjectionEquivalent(requiredSchema, targetSchema);
+    if (!schemasEquivalent) {
       projectionConverter = readerContext.getRecordContext().projectRecord(requiredSchema, targetSchema);
     }
-    if (shouldAddCompletionTime && !commitTimeToCompletionTimeMap.isEmpty()) {
+    if (shouldAddCompletionTime) {
       completionTimeConverter = getCompletionTimeTransformer();
     }
     if (projectionConverter != null && completionTimeConverter != null) {
@@ -178,28 +179,21 @@ public class FileGroupReaderSchemaHandler<T> {
         }
         String commitTime = commitTimeObj.toString();
         String completionTime = commitTimeToCompletionTimeMap.getOrDefault(commitTime, commitTime);
-        Option<Schema.Field> completionTimeFieldOpt = findNestedField(
-            requestedSchemaWithCompletionTime,
-            HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD
-        );
-        if (!completionTimeFieldOpt.isPresent()) {
+        Schema.Field completionTimeField = requestedSchemaWithCompletionTime.getField(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD);
+        if (completionTimeField == null) {
           return record;
         }
-        int completionTimePos = completionTimeFieldOpt.get().pos();
-        Map<Integer, Object> updateValues = new HashMap<>();
-        updateValues.put(completionTimePos, completionTime);
-        BufferedRecord<T> bufferedRecord = BufferedRecords.fromEngineRecord(
-            record,
-            requestedSchemaWithCompletionTime,
-            readerContext.getRecordContext(),
-            java.util.Collections.emptyList(),
-            false
-        );
-        return readerContext.getRecordContext().mergeWithEngineRecord(
-            requestedSchemaWithCompletionTime,
-            updateValues,
-            bufferedRecord
-        );
+        int completionTimePos = completionTimeField.pos();
+        Object[] fieldValues = new Object[requestedSchemaWithCompletionTime.getFields().size()];
+        for (int i = 0; i < fieldValues.length; i++) {
+          if (i == completionTimePos) {
+            fieldValues[i] = completionTime;
+          } else {
+            Schema.Field field = requestedSchemaWithCompletionTime.getFields().get(i);
+            fieldValues[i] = readerContext.getRecordContext().getValue(record, requestedSchemaWithCompletionTime, field.name());
+          }
+        }
+        return readerContext.getRecordContext().constructEngineRecord(requestedSchemaWithCompletionTime, fieldValues);
       } catch (Exception e) {
         return record;
       }

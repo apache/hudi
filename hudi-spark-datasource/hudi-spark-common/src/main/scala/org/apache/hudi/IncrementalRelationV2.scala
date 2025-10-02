@@ -32,15 +32,15 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
-
 import org.apache.avro.Schema
 import org.apache.hadoop.fs.GlobPattern
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{AnalysisException, DataFrame, Row, SQLContext}
 import org.apache.spark.sql.execution.datasources.parquet.LegacyHoodieParquetFileFormat
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
@@ -317,16 +317,16 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
   }
 
   private def transformDataFrameWithCompletionTime(df: DataFrame,
-                                                  broadcastMap: org.apache.spark.broadcast.Broadcast[Map[String, String]]): DataFrame = {
+                                                  broadcastMap: Broadcast[Map[String, String]]): DataFrame = {
     val transformedRDD = addCompletionTimeColumn(df.rdd, broadcastMap)
     sqlContext.createDataFrame(transformedRDD, schema)
   }
 
   private def addCompletionTimeColumn(rdd: RDD[Row],
-                                    broadcastMap: org.apache.spark.broadcast.Broadcast[Map[String, String]]): RDD[Row] = {
+                                    broadcastMap: Broadcast[Map[String, String]]): RDD[Row] = {
     val commitTimeFieldIndex = schema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
     val completionTimeFieldIndex = schema.fieldIndex(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD)
-    
+
     rdd.map { row =>
       val currentRequestedTime = row.getString(commitTimeFieldIndex)
       val completionTime = broadcastMap.value.getOrElse(currentRequestedTime, currentRequestedTime)
@@ -342,7 +342,6 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
   }
 
   private def addCompletionTimeColumn(baseSchema: StructType): StructType = {
-    import org.apache.spark.sql.types.{StringType, StructField}
     val completionTimeField = StructField(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD, StringType, nullable = true)
     StructType(baseSchema.fields :+ completionTimeField)
   }

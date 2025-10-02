@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.{HoodieMemoryConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.read.{HoodieFileGroupReader, IncrementalQueryAnalyzer}
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.data.CloseableIteratorListener
@@ -34,29 +35,30 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.IOUtils
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
+
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.mapreduce.Job
-import org.apache.hudi.common.table.log.InstantRange
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.JoinedRow
+import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, JoinedRow}
 import org.apache.spark.sql.execution.datasources.{OutputWriterFactory, PartitionedFile, SparkColumnarFileReader}
 import org.apache.spark.sql.execution.datasources.orc.OrcUtils
 import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapColumnVector}
 import org.apache.spark.sql.hudi.MultipleColumnarFileFormatReader
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
+import org.apache.spark.unsafe.types.UTF8String
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
+
 import scala.collection.JavaConverters.mapAsJavaMapConverter
 import scala.jdk.CollectionConverters.asScalaBufferConverter
 
@@ -223,7 +225,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       } catch {
         case _: IllegalArgumentException => None
       }
-      
+
       completionTimeFieldIndexOpt match {
         case Some(completionTimeFieldIndex) if completionTimeFieldIndex >= 0 =>
           val currentRequestedTime = row.getString(commitTimeFieldIndex)
@@ -272,10 +274,13 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
     val completionTimeFieldInDataSchema = dataSchema.fields.find(_.name == HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD)
-    val shouldAddCompletionTime = completionTimeFieldInDataSchema.isDefined &&
+    val completionTimeFieldInTableSchema = Option(avroTableSchema.getField(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD))
+      .map(_ => StructField(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD, org.apache.spark.sql.types.StringType, nullable = true))
+    val completionTimeField = completionTimeFieldInDataSchema.orElse(completionTimeFieldInTableSchema)
+    val shouldAddCompletionTime = completionTimeField.isDefined &&
       !requiredSchema.fieldNames.contains(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD)
     val outputSchema = if (shouldAddCompletionTime) {
-      StructType((requiredSchema.fields :+ completionTimeFieldInDataSchema.get) ++ partitionSchema.fields)
+      StructType((requiredSchema.fields :+ completionTimeField.get) ++ partitionSchema.fields)
     } else {
       StructType(requiredSchema.fields ++ partitionSchema.fields)
     }
@@ -294,7 +299,6 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val exclusionFields = new java.util.HashSet[String]()
     exclusionFields.add("op")
     partitionSchema.fields.foreach(f => exclusionFields.add(f.name))
-    val completionTimeField = dataSchema.fields.find(_.name == HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD)
     val baseRequestedFields = requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name))
     val requestedSchemaFields = completionTimeField match {
       case Some(field) if !baseRequestedFields.exists(_.name == field.name) => baseRequestedFields :+ field
@@ -338,6 +342,21 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       None
     }
 
+    val instantRangeOpt: org.apache.hudi.common.util.Option[InstantRange] = if (isIncremental && options.contains(DataSourceReadOptions.START_COMMIT.key())) {
+      val startCommit = options(DataSourceReadOptions.START_COMMIT.key())
+      val endCommit = options.get(DataSourceReadOptions.END_COMMIT.key()).orNull
+      val queryContext = IncrementalQueryAnalyzer.builder()
+        .metaClient(metaClient)
+        .startCompletionTime(startCommit)
+        .endCompletionTime(endCommit)
+        .rangeType(InstantRange.RangeType.OPEN_CLOSED)
+        .build()
+        .analyze()
+      queryContext.getInstantRange
+    } else {
+      org.apache.hudi.common.util.Option.empty[InstantRange]()
+    }
+
     (file: PartitionedFile) => {
       val storageConf = new HadoopStorageConfiguration(broadcastedStorageConf.value.value)
       val iter = file.partitionValues match {
@@ -347,7 +366,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
             .getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
           fileSliceMapping.getSlice(fileGroupName) match {
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
-              val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupBaseFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig)
+              val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupBaseFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig, instantRangeOpt)
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))
               props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction))
@@ -394,40 +413,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
           val baseIterSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
           applyCompletionTimeTransformation(baseIter, outputSchemaForTransformation, baseIterSchema, broadcastCompletionTimeMap)
       }
-      if (iter.hasNext) {
-        val firstRow = iter.next()
-        println(s"First row: $firstRow")
-        println(s"First row class: ${firstRow.getClass.getName}")
-        if (firstRow.isInstanceOf[org.apache.spark.sql.catalyst.InternalRow]) {
-          val internalRow = firstRow.asInstanceOf[org.apache.spark.sql.catalyst.InternalRow]
-          println(s"Row numFields: ${internalRow.numFields}")
-          for (i <- 0 until math.min(internalRow.numFields, outputSchema.fields.length)) {
-            try {
-              val fieldType = outputSchema.fields(i).dataType
-              val value = if (internalRow.isNullAt(i)) {
-                "null"
-              } else {
-                fieldType match {
-                  case org.apache.spark.sql.types.StringType => 
-                    val utf8String = internalRow.getUTF8String(i)
-                    if (utf8String != null) utf8String.toString else "null"
-                  case _ => 
-                    internalRow.get(i, fieldType).toString
-                }
-              }
-              val fieldName = if (i < outputSchema.fields.length) outputSchema.fields(i).name else s"field_$i"
-              println(s"Field[$i] ($fieldName): $value")
-            } catch {
-              case e: Exception =>
-                println(s"Field[$i]: <error reading field: ${e.getMessage}>")
-            }
-          }
-        }
-        val iterWithFirst = Iterator(firstRow) ++ iter
-        CloseableIteratorListener.addListener(iterWithFirst.asInstanceOf[Iterator[InternalRow]])
-      } else {
-        CloseableIteratorListener.addListener(iter)
-      }
+      CloseableIteratorListener.addListener(iter)
     }
   }
 
@@ -496,7 +482,10 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       }
       val unsafeProjection = generateUnsafeProjection(StructType(inputSchema.fields ++ partitionSchema.fields), to)
       val joinedRow = new JoinedRow()
-      makeCloseableFileGroupMappingRecordIterator(iter, d => unsafeProjection(joinedRow(d, fixedPartitionValues)))
+      makeCloseableFileGroupMappingRecordIterator(iter, d => {
+        val convertedRow = convertStringFieldsToUTF8String(d, StructType(inputSchema.fields))
+        unsafeProjection(joinedRow(convertedRow, fixedPartitionValues))
+      })
     }
   }
 
@@ -568,5 +557,30 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
   override def prepareWrite(sparkSession: SparkSession, job: Job, options: Map[String, String], dataSchema: StructType): OutputWriterFactory = {
     throw new HoodieNotSupportedException("HoodieFileGroupReaderBasedFileFormat does not support writing")
+  }
+
+  private def convertStringFieldsToUTF8String(row: InternalRow, schema: StructType): InternalRow = {
+    val completionTimeIdx = schema.fieldNames.indexOf(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD)
+
+    if (completionTimeIdx >= 0 && !row.isNullAt(completionTimeIdx)) {
+      try {
+        row.getUTF8String(completionTimeIdx)
+        row
+      } catch {
+        case _: ClassCastException =>
+          val stringValue = row.get(completionTimeIdx, schema.fields(completionTimeIdx).dataType).asInstanceOf[String]
+          val newRowValues = new Array[Any](row.numFields)
+          for (i <- 0 until row.numFields) {
+            if (i == completionTimeIdx) {
+              newRowValues(i) = UTF8String.fromString(stringValue)
+            } else {
+              newRowValues(i) = if (row.isNullAt(i)) null else row.get(i, schema.fields(i).dataType)
+            }
+          }
+          new GenericInternalRow(newRowValues)
+      }
+    } else {
+      row
+    }
   }
 }

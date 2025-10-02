@@ -131,7 +131,8 @@ public class SparkReaderContextFactory implements ReaderContextFactory<InternalR
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
           new HadoopStorageConfiguration(configurationBroadcast.getValue().value()),
-          tableConfigBroadcast.getValue());
+          tableConfigBroadcast.getValue(),
+          Option.empty());
     } else {
       throw new HoodieException("Cannot get the broadcast Spark Parquet reader.");
     }

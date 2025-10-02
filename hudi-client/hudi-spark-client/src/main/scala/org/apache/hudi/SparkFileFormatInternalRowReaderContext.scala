@@ -59,8 +59,9 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
                                               filters: Seq[Filter],
                                               requiredFilters: Seq[Filter],
                                               storageConfiguration: StorageConfiguration[_],
-                                              tableConfig: HoodieTableConfig)
-  extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig, SparkFileFormatInternalRecordContext.apply(tableConfig)) {
+                                              tableConfig: HoodieTableConfig,
+                                              instantRangeOpt: org.apache.hudi.common.util.Option[org.apache.hudi.common.table.log.InstantRange] = org.apache.hudi.common.util.Option.empty())
+  extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig, instantRangeOpt, SparkFileFormatInternalRecordContext.apply(tableConfig)) {
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
   private lazy val bootstrapSafeFilters: Seq[Filter] = filters.filter(filterIsSafeForBootstrap) ++ requiredFilters
   private lazy val allFilters = filters ++ requiredFilters
