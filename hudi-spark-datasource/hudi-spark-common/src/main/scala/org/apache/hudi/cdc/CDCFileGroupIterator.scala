@@ -223,40 +223,42 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   }
 
   @tailrec final def hasNextInternal: Boolean = {
-    if (nextRecordLoaded) {
-      true
+    if (needLoadNextFile) {
+      loadCdcFile()
+    }
+    if (currentCDCFileSplit == null) {
+      false
     } else {
-      if (needLoadNextFile) {
-        loadCdcFile()
-      }
-      if (currentCDCFileSplit == null) {
-        false
-      } else {
-        currentCDCFileSplit.getCdcInferCase match {
-          case BASE_FILE_INSERT | BASE_FILE_DELETE | REPLACE_COMMIT =>
-            if (recordIter.hasNext && loadNext()) {
-              true
-            } else {
-              hasNextInternal
-            }
-          case LOG_FILE =>
-            if (logRecordIter.hasNext && loadNext()) {
-              true
-            } else {
-              hasNextInternal
-            }
-          case AS_IS =>
-            if (cdcLogRecordIterator.hasNext && loadNext()) {
-              true
-            } else {
-              hasNextInternal
-            }
-        }
+      currentCDCFileSplit.getCdcInferCase match {
+        case BASE_FILE_INSERT | BASE_FILE_DELETE | REPLACE_COMMIT =>
+          if (recordIter.hasNext && loadNext()) {
+            true
+          } else {
+            hasNextInternal
+          }
+        case LOG_FILE =>
+          if (logRecordIter.hasNext && loadNext()) {
+            true
+          } else {
+            hasNextInternal
+          }
+        case AS_IS =>
+          if (cdcLogRecordIterator.hasNext && loadNext()) {
+            true
+          } else {
+            hasNextInternal
+          }
       }
     }
   }
 
-  override def hasNext: Boolean = hasNextInternal
+  override def hasNext: Boolean = {
+    if (nextRecordLoaded) {
+      true
+    } else {
+      hasNextInternal
+    }
+  }
 
   override final def next(): InternalRow = {
     nextRecordLoaded = false
