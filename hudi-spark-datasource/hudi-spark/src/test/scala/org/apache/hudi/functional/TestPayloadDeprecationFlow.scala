@@ -1109,6 +1109,68 @@ object TestPayloadDeprecationFlow {
 
   def provideV6PayloadTestCases(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
+      // V6 backward compat: DefaultHoodieRecordPayload cases
+      Arguments.of(
+        "6",
+        "COPY_ON_WRITE",
+        classOf[DefaultHoodieRecordPayload].getName,
+        "false",
+        "false",
+        Map(
+          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName),
+        Map(
+          HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName,
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
+          HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> null)
+      ),
+      Arguments.of(
+        "6",
+        "COPY_ON_WRITE",
+        classOf[DefaultHoodieRecordPayload].getName,
+        "true",
+        "false",
+        Map(
+          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName),
+        Map(
+          HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName,
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
+          HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> null,
+          HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DefaultHoodieRecordPayload.DELETE_KEY -> "Op",
+          HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DefaultHoodieRecordPayload.DELETE_MARKER -> "D")
+      ),
+      Arguments.of(
+        "6",
+        "MERGE_ON_READ",
+        classOf[DefaultHoodieRecordPayload].getName,
+        "false",
+        "false",
+        Map(
+          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName),
+        Map(
+          HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName,
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
+          HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> null)
+      ),
+      Arguments.of(
+        "6",
+        "MERGE_ON_READ",
+        classOf[DefaultHoodieRecordPayload].getName,
+        "true",
+        "false",
+        Map(
+          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName),
+        Map(
+          HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName,
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
+          HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> null,
+          HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DefaultHoodieRecordPayload.DELETE_KEY -> "Op",
+          HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DefaultHoodieRecordPayload.DELETE_MARKER -> "D")
+      ),
+      // V6 backward compat: OverwriteWithLatestAvroPayload cases
       // V6 backward compat: COW + no ordering → COMMIT_TIME
       Arguments.of(
         "6",
@@ -1174,8 +1236,8 @@ object TestPayloadDeprecationFlow {
 
   def providePayloadClassTestCases(): java.util.List[Arguments] = {
     val combined = new java.util.ArrayList[Arguments]()
-    combined.addAll(provideV8PayloadTestCases())
     combined.addAll(provideV6PayloadTestCases())
+    combined.addAll(provideV8PayloadTestCases())
     combined
   }
 
