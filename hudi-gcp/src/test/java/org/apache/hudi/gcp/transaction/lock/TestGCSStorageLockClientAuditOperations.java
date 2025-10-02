@@ -231,7 +231,7 @@ public class TestGCSStorageLockClientAuditOperations {
     boolean result = lockClient.writeObject(filePath, content);
 
     assertFalse(result);
-    verify(mockLogger).warn(contains("Error writing object to"), eq(filePath), eq(storageException));
+    verify(mockLogger).error(contains("Error writing object to"), eq(filePath), eq(storageException));
   }
 
   @Test
@@ -242,7 +242,7 @@ public class TestGCSStorageLockClientAuditOperations {
     boolean result = lockClient.writeObject(invalidPath, content);
 
     assertFalse(result);
-    verify(mockLogger).warn(contains("Error writing object to"), eq(invalidPath), any(Exception.class));
+    verify(mockLogger).error(contains("Error writing object to"), eq(invalidPath), any(Exception.class));
   }
 
   @Test
@@ -268,6 +268,6 @@ public class TestGCSStorageLockClientAuditOperations {
     boolean result = lockClient.writeObject(filePath, content);
 
     assertFalse(result);
-    verify(mockLogger).warn(contains("Error writing object to"), eq(filePath), eq(rateLimitException));
+    verify(mockLogger).error(contains("Error writing object to"), eq(filePath), eq(rateLimitException));
   }
 }
