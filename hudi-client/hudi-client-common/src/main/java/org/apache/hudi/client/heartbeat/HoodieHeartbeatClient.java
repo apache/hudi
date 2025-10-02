@@ -244,38 +244,46 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
       lastHeartbeatForWriter.getTimer().cancel();
     }
     if (currentTime - lastHeartbeatForWriter.getLastHeartbeatTime() > this.maxAllowableHeartbeatIntervalInMs) {
-      LOG.warn("Heartbeat expired, currentTime = " + currentTime + ", last heartbeat = " + lastHeartbeatForWriter
-          + ", heartbeat interval = " + this.heartbeatIntervalInMs);
+      LOG.warn("Heartbeat expired, currentTime = {}, last heartbeat = {}, heartbeat interval = {}, max allowable interval = {}",
+          currentTime, lastHeartbeatForWriter, this.heartbeatIntervalInMs, this.maxAllowableHeartbeatIntervalInMs);
       return true;
     }
     return false;
   }
 
   private void updateHeartbeat(String instantTime) throws HoodieHeartbeatException {
+    Heartbeat heartbeat = instantToHeartbeatMap.get(instantTime);
+    ValidationUtils.checkState(heartbeat != null, "Heartbeat not found for instant " + instantTime);
     try {
-      Long newHeartbeatTime = System.currentTimeMillis();
-      OutputStream outputStream =
-          this.storage.create(
-              new StoragePath(heartbeatFolderPath, instantTime), true);
-      outputStream.close();
-      Heartbeat heartbeat = instantToHeartbeatMap.get(instantTime);
+      // check if heartbeat is expired
       if (heartbeat.getLastHeartbeatTime() != null && isHeartbeatExpired(instantTime)) {
         LOG.error("Aborting, missed generating heartbeat within allowable interval " + this.maxAllowableHeartbeatIntervalInMs);
         // Since TimerTask allows only java.lang.Runnable, cannot throw an exception and bubble to the caller thread, hence
         // explicitly interrupting the timer thread.
         Thread.currentThread().interrupt();
       }
+      // tick the heartbeat
+      long newHeartbeatTime = tickHeartbeat(instantTime);
       heartbeat.setInstantTime(instantTime);
       heartbeat.setLastHeartbeatTime(newHeartbeatTime);
       heartbeat.setNumHeartbeats(heartbeat.getNumHeartbeats() + 1);
     } catch (IOException io) {
-      Boolean isHeartbeatStopped = instantToHeartbeatMap.get(instantTime).isHeartbeatStopped;
+      Boolean isHeartbeatStopped = heartbeat.isHeartbeatStopped;
       if (isHeartbeatStopped) {
-        LOG.warn(String.format("update heart beat failed, because the instant time %s was stopped ? : %s", instantTime, isHeartbeatStopped));
+        LOG.warn("update heart beat failed, because the heartbeat for instant time {} was stopped", instantTime);
         return;
       }
       throw new HoodieHeartbeatException("Unable to generate heartbeat for instant " + instantTime, io);
     }
+  }
+
+  private long tickHeartbeat(String instantTime) throws IOException {
+    Long newHeartbeatTime = System.currentTimeMillis();
+    OutputStream outputStream =
+        this.storage.create(
+            new StoragePath(heartbeatFolderPath, instantTime), true);
+    outputStream.close();
+    return newHeartbeatTime;
   }
 
   public String getHeartbeatFolderPath() {
