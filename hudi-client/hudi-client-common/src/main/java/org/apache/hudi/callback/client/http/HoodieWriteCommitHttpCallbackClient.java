@@ -81,7 +81,7 @@ public class HoodieWriteCommitHttpCallbackClient implements Closeable {
     try (CloseableHttpResponse response = client.execute(request)) {
       int statusCode = response.getStatusLine().getStatusCode();
       if (statusCode >= 300) {
-        LOG.warn("Failed to send callback message. Response was {}", response);
+        LOG.error("Failed to send callback message. Response was {}", response);
       } else {
         LOG.info("Sent Callback data with {} custom headers to {} successfully !", customHeaders.size(), url);
       }

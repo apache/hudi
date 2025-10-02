@@ -149,7 +149,7 @@ public class HoodiePartitionMetadata {
           storage.deleteFile(tmpPath);
         }
       } catch (IOException ioe) {
-        LOG.warn("Error trying to clean up temporary files for " + partitionPath, ioe);
+        LOG.info("Error trying to clean up temporary files for {}", partitionPath, ioe);
       }
     }
   }
@@ -213,7 +213,7 @@ public class HoodiePartitionMetadata {
       }
       return Option.of(props.getProperty(COMMIT_TIME_KEY));
     } catch (IOException ioe) {
-      LOG.warn("Error fetch Hoodie partition metadata for " + partitionPath, ioe);
+      LOG.warn("Error fetch Hoodie partition metadata for {}", partitionPath, ioe);
       return Option.empty();
     }
   }

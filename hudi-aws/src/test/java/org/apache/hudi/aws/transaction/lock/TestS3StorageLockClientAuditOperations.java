@@ -239,7 +239,7 @@ public class TestS3StorageLockClientAuditOperations {
     boolean result = lockClient.writeObject(filePath, content);
 
     assertFalse(result);
-    verify(mockLogger).warn(contains("Error writing object to"), eq(filePath), eq(s3Exception));
+    verify(mockLogger).error(contains("Error writing object to"), eq(filePath), eq(s3Exception));
   }
 
   @Test
@@ -250,7 +250,7 @@ public class TestS3StorageLockClientAuditOperations {
     boolean result = lockClient.writeObject(invalidPath, content);
 
     assertFalse(result);
-    verify(mockLogger).warn(contains("Error writing object to"), eq(invalidPath), any(Exception.class));
+    verify(mockLogger).error(contains("Error writing object to"), eq(invalidPath), any(Exception.class));
   }
 
   @Test

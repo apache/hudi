@@ -73,8 +73,8 @@ public class MarkerBasedRollbackUtils {
       try {
         return new ArrayList<>(writeMarkers.allMarkerFilePaths());
       } catch (IOException | IllegalArgumentException e) {
-        LOG.warn(String.format("%s not present and %s marker failed with error: %s. So, falling back to %s marker",
-            MARKER_TYPE_FILENAME, DIRECT, e.getMessage(), TIMELINE_SERVER_BASED));
+        LOG.warn("{} not present and {} marker failed with error: {}. Falling back to {} marker",
+            MARKER_TYPE_FILENAME, DIRECT, e.getMessage(), TIMELINE_SERVER_BASED);
         return getTimelineServerBasedMarkers(context, parallelism, markerDir, storage);
       }
     }

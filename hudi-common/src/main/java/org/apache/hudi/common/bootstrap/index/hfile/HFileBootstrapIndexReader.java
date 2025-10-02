@@ -181,7 +181,7 @@ public class HFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
             .map(e -> new BootstrapFileMapping(bootstrapBasePath, metadata.getBootstrapPartitionPath(),
                 partition, e.getValue(), e.getKey())).collect(Collectors.toList());
       } else {
-        LOG.warn("No value found for partition key (" + partition + ")");
+        LOG.warn("No value found for partition key ({})", partition);
         return new ArrayList<>();
       }
     } catch (IOException ioe) {

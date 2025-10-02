@@ -103,7 +103,7 @@ public class DatadogHttpClient implements Closeable {
     try (CloseableHttpResponse response = client.execute(request)) {
       int statusCode = response.getStatusLine().getStatusCode();
       if (statusCode >= 300) {
-        LOG.warn(String.format("Failed to send to Datadog. Response was %s", response));
+        LOG.error("Failed to send to Datadog. Response was {}", response);
       } else {
         LOG.debug(String.format("Sent metrics data (size: %d) to %s", payload.length(), seriesUrl));
       }
