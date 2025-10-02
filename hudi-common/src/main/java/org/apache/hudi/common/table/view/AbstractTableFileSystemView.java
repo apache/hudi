@@ -1047,18 +1047,43 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       readLock.lock();
       String partition = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partition);
-      return fetchAllStoredFileGroups(partition)
+      Stream<FileSlice> fileSliceStream = fetchAllStoredFileGroups(partition)
           .filter(fg -> !isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxInstantTime))
           .map(fileGroup -> {
             Option<FileSlice> fileSlice = fileGroup.getLatestFileSliceBeforeOrOn(maxInstantTime);
             // if the file-group is under construction, pick the latest before compaction instant time.
             if (fileSlice.isPresent()) {
               fileSlice = Option.of(fetchMergedFileSlice(fileGroup, tableVersion8AndAbove()
-                      ? filterUncommittedLogs(fileSlice.get()) : fileSlice.get())
+                  ? filterUncommittedLogs(fileSlice.get()) : fileSlice.get())
               );
             }
             return fileSlice;
           }).filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
+      return fileSliceStream;
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  @Override
+  public final Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOnIncludingInflight(String partitionStr, String maxInstantTime) {
+    try {
+      readLock.lock();
+      String partition = formatPartitionKey(partitionStr);
+      ensurePartitionLoadedCorrectly(partition);
+      Stream<FileSlice> fileSliceStream = fetchAllStoredFileGroups(partition)
+          .filter(fg -> !isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxInstantTime))
+          .map(fileGroup -> {
+            Option<FileSlice> fileSlice = fileGroup.getLatestFileSliceBeforeOrOn(maxInstantTime);
+            // if the file-group is under construction, pick the latest before compaction instant time.
+            if (fileSlice.isPresent()) {
+              fileSlice = Option.of(fetchMergedFileSlice(fileGroup, tableVersion8AndAbove()
+                  ? filterUncommittedLogs(fileSlice.get()) : fileSlice.get())
+              );
+            }
+            return fileSlice;
+          }).filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
+      return fileSliceStream;
     } finally {
       readLock.unlock();
     }

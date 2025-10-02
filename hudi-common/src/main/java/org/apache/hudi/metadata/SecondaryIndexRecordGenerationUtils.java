@@ -123,6 +123,9 @@ public class SecondaryIndexRecordGenerationUtils {
         recordKeyToSecondaryKeyForPreviousFileSlice =
             getRecordKeyToSecondaryKey(dataMetaClient, readerContextFactory.getContext(), previousFileSliceForFileId, tableSchema, indexDefinition, instantTime, props, false);
       }
+      // TODO(yihua): fix this
+      // regular delta commits: log file added to file slice
+      // commit: new base file (new file slice) -> new files slice with base file only
       List<FileSlice> latestIncludingInflightFileSlices = getPartitionLatestFileSlicesIncludingInflight(dataMetaClient, Option.empty(), partition);
       FileSlice currentFileSliceForFileId = latestIncludingInflightFileSlices.stream().filter(fs -> fs.getFileId().equals(fileId)).findFirst()
           .orElseThrow(() -> new HoodieException("Could not find any file slice for fileId " + fileId));

@@ -413,6 +413,7 @@ public class SparkMetadataWriterUtils {
         checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
         // Collect Column Metadata for Each File part of active file system view of latest snapshot
         // Get all file names, including log files, in a set from the file slices
+        // TODO(yihua): fix this
         Set<String> fileNames = HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight(dataMetaClient, Option.of(fileSystemView), partitionName).stream()
             .flatMap(fileSlice -> Stream.concat(
                 Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
@@ -420,6 +421,7 @@ public class SparkMetadataWriterUtils {
             .filter(Objects::nonNull)
             .collect(Collectors.toSet());
         // Fetch EI column stat records for above files
+        // TODO(yihua): fix the logic to account for commitMetadata
         List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata =
             tableMetadata.getRecordsByKeyPrefixes(
                     HoodieListData.lazy(HoodieTableMetadataUtil.generateColumnStatsKeys(validColumnsToIndex, partitionName)),
