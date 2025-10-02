@@ -94,7 +94,7 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
   }
 
   void decodeRecord(Schema schema) {
-    if (record == null) {
+    if (this.schema == null) {
       this.schema = schema;
     }
   }
