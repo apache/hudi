@@ -60,6 +60,8 @@ import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
 
+import scala.collection.JavaConverters._
+
 trait HoodieFormatTrait {
 
   // Used so that the planner only projects once and does not stack overflow
