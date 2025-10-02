@@ -60,9 +60,6 @@ import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
 
-import scala.collection.JavaConverters.mapAsJavaMapConverter
-import scala.jdk.CollectionConverters.asScalaBufferConverter
-
 trait HoodieFormatTrait {
 
   // Used so that the planner only projects once and does not stack overflow
@@ -204,6 +201,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
           .rangeType(InstantRange.RangeType.OPEN_CLOSED)
           .build()
           .analyze()
+        import scala.collection.JavaConverters._
         queryContext.getInstants.asScala.map { instant =>
           val requestedTime = instant.requestedTime()
           val completionTime = Option(instant.getCompletionTime).getOrElse(requestedTime)
