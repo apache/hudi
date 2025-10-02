@@ -134,13 +134,13 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (12, 1L, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1, "d"),
       (11, 2L, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1, "u"))
     performUpsert(firstUpdateData, columns, serviceOpts, opts, basePath,
-      tableVersion = Some("8"), orderingFields = originalOrderingFields)
+      tableVersion = Some(startVersion), orderingFields = originalOrderingFields)
     // Validate table version.
     metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
       .setConf(storageConf())
       .build()
-    assertEquals(8, metaClient.getTableConfig.getTableVersion.versionCode())
+    assertEquals(startVersion.toInt, metaClient.getTableConfig.getTableVersion.versionCode())
     val firstUpdateInstantTime = metaClient.getActiveTimeline.getInstants.get(1).requestedTime()
 
     // 3. Add mixed ordering test data to validate proper ordering handling
@@ -156,13 +156,13 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       // Delete rider-E with LOWER ordering - should be IGNORED (rider-E has ts=10 originally)
       (9, 5L, "rider-EE", "driver-EE", 17.85, "D", "9.1", 9, 1, "d"))
     performUpsert(mixedOrderingData, columns, serviceOpts, opts, basePath,
-      tableVersion = Some("8"), orderingFields = originalOrderingFields)
+      tableVersion = Some(startVersion), orderingFields = originalOrderingFields)
     // Validate table version is still 8 after mixed ordering batch
     metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
       .setConf(storageConf())
       .build()
-    assertEquals(8, metaClient.getTableConfig.getTableVersion.versionCode())
+    assertEquals(startVersion.toInt, metaClient.getTableConfig.getTableVersion.versionCode())
 
     // 4. Add an update. This is expected to trigger the upgrade
     val compactionEnabled = if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) "true" else "false"
@@ -264,12 +264,13 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     }
 
     // 9-10. Perform downgrade and validation
-    performDowngradeAndValidate(metaClient, basePath, expectedDowngradeConfigs, expectedData, columns, serviceOpts)
+    performDowngradeAndValidate(metaClient, basePath, expectedDowngradeConfigs, expectedData, columns, serviceOpts, startVersion.toInt)
   }
 
   @ParameterizedTest
-  @MethodSource(Array("providePayloadClassTestCases"))
-def testMergerBuiltinPayloadFromTableCreationPath(tableType: String,
+  @MethodSource(Array("providePayloadClassTestCasesForTableCreation"))
+def testMergerBuiltinPayloadFromTableCreationPath(tableVersion: String,
+                                                    tableType: String,
                                                     payloadClazz: String,
                                                     useOpAsDeleteStr: String,
                                                     setOrderingFieldStr: String,
@@ -473,7 +474,7 @@ def testMergerBuiltinPayloadFromTableCreationPath(tableType: String,
     val df = spark.read.format("hudi").load(basePath)
     val finalDf = df.select("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME, DebeziumConstants.FLATTENED_OP_COL_NAME)
       .sort("_event_lsn")
-    val expectedData = getExpectedResultForSnapshotQuery(payloadClazz, useOpAsDelete, setOrderingField, tableType)
+    val expectedData = getExpectedResultForSnapshotQuery(payloadClazz, useOpAsDelete, setOrderingField, tableType, "9")
     val expectedDf = spark.createDataFrame(spark.sparkContext.parallelize(expectedData)).toDF(columns: _*).sort("_event_lsn")
     assertTrue(expectedDf.except(finalDf).isEmpty && finalDf.except(expectedDf).isEmpty)
     // Validate time travel query.
@@ -558,15 +559,16 @@ def testMergerBuiltinPayloadFromTableCreationPath(tableType: String,
                                    expectedDowngradeConfigs: Map[String, String],
                                    expectedData: Seq[(Int, Long, String, String, Double, String, String, Int, Int, String)],
                                    columns: Seq[String],
-                                   serviceOpts: Map[String, String]): Unit = {
-    // 9. Downgrade from v9 to v8
+                                   serviceOpts: Map[String, String],
+                                   downgradeVersion: Int = 8): Unit = {
+    // 9. Downgrade from v9 to v8 (if downgrade not specified)
     val writeConfig = HoodieWriteConfig.newBuilder()
       .withPath(basePath)
       .withSchema(spark.read.format("hudi").load(basePath).schema.json)
       .build()
 
     new UpgradeDowngrade(metaClient, writeConfig, context, SparkUpgradeDowngradeHelper.getInstance)
-      .run(HoodieTableVersion.EIGHT, null)
+      .run(HoodieTableVersion.fromVersionCode(downgradeVersion), null)
 
     // Reload metaClient to get updated table config
     val downgradedMetaClient = HoodieTableMetaClient.builder()
@@ -574,8 +576,8 @@ def testMergerBuiltinPayloadFromTableCreationPath(tableType: String,
       .setConf(storageConf())
       .build()
 
-    // Validate table version is 8
-    assertEquals(8, downgradedMetaClient.getTableConfig.getTableVersion.versionCode())
+    // Validate table version is downgraded to original
+    assertEquals(downgradeVersion, downgradedMetaClient.getTableConfig.getTableVersion.versionCode())
 
     // Validate downgrade configs
     val downgradedTableConfig = downgradedMetaClient.getTableConfig
@@ -798,7 +800,7 @@ def testMergerBuiltinPayloadFromTableCreationPath(tableType: String,
 }
 
 object TestPayloadDeprecationFlow {
-  def providePayloadClassTestCases(): java.util.List[Arguments] = {
+  def provideV8PayloadTestCases(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
       Arguments.of(
         "8",
@@ -1129,7 +1131,12 @@ object TestPayloadDeprecationFlow {
           HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID,
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
           HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> null)
-      ),
+      )
+    )
+  }
+
+  def provideV6PayloadTestCases(): java.util.List[Arguments] = {
+    java.util.Arrays.asList(
       // V6 backward compat: COW + no ordering → COMMIT_TIME
       Arguments.of(
         "6",
@@ -1191,5 +1198,16 @@ object TestPayloadDeprecationFlow {
           HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> null)
       )
     )
+  }
+
+  def providePayloadClassTestCases(): java.util.List[Arguments] = {
+    val combined = new java.util.ArrayList[Arguments]()
+    combined.addAll(provideV8PayloadTestCases())
+    combined.addAll(provideV6PayloadTestCases())
+    combined
+  }
+
+  def providePayloadClassTestCasesForTableCreation(): java.util.List[Arguments] = {
+    provideV8PayloadTestCases()
   }
 }
