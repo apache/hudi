@@ -171,7 +171,7 @@ Listed below are some sample queries you can try running to explore the data:
 
 1. Tracing Admin Access Paths from Users to Internet Gateways
 
-```groovy
+```javascript
 g.V().hasLabel('User').as('user')
  .outE('ACCESS').has('access_level', 'admin').as('edge')
  .inV()
@@ -182,7 +182,7 @@ g.V().hasLabel('User').as('user')
 
 2. Find all public IP addresses exposed to the internet, along with their associated virtual machine instances, security groups, subnets, VPCs, internet gateways, and users, displaying all these entities in the traversal path.
 
-```groovy
+```javascript
  g.V().hasLabel('PublicIP').as('ip')
  .in('HAS_PUBLIC_IP').as('ni')
  .in('PROTECTS').hasLabel('SecurityGroup').as('sg')
@@ -205,7 +205,7 @@ g.V().hasLabel('User').as('user')
 
 3. Find roles that have been granted excessive access permissions, along with their associated virtual machine instances.
 
-```groovy
+```javascript
 g.V().hasLabel('Role').as('role')
 .where(
   __.out('ALLOWS_ACCESS_TO').count().is(gt(4L))
@@ -220,7 +220,7 @@ g.V().hasLabel('Role').as('role')
 
 4. Find security groups that have ingress rules permitting traffic from any IP address (0.0.0.0/0) to sensitive ports (22 or 3389), and retrieve the associated ingress rules, network interfaces, and virtual machine instances in the traversal path.
 
-```groovy
+```javascript
 g.V().hasLabel('SecurityGroup').as('sg')
  .out('HAS_RULE')
    .has('source', '0.0.0.0/0')
