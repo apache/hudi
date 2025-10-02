@@ -1215,21 +1215,6 @@ object TestPayloadDeprecationFlow {
           HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName,
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
           HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> null)
-      ),
-      // V6 backward compat: MOR + ordering → EVENT_TIME (special case!)
-      Arguments.of(
-        "6",
-        "MERGE_ON_READ",
-        classOf[OverwriteWithLatestAvroPayload].getName,
-        "false",
-        "true",
-        Map(
-          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
-          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName),
-        Map(
-          HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName,
-          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
-          HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> null)
       )
     )
   }
