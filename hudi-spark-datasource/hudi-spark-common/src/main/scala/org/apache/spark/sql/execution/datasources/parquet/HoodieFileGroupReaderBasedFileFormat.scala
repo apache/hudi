@@ -41,6 +41,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
@@ -234,7 +235,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
           for (i <- 0 until completionTimeFieldIndex) {
             newRowValues(i) = if (row.isNullAt(i)) null else row.get(i, inputSchema.fields(i).dataType)
           }
-          newRowValues(completionTimeFieldIndex) = org.apache.spark.unsafe.types.UTF8String.fromString(completionTime)
+          newRowValues(completionTimeFieldIndex) = UTF8String.fromString(completionTime)
 
           for (i <- completionTimeFieldIndex until row.numFields) {
             val targetIndex = i + 1
@@ -253,10 +254,10 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   private def applyCompletionTimeTransformation(baseIter: Iterator[InternalRow],
                                                 outputSchema: StructType,
                                                 inputSchema: StructType,
-                                                broadcastCompletionTimeMap: Option[org.apache.spark.broadcast.Broadcast[Map[String, String]]]): Iterator[InternalRow] = {
+                                                broadcastCompletionTimeMap: Option[Broadcast[Map[String, String]]]): Iterator[InternalRow] = {
     broadcastCompletionTimeMap match {
       case Some(broadcastMap) if broadcastMap.value.nonEmpty =>
-        val commitTimeFieldIndex = inputSchema.fieldNames.indexOf(org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+        val commitTimeFieldIndex = inputSchema.fieldNames.indexOf(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
 
         baseIter.map { row =>
           transformRowWithCompletionTime(row, commitTimeFieldIndex, broadcastMap.value, outputSchema, inputSchema)

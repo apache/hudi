@@ -32,6 +32,7 @@ import org.apache.hudi.keygen.{CustomAvroKeyGenerator, CustomKeyGenerator, Times
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.avro.Schema
+import org.apache.avro.JsonProperties.NULL_VALUE
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{SparkSession, SQLContext}
 import org.apache.spark.sql.catalyst.analysis.Resolver
@@ -243,17 +244,13 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
 
   override def buildOptions(): Map[String, String] = optParams
   override def build(): HadoopFsRelation = {
-    val relation = HadoopFsRelation(
+    HadoopFsRelation(
       location = buildFileIndex(),
       partitionSchema = buildPartitionSchema(),
       dataSchema = buildDataSchema(),
       bucketSpec = buildBucketSpec(),
       fileFormat = buildFileFormat(),
       options = buildOptions())(sparkSession)
-    println(s"relation.dataSchema fields: ${relation.dataSchema.fieldNames.mkString(", ")}")
-    println(s"relation.partitionSchema fields: ${relation.partitionSchema.fieldNames.mkString(", ")}")
-    println(s"relation.schema fields: ${relation.schema.fieldNames.mkString(", ")}")
-    relation
   }
 }
 
@@ -392,7 +389,7 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(override val sqlCont
     }.toBuffer
     val completionTimeField = new Schema.Field(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD,
       Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)),
-      "Completion time of the commit", org.apache.avro.JsonProperties.NULL_VALUE)
+      "Completion time of the commit", NULL_VALUE)
       newFields += completionTimeField
       Schema.createRecord(baseAvroSchema.getName, baseAvroSchema.getDoc,
         baseAvroSchema.getNamespace, baseAvroSchema.isError, newFields.asJava)
@@ -556,7 +553,7 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(override val sqlCont
     }.toBuffer
     val completionTimeField = new Schema.Field(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD,
       Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)),
-      "Completion time of the commit", org.apache.avro.JsonProperties.NULL_VALUE)
+      "Completion time of the commit", NULL_VALUE)
       newFields += completionTimeField
       Schema.createRecord(baseAvroSchema.getName, baseAvroSchema.getDoc,
         baseAvroSchema.getNamespace, baseAvroSchema.isError, newFields.asJava)

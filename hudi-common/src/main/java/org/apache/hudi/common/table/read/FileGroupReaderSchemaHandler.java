@@ -56,6 +56,7 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.avro.JsonProperties.NULL_VALUE;
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNested;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNewSchemaFromFieldsWithReference;
 import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
@@ -251,7 +252,7 @@ public class FileGroupReaderSchemaHandler<T> {
             HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD,
             unionSchema,
             "Completion time of the commit",
-            org.apache.avro.JsonProperties.NULL_VALUE
+            NULL_VALUE
         );
         addedFields.add(completionTimeField);
       }
@@ -285,7 +286,7 @@ public class FileGroupReaderSchemaHandler<T> {
           HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD,
           unionSchema,
           "Completion time of the commit",
-          org.apache.avro.JsonProperties.NULL_VALUE
+          NULL_VALUE
       );
       addedFields.add(completionTimeField);
     }
@@ -421,7 +422,7 @@ public class FileGroupReaderSchemaHandler<T> {
         HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD,
         unionSchema,
         "Completion time of the commit",
-        org.apache.avro.JsonProperties.NULL_VALUE
+        NULL_VALUE
     );
     return appendFieldsToSchemaDedupNested(schema, Collections.singletonList(completionTimeField));
   }
