@@ -169,7 +169,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
 
         TimeUnit.SECONDS.sleep(5);
       } catch (Exception e) {
-        LOG.warn("Update global task bootstrap summary error", e);
+        LOG.error("Updating global task bootstrap summary failed", e);
       }
     }
   }

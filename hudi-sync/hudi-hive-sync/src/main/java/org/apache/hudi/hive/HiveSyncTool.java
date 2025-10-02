@@ -236,7 +236,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       }
     } else {
       if (!syncClient.databaseExists(databaseName)) {
-        LOG.error("Hive database does not exist " + databaseName);
+        LOG.error("Hive database does not exist {}", databaseName);
         throw new HoodieHiveSyncException("hive database does not exist " + databaseName);
       }
     }

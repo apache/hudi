@@ -67,7 +67,7 @@ public class HoodieHeartbeatUtils {
     Long currentTime = System.currentTimeMillis();
     Long lastHeartbeatTime = getLastHeartbeatTime(fs, basePath, instantTime);
     if (currentTime - lastHeartbeatTime > maxAllowableHeartbeatIntervalInMs) {
-      LOG.warn("Heartbeat expired, for instant: " + instantTime);
+      LOG.warn("Heartbeat expired, for instant: {}", instantTime);
       return true;
     }
     return false;

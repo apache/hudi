@@ -556,8 +556,8 @@ public class StreamWriteOperatorCoordinator
     if (!hasErrors || this.conf.getBoolean(FlinkOptions.IGNORE_FAILED)) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
       if (hasErrors) {
-        LOG.warn("Some records failed to merge but forcing commit since commitOnErrors set to true. Errors/Total="
-            + totalErrorRecords + "/" + totalRecords);
+        LOG.warn("Some records failed to merge but forcing commit since commitOnErrors set to true. Errors/Total={}/{}",
+            totalErrorRecords, totalRecords);
       }
 
       final Map<String, List<String>> partitionToReplacedFileIds = tableState.isOverwrite

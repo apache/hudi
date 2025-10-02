@@ -285,9 +285,7 @@ public class ConfigUtils {
     }
     for (String alternative : configProperty.getAlternatives()) {
       if (props.containsKey(alternative)) {
-        LOG.warn(String.format("The configuration key '%s' has been deprecated "
-                + "and may be removed in the future. Please use the new key '%s' instead.",
-            alternative, configProperty.key()));
+        deprecationWarning(alternative, configProperty);
         return Option.ofNullable(props.get(alternative));
       }
     }
@@ -372,13 +370,16 @@ public class ConfigUtils {
     for (String alternative : configProperty.getAlternatives()) {
       value = props.get(alternative);
       if (value != null) {
-        LOG.warn(String.format("The configuration key '%s' has been deprecated "
-                + "and may be removed in the future. Please use the new key '%s' instead.",
-            alternative, configProperty.key()));
+        deprecationWarning(alternative, configProperty);
         return value.toString();
       }
     }
     return configProperty.hasDefaultValue() ? configProperty.defaultValue() : null;
+  }
+
+  private static void deprecationWarning(String alternative, ConfigProperty<?> configProperty) {
+    LOG.warn("The configuration key '{}' has been deprecated and may be removed in the future."
+        + " Please use the new key '{}' instead.", alternative, configProperty.key());
   }
 
   /**

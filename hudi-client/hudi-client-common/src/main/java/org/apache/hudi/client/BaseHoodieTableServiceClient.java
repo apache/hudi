@@ -754,7 +754,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       }
 
       if (shouldDelegateToTableServiceManager(config, ActionType.clean)) {
-        LOG.warn("Cleaning is not yet supported with Table Service Manager.");
+        LOG.info("Cleaning is not yet supported with Table Service Manager.");
         return null;
       }
     }
@@ -836,17 +836,17 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         rollbackPlan = RollbackUtils.getRollbackPlan(metaClient, rollbackInstant);
       } catch (Exception e) {
         if (rollbackInstant.isRequested()) {
-          LOG.warn("Fetching rollback plan failed for " + rollbackInstant + ", deleting the plan since it's in REQUESTED state", e);
+          LOG.warn("Fetching rollback plan failed for {}, deleting the plan since it's in REQUESTED state", rollbackInstant, e);
           try {
             metaClient.getActiveTimeline().deletePending(rollbackInstant);
           } catch (HoodieIOException he) {
-            LOG.warn("Cannot delete " + rollbackInstant, he);
+            LOG.warn("Cannot delete {}", rollbackInstant, he);
             continue;
           }
         } else {
           // Here we assume that if the rollback is inflight, the rollback plan is intact
           // in instant.rollback.requested.  The exception here can be due to other reasons.
-          LOG.warn("Fetching rollback plan failed for " + rollbackInstant + ", skip the plan", e);
+          LOG.error("Fetching rollback plan failed for {}, skip the plan", rollbackInstant, e);
         }
         continue;
       }
@@ -866,7 +866,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           infoMap.putIfAbsent(instantToRollback, Option.of(new HoodiePendingRollbackInfo(rollbackInstant, rollbackPlan)));
         }
       } catch (Exception e) {
-        LOG.warn("Processing rollback plan failed for " + rollbackInstant + ", skip the plan", e);
+        LOG.warn("Processing rollback plan failed for {}, skip the plan", rollbackInstant, e);
       }
     }
     return infoMap;

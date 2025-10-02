@@ -114,7 +114,7 @@ public class SchemaEvolutionContext {
       Option<Path> tablePath = TablePathUtils.getTablePath(fs, inputPath);
       return HoodieTableMetaClient.builder().setBasePath(tablePath.get().toString()).setConf(job).build();
     } catch (Exception e) {
-      LOG.warn(String.format("Not a valid hoodie table, table path: %s", ((FileSplit)split).getPath()), e);
+      LOG.error(String.format("Not a valid hoodie table, table path: %s", ((FileSplit)split).getPath()), e);
       return null;
     }
   }

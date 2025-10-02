@@ -211,7 +211,7 @@ public class IncrementalInputSplits implements Serializable {
       }
       FileStatus[] files = WriteProfiles.getFilesFromMetadata(path, metaClient.getHadoopConf(), metadataList, metaClient.getTableType(), false);
       if (files == null) {
-        LOG.warn("Found deleted files in metadata, fall back to full table scan.");
+        LOG.warn("Found deleted files in metadata, falling back to full table scan.");
         // fallback to full table scan
         // reading from the earliest, scans the partitions and files directly.
         FileIndex fileIndex = getFileIndex();
@@ -293,7 +293,7 @@ public class IncrementalInputSplits implements Serializable {
 
       Set<String> readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
       if (readPartitions.size() == 0) {
-        LOG.warn("No partitions found for reading under path: " + path);
+        LOG.warn("No partitions found for reading under path: {}", path);
         return Result.EMPTY;
       }
 
@@ -337,8 +337,8 @@ public class IncrementalInputSplits implements Serializable {
     if (archivedMetadataList.size() > 0) {
       LOG.warn("\n"
           + "--------------------------------------------------------------------------------\n"
-          + "---------- caution: the reader has fall behind too much from the writer,\n"
-          + "---------- tweak 'read.tasks' option to add parallelism of read tasks.\n"
+          + "---------- caution: the reader has fallen behind too much from the writer,\n"
+          + "---------- update 'read.tasks' option to add parallelism of read tasks.\n"
           + "--------------------------------------------------------------------------------");
     }
     // IMPORTANT: the merged metadata list must be in ascending order by instant time
@@ -346,7 +346,7 @@ public class IncrementalInputSplits implements Serializable {
 
     Set<String> readPartitions = getReadPartitions(metadataList);
     if (readPartitions.size() == 0) {
-      LOG.warn("No partitions found for reading under path: " + path);
+      LOG.warn("No partitions found for reading under path: {}", path);
       return Collections.emptyList();
     }
     FileStatus[] fileStatuses = WriteProfiles.getFilesFromMetadata(path, hadoopConf, metadataList, metaClient.getTableType());
@@ -462,7 +462,7 @@ public class IncrementalInputSplits implements Serializable {
     Map<HoodieFileGroupId, List<HoodieCDCFileSplit>> fileSplits = extractor.extractCDCFileSplits();
 
     if (fileSplits.isEmpty()) {
-      LOG.warn("No change logs found for reading in path: " + path);
+      LOG.warn("No change logs found for reading in path: {}", path);
       return Collections.emptyList();
     }
 

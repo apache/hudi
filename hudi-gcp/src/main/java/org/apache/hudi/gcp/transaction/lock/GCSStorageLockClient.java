@@ -271,7 +271,7 @@ public class GCSStorageLockClient implements StorageLockClient {
       logger.debug("Successfully wrote object to: {}", filePath);
       return true;
     } catch (Exception e) {
-      logger.warn("Error writing object to: {}", filePath, e);
+      logger.error("Error writing object to: {}", filePath, e);
       return false;
     }
   }
