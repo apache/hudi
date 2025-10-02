@@ -463,7 +463,7 @@ public class HoodieMetadataWriteUtils {
       int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
 
       HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> columnRangeMetadata =
-          engineContext.parallelize(partitionedWriteStats.entrySet().stream().collect(Collectors.toList()), parallelism).mapToPair(entry -> {
+          engineContext.parallelize(new ArrayList<>(partitionedWriteStats.entrySet()), parallelism).mapToPair(entry -> {
             String partitionName = entry.getKey();
             List<HoodieWriteStat> partitionedWriteStat = entry.getValue();
 
@@ -487,7 +487,7 @@ public class HoodieMetadataWriteUtils {
                 tableMetadata, dataMetaClient, dataMetaClient.getActiveTimeline(),
                 consolidatedPathInfos, dataWriteConfig.getViewStorageConfig(), dataWriteConfig.getCommonConfig());
 
-            // Collect column metadata for each file part of the current commit metadata
+            // Collect column metadata for each file part of the latest merged file slice before the current instant time
             List<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata = partitionedWriteStat.stream()
                 .flatMap(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, colsToIndex, partitionStatsIndexVersion).stream()).collect(toList());
             Set<String> filesWithColumnStats = partitionedWriteStat.stream()
