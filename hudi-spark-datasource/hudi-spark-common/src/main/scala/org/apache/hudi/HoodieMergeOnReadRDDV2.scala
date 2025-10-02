@@ -51,8 +51,6 @@ import org.apache.spark.sql.execution.datasources.{FileFormat, SparkColumnarFile
 import org.apache.spark.sql.hudi.MultipleColumnarFileFormatReader
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.unsafe.types.UTF8String
 
 import java.io.Closeable
 import java.util.function.Predicate
@@ -106,8 +104,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
                              optionalFilters: Array[Filter],
                              metaClient: HoodieTableMetaClient,
                              options: Map[String, String] = Map.empty,
-                             includedInstantTimeSet: Option[Set[String]] = Option.empty,
-                             requestedToCompletionTimeMap: Option[Map[String, String]] = Option.empty)
+                             includedInstantTimeSet: Option[Set[String]] = Option.empty)
   extends RDD[InternalRow](sc, Nil) with HoodieUnsafeRDD with SparkAdapterSupport {
 
   protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
@@ -211,7 +208,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
 
     val commitTimeMetadataFieldIdx = requiredSchema.structTypeSchema.fieldNames.indexOf(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
     val needsFiltering = commitTimeMetadataFieldIdx >= 0 && includedInstantTimeSet.isDefined
-    val filteredIter = if (needsFiltering) {
+    if (needsFiltering) {
       val filterT: Predicate[InternalRow] = new Predicate[InternalRow] {
         override def test(row: InternalRow): Boolean = {
           val commitTime = row.getString(commitTimeMetadataFieldIdx)
@@ -219,23 +216,9 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
         }
       }
       iter.filter(filterT.test)
-    } else {
-      iter
     }
-
-    if (requestedToCompletionTimeMap.isDefined && metaClient.getTableConfig.getTableVersion.versionCode() > 6 && commitTimeMetadataFieldIdx >= 0) {
-      val timeMap = requestedToCompletionTimeMap.get
-      filteredIter.map { row =>
-        val currentRequestedTime = row.getString(commitTimeMetadataFieldIdx)
-        val completionTime = timeMap.getOrElse(currentRequestedTime, currentRequestedTime)
-        val originalValues = (0 until row.numFields).map { i =>
-          row.get(i, requiredSchema.structTypeSchema.fields(i).dataType)
-        }
-        val newValues = originalValues :+ UTF8String.fromString(completionTime)
-        InternalRow.fromSeq(newValues)
-      }
-    } else {
-      filteredIter
+    else {
+      iter
     }
   }
 

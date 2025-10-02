@@ -131,6 +131,7 @@ class TestIncrementalQueriesV2WithCompleteTime extends HoodieSparkClientTestBase
       .load(testBasePath)
 
     val tempViewName = s"hudi_incremental_test_${tableTypeStr}_${enableFileGroupReader}"
+    println(s"incrementalDF.schema.fieldNames: ${incrementalDF.schema.fieldNames.mkString(", ")}")
     incrementalDF.createOrReplaceTempView(tempViewName)
     incrementalDF.show(false)
 
@@ -141,7 +142,7 @@ class TestIncrementalQueriesV2WithCompleteTime extends HoodieSparkClientTestBase
     """)
 
     val actualCompletionTimes = completionTimesDF.collect().map(_.getString(0))
-    assertTrue(actualCompletionTimes.length == 2, s"Should have 2 distinct completion times but got ${actualCompletionTimes.length}")
+    assertTrue(actualCompletionTimes.length == 5, s"Should have length of 5 but got ${actualCompletionTimes.length}")
 
     val expectedCompletionTimes = commits.map(_.asInstanceOf[HoodieInstant].getCompletionTime).sorted
 

@@ -37,8 +37,7 @@ import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.sources._
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.unsafe.types.UTF8String
+import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable
@@ -59,10 +58,8 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
 
   override type Relation = MergeOnReadIncrementalRelationV2
 
-  override def updatePrunedDataSchema(prunedSchema: StructType): Relation = {
-    val filteredSchema = StructType(prunedSchema.fields.filterNot(_.name == HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD))
-    this.copy(prunedDataSchema = Some(filteredSchema))
-  }
+  override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
+    this.copy(prunedDataSchema = Some(prunedSchema))
 
   override protected def timeline: HoodieTimeline = {
     if (fullTableScan) {
@@ -77,24 +74,13 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
                                     requiredSchema: HoodieTableSchema,
                                     requestedColumns: Array[String],
                                     filters: Array[Filter]): RDD[InternalRow] = {
-    val filteredRequestedColumns = requestedColumns.filterNot(_ == HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD)
-
-    val filteredRequiredSchema = if (requestedColumns.contains(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD)) {
-      val filteredStructType = StructType(requiredSchema.structTypeSchema.fields.filterNot(_.name == HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD))
-      HoodieTableSchema(filteredStructType, requiredSchema.avroSchemaStr, requiredSchema.internalSchema)
-    } else {
-      requiredSchema
-    }
-
     // The only required filters are ones that make sure we're only fetching records that
     // fall into incremental span of the timeline being queried
     val requiredFilters = incrementalSpanRecordFilters
     val optionalFilters = filters
-    val readers = createBaseFileReaders(tableSchema, filteredRequiredSchema, filteredRequestedColumns, requiredFilters, optionalFilters)
+    val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
 
-    val requestedToCompletionTimeMap = buildCompletionTimeMapping()
-
-    val baseRDD = new HoodieMergeOnReadRDDV2(
+    new HoodieMergeOnReadRDDV2(
       sqlContext.sparkContext,
       config = jobConf,
       sqlConf = sqlContext.sparkSession.sessionState.conf,
@@ -107,19 +93,7 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
       includedInstantTimeSet = Option(includedCommits.map(_.requestedTime).toSet),
       optionalFilters = optionalFilters,
       metaClient = metaClient,
-      options = optParams,
-      requestedToCompletionTimeMap = Option(requestedToCompletionTimeMap))
-
-    baseRDD
-  }
-
-  override lazy val schema: StructType = {
-    val baseSchema = super.schema
-    if (metaClient.getTableConfig.getTableVersion.versionCode() > 6 && includedCommits.nonEmpty) {
-      addCompletionTimeColumn(baseSchema)
-    } else {
-      baseSchema
-    }
+      options = optParams)
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
@@ -197,20 +171,6 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
       fileSlices
     }
     filteredFileSlices
-  }
-
-  private def buildCompletionTimeMapping(): Map[String, String] = {
-    includedCommits.map { instant =>
-      val requestedTime = instant.requestedTime()
-      val completionTime = Option(instant.getCompletionTime).getOrElse(requestedTime)
-      requestedTime -> completionTime
-    }.toMap
-  }
-
-
-  private def addCompletionTimeColumn(baseSchema: StructType): StructType = {
-    val completionTimeField = StructField(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD, StringType, nullable = true)
-    StructType(baseSchema.fields :+ completionTimeField)
   }
 }
 

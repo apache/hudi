@@ -43,6 +43,7 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.{OutputWriterFactory, PartitionedFile, SparkColumnarFileReader}
@@ -175,7 +176,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                            options: Map[String, String],
                            path: Path): Boolean = false
   private def supportsCompletionTime(metaClient: HoodieTableMetaClient): Boolean = {
-    metaClient.getTableConfig.getTableVersion.greaterThan(HoodieTableVersion.SIX)
+    !metaClient.isMetadataTable && metaClient.getTableConfig.getTableVersion.greaterThanOrEquals(HoodieTableVersion.SIX)
   }
 
   private def shouldTransformCommitTimeValues(metaClient: HoodieTableMetaClient): Boolean = {
@@ -212,13 +213,13 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   private def transformRowWithCompletionTime(row: InternalRow,
                                              commitTimeFieldIndex: Int,
                                              completionTimeMap: Map[String, String],
+                                             outputSchema: StructType,
                                              inputSchema: StructType): InternalRow = {
     if (completionTimeMap.isEmpty || commitTimeFieldIndex < 0) {
       row
     } else {
-      // Find the completion time field index in the schema
       val completionTimeFieldIndexOpt = try {
-        Some(inputSchema.fieldIndex(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD))
+        Some(outputSchema.fieldIndex(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD))
       } catch {
         case _: IllegalArgumentException => None
       }
@@ -227,25 +228,28 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
         case Some(completionTimeFieldIndex) if completionTimeFieldIndex >= 0 =>
           val currentRequestedTime = row.getString(commitTimeFieldIndex)
           val completionTime = completionTimeMap.getOrElse(currentRequestedTime, currentRequestedTime)
-          val updatedValuesMap = new java.util.HashMap[Integer, Object]()
-          // Update the completion time field, not the commit time field
-          updatedValuesMap.put(completionTimeFieldIndex, org.apache.spark.unsafe.types.UTF8String.fromString(completionTime))
+          val newRowValues = new Array[Any](outputSchema.length)
+          for (i <- 0 until completionTimeFieldIndex) {
+            newRowValues(i) = if (row.isNullAt(i)) null else row.get(i, inputSchema.fields(i).dataType)
+          }
+          newRowValues(completionTimeFieldIndex) = org.apache.spark.unsafe.types.UTF8String.fromString(completionTime)
 
-          val rowWriter = org.apache.spark.sql.HoodieInternalRowUtils.genUnsafeRowWriter(
-            inputSchema,
-            inputSchema,
-            java.util.Collections.emptyMap(),
-            updatedValuesMap
-          )
-          rowWriter(row)
+          for (i <- completionTimeFieldIndex until row.numFields) {
+            val targetIndex = i + 1
+            if (targetIndex < outputSchema.length) {
+              newRowValues(targetIndex) = if (row.isNullAt(i)) null else row.get(i, inputSchema.fields(i).dataType)
+            }
+          }
+          val newRow = new GenericInternalRow(newRowValues)
+          newRow
         case _ =>
-          // Completion time field not found in schema, return original row
           row
       }
     }
   }
 
   private def applyCompletionTimeTransformation(baseIter: Iterator[InternalRow],
+                                                outputSchema: StructType,
                                                 inputSchema: StructType,
                                                 broadcastCompletionTimeMap: Option[org.apache.spark.broadcast.Broadcast[Map[String, String]]]): Iterator[InternalRow] = {
     broadcastCompletionTimeMap match {
@@ -253,7 +257,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
         val commitTimeFieldIndex = inputSchema.fieldNames.indexOf(org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_METADATA_FIELD)
 
         baseIter.map { row =>
-          transformRowWithCompletionTime(row, commitTimeFieldIndex, broadcastMap.value, inputSchema)
+          transformRowWithCompletionTime(row, commitTimeFieldIndex, broadcastMap.value, outputSchema, inputSchema)
         }
       case _ =>
         baseIter
@@ -267,7 +271,14 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
+    val completionTimeFieldInDataSchema = dataSchema.fields.find(_.name == HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD)
+    val shouldAddCompletionTime = completionTimeFieldInDataSchema.isDefined &&
+      !requiredSchema.fieldNames.contains(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD)
+    val outputSchema = if (shouldAddCompletionTime) {
+      StructType((requiredSchema.fields :+ completionTimeFieldInDataSchema.get) ++ partitionSchema.fields)
+    } else {
+      StructType(requiredSchema.fields ++ partitionSchema.fields)
+    }
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     val augmentedStorageConf = new HadoopStorageConfiguration(hadoopConf).getInline
     setSchemaEvolutionConfigs(augmentedStorageConf)
@@ -290,6 +301,14 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       case _ => baseRequestedFields
     }
     val requestedSchema = StructType(requestedSchemaFields)
+    val completionTimeInRequired = completionTimeField.exists(f => requiredSchema.fieldNames.contains(f.name))
+    val outputSchemaForTransformation = if (completionTimeField.isDefined && !completionTimeInRequired) {
+      StructType((requiredSchema.fields :+ completionTimeField.get) ++ partitionSchema.fields)
+    } else if (completionTimeInRequired) {
+      StructType(requiredSchema.fields ++ partitionSchema.fields)
+    } else {
+      StructType(requiredSchema.fields ++ partitionSchema.fields)
+    }
     val requestedAvroSchema = AvroSchemaUtils.pruneDataSchema(avroTableSchema, AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName), exclusionFields)
     val dataAvroSchema = AvroSchemaUtils.pruneDataSchema(avroTableSchema, AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName), exclusionFields)
 
@@ -362,7 +381,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
             case _ =>
               val baseIter = readBaseFile(file, baseFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
                 requiredSchema, partitionSchema, outputSchema, filters ++ requiredFilters, storageConf)
-              applyCompletionTimeTransformation(baseIter, outputSchema, broadcastCompletionTimeMap)
+              val baseIterSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
+              applyCompletionTimeTransformation(baseIter, outputSchemaForTransformation, baseIterSchema, broadcastCompletionTimeMap)
           }
         // CDC queries.
         case hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping =>
@@ -371,9 +391,43 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
         case _ =>
           val baseIter = readBaseFile(file, baseFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
               requiredSchema, partitionSchema, outputSchema, filters ++ requiredFilters, storageConf)
-          applyCompletionTimeTransformation(baseIter, outputSchema, broadcastCompletionTimeMap)
+          val baseIterSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
+          applyCompletionTimeTransformation(baseIter, outputSchemaForTransformation, baseIterSchema, broadcastCompletionTimeMap)
       }
-      CloseableIteratorListener.addListener(iter)
+      if (iter.hasNext) {
+        val firstRow = iter.next()
+        println(s"First row: $firstRow")
+        println(s"First row class: ${firstRow.getClass.getName}")
+        if (firstRow.isInstanceOf[org.apache.spark.sql.catalyst.InternalRow]) {
+          val internalRow = firstRow.asInstanceOf[org.apache.spark.sql.catalyst.InternalRow]
+          println(s"Row numFields: ${internalRow.numFields}")
+          for (i <- 0 until math.min(internalRow.numFields, outputSchema.fields.length)) {
+            try {
+              val fieldType = outputSchema.fields(i).dataType
+              val value = if (internalRow.isNullAt(i)) {
+                "null"
+              } else {
+                fieldType match {
+                  case org.apache.spark.sql.types.StringType => 
+                    val utf8String = internalRow.getUTF8String(i)
+                    if (utf8String != null) utf8String.toString else "null"
+                  case _ => 
+                    internalRow.get(i, fieldType).toString
+                }
+              }
+              val fieldName = if (i < outputSchema.fields.length) outputSchema.fields(i).name else s"field_$i"
+              println(s"Field[$i] ($fieldName): $value")
+            } catch {
+              case e: Exception =>
+                println(s"Field[$i]: <error reading field: ${e.getMessage}>")
+            }
+          }
+        }
+        val iterWithFirst = Iterator(firstRow) ++ iter
+        CloseableIteratorListener.addListener(iterWithFirst.asInstanceOf[Iterator[InternalRow]])
+      } else {
+        CloseableIteratorListener.addListener(iter)
+      }
     }
   }
 
