@@ -32,6 +32,7 @@ import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -236,6 +237,12 @@ public class FileIOUtils {
   public static Option<byte[]> readDataFromPath(HoodieStorage storage, StoragePath detailPath, boolean ignoreIOE) {
     try (InputStream is = storage.open(detailPath)) {
       return Option.of(FileIOUtils.readAsByteArray(is));
+    } catch (FileNotFoundException fnfe) {
+      if (!ignoreIOE) {
+        throw new HoodieIOException("Could not find commit details from " + detailPath, fnfe);
+      }
+      LOG.debug("No file found at path {}", detailPath);
+      return Option.empty();
     } catch (IOException e) {
       LOG.warn("Could not read commit details from {}", detailPath, e);
       if (!ignoreIOE) {
