@@ -21,7 +21,6 @@ package org.apache.hudi.functional.cdc
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
-import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode}
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY
@@ -174,6 +173,9 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     totalDeletedCnt += deletedCnt4
     allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
+    val cdcDataOrdered = cdcDataFrame((commitTime1.toLong - 1).toString).orderBy("ts_ms")
+    assertCDCOpCnt(cdcDataOrdered, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
+    assertEquals(allVisibleCDCData.collect().length, cdcDataOrdered.collect().length)
 
     val records5 = recordsToStrings(dataGen.generateInserts("005", 7)).asScala.toList
     val inputDF5 = spark.read.json(spark.sparkContext.parallelize(records5, 2))
@@ -363,6 +365,9 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     totalInsertedCnt += insertedCnt4
     allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
+    val cdcDataOrdered = cdcDataFrame((commitTime1.toLong - 1).toString).orderBy("ts_ms")
+    assertCDCOpCnt(cdcDataOrdered, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
+    assertEquals(allVisibleCDCData.collect().length, cdcDataOrdered.collect().length)
 
     // 5. Upsert Operation With Clustering Operation
     val records5 = recordsToStrings(dataGen.generateUniqueUpdates("004", 60)).asScala.toList
@@ -844,52 +849,4 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       assertCDCOpCnt(result3, 3, 1, 0)
       assertEquals(result3.count(), 4)
     }
-
-  @Test
-  def testCDCQueryWithOrdering(): Unit = {
-    val options = commonOpts ++ Map(
-      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER.name()
-    )
-
-    val records1 = recordsToStrings(dataGen.generateInserts("000", 5)).asScala.toList
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
-      .options(options)
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
-
-    metaClient = createMetaClient(spark, basePath)
-    Thread.sleep(1000)
-
-    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("001", 3)).asScala.toList
-    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("org.apache.hudi")
-      .options(options)
-      .mode(SaveMode.Append)
-      .save(basePath)
-
-    Thread.sleep(1000)
-
-    val records3 = deleteRecordsToStrings(dataGen.generateUniqueDeletes(1)).asScala.toList
-    val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
-    inputDF3.write.format("org.apache.hudi")
-      .options(options)
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
-      .mode(SaveMode.Append)
-      .save(basePath)
-
-    metaClient = createMetaClient(spark, basePath)
-    val instant1 = metaClient.reloadActiveTimeline.firstInstant().get()
-    val commitTime1 = instant1.requestedTime
-
-    val cdcDataUnordered = cdcDataFrame((commitTime1.toLong - 1).toString)
-    val unorderedResults = cdcDataUnordered.collect()
-
-    val cdcDataOrdered = cdcDataFrame((commitTime1.toLong - 1).toString)
-      .orderBy("ts_ms")
-    val orderedResults = cdcDataOrdered.collect()
-
-    assertEquals(unorderedResults.length, orderedResults.length,
-      s"CDC query ordering issue: unordered count (${unorderedResults.length}) != ordered count (${orderedResults.length})")
-  }
 }
