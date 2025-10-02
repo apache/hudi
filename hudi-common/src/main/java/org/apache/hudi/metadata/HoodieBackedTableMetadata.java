@@ -121,7 +121,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private HoodieTableFileSystemView metadataFileSystemView;
   // should we reuse the open file handles, across calls
   private final boolean reuse;
-  private final transient Map<HoodieFileGroupId, Pair<HoodieAvroFileReader, ReusableFileGroupRecordBufferLoader<IndexedRecord>>> reusableFileReaders = new ConcurrentHashMap<>();
+  private transient Map<HoodieFileGroupId, Pair<HoodieAvroFileReader, ReusableFileGroupRecordBufferLoader<IndexedRecord>>> reusableFileReaders;
 
   // Latest file slices in the metadata partitions
   private final Map<String, List<FileSlice>> partitionFileSliceMap = new ConcurrentHashMap<>();
@@ -154,7 +154,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     } else if (this.metadataMetaClient == null) {
       try {
         this.metadataMetaClient = HoodieTableMetaClient.builder()
-            .setStorage(storage)
+            .setStorage(getStorage())
             .setBasePath(metadataBasePath)
             .build();
       } catch (TableNotFoundException e) {
@@ -171,6 +171,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         this.validInstantTimestamps = null;
       }
     }
+  }
+
+  private synchronized Map<HoodieFileGroupId, Pair<HoodieAvroFileReader, ReusableFileGroupRecordBufferLoader<IndexedRecord>>> getReusableFileReaders() {
+    if (reusableFileReaders == null) {
+      reusableFileReaders = new ConcurrentHashMap<>();
+    }
+    return reusableFileReaders;
   }
 
   @Override
@@ -507,12 +514,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     TypedProperties fileGroupReaderProps = ConfigUtils.buildFileGroupReaderProperties(metadataConfig, shouldReuse);
     if (shouldReuse) {
       Pair<HoodieAvroFileReader, ReusableFileGroupRecordBufferLoader<IndexedRecord>> readers =
-          reusableFileReaders.computeIfAbsent(fileSlice.getFileGroupId(), fgId -> {
+          getReusableFileReaders().computeIfAbsent(fileSlice.getFileGroupId(), fgId -> {
             try {
               HoodieAvroFileReader baseFileReader = null;
               if (fileSlice.getBaseFile().isPresent()) {
                 HoodieConfig fileGroupReaderConfig = new HoodieConfig(fileGroupReaderProps);
-                baseFileReader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+                baseFileReader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(getStorage()).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
                     .getFileReader(fileGroupReaderConfig, fileSlice.getBaseFile().get().getStoragePath(), metadataMetaClient.getTableConfig().getBaseFileFormat(), Option.empty());
               }
               return Pair.of(baseFileReader, buildReusableRecordBufferLoader(fileSlice, latestMetadataInstantTime, instantRange));
@@ -697,7 +704,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    */
   private void closeReusableReaders() {
     if (reuse) {
-      reusableFileReaders.values().forEach(pair -> {
+      getReusableFileReaders().values().forEach(pair -> {
         if (pair.getLeft() != null) {
           // Close the base file reader
           pair.getLeft().close();
@@ -707,7 +714,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           pair.getRight().close();
         }
       });
-      reusableFileReaders.clear();
+      getReusableFileReaders().clear();
     }
   }
 
