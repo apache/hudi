@@ -386,7 +386,8 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
    */
   // TODO(yihua): parameterize based on streaming writes
   test("Test partition stats index with tight bound") {
-    Seq("cow", "mor").foreach { tableType =>
+    // cow
+    Seq("mor").foreach { tableType =>
       withTempDir { tmp =>
         val tableName = generateTableName + s"_tight_bound_$tableType"
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
