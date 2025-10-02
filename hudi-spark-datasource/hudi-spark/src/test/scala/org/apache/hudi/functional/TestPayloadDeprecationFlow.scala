@@ -47,12 +47,12 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
   @ParameterizedTest
   @MethodSource(Array("providePayloadClassTestCases"))
   def testMergerBuiltinPayloadUpgradeDowngradePath(startVersion: String,
-                                          tableType: String,
-                                          payloadClazz: String,
-                                          useOpAsDeleteStr: String,
-                                          setOrderingFieldStr: String,
-                                          expectedConfigs: Map[String, String],
-                                          expectedDowngradeConfigs: Map[String, String]): Unit = {
+                                                    tableType: String,
+                                                    payloadClazz: String,
+                                                    useOpAsDeleteStr: String,
+                                                    setOrderingFieldStr: String,
+                                                    expectedConfigs: Map[String, String],
+                                                    expectedDowngradeConfigs: Map[String, String]): Unit = {
     val useOpAsDelete = useOpAsDeleteStr.equals("true")
     val setOrderingField = setOrderingFieldStr.equals("true")
     val deleteOpts: Map[String, String] = if (useOpAsDelete) {
@@ -269,13 +269,13 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
 
   @ParameterizedTest
   @MethodSource(Array("providePayloadClassTestCasesForTableCreation"))
-def testMergerBuiltinPayloadFromTableCreationPath(tableVersion: String,
-                                                    tableType: String,
-                                                    payloadClazz: String,
-                                                    useOpAsDeleteStr: String,
-                                                    setOrderingFieldStr: String,
-                                                    expectedConfigs: Map[String, String],
-                                                    expectedDowngradeConfigs: Map[String, String]): Unit = {
+  def testMergerBuiltinPayloadFromTableCreationPath(tableVersion: String,
+                                                     tableType: String,
+                                                     payloadClazz: String,
+                                                     useOpAsDeleteStr: String,
+                                                     setOrderingFieldStr: String,
+                                                     expectedConfigs: Map[String, String],
+                                                     expectedDowngradeConfigs: Map[String, String]): Unit = {
     val useOpAsDelete = useOpAsDeleteStr.equals("true")
     val setOrderingField = setOrderingFieldStr.equals("true")
     val deleteOpts: Map[String, String] = if (useOpAsDelete) {
