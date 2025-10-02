@@ -2620,7 +2620,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     // Complete the compaction
     commitTimeline.saveAsComplete(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstant), Option.empty());
     refreshFsView();
-    
+
     actual = fsView.getLatestMergedFileSlicesBeforeOrOn(partitionPath, instantTime5)
         .collect(Collectors.toList());
     assertEquals(1, actual.size());
