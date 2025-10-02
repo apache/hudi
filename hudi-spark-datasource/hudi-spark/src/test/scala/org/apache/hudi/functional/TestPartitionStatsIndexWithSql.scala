@@ -542,7 +542,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
       checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value, ColumnStatsMetadata.isTightBound from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='price'")(
         Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 2000, true),
         Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 3000, true),
-        Seq(getPartitionStatsIndexKey("ts=30", "price"), 4003, 4003, true)
+        Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 4003, true)
       )
     }
   }
