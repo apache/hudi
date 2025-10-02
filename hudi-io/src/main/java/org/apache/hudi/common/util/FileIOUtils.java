@@ -238,9 +238,6 @@ public class FileIOUtils {
     try (InputStream is = storage.open(detailPath)) {
       return Option.of(FileIOUtils.readAsByteArray(is));
     } catch (FileNotFoundException fnfe) {
-      if (!ignoreIOE) {
-        throw new HoodieIOException("Could not find commit details from " + detailPath, fnfe);
-      }
       LOG.debug("No file found at path {}", detailPath);
       return Option.empty();
     } catch (IOException e) {
