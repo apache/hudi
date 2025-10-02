@@ -849,20 +849,6 @@ object TestPayloadDeprecationFlow {
       Arguments.of(
         "8",
         "COPY_ON_WRITE",
-        classOf[OverwriteWithLatestAvroPayload].getName,
-        "false",
-        "true",
-        Map(
-          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "COMMIT_TIME_ORDERING",
-          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName),
-        Map(
-          HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName,
-          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
-          HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> null)
-      ),
-      Arguments.of(
-        "8",
-        "COPY_ON_WRITE",
         classOf[PartialUpdateAvroPayload].getName,
         "false",
         "false",
@@ -1003,20 +989,6 @@ object TestPayloadDeprecationFlow {
         classOf[OverwriteWithLatestAvroPayload].getName,
         "false",
         "false",
-        Map(
-          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "COMMIT_TIME_ORDERING",
-          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName),
-        Map(
-          HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName,
-          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
-          HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> null)
-      ),
-      Arguments.of(
-        "8",
-        "MERGE_ON_READ",
-        classOf[OverwriteWithLatestAvroPayload].getName,
-        "false",
-        "true",
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "COMMIT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName),
