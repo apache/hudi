@@ -793,8 +793,7 @@ object TestPayloadDeprecationFlow {
         "false",
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
-          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName),
         Map(
           HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName,
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
@@ -806,8 +805,7 @@ object TestPayloadDeprecationFlow {
         "true",
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
-          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName),
         Map(
           HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName,
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
@@ -821,9 +819,7 @@ object TestPayloadDeprecationFlow {
         "false",
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "COMMIT_TIME_ORDERING",
-          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID,
-        ),
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName),
         Map(
           HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName,
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
@@ -836,7 +832,6 @@ object TestPayloadDeprecationFlow {
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[PartialUpdateAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
           HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_DEFAULTS"),
         Map(
           HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[PartialUpdateAvroPayload].getName,
@@ -872,7 +867,6 @@ object TestPayloadDeprecationFlow {
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[MySqlDebeziumAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
           HoodieTableConfig.ORDERING_FIELDS.key() -> (DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME)),
         Map(
           HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[MySqlDebeziumAvroPayload].getName,
@@ -904,9 +898,7 @@ object TestPayloadDeprecationFlow {
         "false",
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
-          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[EventTimeAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID
-        ),
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[EventTimeAvroPayload].getName),
         Map(
           HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[EventTimeAvroPayload].getName,
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
@@ -919,7 +911,6 @@ object TestPayloadDeprecationFlow {
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "COMMIT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID,
           HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_DEFAULTS"
         ),
         Map(
@@ -935,8 +926,7 @@ object TestPayloadDeprecationFlow {
         "false",
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
-          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName),
         Map(
           HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName,
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
@@ -948,8 +938,7 @@ object TestPayloadDeprecationFlow {
         "true",
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
-          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName),
         Map(
           HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName,
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
@@ -963,8 +952,7 @@ object TestPayloadDeprecationFlow {
         "false",
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "COMMIT_TIME_ORDERING",
-          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName),
         Map(
           HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName,
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
@@ -977,7 +965,6 @@ object TestPayloadDeprecationFlow {
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[PartialUpdateAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
           HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_DEFAULTS"),
         Map(
           HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[PartialUpdateAvroPayload].getName,
@@ -1013,7 +1000,6 @@ object TestPayloadDeprecationFlow {
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[MySqlDebeziumAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
           HoodieTableConfig.ORDERING_FIELDS.key() -> (DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME)),
         Map(
           HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[MySqlDebeziumAvroPayload].getName,
@@ -1045,9 +1031,7 @@ object TestPayloadDeprecationFlow {
         "false",
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
-          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[EventTimeAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID
-        ),
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[EventTimeAvroPayload].getName),
         Map(
           HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[EventTimeAvroPayload].getName,
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> null,
@@ -1060,7 +1044,6 @@ object TestPayloadDeprecationFlow {
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "COMMIT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID,
           HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_DEFAULTS"
         ),
         Map(
