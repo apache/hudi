@@ -374,6 +374,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FileStatus[] listStatus(Path f) throws IOException {
+    System.out.println("!!!!!!! listStatus for " + f);
     return executeFuncWithTimeMetrics(MetricName.listStatus.name(), f, () -> {
       return fileSystem.listStatus(convertToDefaultPath(f));
     });
@@ -598,6 +599,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FileStatus[] listStatus(Path f, PathFilter filter) throws IOException {
+    System.out.println("!!!!!!! listStatus for " + f);
     return executeFuncWithTimeMetrics(MetricName.listStatus.name(), f, () -> {
       return fileSystem.listStatus(convertToDefaultPath(f), filter);
     });
@@ -605,6 +607,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FileStatus[] listStatus(Path[] files) throws IOException {
+    System.out.println("!!!!!!! listStatus for files");
     return executeFuncWithTimeMetrics(MetricName.listStatus.name(), files.length > 0 ? files[0] : null, () -> {
       return fileSystem.listStatus(convertDefaults(files));
     });
@@ -612,6 +615,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FileStatus[] listStatus(Path[] files, PathFilter filter) throws IOException {
+    System.out.println("!!!!!!! listStatus for files");
     return executeFuncWithTimeMetrics(MetricName.listStatus.name(), files.length > 0 ? files[0] : null, () -> {
       return fileSystem.listStatus(convertDefaults(files), filter);
     });
@@ -638,6 +642,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public RemoteIterator<LocatedFileStatus> listFiles(Path f, boolean recursive) throws IOException {
+    System.out.println("!!!!!!! listFiles for files");
     return executeFuncWithTimeMetrics(MetricName.listFiles.name(), f, () -> {
       return fileSystem.listFiles(convertToDefaultPath(f), recursive);
     });
