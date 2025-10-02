@@ -25,6 +25,7 @@ import org.apache.hudi.expression.ArrayData;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -49,6 +50,13 @@ public abstract class AbstractHoodieTableMetadata implements HoodieTableMetadata
     this.storage = storage;
     this.storageConf = storage.getConf();
     this.dataBasePath = new StoragePath(dataBasePath);
+  }
+
+  public HoodieStorage getStorage() {
+    if (storage == null) {
+      storage = HoodieStorageUtils.getStorage(dataBasePath, storageConf);
+    }
+    return storage;
   }
 
   protected static int getPathPartitionLevel(Types.RecordType partitionFields, String path) {
