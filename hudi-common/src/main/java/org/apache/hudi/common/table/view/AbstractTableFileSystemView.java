@@ -1043,30 +1043,17 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   @Override
   public final Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionStr, String maxInstantTime) {
-    try {
-      readLock.lock();
-      String partition = formatPartitionKey(partitionStr);
-      ensurePartitionLoadedCorrectly(partition);
-      Stream<FileSlice> fileSliceStream = fetchAllStoredFileGroups(partition)
-          .filter(fg -> !isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxInstantTime))
-          .map(fileGroup -> {
-            Option<FileSlice> fileSlice = fileGroup.getLatestFileSliceBeforeOrOn(maxInstantTime);
-            // if the file-group is under construction, pick the latest before compaction instant time.
-            if (fileSlice.isPresent()) {
-              fileSlice = Option.of(fetchMergedFileSlice(fileGroup, tableVersion8AndAbove()
-                  ? filterUncommittedLogs(fileSlice.get()) : fileSlice.get())
-              );
-            }
-            return fileSlice;
-          }).filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
-      return fileSliceStream;
-    } finally {
-      readLock.unlock();
-    }
+    return getLatestMergedFileSliceBeforeOrOnInternal(partitionStr, maxInstantTime, false);
   }
 
   @Override
   public final Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOnIncludingInflight(String partitionStr, String maxInstantTime) {
+    return getLatestMergedFileSliceBeforeOrOnInternal(partitionStr, maxInstantTime, true);
+  }
+
+  private final Stream<FileSlice> getLatestMergedFileSliceBeforeOrOnInternal(String partitionStr,
+                                                                             String maxInstantTime,
+                                                                             boolean includeInflight) {
     try {
       readLock.lock();
       String partition = formatPartitionKey(partitionStr);
@@ -1077,8 +1064,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
             Option<FileSlice> fileSlice = fileGroup.getLatestFileSliceBeforeOrOn(maxInstantTime);
             // if the file-group is under construction, pick the latest before compaction instant time.
             if (fileSlice.isPresent()) {
-              fileSlice = Option.of(fetchMergedFileSlice(fileGroup, tableVersion8AndAbove()
-                  ? filterUncommittedLogs(fileSlice.get()) : fileSlice.get())
+              fileSlice = Option.of(fetchMergedFileSlice(fileGroup, (!includeInflight && tableVersion8AndAbove())
+                  ? filterUncommittedLogs(fileSlice.get()) : fileSlice.get(), maxInstantTime, includeInflight)
               );
             }
             return fileSlice;
@@ -1577,13 +1564,27 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    *
    * @param fileGroup File Group for which the file slice belongs to
    * @param fileSlice File Slice which needs to be merged
+   * @param maxInstantTime Maximum instant time to consider for the file slice
+   * @param includeBaseFileUnderInflightCompaction whether to include base file under inflight compaction
+   *                                               when merging file slices
    */
-  private FileSlice fetchMergedFileSlice(HoodieFileGroup fileGroup, FileSlice fileSlice) {
+  private FileSlice fetchMergedFileSlice(HoodieFileGroup fileGroup,
+                                         FileSlice fileSlice,
+                                         String maxInstantTime,
+                                         boolean includeBaseFileUnderInflightCompaction) {
     // if the file-group is under construction, pick the latest before compaction instant time.
     Option<Pair<String, CompactionOperation>> compactionOpWithInstant =
         getPendingCompactionOperationWithInstant(fileGroup.getFileGroupId());
     if (compactionOpWithInstant.isPresent()) {
       String compactionInstantTime = compactionOpWithInstant.get().getKey();
+      // Only if includeBaseFileUnderInflightCompaction is true, i.e., the base file from inflight
+      // compaction should be considered in the latest merged file slice, we check the file slice.
+      // The input file is directly returned if the maxInstantTime matches the inflight compaction
+      // and the base file is generated from the inflight compaction
+      if (includeBaseFileUnderInflightCompaction && compactionInstantTime.equals(maxInstantTime)
+          && fileSlice.getBaseFile().isPresent() && fileSlice.getBaseFile().get().getCommitTime().equals(compactionInstantTime)) {
+        return fileSlice;
+      }
       if (fileSlice.getBaseInstantTime().equals(compactionInstantTime)) {
         Option<FileSlice> prevFileSlice = fileGroup.getLatestFileSliceBefore(compactionInstantTime);
         if (prevFileSlice.isPresent()) {
