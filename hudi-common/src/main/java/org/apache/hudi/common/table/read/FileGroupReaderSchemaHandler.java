@@ -242,7 +242,7 @@ public class FileGroupReaderSchemaHandler<T> {
     //might need to change this if other queries than mor have mandatory fields
     if (!readerContext.getHasLogFiles()) {
       List<Schema.Field> addedFields = new ArrayList<>();
-      if ((hasInstantRange || shouldAddCompletionTime) && !findNestedField(requestedSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD).isPresent()) {
+      if (hasInstantRange && !findNestedField(requestedSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD).isPresent()) {
         addedFields.add(getField(this.tableSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD));
       }
       if (shouldAddCompletionTime && !findNestedField(requestedSchemaWithCompletionTime, HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD).isPresent()) {
