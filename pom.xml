@@ -170,7 +170,7 @@
     <spark33.version>3.3.4</spark33.version>
     <spark34.version>3.4.3</spark34.version>
     <spark35.version>3.5.5</spark35.version>
-    <spark40.version>4.0.0</spark40.version>
+    <spark40.version>4.0.1</spark40.version>
     <hudi.spark.module>hudi-spark3.5.x</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
     <avro.version>1.11.4</avro.version>
@@ -2588,7 +2588,7 @@
         <orc.spark.version>2.1.2</orc.spark.version>
         <avro.version>1.12.0</avro.version>
         <antlr.version>4.13.1</antlr.version>
-        <fasterxml.spark4.version>2.17.1</fasterxml.spark4.version>
+        <fasterxml.spark4.version>2.18.2</fasterxml.spark4.version>
         <fasterxml.version>${fasterxml.spark4.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark4.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark4.version}</fasterxml.jackson.module.scala.version>
