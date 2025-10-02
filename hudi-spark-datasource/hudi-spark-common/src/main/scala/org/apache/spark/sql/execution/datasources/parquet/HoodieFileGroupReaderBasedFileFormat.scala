@@ -60,7 +60,7 @@ import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
 
-import scala.collection.JavaConverters.mapAsJavaMapConverter
+import scala.collection.JavaConverters._
 
 trait HoodieFormatTrait {
 
