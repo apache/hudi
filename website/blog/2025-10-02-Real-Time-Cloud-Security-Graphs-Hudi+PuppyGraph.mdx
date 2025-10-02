@@ -57,12 +57,12 @@ PuppyGraph is not a traditional graph database but a graph query engine designed
 Instead of migrating data into a specialized store, PuppyGraph connects to sources including [PostgreSQL](https://www.puppygraph.com/blog/postgresql-graph-database), [Apache Iceberg](https://docs.puppygraph.com/connecting/connecting-to-iceberg/?h=ice), [Apache Hudi](https://docs.puppygraph.com/connecting/connecting-to-apache-hudi/), [BigQuery](https://docs.puppygraph.com/connecting/connecting-to-bigquery/?h=bigq), and others, then builds a virtual graph layer over them. Graph models are defined through simple JSON schema files, making it easy to update, version, or switch graph views without touching the underlying data. From there, you can quickly begin exploring your data with graph queries written in Gremlin or openCypher.
 
 <figure>
-![][image2]
+![](/assets/images/blog/2025-10-02-Real-Time-Cloud-Security-Graphs-Hudi+PuppyGraph/fig-2-PuppyGraph_Supported_Data_Sources.png)
 <figcaption>PuppyGraph Supported Data Sources</figcaption>
 </figure>
 
 <figure>
-![][image3]
+![](/assets/images/blog/2025-10-02-Real-Time-Cloud-Security-Graphs-Hudi+PuppyGraph/fig-3-Architecture-with-Graph-Database-vs-with-PuppyGraph.png)
 <figcaption>Architecture with Graph Database vs. with PuppyGraph</figcaption>
 </figure>
 
@@ -75,7 +75,7 @@ We have shown why cloud security benefits from a relationship-first view of iden
 Getting started is straightforward. You will deploy the stack, load security data into Hudi, connect PuppyGraph to your catalog, define a graph view, and run a few queries. All in a matter of minutes.
 
 <figure>
-![][image4]
+![](/assets/images/blog/2025-10-02-Real-Time-Cloud-Security-Graphs-Hudi+PuppyGraph/fig-4-Sample-Architecture-of-PuppyGraph-Hudi.png)
 <figcaption>Sample Architecture of PuppyGraph \+ Hudi</figcaption>
 </figure>
 
@@ -140,21 +140,21 @@ docker compose exec spark /opt/spark/bin/spark-sql -f /init.sql
 Now that our data is loaded in, we can log into the PuppyGraph Web UI at [http://localhost:8081](http://localhost:8081) with the default credentials (username: puppygraph, password: puppygraph123)  
 
 <figure>
-![][image5]
+![](/assets/images/blog/2025-10-02-Real-Time-Cloud-Security-Graphs-Hudi+PuppyGraph/fig-5-PuppyGraph-Login-Page.png)
 <figcaption>PuppyGraph Login Page</figcaption>
 </figure>
 
 To model your data as a graph, you can simply select the file \`schema.json\` in the Upload Graph Schema JSON section and click on Upload.
 
 <figure>
-![][image6]  
+![](/assets/images/blog/2025-10-02-Real-Time-Cloud-Security-Graphs-Hudi+PuppyGraph/fig-6-Schema-Page-in-PuppyGraph-UI.png)
 <figcaption>Schema Page in PuppyGraph UI</figcaption>
 </figure>
 
 Once you see your graph schema loaded in, you’re ready to start querying your data as a graph.
 
 <figure>
-![][image7]  
+![](/assets/images/blog/2025-10-02-Real-Time-Cloud-Security-Graphs-Hudi+PuppyGraph/fig-7-Loaded-Schema-in-PuppyGraph-UI.png)
 <figcaption>Loaded Schema in PuppyGraph UI</figcaption>
 </figure>
 
@@ -171,18 +171,18 @@ Listed below are some sample queries you can try running to explore the data:
 
 1. Tracing Admin Access Paths from Users to Internet Gateways
 
-```
+```groovy
 g.V().hasLabel('User').as('user')
  .outE('ACCESS').has('access_level', 'admin').as('edge')
  .inV()
  .path()
 ```
 
-![][image8]
+![](/assets/images/blog/2025-10-02-Real-Time-Cloud-Security-Graphs-Hudi+PuppyGraph/fig-8-PuppyGraph-Query-1.png)
 
 2. Find all public IP addresses exposed to the internet, along with their associated virtual machine instances, security groups, subnets, VPCs, internet gateways, and users, displaying all these entities in the traversal path.
 
-```
+```groovy
  g.V().hasLabel('PublicIP').as('ip')
  .in('HAS_PUBLIC_IP').as('ni')
  .in('PROTECTS').hasLabel('SecurityGroup').as('sg')
@@ -201,11 +201,11 @@ g.V().hasLabel('User').as('user')
  .limit(1000)
 ```
 
-![][image9]
+![](/assets/images/blog/2025-10-02-Real-Time-Cloud-Security-Graphs-Hudi+PuppyGraph/fig-9-PuppyGraph-Query-2.png)
 
 3. Find roles that have been granted excessive access permissions, along with their associated virtual machine instances.
 
-```
+```groovy
 g.V().hasLabel('Role').as('role')
 .where(
   __.out('ALLOWS_ACCESS_TO').count().is(gt(4L))
@@ -216,11 +216,11 @@ g.V().hasLabel('Role').as('role')
 .path()
 ```
 
-![][image10]
+![](/assets/images/blog/2025-10-02-Real-Time-Cloud-Security-Graphs-Hudi+PuppyGraph/fig-10-PuppyGraph-Query-3.png)
 
 4. Find security groups that have ingress rules permitting traffic from any IP address (0.0.0.0/0) to sensitive ports (22 or 3389), and retrieve the associated ingress rules, network interfaces, and virtual machine instances in the traversal path.
 
-```
+```groovy
 g.V().hasLabel('SecurityGroup').as('sg')
  .out('HAS_RULE')
    .has('source', '0.0.0.0/0')
@@ -232,7 +232,7 @@ g.V().hasLabel('SecurityGroup').as('sg')
  .path()
 ```
 
-![][image11]
+![](/assets/images/blog/2025-10-02-Real-Time-Cloud-Security-Graphs-Hudi+PuppyGraph/fig-11-PuppyGraph-Query-4.png)
 
 ## Conclusion
 
