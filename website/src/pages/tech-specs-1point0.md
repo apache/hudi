@@ -343,8 +343,12 @@ Every record stored in the metadata table is a Hudi record and hence has partiti
 
 *   **files** - Partition path to file name index. Key for the Hudi record is the partition path and the actual record is a map of file name to an instance of `HoodieMetadataFileInfo`. 
     Additionally, a special key `__all_partitions__` holds the list of all partitions. The files index can be used to do file listing and do filter based pruning of the scanset during query
-*   **column\_stats** - contains statistics of columns for all the records in the table. This enables fine-grained file pruning for filters and join conditions in the query. 
+*   **column\_stats** - contains statistics of columns for all the records in the table. This enables fine-grained file pruning for filters and join conditions in the query.
     The actual payload is an instance of `HoodieMetadataColumnStats`.
+
+* **secondary\_index** - contains metadata info that allows user to efficiently lookup data file groups a given secondary key value sits.
+
+* **record\_index** - contains metadata info that allows user to efficiently lookup data file groups a given primary key value sits.
 
 Apache Hudi platform employs HFile format, to store metadata and indexes, to ensure high performance, though different implementations are free to choose their own.
 
@@ -379,10 +383,32 @@ stored with the actual record to avoid re-computation.
 Within a given file, all records share the same values for `_hoodie_partition_path` and `_hoodie_file_name`, thus easily compressed away without any overheads with columnar file formats. 
 The other fields can also be optional for writers depending on whether protection against key field changes or incremental processing is desired. More on how to populate these fields in the sections below.
 
-## Indexes
+## Indices
 
 ### Naming
-Indexes are stored under `.hoodie/metadata` storage path, with separate partitions of the  form `<index_type>_<index_name>`.
+Indices are stored under `.hoodie/metadata` storage path, with separate partitions whose `partitionName` are of the form `<index_type>_<index_name>`.
+
+Indicies definitions are stored under `.hoodie/.index_defs/index.json`. The schema is defined as follows
+
+```
+{
+  "indexDefinitions" : {
+    <partitionName> : {
+      "indexName" : <partitionName>,
+      "indexType" : <indexType>,
+      "indexFunction" : "<indexFunction>",
+      "version": <versionEnum>,
+      "sourceFields" : [ <tableColumn1>, <tableColumn2>, ... ],
+      "indexOptions" : { }
+    },
+    ...
+  }
+}
+```
+
+- `<indexType>`: possible values can be `secondary_index`,`expr_index`, `record_index`, `bloom_filters`,`column_stats`,`partition_stats` and `files`.
+- `<versionEnum>`: It is a new attribute introduced since table version 9, it speciffies the version of the index storage layout, which provides forward backward index read write path compatibiity without necessarily require a table version upgrade/downgrade. The enum is in the form of `V[0-9]+`, like `V1`, `V2`, etc.
+- `sourceFields`: columns from the data table that the index is dependent on. It can contain metadata columns.
 
 ### Bloom Filter Index
 
@@ -430,14 +456,14 @@ The key is encoded in a format that ensures:
 2. **Safety**: Any occurrences of the delimiter or escape character within the data itself are handled correctly to avoid ambiguity.
 3. **Efficiency**: The encoding and decoding processes are optimized for performance while ensuring data integrity.
 
-The key format is:
+The format of the key that got persisted in the file system is:
 ```
 <escaped-secondary-key>$<escaped-primary-key>
-
-Where:
-  - `$` is the delimiter separating the secondary key and primary key.
-  - Special characters in the secondary or primary key (`$` and `\`) are escaped to avoid conflicts.
 ```
+Where:
+- `$` is the delimiter separating the secondary key and primary key.
+- For null secondary key, it is encoded internally as ASCII null char.
+- Special characters in the secondary or primary key (`$`, `\`, ASCII null char) are escaped to avoid conflicts.
 
 **Value** contains metadata about the record, specifically an `isDeleted` flag indicating whether the record is valid or has been logically deleted.
 
@@ -445,6 +471,17 @@ For example, consider a secondary index on the `city` column. The key-value pair
 ```
 chennai$id1 -> {"isDeleted": false}
 ```
+
+**Partition strategy**
+Internally, the index metadata is tracked by a collection of file groups in the corresponding metadata table partition with `partitionName`. Hash based partitioning is applied here to distribute all metadata records over the index file groups:
+- For secondary index version `V1` (default used by table version 8), hash value of `<escaped-secondary-key>$<escaped-primary-key>` is computed to decide the targeting file groups that the index key belongs to.
+- For secondary index version `V2` (default used by table version 9), hash value of `<escaped-secondary-key>$` is computed to decide the targeting file groups that the index key belongs to. If allows efficient index key look up with secondary keys alone without knowing the primary key value.
+
+
+#### Current limitations
+- We don't allow schema evolution on columns with a secondary index. User must drop any associated indices on the column before evolving the schema of the column.
+- We don't support secondary index built on top of more than 1 column.
+- We only support secondary index on columns of string, double, timestamp and any integral types such as int, long, bigint.
 
 ### Expression Indexes
 
