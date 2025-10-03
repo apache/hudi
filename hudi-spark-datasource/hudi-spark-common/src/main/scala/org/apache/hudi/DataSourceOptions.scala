@@ -612,11 +612,11 @@ object DataSourceWriteOptions {
     .markAdvanced()
     .sinceVersion("0.14.0")
     .withDocumentation("Sql write operation to use with INSERT_INTO spark sql command. This comes with 3 possible values, bulk_insert, " +
-      "insert and upsert. bulk_insert is generally meant for initial loads and is known to be performant compared to insert. But bulk_insert may not " +
-      "do small file management. If you prefer hudi to automatically manage small files, then you can go with \"insert\". There is no precombine " +
+      "insert and upsert. The default behavior is insert, which means that duplicates will be preserved when writing data. bulk_insert is generally meant for initial loads " +
+      "and is known to be performant compared to insert. But bulk_insert may not do small file management. If you prefer hudi to automatically manage small files, then you can go with \"insert\". There is no precombine " +
       "(if there are duplicates within the same batch being ingested, same dups will be ingested) with bulk_insert and insert and there is no index " +
       "look up as well. If you may use INSERT_INTO for mutable dataset, then you may have to set this config value to \"upsert\". With upsert, you will " +
-      "get both precombine and updates to existing records on storage is also honored. If not, you may see duplicates. ")
+      "get both precombine and updates to existing records on storage is also honored, meaning deduplication will occur.")
 
   val ENABLE_MERGE_INTO_PARTIAL_UPDATES: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.spark.sql.merge.into.partial.updates")
