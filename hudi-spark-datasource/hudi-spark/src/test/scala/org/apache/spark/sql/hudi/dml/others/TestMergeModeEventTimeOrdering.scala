@@ -20,12 +20,12 @@
 package org.apache.spark.sql.hudi.dml.others
 
 import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload
 import org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.common.testutils.HoodieTestUtils
-
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.validateTableConfig
 
@@ -95,6 +95,7 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
     test(s"Test $tableType table with EVENT_TIME_ORDERING (tableVersion=$tableVersion,"
       + s"setRecordMergeConfigs=$setRecordMergeConfigs)") {
       withSparkSqlSessionConfigWithCondition(
+        (SPARK_SQL_INSERT_INTO_OPERATION.key -> "upsert", true),
         ("hoodie.merge.small.file.group.candidates.limit" -> "0", true),
         (DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key -> "true", true),
         // TODO(HUDI-8820): enable MDT after supporting MDT with table version 6
