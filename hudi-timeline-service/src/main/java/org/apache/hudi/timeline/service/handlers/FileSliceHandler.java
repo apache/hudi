@@ -61,9 +61,10 @@ public class FileSliceHandler extends Handler {
   }
 
   public List<FileSliceDTO> getLatestMergedFileSlicesBeforeOrOnIncludingInflight(String basePath, String partitionPath,
-                                                                                 String maxInstantTime) {
+                                                                                 String maxInstantTime,
+                                                                                 String currentInstantTime) {
     return viewManager.getFileSystemView(basePath)
-        .getLatestMergedFileSlicesBeforeOrOnIncludingInflight(partitionPath, maxInstantTime)
+        .getLatestMergedFileSlicesBeforeOrOnIncludingInflight(partitionPath, maxInstantTime, currentInstantTime)
         .map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
   }
 

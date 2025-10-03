@@ -1043,17 +1043,18 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   @Override
   public final Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionStr, String maxInstantTime) {
-    return getLatestMergedFileSliceBeforeOrOnInternal(partitionStr, maxInstantTime, false);
+    return getLatestMergedFileSliceBeforeOrOnInternal(partitionStr, maxInstantTime, maxInstantTime, false);
   }
 
   @Override
-  public final Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOnIncludingInflight(String partitionStr, String maxInstantTime) {
-    return getLatestMergedFileSliceBeforeOrOnInternal(partitionStr, maxInstantTime, true);
+  public final Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOnIncludingInflight(String partitionStr, String maxInstantTime, String currentInstantTime) {
+    return getLatestMergedFileSliceBeforeOrOnInternal(partitionStr, maxInstantTime, currentInstantTime, true);
   }
 
-  private final Stream<FileSlice> getLatestMergedFileSliceBeforeOrOnInternal(String partitionStr,
-                                                                             String maxInstantTime,
-                                                                             boolean includeInflight) {
+  private Stream<FileSlice> getLatestMergedFileSliceBeforeOrOnInternal(String partitionStr,
+                                                                       String maxInstantTime,
+                                                                       String currentInstantTime,
+                                                                       boolean includeInflight) {
     try {
       readLock.lock();
       String partition = formatPartitionKey(partitionStr);
@@ -1065,7 +1066,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
             // if the file-group is under construction, pick the latest before compaction instant time.
             if (fileSlice.isPresent()) {
               fileSlice = Option.of(fetchMergedFileSlice(fileGroup, (!includeInflight && tableVersion8AndAbove())
-                  ? filterUncommittedLogs(fileSlice.get()) : fileSlice.get(), maxInstantTime, includeInflight)
+                  ? filterUncommittedLogs(fileSlice.get()) : fileSlice.get(), currentInstantTime, includeInflight)
               );
             }
             return fileSlice;
@@ -1564,13 +1565,13 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    *
    * @param fileGroup File Group for which the file slice belongs to
    * @param fileSlice File Slice which needs to be merged
-   * @param maxInstantTime Maximum instant time to consider for the file slice
+   * @param currentInstantTime Instant time of the current transaction
    * @param includeBaseFileUnderInflightCompaction whether to include base file under inflight compaction
    *                                               when merging file slices
    */
   private FileSlice fetchMergedFileSlice(HoodieFileGroup fileGroup,
                                          FileSlice fileSlice,
-                                         String maxInstantTime,
+                                         String currentInstantTime,
                                          boolean includeBaseFileUnderInflightCompaction) {
     // if the file-group is under construction, pick the latest before compaction instant time.
     Option<Pair<String, CompactionOperation>> compactionOpWithInstant =
@@ -1581,7 +1582,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       // compaction should be considered in the latest merged file slice, we check the file slice.
       // The input file is directly returned if the maxInstantTime matches the inflight compaction
       // and the base file is generated from the inflight compaction
-      if (includeBaseFileUnderInflightCompaction && compactionInstantTime.equals(maxInstantTime)
+      if (includeBaseFileUnderInflightCompaction && compactionInstantTime.equals(currentInstantTime)
           && fileSlice.getBaseFile().isPresent() && fileSlice.getBaseFile().get().getCommitTime().equals(compactionInstantTime)) {
         return fileSlice;
       }
