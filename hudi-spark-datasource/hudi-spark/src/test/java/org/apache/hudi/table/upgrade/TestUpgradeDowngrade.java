@@ -902,47 +902,18 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
    */
   private void validateOverwritePayloadEventTimeOrdering(HoodieTableMetaClient metaClient, String stage) {
     LOG.info("Validating event-time ordering for OverwriteWithLatestAvroPayload {}", stage);
-
     try {
       Dataset<Row> actualData = readTableData(metaClient, stage);
-
-      // Select business columns in consistent order
       Dataset<Row> actualDataSorted = actualData
           .select("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq",
                   "_event_bin_file", "_event_pos", "_change_operation_type")
           .sort("_event_lsn");
-
-      // Expected data based on simplified fixture + test operations:
-      //
-      // From SIMPLIFIED fixture (v6):
-      // 1. Initial: lsn=1-5, ts=10
-      // 2. Update: lsn=1,2,3 with ts=11 (rider-X, rider-Y, rider-CC)
-      // 3. Delete: lsn=1,5 with ts=12
-      //
-      // After fixture, surviving records:
-      // - lsn=2: ts=11, rider-Y
-      // - lsn=3: ts=11, rider-CC
-      // - lsn=4: ts=10, rider-D
-      //
-      // From test (after v9 upgrade):
-      // 4. Mixed ordering batch:
-      //    - lsn=2: ts=13, rider-YY (HIGHER than ts=11 → APPLIED)
-      //    - lsn=4: ts=9, rider-IGNORED (LOWER than ts=10 → IGNORED)
-      // 5. New record: lsn=6, ts=14, rider-NEW
-      //
-      // Final expected state (event-time ordering respected):
-      // - lsn=2: ts=13, rider-YY (higher ordering applied)
-      // - lsn=3: ts=11, rider-CC (from fixture)
-      // - lsn=4: ts=10, rider-D (lower ordering ts=9 IGNORED)
-      // - lsn=6: ts=14, rider-NEW (new record)
-
       List<org.apache.spark.sql.Row> expectedRows = Arrays.asList(
           org.apache.spark.sql.RowFactory.create(13, 2L, "rider-YY", "driver-YY", 27.70, "u", "13.1", 13, 1, "u"),
           org.apache.spark.sql.RowFactory.create(11, 3L, "rider-CC", "driver-CC", 33.90, "u", "11.1", 11, 1, "u"),
           org.apache.spark.sql.RowFactory.create(10, 4L, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1, "i"),
           org.apache.spark.sql.RowFactory.create(14, 6L, "rider-NEW", "driver-NEW", 25.50, "i", "14.1", 14, 1, "i")
       );
-
       org.apache.spark.sql.types.StructType schema = org.apache.spark.sql.types.DataTypes.createStructType(
           Arrays.asList(
               org.apache.spark.sql.types.DataTypes.createStructField("ts", org.apache.spark.sql.types.DataTypes.IntegerType, true),
@@ -957,17 +928,13 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
               org.apache.spark.sql.types.DataTypes.createStructField("_change_operation_type", org.apache.spark.sql.types.DataTypes.StringType, true)
           )
       );
-
       Dataset<Row> expectedDataSorted = sqlContext().createDataFrame(expectedRows, schema).sort("_event_lsn");
       Dataset<Row> inActualNotExpected = actualDataSorted.except(expectedDataSorted);
       Dataset<Row> inExpectedNotActual = expectedDataSorted.except(actualDataSorted);
       // Validate that actual data matches expected data (event-time ordering respected)
       boolean isEqual = inExpectedNotActual.isEmpty() && inActualNotExpected.isEmpty();
-
-    assertTrue(isEqual,
+      assertTrue(isEqual,
           "Event-time ordering validation failed " + stage + ": data should match expected results with event-time ordering");
-
-      LOG.info("Event-time ordering validation passed {} ({} records)", stage, actualDataSorted.count());
     } catch (Exception e) {
       LOG.error("Event-time ordering validation failed {}", stage, e);
       throw new RuntimeException("Event-time ordering validation failed " + stage, e);
@@ -1093,15 +1060,13 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     // Expected record count: 3 from fixture (after deletes: lsn=2,3,4) + 1 new (lsn=6) = 4 records
     assertEquals(4, readOptimizedDataUpgradeAndWrite.count(),
             "Read-optimized query should return 4 records after upgrade/write: " + payloadType);
-    // will perform real time query and do dataframe validation
-    // Skip generic validation for overwrite - it has specific validation below that accounts for mixed ordering batch
-    if (!"overwrite".equals(payloadType)) {
-      validateDataConsistency(expectedDataWithNewRecord, metaClientV9, "dataframe validation after v9 upgrade/write for " + payloadType);
-    }
 
-    // For overwrite payload: validate event-time ordering in v9 (before downgrade)
+    // will perform real time query and do dataframe validation
+    // for overwrite - it has specific validation below that accounts for mixed ordering batch
     if ("overwrite".equals(payloadType)) {
       validateOverwritePayloadEventTimeOrdering(metaClientV9, "event-time ordering validation after v9 upgrade for " + payloadType);
+    } else {
+      validateDataConsistency(expectedDataWithNewRecord, metaClientV9, "dataframe validation after v9 upgrade/write for " + payloadType);
     }
 
     // Test downgrade v9 -> v6
@@ -1123,18 +1088,14 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
 
     // Expected: 3 from fixture (lsn=2,3,4) + 1 new (lsn=6) = 4 records
     assertEquals(4, readOptimizedDataAfterDowngrade.count(), "Read-optimized query should return 4 records after downgrade: " + payloadType);
-    // will perform real time query and do dataframe validation
-    // Skip generic validation for overwrite - it has specific validation below that accounts for mixed ordering batch
-    if (!"overwrite".equals(payloadType)) {
-      validateDataConsistency(expectedDataWithNewRecord, metaClientV6, "dataframe validation after v9->v6 downgrade for " + payloadType);
-    }
 
-    // Special validation for overwrite payload: verify event-time ordering behavior
-    // This is the special case of a v6 MOR table with ordering field set to "ts"
+    // will perform real time query and do dataframe validation
+    // for overwrite - it has specific validation below that accounts for mixed ordering batch
     if ("overwrite".equals(payloadType)) {
       validateOverwritePayloadEventTimeOrdering(metaClientV6, "event-time ordering validation after downgrade for " + payloadType);
+    } else {
+      validateDataConsistency(expectedDataWithNewRecord, metaClientV6, "dataframe validation after v9->v6 downgrade for " + payloadType);
     }
-
     LOG.info("Completed payload upgrade/downgrade test for: {}", payloadType);
   }
 }
