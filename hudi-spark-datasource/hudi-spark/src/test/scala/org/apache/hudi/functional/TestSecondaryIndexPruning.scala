@@ -33,7 +33,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config._
 import org.apache.hudi.exception.{HoodieMetadataIndexException, HoodieWriteConflictException}
-import org.apache.hudi.functional.TestSecondaryIndexPruning.SecondaryIndexTestCase
+import org.apache.hudi.functional.TestSecondaryIndexPruning.{SecondaryIndexStreamingWritesTestCase, SecondaryIndexTestCase}
 import org.apache.hudi.metadata._
 import org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR
 import org.apache.hudi.storage.StoragePath
@@ -278,10 +278,11 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testSecondaryIndexPruningParameters"))
-  def testSecondaryIndexPruningWithUpdates(testCase: SecondaryIndexTestCase): Unit = {
+  @MethodSource(Array("testSecondaryIndexPruningStreamingParameters"))
+  def testSecondaryIndexPruningWithUpdates(testCase: SecondaryIndexStreamingWritesTestCase): Unit = {
     val tableType = testCase.tableType
     val isPartitioned = testCase.isPartitioned
+    val isStreamingWritesEnabled = testCase.isStreamingWrites
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
@@ -300,11 +301,13 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
          |) using hudi
          | options (
          |  primaryKey ='record_key_col',
+         |  type = '$sqlTableType',
          |  hoodie.metadata.enable = 'true',
          |  hoodie.metadata.record.index.enable = 'true',
          |  hoodie.datasource.write.recordkey.field = 'record_key_col',
          |  hoodie.enable.data.skipping = 'true',
-         |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
+         |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
+         |  hoodie.metadata.streaming.write.enabled = '$isStreamingWritesEnabled'
          | )
          | $partitionedByClause
          | location '$basePath'
@@ -323,6 +326,9 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       .setBasePath(basePath)
       .setConf(HoodieTestUtils.getDefaultStorageConf)
       .build()
+
+    assertEquals(metaClient.getTableConfig.getTableType.name(), tableType)
+
     // validate the secondary index records themselves
     checkAnswer(s"select key from hudi_metadata('$basePath') where type=7")(
       Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
@@ -351,6 +357,19 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       Seq(1, "row1", "xyz", "p1")
     )
     verifyQueryPredicate(hudiOpts, "not_record_key_col", "abc")
+
+    // update the secondary key column
+    spark.sql(s"update $tableName set not_record_key_col = 'xyz2' where record_key_col = 'row1'")
+    // validate the secondary index records themselves
+    checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+      Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+      Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3", false),
+      Seq(s"xyz2${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false)
+    )
+    // validate data and data skipping
+    checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where record_key_col = 'row1'")(
+      Seq(1, "row1", "xyz2", "p1")
+    )
   }
 
   @ParameterizedTest
@@ -1701,6 +1720,15 @@ object TestSecondaryIndexPruning {
       arguments(SecondaryIndexTestCase("COPY_ON_WRITE", isPartitioned = false)),
       arguments(SecondaryIndexTestCase("MERGE_ON_READ", isPartitioned = true)),
       arguments(SecondaryIndexTestCase("MERGE_ON_READ", isPartitioned = false))
+    )
+  }
+
+  case class SecondaryIndexStreamingWritesTestCase(tableType: String, isPartitioned: Boolean, isStreamingWrites: Boolean)
+
+  def testSecondaryIndexPruningStreamingParameters(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      arguments(SecondaryIndexStreamingWritesTestCase("COPY_ON_WRITE", isPartitioned = true, isStreamingWrites = true)),
+      arguments(SecondaryIndexStreamingWritesTestCase("MERGE_ON_READ", isPartitioned = true, isStreamingWrites = true))
     )
   }
 }

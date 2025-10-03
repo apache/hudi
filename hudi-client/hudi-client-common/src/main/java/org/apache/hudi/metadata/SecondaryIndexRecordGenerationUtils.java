@@ -23,28 +23,36 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
 
@@ -57,12 +65,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createSecondaryIndexRecord;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.filePath;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryResolveSchemaForTable;
 
 /**
@@ -80,7 +88,7 @@ public class SecondaryIndexRecordGenerationUtils {
    * @param fsView          file system view as of instant time
    * @param dataMetaClient  data table meta client
    * @param engineContext   engine context
-   * @param props           the writer properties
+   * @param writeConfig     hoodie write config.
    * @return {@link HoodieData} of {@link HoodieRecord} to be updated in the metadata table for the given secondary index partition
    */
   @VisibleForTesting
@@ -91,7 +99,9 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                                       HoodieTableFileSystemView fsView,
                                                                                       HoodieTableMetaClient dataMetaClient,
                                                                                       HoodieEngineContext engineContext,
-                                                                                      TypedProperties props) {
+                                                                                      HoodieWriteConfig writeConfig
+                                                                                      ) {
+    TypedProperties props = writeConfig.getProps();
     // Secondary index cannot support logs having inserts with current offering. So, lets validate that.
     if (allWriteStats.stream().anyMatch(writeStat -> {
       String fileName = FSUtils.getFileName(writeStat.getPath(), writeStat.getPartitionPath());
@@ -114,21 +124,60 @@ public class SecondaryIndexRecordGenerationUtils {
       String fileId = writeStatsByFileIdEntry.getKey();
       List<HoodieWriteStat> writeStats = writeStatsByFileIdEntry.getValue();
       String partition = writeStats.get(0).getPartitionPath();
-      FileSlice previousFileSliceForFileId = fsView.getLatestFileSlice(partition, fileId).orElse(null);
-      Map<String, String> recordKeyToSecondaryKeyForPreviousFileSlice;
-      if (previousFileSliceForFileId == null) {
-        // new file slice, so empty mapping for previous slice
-        recordKeyToSecondaryKeyForPreviousFileSlice = Collections.emptyMap();
-      } else {
-        recordKeyToSecondaryKeyForPreviousFileSlice =
-            getRecordKeyToSecondaryKey(dataMetaClient, readerContextFactory.getContext(), previousFileSliceForFileId, tableSchema, indexDefinition, instantTime, props, false);
+      StoragePath basePath = dataMetaClient.getBasePath();
+
+      // validate that for a given fileId, either we have 1 parquet file or N log files.
+      AtomicInteger totalParquetFiles = new AtomicInteger();
+      AtomicInteger totalLogFiles = new AtomicInteger();
+      writeStats.stream().forEach(writeStat -> {
+        if (FSUtils.isLogFile(new StoragePath(basePath, writeStat.getPath()))) {
+          totalLogFiles.getAndIncrement();
+        } else {
+          totalParquetFiles.getAndIncrement();
+        }
+      });
+
+      ValidationUtils.checkArgument(!(totalParquetFiles.get() > 0 && totalLogFiles.get() > 0), "Only either of base file or log files are expected for a given file group. "
+          + "Partition " + partition + ", fileId " + fileId);
+      if (totalParquetFiles.get() > 0) {
+        // we should expect only 1 parquet file
+        ValidationUtils.checkArgument(writeStats.size() == 1, "Only one new parquet file expected per file group per commit");
       }
-      List<FileSlice> latestIncludingInflightFileSlices = getPartitionLatestFileSlicesIncludingInflight(dataMetaClient, Option.empty(), partition);
-      FileSlice currentFileSliceForFileId = latestIncludingInflightFileSlices.stream().filter(fs -> fs.getFileId().equals(fileId)).findFirst()
-          .orElseThrow(() -> new HoodieException("Could not find any file slice for fileId " + fileId));
-      Map<String, String> recordKeyToSecondaryKeyForCurrentFileSlice =
-          getRecordKeyToSecondaryKey(dataMetaClient, readerContextFactory.getContext(), currentFileSliceForFileId, tableSchema, indexDefinition, instantTime, props, true);
-      // Need to find what secondary index record should be deleted, and what should be inserted.
+      // Instantiate Remote table FSV
+      TableFileSystemView.SliceView sliceView = getSliceView(writeConfig,  dataMetaClient);
+      Option<FileSlice> fileSliceOption = sliceView.getLatestMergedFileSliceBeforeOrOn(partition, instantTime, fileId);
+      Map<String, String> recordKeyToSecondaryKeyForPreviousFileSlice;
+      Map<String, String> recordKeyToSecondaryKeyForCurrentFileSlice;
+      if (fileSliceOption.isPresent()) { // if previous file slice is present.
+        recordKeyToSecondaryKeyForPreviousFileSlice =
+            getRecordKeyToSecondaryKey(dataMetaClient, readerContextFactory.getContext(), fileSliceOption.get(), tableSchema, indexDefinition, instantTime, props, false);
+        // branch out based on whether new parquet file is added or log files are added.
+        if (totalParquetFiles.get() > 0) { // new base file/file slice is created in current commit.
+          FileSlice currentFileSliceForFileId = new FileSlice(partition, instantTime, fileId);
+          HoodieWriteStat stat = writeStats.get(0);
+          StoragePathInfo baseFilePathInfo = new StoragePathInfo(new StoragePath(basePath, stat.getPath()), stat.getFileSizeInBytes(), false, (short) 0, 0, 0);
+          currentFileSliceForFileId.setBaseFile(new HoodieBaseFile(baseFilePathInfo));
+          recordKeyToSecondaryKeyForCurrentFileSlice =
+              getRecordKeyToSecondaryKey(dataMetaClient, readerContextFactory.getContext(), currentFileSliceForFileId, tableSchema, indexDefinition, instantTime, props, true);
+        } else { // log files are added in current commit
+          // add new log files to existing latest file slice and compute the secondary index to primary key mapping.
+          FileSlice latestFileSlice = fileSliceOption.get();
+          writeStats.stream().forEach(writeStat -> {
+            StoragePathInfo logFile = new StoragePathInfo(new StoragePath(basePath, writeStat.getPath()), writeStat.getFileSizeInBytes(), false, (short) 0, 0, 0);
+            latestFileSlice.addLogFile(new HoodieLogFile(logFile));
+          });
+          recordKeyToSecondaryKeyForCurrentFileSlice =
+              getRecordKeyToSecondaryKey(dataMetaClient, readerContextFactory.getContext(), latestFileSlice, tableSchema, indexDefinition, instantTime, props, true);
+        }
+      } else { // new file group
+        recordKeyToSecondaryKeyForPreviousFileSlice = Collections.emptyMap(); // previous slice is empty.
+        FileSlice currentFileSliceForFileId = new FileSlice(partition, instantTime, fileId);
+        HoodieWriteStat stat = writeStats.get(0);
+        StoragePathInfo baseFilePathInfo = new StoragePathInfo(new StoragePath(basePath, stat.getPath()), stat.getFileSizeInBytes(), false, (short) 0, 0, 0);
+        currentFileSliceForFileId.setBaseFile(new HoodieBaseFile(baseFilePathInfo));
+        recordKeyToSecondaryKeyForCurrentFileSlice =
+            getRecordKeyToSecondaryKey(dataMetaClient, readerContextFactory.getContext(), currentFileSliceForFileId, tableSchema, indexDefinition, instantTime, props, true);
+      }   // Need to find what secondary index record should be deleted, and what should be inserted.
       // For each entry in recordKeyToSecondaryKeyForCurrentFileSlice, if it is not present in recordKeyToSecondaryKeyForPreviousFileSlice, then it should be inserted.
       // For each entry in recordKeyToSecondaryKeyForCurrentFileSlice, if it is present in recordKeyToSecondaryKeyForPreviousFileSlice, then it should be updated.
       // For each entry in recordKeyToSecondaryKeyForPreviousFileSlice, if it is not present in recordKeyToSecondaryKeyForCurrentFileSlice, then it should be deleted.
@@ -152,6 +201,17 @@ public class SecondaryIndexRecordGenerationUtils {
       });
       return records.iterator();
     });
+  }
+
+  private static TableFileSystemView.SliceView getSliceView(HoodieWriteConfig config, HoodieTableMetaClient dataMetaClient) {
+    HoodieEngineContext context = new HoodieLocalEngineContext(dataMetaClient.getStorageConf());
+    FileSystemViewManager viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(),
+        config.getCommonConfig(), unused -> getMetadataTable(config, dataMetaClient, context));
+    return viewManager.getFileSystemView(dataMetaClient);
+  }
+
+  private static HoodieTableMetadata getMetadataTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient, HoodieEngineContext context) {
+    return metaClient.getTableFormat().getMetadataFactory().create(context, metaClient.getStorage(), config.getMetadataConfig(), config.getBasePath());
   }
 
   public static <T> Map<String, String> getRecordKeyToSecondaryKey(HoodieTableMetaClient metaClient,
