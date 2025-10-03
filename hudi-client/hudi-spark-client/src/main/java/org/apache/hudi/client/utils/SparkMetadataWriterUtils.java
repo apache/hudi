@@ -41,6 +41,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -92,6 +93,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -409,6 +411,12 @@ public class SparkMetadataWriterUtils {
       List<List<HoodieWriteStat>> partitionedWriteStats = new ArrayList<>(commitMetadata.getWriteStats().stream()
           .collect(Collectors.groupingBy(HoodieWriteStat::getPartitionPath))
           .values());
+
+      Map<String, Set<String>> fileGroupIdsToReplaceMap = (commitMetadata instanceof HoodieReplaceCommitMetadata)
+          ? ((HoodieReplaceCommitMetadata) commitMetadata).getPartitionToReplaceFileIds()
+          .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> new HashSet<>(e.getValue())))
+          : Collections.emptyMap();
+
       String maxInstantTime = HoodieMetadataWriteUtils.getMaxInstantTime(dataMetaClient, instantTime);
       int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
       return engineContext.parallelize(partitionedWriteStats, parallelism).mapToPair(partitionedWriteStat -> {
@@ -416,7 +424,8 @@ public class SparkMetadataWriterUtils {
         checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
         // Collect Column Metadata for Each File part of active file system view of latest snapshot
         // Get all file names, including log files, in a set from the file slices
-        Set<String> fileNames = HoodieMetadataWriteUtils.getFilesToFetchColumnStats(partitionedWriteStat, dataMetaClient, tableMetadata, dataWriteConfig, partitionName, maxInstantTime, instantTime);
+        Set<String> fileNames = HoodieMetadataWriteUtils.getFilesToFetchColumnStats(partitionedWriteStat, dataMetaClient, tableMetadata, dataWriteConfig, partitionName, maxInstantTime, instantTime,
+            fileGroupIdsToReplaceMap, validColumnsToIndex, indexVersion);
         // Fetch EI column stat records for above files
         List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata =
             tableMetadata.getRecordsByKeyPrefixes(

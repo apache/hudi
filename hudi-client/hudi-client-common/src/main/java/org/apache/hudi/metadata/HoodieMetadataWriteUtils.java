@@ -544,8 +544,6 @@ public class HoodieMetadataWriteUtils {
                                                        List<String> colsToIndex,
                                                        HoodieIndexVersion partitionStatsIndexVersion) {
     // Get the latest merged file slices based on the commited files part of the latest snapshot and the new files of the current commit metadata
-    // Get the latest merged file slices based on the commited files part of the latest snapshot and the new files of the current commit metadata
-    // Get the latest merged file slices based on the commited files part of the latest snapshot and the new files of the current commit metadata
     List<StoragePathInfo> consolidatedPathInfos = new ArrayList<>();
     partitionedWriteStat.forEach(
         stat -> consolidatedPathInfos.add(
