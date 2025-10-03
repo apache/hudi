@@ -62,6 +62,14 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   /**
+   * Helper method to create AuditRecord for tests with lockHeld defaulting to true.
+   */
+  private static LockAuditingCommand.AuditRecord createAuditRecord(
+      String ownerId, long transactionStartTime, long timestamp, String state, long lockExpiration) {
+    return new LockAuditingCommand.AuditRecord(ownerId, transactionStartTime, timestamp, state, lockExpiration, true);
+  }
+
+  /**
    * Represents a transaction scenario with its audit records
    */
   static class TransactionScenario {
@@ -292,8 +300,8 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     // Create some audit files to be cleaned up
     List<TransactionScenario> scenarios = new ArrayList<>();
     List<LockAuditingCommand.AuditRecord> records = new ArrayList<>();
-    records.add(new LockAuditingCommand.AuditRecord("owner1", 1000L, 1100L, "START", 61000L));
-    records.add(new LockAuditingCommand.AuditRecord("owner1", 1000L, 1200L, "END", 61000L));
+    records.add(createAuditRecord("owner1", 1000L, 1100L, "START", 61000L));
+    records.add(createAuditRecord("owner1", 1000L, 1200L, "END", 61000L));
     scenarios.add(new TransactionScenario("1000_owner1.jsonl", records));
     createAuditFiles(scenarios);
 
@@ -319,8 +327,8 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     // Create some audit files
     List<TransactionScenario> scenarios = new ArrayList<>();
     List<LockAuditingCommand.AuditRecord> records = new ArrayList<>();
-    records.add(new LockAuditingCommand.AuditRecord("owner1", 1000L, 1100L, "START", 61000L));
-    records.add(new LockAuditingCommand.AuditRecord("owner1", 1000L, 1200L, "END", 61000L));
+    records.add(createAuditRecord("owner1", 1000L, 1100L, "START", 61000L));
+    records.add(createAuditRecord("owner1", 1000L, 1200L, "END", 61000L));
     scenarios.add(new TransactionScenario("1000_owner1.jsonl", records));
     createAuditFiles(scenarios);
 
@@ -442,15 +450,15 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     
     // Transaction 1: Complete transaction
     List<LockAuditingCommand.AuditRecord> records1 = new ArrayList<>();
-    records1.add(new LockAuditingCommand.AuditRecord("owner1", baseTime, baseTime + 100, "START", baseTime + 60000));
-    records1.add(new LockAuditingCommand.AuditRecord("owner1", baseTime, baseTime + 200, "RENEW", baseTime + 60000));
-    records1.add(new LockAuditingCommand.AuditRecord("owner1", baseTime, baseTime + 300, "END", baseTime + 60000));
+    records1.add(createAuditRecord("owner1", baseTime, baseTime + 100, "START", baseTime + 60000));
+    records1.add(createAuditRecord("owner1", baseTime, baseTime + 200, "RENEW", baseTime + 60000));
+    records1.add(createAuditRecord("owner1", baseTime, baseTime + 300, "END", baseTime + 60000));
     scenarios.add(new TransactionScenario(baseTime + "_owner1.jsonl", records1));
     
     // Transaction 2: Complete transaction starting after first one ends
     List<LockAuditingCommand.AuditRecord> records2 = new ArrayList<>();
-    records2.add(new LockAuditingCommand.AuditRecord("owner2", baseTime + 500, baseTime + 600, "START", baseTime + 60000));
-    records2.add(new LockAuditingCommand.AuditRecord("owner2", baseTime + 500, baseTime + 700, "END", baseTime + 60000));
+    records2.add(createAuditRecord("owner2", baseTime + 500, baseTime + 600, "START", baseTime + 60000));
+    records2.add(createAuditRecord("owner2", baseTime + 500, baseTime + 700, "END", baseTime + 60000));
     scenarios.add(new TransactionScenario((baseTime + 500) + "_owner2.jsonl", records2));
     
     createAuditFiles(scenarios);
@@ -476,7 +484,7 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     
     // Single audit file without END record
     List<LockAuditingCommand.AuditRecord> records1 = new ArrayList<>();
-    records1.add(new LockAuditingCommand.AuditRecord("owner1", baseTime, baseTime + 100, "START", baseTime + 200));
+    records1.add(createAuditRecord("owner1", baseTime, baseTime + 100, "START", baseTime + 200));
     scenarios.add(new TransactionScenario(baseTime + "_owner1.jsonl", records1));
     
     createAuditFiles(scenarios);
@@ -501,13 +509,13 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     
     // Transaction 1: Unclosed (effective end at expiration = baseTime + 200)
     List<LockAuditingCommand.AuditRecord> records1 = new ArrayList<>();
-    records1.add(new LockAuditingCommand.AuditRecord("owner1", baseTime, baseTime + 100, "START", baseTime + 200));
+    records1.add(createAuditRecord("owner1", baseTime, baseTime + 100, "START", baseTime + 200));
     scenarios.add(new TransactionScenario(baseTime + "_owner1.jsonl", records1));
     
     // Transaction 2: Complete, starts after owner1's expiration
     List<LockAuditingCommand.AuditRecord> records2 = new ArrayList<>();
-    records2.add(new LockAuditingCommand.AuditRecord("owner2", baseTime + 300, baseTime + 400, "START", baseTime + 60000));
-    records2.add(new LockAuditingCommand.AuditRecord("owner2", baseTime + 300, baseTime + 500, "END", baseTime + 60000));
+    records2.add(createAuditRecord("owner2", baseTime + 300, baseTime + 400, "START", baseTime + 60000));
+    records2.add(createAuditRecord("owner2", baseTime + 300, baseTime + 500, "END", baseTime + 60000));
     scenarios.add(new TransactionScenario((baseTime + 300) + "_owner2.jsonl", records2));
     
     createAuditFiles(scenarios);
@@ -535,14 +543,14 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     
     // Transaction 1: Ends after owner2 starts (overlapping)
     List<LockAuditingCommand.AuditRecord> records1 = new ArrayList<>();
-    records1.add(new LockAuditingCommand.AuditRecord("owner1", baseTime, baseTime + 100, "START", baseTime + 60000));
-    records1.add(new LockAuditingCommand.AuditRecord("owner1", baseTime, baseTime + 500, "END", baseTime + 60000)); // Ends after owner2 starts
+    records1.add(createAuditRecord("owner1", baseTime, baseTime + 100, "START", baseTime + 60000));
+    records1.add(createAuditRecord("owner1", baseTime, baseTime + 500, "END", baseTime + 60000)); // Ends after owner2 starts
     scenarios.add(new TransactionScenario(baseTime + "_owner1.jsonl", records1));
     
     // Transaction 2: Starts before owner1 ends (overlapping)
     List<LockAuditingCommand.AuditRecord> records2 = new ArrayList<>();
-    records2.add(new LockAuditingCommand.AuditRecord("owner2", baseTime + 200, baseTime + 300, "START", baseTime + 60000)); // Starts before owner1 ends
-    records2.add(new LockAuditingCommand.AuditRecord("owner2", baseTime + 200, baseTime + 400, "END", baseTime + 60000));
+    records2.add(createAuditRecord("owner2", baseTime + 200, baseTime + 300, "START", baseTime + 60000)); // Starts before owner1 ends
+    records2.add(createAuditRecord("owner2", baseTime + 200, baseTime + 400, "END", baseTime + 60000));
     scenarios.add(new TransactionScenario((baseTime + 200) + "_owner2.jsonl", records2));
     
     createAuditFiles(scenarios);
@@ -571,14 +579,14 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     
     // Transaction 1: Unclosed transaction
     List<LockAuditingCommand.AuditRecord> records1 = new ArrayList<>();
-    records1.add(new LockAuditingCommand.AuditRecord("owner1", baseTime, baseTime + 100, "START", baseTime + 60000));
+    records1.add(createAuditRecord("owner1", baseTime, baseTime + 100, "START", baseTime + 60000));
     // No END - unclosed
     scenarios.add(new TransactionScenario(baseTime + "_owner1.jsonl", records1));
     
     // Transaction 2: Overlaps with owner1
     List<LockAuditingCommand.AuditRecord> records2 = new ArrayList<>();
-    records2.add(new LockAuditingCommand.AuditRecord("owner2", baseTime + 50, baseTime + 150, "START", baseTime + 60000)); // Overlaps with owner1
-    records2.add(new LockAuditingCommand.AuditRecord("owner2", baseTime + 50, baseTime + 250, "END", baseTime + 60000));
+    records2.add(createAuditRecord("owner2", baseTime + 50, baseTime + 150, "START", baseTime + 60000)); // Overlaps with owner1
+    records2.add(createAuditRecord("owner2", baseTime + 50, baseTime + 250, "END", baseTime + 60000));
     scenarios.add(new TransactionScenario((baseTime + 50) + "_owner2.jsonl", records2));
     
     createAuditFiles(scenarios);
@@ -607,14 +615,14 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     
     // File with later timestamp in name but contains earlier transaction
     List<LockAuditingCommand.AuditRecord> records1 = new ArrayList<>();
-    records1.add(new LockAuditingCommand.AuditRecord("owner2", baseTime + 100, baseTime + 200, "START", baseTime + 60000)); // Actually starts first
-    records1.add(new LockAuditingCommand.AuditRecord("owner2", baseTime + 100, baseTime + 300, "END", baseTime + 60000));
+    records1.add(createAuditRecord("owner2", baseTime + 100, baseTime + 200, "START", baseTime + 60000)); // Actually starts first
+    records1.add(createAuditRecord("owner2", baseTime + 100, baseTime + 300, "END", baseTime + 60000));
     scenarios.add(new TransactionScenario((baseTime + 2000) + "_owner2.jsonl", records1)); // Filename suggests later time
     
     // File with earlier timestamp in name but contains later transaction
     List<LockAuditingCommand.AuditRecord> records2 = new ArrayList<>();
-    records2.add(new LockAuditingCommand.AuditRecord("owner1", baseTime + 500, baseTime + 600, "START", baseTime + 60000)); // Actually starts second
-    records2.add(new LockAuditingCommand.AuditRecord("owner1", baseTime + 500, baseTime + 700, "END", baseTime + 60000));
+    records2.add(createAuditRecord("owner1", baseTime + 500, baseTime + 600, "START", baseTime + 60000)); // Actually starts second
+    records2.add(createAuditRecord("owner1", baseTime + 500, baseTime + 700, "END", baseTime + 60000));
     scenarios.add(new TransactionScenario(baseTime + "_owner1.jsonl", records2)); // Filename suggests earlier time
     
     createAuditFiles(scenarios);
@@ -719,8 +727,8 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     List<TransactionScenario> scenarios = new ArrayList<>();
     
     List<LockAuditingCommand.AuditRecord> records = new ArrayList<>();
-    records.add(new LockAuditingCommand.AuditRecord("owner1", oldTime, oldTime + 100, "START", oldTime + 60000));
-    records.add(new LockAuditingCommand.AuditRecord("owner1", oldTime, oldTime + 200, "END", oldTime + 60000));
+    records.add(createAuditRecord("owner1", oldTime, oldTime + 100, "START", oldTime + 60000));
+    records.add(createAuditRecord("owner1", oldTime, oldTime + 200, "END", oldTime + 60000));
     scenarios.add(new TransactionScenario(oldTime + "_owner1.jsonl", records));
     
     createAuditFiles(scenarios);
@@ -754,8 +762,8 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     List<TransactionScenario> scenarios = new ArrayList<>();
     
     List<LockAuditingCommand.AuditRecord> records = new ArrayList<>();
-    records.add(new LockAuditingCommand.AuditRecord("owner1", 1000L, 1100L, "START", 61000L));
-    records.add(new LockAuditingCommand.AuditRecord("owner1", 1000L, 1200L, "END", 61000L));
+    records.add(createAuditRecord("owner1", 1000L, 1100L, "START", 61000L));
+    records.add(createAuditRecord("owner1", 1000L, 1200L, "END", 61000L));
     scenarios.add(new TransactionScenario("1000_owner1.jsonl", records));
     
     createAuditFiles(scenarios);
@@ -778,8 +786,8 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     List<TransactionScenario> scenarios = new ArrayList<>();
     
     List<LockAuditingCommand.AuditRecord> records = new ArrayList<>();
-    records.add(new LockAuditingCommand.AuditRecord("owner1", 1000L, 1100L, "START", 61000L));
-    records.add(new LockAuditingCommand.AuditRecord("owner1", 1000L, 1200L, "END", 61000L));
+    records.add(createAuditRecord("owner1", 1000L, 1100L, "START", 61000L));
+    records.add(createAuditRecord("owner1", 1000L, 1200L, "END", 61000L));
     scenarios.add(new TransactionScenario("1000_owner1.jsonl", records));
     
     createAuditFiles(scenarios);
@@ -804,8 +812,8 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     List<TransactionScenario> scenarios = new ArrayList<>();
     
     List<LockAuditingCommand.AuditRecord> records = new ArrayList<>();
-    records.add(new LockAuditingCommand.AuditRecord("owner1", recentTime, recentTime + 100, "START", recentTime + 60000));
-    records.add(new LockAuditingCommand.AuditRecord("owner1", recentTime, recentTime + 200, "END", recentTime + 60000));
+    records.add(createAuditRecord("owner1", recentTime, recentTime + 100, "START", recentTime + 60000));
+    records.add(createAuditRecord("owner1", recentTime, recentTime + 200, "END", recentTime + 60000));
     scenarios.add(new TransactionScenario(recentTime + "_owner1.jsonl", records));
     
     createAuditFiles(scenarios);
@@ -867,14 +875,14 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     
     // File 1
     List<LockAuditingCommand.AuditRecord> records1 = new ArrayList<>();
-    records1.add(new LockAuditingCommand.AuditRecord("owner1", 1000L, 1100L, "START", 61000L));
-    records1.add(new LockAuditingCommand.AuditRecord("owner1", 1000L, 1200L, "END", 61000L));
+    records1.add(createAuditRecord("owner1", 1000L, 1100L, "START", 61000L));
+    records1.add(createAuditRecord("owner1", 1000L, 1200L, "END", 61000L));
     scenarios.add(new TransactionScenario("1000_owner1.jsonl", records1));
     
     // File 2
     List<LockAuditingCommand.AuditRecord> records2 = new ArrayList<>();
-    records2.add(new LockAuditingCommand.AuditRecord("owner2", 2000L, 2100L, "START", 62000L));
-    records2.add(new LockAuditingCommand.AuditRecord("owner2", 2000L, 2200L, "END", 62000L));
+    records2.add(createAuditRecord("owner2", 2000L, 2100L, "START", 62000L));
+    records2.add(createAuditRecord("owner2", 2000L, 2200L, "END", 62000L));
     scenarios.add(new TransactionScenario("2000_owner2.jsonl", records2));
     
     createAuditFiles(scenarios);
@@ -902,8 +910,8 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     // Create some audit files to be cleaned up
     List<TransactionScenario> scenarios = new ArrayList<>();
     List<LockAuditingCommand.AuditRecord> records = new ArrayList<>();
-    records.add(new LockAuditingCommand.AuditRecord("owner1", 1000L, 1100L, "START", 61000L));
-    records.add(new LockAuditingCommand.AuditRecord("owner1", 1000L, 1200L, "END", 61000L));
+    records.add(createAuditRecord("owner1", 1000L, 1100L, "START", 61000L));
+    records.add(createAuditRecord("owner1", 1000L, 1200L, "END", 61000L));
     scenarios.add(new TransactionScenario("1000_owner1.jsonl", records));
     createAuditFiles(scenarios);
 

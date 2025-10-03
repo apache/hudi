@@ -82,14 +82,6 @@ public class LockAuditingCommand {
       this.lockHeld = lockHeld;
     }
 
-    /**
-     * Convenience constructor with lockHeld defaulting to true.
-     */
-    public AuditRecord(String ownerId, long transactionStartTime, long timestamp,
-                       String state, long lockExpiration) {
-      this(ownerId, transactionStartTime, timestamp, state, lockExpiration, true);
-    }
-
     public String getOwnerId() {
       return ownerId;
     }

@@ -175,7 +175,6 @@ public class StorageLockClientFileTest {
 
   @Test
   void testGetLockFolderPathWithTrailingSlash() {
-    // This is the critical bug fix test - base path with trailing slash should be normalized
     String basePath = "s3://bucket/table/";
     String expected = "s3://bucket/table/.hoodie/.locks";
     String actual = StorageLockClient.getLockFolderPath(basePath);
