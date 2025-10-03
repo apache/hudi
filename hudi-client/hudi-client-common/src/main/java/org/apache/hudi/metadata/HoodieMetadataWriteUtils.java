@@ -499,7 +499,7 @@ public class HoodieMetadataWriteUtils {
             // Collect column metadata for each file part of the latest merged file slice before the current instant time
             List<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata = partitionedWriteStat.stream()
                 .flatMap(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, colsToIndex, partitionStatsIndexVersion).stream()).collect(toList());
-            Set<String> fileGroupIdsToReplace = fileGroupIdsToReplaceMap.getOrDefault(partitionName, e -> new HashMap<>());
+            Set<String> fileGroupIdsToReplace = fileGroupIdsToReplaceMap.getOrDefault(partitionName, Collections.emptySet());
             Set<String> filesWithColumnStats = partitionedWriteStat.stream()
                 .map(stat -> new StoragePath(stat.getPath()).getName()).collect(Collectors.toSet());
             // Collect column metadata of each file that does not have column stats provided by the write stat in the commit metadata
