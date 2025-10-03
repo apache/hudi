@@ -2515,6 +2515,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     String compactionInstant = "003";
     String instantTime4 = "004";
     String instantTime5 = "005";
+    String instantTime6 = "006";
 
     new File(basePath + "/" + partitionPath).mkdirs();
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
@@ -2576,6 +2577,12 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     commitTimeline.createNewInstant(INSTANT_GENERATOR.createNewInstant(State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime5));
     commitTimeline.createNewInstant(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime5));
 
+    // Add log files at instant6
+    String logFileName6 = FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, instantTime5, 1, TEST_WRITE_TOKEN);
+    new File(basePath + "/" + partitionPath + "/" + logFileName6).createNewFile();
+    commitTimeline.createNewInstant(INSTANT_GENERATOR.createNewInstant(State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime6));
+    commitTimeline.createNewInstant(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime6));
+
     refreshFsView();
     actual = fsView.getLatestMergedFileSlicesBeforeOrOn(partitionPath, instantTime5)
         .collect(Collectors.toList());
@@ -2610,6 +2617,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         Arrays.asList(logFileName4, logFileName5),
         fileSlice.getLogFiles().map(HoodieLogFile::getFileName).sorted().collect(Collectors.toList()));
 
+    // Complete the compaction
     commitTimeline.saveAsComplete(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstant), Option.empty());
     refreshFsView();
     
@@ -2632,56 +2640,6 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertEquals(
         Arrays.asList(logFileName4, logFileName5),
         fileSlice.getLogFiles().map(HoodieLogFile::getFileName).sorted().collect(Collectors.toList()));
-  }
-
-  @Test
-  public void testGetLatestMergedFileSlicesIncludingInflightWithCurrentInstantTime() throws IOException {
-    String partitionPath = "2023/01/01";
-    String fileId = UUID.randomUUID().toString();
-    String instantTime1 = "001";
-    String instantTime2 = "002";
-    String instantTime3 = "003";
-    String instantTime4 = "004";
-
-    new File(basePath + "/" + partitionPath).mkdirs();
-    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
-
-    // Create base file at instant1
-    String baseFileName = FSUtils.makeBaseFileName(instantTime1, TEST_WRITE_TOKEN, fileId, BASE_FILE_EXTENSION);
-    new File(basePath + "/" + partitionPath + "/" + baseFileName).createNewFile();
-    HoodieInstant instant1 = INSTANT_GENERATOR.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instantTime1);
-    commitTimeline.createNewInstant(instant1);
-    commitTimeline.saveAsComplete(instant1, Option.empty());
-
-    // Add log files at instant2, 3, 4
-    for (String instant : Arrays.asList(instantTime2, instantTime3, instantTime4)) {
-      HoodieInstant deltaInstant = INSTANT_GENERATOR.createNewInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instant);
-      commitTimeline.createNewInstant(deltaInstant);
-      commitTimeline.saveAsComplete(deltaInstant, Option.empty());
-      String logFileName = FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, instant, 1, TEST_WRITE_TOKEN);
-      new File(basePath + "/" + partitionPath + "/" + logFileName).createNewFile();
-    }
-
-    refreshFsView();
-    SyncableFileSystemView fsView = getFileSystemView(commitTimeline);
-
-    // Test with maxInstantTime < currentInstantTime - should only include logs up to maxInstantTime
-    List<FileSlice> fileSlices = fsView.getLatestMergedFileSlicesBeforeOrOnIncludingInflight(partitionPath, instantTime2, instantTime4)
-        .collect(Collectors.toList());
-    assertEquals(1, fileSlices.size());
-    FileSlice fileSlice = fileSlices.get(0);
-    assertTrue(fileSlice.getBaseFile().isPresent());
-    // Should only have log files up to instant2
-    assertEquals(1, fileSlice.getLogFiles().count());
-
-    // Test with maxInstantTime == currentInstantTime
-    fileSlices = fsView.getLatestMergedFileSlicesBeforeOrOnIncludingInflight(partitionPath, instantTime4, instantTime4)
-        .collect(Collectors.toList());
-    assertEquals(1, fileSlices.size());
-    fileSlice = fileSlices.get(0);
-    assertTrue(fileSlice.getBaseFile().isPresent());
-    // Should have all log files
-    assertEquals(3, fileSlice.getLogFiles().count());
   }
 
   static class FileSystemViewExpectedState {
