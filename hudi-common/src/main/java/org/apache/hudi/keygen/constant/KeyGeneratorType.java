@@ -150,7 +150,7 @@ public enum KeyGeneratorType {
       return keyGeneratorType.getClassName();
     }
     // No key generator information is provided.
-    LOG.warn("No key generator type is set properly");
+    LOG.info("No key generator type is set properly");
     return null;
   }
 
