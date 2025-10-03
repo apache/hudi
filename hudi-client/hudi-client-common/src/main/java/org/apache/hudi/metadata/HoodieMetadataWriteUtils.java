@@ -49,6 +49,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.SpillableMapBasedFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -462,7 +463,11 @@ public class HoodieMetadataWriteUtils {
           .values());
 
       int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
-
+      Option<String> lastCompletedInstant = dataMetaClient.getActiveTimeline().filterCompletedInstants()
+          .lastInstant()
+          .map(HoodieInstant::requestedTime);
+      String maxInstantTime = lastCompletedInstant.map(lastCompletedInstantTime ->
+          lastCompletedInstantTime.compareTo(instantTime) > 0 ? lastCompletedInstantTime : instantTime).orElse(instantTime);
       HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> columnRangeMetadata =
           engineContext.parallelize(partitionedWriteStats, parallelism).mapToPair(partitionedWriteStat -> {
             final String partitionName = partitionedWriteStat.get(0).getPartitionPath();
@@ -475,12 +480,12 @@ public class HoodieMetadataWriteUtils {
             SyncableFileSystemView fileSystemViewForCommitedFiles = FileSystemViewManager.createViewManager(new HoodieLocalEngineContext(dataMetaClient.getStorageConf()),
                 dataWriteConfig.getMetadataConfig(), dataWriteConfig.getViewStorageConfig(), dataWriteConfig.getCommonConfig(),
                 unused -> tableMetadata).getFileSystemView(dataMetaClient);
-            fileSystemViewForCommitedFiles.getLatestMergedFileSlicesBeforeOrOn(partitionName, instantTime)
+            fileSystemViewForCommitedFiles.getLatestMergedFileSlicesBeforeOrOn(partitionName, maxInstantTime)
                 .forEach(fileSlice -> {
                   if (fileSlice.getBaseFile().isPresent()) {
-                    consolidatedPathInfos.add(fileSlice.getBaseFile().get().getPathInfo());
+                    consolidatedPathInfos.add(getBaseFileStoragePathInfo(fileSlice.getBaseFile().get()));
                   }
-                  fileSlice.getLogFiles().forEach(logFile -> consolidatedPathInfos.add(logFile.getPathInfo()));
+                  fileSlice.getLogFiles().forEach(logFile -> consolidatedPathInfos.add(getLogFileStoragePathInfo(logFile)));
                 });
             SpillableMapBasedFileSystemView consolidatedFileSystemView = new SpillableMapBasedFileSystemView(
                 tableMetadata, dataMetaClient, dataMetaClient.getActiveTimeline(),
@@ -492,7 +497,7 @@ public class HoodieMetadataWriteUtils {
             Set<String> filesWithColumnStats = partitionedWriteStat.stream()
                 .map(stat -> new StoragePath(stat.getPath()).getName()).collect(Collectors.toSet());
             // Collect column metadata of each file that does not have column stats provided by the write stat in the commit metadata
-            Set<String> filesToFetchColumnStats = consolidatedFileSystemView.getLatestMergedFileSlicesBeforeOrOnIncludingInflight(partitionName, instantTime)
+            Set<String> filesToFetchColumnStats = consolidatedFileSystemView.getLatestMergedFileSlicesBeforeOrOnIncludingInflight(partitionName, maxInstantTime, instantTime)
                 .flatMap(fileSlice -> Stream.concat(
                     Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
                     fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
@@ -520,5 +525,21 @@ public class HoodieMetadataWriteUtils {
     } catch (Exception e) {
       throw new HoodieException("Failed to generate column stats records for metadata table", e);
     }
+  }
+
+  private static StoragePathInfo getBaseFileStoragePathInfo(HoodieBaseFile baseFile) {
+    StoragePathInfo pathInfo = baseFile.getPathInfo();
+    if (pathInfo != null) {
+      return pathInfo;
+    }
+    return new StoragePathInfo(baseFile.getStoragePath(), baseFile.getFileLen(), false, (short) 0, 0, 0);
+  }
+
+  private static StoragePathInfo getLogFileStoragePathInfo(HoodieLogFile logFile) {
+    StoragePathInfo pathInfo = logFile.getPathInfo();
+    if (pathInfo != null) {
+      return pathInfo;
+    }
+    return new StoragePathInfo(logFile.getPath(), logFile.getFileSize(), false, (short) 0, 0, 0);
   }
 }
