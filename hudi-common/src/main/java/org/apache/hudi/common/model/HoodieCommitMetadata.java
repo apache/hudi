@@ -299,6 +299,10 @@ public class HoodieCommitMetadata implements Serializable {
     return totalFilesUpdated;
   }
 
+  public long fetchTotalFiles() {
+    return partitionToWriteStats.values().stream().mapToLong(List::size).sum();
+  }
+
   public long fetchTotalUpdateRecordsWritten() {
     long totalUpdateRecordsWritten = 0;
     for (List<HoodieWriteStat> stats : partitionToWriteStats.values()) {
