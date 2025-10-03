@@ -60,8 +60,8 @@ import org.apache.hudi.index.expression.HoodieExpressionIndex;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
-import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
@@ -360,7 +360,8 @@ public class SparkMetadataWriterUtils {
   }
 
   /**
-   * Fetches column range metadata from the EI partition for all the partition files impacted by the commit. This would only take into account completed commits for the partitions
+   * Fetches column range metadata from the EI partition for existing files excluding the files
+   * impacted by the commit. This would only take into account completed commits for the partitions
    * since EI updates have not yet been committed.
    *
    * @param commitMetadata Hoodie commit metadata
@@ -371,11 +372,12 @@ public class SparkMetadataWriterUtils {
    * @param metadataConfig Hoodie metadata config
    * @return HoodiePairData of partition name and list of column range metadata for the partitions
    */
-  public static HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> getExpressionIndexPartitionStatUpdates(HoodieCommitMetadata commitMetadata, String indexPartition,
-                                                                                                                           HoodieEngineContext engineContext, HoodieTableMetadata tableMetadata,
-                                                                                                                           HoodieTableMetaClient dataMetaClient, HoodieMetadataConfig metadataConfig,
-                                                                                                                           Option<HoodieRecord.HoodieRecordType> recordTypeOpt, String instantTime,
-                                                                                                                           HoodieWriteConfig dataWriteConfig) {
+  public static HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> getExpressionIndexPartitionStatsForExistingFiles(
+      HoodieCommitMetadata commitMetadata, String indexPartition,
+      HoodieEngineContext engineContext, HoodieTableMetadata tableMetadata,
+      HoodieTableMetaClient dataMetaClient, HoodieMetadataConfig metadataConfig,
+      Option<HoodieRecord.HoodieRecordType> recordTypeOpt, String instantTime,
+      HoodieWriteConfig dataWriteConfig) {
     // In this function we iterate over all the partitions modified by the commit and fetch the latest files in those partitions
     // We fetch stored Expression index records for these latest files and return HoodiePairData of partition name and list of column range metadata of these files
 
