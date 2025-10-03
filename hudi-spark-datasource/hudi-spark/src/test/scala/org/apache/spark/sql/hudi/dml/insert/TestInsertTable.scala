@@ -2498,10 +2498,23 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     assertResult(expectedOperationtype) {
       getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName").getOperationType
     }
+    // Check if INSERT operation was explicitly set in setOptions
+    val isExplicitInsertOperation = setOptions.exists(option =>
+      option.toLowerCase.contains("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + " = insert")
+    )
+
     if (expectedOperationtype == WriteOperationType.UPSERT) {
       // dedup should happen within same batch being ingested and existing records on storage should get updated
       checkAnswer(s"select id, name, price, dt from $tableName order by id")(
         Seq(1, "a1_1", 10.0, "2021-07-18"),
+        Seq(2, "a2_2", 30.0, "2021-07-18")
+      )
+    } else if (isExplicitInsertOperation) {
+      // duplications are retained as INSERT is explicitly set
+      checkAnswer(s"select id, name, price, dt from $tableName order by id")(
+        Seq(1, "a1", 10.0, "2021-07-18"),
+        Seq(1, "a1_1", 10.0, "2021-07-18"),
+        Seq(2, "a2", 20.0, "2021-07-18"),
         Seq(2, "a2_2", 30.0, "2021-07-18")
       )
     } else {
@@ -2509,7 +2522,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id, name, price, dt from $tableName order by id")(
         Seq(1, "a1", 10.0, "2021-07-18"),
         Seq(1, "a1_1", 10.0, "2021-07-18"),
-        // Seq(2, "a2", 20.0, "2021-07-18"), // preCombine within same batch kicks in if preCombine is set
+        // Seq(2, "a2", 20.0, "2021-07-18"), // preCombine with no sql insert within same batch kicks in if preCombine is set
         Seq(2, "a2_2", 30.0, "2021-07-18")
       )
     }
@@ -3051,12 +3064,33 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName").getOperationType
       }
 
+      // Check if INSERT operation was explicitly set in setOptions
+      val isExplicitInsertOperation = setOptions.exists(option =>
+        option.toLowerCase.contains("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=insert")
+      )
+
       if (expectedOperationtype == WriteOperationType.UPSERT) {
         // dedup should happen within same batch being ingested and existing records on storage should get updated
         checkAnswer(s"select id, name, price, dt from $tableName order by id")(
           Seq(1, "a1_1", 10.0, "2021-07-18"),
           Seq(2, "a2_2", 30.0, "2021-07-18")
         )
+      } else if (isExplicitInsertOperation) {
+        // When INSERT operation is explicitly set, duplicates should be preserved
+        if (insertDupPolicy == NONE_INSERT_DUP_POLICY) {
+          checkAnswer(s"select id, name, price, dt from $tableName order by id")(
+            Seq(1, "a1", 10.0, "2021-07-18"),
+            Seq(1, "a1_1", 10.0, "2021-07-18"),
+            Seq(2, "a2", 20.0, "2021-07-18"),
+            Seq(2, "a2_2", 30.0, "2021-07-18")
+          )
+        } else if (insertDupPolicy == DROP_INSERT_DUP_POLICY) {
+          checkAnswer(s"select id, name, price, dt from $tableName order by id")(
+            Seq(1, "a1", 10.0, "2021-07-18"),
+            Seq(2, "a2", 20.0, "2021-07-18"), // same-batch duplicates preserved with explicit INSERT
+            Seq(2, "a2_2", 30.0, "2021-07-18")
+          )
+        }
       } else {
         if (insertDupPolicy == NONE_INSERT_DUP_POLICY) {
           // no dedup across batches
