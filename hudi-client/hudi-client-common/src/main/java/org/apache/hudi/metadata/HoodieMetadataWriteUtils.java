@@ -468,9 +468,6 @@ public class HoodieMetadataWriteUtils {
           : Collections.emptyMap();
 
       int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
-      Option<String> lastCompletedInstant = dataMetaClient.getActiveTimeline().filterCompletedInstants()
-          .lastInstant()
-          .map(HoodieInstant::requestedTime);
       String maxInstantTime = getMaxInstantTime(dataMetaClient, instantTime);
       HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> columnRangeMetadata =
           engineContext.parallelize(partitionedWriteStats, parallelism).mapToPair(partitionedWriteStat -> {
