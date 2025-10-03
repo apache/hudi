@@ -27,8 +27,12 @@ function HomepageHeader() {
                 </LinkButton>
               </div>
             </div>
-            <div className={styles.videoWrapper}>
-              <iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/-zcFSJttWtw?si=YPtQ4SPy6hPsebHd" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+            <div className={styles.imageWrapper}>
+              <img
+                className={clsx("hero__img", styles.heroImg)}
+                src={require("/assets/images/logo-big.png").default}
+                alt="Hudi banner"
+              />
             </div>
           </div>
         </div>

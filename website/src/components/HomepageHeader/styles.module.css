@@ -28,13 +28,6 @@
     width: 50%;
 }
 
-.videoWrapper {
-    width: 100%;
-    display: flex;
-    align-items: right;
-    justify-content: center;
-}
-
 .leftContent {
     width: 50%;
 }
@@ -59,13 +52,6 @@
 
 
     .imageWrapper {
-        width: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .videoWrapper {
         width: 100%;
         display: flex;
         align-items: center;
