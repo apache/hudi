@@ -384,10 +384,8 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
    * 4. Trigger stats recomputation: Assuming tighter bounds is enabled on every write, validate that the partition stats
    * have adjusted correctly after scanning and recomputing accurate stats.
    */
-  // TODO(yihua): parameterize based on streaming writes
   test("Test partition stats index with tight bound") {
-    // cow
-    Seq("mor").foreach { tableType =>
+    Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
         val tableName = generateTableName + s"_tight_bound_$tableType"
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
