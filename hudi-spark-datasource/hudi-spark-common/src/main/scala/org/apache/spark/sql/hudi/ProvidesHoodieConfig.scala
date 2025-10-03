@@ -215,7 +215,11 @@ trait ProvidesHoodieConfig extends Logging {
     val insertDupPolicy = combinedOpts.getOrElse(INSERT_DUP_POLICY.key(), INSERT_DUP_POLICY.defaultValue())
     val isNonStrictMode = insertMode == InsertMode.NON_STRICT
     val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
-    val combineBeforeInsert = !hoodieCatalogTable.orderingFields.isEmpty && hoodieCatalogTable.primaryKeys.nonEmpty
+    val combineBeforeInsert = if (sparkSqlInsertIntoOperationSet && sparkSqlInsertIntoOperation == "insert") {
+      false
+    } else {
+      !hoodieCatalogTable.orderingFields.isEmpty && hoodieCatalogTable.primaryKeys.nonEmpty
+    }
 
     /*
      * The sql write operation has higher precedence than the legacy insert mode.
