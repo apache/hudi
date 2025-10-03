@@ -757,6 +757,106 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
+  test("Test expression index with inflight compaction") {
+    withTempDir { tmp =>
+      val tableName = generateTableName + "_expr_compact"
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+
+      // setting this for non-partitioned table to ensure multiple file groups are created
+      spark.sql(s"set ${HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key()}=0")
+      spark.sql("set hoodie.compact.inline=false")
+
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  ts long,
+           |  price int
+           |) using hudi
+           | options (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts',
+           |  hoodie.metadata.index.column.stats.enable = 'true'
+           | )
+           | location '$tablePath'
+           |""".stripMargin
+      )
+
+      // Insert initial data
+      spark.sql(s"insert into $tableName values(1, 'a1', 1601098924, 10)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 1632634924, 100)")
+      spark.sql(s"insert into $tableName values(3, 'a3', 1664170924, 1000)")
+
+      // Create expression index
+      spark.sql(
+        s"create index idx_datestr on $tableName using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd')"
+      )
+
+      // Validate index initialization
+      checkAnswer(
+        s"""
+           |select ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value
+           |from hudi_metadata('$tableName')
+           |where type=3
+       """.stripMargin
+      )(
+        Seq("2020-09-26", "2020-09-26"),
+        Seq("2021-09-26", "2021-09-26"),
+        Seq("2022-09-26", "2022-09-26")
+      )
+
+      // Generate multiple log files by updating same record multiple times
+      spark.sql(s"update $tableName set ts = 1695706924 where id=3") // ~2023-09-26
+      spark.sql(s"update $tableName set ts = 1727329324 where id=3") // ~2024-09-26
+
+      // Schedule compaction (inflight)
+      spark.sql(s"refresh table $tableName")
+      spark.sql("set hoodie.compact.inline=false")
+      spark.sql("set hoodie.compact.inline.max.delta.commits=2")
+      spark.sql(s"schedule compaction on $tableName")
+      val compactionRows = spark.sql(s"show compaction on $tableName").collect()
+      val compactionInstant = compactionRows(0).getString(0)
+      assertTrue(compactionRows.length == 1)
+
+      // Do an update while compaction is inflight
+      spark.sql(s"update $tableName set ts = 1695706924 where id=3")
+
+      // Validate expression index after inflight update (before compaction finishes)
+      checkAnswer(
+        s"""
+           |select distinct ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value
+           |from hudi_metadata('$tableName') where type=3
+       """.stripMargin
+      )(
+        Seq("2020-09-26", "2020-09-26"),
+        Seq("2021-09-26", "2021-09-26"),
+        Seq("2022-09-26", "2022-09-26"),
+        Seq("2023-09-26", "2023-09-26"),
+        Seq("2024-09-26", "2024-09-26")
+      )
+
+      // Complete compaction
+      spark.sql(s"run compaction on $tableName at $compactionInstant")
+      spark.sql(s"refresh table $tableName")
+
+      // Validate expression index correctness after compaction
+      checkAnswer(
+        s"""
+           |select distinct ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value
+           |from hudi_metadata('$tableName') where type=3
+       """.stripMargin
+      )(
+        Seq("2020-09-26", "2020-09-26"),
+        Seq("2021-09-26", "2021-09-26"),
+        Seq("2022-09-26", "2022-09-26"),
+        Seq("2023-09-26", "2023-09-26"),
+        Seq("2024-09-26", "2024-09-26")
+      )
+    }
+  }
+
   /**
    * Test expression index with auto generation of record keys
    */

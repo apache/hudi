@@ -41,11 +41,11 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -59,6 +59,7 @@ import org.apache.hudi.index.expression.HoodieExpressionIndex;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -94,7 +95,6 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -115,7 +115,6 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.createBloomFilterMe
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createColumnStatsRecords;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemViewForMetadataTable;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 
 /**
@@ -373,7 +372,8 @@ public class SparkMetadataWriterUtils {
   public static HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> getExpressionIndexPartitionStatUpdates(HoodieCommitMetadata commitMetadata, String indexPartition,
                                                                                                                            HoodieEngineContext engineContext, HoodieTableMetadata tableMetadata,
                                                                                                                            HoodieTableMetaClient dataMetaClient, HoodieMetadataConfig metadataConfig,
-                                                                                                                           Option<HoodieRecord.HoodieRecordType> recordTypeOpt) {
+                                                                                                                           Option<HoodieRecord.HoodieRecordType> recordTypeOpt, String instantTime,
+                                                                                                                           HoodieWriteConfig dataWriteConfig) {
     // In this function we iterate over all the partitions modified by the commit and fetch the latest files in those partitions
     // We fetch stored Expression index records for these latest files and return HoodiePairData of partition name and list of column range metadata of these files
 
@@ -406,22 +406,18 @@ public class SparkMetadataWriterUtils {
 
       // Step 2: Compute expression index records for the modified partitions
       LOG.debug("Indexing following columns for partition stats index: {}", validColumnsToIndex);
-      List<String> partitionPaths = new ArrayList<>(commitMetadata.getWritePartitionPaths());
-      HoodieTableFileSystemView fileSystemView = getFileSystemViewForMetadataTable(dataMetaClient);
-      int parallelism = Math.max(Math.min(partitionPaths.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
-      return engineContext.parallelize(partitionPaths, parallelism).mapToPair(partitionName -> {
+      List<List<HoodieWriteStat>> partitionedWriteStats = new ArrayList<>(commitMetadata.getWriteStats().stream()
+          .collect(Collectors.groupingBy(HoodieWriteStat::getPartitionPath))
+          .values());
+      String maxInstantTime = HoodieMetadataWriteUtils.getMaxInstantTime(dataMetaClient, instantTime);
+      int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
+      return engineContext.parallelize(partitionedWriteStats, parallelism).mapToPair(partitionedWriteStat -> {
+        final String partitionName = partitionedWriteStat.get(0).getPartitionPath();
         checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
         // Collect Column Metadata for Each File part of active file system view of latest snapshot
         // Get all file names, including log files, in a set from the file slices
-        // TODO(yihua): fix this
-        Set<String> fileNames = HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight(dataMetaClient, Option.of(fileSystemView), partitionName).stream()
-            .flatMap(fileSlice -> Stream.concat(
-                Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
-                fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
-            .filter(Objects::nonNull)
-            .collect(Collectors.toSet());
+        Set<String> fileNames = HoodieMetadataWriteUtils.getFilesToFetchColumnStats(partitionedWriteStat, dataMetaClient, tableMetadata, dataWriteConfig, partitionName, maxInstantTime, instantTime);
         // Fetch EI column stat records for above files
-        // TODO(yihua): fix the logic to account for commitMetadata
         List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata =
             tableMetadata.getRecordsByKeyPrefixes(
                     HoodieListData.lazy(HoodieTableMetadataUtil.generateColumnStatsKeys(validColumnsToIndex, partitionName)),

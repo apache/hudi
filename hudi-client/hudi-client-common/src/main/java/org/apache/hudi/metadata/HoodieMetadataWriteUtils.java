@@ -471,44 +471,18 @@ public class HoodieMetadataWriteUtils {
       Option<String> lastCompletedInstant = dataMetaClient.getActiveTimeline().filterCompletedInstants()
           .lastInstant()
           .map(HoodieInstant::requestedTime);
-      String maxInstantTime = lastCompletedInstant.map(lastCompletedInstantTime ->
-          lastCompletedInstantTime.compareTo(instantTime) > 0 ? lastCompletedInstantTime : instantTime).orElse(instantTime);
+      String maxInstantTime = getMaxInstantTime(dataMetaClient, instantTime);
       HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> columnRangeMetadata =
           engineContext.parallelize(partitionedWriteStats, parallelism).mapToPair(partitionedWriteStat -> {
             final String partitionName = partitionedWriteStat.get(0).getPartitionPath();
             checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
-            // Get the latest merged file slices based on the commited files part of the latest snapshot and the new files of the current commit metadata
-            List<StoragePathInfo> consolidatedPathInfos = new ArrayList<>();
-            partitionedWriteStat.forEach(
-                stat -> consolidatedPathInfos.add(
-                    new StoragePathInfo(new StoragePath(dataMetaClient.getBasePath(), stat.getPath()), stat.getFileSizeInBytes(), false, (short) 0, 0, 0)));
-            SyncableFileSystemView fileSystemViewForCommitedFiles = FileSystemViewManager.createViewManager(new HoodieLocalEngineContext(dataMetaClient.getStorageConf()),
-                dataWriteConfig.getMetadataConfig(), dataWriteConfig.getViewStorageConfig(), dataWriteConfig.getCommonConfig(),
-                unused -> tableMetadata).getFileSystemView(dataMetaClient);
-            fileSystemViewForCommitedFiles.getLatestMergedFileSlicesBeforeOrOn(partitionName, maxInstantTime)
-                .forEach(fileSlice -> {
-                  if (fileSlice.getBaseFile().isPresent()) {
-                    consolidatedPathInfos.add(getBaseFileStoragePathInfo(fileSlice.getBaseFile().get()));
-                  }
-                  fileSlice.getLogFiles().forEach(logFile -> consolidatedPathInfos.add(getLogFileStoragePathInfo(logFile)));
-                });
-            SpillableMapBasedFileSystemView consolidatedFileSystemView = new SpillableMapBasedFileSystemView(
-                tableMetadata, dataMetaClient, dataMetaClient.getActiveTimeline(),
-                consolidatedPathInfos, dataWriteConfig.getViewStorageConfig(), dataWriteConfig.getCommonConfig());
 
             // Collect column metadata for each file part of the latest merged file slice before the current instant time
             List<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata = partitionedWriteStat.stream()
                 .flatMap(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, colsToIndex, partitionStatsIndexVersion).stream()).collect(toList());
-            Set<String> fileGroupIdsToReplace = fileGroupIdsToReplaceMap.getOrDefault(partitionName, Collections.emptySet());
-            Set<String> filesWithColumnStats = partitionedWriteStat.stream()
-                .map(stat -> new StoragePath(stat.getPath()).getName()).collect(Collectors.toSet());
             // Collect column metadata of each file that does not have column stats provided by the write stat in the commit metadata
-            Set<String> filesToFetchColumnStats = consolidatedFileSystemView.getLatestMergedFileSlicesBeforeOrOnIncludingInflight(partitionName, maxInstantTime, instantTime)
-                .flatMap(fileSlice -> Stream.concat(
-                    Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
-                    fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
-                .filter(e -> Objects.nonNull(e) && !filesWithColumnStats.contains(e) && !fileGroupIdsToReplace.contains(e))
-                .collect(Collectors.toSet());
+            Set<String> filesToFetchColumnStats = getFilesToFetchColumnStats(partitionedWriteStat, dataMetaClient, tableMetadata, dataWriteConfig, partitionName, maxInstantTime,
+                instantTime, fileGroupIdsToReplaceMap, colsToIndex, partitionStatsIndexVersion);
             // Fetch metadata table COLUMN_STATS partition records for the above files
             List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata
                 .getRecordsByKeyPrefixes(
@@ -523,7 +497,6 @@ public class HoodieMetadataWriteUtils {
             // fileColumnMetadata already contains stats for the files from the current inflight commit.
             // Here it adds the stats for the commited files part of the latest merged file slices
             fileColumnMetadata.addAll(partitionColumnMetadata);
-
             return Pair.of(partitionName, fileColumnMetadata);
           });
 
@@ -547,5 +520,63 @@ public class HoodieMetadataWriteUtils {
       return pathInfo;
     }
     return new StoragePathInfo(logFile.getPath(), logFile.getFileSize(), false, (short) 0, 0, 0);
+  }
+
+  public static String getMaxInstantTime(HoodieTableMetaClient dataMetaClient, String instantTime) {
+    Option<String> lastCompletedInstant = dataMetaClient.getActiveTimeline().filterCompletedInstants()
+        .lastInstant()
+        .map(HoodieInstant::requestedTime);
+    return lastCompletedInstant.map(lastCompletedInstantTime ->
+        lastCompletedInstantTime.compareTo(instantTime) > 0 ? lastCompletedInstantTime : instantTime).orElse(instantTime);
+  }
+
+  /**
+   * Collect column metadata of each file that does not have column stats provided by the write stat in the commit metadata
+   */
+  public static Set<String> getFilesToFetchColumnStats(List<HoodieWriteStat> partitionedWriteStat,
+                                                       HoodieTableMetaClient dataMetaClient,
+                                                       HoodieTableMetadata tableMetadata,
+                                                       HoodieWriteConfig dataWriteConfig,
+                                                       String partitionName,
+                                                       String maxInstantTime,
+                                                       String instantTime,
+                                                       Map<String, Set<String>> fileGroupIdsToReplaceMap,
+                                                       List<String> colsToIndex,
+                                                       HoodieIndexVersion partitionStatsIndexVersion) {
+    // Get the latest merged file slices based on the commited files part of the latest snapshot and the new files of the current commit metadata
+    // Get the latest merged file slices based on the commited files part of the latest snapshot and the new files of the current commit metadata
+    // Get the latest merged file slices based on the commited files part of the latest snapshot and the new files of the current commit metadata
+    List<StoragePathInfo> consolidatedPathInfos = new ArrayList<>();
+    partitionedWriteStat.forEach(
+        stat -> consolidatedPathInfos.add(
+            new StoragePathInfo(new StoragePath(dataMetaClient.getBasePath(), stat.getPath()), stat.getFileSizeInBytes(), false, (short) 0, 0, 0)));
+    SyncableFileSystemView fileSystemViewForCommitedFiles =
+        FileSystemViewManager.createViewManager(new HoodieLocalEngineContext(dataMetaClient.getStorageConf()),
+            dataWriteConfig.getMetadataConfig(), dataWriteConfig.getViewStorageConfig(), dataWriteConfig.getCommonConfig(),
+            unused -> tableMetadata).getFileSystemView(dataMetaClient);
+    fileSystemViewForCommitedFiles.getLatestMergedFileSlicesBeforeOrOn(partitionName, maxInstantTime)
+        .forEach(fileSlice -> {
+          if (fileSlice.getBaseFile().isPresent()) {
+            consolidatedPathInfos.add(getBaseFileStoragePathInfo(fileSlice.getBaseFile().get()));
+          }
+          fileSlice.getLogFiles().forEach(logFile -> consolidatedPathInfos.add(getLogFileStoragePathInfo(logFile)));
+        });
+    SpillableMapBasedFileSystemView consolidatedFileSystemView = new SpillableMapBasedFileSystemView(
+        tableMetadata, dataMetaClient, dataMetaClient.getActiveTimeline(),
+        consolidatedPathInfos, dataWriteConfig.getViewStorageConfig(), dataWriteConfig.getCommonConfig());
+
+    // Collect column metadata for each file part of the latest merged file slice before the current instant time
+    List<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata = partitionedWriteStat.stream()
+        .flatMap(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, colsToIndex, partitionStatsIndexVersion).stream()).collect(toList());
+    Set<String> fileGroupIdsToReplace = fileGroupIdsToReplaceMap.getOrDefault(partitionName, Collections.emptySet());
+    Set<String> filesWithColumnStats = partitionedWriteStat.stream()
+        .map(stat -> new StoragePath(stat.getPath()).getName()).collect(Collectors.toSet());
+    // Collect column metadata of each file that does not have column stats provided by the write stat in the commit metadata
+    return consolidatedFileSystemView.getLatestMergedFileSlicesBeforeOrOnIncludingInflight(partitionName, maxInstantTime, instantTime)
+        .flatMap(fileSlice -> Stream.concat(
+            Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
+            fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
+        .filter(e -> Objects.nonNull(e) && !filesWithColumnStats.contains(e) && !fileGroupIdsToReplace.contains(e))
+        .collect(Collectors.toSet());
   }
 }

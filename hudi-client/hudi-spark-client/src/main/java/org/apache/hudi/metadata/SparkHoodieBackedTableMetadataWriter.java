@@ -243,7 +243,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       // Fetch column range metadata for affected partitions in the commit
       HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> exprIndexPartitionStatUpdates =
           SparkMetadataWriterUtils.getExpressionIndexPartitionStatUpdates(commitMetadata, indexPartition, engineContext, getTableMetadata(), dataMetaClient, dataWriteConfig.getMetadataConfig(),
-                  Option.of(dataWriteConfig.getRecordMerger().getRecordType()))
+                  Option.of(dataWriteConfig.getRecordMerger().getRecordType()), instantTime, dataWriteConfig)
               .flatMapValues(List::iterator);
       // The function below merges the column range metadata from the updated data with latest column range metadata of affected partition computed above
       partitionRecordsFunctionOpt = Option.of(rangeMetadata ->
