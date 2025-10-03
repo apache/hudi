@@ -1414,7 +1414,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
   test("Test combine before insert") {
     Seq("cow", "mor").foreach { tableType =>
-      withSQLConf("hoodie.sql.bulk.insert.enable" -> "false", "hoodie.merge.allow.duplicate.on.inserts" -> "false") {
+      withSQLConf("hoodie.sql.bulk.insert.enable" -> "false", "hoodie.merge.allow.duplicate.on.inserts" -> "false",
+        "hoodie.combine.before.insert" -> "true") {
         withRecordType()(withTempDir { tmp =>
           val tableName = generateTableName
           spark.sql(
@@ -1453,7 +1454,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   test("Test insert pk-table") {
     spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     Seq("cow", "mor").foreach { tableType =>
-      withSQLConf("hoodie.sql.bulk.insert.enable" -> "false") {
+      withSQLConf("hoodie.sql.bulk.insert.enable" -> "false", "hoodie.spark.sql.insert.into.operation" -> "upsert") {
         withRecordType()(withTempDir { tmp =>
           val tableName = generateTableName
           spark.sql(
@@ -1554,36 +1555,38 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test nested field as primaryKey and preCombineField") {
-    withRecordType()(withTempDir { tmp =>
-      Seq("cow", "mor").foreach { tableType =>
-        val tableName = generateTableName
-        // create table
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  name string,
-             |  price double,
-             |  ts long,
-             |  nestedcol struct<a1:string, a2:struct<b1:string, b2:struct<c1:string, c2:int>>>
-             |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName'
-             | options (
-             |  type = '$tableType',
-             |  primaryKey = 'nestedcol.a1',
-             |  preCombineField = 'nestedcol.a2.b2.c2'
-             | )
-       """.stripMargin)
-        // insert data to table
-        spark.sql(
-          s"""insert into $tableName values
-             |('name_1', 10, 1000, struct('a', struct('b', struct('c', 999)))),
-             |('name_2', 20, 2000, struct('a', struct('b', struct('c', 333))))
-             |""".stripMargin)
-        checkAnswer(s"select name, price, ts, nestedcol.a1, nestedcol.a2.b2.c2 from $tableName")(
-          Seq("name_1", 10.0, 1000, "a", 999)
-        )
-      }
-    })
+    withSQLConf("hoodie.spark.sql.insert.into.operation" -> "upsert") {
+      withRecordType()(withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          val tableName = generateTableName
+          // create table
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  name string,
+               |  price double,
+               |  ts long,
+               |  nestedcol struct<a1:string, a2:struct<b1:string, b2:struct<c1:string, c2:int>>>
+               |) using hudi
+               | location '${tmp.getCanonicalPath}/$tableName'
+               | options (
+               |  type = '$tableType',
+               |  primaryKey = 'nestedcol.a1',
+               |  preCombineField = 'nestedcol.a2.b2.c2'
+               | )
+         """.stripMargin)
+          // insert data to table
+          spark.sql(
+            s"""insert into $tableName values
+               |('name_1', 10, 1000, struct('a', struct('b', struct('c', 999)))),
+               |('name_2', 20, 2000, struct('a', struct('b', struct('c', 333))))
+               |""".stripMargin)
+          checkAnswer(s"select name, price, ts, nestedcol.a1, nestedcol.a2.b2.c2 from $tableName")(
+            Seq("name_1", 10.0, 1000, "a", 999)
+          )
+        }
+      })
+    }
   }
 
   test("Test Insert Into With Catalog Identifier") {
@@ -2487,8 +2490,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   /**
-   * When neither of strict mode nor sql.write.operation is set, sql write operation is deduced as UPSERT
-   * due to presence of preCombineField.
+   * When no explicit configs are set, sql write operation is deduced as INSERT
+   * which preserves duplicates by default.
    */
   test("Test sql write operation with INSERT_INTO No explicit configs") {
     spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
@@ -2498,7 +2501,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         withTable(generateTableName) { tableName =>
-          ingestAndValidateData(tableType, tableName, tmp, WriteOperationType.UPSERT)
+          ingestAndValidateData(tableType, tableName, tmp, WriteOperationType.INSERT)
         }
       }
     }
@@ -2611,11 +2614,11 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(2, "a2_2", 30.0, "2021-07-18")
       )
     } else {
-      // no dedup across batches
+      // no dedup across batches or within same batch - INSERT preserves all duplicates
       checkAnswer(s"select id, name, price, dt from $tableName order by id")(
         Seq(1, "a1", 10.0, "2021-07-18"),
         Seq(1, "a1_1", 10.0, "2021-07-18"),
-        // Seq(2, "a2", 20.0, "2021-07-18"), // preCombine with no sql insert within same batch kicks in if preCombine is set
+        Seq(2, "a2", 20.0, "2021-07-18"),
         Seq(2, "a2_2", 30.0, "2021-07-18")
       )
     }
@@ -3186,11 +3189,11 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         }
       } else {
         if (insertDupPolicy == NONE_INSERT_DUP_POLICY) {
-          // no dedup across batches
+          // no dedup across batches or within same batch - all duplicates preserved
           checkAnswer(s"select id, name, price, dt from $tableName order by id")(
             Seq(1, "a1", 10.0, "2021-07-18"),
             Seq(1, "a1_1", 10.0, "2021-07-18"),
-            // Seq(2, "a2", 20.0, "2021-07-18"), // preCombine within same batch kicks in if preCombine is set
+            Seq(2, "a2", 20.0, "2021-07-18"),
             Seq(2, "a2_2", 30.0, "2021-07-18")
           )
         } else if (insertDupPolicy == DROP_INSERT_DUP_POLICY) {
