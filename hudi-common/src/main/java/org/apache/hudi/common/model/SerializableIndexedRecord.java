@@ -68,6 +68,9 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
   }
 
   public static SerializableIndexedRecord fromAvroBytes(Schema schema, byte[] bytes) {
+    if (bytes.length == 0) {
+      return null;
+    }
     return new SerializableIndexedRecord(schema, bytes);
   }
 
@@ -83,7 +86,7 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
 
   @Override
   public Schema getSchema() {
-    return schema != null ? schema : getData().getSchema();
+    return schema != null ? schema : record.getSchema();
   }
 
   byte[] encodeRecord() {
