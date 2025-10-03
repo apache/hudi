@@ -96,7 +96,6 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                                       String instantTime,
                                                                                       HoodieIndexDefinition indexDefinition,
                                                                                       HoodieMetadataConfig metadataConfig,
-                                                                                      HoodieTableFileSystemView fsView,
                                                                                       HoodieTableMetaClient dataMetaClient,
                                                                                       HoodieEngineContext engineContext,
                                                                                       HoodieWriteConfig writeConfig
