@@ -177,9 +177,6 @@ public class HoodieHadoopStorage extends HoodieStorage {
 
   @Override
   public List<StoragePathInfo> listDirectEntries(StoragePath path) throws IOException {
-    if (path.getParent().getName().equals("test_table")) {
-      System.out.println("!!!!!!!!!!!! listDirectEntries: " + path);
-    }
     return Arrays.stream(fs.listStatus(convertToHadoopPath(path)))
         .map(HadoopFSUtils::convertToStoragePathInfo)
         .collect(Collectors.toList());
@@ -187,9 +184,6 @@ public class HoodieHadoopStorage extends HoodieStorage {
 
   @Override
   public List<StoragePathInfo> listFiles(StoragePath path) throws IOException {
-    if (path.getParent().getName().equals("test_table")) {
-      System.out.println("!!!!!!!!!!!! listFiles: " + path);
-    }
     List<StoragePathInfo> result = new ArrayList<>();
     RemoteIterator<LocatedFileStatus> iterator = fs.listFiles(convertToHadoopPath(path), true);
     while (iterator.hasNext()) {
@@ -200,9 +194,6 @@ public class HoodieHadoopStorage extends HoodieStorage {
 
   @Override
   public List<StoragePathInfo> listDirectEntries(List<StoragePath> pathList) throws IOException {
-    if (pathList.stream().anyMatch(path -> path.getParent().getName().equals("test_table"))) {
-      System.out.println("!!!!!!!!!!!! listDirectEntries with pathList");
-    }
     return Arrays.stream(fs.listStatus(pathList.stream()
             .map(HadoopFSUtils::convertToHadoopPath)
             .toArray(Path[]::new)))
@@ -214,9 +205,6 @@ public class HoodieHadoopStorage extends HoodieStorage {
   public List<StoragePathInfo> listDirectEntries(StoragePath path,
                                                  StoragePathFilter filter)
       throws IOException {
-    if (path.getParent().getName().equals("test_table")) {
-      System.out.println("!!!!!!!!!!!! listDirectEntries with filter: " + path);
-    }
     return Arrays.stream(fs.listStatus(
             convertToHadoopPath(path), e ->
                 filter.accept(convertToStoragePath(e))))
@@ -232,9 +220,6 @@ public class HoodieHadoopStorage extends HoodieStorage {
   @Override
   public List<StoragePathInfo> listDirectEntries(List<StoragePath> pathList,
                                                  StoragePathFilter filter) throws IOException {
-    if (pathList.stream().anyMatch(path -> path.getParent().getName().equals("test_table"))) {
-      System.out.println("!!!!!!!!!!!! listDirectEntries with pathList");
-    }
     return Arrays.stream(fs.listStatus(
             pathList.stream()
                 .map(HadoopFSUtils::convertToHadoopPath)
