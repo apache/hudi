@@ -1695,6 +1695,99 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     spark.sql("set hoodie.datasource.write.operation = upsert")
   }
 
+  test("Test INSERT INTO preserves duplicates by default") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id BIGINT,
+           |  ts BIGINT,
+           |  v STRING
+           |) USING hudi
+           |TBLPROPERTIES (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           |)
+           |location '${tmp.getCanonicalPath}/$tableName'
+           |""".stripMargin)
+
+      // Insert initial batch with same-batch duplicates
+      spark.sql(
+        s"""
+           |INSERT INTO $tableName VALUES
+           |  (1, 1000, 'a'),
+           |  (1, 1001, 'a_dup'),
+           |  (2, 1002, 'b')
+           |""".stripMargin)
+
+      // Verify both duplicates are present (id=1 appears twice)
+      checkAnswer(s"SELECT id, ts, v FROM $tableName ORDER BY id, ts")(
+        Seq(1, 1000, "a"),
+        Seq(1, 1001, "a_dup"),
+        Seq(2, 1002, "b")
+      )
+
+      // Insert another batch with another duplicate for id=1
+      spark.sql(s"INSERT INTO $tableName VALUES (1, 1003, 'a_again'), (3, 1004, 'c')")
+
+      // Verify all three duplicates for id=1 are present
+      checkAnswer(s"SELECT id, ts, v FROM $tableName ORDER BY id, ts")(
+        Seq(1, 1000, "a"),
+        Seq(1, 1001, "a_dup"),
+        Seq(1, 1003, "a_again"),
+        Seq(2, 1002, "b"),
+        Seq(3, 1004, "c")
+      )
+    }
+  }
+
+  test("Test INSERT INTO deduplicates when operation is set to upsert") {
+    withSQLConf("hoodie.spark.sql.insert.into.operation" -> "upsert") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |CREATE TABLE $tableName (
+             |  id BIGINT,
+             |  ts BIGINT,
+             |  v STRING
+             |) USING hudi
+             |TBLPROPERTIES (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             |)
+             |location '${tmp.getCanonicalPath}/$tableName'
+             |""".stripMargin)
+
+        // Insert initial batch with same-batch duplicates
+        spark.sql(
+          s"""
+             |INSERT INTO $tableName VALUES
+             |  (1, 1000, 'a'),
+             |  (1, 1001, 'a_dup'),
+             |  (2, 1002, 'b')
+             |""".stripMargin)
+
+        // Verify only latest record for id=1 is present (ts=1001)
+        checkAnswer(s"SELECT id, ts, v FROM $tableName ORDER BY id, ts")(
+          Seq(1, 1001, "a_dup"),
+          Seq(2, 1002, "b")
+        )
+
+        // Insert another batch with another duplicate for id=1
+        spark.sql(s"INSERT INTO $tableName VALUES (1, 1003, 'a_again'), (3, 1004, 'c')")
+
+        // Verify only latest record for id=1 is present (ts=1003)
+        checkAnswer(s"SELECT id, ts, v FROM $tableName ORDER BY id, ts")(
+          Seq(1, 1003, "a_again"),
+          Seq(2, 1002, "b"),
+          Seq(3, 1004, "c")
+        )
+      }
+    }
+  }
+
   test("Test Insert Into Bucket Index Table") {
     spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     withTempDir { tmp =>
