@@ -355,6 +355,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   @Override
   public Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime) {
     Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, MAX_INSTANT_PARAM, maxInstantTime);
+    paramsMap.put(REFRESH_OFF, "true");
     return getLatestFileSlicesStreamFromParams(LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_URL, paramsMap);
   }
 

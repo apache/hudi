@@ -472,7 +472,8 @@ public class HoodieMetadataWriteUtils {
           .lastInstant()
           .map(HoodieInstant::requestedTime);
       String maxInstantTime = lastCompletedInstant.map(lastCompletedInstantTime ->
-          lastCompletedInstantTime.compareTo(instantTime) > 0 ? lastCompletedInstantTime : instantTime).orElse(instantTime);
+                        lastCompletedInstantTime.compareTo(instantTime) > 0 ? lastCompletedInstantTime : instantTime)
+          .orElse(instantTime);
       HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> columnRangeMetadata =
           engineContext.parallelize(partitionedWriteStats, parallelism).mapToPair(partitionedWriteStat -> {
             final String partitionName = partitionedWriteStat.get(0).getPartitionPath();
@@ -482,9 +483,10 @@ public class HoodieMetadataWriteUtils {
             partitionedWriteStat.forEach(
                 stat -> consolidatedPathInfos.add(
                     new StoragePathInfo(new StoragePath(dataMetaClient.getBasePath(), stat.getPath()), stat.getFileSizeInBytes(), false, (short) 0, 0, 0)));
-            SyncableFileSystemView fileSystemViewForCommitedFiles = FileSystemViewManager.createViewManager(new HoodieLocalEngineContext(dataMetaClient.getStorageConf()),
+            SyncableFileSystemView fileSystemViewForCommitedFiles =
+                FileSystemViewManager.createViewManager(new HoodieLocalEngineContext(dataMetaClient.getStorageConf()),
                 dataWriteConfig.getMetadataConfig(), dataWriteConfig.getViewStorageConfig(), dataWriteConfig.getCommonConfig(),
-                unused -> tableMetadata).getFileSystemView(dataMetaClient);
+                    unused -> tableMetadata).getFileSystemView(dataMetaClient);
             fileSystemViewForCommitedFiles.getLatestMergedFileSlicesBeforeOrOn(partitionName, maxInstantTime)
                 .forEach(fileSlice -> {
                   if (fileSlice.getBaseFile().isPresent()) {
