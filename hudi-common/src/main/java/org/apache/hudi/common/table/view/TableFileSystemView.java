@@ -167,7 +167,7 @@ public interface TableFileSystemView {
     Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime);
 
     /**
-     * Stream all "merged" file slices before on an instant time including files under inflight instants.
+     * Stream all latest merged file slices before or on an instant time including files under inflight instants.
      * If a filegroup has a pending compaction request,
      * (1) if the base file from compaction is not present, the file slice before and after
      * compaction request instant is merged and returned;
