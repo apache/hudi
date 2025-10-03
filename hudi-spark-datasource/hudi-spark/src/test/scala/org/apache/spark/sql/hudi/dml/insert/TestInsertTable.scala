@@ -3076,12 +3076,12 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           Seq(2, "a2_2", 30.0, "2021-07-18")
         )
       } else if (isExplicitInsertOperation) {
-        // When INSERT operation is explicitly set, duplicates should be preserved (our fix)
+        // When INSERT operation is explicitly set, duplicates should be preserved
         if (insertDupPolicy == NONE_INSERT_DUP_POLICY) {
           checkAnswer(s"select id, name, price, dt from $tableName order by id")(
             Seq(1, "a1", 10.0, "2021-07-18"),
             Seq(1, "a1_1", 10.0, "2021-07-18"),
-            Seq(2, "a2", 20.0, "2021-07-18"), // same-batch duplicates preserved with explicit INSERT
+            Seq(2, "a2", 20.0, "2021-07-18"),
             Seq(2, "a2_2", 30.0, "2021-07-18")
           )
         } else if (insertDupPolicy == DROP_INSERT_DUP_POLICY) {
