@@ -3448,5 +3448,103 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test INSERT INTO duplicate handling with preCombineField") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |  uuid STRING,
+           |  rider STRING,
+           |  driver STRING,
+           |  fare DOUBLE,
+           |  city STRING
+           |) USING hudi
+           |TBLPROPERTIES (
+           |  primaryKey = 'uuid',
+           |  preCombineField = 'fare'
+           |)
+           |LOCATION '$tablePath'
+           |""".stripMargin)
+
+      spark.sql(
+        s"""
+           |INSERT INTO $tableName VALUES
+           |  ('uuid1', 'rider-A', 'driver-X', 19.1, 'san_francisco'),
+           |  ('uuid2', 'rider-C', 'driver-X', 27.7, 'san_francisco'),
+           |  ('uuid3', 'rider-D', 'driver-Y', 33.9, 'san_francisco'),
+           |  ('uuid4', 'rider-E', 'driver-Y', 93.5, 'san_francisco'),
+           |  ('uuid6', 'rider-G', 'driver-W', 43.4, 'sao_paulo')
+           |""".stripMargin)
+
+      val initialCount = spark.sql(s"SELECT * FROM $tableName").count()
+      assertEquals(5, initialCount)
+
+      // Default behavior - INSERT INTO SELECT should deduplicate due to preCombineField
+      spark.sql(s"INSERT INTO $tableName SELECT * FROM $tableName")
+      val countAfterDefault = spark.sql(s"SELECT * FROM $tableName").count()
+      assertEquals(initialCount, countAfterDefault,
+        "Default INSERT INTO SELECT should deduplicate when preCombineField exists")
+
+      // Same-batch duplicates with default settings
+      spark.sql(s"TRUNCATE TABLE $tableName")
+      spark.sql(
+        s"""
+           |INSERT INTO $tableName VALUES
+           |  ('uuid1', 'rider-A', 'driver-X', 19.1, 'san_francisco'),
+           |  ('uuid1', 'rider-A', 'driver-X', 25.5, 'san_francisco'),
+           |  ('uuid2', 'rider-B', 'driver-Y', 30.0, 'new_york')
+           |""".stripMargin)
+
+      val sameBatchResult = spark.sql(s"SELECT * FROM $tableName WHERE uuid = 'uuid1'").collect()
+      assertEquals(1, sameBatchResult.length, "Same-batch duplicates should be deduplicated by default")
+
+      // Cross-batch duplicates with default settings
+      spark.sql(s"INSERT INTO $tableName VALUES ('uuid1', 'rider-A', 'driver-X', 35.0, 'cross_batch')")
+
+      val crossBatchResult = spark.sql(s"SELECT * FROM $tableName WHERE uuid = 'uuid1'").collect()
+      assertEquals(1, crossBatchResult.length, "Cross-batch duplicates should be deduplicated by default")
+
+      spark.sql(s"TRUNCATE TABLE $tableName")
+      spark.sql("SET hoodie.spark.sql.insert.into.operation=insert")
+
+      spark.sql(
+        s"""
+           |INSERT INTO $tableName VALUES
+           |  ('uuid1', 'rider-A', 'driver-X', 19.1, 'san_francisco'),
+           |  ('uuid1', 'rider-A', 'driver-X', 25.5, 'san_francisco'),
+           |  ('uuid2', 'rider-B', 'driver-Y', 30.0, 'new_york')
+           |""".stripMargin)
+
+      // same-batch duplicates
+      val explicitResult = spark.sql(s"SELECT * FROM $tableName WHERE uuid = 'uuid1'").collect()
+      assertEquals(2, explicitResult.length, "Same-batch duplicates should be preserved")
+
+      // Cross-batch duplicates
+      spark.sql(s"INSERT INTO $tableName VALUES ('uuid1', 'rider-A', 'driver-X', 35.0, 'cross_batch')")
+      val crossBatchResultExplicit = spark.sql(s"SELECT * FROM $tableName WHERE uuid = 'uuid1'").collect()
+      assertEquals(3, crossBatchResultExplicit.length, "Cross-batch duplicates should be preserved")
+
+      spark.sql(s"TRUNCATE TABLE $tableName")
+      spark.sql("SET hoodie.combine.before.insert=true")
+
+      spark.sql(
+        s"""
+           |INSERT INTO $tableName VALUES
+           |  ('uuid1', 'rider-A', 'driver-X', 19.1, 'san_francisco'),
+           |  ('uuid1', 'rider-A', 'driver-X', 25.5, 'san_francisco'),
+           |  ('uuid2', 'rider-B', 'driver-Y', 30.0, 'new_york')
+           |""".stripMargin)
+
+      val overrideResult = spark.sql(s"SELECT * FROM $tableName WHERE uuid = 'uuid1'").collect()
+      assertEquals(1, overrideResult.length, "User override combine.before.insert=true should be honored")
+
+      spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
+      spark.sessionState.conf.unsetConf(HoodieWriteConfig.COMBINE_BEFORE_INSERT.key)
+    }
+  }
 }
 
