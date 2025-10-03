@@ -159,6 +159,10 @@ public class RequestHandler {
     return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM, String.class).getOrThrow(e -> new HoodieException("MAX_INSTANT_PARAM is invalid"));
   }
 
+  private static String getCurrentInstantParamMandatory(Context ctx) {
+    return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.CURRENT_INSTANT_PARAM, String.class).getOrThrow(e -> new HoodieException("MAX_INSTANT_PARAM is invalid"));
+  }
+
   private static String getMaxInstantParamOptional(Context ctx) {
     return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM, String.class).getOrDefault("");
   }
@@ -376,6 +380,16 @@ public class RequestHandler {
           getBasePathParam(ctx),
           getPartitionParam(ctx),
           getMaxInstantParamMandatory(ctx));
+      writeValueAsString(ctx, dtos);
+    }, true));
+
+    app.get(RemoteHoodieTableFileSystemView.LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_INFLIGHT_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_INFLIGHT", 1);
+      List<FileSliceDTO> dtos = sliceHandler.getLatestMergedFileSlicesBeforeOrOnIncludingInflight(
+          getBasePathParam(ctx),
+          getPartitionParam(ctx),
+          getMaxInstantParamMandatory(ctx),
+          getCurrentInstantParamMandatory(ctx));
       writeValueAsString(ctx, dtos);
     }, true));
 

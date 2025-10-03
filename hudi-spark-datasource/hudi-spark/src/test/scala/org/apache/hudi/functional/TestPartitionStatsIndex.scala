@@ -88,6 +88,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
    */
   @Test
   def testPartitionStatsWithLogicalType(): Unit = {
+    //val basePath = "/tmp/test/test_table"
     val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
       HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "current_date"
