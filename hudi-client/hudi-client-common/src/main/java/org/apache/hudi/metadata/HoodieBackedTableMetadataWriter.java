@@ -1536,7 +1536,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     HoodieTableFileSystemView fsView = getMetadataView();
     fsView.loadPartitions(new ArrayList<>(commitMetadata.getWritePartitionPaths()));
     return convertWriteStatsToSecondaryIndexRecords(allWriteStats, instantTime, indexDefinition, dataWriteConfig.getMetadataConfig(),
-        fsView, dataMetaClient, engineContext, dataWriteConfig.getProps());
+        fsView, dataMetaClient, engineContext, dataWriteConfig);
   }
 
   /**
