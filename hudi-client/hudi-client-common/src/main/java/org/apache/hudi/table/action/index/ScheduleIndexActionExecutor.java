@@ -39,7 +39,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.EnumSet;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -90,7 +89,16 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     Set<String> indexesInflightOrCompleted = getInflightAndCompletedMetadataPartitions(table.getMetaClient().getTableConfig());
     InstantGenerator instantGenerator = table.getMetaClient().getInstantGenerator();
 
-    Set<String> requestedPartitions = new HashSet<>(partitionPaths);
+    HoodieMetadataConfig metadataConfig = config.getMetadataConfig();
+    Set<String> requestedPartitions = partitionIndexTypes.stream().map(p -> {
+      if (MetadataPartitionType.EXPRESSION_INDEX.equals(p)) {
+        return getSecondaryOrExpressionIndexName(metadataConfig::getExpressionIndexName, PARTITION_NAME_EXPRESSION_INDEX_PREFIX, metadataConfig.getExpressionIndexColumn());
+      } else if (MetadataPartitionType.SECONDARY_INDEX.equals(p)) {
+        return getSecondaryOrExpressionIndexName(metadataConfig::getSecondaryIndexName, PARTITION_NAME_SECONDARY_INDEX_PREFIX, metadataConfig.getSecondaryIndexColumn());
+      }
+      return p.getPartitionPath();
+    }).collect(Collectors.toSet());
+    requestedPartitions.addAll(partitionPaths);
     requestedPartitions.removeAll(indexesInflightOrCompleted);
 
     if (!requestedPartitions.isEmpty()) {
@@ -101,7 +109,17 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
       return Option.empty();
     }
     List<MetadataPartitionType> finalPartitionsToIndex = partitionIndexTypes.stream()
-        .filter(p -> requestedPartitions.contains(p.getPartitionPath())).collect(Collectors.toList());
+        .filter(p -> {
+          String partitionName;
+          if (MetadataPartitionType.EXPRESSION_INDEX.equals(p)) {
+            partitionName = getSecondaryOrExpressionIndexName(metadataConfig::getExpressionIndexName, PARTITION_NAME_EXPRESSION_INDEX_PREFIX, metadataConfig.getExpressionIndexColumn());
+          } else if (MetadataPartitionType.SECONDARY_INDEX.equals(p)) {
+            partitionName = getSecondaryOrExpressionIndexName(metadataConfig::getSecondaryIndexName, PARTITION_NAME_SECONDARY_INDEX_PREFIX, metadataConfig.getSecondaryIndexColumn());
+          } else {
+            partitionName = p.getPartitionPath();
+          }
+          return requestedPartitions.contains(partitionName);
+        }).collect(Collectors.toList());
     final HoodieInstant indexInstant = instantGenerator.getIndexRequestedInstant(instantTime);
     try {
       // get last completed instant
