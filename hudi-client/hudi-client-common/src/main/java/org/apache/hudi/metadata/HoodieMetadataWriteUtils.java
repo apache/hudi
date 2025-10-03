@@ -85,6 +85,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -461,6 +462,10 @@ public class HoodieMetadataWriteUtils {
       List<List<HoodieWriteStat>> partitionedWriteStats = new ArrayList<>(allWriteStats.stream()
           .collect(Collectors.groupingBy(HoodieWriteStat::getPartitionPath))
           .values());
+      Map<String, Set<String>> fileGroupIdsToReplaceMap = (commitMetadata instanceof HoodieReplaceCommitMetadata)
+          ? ((HoodieReplaceCommitMetadata) commitMetadata).getPartitionToReplaceFileIds()
+          .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> new HashSet<>(e.getValue())))
+          : Collections.emptyMap();
 
       int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
       Option<String> lastCompletedInstant = dataMetaClient.getActiveTimeline().filterCompletedInstants()
@@ -494,6 +499,7 @@ public class HoodieMetadataWriteUtils {
             // Collect column metadata for each file part of the latest merged file slice before the current instant time
             List<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata = partitionedWriteStat.stream()
                 .flatMap(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, colsToIndex, partitionStatsIndexVersion).stream()).collect(toList());
+            Set<String> fileGroupIdsToReplace = fileGroupIdsToReplaceMap.getOrDefault(partitionName, e -> new HashMap<>());
             Set<String> filesWithColumnStats = partitionedWriteStat.stream()
                 .map(stat -> new StoragePath(stat.getPath()).getName()).collect(Collectors.toSet());
             // Collect column metadata of each file that does not have column stats provided by the write stat in the commit metadata
@@ -501,7 +507,7 @@ public class HoodieMetadataWriteUtils {
                 .flatMap(fileSlice -> Stream.concat(
                     Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
                     fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
-                .filter(e -> Objects.nonNull(e) && !filesWithColumnStats.contains(e))
+                .filter(e -> Objects.nonNull(e) && !filesWithColumnStats.contains(e) && !fileGroupIdsToReplace.contains(e))
                 .collect(Collectors.toSet());
             // Fetch metadata table COLUMN_STATS partition records for the above files
             List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata
