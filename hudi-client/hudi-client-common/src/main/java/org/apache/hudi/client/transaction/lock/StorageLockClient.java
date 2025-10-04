@@ -89,7 +89,7 @@ public interface StorageLockClient extends AutoCloseable {
    * @return The lock folder path (e.g., "s3://bucket/table/.hoodie/.locks")
    */
   static String getLockFolderPath(String basePath) {
-    return String.format("%s%s%s", basePath, StoragePath.SEPARATOR, LOCKS_FOLDER_NAME);
+    return new StoragePath(basePath, LOCKS_FOLDER_NAME).toString();
   }
 
   /**
