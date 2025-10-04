@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
@@ -56,6 +57,13 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
                                               HoodieTableConfig tableConfig,
                                               BaseSparkInternalRecordContext recordContext) {
     super(storageConfig, tableConfig, Option.empty(), Option.empty(), recordContext);
+  }
+
+  protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig,
+                                              HoodieTableConfig tableConfig,
+                                              Option<InstantRange> instantRange,
+                                              BaseSparkInternalRecordContext recordContext) {
+    super(storageConfig, tableConfig, instantRange, Option.empty(), recordContext);
   }
 
   @Override
