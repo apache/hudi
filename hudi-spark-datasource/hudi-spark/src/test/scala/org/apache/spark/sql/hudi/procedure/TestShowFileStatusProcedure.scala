@@ -18,7 +18,7 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hudi.{HoodieCLIUtils, HoodieDataSourceHelpers}
+import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils, HoodieDataSourceHelpers}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.{Option => HOption}
@@ -34,214 +34,219 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
   private val DEFAULT_VALUE = ""
 
   test("Test Call show_file_status Procedure By COW / MOR Partitioned Table") {
-    withTempDir { tmp =>
-      Seq("mor", "cow").foreach { tableType =>
+    withSQLConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key() -> "upsert") {
+      withTempDir { tmp =>
+        Seq("mor", "cow").foreach { tableType =>
 
-        val tableName = generateTableName
-        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
 
-        // specify clean conf & archive conf & compaction conf
-        spark.sql("set hoodie.clean.commits.retained = 2")
-        spark.sql("set hoodie.keep.min.commits = 3")
-        spark.sql("set hoodie.keep.max.commits = 4")
-        spark.sql("set hoodie.compact.inline=false")
-        spark.sql("set hoodie.compact.schedule.inline=false")
+          // specify clean conf & archive conf & compaction conf
+          spark.sql("set hoodie.clean.commits.retained = 2")
+          spark.sql("set hoodie.keep.min.commits = 3")
+          spark.sql("set hoodie.keep.max.commits = 4")
+          spark.sql("set hoodie.compact.inline=false")
+          spark.sql("set hoodie.compact.schedule.inline=false")
 
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long,
-             |  partition long
-             |) using hudi
-             | options (
-             |  primaryKey ='id',
-             |  type = '$tableType',
-             |  preCombineField = 'ts'
-             | )
-             | partitioned by(partition)
-             | location '$basePath'
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long,
+               |  partition long
+               |) using hudi
+               | options (
+               |  primaryKey ='id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               | )
+               | partitioned by(partition)
+               | location '$basePath'
         """.stripMargin)
 
-        val partition: String = "partition=1000"
-        var before: List[String] = null
-        var after: List[String] = null
-        var cleanedDataFile: Option[String] = Option.empty
+          val partition: String = "partition=1000"
+          var before: List[String] = null
+          var after: List[String] = null
+          var cleanedDataFile: Option[String] = Option.empty
 
-        val fs = new Path(basePath).getFileSystem(spark.sessionState.newHadoopConf())
-        val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
-        val metaClient: HoodieTableMetaClient = client.getInternalSchemaAndMetaClient.getRight
+          val fs = new Path(basePath).getFileSystem(spark.sessionState.newHadoopConf())
+          val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
+          val metaClient: HoodieTableMetaClient = client.getInternalSchemaAndMetaClient.getRight
 
-        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 1000)")
-        val firstCleanedDataFile = getAllDataFile(fs, basePath, Option.apply(partition)).toStream.filter(f => !f.startsWith(".")).head
-        cleanedDataFile = Option.apply(firstCleanedDataFile)
-        checkAnswer(s"call show_file_status(table => '$tableName', partition => '$partition', file => '${cleanedDataFile.get}')")(
-          Seq(FileStatus.EXIST.toString, DEFAULT_VALUE, DEFAULT_VALUE, TimelineType.ACTIVE.toString, new Path(basePath, new Path(partition, cleanedDataFile.get)).toString))
+          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 1000)")
+          val firstCleanedDataFile = getAllDataFile(fs, basePath, Option.apply(partition)).toStream.filter(f => !f.startsWith(".")).head
+          cleanedDataFile = Option.apply(firstCleanedDataFile)
+          checkAnswer(s"call show_file_status(table => '$tableName', partition => '$partition', file => '${cleanedDataFile.get}')")(
+            Seq(FileStatus.EXIST.toString, DEFAULT_VALUE, DEFAULT_VALUE, TimelineType.ACTIVE.toString, new Path(basePath, new Path(partition, cleanedDataFile.get)).toString))
 
-        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001, 1000)")
-        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
-        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
+          spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001, 1000)")
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
 
-        checkAnswer(s"call show_file_status(table => '$tableName', partition => '$partition', file => '$firstCleanedDataFile')")(
-          Seq(FileStatus.DELETED.toString, HoodieTimeline.CLEAN_ACTION, metaClient.reloadActiveTimeline().getCleanerTimeline.lastInstant().get.requestedTime, TimelineType.ACTIVE.toString, DEFAULT_VALUE)
-        )
+          checkAnswer(s"call show_file_status(table => '$tableName', partition => '$partition', file => '$firstCleanedDataFile')")(
+            Seq(FileStatus.DELETED.toString, HoodieTimeline.CLEAN_ACTION, metaClient.reloadActiveTimeline().getCleanerTimeline.lastInstant().get.requestedTime, TimelineType.ACTIVE.toString, DEFAULT_VALUE)
+          )
 
-        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1001)")
-        // clustering / compaction
-        var newInstant: String = null
-        if (tableType.equals("cow")) {
-          newInstant = client.scheduleClustering(HOption.empty()).get()
-          client.cluster(newInstant)
-        } else {
-          newInstant = client.scheduleCompaction(HOption.empty()).get()
-          val result = client.compact(newInstant)
-          client.commitCompaction(newInstant, result, HOption.empty())
-          assertTrue(metaClient.reloadActiveTimeline.filterCompletedInstants.containsInstant(newInstant))
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1001)")
+          // clustering / compaction
+          var newInstant: String = null
+          if (tableType.equals("cow")) {
+            newInstant = client.scheduleClustering(HOption.empty()).get()
+            client.cluster(newInstant)
+          } else {
+            newInstant = client.scheduleCompaction(HOption.empty()).get()
+            val result = client.compact(newInstant)
+            client.commitCompaction(newInstant, result, HOption.empty())
+            assertTrue(metaClient.reloadActiveTimeline.filterCompletedInstants.containsInstant(newInstant))
+          }
+
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
+          spark.sql(s"insert into $tableName values(4, 'a4', 10, 1002, 1000)")
+
+          // savepoint
+          val savepointTime: String = getSpecifyActionLatestTime(fs, basePath, newInstant, 1).get
+          spark.sql(s"call create_savepoint(table => '$tableName', commit_time => '$savepointTime')")
+          spark.sql(s"insert into $tableName values(2, 'a2', 11, 1002, 1000)")
+          spark.sql(s"insert into $tableName values(6, 'a6', 10, 1000, 1001)")
+
+          // restore
+          before = getAllDataFile(fs, basePath, Option.apply(partition))
+          spark.sql(s"call rollback_to_savepoint(table => '$tableName', instant_time => '$savepointTime')")
+          after = getAllDataFile(fs, basePath, Option.apply(partition))
+          cleanedDataFile = getAnyOneDataFile(before, after)
+
+          checkAnswer(s"call show_file_status(table => '$tableName', partition => '$partition', file => '${cleanedDataFile.get}')")(
+            Seq(FileStatus.DELETED.toString, HoodieTimeline.RESTORE_ACTION, metaClient.reloadActiveTimeline().getRestoreTimeline.lastInstant().get.requestedTime, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
+
+          val latestTime = HoodieDataSourceHelpers.latestCommit(fs, basePath)
+          spark.sql(s"insert into $tableName values(7, 'a7', 15, 1000, 1000)")
+          spark.sql(s"insert into $tableName values(8, 'a8', 12, 1000, 1000)")
+
+          before = getAllDataFile(fs, basePath, Option.apply(partition))
+          // rollback
+          val rollbackTime = getSpecifyActionLatestTime(fs, basePath, latestTime, 5).get
+          spark.sql(s"call rollback_to_instant(table => '$tableName', instant_time => '$rollbackTime')")
+          spark.sql(s"insert into $tableName values(9, 'a9', 16, 1000, 1000)")
+          after = getAllDataFile(fs, basePath, Option.apply(partition))
+          cleanedDataFile = getAnyOneDataFile(before, after)
+          checkAnswer(s"call show_file_status(table => '$tableName', partition => '$partition', file => '${cleanedDataFile.get}')")(
+            Seq(FileStatus.DELETED.toString, HoodieTimeline.ROLLBACK_ACTION, metaClient.reloadActiveTimeline().getRollbackTimeline.lastInstant().get.requestedTime, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
+
+          // unknown
+          checkAnswer(s"call show_file_status(table => '$tableName', partition => '$partition', file => 'unknown')")(
+            Seq(FileStatus.UNKNOWN.toString, DEFAULT_VALUE, DEFAULT_VALUE, DEFAULT_VALUE, DEFAULT_VALUE))
         }
-
-        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
-        spark.sql(s"insert into $tableName values(4, 'a4', 10, 1002, 1000)")
-
-        // savepoint
-        val savepointTime: String = getSpecifyActionLatestTime(fs, basePath, newInstant, 1).get
-        spark.sql(s"call create_savepoint(table => '$tableName', commit_time => '$savepointTime')")
-        spark.sql(s"insert into $tableName values(2, 'a2', 11, 1002, 1000)")
-        spark.sql(s"insert into $tableName values(6, 'a6', 10, 1000, 1001)")
-
-        // restore
-        before = getAllDataFile(fs, basePath, Option.apply(partition))
-        spark.sql(s"call rollback_to_savepoint(table => '$tableName', instant_time => '$savepointTime')")
-        after = getAllDataFile(fs, basePath, Option.apply(partition))
-        cleanedDataFile = getAnyOneDataFile(before, after)
-
-        checkAnswer(s"call show_file_status(table => '$tableName', partition => '$partition', file => '${cleanedDataFile.get}')")(
-          Seq(FileStatus.DELETED.toString, HoodieTimeline.RESTORE_ACTION, metaClient.reloadActiveTimeline().getRestoreTimeline.lastInstant().get.requestedTime, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
-
-        val latestTime = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-        spark.sql(s"insert into $tableName values(7, 'a7', 15, 1000, 1000)")
-        spark.sql(s"insert into $tableName values(8, 'a8', 12, 1000, 1000)")
-
-        before = getAllDataFile(fs, basePath, Option.apply(partition))
-        // rollback
-        val rollbackTime = getSpecifyActionLatestTime(fs, basePath, latestTime, 5).get
-        spark.sql(s"call rollback_to_instant(table => '$tableName', instant_time => '$rollbackTime')")
-        spark.sql(s"insert into $tableName values(9, 'a9', 16, 1000, 1000)")
-        after = getAllDataFile(fs, basePath, Option.apply(partition))
-        cleanedDataFile = getAnyOneDataFile(before, after)
-        checkAnswer(s"call show_file_status(table => '$tableName', partition => '$partition', file => '${cleanedDataFile.get}')")(
-          Seq(FileStatus.DELETED.toString, HoodieTimeline.ROLLBACK_ACTION, metaClient.reloadActiveTimeline().getRollbackTimeline.lastInstant().get.requestedTime, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
-
-        // unknown
-        checkAnswer(s"call show_file_status(table => '$tableName', partition => '$partition', file => 'unknown')")(
-          Seq(FileStatus.UNKNOWN.toString, DEFAULT_VALUE, DEFAULT_VALUE, DEFAULT_VALUE, DEFAULT_VALUE))
       }
     }
+
   }
 
   test("Test Call show_file_status Procedure By COW / MOR Non_Partitioned Table") {
-    withTempDir { tmp =>
-      Seq("mor", "cow").foreach { tableType =>
+    withSQLConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key() -> "upsert") {
+      withTempDir { tmp =>
+        Seq("mor", "cow").foreach { tableType =>
 
-        val tableName = generateTableName
-        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
 
-        // specify clean conf & archive conf & compaction conf
-        spark.sql("set hoodie.clean.commits.retained = 2")
-        spark.sql("set hoodie.keep.min.commits = 3")
-        spark.sql("set hoodie.keep.max.commits = 4")
-        spark.sql("set hoodie.compact.inline=false")
-        spark.sql("set hoodie.compact.schedule.inline=false")
+          // specify clean conf & archive conf & compaction conf
+          spark.sql("set hoodie.clean.commits.retained = 2")
+          spark.sql("set hoodie.keep.min.commits = 3")
+          spark.sql("set hoodie.keep.max.commits = 4")
+          spark.sql("set hoodie.compact.inline=false")
+          spark.sql("set hoodie.compact.schedule.inline=false")
 
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long,
-             |  partition long
-             |) using hudi
-             | options (
-             |  primaryKey ='id',
-             |  type = '$tableType',
-             |  preCombineField = 'ts'
-             | )
-             | location '$basePath'
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long,
+               |  partition long
+               |) using hudi
+               | options (
+               |  primaryKey ='id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               | )
+               | location '$basePath'
         """.stripMargin)
 
-        val partition: Option[String] = Option.empty
-        var before: List[String] = null
-        var after: List[String] = null
-        var cleanedDataFile: Option[String] = Option.empty
+          val partition: Option[String] = Option.empty
+          var before: List[String] = null
+          var after: List[String] = null
+          var cleanedDataFile: Option[String] = Option.empty
 
-        val fs = new Path(basePath).getFileSystem(spark.sessionState.newHadoopConf())
-        val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
-        val metaClient: HoodieTableMetaClient = client.getInternalSchemaAndMetaClient.getRight
+          val fs = new Path(basePath).getFileSystem(spark.sessionState.newHadoopConf())
+          val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
+          val metaClient: HoodieTableMetaClient = client.getInternalSchemaAndMetaClient.getRight
 
-        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 1000)")
-        val firstCleanedDataFile = getAllDataFile(fs, basePath, partition).toStream.filter(f => !f.startsWith(".")).head
-        cleanedDataFile = Option.apply(firstCleanedDataFile)
-        checkAnswer(s"call show_file_status(table => '$tableName', file => '${cleanedDataFile.get}')")(
-          Seq(FileStatus.EXIST.toString, DEFAULT_VALUE, DEFAULT_VALUE, TimelineType.ACTIVE.toString, new Path(basePath, new Path(cleanedDataFile.get)).toString))
+          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 1000)")
+          val firstCleanedDataFile = getAllDataFile(fs, basePath, partition).toStream.filter(f => !f.startsWith(".")).head
+          cleanedDataFile = Option.apply(firstCleanedDataFile)
+          checkAnswer(s"call show_file_status(table => '$tableName', file => '${cleanedDataFile.get}')")(
+            Seq(FileStatus.EXIST.toString, DEFAULT_VALUE, DEFAULT_VALUE, TimelineType.ACTIVE.toString, new Path(basePath, new Path(cleanedDataFile.get)).toString))
 
-        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001, 1000)")
-        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
-        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
+          spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001, 1000)")
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
 
-        checkAnswer(s"call show_file_status(table => '$tableName', file => '$firstCleanedDataFile')")(
-          Seq(FileStatus.DELETED.toString, HoodieTimeline.CLEAN_ACTION, metaClient.reloadActiveTimeline().getCleanerTimeline.lastInstant().get.requestedTime, TimelineType.ACTIVE.toString, DEFAULT_VALUE)
-        )
+          checkAnswer(s"call show_file_status(table => '$tableName', file => '$firstCleanedDataFile')")(
+            Seq(FileStatus.DELETED.toString, HoodieTimeline.CLEAN_ACTION, metaClient.reloadActiveTimeline().getCleanerTimeline.lastInstant().get.requestedTime, TimelineType.ACTIVE.toString, DEFAULT_VALUE)
+          )
 
-        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
-        // clustering / compaction
-        var newInstant: String = null
-        if (tableType.equals("cow")) {
-          newInstant = client.scheduleClustering(HOption.empty()).get()
-          client.cluster(newInstant)
-        } else {
-          newInstant = client.scheduleCompaction(HOption.empty()).get()
-          val result = client.compact(newInstant)
-          client.commitCompaction(newInstant, result, HOption.empty())
-          assertTrue(metaClient.reloadActiveTimeline.filterCompletedInstants.containsInstant(newInstant))
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
+          // clustering / compaction
+          var newInstant: String = null
+          if (tableType.equals("cow")) {
+            newInstant = client.scheduleClustering(HOption.empty()).get()
+            client.cluster(newInstant)
+          } else {
+            newInstant = client.scheduleCompaction(HOption.empty()).get()
+            val result = client.compact(newInstant)
+            client.commitCompaction(newInstant, result, HOption.empty())
+            assertTrue(metaClient.reloadActiveTimeline.filterCompletedInstants.containsInstant(newInstant))
+          }
+
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
+          spark.sql(s"insert into $tableName values(4, 'a4', 10, 1002, 1000)")
+
+          // savepoint
+          val savepointTime: String = getSpecifyActionLatestTime(fs, basePath, newInstant, 1).get
+          spark.sql(s"call create_savepoint(table => '$tableName', commit_time => '$savepointTime')")
+          spark.sql(s"insert into $tableName values(2, 'a2', 11, 1002, 1000)")
+          spark.sql(s"insert into $tableName values(6, 'a6', 10, 1000, 1000)")
+
+          // restore
+          before = getAllDataFile(fs, basePath, partition)
+          spark.sql(s"call rollback_to_savepoint(table => '$tableName', instant_time => '$savepointTime')")
+          after = getAllDataFile(fs, basePath, partition)
+          cleanedDataFile = getAnyOneDataFile(before, after)
+          checkAnswer(s"call show_file_status(table => '$tableName', file => '${cleanedDataFile.get}')")(
+            Seq(FileStatus.DELETED.toString, HoodieTimeline.RESTORE_ACTION,
+              metaClient.reloadActiveTimeline().getRestoreTimeline.lastInstant().get.requestedTime, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
+
+          val latestTime = HoodieDataSourceHelpers.latestCommit(fs, basePath)
+          spark.sql(s"insert into $tableName values(7, 'a7', 15, 1000, 1000)")
+          spark.sql(s"insert into $tableName values(8, 'a8', 12, 1000, 1000)")
+
+          before = getAllDataFile(fs, basePath, partition)
+          // rollback
+          val rollbackTime = getSpecifyActionLatestTime(fs, basePath, latestTime, 5).get
+          spark.sql(s"call rollback_to_instant(table => '$tableName', instant_time => '$rollbackTime')")
+          spark.sql(s"insert into $tableName values(9, 'a9', 16, 1000, 1000)")
+          after = getAllDataFile(fs, basePath, partition)
+          cleanedDataFile = getAnyOneDataFile(before, after)
+          checkAnswer(s"call show_file_status(table => '$tableName', file => '${cleanedDataFile.get}')")(
+            Seq(FileStatus.DELETED.toString, HoodieTimeline.ROLLBACK_ACTION, metaClient.reloadActiveTimeline().getRollbackTimeline.lastInstant().get.requestedTime, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
+
+          // unknown
+          checkAnswer(s"call show_file_status(table => '$tableName', file => 'unknown')")(
+            Seq(FileStatus.UNKNOWN.toString, DEFAULT_VALUE, DEFAULT_VALUE, DEFAULT_VALUE, DEFAULT_VALUE))
         }
-
-        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
-        spark.sql(s"insert into $tableName values(4, 'a4', 10, 1002, 1000)")
-
-        // savepoint
-        val savepointTime: String = getSpecifyActionLatestTime(fs, basePath, newInstant, 1).get
-        spark.sql(s"call create_savepoint(table => '$tableName', commit_time => '$savepointTime')")
-        spark.sql(s"insert into $tableName values(2, 'a2', 11, 1002, 1000)")
-        spark.sql(s"insert into $tableName values(6, 'a6', 10, 1000, 1000)")
-
-        // restore
-        before = getAllDataFile(fs, basePath, partition)
-        spark.sql(s"call rollback_to_savepoint(table => '$tableName', instant_time => '$savepointTime')")
-        after = getAllDataFile(fs, basePath, partition)
-        cleanedDataFile = getAnyOneDataFile(before, after)
-        checkAnswer(s"call show_file_status(table => '$tableName', file => '${cleanedDataFile.get}')")(
-          Seq(FileStatus.DELETED.toString, HoodieTimeline.RESTORE_ACTION,
-            metaClient.reloadActiveTimeline().getRestoreTimeline.lastInstant().get.requestedTime, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
-
-        val latestTime = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-        spark.sql(s"insert into $tableName values(7, 'a7', 15, 1000, 1000)")
-        spark.sql(s"insert into $tableName values(8, 'a8', 12, 1000, 1000)")
-
-        before = getAllDataFile(fs, basePath, partition)
-        // rollback
-        val rollbackTime = getSpecifyActionLatestTime(fs, basePath, latestTime, 5).get
-        spark.sql(s"call rollback_to_instant(table => '$tableName', instant_time => '$rollbackTime')")
-        spark.sql(s"insert into $tableName values(9, 'a9', 16, 1000, 1000)")
-        after = getAllDataFile(fs, basePath, partition)
-        cleanedDataFile = getAnyOneDataFile(before, after)
-        checkAnswer(s"call show_file_status(table => '$tableName', file => '${cleanedDataFile.get}')")(
-          Seq(FileStatus.DELETED.toString, HoodieTimeline.ROLLBACK_ACTION, metaClient.reloadActiveTimeline().getRollbackTimeline.lastInstant().get.requestedTime, TimelineType.ACTIVE.toString, DEFAULT_VALUE))
-
-        // unknown
-        checkAnswer(s"call show_file_status(table => '$tableName', file => 'unknown')")(
-          Seq(FileStatus.UNKNOWN.toString, DEFAULT_VALUE, DEFAULT_VALUE, DEFAULT_VALUE, DEFAULT_VALUE))
       }
     }
   }
