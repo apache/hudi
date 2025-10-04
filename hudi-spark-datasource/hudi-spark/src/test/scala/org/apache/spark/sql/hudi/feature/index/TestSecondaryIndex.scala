@@ -260,6 +260,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
           spark.sql("set hoodie.embed.timeline.server=false")
+          spark.sql("set hoodie.spark.sql.insert.into.operation=upsert")
           // Create table with version 8
           spark.sql(
             s"""
@@ -325,6 +326,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
             // Verify that secondary indexes are dropped after upgrade
             dropRecreateIdxAndValidate(tableName, basePath, 9, 2, dropRecreate = true, expected)
           }
+          spark.sessionState.conf.unsetConf("hoodie.spark.sql.insert.into.operation")
         }
       }
     }

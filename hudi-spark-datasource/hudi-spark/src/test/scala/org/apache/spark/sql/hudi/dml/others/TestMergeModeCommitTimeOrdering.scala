@@ -44,7 +44,7 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
     }
     val setRecordMergeConfigs = argList(2).toBoolean
     val setUpsertOperation = argList(3).toBoolean
-    val isUpsert = setUpsertOperation || (tableVersion.toInt != 6 && setRecordMergeConfigs)
+    val isUpsert = setUpsertOperation
     val storage = HoodieTestUtils.getDefaultStorage
     val mergeConfigClause = if (setRecordMergeConfigs) {
       // with precombine field set, UPSERT operation is used automatically

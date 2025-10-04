@@ -113,14 +113,11 @@ trait ProvidesHoodieConfig extends Logging {
    * Deduce the sql write operation for INSERT_INTO
    */
   private def deduceSparkSqlInsertIntoWriteOperation(isOverwritePartition: Boolean, isOverwriteTable: Boolean,
-                                                     shouldAutoKeyGen: Boolean, preCombineField: String,
-                                                     sparkSqlInsertIntoOperationSet: Boolean, sparkSqlInsertIntoOperation: String): String = {
+                                                     sparkSqlInsertIntoOperation: String): String = {
     if (isOverwriteTable) {
       INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
     } else if (isOverwritePartition) {
       INSERT_OVERWRITE_OPERATION_OPT_VAL
-    } else if (!sparkSqlInsertIntoOperationSet && !shouldAutoKeyGen && preCombineField.nonEmpty) {
-      UPSERT_OPERATION_OPT_VAL
     } else {
       sparkSqlInsertIntoOperation
     }
@@ -215,16 +212,8 @@ trait ProvidesHoodieConfig extends Logging {
     val insertDupPolicy = combinedOpts.getOrElse(INSERT_DUP_POLICY.key(), INSERT_DUP_POLICY.defaultValue())
     val isNonStrictMode = insertMode == InsertMode.NON_STRICT
     val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
-    val combineBeforeInsert = combinedOpts.get(HoodieWriteConfig.COMBINE_BEFORE_INSERT.key()) match {
-      case Some(value) =>
-        value.toBoolean
-      case None =>
-        if (sparkSqlInsertIntoOperationSet && sparkSqlInsertIntoOperation.equals(INSERT_OPERATION_OPT_VAL)) {
-          false
-        } else {
-          !hoodieCatalogTable.orderingFields.isEmpty && hoodieCatalogTable.primaryKeys.nonEmpty
-        }
-    }
+    val combineBeforeInsert = combinedOpts.getOrElse(HoodieWriteConfig.COMBINE_BEFORE_INSERT.key(),
+      HoodieWriteConfig.COMBINE_BEFORE_INSERT.defaultValue()).toBoolean
 
     /*
      * The sql write operation has higher precedence than the legacy insert mode.
@@ -240,8 +229,7 @@ trait ProvidesHoodieConfig extends Logging {
         deduceOperation(enableBulkInsert, isOverwritePartition, isOverwriteTable, dropDuplicate,
           isNonStrictMode, isPartitionedTable, combineBeforeInsert, insertMode, shouldAutoKeyGen)
       } else {
-        deduceSparkSqlInsertIntoWriteOperation(isOverwritePartition, isOverwriteTable,
-          shouldAutoKeyGen, orderingFieldsStr, sparkSqlInsertIntoOperationSet, sparkSqlInsertIntoOperation)
+        deduceSparkSqlInsertIntoWriteOperation(isOverwritePartition, isOverwriteTable, sparkSqlInsertIntoOperation)
       }
     )
 
