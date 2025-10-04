@@ -197,7 +197,12 @@ Key:
 
 - **Key Content Size**: 2 byte, short, size of the key content.
 - **Key Content**: key content in byte array. In Hudi, we serialize the String into byte array using UTF-8.
-- **Other Information**: other information of the key, which is not used by Hudi.
+- **Other Information**: other information of the key, like column family, column qualifier, timestamp, key type, which is not used by Hudi,
+    but must be set for compatibility with HBase HFile reader. That is, this information occupies 10 bytes with constant values as follows:
+    1 byte for column family length, whose type is byte, and value = 0, and
+    8 bytes for timestamp, whose type is long, and value = 0, and
+    1 byte for key type, whose type is byte, and value is 4, which stands for 'put' operation, and
+    0 byte for column qualifier.
 
 Value:
 
@@ -331,6 +336,8 @@ Here are common metadata stored in the File Info Block:
 - `hfile.LASTKEY`: The last key of the file (byte array)
 - `hfile.MAX_MEMSTORE_TS_KEY`: Maximum MVCC timestamp of the key-value pairs in the file. In Hudi, this should always be
     0.
+- `hfile.AVG_KEY_LEN`: required for compatibility with HBase HFile reader.
+- `hfile.AVG_VALUE_LEN`: required for compatibility with HBase HFile reader.
 
 ## Trailer
 
@@ -387,7 +394,8 @@ Here are the meaning of each field:
 - `last_data_block_offset`: The offset of the first byte after the last key-value data block
 - `comparator_class_name`: Comparator class name (In Hudi, we always assume lexicographical order, so this is ignored)
 - `compression_codec`: Compression codec: 0 = LZO, 1 = GZ, 2 = NONE
-- `encryption_key`: Encryption key (not used by Hudi)
+- `encryption_key`: Encryption key (not used by Hudi). For backward compatibility, we should not set this field such
+                    that HBase HFile reader treats it as NULL and skip some related checks.
 
 The last 4 bytes of the Trailer content contain the HFile version: the number represented by the first byte indicates
 the minor version, and the number represented by the last three bytes indicates the major version. In the case of Hudi,
