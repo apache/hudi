@@ -86,6 +86,7 @@
                   <include>org.apache.parquet:parquet-format-structures</include>
                   <include>org.apache.parquet:parquet-hadoop</include>
                   <include>org.apache.parquet:parquet-jackson</include>
+                  <include>org.apache.parquet:parquet-format</include>
                   <include>commons-io:commons-io</include>
                   <include>org.openjdk.jol:jol-core</include>
                   <!-- Kryo -->
