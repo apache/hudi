@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.ddl
 
 import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.avro.model.{HoodieCleanMetadata, HoodieCleanPartitionMetadata}
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieCommitMetadata}
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -374,86 +375,88 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
   Seq(false, true).foreach { hiveStyle =>
     test(s"Lazy Clean drop multi-level partitioned table's partitions, isHiveStylePartitioning: $hiveStyle") {
-      withTempDir { tmp =>
-        val tableName = generateTableName
-        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-        val schemaFields = Seq("id", "name", "ts", "year", "month", "day")
+      withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> "upsert") {
+        withTempDir { tmp =>
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          val schemaFields = Seq("id", "name", "ts", "year", "month", "day")
 
-        import spark.implicits._
-        val df = Seq((1, "z3", "v1", "2021", "10", "01")).toDF(schemaFields :_*)
+          import spark.implicits._
+          val df = Seq((1, "z3", "v1", "2021", "10", "01")).toDF(schemaFields: _*)
 
-        df.write.format("hudi")
-          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-          .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
-          .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
-          .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
-          .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
-          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
-          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
-          .mode(SaveMode.Overwrite)
-          .save(tablePath)
+          df.write.format("hudi")
+            .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+            .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+            .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+            .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
+            .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
+            .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
+            .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+            .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+            .mode(SaveMode.Overwrite)
+            .save(tablePath)
 
-        // register meta to spark catalog by creating table
-        spark.sql(
-          s"""
-             |create table $tableName using hudi
-             |location '$tablePath'
-             | tblproperties (
-             |  primaryKey = 'id',
-             |  orderingFields = 'ts',
-             |  hoodie.clean.commits.retained= '1'
-             | )
-             |""".stripMargin)
+          // register meta to spark catalog by creating table
+          spark.sql(
+            s"""
+               |create table $tableName using hudi
+               |location '$tablePath'
+               | tblproperties (
+               |  primaryKey = 'id',
+               |  orderingFields = 'ts',
+               |  hoodie.clean.commits.retained= '1'
+               | )
+               |""".stripMargin)
 
-        df.write.format("hudi")
-          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-          .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
-          .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
-          .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
-          .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
-          .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
-          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
-          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
-          .mode(SaveMode.Append)
-          .save(tablePath)
+          df.write.format("hudi")
+            .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+            .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+            .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
+            .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
+            .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
+            .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
+            .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
+            .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+            .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+            .mode(SaveMode.Append)
+            .save(tablePath)
 
-        // drop 2021-10-01 partition
-        spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
-        ensureLastCommitIncludesProperSchema(tablePath, schemaFields)
+          // drop 2021-10-01 partition
+          spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
+          ensureLastCommitIncludesProperSchema(tablePath, schemaFields)
 
-        spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
+          spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
 
-        // trigger clean so that partition deletion kicks in.
-        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
-          .collect()
-        ensureLastCommitIncludesProperSchema(tablePath, schemaFields)
+          // trigger clean so that partition deletion kicks in.
+          spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+            .collect()
+          ensureLastCommitIncludesProperSchema(tablePath, schemaFields)
 
-        val cleanMetadata: HoodieCleanMetadata = getLastCleanMetadata(spark, tablePath)
-        val cleanPartitionMeta = new java.util.ArrayList(cleanMetadata.getPartitionMetadata.values()).toArray()
-        var totalDeletedFiles = 0
-        cleanPartitionMeta.foreach(entry =>
-        {
-          totalDeletedFiles += entry.asInstanceOf[HoodieCleanPartitionMetadata].getSuccessDeleteFiles.size()
-        })
-        assertTrue(totalDeletedFiles > 0)
+          val cleanMetadata: HoodieCleanMetadata = getLastCleanMetadata(spark, tablePath)
+          val cleanPartitionMeta = new java.util.ArrayList(cleanMetadata.getPartitionMetadata.values()).toArray()
+          var totalDeletedFiles = 0
+          cleanPartitionMeta.foreach(entry =>
+          {
+            totalDeletedFiles += entry.asInstanceOf[HoodieCleanPartitionMetadata].getSuccessDeleteFiles.size()
+          })
+          assertTrue(totalDeletedFiles > 0)
 
-        // insert data
-        spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
+          // insert data
+          spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
 
-        checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
-          Seq(2, "l4", "v1", "2021", "10", "02")
-        )
+          checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
+            Seq(2, "l4", "v1", "2021", "10", "02")
+          )
 
-        assertResult(false)(existsPath(
-          s"${tmp.getCanonicalPath}/$tableName/year=2021/month=10/day=01"))
+          assertResult(false)(existsPath(
+            s"${tmp.getCanonicalPath}/$tableName/year=2021/month=10/day=01"))
 
-        // show partitions
-        if (hiveStyle) {
-          checkAnswer(s"show partitions $tableName")(Seq("year=2021/month=10/day=02"))
-        } else {
-          checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
+          // show partitions
+          if (hiveStyle) {
+            checkAnswer(s"show partitions $tableName")(Seq("year=2021/month=10/day=02"))
+          } else {
+            checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
+          }
         }
       }
     }
