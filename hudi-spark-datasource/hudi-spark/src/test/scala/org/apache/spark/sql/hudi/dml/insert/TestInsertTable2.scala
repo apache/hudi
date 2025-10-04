@@ -20,11 +20,13 @@
 package org.apache.spark.sql.hudi.dml.insert
 
 import org.apache.hudi.DataSourceWriteOptions.{COW_TABLE_TYPE_OPT_VAL, MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD, RECORDKEY_FIELD, SPARK_SQL_INSERT_INTO_OPERATION, TABLE_TYPE}
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
+import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.client.WriteClientTestUtils
 import org.apache.hudi.common.model.WriteOperationType
+import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient

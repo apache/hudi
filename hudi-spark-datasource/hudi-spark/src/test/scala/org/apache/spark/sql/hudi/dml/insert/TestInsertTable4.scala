@@ -20,7 +20,8 @@
 package org.apache.spark.sql.hudi.dml.insert
 
 import org.apache.hudi.DataSourceWriteOptions.{DROP_INSERT_DUP_POLICY, ENABLE_ROW_WRITER, FAIL_INSERT_DUP_POLICY, INSERT_DROP_DUPS, INSERT_DUP_POLICY, NONE_INSERT_DUP_POLICY, RECORDKEY_FIELD, SPARK_SQL_INSERT_INTO_OPERATION}
-import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
+import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.WriteOperationType
