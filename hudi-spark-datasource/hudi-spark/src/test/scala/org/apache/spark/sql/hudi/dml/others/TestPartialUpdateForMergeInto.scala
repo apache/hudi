@@ -681,7 +681,8 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
   test("Test MergeInto Partial Updates should fail with CUSTOM payload and merge mode") {
     withTempDir { tmp =>
       withSQLConf(
-        "hoodie.index.type" -> "GLOBAL_SIMPLE") {
+        "hoodie.index.type" -> "GLOBAL_SIMPLE",
+        DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key() -> "upsert") {
         val tableName = generateTableName
         spark.sql(
           s"""
