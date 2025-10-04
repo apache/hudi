@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.ddl
 
+import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -1735,7 +1736,8 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Create Table with Same Value for Partition and Precombine") {
-    withSQLConf("hoodie.parquet.small.file.limit" -> "0") {
+    withSQLConf("hoodie.parquet.small.file.limit" -> "0",
+      DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key -> "upsert") {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           // simple partition path
