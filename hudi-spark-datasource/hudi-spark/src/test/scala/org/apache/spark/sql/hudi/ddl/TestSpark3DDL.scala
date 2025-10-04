@@ -734,7 +734,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
 
   test("Test alter column with complex schema") {
     withTempDir { tmp =>
-      withSQLConf(s"${DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION}" -> "upsert",
+      withSQLConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key -> "upsert",
         "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true",
         "hoodie.schema.on.read.enable" -> "true",
         "spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
