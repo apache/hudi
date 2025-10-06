@@ -516,7 +516,7 @@
       <id>m1-mac</id>
       <properties>
         <dockerCompose.file>
-          ${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark244_mac_aarch64.yml
+          ${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark353_arm64.yml
         </dockerCompose.file>
       </properties>
       <activation>
