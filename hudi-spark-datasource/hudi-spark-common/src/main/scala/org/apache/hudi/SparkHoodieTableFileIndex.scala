@@ -35,6 +35,7 @@ import org.apache.hudi.internal.schema.utils.Conversions
 import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.util.JFunction
+
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
@@ -48,8 +49,10 @@ import org.apache.spark.sql.types.{ByteType, DateType, IntegerType, LongType, Sh
 import org.slf4j.LoggerFactory
 
 import javax.annotation.concurrent.NotThreadSafe
+
 import java.lang.reflect.{Array => JArray}
 import java.util.Collections
+
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 import scala.util.{Success, Try}
@@ -251,11 +254,13 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
             BoundReference(index, partitionSchema(index).dataType, nullable = true)
         }
         val boundPredicate: BasePredicate = try {
-          // Standard OSS Spark usage (1-arg constructor)
-          InterpretedPredicate(transformedPredicate)
+          // Try using 1-arg constructor via reflection
+          val clazz = Class.forName("org.apache.spark.sql.catalyst.expressions.InterpretedPredicate")
+          val ctor = clazz.getConstructor(classOf[Expression])
+          ctor.newInstance(transformedPredicate).asInstanceOf[BasePredicate]
         } catch {
           case _: NoSuchMethodException | _: IllegalArgumentException =>
-            // Runtime fallback for Databricks (2-arg constructor via reflection)
+            // Fallback: Try using 2-arg constructor
             val clazz = Class.forName("org.apache.spark.sql.catalyst.expressions.InterpretedPredicate")
             val ctor = clazz.getConstructor(classOf[Expression], classOf[Boolean])
             ctor.newInstance(transformedPredicate, java.lang.Boolean.FALSE)
