@@ -84,10 +84,8 @@ The new table property `hoodie.table.partial.update.mode=<value>` now controls h
 
 | Mode              | Description                                                     |
 | ----------------- | --------------------------------------------------------------- |
-| `KEEP_VALUES`     | (default) Use value from previous record if column is missing   |
-| `FILL_DEFAULTS`   | Fill missing columns with default values from Avro schema       |
 | `IGNORE_DEFAULTS` | Skip update if current record has schema default value          |
-| `IGNORE_MARKERS`  | Skip update if current record matches a configured marker value |
+| `FILL_UNAVAILABLE`  | Skip update if current record matches a configured marker value |
 
 This config supports:
 
@@ -104,7 +102,7 @@ This behavior is now decoupled from merge mode, and supports all ingestion sourc
 *(Expanded with context on industry usage and reasoning)*
 
 | Payload Class                               | Merge Mode + Partial Update Mode           | Changes Proposed                                                                                                                                                                                                                                                                                   | Recommendations to User                                                                | Behavior / Notes                                                                                                 |
-| ------------------------------------------- | ------------------------------------------ |----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
+|---------------------------------------------| ------------------------------------------ |----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
 | `OverwriteWithLatestAvroPayload`            | `COMMIT_TIME_ORDERING`                     | Upgrade process sets right merge mode and add legacy payload class from table config.                                                                                                                                                                                                              | No action                                                                              | Most common for bulk ingest. Removing payload makes delete marker support consistent across COW/MOR.             |
 | `DefaultHoodieRecordPayload`                | `EVENT_TIME_ORDERING`                      | Upgrade process sets right merge mode and remove payload class from table config. Set `hoodie.write.enable.event.time.watermark.in.commit.metadata=true` to produce event time watermarks commit metadata.                                                                                         | No action                                                                              | Default since Hudi 0.5.0; behavior unchanged.                                                                    |
 | `EventTimeAvroPayload`                      | `EVENT_TIME_ORDERING`                      | Set merge mode and remove payload class config                                                                                                                                                                                                                                                     | No action                                                                              | Needed for out-of-order ingestion from Kafka, Pulsar, Flink. Deprecated in favor of `EVENT_TIME_ORDERING`.       |
@@ -116,33 +114,47 @@ This behavior is now decoupled from merge mode, and supports all ingestion sourc
 | `PostgresDebeziumAvroPayload`               | `EVENT_TIME_ORDERING` + `IGNORE_MARKERS`   | a.  Upgrade automatically sets `hoodie.table.partial.update.mode` to `IGNORE_MARKERS`  table property and b. Upgrade automatically sets `hoodie.table.partial.update.custom.marker`  as `__debezium_unavailable_value` c. Rollback any pending commits and trigger full compaction during upgrade. | No action                                                                              | CDC systems like Debezium mark unavailable fields. Full compaction is needed to migrate.                         |
 | `ExpressionPayload`                         | N/A                                        | Leave unchanged                                                                                                                                                                                                                                                                                    | No action                                                                              | Used in `Merge into (...) where` logic in SQL. Will eventually be rewritten into a merger.                       |
 | `HoodieMetadataPayload`                     | N/A                                        | An explicit merger class is provided during the upgrade                                                                                                                                                                                                                                            | No action                                                                              | Not impacted. Handles metadata table compactions. Merges handled explicitly for performance and correctness.     |
-
+| `BootstrapRecordPayload`                    | N/A                                        | Stop support and replace with non-payload based `HoodieAvroIndexedRecord` records                                                                                                                                                                                                                  | No action                                                                              | Not impacted.      |
 ---
 
 # Required Changes Highlighted
 
-## Reader Side
+## Reader Side Changes
 * Create an enum class named `PartialUpdateMode` for partial update modes defined above as follows.
   ```java
   public enum PartialUpdateMode {
-    NONE, KEEP_VALUES, FILL_DEFAULTS, IGNORE_DEFAULTS, IGNORE_MARKERS
+    FILL_DEFAULTS, FILL_UNAVAILABLE
   }
   ```
-  The mode `NONE` represents no partial update should be attempted, which is introduced for lower table versions. 
-* Introduce a new table configuration `hoodie.table.partial.update.mode` for partial update mode, whose default value is `NONE`.
-* Introduce a new table configuration `hoodie.table.merge.properties` to collect a list of configurations that could be  
-  used during merging for above mentioned payloads. E.g., for `PostgresDebeziumAvroPayload`, \
-  `hoodie.table.merge.properties="hoodie.table.partial.update.custom.marker=__debezium_unavailable_value"`.
+* Introduce a new table configuration `hoodie.table.partial.update.mode` for partial update mode with no default value.
+* For specific payload classes deprecated, new configurations should be added into table configurations for merge process for both read and write process.
+  The following are the properties should be set for specific deprecated payloads.
+  | Payload Class                               | Merge properties to deprecate during read and write |
+  |---------------------------------------------| --------------------------------------------------- |
+  | `PostgresDebeziumAvroPayload`               | `hoodie.record.merge.property.hoodie.table.partial.update.custom.marker=__debezium_unavailable_value`, `hoodie.record.merge.property.hoodie.payload.delete.field=_change_operation_type`, `hoodie.record.merge.property.hoodie.payload.delete.marker=d`, `hoodie.table.ordering.fields=_event_lsn` |
+  | `MySqlDebeziumAvroPayload`                  | `hoodie.record.merge.property.hoodie.payload.delete.field=_change_operation_type`, `hoodie.record.merge.property.hoodie.payload.delete.marker=d`, `hoodie.table.ordering.fields=_event_bin_file,_event_pos` |
+  | `AWSDmsAvroPayload`                         | `hoodie.record.merge.property.hoodie.payload.delete.field=Op`, `hoodie.record.merge.property.hoodie.payload.delete.marker=D` |
 * `BufferedRecordMergerFactory` generates two more partial-update related mergers, **CommitTimeBufferedRecordPartialUpdateMerger**,
   **EventTimeBufferedRecordPartialUpdateMerger**, which are used for partial update modes for `COMMIT_TIME_ORDERING` and `EVENT_TIME_ORDERING` merge modes.
 * Class `PartialUpdateStrategy` implements the detailed logics for all partial update modes, which is wrapped into above
   mergers. We can employ a branching to trigger a specific partial logic based on the input partial update mode due to
   simplicity of the implementation.
+* API of `HoodieRecordMerger` is updated to make deletion behavior consistent for custom record mergers (See [RFC-101](https://github.com/apache/hudi/pull/13865)). \
+  E.g., `spark.write.format("hudi").option(HoodieWriteConfig.RECORD_MERGE_MODE.key, "COMMIT_TIME_ORDERING").save(..).` would fail if `EVENT_TIME_ORDERING` merge mode is set during table creation.
 
-## Writer Side
-
+## Writer Side Changes
+* `FileGroupReaderBasedMergeHandle` is extended to handle record merging during writes such that the merge logic becomes consistent across read and write for both COW and MOR tables. (See PR [#13669](https://github.com/apache/hudi/pull/13699))
+* `BufferedRecordMerger` replaces the existing `HoodieRecord` based `HoodieRecordMerger.merge()` api within deduplication, global indexing, and Spark CDC iterator. (See PR: [#13694](https://github.com/apache/hudi/pull/13694/), [#13600](https://github.com/apache/hudi/pull/13600))
+* `HoodieAvroIndexedRecord` is extended to replace payload based `HoodeAvroRecord` during writes when payload class is not needed or payload class is one of the deprecated. (See PR: [#13726](https://github.com/apache/hudi/pull/13726)) 
+* `SerializableIndexedRecord` is introduced to manage the serialization of the data in order to match the read performance on a single node. Meanwhile, Kryo improves the serialization throughput by 90%+. (See PR: [#13686](https://github.com/apache/hudi/pull/13686))
+* Mutating merge properties including merge mode, merge strategy id and payload class during writes is forbidden, such that the merging behavior is kept consistent for tables. (See PR: [#13959](https://github.com/apache/hudi/pull/13959))
+* Support `event_time` metadata tracking. (See PR: [#13517](https://github.com/apache/hudi/pull/13517))
+* The table properties created for these deprecated payloads are passed to writers properly. (See PR: [#13738](https://github.com/apache/hudi/pull/13738))
 
 ## Upgrade/Downgrade Support
+* During the creation of a version 9 table, the proper table configs are generated for tables with deprecated payload class. (See PR: [#13615](https://github.com/apache/hudi/pull/13615))
+* During the upgrade from v8 to v9, based on the spec in above `Payload Migration Table`, the table configs are upgraded accordingly.
+* Config `hoodie.record.merge.strategy.id` is removed from table configs when the merge mode is not `CUSTOM`. (See PR [#13950](https://github.com/apache/hudi/pull/13950))
 
 ---
 
@@ -151,10 +163,9 @@ This behavior is now decoupled from merge mode, and supports all ingestion sourc
 ### How do we support old Hudi version readers?
 
 To maintain compatibility with older table versions and readers:
-
-* Writers will retain the existing `hoodie.payload.class` property in metadata
-* New properties (`hoodie.write.partial.update.mode`) will be added
-* Table version will be bumped to 9 only when necessary (e.g., watermark handling, partial update logic)
+* Regarding table configs, tables in version 9 can be safely downgraded to version 6 or 8, such that their table configurations \
+  should exactly match these in version 6 or 8.
+* Regarding data files, there are no format changes; so there is no compatibility issues with version 6 and 8.
 
 This enables:
 
