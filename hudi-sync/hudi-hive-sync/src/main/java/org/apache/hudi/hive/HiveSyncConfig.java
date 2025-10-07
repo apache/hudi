@@ -88,6 +88,14 @@ public class HiveSyncConfig extends HoodieSyncConfig {
           + "filters exceed this size, will directly try to fetch all partitions between the min/max."
           + "In case of glue metastore, this value should be reduced because it has a filter length limit.");
 
+  public static final ConfigProperty<Boolean> RECREATE_HIVE_TABLE_ON_ERROR = ConfigProperty
+      .key("hoodie.datasource.hive_sync.recreate_table_on_error")
+      .defaultValue(false)
+      .sinceVersion("0.14.0")
+      .markAdvanced()
+      .withDocumentation("Hive sync may fail if the Hive table exists with partitions differing from the Hoodie table or if schema evolution if not supported by Hive."
+          + "Enabling this configuration will drop and create the table to match the Hoodie config");
+
   public static String getBucketSpec(String bucketCols, int bucketNum) {
     return "CLUSTERED BY (" + bucketCols + " INTO " + bucketNum + " BUCKETS";
   }
