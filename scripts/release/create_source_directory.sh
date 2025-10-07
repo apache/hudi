@@ -26,4 +26,5 @@ rsync -a \
   --exclude "docs/content" --exclude ".rubydeps" \
   --exclude "rfc" \
   --exclude "docker/images" \
+  --exclude "hudi-notebooks/notebooks/images" \
   . $1
