@@ -44,11 +44,10 @@ case class HoodieBootstrapSplit(dataFile: PartitionedFile,
 
 case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
                                    private val userSchema: Option[StructType],
-                                   private val globPaths: Seq[StoragePath],
                                    override val metaClient: HoodieTableMetaClient,
                                    override val optParams: Map[String, String],
                                    private val prunedDataSchema: Option[StructType] = None)
-  extends BaseHoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, optParams, prunedDataSchema) {
+  extends BaseHoodieBootstrapRelation(sqlContext, userSchema, metaClient, optParams, prunedDataSchema) {
 
   override type Relation = HoodieBootstrapRelation
 
@@ -88,7 +87,6 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
  */
 abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
                                            private val userSchema: Option[StructType],
-                                           private val globPaths: Seq[StoragePath],
                                            override val metaClient: HoodieTableMetaClient,
                                            override val optParams: Map[String, String],
                                            private val prunedDataSchema: Option[StructType] = None)
@@ -101,7 +99,7 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
   override lazy val mandatoryFields: Seq[String] = Seq.empty
 
   protected def getFileSlices(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSlice] = {
-    listLatestFileSlices(globPaths, partitionFilters, dataFilters)
+    listLatestFileSlices(partitionFilters, dataFilters)
   }
 
   protected def createFileSplit(fileSlice: FileSlice, dataFile: PartitionedFile, skeletonFile: Option[PartitionedFile]): FileSplit
