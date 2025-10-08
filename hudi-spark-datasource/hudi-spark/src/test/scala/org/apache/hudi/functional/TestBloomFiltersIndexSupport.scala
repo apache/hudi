@@ -31,21 +31,20 @@ import org.apache.hudi.common.util.hash.{FileIndexID, PartitionIndexID}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.hudi.util.{JFunction, JavaConversions}
+import org.apache.hudi.util.{JavaConversions, JFunction}
 
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
 import org.apache.spark.sql.functions.{col, not}
 import org.apache.spark.sql.types.StringType
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
 
-import scala.collection.{JavaConverters, mutable}
+import scala.collection.{mutable, JavaConverters}
 import scala.collection.JavaConverters._
 
 class TestBloomFiltersIndexSupport extends HoodieSparkClientTestBase {
