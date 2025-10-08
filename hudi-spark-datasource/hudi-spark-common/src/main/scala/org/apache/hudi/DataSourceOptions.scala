@@ -89,6 +89,7 @@ object DataSourceReadOptions {
   @Deprecated
   val READ_PRE_COMBINE_FIELD = HoodieWriteConfig.PRECOMBINE_FIELD_NAME
 
+  @Deprecated
   val ENABLE_HOODIE_FILE_INDEX: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.file.index.enable")
     .defaultValue(true)
