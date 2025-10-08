@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[22844],{45485:a=>{a.exports=JSON.parse('{"tag":{"label":"min","permalink":"/blog/tags/min","allTagsPath":"/blog/tags","count":1,"unlisted":false},"listMetadata":{"permalink":"/blog/tags/min","page":1,"postsPerPage":12,"totalPages":1,"totalCount":1,"blogDescription":"Blog","blogTitle":"Blogs List Page"}}')}}]);

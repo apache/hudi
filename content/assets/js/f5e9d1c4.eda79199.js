@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[93438],{19678:a=>{a.exports=JSON.parse('{"tag":{"label":"mor","permalink":"/videos/tags/mor","allTagsPath":"/videos/tags","count":7,"unlisted":false},"listMetadata":{"permalink":"/videos/tags/mor","page":1,"postsPerPage":10,"totalPages":1,"totalCount":7,"blogDescription":"Blog","blogTitle":"Blog"}}')}}]);
