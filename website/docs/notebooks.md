@@ -2,7 +2,7 @@
 title: "Notebooks"
 keywords: [ hudi, notebooks]
 toc: true
-last_modified_at: 2025-10-01T14:13:57+08:00
+last_modified_at: 2025-10-09T19:13:57+08:00
 ---
 
 Get hands-on with Apache Hudi using interactive notebooks!
@@ -27,7 +27,7 @@ All you need is a cloned copy of the Hudi repository and Docker installed on you
     ```
 
 ### Meet Your Notebooks
-#### 1 - Getting Started with Apache Hudi: A Hands-On Guide to CRUD Operations - <a href="/notebooks/01-crud-operations.html" target="_blank">preview</a>
+#### 1 - Getting Started with Apache Hudi: A Hands-On Guide to CRUD Operations
 This notebook is a beginner friendly, practical guide to working with Apache Hudi using PySpark. It walks you through the essential CRUD operations (Create, Read, Update, Delete) on Hudi tables, while also helping you understand key table types such as Copy-On-Write (COW) and Merge-On-Read (MOR).
 
 For storage, we use MinIO as an S3-compatible backend, simulating a modern datalake setup.
@@ -38,7 +38,7 @@ For storage, we use MinIO as an S3-compatible backend, simulating a modern datal
 - Reading data using snapshot and incremental queries
 - How Hudi handles upserts and deletes
 
-#### 2 - Deep Dive into Apache Hudi Table & Query Types: Snapshot, RO, Incremental, Time Travel, CDC - <a href="/notebooks/02-query-types.html" target="_blank">preview</a>
+#### 2 - Deep Dive into Apache Hudi Table & Query Types: Snapshot, RO, Incremental, Time Travel, CDC
 This notebook is your hands-on guide to mastering Apache Hudi's advanced query capabilities. You will explore practical examples of various read modes such as Snapshot, Read-Optimized (RO), Incremental, Time Travel, and Change Data Capture (CDC) so you can understand when and how to use each for building efficient, real-world data pipelines.
 
 **What you will learn:**
@@ -47,7 +47,7 @@ This notebook is your hands-on guide to mastering Apache Hudi's advanced query c
 - Querying historical data with Time Travel
 - Capturing changes with CDC for downstream consumption
 
-#### 3 - Implementing Slowly Changing Dimensions (SCD Type 2 & 4) with Apache Hudi - <a href="/notebooks/03-scd-types.html" target="_blank">preview</a>
+#### 3 - Implementing Slowly Changing Dimensions (SCD Type 2 & 4) with Apache Hudi
 Dive into this practical guide on implementing two key data warehousing patterns - Slowly Changing Dimensions (SCD) Type 2 and Type 4 using Apache Hudi.
 
 SCDs help track changes in dimension data over time without losing historical context. Instead of overwriting records, these patterns let you maintain a full history of data changes. Leveraging Hudi's upsert capabilities and rich metadata, this notebook simplifies what's traditionally a complex process.
@@ -56,19 +56,19 @@ SCDs help track changes in dimension data over time without losing historical co
 - SCD Type 2: How to track changes by adding new rows to your dimension tables
 - SCD Type 4: How to manage historical data in a separate history table
 
-#### 4 - Schema Evolution with Apache Hudi: Concepts and Practical Use - <a href="/notebooks/04-schema-evolution.html" target="_blank">preview</a>
+#### 4 - Schema Evolution with Apache Hudi: Concepts and Practical Use
 In real-world data lake environments, schema changes are not just common but they are expected. Whether you are adding new data attributes, adjusting existing types, or refactoring nested structures, it's essential that your pipelines adapt without introducing instability.
 
 Apache Hudi supports powerful schema evolution capabilities that help you maintain schema flexibility while ensuring data consistency. In this notebook, we will explore how Hudi enables safe and efficient schema changes, both at write time and read time.
 
 **What you will learn:**
-1. Schema Evolution on Write:
+- Schema Evolution on Write:
 Apache Hudi allows safe, backward-compatible schema changes during write operations. This ensures that you can evolve your schema without rewriting existing data or breaking your ingestion pipelines.
 
-2. Schema Evolution on Read (Experimental Feature):
-Hudi also supports experimental schema evolution during reads, enabling more flexible transformations that don't require rewriting the dataset.
+- Schema Evolution on Read:
+Hudi also supports schema evolution during reads, enabling more flexible transformations that don't require rewriting the dataset.
 
-#### 5 - A Hands-on Guide to Hudi SQL Procedures - <a href="/notebooks/05-mastering-sql-procedures.html" target="_blank">preview</a>
+#### 5 - A Hands-on Guide to Hudi SQL Procedures
 Apache Hudi provides a suite of powerful built-in procedures that can be executed directly from Spark SQL using the familiar CALL syntax.
 
 These procedures enable you to perform advanced table maintenance, auditing, and data management tasks without writing any custom code or scripts. Whether you are compacting data, cleaning old versions, or retrieving metadata, Hudi SQL procedures make it easy and SQL-friendly.
