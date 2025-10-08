@@ -1,0 +1,93 @@
+#!/bin/bash
+
+#  Licensed to the Apache Software Foundation (ASF) under one
+#  or more contributor license agreements.  See the NOTICE file
+#  distributed with this work for additional information
+#  regarding copyright ownership.  The ASF licenses this file
+#  to you under the Apache License, Version 2.0 (the
+#  "License"); you may not use this file except in compliance
+#  with the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+# limitations under the License.
+
+services:
+  spark-hudi:
+    image: apachehudi/spark-hudi:latest
+    container_name: spark-hudi
+    depends_on:
+      - hive-metastore
+      - minio
+    ports:
+      - "8888:8888"   # Jupyter
+      - "4040:4040"   # Spark UI
+      - "7077:7077"   # Spark Master
+      - "8080:8080"   # Spark Master UI
+      - "8081:8081"   # Spark Worker UI
+      - "18080:18080" # Spark History Server UI
+    volumes:
+      - ./data/spark-events:/opt/spark/spark-events
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - AWS_ENDPOINT_URL=http://minio:9000
+      - AWS_ALLOW_HTTP=true
+    networks:
+      - hudi-datalake
+
+  minio:
+    image: 'minio/minio:latest'
+    container_name: minio
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password
+      - MINIO_DOMAIN=minio
+    ports:
+      - "9000:9000"   # S3 API Port
+      - "9001:9001"   # MinIO Console UI
+    volumes:
+      - ./data/minio:/data
+    healthcheck:
+      test: bash -c ':> /dev/tcp/127.0.0.1/9000' || exit 1
+    networks:
+      hudi-datalake:
+        aliases:
+          - warehouse.minio
+
+  mc:
+    image: minio/mc:latest
+    container_name: mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c " 
+      until (/usr/bin/mc config host add minio http://minio:9000 admin password) do echo '...waiting...' && sleep 1; done; 
+      /usr/bin/mc mb minio/warehouse;
+      /usr/bin/mc policy set public minio/warehouse;
+      tail -f /dev/null
+      "
+    networks:
+      - hudi-datalake
+
+  hive-metastore:
+    image: apachehudi/hive:latest
+    container_name: hive-metastore
+    command: /opt/hive/bin/hive --service metastore
+    environment:
+      SERVICE_NAME: metastore
+    ports:
+      - "9083:9083"
+    networks:
+      - hudi-datalake
+
+networks:
+  hudi-datalake:
+    name: hudi-datalake
