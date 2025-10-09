@@ -72,6 +72,7 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .key("hoodie.bootstrap.data.queries.only")
       .defaultValue("false")
       .markAdvanced()
+      .deprecatedAfter("1.2.0")
       .sinceVersion("0.14.0")
       .withDocumentation("Improves query performance, but queries cannot use hudi metadata fields");
 
