@@ -23,55 +23,15 @@ import org.apache.hudi.storage.StoragePathInfo
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
-import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.PredicateHelper
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.sources.{And, Filter, Or}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.vectorized.ColumnarBatch
-
-import scala.collection.JavaConverters._
 
 object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
-
-
-  /**
-   * Wrapper for `buildReaderWithPartitionValues` of [[ParquetFileFormat]] handling [[ColumnarBatch]],
-   * when Parquet's Vectorized Reader is used
-   *
-   * TODO move to HoodieBaseRelation, make private
-   */
-  private[hudi] def buildHoodieParquetReader(sparkSession: SparkSession,
-                                             dataSchema: StructType,
-                                             partitionSchema: StructType,
-                                             requiredSchema: StructType,
-                                             filters: Seq[Filter],
-                                             options: Map[String, String],
-                                             hadoopConf: Configuration,
-                                             appendPartitionValues: Boolean = false): PartitionedFile => Iterator[InternalRow] = {
-    val parquetFileFormat: ParquetFileFormat = sparkAdapter.createLegacyHoodieParquetFileFormat(appendPartitionValues).get
-    val readParquetFile: PartitionedFile => Iterator[Any] = parquetFileFormat.buildReaderWithPartitionValues(
-      sparkSession = sparkSession,
-      dataSchema = dataSchema,
-      partitionSchema = partitionSchema,
-      requiredSchema = requiredSchema,
-      filters = if (appendPartitionValues) getNonPartitionFilters(filters, dataSchema, partitionSchema) else filters,
-      options = options,
-      hadoopConf = hadoopConf
-    )
-
-    file: PartitionedFile => {
-      val iter = readParquetFile(file)
-      iter.flatMap {
-        case r: InternalRow => Seq(r)
-        case b: ColumnarBatch => b.rowIterator().asScala
-      }
-    }
-  }
 
   def splitFiles(sparkSession: SparkSession,
                  file: StoragePathInfo,
