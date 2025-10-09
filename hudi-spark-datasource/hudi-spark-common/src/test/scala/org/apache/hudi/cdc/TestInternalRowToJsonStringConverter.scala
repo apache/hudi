@@ -18,7 +18,7 @@
 
 package org.apache.hudi.cdc
 
-import org.apache.hudi.HoodieTableSchema
+import org.apache.hudi.incremental.HoodieTableSchema
 import org.apache.hudi.internal.schema.InternalSchema
 
 import org.apache.spark.sql.catalyst.InternalRow
