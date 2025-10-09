@@ -95,7 +95,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     this.metaClient = metaClient;
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
-    LOG.info("Loaded instants upto : {}", lastInstant());
+    LOG.debug("Loaded instants upto : {}", lastInstant());
   }
 
   public ActiveTimelineV2(HoodieTableMetaClient metaClient) {
