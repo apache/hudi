@@ -614,6 +614,7 @@
               <!-- local files not in version control -->
               <exclude>**/*.iml</exclude>
               <exclude>.mvn/**</exclude>
+              <exclude>hudi-trino-plugin/**</exclude>
             </excludes>
           </configuration>
           <executions>
