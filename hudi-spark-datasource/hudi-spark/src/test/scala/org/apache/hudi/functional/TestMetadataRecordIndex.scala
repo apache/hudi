@@ -206,7 +206,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
 
     assertEquals(rowArr.length, recordIndexMap.keySet.size)
     val estimatedFileGroupCount = HoodieTableMetadataUtil.estimateFileGroupCount(
-      MetadataPartitionType.RECORD_INDEX, rowArr.length, 48,
+      MetadataPartitionType.RECORD_INDEX, () => rowArr.length, 48,
       writeConfig.getRecordIndexMinFileGroupCount, writeConfig.getRecordIndexMaxFileGroupCount,
       writeConfig.getRecordIndexGrowthFactor, writeConfig.getRecordIndexMaxFileGroupSizeBytes)
     assertEquals(estimatedFileGroupCount, getFileGroupCountForRecordIndex(writeConfig))
