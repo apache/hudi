@@ -58,10 +58,7 @@ object SparkColumnarFileReader {
    * @return trimmed schema that can be safely applied to the data
    */
   def trimSchema(requiredSchema: StructType, dataSchema: StructType): StructType = {
-    trimSchemaInternal(requiredSchema, dataSchema) match {
-      case Some(schema) => schema
-      case None => throw new IllegalStateException("Trimmed schema cannot be empty")
-    }
+    trimSchemaInternal(requiredSchema, dataSchema).getOrElse(requiredSchema)
   }
 
   def trimSchemaInternal(requiredSchema: StructType, dataSchema: StructType): Option[StructType] = {
