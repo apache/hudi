@@ -28,8 +28,7 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.internal.SQLConf;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
@@ -38,11 +37,11 @@ import java.util.Map;
  * Ensure that parquet filters are not being pushed down when they shouldn't be
  */
 @Tag("functional")
+//TODO: Since we got rid of non-fg reader, we might need to increase the validation
 public class TestFiltersInFileGroupReader extends TestBootstrapReadBase {
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testFiltersInFileFormat(boolean mergeUseRecordPositions) {
+  @Test
+  public void testFiltersInFileFormat() {
     this.bootstrapType = "mixed";
     this.dashPartitions = true;
     this.tableType = HoodieTableType.MERGE_ON_READ;
@@ -59,48 +58,46 @@ public class TestFiltersInFileGroupReader extends TestBootstrapReadBase {
         .options(options)
         .mode(SaveMode.Overwrite)
         .save(bootstrapTargetPath);
-    runComparison(mergeUseRecordPositions);
+    runComparison();
 
 
     options = basicOptions();
-    options.put(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key(), String.valueOf(mergeUseRecordPositions));
-    options.put(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), String.valueOf(mergeUseRecordPositions));
+    options.put(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key(), "true");
+    options.put(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), "true");
 
     doUpdate(options, "001");
-    runComparison(mergeUseRecordPositions);
+    runComparison();
 
     doInsert(options, "002");
-    runComparison(mergeUseRecordPositions);
+    runComparison();
 
     doDelete(options, "003");
-    runComparison(mergeUseRecordPositions);
+    runComparison();
   }
 
-  protected void runComparison(boolean mergeUseRecordPositions) {
-    compareDf(createDf(hudiBasePath, true, mergeUseRecordPositions), createDf(hudiBasePath, false, false));
-    compareDf(createDf(bootstrapTargetPath, true, mergeUseRecordPositions), createDf(bootstrapTargetPath, false, false));
-    compareDf(createDf2(hudiBasePath, true, mergeUseRecordPositions), createDf2(hudiBasePath, false, false));
-    compareDf(createDf2(bootstrapTargetPath, true, mergeUseRecordPositions), createDf2(bootstrapTargetPath, false, false));
+  protected void runComparison() {
+    compareDf(createDf(hudiBasePath, true), createDf(hudiBasePath, false));
+    compareDf(createDf(bootstrapTargetPath, true), createDf(bootstrapTargetPath, false));
+    compareDf(createDf2(hudiBasePath, true), createDf2(hudiBasePath, false));
+    compareDf(createDf2(bootstrapTargetPath, true), createDf2(bootstrapTargetPath, false));
   }
 
-  protected Dataset<Row> createDf(String tableBasePath, Boolean fgReaderEnabled, Boolean mergeUseRecordPositions) {
+  protected Dataset<Row> createDf(String tableBasePath, Boolean mergeUseRecordPositions) {
     //The chances of a uuid containing 00 with the 8-4-4-4-12 format is around 90%
     //for bootstrap, _hoodie_record_key is in the skeleton while begin_lat is in the data
     //We have a record key filter so that tests MORs filter pushdown with position based merging
     return sparkSession.read().format("hudi")
-        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), fgReaderEnabled)
         .option(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key(), mergeUseRecordPositions)
         .load(tableBasePath)
         .drop("city_to_state")
         .where("begin_lat > 0.5 and _hoodie_record_key LIKE '%00%'");
   }
 
-  protected Dataset<Row> createDf2(String tableBasePath, Boolean fgReaderEnabled, Boolean mergeUseRecordPositions) {
+  protected Dataset<Row> createDf2(String tableBasePath, Boolean mergeUseRecordPositions) {
     //The chances of a uuid containing 00 with the 8-4-4-4-12 format is around 90%
     //for bootstrap, _hoodie_record_key is in the skeleton while begin_lat is in the data
     //We have a record key filter so that tests MORs filter pushdown with position based merging
     return sparkSession.read().format("hudi")
-        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), fgReaderEnabled)
         .option(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key(), mergeUseRecordPositions)
         .load(tableBasePath)
         .drop("city_to_state")

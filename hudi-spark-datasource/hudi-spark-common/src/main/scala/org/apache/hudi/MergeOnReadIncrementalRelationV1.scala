@@ -50,7 +50,7 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
                                             override val metaClient: HoodieTableMetaClient,
                                             private val userSchema: Option[StructType],
                                             private val prunedDataSchema: Option[StructType] = None)
-  extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, Seq(), userSchema, prunedDataSchema)
+  extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, userSchema, prunedDataSchema)
     with HoodieIncrementalRelationV1Trait with MergeOnReadIncrementalRelation {
 
   override type Relation = MergeOnReadIncrementalRelationV1
@@ -105,7 +105,7 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
       List()
     } else {
       val fileSlices = if (fullTableScan) {
-        listLatestFileSlices(Seq(), partitionFilters, dataFilters)
+        listLatestFileSlices(partitionFilters, dataFilters)
       } else {
         val latestCommit = includedCommits.last.requestedTime
 
@@ -128,7 +128,7 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
       List()
     } else {
       val fileSlices = if (fullTableScan) {
-        listLatestFileSlices(Seq(), partitionFilters, dataFilters)
+        listLatestFileSlices(partitionFilters, dataFilters)
       } else {
         val latestCommit = includedCommits.last.requestedTime
         val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
