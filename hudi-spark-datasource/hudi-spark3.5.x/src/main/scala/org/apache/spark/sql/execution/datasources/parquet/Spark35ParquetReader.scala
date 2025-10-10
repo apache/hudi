@@ -110,6 +110,11 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
     val int96RebaseSpec = DataSourceUtils.int96RebaseSpec(
       footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
 
+    val fileSchema = new ParquetToSparkSchemaConverter(sharedConf).convert(footerFileMetaData.getSchema)
+    val baseSchema = trimSchema(requiredSchema, fileSchema)
+    sharedConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, baseSchema.json)
+    sharedConf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, baseSchema.json)
+
     // Try to push down filters when filter push-down is enabled.
     val pushed = if (enableParquetFilterPushDown) {
       val parquetSchema = footerFileMetaData.getSchema
@@ -205,12 +210,12 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
         new ParquetRecordReader[InternalRow](readSupport)
       }
       val readerWithRowIndexes = ParquetRowIndexUtil.addRowIndexToRecordReaderIfNeeded(reader,
-        requiredSchema)
+        baseSchema)
       val iter = new RecordReaderIterator[InternalRow](readerWithRowIndexes)
       try {
         readerWithRowIndexes.initialize(split, hadoopAttemptContext)
 
-        val fullSchema = toAttributes(requiredSchema) ++ toAttributes(partitionSchema)
+        val fullSchema = toAttributes(baseSchema) ++ toAttributes(partitionSchema)
         val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId)
 
         if (partitionSchema.length == 0) {

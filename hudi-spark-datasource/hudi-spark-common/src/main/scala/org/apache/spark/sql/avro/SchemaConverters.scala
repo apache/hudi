@@ -104,7 +104,7 @@ private[sql] object SchemaConverters {
       case ARRAY =>
         val schemaType = toSqlTypeHelper(avroSchema.getElementType, existingRecordNames)
         SchemaType(
-          ArrayType(schemaType.dataType, containsNull = schemaType.nullable),
+          ArrayType(schemaType.dataType, containsNull = true),
           nullable = false)
 
       case MAP =>
