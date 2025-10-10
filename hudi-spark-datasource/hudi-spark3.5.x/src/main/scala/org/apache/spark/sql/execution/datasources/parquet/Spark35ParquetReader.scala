@@ -91,9 +91,6 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
     val filePath = file.toPath
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
-    val schemaEvolutionUtils = new ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
-      partitionSchema, internalSchemaOpt)
-
     val fileFooter = if (enableVectorizedReader) {
       // When there are vectorized reads, we can avoid reading the footer twice by reading
       // all row groups in advance and filter row groups according to filters that require
@@ -109,6 +106,13 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
       datetimeRebaseModeInRead)
     val int96RebaseSpec = DataSourceUtils.int96RebaseSpec(
       footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
+
+    val fileSchema = new ParquetToSparkSchemaConverter(sharedConf).convert(footerFileMetaData.getSchema)
+    val baseSchema = SparkColumnarFileReader.trimSchema(requiredSchema, fileSchema)
+    sharedConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, baseSchema.json)
+    sharedConf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, baseSchema.json)
+    val schemaEvolutionUtils = new ParquetSchemaEvolutionUtils(sharedConf, filePath, baseSchema,
+      partitionSchema, internalSchemaOpt)
 
     // Try to push down filters when filter push-down is enabled.
     val pushed = if (enableParquetFilterPushDown) {
@@ -205,12 +209,12 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
         new ParquetRecordReader[InternalRow](readSupport)
       }
       val readerWithRowIndexes = ParquetRowIndexUtil.addRowIndexToRecordReaderIfNeeded(reader,
-        requiredSchema)
+        baseSchema)
       val iter = new RecordReaderIterator[InternalRow](readerWithRowIndexes)
       try {
         readerWithRowIndexes.initialize(split, hadoopAttemptContext)
 
-        val fullSchema = toAttributes(requiredSchema) ++ toAttributes(partitionSchema)
+        val fullSchema = toAttributes(baseSchema) ++ toAttributes(partitionSchema)
         val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId)
 
         if (partitionSchema.length == 0) {
