@@ -856,7 +856,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             .load(tablePath)
         oldView.show(5, false)
 
-        val records2 = HoodieTestDataGenerator.recordsToStrings(dataGen.generateInsertsAsPerSchema("002", 100, schema)).asScala.toList
+        val records2 = HoodieTestDataGenerator.recordsToStrings(dataGen.generateUpdatesAsPerSchema("002", 100, schema)).asScala.toList
         val inputD2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
         val updatedStringDf = inputD2.drop("fare").drop("height")
         val checkRowKey = inputD2.select("_row_key").collectAsList().asScala.map(_.getString(0)).head
