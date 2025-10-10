@@ -68,11 +68,13 @@ object SparkColumnarFileReader {
     if (requiredSchema.equals(dataSchema)) {
       Some(requiredSchema)
     } else {
+      var hasAtLeastOneMatch = false
       val fields = requiredSchema.fields.map(field => {
         val dataSchemaFieldOpt = dataSchema.find(_.name.equals(field.name))
         if (dataSchemaFieldOpt.isEmpty) {
-         None
+         Some(field)
         } else {
+          hasAtLeastOneMatch = true
           val dataSchemaField = dataSchemaFieldOpt.get
           field.dataType match {
             case structType: StructType =>
@@ -100,7 +102,7 @@ object SparkColumnarFileReader {
           }
         }
       }).filter(_.isDefined).map(_.get)
-      if (fields.length > 0) {
+      if (hasAtLeastOneMatch && fields.length > 0) {
         Some(StructType(fields))
       } else {
         None

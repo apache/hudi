@@ -91,9 +91,6 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
     val filePath = file.toPath
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
-    val schemaEvolutionUtils = new ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
-      partitionSchema, internalSchemaOpt)
-
     val fileFooter = if (enableVectorizedReader) {
       // When there are vectorized reads, we can avoid reading the footer twice by reading
       // all row groups in advance and filter row groups according to filters that require
@@ -114,6 +111,8 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
     val baseSchema = SparkColumnarFileReader.trimSchema(requiredSchema, fileSchema)
     sharedConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, baseSchema.json)
     sharedConf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, baseSchema.json)
+    val schemaEvolutionUtils = new ParquetSchemaEvolutionUtils(sharedConf, filePath, baseSchema,
+      partitionSchema, internalSchemaOpt)
 
     // Try to push down filters when filter push-down is enabled.
     val pushed = if (enableParquetFilterPushDown) {

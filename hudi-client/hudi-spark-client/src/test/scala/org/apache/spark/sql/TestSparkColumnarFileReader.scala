@@ -74,18 +74,14 @@ class TestSparkColumnarFileReader {
         .add("b", dataNestedField)
         .add("c", dataArrayField)
         .add("d", dataMapField)
-        .add("e", "string")
 
     val trimmedSchema = SparkColumnarFileReader.trimSchema(requiredSchema, dataSchema);
 
-    val expectedNestedField = new StructType().add("nested_b", "string")
-    val expectedArrayField = new ArrayType(expectedNestedField, true)
-    val expectedMapField = new MapType(DataTypes.StringType, expectedNestedField, true)
     val expectedSchema = new StructType()
         .add("a", "string")
-        .add("b", expectedNestedField)
-        .add("c", expectedArrayField)
-        .add("d", expectedMapField)
+        .add("b", requiredNestedField)
+        .add("c", requiredArrayField)
+        .add("d", requiredMapField)
         .add("e", "string")
 
     Assertions.assertEquals(expectedSchema, trimmedSchema)
