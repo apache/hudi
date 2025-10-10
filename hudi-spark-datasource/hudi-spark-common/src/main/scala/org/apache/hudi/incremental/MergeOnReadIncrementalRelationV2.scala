@@ -1,29 +1,32 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
-package org.apache.hudi
+package org.apache.hudi.incremental
 
+import org.apache.hudi.{DataSourceReadOptions, HoodieFileIndex}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.table.timeline.TimelineUtils.{concatTimeline, getCommitMetadata}
+import org.apache.hudi.common.table.timeline.TimelineUtils.getCommitMetadata
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
@@ -32,7 +35,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil.getWritePartitionPaths
 import org.apache.hudi.storage.StoragePathInfo
 
 import org.apache.hadoop.fs.GlobPattern
-import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -51,15 +53,9 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
                                             override val optParams: Map[String, String],
                                             override val metaClient: HoodieTableMetaClient,
                                             private val userSchema: Option[StructType],
-                                            private val prunedDataSchema: Option[StructType] = None,
                                             override val rangeType: RangeType = RangeType.OPEN_CLOSED)
-  extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, Seq(), userSchema, prunedDataSchema)
+  extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema)
     with HoodieIncrementalRelationV2Trait with MergeOnReadIncrementalRelation {
-
-  override type Relation = MergeOnReadIncrementalRelationV2
-
-  override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
-    this.copy(prunedDataSchema = Some(prunedSchema))
 
   override protected def timeline: HoodieTimeline = {
     if (fullTableScan) {
@@ -69,69 +65,19 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
     }
   }
 
-  protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
-                                    tableSchema: HoodieTableSchema,
-                                    requiredSchema: HoodieTableSchema,
-                                    requestedColumns: Array[String],
-                                    filters: Array[Filter]): RDD[InternalRow] = {
-    // The only required filters are ones that make sure we're only fetching records that
-    // fall into incremental span of the timeline being queried
-    val requiredFilters = incrementalSpanRecordFilters
-    val optionalFilters = filters
-    val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
-
-    new HoodieMergeOnReadRDDV2(
-      sqlContext.sparkContext,
-      config = jobConf,
-      sqlConf = sqlContext.sparkSession.sessionState.conf,
-      fileReaders = readers,
-      tableSchema = tableSchema,
-      requiredSchema = requiredSchema,
-      tableState = tableState,
-      mergeType = mergeType,
-      fileSplits = fileSplits,
-      includedInstantTimeSet = Option(includedCommits.map(_.requestedTime).toSet),
-      optionalFilters = optionalFilters,
-      metaClient = metaClient,
-      options = optParams)
-  }
-
-  override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
-    if (includedCommits.isEmpty) {
-      List()
-    } else {
-      val fileSlices = if (fullTableScan) {
-        listLatestFileSlices(Seq(), partitionFilters, dataFilters)
-      } else {
-        val latestCommit = includedCommits.last.requestedTime
-
-        val fsView = new HoodieTableFileSystemView(
-          metaClient, timeline, affectedFilesInCommits)
-
-        val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
-
-        modifiedPartitions.asScala.flatMap { relativePartitionPath =>
-          fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
-        }.toSeq
-      }
-
-      buildSplits(filterFileSlices(fileSlices, globPattern))
-    }
-  }
-
   override def listFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[InternalRow, Seq[FileSlice]] = {
     val slices = if (includedCommits.isEmpty) {
       List()
     } else {
       val fileSlices = if (fullTableScan) {
-        listLatestFileSlices(Seq(), partitionFilters, dataFilters)
+        listLatestFileSlices(partitionFilters, dataFilters)
       } else {
         val latestCommit = includedCommits.last.requestedTime
         val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
         val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
 
         fileIndex.listMatchingPartitionPaths(HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters))
-          .map(p => p.path).filter(p => modifiedPartitions.contains(p))
+          .map(p => p.getPath).filter(p => modifiedPartitions.contains(p))
           .flatMap { relativePartitionPath =>
             fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
           }

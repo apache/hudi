@@ -19,10 +19,11 @@
 
 package org.apache.hudi.cdc
 
-import org.apache.hudi.{AvroConversionUtils, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{AvroConversionUtils, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.cdc.CDCFileGroupIterator.{CDC_OPERATION_DELETE, CDC_OPERATION_INSERT, CDC_OPERATION_UPDATE}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieMetadataConfig, HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieCommonConfig.{DISK_MAP_BITCASK_COMPRESSION_ENABLED, SPILLABLE_DISK_MAP_TYPE}
 import org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH
@@ -36,12 +37,13 @@ import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
 import org.apache.hudi.common.table.log.{HoodieCDCLogRecordIterator, HoodieMergedLogRecordReader}
-import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecordMerger, BufferedRecordMergerFactory, BufferedRecords, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, IteratorMode, UpdateProcessor}
+import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecordMerger, BufferedRecordMergerFactory, BufferedRecords, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, UpdateProcessor}
 import org.apache.hudi.common.table.read.buffer.KeyBasedFileGroupRecordBuffer
 import org.apache.hudi.common.util.{DefaultSizeEstimator, FileIOUtils, HoodieRecordUtils, Option}
 import org.apache.hudi.common.util.collection.ExternalSpillableMap
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.CloseableIteratorListener
+import org.apache.hudi.incremental.HoodieTableSchema
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 
 import org.apache.avro.Schema
@@ -64,6 +66,12 @@ import java.util.stream.Collectors
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+
+/**
+ * The split that will be processed by spark task.
+ * The [[changes]] should be sorted first.
+ */
+case class HoodieCDCFileGroupSplit(changes: Array[HoodieCDCFileSplit])
 
 class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
                            metaClient: HoodieTableMetaClient,
@@ -342,7 +350,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
         // no real record is deleted, just ignore.
       } else {
         // there is a real record deleted.
-        recordToLoad.update(0, CDCRelation.CDC_OPERATION_DELETE)
+        recordToLoad.update(0, CDC_OPERATION_DELETE)
         recordToLoad.update(2, convertBufferedRecordToJsonString(existingRecordOpt.get))
         recordToLoad.update(3, null)
         loaded = true
@@ -351,7 +359,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       val existingRecordOpt = beforeImageRecords.get(logRecord.getRecordKey)
       if (existingRecordOpt.isEmpty) {
         // a new record is inserted.
-        recordToLoad.update(0, CDCRelation.CDC_OPERATION_INSERT)
+        recordToLoad.update(0, CDC_OPERATION_INSERT)
         recordToLoad.update(2, null)
         recordToLoad.update(3, convertBufferedRecordToJsonString(logRecord))
         // insert into beforeImageRecords
@@ -362,7 +370,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
         val existingRecord = existingRecordOpt.get
         val mergeRecord = merge(existingRecord, logRecord)
         if (existingRecord != mergeRecord) {
-          recordToLoad.update(0, CDCRelation.CDC_OPERATION_UPDATE)
+          recordToLoad.update(0, CDC_OPERATION_UPDATE)
           recordToLoad.update(2, convertBufferedRecordToJsonString(existingRecord))
           recordToLoad.update(3, convertBufferedRecordToJsonString(mergeRecord))
           // update into beforeImageRecords
@@ -451,11 +459,11 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     recordToLoad = currentCDCFileSplit.getCdcInferCase match {
       case BASE_FILE_INSERT =>
         InternalRow.fromSeq(Seq(
-          CDCRelation.CDC_OPERATION_INSERT, convertToUTF8String(currentInstant),
+          CDC_OPERATION_INSERT, convertToUTF8String(currentInstant),
           null, null))
       case BASE_FILE_DELETE =>
         InternalRow.fromSeq(Seq(
-          CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant),
+          CDC_OPERATION_DELETE, convertToUTF8String(currentInstant),
           null, null))
       case LOG_FILE =>
         InternalRow.fromSeq(Seq(
@@ -467,7 +475,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
           null, null))
       case REPLACE_COMMIT =>
         InternalRow.fromSeq(Seq(
-          CDCRelation.CDC_OPERATION_DELETE, convertToUTF8String(currentInstant),
+          CDC_OPERATION_DELETE, convertToUTF8String(currentInstant),
           null, null))
     }
   }
@@ -585,3 +593,10 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     }
   }
 }
+
+object CDCFileGroupIterator {
+  val CDC_OPERATION_DELETE: UTF8String = UTF8String.fromString(DELETE.getValue)
+  val CDC_OPERATION_INSERT: UTF8String = UTF8String.fromString(INSERT.getValue)
+  val CDC_OPERATION_UPDATE: UTF8String = UTF8String.fromString(UPDATE.getValue)
+}
+

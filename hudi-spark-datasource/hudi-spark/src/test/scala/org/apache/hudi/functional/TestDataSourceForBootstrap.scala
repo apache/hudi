@@ -135,7 +135,7 @@ class TestDataSourceForBootstrap {
     assert(!fs.exists(new Path(basePath, ".hoodie/.temp/00000000000001")))
 
     // Read bootstrapped table and verify count using glob path
-    val hoodieROViewDF1 = spark.read.format("hudi").load(basePath + "/*")
+    val hoodieROViewDF1 = spark.read.format("hudi").load(basePath)
     assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDF1)).collectAsList())
 
     // Read bootstrapped table and verify count using Hudi file index
@@ -160,7 +160,7 @@ class TestDataSourceForBootstrap {
     assertEquals(1, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, commitInstantTime1).size())
 
     // Read table after upsert and verify count using glob path
-    val hoodieROViewDF3 = spark.read.format("hudi").load(basePath + "/*")
+    val hoodieROViewDF3 = spark.read.format("hudi").load(basePath)
     assertEquals(numRecords, hoodieROViewDF3.count())
     assertEquals(numRecordsUpdate, hoodieROViewDF3.filter(s"timestamp == $updateTimestamp").count())
     // Read with base path using Hudi file index
@@ -218,7 +218,7 @@ class TestDataSourceForBootstrap {
     }
 
     // Read bootstrapped table and verify count
-    val hoodieROViewDF1 = spark.read.options(readOpts).format("hudi").load(basePath + "/*")
+    val hoodieROViewDF1 = spark.read.options(readOpts).format("hudi").load(basePath)
     assertEquals(expectedDF.collectAsList(), sort(dropMetaCols(hoodieROViewDF1)).collectAsList())
 
     // Read bootstrapped table and verify count using Hudi file index
@@ -247,7 +247,7 @@ class TestDataSourceForBootstrap {
     assertEquals(1, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, commitInstantTime1).size())
 
     // Read table after upsert and verify count using glob path
-    val hoodieROViewDF3 = spark.read.format("hudi").load(basePath + "/*")
+    val hoodieROViewDF3 = spark.read.format("hudi").load(basePath)
     assertEquals(numRecords, hoodieROViewDF3.count())
     assertEquals(numRecordsUpdate, hoodieROViewDF3.filter(s"timestamp == $updateTimestamp").count())
     // Read table after upsert and verify count using Hudi file index
@@ -284,7 +284,7 @@ class TestDataSourceForBootstrap {
     val commitCompletionTime1 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
 
     // Read bootstrapped table and verify count using glob path
-    val hoodieROViewDF1 = spark.read.format("hudi").load(basePath + "/*")
+    val hoodieROViewDF1 = spark.read.format("hudi").load(basePath)
     assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDF1)).collectAsList())
 
     // Read with base path using Hudi file index
@@ -303,7 +303,7 @@ class TestDataSourceForBootstrap {
 
     // Read table after upsert and verify the updated value
     assertEquals(1, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, commitInstantTime1).size())
-    val hoodieROViewDF2 = spark.read.format("hudi").load(basePath + "/*")
+    val hoodieROViewDF2 = spark.read.format("hudi").load(basePath)
     hoodieROViewDF2.collect()
     assertEquals(updatedVerificationVal, hoodieROViewDF2.filter(col("_row_key") === verificationRowKey).select(verificationCol).first.getString(0))
 
@@ -324,7 +324,7 @@ class TestDataSourceForBootstrap {
     assertEquals(2, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, commitInstantTime1).size())
 
     // Read table after upsert and verify count using glob paths
-    val hoodieROViewDF3 = spark.read.format("hudi").load(basePath + "/*")
+    val hoodieROViewDF3 = spark.read.format("hudi").load(basePath)
     assertEquals(numRecords, hoodieROViewDF3.count())
     assertEquals(numRecordsUpdate, hoodieROViewDF3.filter(s"timestamp == $updateTimestamp").count())
     // Read table after upsert and verify count using Hudi file index
@@ -386,7 +386,7 @@ class TestDataSourceForBootstrap {
     val hoodieROViewDF2 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key,
         DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-      .load(basePath + "/*")
+      .load(basePath)
     assertEquals(numRecords, hoodieROViewDF2.count())
 
     // Test query without "*" for MOR READ_OPTIMIZED
@@ -454,7 +454,7 @@ class TestDataSourceForBootstrap {
     val hoodieROViewDF2 = spark.read.format("hudi")
                             .option(DataSourceReadOptions.QUERY_TYPE.key,
                               DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-                            .load(basePath + "/*")
+                            .load(basePath)
     assertEquals(numRecords, hoodieROViewDF2.count())
     assertEquals(numRecordsUpdate, hoodieROViewDF2.filter(s"timestamp == $updateTimestamp").count())
     // Test query without "*" for MOR READ_OPTIMIZED
@@ -494,7 +494,7 @@ class TestDataSourceForBootstrap {
     val hoodieROViewDF1 = spark.read.format("hudi")
                             .option(DataSourceReadOptions.QUERY_TYPE.key,
                               DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-                            .load(basePath + "/*")
+                            .load(basePath)
 
     assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDF1)).collectAsList())
 
@@ -587,12 +587,10 @@ class TestDataSourceForBootstrap {
     assertEquals(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS, commitInstantTime1)
 
     // Read bootstrapped table and verify count
-    val hoodieROViewDF1 = spark.read.format("hudi")
-      .option(HoodieBootstrapConfig.DATA_QUERIES_ONLY.key(), "true").load(basePath + "/*")
+    val hoodieROViewDF1 = spark.read.format("hudi").load(basePath)
     assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDF1)).collectAsList())
 
-    val hoodieROViewDFWithBasePath = spark.read.format("hudi")
-      .option(HoodieBootstrapConfig.DATA_QUERIES_ONLY.key(), "true").load(basePath)
+    val hoodieROViewDFWithBasePath = spark.read.format("hudi").load(basePath)
     assertEquals(sort(sourceDF).collectAsList(), sort(dropMetaCols(hoodieROViewDFWithBasePath)).collectAsList())
 
     // Perform upsert
@@ -612,8 +610,7 @@ class TestDataSourceForBootstrap {
     assertEquals(1, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, commitInstantTime1).size())
 
     // Read table after upsert and verify count
-    val hoodieROViewDF2 = spark.read.format("hudi")
-      .option(HoodieBootstrapConfig.DATA_QUERIES_ONLY.key(), "true").load(basePath + "/*")
+    val hoodieROViewDF2 = spark.read.format("hudi").load(basePath)
     assertEquals(numRecords, hoodieROViewDF2.count())
     assertEquals(numRecordsUpdate, hoodieROViewDF2.filter(s"timestamp == $updateTimestamp").count())
 

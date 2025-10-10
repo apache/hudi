@@ -21,7 +21,7 @@ import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieFileIndex.{collectReferencedColumns, convertFilterForTimestampKeyGenerator, getConfigProperties, DataSkippingFailureMode}
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
@@ -358,21 +358,10 @@ case class HoodieFileIndex(spark: SparkSession,
   }
 
   /**
-   * In the fast bootstrap read code path, it gets the path info for the bootstrap base file instead of
-   * skeleton file. Returns path info for the base file if available.
+   * Returns path info for the base file if available.
    */
   protected def getBaseFileInfo(baseFileOpt: Option[HoodieBaseFile]): Option[StoragePathInfo] = {
-    baseFileOpt.map(baseFile => {
-      if (shouldFastBootstrap) {
-        if (baseFile.getBootstrapBaseFile.isPresent) {
-          baseFile.getBootstrapBaseFile.get().getPathInfo
-        } else {
-          baseFile.getPathInfo
-        }
-      } else {
-        baseFile.getPathInfo
-      }
-    })
+    baseFileOpt.map(baseFile => baseFile.getPathInfo)
   }
 
   /**

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hudi.{DefaultSource, EmptyRelation, HoodieBaseRelation}
+import org.apache.hudi.{DefaultSource, EmptyRelation}
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 
 import org.apache.spark.sql.{AnalysisException, SparkSession, SQLContext}
@@ -114,8 +114,6 @@ case class HoodieSpark35ResolveColumnsForInsertInto() extends ResolveInsertionBa
             preprocess(i, catalogTable, new StructType())
           // The two conditions below are adapted to Hudi relations
           case LogicalRelation(_: EmptyRelation, _, catalogTable, _) =>
-            preprocess(i, catalogTable)
-          case LogicalRelation(_: HoodieBaseRelation, _, catalogTable, _) =>
             preprocess(i, catalogTable)
           case _ => i
         }

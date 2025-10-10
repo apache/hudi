@@ -150,11 +150,6 @@ trait SparkAdapter extends Serializable {
     "hudi".equalsIgnoreCase(provider)
   }
 
-  /**
-   * Create instance of [[ParquetFileFormat]]
-   */
-  def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat]
-
   def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch
 
   /**
@@ -170,7 +165,6 @@ trait SparkAdapter extends Serializable {
   def createRelation(sqlContext: SQLContext,
                      metaClient: HoodieTableMetaClient,
                      schema: Schema,
-                     globPaths: Array[StoragePath],
                      parameters: java.util.Map[String, String]): BaseRelation
 
   /**
