@@ -57,7 +57,7 @@ function HomepageHeader() {
             </div>
             <div className={styles.videoWrapper}>
               <div id={styles.ytContainer} onClick={addElement}></div>
-              <div>Clicking on this link will load and send data from and to Google.</div>
+              <div><i>Clicking on and playing the video above will load and send data from and to Google.</i></div>
             </div>
           </div>
         </div>

@@ -40,7 +40,7 @@
     text-align: right;
     align-items: right;
     justify-content: center;
-    background-image: url('images/homepage_video_placeholder.png');
+    background-image: url('images/yt_video_cover_placeholder.png');
     background-size: cover;
     width: 560px;
     height: 315px;
@@ -88,7 +88,7 @@
         text-align: center;
         align-items: center;
         justify-content: center;
-        background-image: url('images/homepage_video_placeholder.png');
+        background-image: url('images/yt_video_cover_placeholder.png');
         background-size: cover;
         width: 560px;
         height: 315px;
