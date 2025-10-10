@@ -58,6 +58,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   public static final String FILENAME_METADATA_FIELD = HoodieMetadataField.FILENAME_METADATA_FIELD.getFieldName();
   public static final String OPERATION_METADATA_FIELD = HoodieMetadataField.OPERATION_METADATA_FIELD.getFieldName();
   public static final String HOODIE_IS_DELETED_FIELD = "_hoodie_is_deleted";
+  public static final String COMMIT_COMPLETION_TIME_METADATA_FIELD = "_hoodie_commit_completion_time";
   // If the ordering value is not set, this default order value is set and
   // always treated as the commit time ordering.
   public static final int DEFAULT_ORDERING_VALUE = 0;
