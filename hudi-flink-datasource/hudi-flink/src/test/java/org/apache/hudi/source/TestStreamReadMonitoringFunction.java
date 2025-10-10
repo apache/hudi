@@ -466,7 +466,6 @@ public class TestStreamReadMonitoringFunction {
   public void testCheckpointRestoreWithLimit() throws Exception {
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     conf.set(FlinkOptions.READ_SPLITS_LIMIT, 2);
-    conf.set(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 1);
     StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);
     OperatorSubtaskState state;
     try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(function)) {
@@ -483,6 +482,7 @@ public class TestStreamReadMonitoringFunction {
       assertTrue(sourceContext.splits.stream().allMatch(split -> split.getInstantRange().isPresent()),
           "All instants should have range limit");
     }
+    conf.set(FlinkOptions.READ_SPLITS_LIMIT, Integer.MAX_VALUE);
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
     StreamReadMonitoringFunction function2 = TestUtils.getMonitorFunc(conf);
     try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(function2)) {
