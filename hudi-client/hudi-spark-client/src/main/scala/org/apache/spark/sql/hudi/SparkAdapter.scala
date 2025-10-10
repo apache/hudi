@@ -170,7 +170,6 @@ trait SparkAdapter extends Serializable {
   def createRelation(sqlContext: SQLContext,
                      metaClient: HoodieTableMetaClient,
                      schema: Schema,
-                     globPaths: Array[StoragePath],
                      parameters: java.util.Map[String, String]): BaseRelation
 
   /**
