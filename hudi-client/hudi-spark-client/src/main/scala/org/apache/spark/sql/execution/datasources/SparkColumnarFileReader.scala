@@ -32,12 +32,12 @@ trait SparkColumnarFileReader extends Serializable {
   /**
    * Read an individual parquet file
    *
-   * @param file               parquet file to read
-   * @param requiredSchema     desired output schema of the data
-   * @param partitionSchema    schema of the partition columns. Partition values will be appended to the end of every row
-   * @param internalSchemaOpt  option of internal schema for schema.on.read
-   * @param filters            filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
-   * @param storageConf        the hadoop conf
+   * @param file              parquet file to read
+   * @param requiredSchema    desired output schema of the data
+   * @param partitionSchema   schema of the partition columns. Partition values will be appended to the end of every row
+   * @param internalSchemaOpt option of internal schema for schema.on.read
+   * @param filters           filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
+   * @param storageConf       the hadoop conf
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
   def read(file: PartitionedFile,
@@ -46,7 +46,9 @@ trait SparkColumnarFileReader extends Serializable {
            internalSchemaOpt: util.Option[InternalSchema],
            filters: Seq[Filter],
            storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow]
+}
 
+object SparkColumnarFileReader {
   /**
    * The requiredSchema may have columns that are not present in the actual data schema.
    * If all the requested fields of a nested record are not present in the data schema, then this field must be
@@ -69,8 +71,7 @@ trait SparkColumnarFileReader extends Serializable {
       val fields = requiredSchema.fields.map(field => {
         val dataSchemaFieldOpt = dataSchema.find(_.name.equals(field.name))
         if (dataSchemaFieldOpt.isEmpty) {
-          // Field is not present in data schema so it will be skipped at runtime and there is no need to inspect it
-          Some(field)
+         None
         } else {
           val dataSchemaField = dataSchemaFieldOpt.get
           field.dataType match {

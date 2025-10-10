@@ -111,7 +111,7 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
       footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
 
     val fileSchema = new ParquetToSparkSchemaConverter(sharedConf).convert(footerFileMetaData.getSchema)
-    val baseSchema = trimSchema(requiredSchema, fileSchema)
+    val baseSchema = SparkColumnarFileReader.trimSchema(requiredSchema, fileSchema)
     sharedConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, baseSchema.json)
     sharedConf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, baseSchema.json)
 
