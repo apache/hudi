@@ -40,7 +40,7 @@ public class TimeMilliLogicalTypeProcessor extends TimeLogicalTypeProcessor {
           public Pair<Boolean, Object> handleStringValue(String value) {
             return convertDateTime(
                 value,
-                time ->  time.toSecondOfDay() * 1000 + time.getNano() / 1000000,  // Millis of day
+                time -> time.toSecondOfDay() * 1000 + time.getNano() / 1000000,  // Millis of day
                 null);
           }
         },
