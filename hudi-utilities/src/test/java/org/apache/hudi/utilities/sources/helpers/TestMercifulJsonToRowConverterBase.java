@@ -22,6 +22,7 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.MercifulJsonConverterTestBase;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.stats.ValueType;
 import org.apache.hudi.utilities.exception.HoodieJsonToRowConversionException;
 
@@ -37,7 +38,6 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -49,6 +49,7 @@ import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
@@ -62,23 +63,16 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
+public abstract class TestMercifulJsonToRowConverterBase extends MercifulJsonConverterTestBase {
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  private static final MercifulJsonToRowConverter CONVERTER = new MercifulJsonToRowConverter(true, "__");
 
   private static final String SIMPLE_AVRO_WITH_DEFAULT = "/schema/simple-test-with-default-value.avsc";
 
-  protected static SparkSession spark;
+  protected abstract MercifulJsonToRowConverter getConverter();
 
-  @BeforeAll
-  public static void start() {
-    spark = SparkSession
-        .builder()
-        .master("local[*]")
-        .appName(TestMercifulJsonToRowConverter.class.getName())
-        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-        .getOrCreate();
-  }
+  protected abstract boolean isJava8ApiEnabled();
+
+  protected static SparkSession spark;
 
   @AfterAll
   public static void clear() throws IOException {
@@ -102,7 +96,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     values.set(1, number);
     values.set(3, color);
     Row recRow = RowFactory.create(values.toArray());
-    Row realRow = CONVERTER.convertToRow(json, simpleSchema);
+    Row realRow = getConverter().convertToRow(json, simpleSchema);
     validateSchemaCompatibility(Collections.singletonList(realRow), simpleSchema);
     assertEquals(recRow, realRow);
   }
@@ -126,7 +120,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     values.set(2, color);
     Row recRow = RowFactory.create(values.toArray());
 
-    Assertions.assertEquals(recRow, CONVERTER.convertToRow(json, simpleSchema));
+    Assertions.assertEquals(recRow, getConverter().convertToRow(json, simpleSchema));
   }
 
   private static final String DECIMAL_AVRO_FILE_PATH = "/decimal-logical-type.avsc";
@@ -149,7 +143,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     Schema schema = SchemaTestUtil.getSchema(DECIMAL_AVRO_FILE_PATH);
 
     Row expectRow = RowFactory.create(bigDecimal);
-    Row realRow = CONVERTER.convertToRow(json, schema);
+    Row realRow = getConverter().convertToRow(json, schema);
     validateSchemaCompatibility(Collections.singletonList(realRow), schema);
     assertEquals(expectRow, realRow);
   }
@@ -178,7 +172,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
 
     // Schedule with timestamp same as that of committed instant
     assertThrows(HoodieJsonToRowConversionException.class, () -> {
-      CONVERTER.convertToRow(json, schema);
+      getConverter().convertToRow(json, schema);
     });
   }
 
@@ -222,7 +216,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     String json = MAPPER.writeValueAsString(data);
 
     Row expectRow = RowFactory.create(bigDecimal);
-    Row realRow = CONVERTER.convertToRow(json, schema);
+    Row realRow = getConverter().convertToRow(json, schema);
     validateSchemaCompatibility(Collections.singletonList(realRow), schema);
     assertEquals(expectRow, realRow);
   }
@@ -241,11 +235,11 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     if (shouldConvert) {
       BigDecimal bigDecimal = new BigDecimal(expected);
       Row expectedRow = RowFactory.create(bigDecimal);
-      Row actualRow = CONVERTER.convertToRow(json, schema);
+      Row actualRow = getConverter().convertToRow(json, schema);
       validateSchemaCompatibility(Collections.singletonList(actualRow), schema);
       assertEquals(expectedRow, actualRow);
     } else {
-      assertThrows(HoodieJsonToRowConversionException.class, () -> CONVERTER.convertToRow(json, schema));
+      assertThrows(HoodieJsonToRowConversionException.class, () -> getConverter().convertToRow(json, schema));
     }
   }
 
@@ -277,7 +271,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
 
     // Duration type is not supported in Row object.
     assertThrows(HoodieJsonToRowConversionException.class, () -> {
-      CONVERTER.convertToRow(json, schema);
+      getConverter().convertToRow(json, schema);
     });
   }
 
@@ -293,7 +287,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     Schema schema = SchemaTestUtil.getSchemaFromResourceFilePath(schemaFile);
     // Schedule with timestamp same as that of committed instant
     assertThrows(HoodieJsonToRowConversionException.class, () -> {
-      CONVERTER.convertToRow(json, schema);
+      getConverter().convertToRow(json, schema);
     });
   }
 
@@ -320,10 +314,20 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     if (groundTruthRow == null) {
       return;
     }
-    Row rec = RowFactory.create(java.sql.Date.valueOf(groundTruthRow).toLocalDate());
-    Row realRow = CONVERTER.convertToRow(json, schema);
+    Row rec;
+    if (isJava8ApiEnabled()) {
+      rec = RowFactory.create(java.sql.Date.valueOf(groundTruthRow).toLocalDate());
+    } else {
+      rec = RowFactory.create(java.sql.Date.valueOf(groundTruthRow));
+    }
+
+    Row realRow = getConverter().convertToRow(json, schema);
     validateSchemaCompatibility(Collections.singletonList(realRow), schema);
-    assertEquals(rec.getLocalDate(0).toString(), realRow.getLocalDate(0).toString());
+    if (isJava8ApiEnabled()) {
+      assertEquals(rec.getLocalDate(0).toString(), realRow.getLocalDate(0).toString());
+    } else {
+      assertEquals(rec.getDate(0).toString(), realRow.getDate(0).toString());
+    }
   }
 
   /**
@@ -340,7 +344,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     data.put("dateField", 1);
     String json = MAPPER.writeValueAsString(data);
     assertThrows(HoodieJsonToRowConversionException.class, () -> {
-      CONVERTER.convertToRow(json, schema);
+      getConverter().convertToRow(json, schema);
     });
   }
 
@@ -398,7 +402,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
       String json = MAPPER.writeValueAsString(data);
 
       Row rec = RowFactory.create(ValueType.castToLocalTimestampMillis(milliSecOfDay, null), ValueType.castToLocalTimestampMicros(microSecOfDay, null));
-      Row actualRow = CONVERTER.convertToRow(json, schema);
+      Row actualRow = getConverter().convertToRow(json, schema);
       validateSchemaCompatibility(Collections.singletonList(actualRow), schema);
       assertEquals(rec, actualRow);
     });
@@ -415,7 +419,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     String json = MAPPER.writeValueAsString(data);
 
     assertThrows(HoodieJsonToRowConversionException.class, () -> {
-      CONVERTER.convertToRow(json, schema);
+      getConverter().convertToRow(json, schema);
     });
   }
 
@@ -444,8 +448,14 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     data.put("timestampMicrosField", timeMicro);
     String json = MAPPER.writeValueAsString(data);
 
-    Row rec = RowFactory.create(new Timestamp(milliSecOfDay), new Timestamp(microSecOfDay / 1000));
-    Row actualRow = CONVERTER.convertToRow(json, schema);
+    Row rec;
+    if (isJava8ApiEnabled()) {
+      rec = RowFactory.create(Instant.ofEpochMilli(milliSecOfDay), DateTimeUtils.microsToInstant(microSecOfDay));
+    } else {
+      rec = RowFactory.create(Timestamp.from(Instant.ofEpochMilli(milliSecOfDay)), Timestamp.from(DateTimeUtils.microsToInstant(microSecOfDay)));
+    }
+
+    Row actualRow = getConverter().convertToRow(json, schema);
     validateSchemaCompatibility(Collections.singletonList(actualRow), schema);
     assertEquals(rec, actualRow);
   }
@@ -462,7 +472,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     // Schedule with timestamp same as that of committed instant
 
     assertThrows(HoodieJsonToRowConversionException.class, () -> {
-      CONVERTER.convertToRow(json, schema);
+      getConverter().convertToRow(json, schema);
     });
   }
 
@@ -491,7 +501,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     String json = MAPPER.writeValueAsString(data);
 
     Row rec = RowFactory.create(microSecOfDay, milliSecOfDay);
-    Row realRow = CONVERTER.convertToRow(json, schema);
+    Row realRow = getConverter().convertToRow(json, schema);
     validateSchemaCompatibility(Collections.singletonList(realRow), schema);
     assertEquals(rec.get(0).toString(), realRow.get(0).toString());
     assertEquals(rec.get(1).toString(), realRow.get(1).toString());
@@ -510,7 +520,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     data.put("timeMillisField", invalidInput);
     // Schedule with timestamp same as that of committed instant
     assertThrows(HoodieJsonToRowConversionException.class, () -> {
-      CONVERTER.convertToRow(MAPPER.writeValueAsString(data), schema);
+      getConverter().convertToRow(MAPPER.writeValueAsString(data), schema);
     });
 
     data.clear();
@@ -518,7 +528,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     data.put("timeMillisField", validInput);
     // Schedule with timestamp same as that of committed instant
     assertThrows(HoodieJsonToRowConversionException.class, () -> {
-      CONVERTER.convertToRow(MAPPER.writeValueAsString(data), schema);
+      getConverter().convertToRow(MAPPER.writeValueAsString(data), schema);
     });
   }
 
@@ -542,7 +552,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     String json = MAPPER.writeValueAsString(data);
 
     Row rec = RowFactory.create(uuid);
-    Row real = CONVERTER.convertToRow(json, schema);
+    Row real = getConverter().convertToRow(json, schema);
     validateSchemaCompatibility(Collections.singletonList(real), schema);
     assertEquals(rec, real);
   }
@@ -559,7 +569,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     Schema nestedSchema = new Schema.Parser().parse(nestedSchemaStr);
 
     Row expected = RowFactory.create("Jane Smith", RowFactory.create(contactInput));
-    Row real = CONVERTER.convertToRow(json, nestedSchema);
+    Row real = getConverter().convertToRow(json, nestedSchema);
     validateSchemaCompatibility(Collections.singletonList(real), nestedSchema);
     assertEquals(expected, real);
   }
@@ -585,7 +595,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     values.set(1, number);
     values.set(2, color);
     Row expected = RowFactory.create(values.toArray());
-    Row actual = CONVERTER.convertToRow(json, sanitizedSchema);
+    Row actual = getConverter().convertToRow(json, sanitizedSchema);
     validateSchemaCompatibility(Collections.singletonList(actual), sanitizedSchema);
     assertEquals(expected, actual);
   }
@@ -613,7 +623,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     values.set(2, color);
     values.set(3, unmatched);
     Row recRow = RowFactory.create(values.toArray());
-    Row realRow = CONVERTER.convertToRow(json, sanitizedSchema);
+    Row realRow = getConverter().convertToRow(json, sanitizedSchema);
     validateSchemaCompatibility(Collections.singletonList(realRow), sanitizedSchema);
     assertEquals(recRow, realRow);
   }
@@ -638,7 +648,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     String json = MAPPER.writeValueAsString(data);
     Schema tripSchema = new Schema.Parser().parse(
         TRIP_ENCODED_DECIMAL_SCHEMA.replace("6", Integer.toString(scale)).replace("10", Integer.toString(precision)));
-    Row rec = CONVERTER.convertToRow(json, tripSchema);
+    Row rec = getConverter().convertToRow(json, tripSchema);
     validateSchemaCompatibility(Collections.singletonList(rec), tripSchema);
     BigDecimal actualField = rec.getDecimal(tripSchema.getField("decfield").pos());
     assertEquals(decfield, actualField);
@@ -669,7 +679,7 @@ public class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBas
     data.put("fare", rand.nextDouble() * 100);
     data.put("_hoodie_is_deleted", false);
     String json = MAPPER.writeValueAsString(data);
-    Row rec = CONVERTER.convertToRow(json, postProcessSchema);
+    Row rec = getConverter().convertToRow(json, postProcessSchema);
     BigDecimal actualField = rec.getDecimal(postProcessSchema.getField("decfield").pos());
     validateSchemaCompatibility(Collections.singletonList(rec), postProcessSchema);
     assertEquals(decfield, actualField);

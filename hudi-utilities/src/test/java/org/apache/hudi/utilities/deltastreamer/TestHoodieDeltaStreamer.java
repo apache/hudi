@@ -110,7 +110,7 @@ import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.sources.SqlSource;
 import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.sources.TestParquetDFSSourceEmptyBatch;
-import org.apache.hudi.utilities.sources.helpers.TestMercifulJsonToRowConverter;
+import org.apache.hudi.utilities.sources.helpers.TestMercifulJsonToRowConverterBase;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy;
 import org.apache.hudi.utilities.streamer.StreamSync;
@@ -790,7 +790,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @ParameterizedTest
   @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
   public void testBackwardsCompatibility(HoodieTableVersion version) throws Exception {
-    TestMercifulJsonToRowConverter.timestampNTZCompatibility(() -> {
+    TestMercifulJsonToRowConverterBase.timestampNTZCompatibility(() -> {
       String dirName = "colstats-upgrade-test-v" + version.versionCode();
       String dataPath = basePath + "/" + dirName;
       java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
