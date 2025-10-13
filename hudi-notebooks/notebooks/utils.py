@@ -32,6 +32,7 @@ def get_spark_session(app_name="Hudi-Notebooks"):
     
     spark_session = SparkSession.builder \
         .appName(app_name) \
+	    .config("spark.hadoop.fs.defaultFS", "s3a://warehouse") \
         .enableHiveSupport() \
         .getOrCreate()
         
@@ -39,6 +40,9 @@ def get_spark_session(app_name="Hudi-Notebooks"):
     print(f"SparkSession started with app name: {app_name}")
     
     return spark_session
+
+# Initialize Spark globally so other functions can use it
+spark = get_spark_session()
 
 # S3 Utility Function
 def ls(base_path):
@@ -50,13 +54,18 @@ def ls(base_path):
     if not base_path.startswith("s3a://"):
         raise ValueError("Path must start with 's3a://'")
     try:
-        parsed = urlparse(base_path)
-        bucket_name = parsed.netloc
-        prefix = parsed.path.lstrip("/")
-        s3_client = boto3.client('s3')
-        response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
-        for obj in response['Contents']:
-            print(f"s3a://{bucket_name}/{obj['Key']}")
+	    hadoop_conf = spark._jsc.hadoopConfiguration()
+        fs = spark._jvm.org.apache.hadoop.fs.FileSystem.get(hadoop_conf)
+        p = spark._jvm.org.apache.hadoop.fs.Path(base_path)
+
+        if not fs.exists(p):
+            print(f"Path does not exist: {base_path}")
+            return []
+
+        status = fs.listStatus(p)
+        files = [str(file.getPath()) for file in status]
+        for f in files:
+            print(f)
     except Exception as e:
         print(f"Exception occurred while listing files from path {base_path}", e)
 
