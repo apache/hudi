@@ -236,7 +236,7 @@ public class S3EventsHoodieIncrSourceHarness extends SparkClientFunctionalTestHa
                              Option<String> checkpointToPull, long sourceLimit, String expectedCheckpoint,
                              TypedProperties typedProperties) {
     S3EventsHoodieIncrSource incrSource = new S3EventsHoodieIncrSource(typedProperties, jsc(),
-        spark(), mockQueryRunner, new CloudDataFetcher(typedProperties, jsc(), spark(), metrics, mockCloudObjectsSelectorCommon),
+        spark(), mockQueryRunner, new CloudDataFetcher(typedProperties, spark(), metrics, mockCloudObjectsSelectorCommon),
         new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
 
     Pair<Option<Dataset<Row>>, Checkpoint> dataAndCheckpoint = incrSource.fetchNextBatch(

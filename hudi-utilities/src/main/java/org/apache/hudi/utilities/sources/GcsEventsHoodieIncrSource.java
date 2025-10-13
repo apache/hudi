@@ -125,7 +125,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
       SchemaProvider schemaProvider,
       HoodieIngestionMetrics metrics) {
     this(props, jsc, spark,
-        new CloudDataFetcher(props, jsc, spark, metrics),
+        new CloudDataFetcher(props, spark, metrics),
         new QueryRunner(spark, props),
         new DefaultStreamContext(schemaProvider, Option.empty())
     );
@@ -138,7 +138,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
       HoodieIngestionMetrics metrics,
       StreamContext streamContext) {
     this(props, jsc, spark,
-        new CloudDataFetcher(props, jsc, spark, metrics),
+        new CloudDataFetcher(props, spark, metrics),
         new QueryRunner(spark, props),
         streamContext
     );

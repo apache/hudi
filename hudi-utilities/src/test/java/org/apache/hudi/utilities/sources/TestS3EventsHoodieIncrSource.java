@@ -48,9 +48,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_EXISTS_CHECK;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -91,7 +93,7 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
     setMockQueryRunner(inputDs);
-    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt())).thenReturn(Option.empty());
+    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt(), eq(false))).thenReturn(Option.empty());
     when(sourceProfileSupplier.getSourceProfile()).thenReturn(null);
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 100L, "1#path/to/file1.json");
@@ -116,7 +118,7 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
     setMockQueryRunner(inputDs);
-    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt())).thenReturn(Option.empty());
+    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt(), eq(false))).thenReturn(Option.empty());
     when(sourceProfileSupplier.getSourceProfile()).thenReturn(null);
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 250L, "1#path/to/file2.json");
@@ -137,6 +139,7 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
     inserts = writeS3MetadataRecords(commitTimeForWrites);
 
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
+    typedProperties.setProperty(ENABLE_EXISTS_CHECK.key(), "true");
     // In the case the extension is explicitly set to something other than the file format.
     if (!extension.endsWith("json")) {
       typedProperties.setProperty(CloudSourceConfig.CLOUD_DATAFILE_EXTENSION.key(), extension);
@@ -156,7 +159,7 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
     setMockQueryRunner(inputDs);
-    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt())).thenReturn(Option.empty());
+    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt(), eq(true))).thenReturn(Option.empty());
     when(sourceProfileSupplier.getSourceProfile()).thenReturn(null);
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1"), 100L,
@@ -221,7 +224,7 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
 
     setMockQueryRunner(inputDs);
     SourceProfile<Long> sourceProfile = new TestSourceProfile(50L, 0, 10L);
-    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt())).thenReturn(Option.empty());
+    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt(), eq(false))).thenReturn(Option.empty());
     if (useSourceProfile) {
       when(sourceProfileSupplier.getSourceProfile()).thenReturn(sourceProfile);
     } else {
@@ -259,7 +262,7 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
     setMockQueryRunner(inputDs);
-    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt())).thenReturn(Option.empty());
+    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt(), eq(false))).thenReturn(Option.empty());
     SourceProfile<Long> sourceProfile = new TestSourceProfile(50L, 0, 10L);
     if (useSourceProfile) {
       when(sourceProfileSupplier.getSourceProfile()).thenReturn(sourceProfile);
@@ -305,7 +308,7 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
     setMockQueryRunner(inputDs, Option.of(snapshotCheckPoint));
-    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt())).thenReturn(Option.empty());
+    when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt(), eq(false))).thenReturn(Option.empty());
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
     typedProperties.setProperty("hoodie.streamer.source.cloud.data.ignore.relpath.prefix", "path/to/skip");
     typedProperties.setProperty("hoodie.streamer.source.cloud.data.select.relative.path.regex", "path/to/file[0-9]+");
@@ -335,7 +338,7 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
     // Verify the partitions being passed in getCloudObjectDataDF are correct.
     ArgumentCaptor<Integer> argumentCaptor = ArgumentCaptor.forClass(Integer.class);
     ArgumentCaptor<Integer> argumentCaptorForMetrics = ArgumentCaptor.forClass(Integer.class);
-    verify(mockCloudObjectsSelectorCommon, atLeastOnce()).loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), argumentCaptor.capture());
+    verify(mockCloudObjectsSelectorCommon, atLeastOnce()).loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), argumentCaptor.capture(), eq(false));
     verify(metrics, atLeastOnce()).updateStreamerSourceParallelism(argumentCaptorForMetrics.capture());
     List<Integer> numPartitions;
     if (snapshotCheckPoint.equals("1") || snapshotCheckPoint.equals("2")) {
@@ -353,7 +356,7 @@ public class TestS3EventsHoodieIncrSource extends S3EventsHoodieIncrSourceHarnes
     S3EventsHoodieIncrSource incrSource = new S3EventsHoodieIncrSource(typedProperties, jsc(),
         spark(), mockQueryRunner,
         new CloudDataFetcher(
-            new TypedProperties(), jsc(), spark(), metrics, mockCloudObjectsSelectorCommon),
+            new TypedProperties(), spark(), metrics, mockCloudObjectsSelectorCommon),
         new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
 
     Exception exception = assertThrows(IllegalArgumentException.class,

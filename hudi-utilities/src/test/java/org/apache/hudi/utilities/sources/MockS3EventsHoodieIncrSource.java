@@ -57,7 +57,7 @@ public class MockS3EventsHoodieIncrSource extends S3EventsHoodieIncrSource {
       SchemaProvider schemaProvider,
       HoodieIngestionMetrics metrics) {
     this(props, sparkContext, sparkSession, new QueryRunner(sparkSession, props),
-        new CloudDataFetcher(props, sparkContext, sparkSession, metrics), new DefaultStreamContext(schemaProvider, Option.empty()));
+        new CloudDataFetcher(props, sparkSession, metrics), new DefaultStreamContext(schemaProvider, Option.empty()));
   }
 
   public MockS3EventsHoodieIncrSource(
@@ -67,7 +67,7 @@ public class MockS3EventsHoodieIncrSource extends S3EventsHoodieIncrSource {
       HoodieIngestionMetrics metrics,
       StreamContext streamContext) {
     this(props, sparkContext, sparkSession, new QueryRunner(sparkSession, props),
-        new CloudDataFetcher(props, sparkContext, sparkSession, metrics), streamContext);
+        new CloudDataFetcher(props, sparkSession, metrics), streamContext);
   }
 
   MockS3EventsHoodieIncrSource(

@@ -28,7 +28,6 @@ import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
-import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
@@ -55,7 +54,6 @@ public class CloudDataFetcher implements Serializable {
   private static final String EMPTY_STRING = "";
 
   private transient TypedProperties props;
-  private transient JavaSparkContext sparkContext;
   private transient SparkSession sparkSession;
   private transient CloudObjectsSelectorCommon cloudObjectsSelectorCommon;
 
@@ -65,13 +63,12 @@ public class CloudDataFetcher implements Serializable {
 
   private final HoodieIngestionMetrics metrics;
 
-  public CloudDataFetcher(TypedProperties props, JavaSparkContext jsc, SparkSession sparkSession, HoodieIngestionMetrics metrics) {
-    this(props, jsc, sparkSession, metrics, new CloudObjectsSelectorCommon(props));
+  public CloudDataFetcher(TypedProperties props, SparkSession sparkSession, HoodieIngestionMetrics metrics) {
+    this(props, sparkSession, metrics, new CloudObjectsSelectorCommon(props));
   }
 
-  public CloudDataFetcher(TypedProperties props, JavaSparkContext jsc, SparkSession sparkSession, HoodieIngestionMetrics metrics, CloudObjectsSelectorCommon cloudObjectsSelectorCommon) {
+  public CloudDataFetcher(TypedProperties props, SparkSession sparkSession, HoodieIngestionMetrics metrics, CloudObjectsSelectorCommon cloudObjectsSelectorCommon) {
     this.props = props;
-    this.sparkContext = jsc;
     this.sparkSession = sparkSession;
     this.metrics = metrics;
     this.cloudObjectsSelectorCommon = cloudObjectsSelectorCommon;
@@ -114,7 +111,7 @@ public class CloudDataFetcher implements Serializable {
     LOG.info("Adjusted end checkpoint :" + checkPointAndDataset.getLeft());
 
     boolean checkIfFileExists = getBooleanWithAltKeys(props, ENABLE_EXISTS_CHECK);
-    List<CloudObjectMetadata> cloudObjectMetadata = CloudObjectsSelectorCommon.getObjectMetadata(cloudType, sparkContext, checkPointAndDataset.getRight().get(), checkIfFileExists, props);
+    List<CloudObjectMetadata> cloudObjectMetadata = CloudObjectsSelectorCommon.getObjectMetadata(cloudType, checkPointAndDataset.getRight().get(), props);
     LOG.info("Total number of files to process :" + cloudObjectMetadata.size());
 
     long bytesPerPartition = props.containsKey(SOURCE_MAX_BYTES_PER_PARTITION.key()) ? props.getLong(SOURCE_MAX_BYTES_PER_PARTITION.key()) :
@@ -128,14 +125,15 @@ public class CloudDataFetcher implements Serializable {
       }
       numSourcePartitions = sourceProfileSupplier.get().getSourceProfile().getSourcePartitions();
     }
-    Option<Dataset<Row>> datasetOption = getCloudObjectDataDF(cloudObjectMetadata, schemaProvider, bytesPerPartition, numSourcePartitions);
+    Option<Dataset<Row>> datasetOption = getCloudObjectDataDF(cloudObjectMetadata, schemaProvider, bytesPerPartition, numSourcePartitions, checkIfFileExists);
     return Pair.of(datasetOption, new StreamerCheckpointV1(checkPointAndDataset.getLeft().toString()));
   }
 
   private Option<Dataset<Row>> getCloudObjectDataDF(List<CloudObjectMetadata> cloudObjectMetadata,
                                                     Option<SchemaProvider> schemaProviderOption,
                                                     long bytesPerPartition,
-                                                    int numSourcePartitions) {
+                                                    int numSourcePartitions,
+                                                    boolean checkIfFileExists) {
     long totalSize = 0;
     for (CloudObjectMetadata o : cloudObjectMetadata) {
       totalSize += o.getSize();
@@ -149,6 +147,6 @@ public class CloudDataFetcher implements Serializable {
       numPartitions = numSourcePartitions;
     }
     metrics.updateStreamerSourceParallelism(numPartitions);
-    return cloudObjectsSelectorCommon.loadAsDataset(sparkSession, cloudObjectMetadata, getFileFormat(props), schemaProviderOption, numPartitions);
+    return cloudObjectsSelectorCommon.loadAsDataset(sparkSession, cloudObjectMetadata, getFileFormat(props), schemaProviderOption, numPartitions, checkIfFileExists);
   }
 }

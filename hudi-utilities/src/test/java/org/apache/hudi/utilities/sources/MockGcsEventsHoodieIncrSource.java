@@ -48,7 +48,7 @@ public class MockGcsEventsHoodieIncrSource extends GcsEventsHoodieIncrSource {
       SchemaProvider schemaProvider,
       HoodieIngestionMetrics metrics) {
     super(props, jsc, spark,
-        new CloudDataFetcher(props, jsc, spark, metrics),
+        new CloudDataFetcher(props, spark, metrics),
         new QueryRunner(spark, props),
         new DefaultStreamContext(schemaProvider, Option.empty())
     );
@@ -61,7 +61,7 @@ public class MockGcsEventsHoodieIncrSource extends GcsEventsHoodieIncrSource {
       HoodieIngestionMetrics metrics,
       StreamContext streamContext) {
     super(props, jsc, spark,
-        new CloudDataFetcher(props, jsc, spark, metrics),
+        new CloudDataFetcher(props, spark, metrics),
         new QueryRunner(spark, props),
         streamContext
     );

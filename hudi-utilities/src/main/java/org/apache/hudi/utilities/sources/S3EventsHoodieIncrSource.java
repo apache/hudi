@@ -79,7 +79,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
       SchemaProvider schemaProvider,
       HoodieIngestionMetrics metrics) {
     this(props, sparkContext, sparkSession, new QueryRunner(sparkSession, props),
-        new CloudDataFetcher(props, sparkContext, sparkSession, metrics), new DefaultStreamContext(schemaProvider, Option.empty()));
+        new CloudDataFetcher(props, sparkSession, metrics), new DefaultStreamContext(schemaProvider, Option.empty()));
   }
 
   public S3EventsHoodieIncrSource(
@@ -89,7 +89,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
       HoodieIngestionMetrics metrics,
       StreamContext streamContext) {
     this(props, sparkContext, sparkSession, new QueryRunner(sparkSession, props),
-        new CloudDataFetcher(props, sparkContext, sparkSession, metrics), streamContext);
+        new CloudDataFetcher(props, sparkSession, metrics), streamContext);
   }
 
   S3EventsHoodieIncrSource(

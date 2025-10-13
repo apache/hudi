@@ -26,7 +26,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig;
@@ -38,8 +37,7 @@ import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.MapPartitionsFunction;
+import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
@@ -113,60 +111,40 @@ public class CloudObjectsSelectorCommon {
    * Return a function that extracts filepaths from a list of Rows.
    * Here Row is assumed to have the schema [bucket_name, filepath_relative_to_bucket, object_size]
    * @param storageUrlSchemePrefix    Eg: s3:// or gs://. The storage-provider-specific prefix to use within the URL.
-   * @param storageConf               storage configuration.
-   * @param checkIfExists             check if each file exists, before adding it to the returned list
    * @return
    */
-  public static MapPartitionsFunction<Row, CloudObjectMetadata> getCloudObjectMetadataPerPartition(
-      String storageUrlSchemePrefix, StorageConfiguration<Configuration> storageConf, boolean checkIfExists) {
-    return rows -> {
-      List<CloudObjectMetadata> cloudObjectMetadataPerPartition = new ArrayList<>();
-      rows.forEachRemaining(row -> {
-        Option<String> filePathUrl = getUrlForFile(row, storageUrlSchemePrefix, storageConf, checkIfExists);
-        filePathUrl.ifPresent(url -> {
-          LOG.info("Adding file: " + url);
-          long size;
-          Object obj = row.get(2);
-          if (obj instanceof String) {
-            size = Long.parseLong((String) obj);
-          } else if (obj instanceof Integer) {
-            size = ((Integer) obj).longValue();
-          } else if (obj instanceof Long) {
-            size = (long) obj;
-          } else {
-            throw new HoodieIOException("unexpected object size's type in Cloud storage events: " + obj.getClass());
-          }
-          cloudObjectMetadataPerPartition.add(new CloudObjectMetadata(url, size));
-        });
-      });
+  public static MapFunction<Row, CloudObjectMetadata> getCloudObjectMetadataPerPartition(String storageUrlSchemePrefix) {
+    return row -> {
+      String url = getUrlForFile(row, storageUrlSchemePrefix);
+      LOG.debug("Adding file: {}", url);
+      long size;
+      Object obj = row.get(2);
+      if (obj instanceof String) {
+        size = Long.parseLong((String) obj);
+      } else if (obj instanceof Integer) {
+        size = ((Integer) obj).longValue();
+      } else if (obj instanceof Long) {
+        size = (long) obj;
+      } else {
+        throw new HoodieIOException("unexpected object size's type in Cloud storage events: " + obj.getClass());
+      }
 
-      return cloudObjectMetadataPerPartition.iterator();
+      return new CloudObjectMetadata(url, size);
     };
   }
 
   /**
    * Construct a full qualified URL string to a cloud file from a given Row. Optionally check if the file exists.
    * Here Row is assumed to have the schema [bucket_name, filepath_relative_to_bucket].
-   * The checkIfExists logic assumes that the relevant impl classes for the storageUrlSchemePrefix are already present
-   * on the classpath!
    *
    * @param storageUrlSchemePrefix Eg: s3:// or gs://. The storage-provider-specific prefix to use within the URL.
    */
-  private static Option<String> getUrlForFile(Row row, String storageUrlSchemePrefix,
-                                              StorageConfiguration<Configuration> storageConf,
-                                              boolean checkIfExists) {
-    final Configuration configuration = storageConf.unwrapCopy();
-
+  private static String getUrlForFile(Row row, String storageUrlSchemePrefix) {
     String bucket = row.getString(0);
     String filePath = storageUrlSchemePrefix + bucket + StoragePath.SEPARATOR + row.getString(1);
 
     try {
-      String filePathUrl = URLDecoder.decode(filePath, StandardCharsets.UTF_8.name());
-      if (!checkIfExists) {
-        return Option.of(filePathUrl);
-      }
-      boolean exists = checkIfFileExists(storageUrlSchemePrefix, bucket, filePathUrl, configuration);
-      return exists ? Option.of(filePathUrl) : Option.empty();
+      return URLDecoder.decode(filePath, StandardCharsets.UTF_8.name());
     } catch (Exception exception) {
       LOG.error("Failed to generate path to cloud file {}", filePath, exception);
       throw new HoodieException(String.format("Failed to generate path to cloud file %s", filePath), exception);
@@ -243,22 +221,18 @@ public class CloudObjectsSelectorCommon {
   /**
    * @param cloudObjectMetadataDF a Dataset that contains metadata of S3/GCS objects. Assumed to be a persisted form
    *                              of a Cloud Storage SQS/PubSub Notification event.
-   * @param checkIfExists         Check if each file exists, before returning its full path
    * @return A {@link List} of {@link CloudObjectMetadata} containing file info.
    */
   public static List<CloudObjectMetadata> getObjectMetadata(
       Type type,
-      JavaSparkContext jsc,
       Dataset<Row> cloudObjectMetadataDF,
-      boolean checkIfExists,
       TypedProperties props
   ) {
-    StorageConfiguration<Configuration> storageConf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration());
     if (type == Type.GCS) {
       return cloudObjectMetadataDF
           .select("bucket", "name", "size")
           .distinct()
-          .mapPartitions(getCloudObjectMetadataPerPartition(GCS_PREFIX, storageConf, checkIfExists), Encoders.kryo(CloudObjectMetadata.class))
+          .map(getCloudObjectMetadataPerPartition(GCS_PREFIX), Encoders.kryo(CloudObjectMetadata.class))
           .collectAsList();
     } else if (type == Type.S3) {
       String s3FS = getStringWithAltKeys(props, S3_FS_PREFIX, true).toLowerCase();
@@ -266,14 +240,15 @@ public class CloudObjectsSelectorCommon {
       return cloudObjectMetadataDF
           .select(CloudObjectsSelectorCommon.S3_BUCKET_NAME, CloudObjectsSelectorCommon.S3_OBJECT_KEY, CloudObjectsSelectorCommon.S3_OBJECT_SIZE)
           .distinct()
-          .mapPartitions(getCloudObjectMetadataPerPartition(s3Prefix, storageConf, checkIfExists), Encoders.kryo(CloudObjectMetadata.class))
+          .map(getCloudObjectMetadataPerPartition(s3Prefix), Encoders.kryo(CloudObjectMetadata.class))
           .collectAsList();
     }
     throw new UnsupportedOperationException("Invalid cloud type " + type);
   }
 
   public Option<Dataset<Row>> loadAsDataset(SparkSession spark, List<CloudObjectMetadata> cloudObjectMetadata,
-                                            String fileFormat, Option<SchemaProvider> schemaProviderOption, int numPartitions) {
+                                            String fileFormat, Option<SchemaProvider> schemaProviderOption, int numPartitions,
+                                            boolean checkIfExists) {
     if (LOG.isDebugEnabled()) {
       LOG.debug("Extracted distinct files " + cloudObjectMetadata.size()
           + " and some samples " + cloudObjectMetadata.stream().map(CloudObjectMetadata::getPath).limit(10).collect(Collectors.toList()));
@@ -282,7 +257,7 @@ public class CloudObjectsSelectorCommon {
     if (isNullOrEmpty(cloudObjectMetadata)) {
       return Option.empty();
     }
-    DataFrameReader reader = spark.read().format(fileFormat);
+    DataFrameReader reader = spark.read().format(fileFormat).option("ignoreMissingFiles", Boolean.toString(checkIfExists));
     String datasourceOpts = getStringWithAltKeys(properties, CloudSourceConfig.SPARK_DATASOURCE_OPTIONS, true);
 
     StructType rowSchema = null;

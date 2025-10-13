@@ -252,7 +252,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     // Verify the partitions being passed in getCloudObjectDataDF are correct.
     List<Integer> numPartitions = Arrays.asList(12, 2, 1);
     ArgumentCaptor<Integer> argumentCaptor = ArgumentCaptor.forClass(Integer.class);
-    verify(cloudObjectsSelectorCommon, atLeastOnce()).loadAsDataset(any(), any(), any(), eq(schemaProvider), argumentCaptor.capture());
+    verify(cloudObjectsSelectorCommon, atLeastOnce()).loadAsDataset(any(), any(), any(), eq(schemaProvider), argumentCaptor.capture(), eq(false));
     Assertions.assertEquals(numPartitions, argumentCaptor.getAllValues());
   }
 
@@ -303,7 +303,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     // Verify the partitions being passed in getCloudObjectDataDF are correct.
     ArgumentCaptor<Integer> argumentCaptor = ArgumentCaptor.forClass(Integer.class);
     ArgumentCaptor<Integer> argumentCaptorForMetrics = ArgumentCaptor.forClass(Integer.class);
-    verify(cloudObjectsSelectorCommon, atLeastOnce()).loadAsDataset(any(), any(), any(), eq(schemaProvider), argumentCaptor.capture());
+    verify(cloudObjectsSelectorCommon, atLeastOnce()).loadAsDataset(any(), any(), any(), eq(schemaProvider), argumentCaptor.capture(), eq(false));
     verify(metrics, atLeastOnce()).updateStreamerSourceParallelism(argumentCaptorForMetrics.capture());
     List<Integer> numPartitions;
     if (snapshotCheckPoint.equals("1") || snapshotCheckPoint.equals("2")) {
@@ -320,7 +320,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
     GcsEventsHoodieIncrSource incrSource = new GcsEventsHoodieIncrSource(typedProperties, jsc(),
         spark(),
-        new CloudDataFetcher(typedProperties, jsc(), spark(), metrics, cloudObjectsSelectorCommon),
+        new CloudDataFetcher(typedProperties, spark(), metrics, cloudObjectsSelectorCommon),
         queryRunner,
         new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
 
@@ -368,7 +368,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
                              TypedProperties typedProperties) {
 
     GcsEventsHoodieIncrSource incrSource = new GcsEventsHoodieIncrSource(typedProperties, jsc(),
-        spark(), new CloudDataFetcher(typedProperties, jsc(), spark(), metrics, cloudObjectsSelectorCommon), queryRunner,
+        spark(), new CloudDataFetcher(typedProperties, spark(), metrics, cloudObjectsSelectorCommon), queryRunner,
         new DefaultStreamContext(schemaProvider.orElse(null), Option.of(sourceProfileSupplier)));
 
     Pair<Option<Dataset<Row>>, Checkpoint> dataAndCheckpoint = incrSource.fetchNextBatch(
