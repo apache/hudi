@@ -21,13 +21,12 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.parquet.hadoop.api.InitContext
 import org.apache.parquet.hadoop.api.ReadSupport.ReadContext
-import org.apache.parquet.schema.Type.Repetition
 import org.apache.parquet.schema.{GroupType, LogicalTypeAnnotation, MessageType, Type, Types}
 import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
 
 import java.time.ZoneId
 
-import scala.jdk.CollectionConverters.{asScalaBufferConverter, bufferAsJavaListConverter}
+import scala.collection.JavaConverters._
 
 class HoodieParquetReadSupport(
                                 convertTz: Option[ZoneId],
@@ -82,8 +81,7 @@ object HoodieParquetReadSupport {
               Some(field)
             }
           }).filter(_.isDefined).map(_.get).asJava
-          val isMapType = groupType.getLogicalTypeAnnotation == LogicalTypeAnnotation.mapType() || groupType.getLogicalTypeAnnotation == LogicalTypeAnnotation.MapKeyValueTypeAnnotation.getInstance()
-          if (isMapType && !fields.isEmpty) {
+          if (groupType.getLogicalTypeAnnotation == LogicalTypeAnnotation.mapType() && !fields.isEmpty) {
             if (fields.get(0).asGroupType().getFields.size() == 2) {
               // Map type must have exactly 2 fields: key and value
               Some(groupType.withNewFields(fields))
