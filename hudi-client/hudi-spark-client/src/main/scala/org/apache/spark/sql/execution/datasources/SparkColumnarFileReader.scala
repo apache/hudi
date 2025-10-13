@@ -23,21 +23,20 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StorageConfiguration
-
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.{ArrayType, MapType, StructType}
+import org.apache.spark.sql.types.StructType
 
 trait SparkColumnarFileReader extends Serializable {
   /**
    * Read an individual parquet file
    *
-   * @param file              parquet file to read
-   * @param requiredSchema    desired output schema of the data
-   * @param partitionSchema   schema of the partition columns. Partition values will be appended to the end of every row
-   * @param internalSchemaOpt option of internal schema for schema.on.read
-   * @param filters           filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
-   * @param storageConf       the hadoop conf
+   * @param file               parquet file to read
+   * @param requiredSchema     desired output schema of the data
+   * @param partitionSchema    schema of the partition columns. Partition values will be appended to the end of every row
+   * @param internalSchemaOpt  option of internal schema for schema.on.read
+   * @param filters            filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
+   * @param storageConf        the hadoop conf
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
   def read(file: PartitionedFile,
@@ -46,64 +45,4 @@ trait SparkColumnarFileReader extends Serializable {
            internalSchemaOpt: util.Option[InternalSchema],
            filters: Seq[Filter],
            storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow]
-}
-
-object SparkColumnarFileReader {
-  /**
-   * The requiredSchema may have columns that are not present in the actual data schema.
-   * If all the requested fields of a nested record are not present in the data schema, then this field must be
-   * excluded from the requiredSchema to prevent runtime errors.
-   * @param requiredSchema the schema required by the query
-   * @param dataSchema the current file's data schema
-   * @return trimmed schema that can be safely applied to the data
-   */
-  def trimSchema(requiredSchema: StructType, dataSchema: StructType): StructType = {
-    trimSchemaInternal(requiredSchema, dataSchema).getOrElse(requiredSchema)
-  }
-
-  def trimSchemaInternal(requiredSchema: StructType, dataSchema: StructType): Option[StructType] = {
-    if (requiredSchema.equals(dataSchema)) {
-      Some(requiredSchema)
-    } else {
-      var hasAtLeastOneMatch = false
-      val fields = requiredSchema.fields.map(field => {
-        val dataSchemaFieldOpt = dataSchema.find(_.name.equals(field.name))
-        if (dataSchemaFieldOpt.isEmpty) {
-         Some(field)
-        } else {
-          hasAtLeastOneMatch = true
-          val dataSchemaField = dataSchemaFieldOpt.get
-          field.dataType match {
-            case structType: StructType =>
-              val trimmed = trimSchemaInternal(structType, dataSchemaField.dataType.asInstanceOf[StructType])
-              trimmed.map(structType => field.copy(dataType = structType))
-            case arrayType: ArrayType =>
-              val elementType = arrayType.elementType
-              val dataElementType = dataSchemaField.dataType.asInstanceOf[ArrayType].elementType
-              elementType match {
-                case structElementType: StructType if dataElementType.isInstanceOf[StructType] =>
-                  val trimmed = trimSchemaInternal(structElementType, dataElementType.asInstanceOf[StructType])
-                  trimmed.map(structType => field.copy(dataType = ArrayType(structType, arrayType.containsNull)))
-                case _ => Some(field)
-              }
-            case mapType: MapType =>
-              val valueType = mapType.valueType
-              val dataValueType = dataSchemaField.dataType.asInstanceOf[MapType].valueType
-              valueType match {
-                case structValueType: StructType if dataValueType.isInstanceOf[StructType] =>
-                  val trimmed = trimSchemaInternal(structValueType, dataValueType.asInstanceOf[StructType])
-                  trimmed.map(structType => field.copy(dataType = MapType(mapType.keyType, structType, mapType.valueContainsNull)))
-                case _ => Some(field)
-              }
-            case _ => Some(field)
-          }
-        }
-      }).filter(_.isDefined).map(_.get)
-      if (hasAtLeastOneMatch && fields.length > 0) {
-        Some(StructType(fields))
-      } else {
-        None
-      }
-    }
-  }
 }
