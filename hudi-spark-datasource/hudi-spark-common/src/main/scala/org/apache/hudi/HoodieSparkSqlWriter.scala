@@ -353,7 +353,7 @@ class HoodieSparkSqlWriterInternal {
           classOf[Schema]))
 
       val shouldReconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
-      val latestTableSchemaOpt = getLatestTableSchema(spark, tableIdentifier, tableMetaClient)
+      val latestTableSchemaOpt = getLatestTableSchema(tableMetaClient)
       val df = if (preppedWriteOperation || preppedSparkSqlWrites || preppedSparkSqlMergeInto || sourceDf.isStreaming) {
         sourceDf
       } else {
@@ -669,26 +669,9 @@ class HoodieSparkSqlWriterInternal {
     sparkContext.getConf.registerAvroSchemas(targetAvroSchemas: _*)
   }
 
-  private def getLatestTableSchema(spark: SparkSession,
-                                   tableId: TableIdentifier,
-                                   tableMetaClient: HoodieTableMetaClient): Option[Schema] = {
+  private def getLatestTableSchema(tableMetaClient: HoodieTableMetaClient): Option[Schema] = {
     val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
-    val latestTableSchemaFromCommitMetadata =
-      toScalaOption(tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false))
-    latestTableSchemaFromCommitMetadata.orElse {
-      getCatalogTable(spark, tableId).map { catalogTable =>
-        val (structName, namespace) = getAvroRecordNameAndNamespace(tableId.table)
-        convertStructTypeToAvroSchema(catalogTable.schema, structName, namespace)
-      }
-    }
-  }
-
-  private def getCatalogTable(spark: SparkSession, tableId: TableIdentifier): Option[CatalogTable] = {
-    if (spark.sessionState.catalog.tableExists(tableId)) {
-      Some(spark.sessionState.catalog.getTableMetadata(tableId))
-    } else {
-      None
-    }
+    toScalaOption(tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false))
   }
 
   def bootstrap(sqlContext: SQLContext,
