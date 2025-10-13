@@ -69,7 +69,8 @@ services:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c " 
-      until (/usr/bin/mc config host add minio http://minio:9000 admin password) do echo '...waiting...' && sleep 1; done; 
+      until (/usr/bin/mc alias set add minio http://minio:9000 admin password --api S3v4) do echo '...waiting...' && sleep 1; done; 
+      /usr/bin/mc rm -r --force minio/warehouse;
       /usr/bin/mc mb minio/warehouse;
       /usr/bin/mc policy set public minio/warehouse;
       tail -f /dev/null
