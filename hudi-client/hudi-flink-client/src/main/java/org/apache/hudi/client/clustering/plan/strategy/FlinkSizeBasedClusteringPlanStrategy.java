@@ -71,9 +71,20 @@ public class FlinkSizeBasedClusteringPlanStrategy<T>
   }
 
   @Override
+  @Override
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(final String partition) {
-    return super.getFileSlicesEligibleForClustering(partition)
-        // Only files that have base file size smaller than small file size are eligible.
-        .filter(slice -> slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L) < getWriteConfig().getClusteringSmallFileLimit());
+    Supplier<Stream<FileSlice>> streamSupplier = () -> super.getFileSlicesEligibleForClustering(partition)
+            .filter(slice -> slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L)
+                    < getWriteConfig().getClusteringSmallFileLimit());
+
+    Stream<FileSlice> fileSliceStream = streamSupplier.get();
+    long fileCount = fileSliceStream.map(slice -> slice.getBaseFile())
+            .distinct()
+            .count();
+
+    if (fileCount > 1L) {
+      return streamSupplier.get();
+    }
+    return Stream.empty();
   }
 }
