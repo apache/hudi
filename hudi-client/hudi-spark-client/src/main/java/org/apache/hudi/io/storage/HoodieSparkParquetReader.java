@@ -56,6 +56,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import scala.Option$;
+
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.parquet.avro.AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS;
 
@@ -124,7 +126,10 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     storage.getConf().set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA(), readSchemaJson);
     storage.getConf().set(SQLConf.PARQUET_BINARY_AS_STRING().key(), SQLConf.get().getConf(SQLConf.PARQUET_BINARY_AS_STRING()).toString());
     storage.getConf().set(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), SQLConf.get().getConf(SQLConf.PARQUET_INT96_AS_TIMESTAMP()).toString());
-    ParquetReader<InternalRow> reader = ParquetReader.builder(new HoodieParquetReadSupport(), new Path(path.toUri()))
+    ParquetReader<InternalRow> reader = ParquetReader.builder(new HoodieParquetReadSupport(Option$.MODULE$.empty(), true,
+            SparkAdapterSupport$.MODULE$.sparkAdapter().getRebaseSpec("CORRECTED"),
+            SparkAdapterSupport$.MODULE$.sparkAdapter().getRebaseSpec("LEGACY")),
+            new Path(path.toUri()))
         .withConf(storage.getConf().unwrapAs(Configuration.class))
         .build();
     UnsafeProjection projection = evolution.generateUnsafeProjection();

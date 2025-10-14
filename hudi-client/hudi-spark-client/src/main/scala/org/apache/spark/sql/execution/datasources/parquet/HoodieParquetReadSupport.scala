@@ -19,6 +19,7 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.util.ValidationUtils
 
 import org.apache.parquet.hadoop.api.InitContext
@@ -36,16 +37,7 @@ class HoodieParquetReadSupport(
                                 enableVectorizedReader: Boolean,
                                 datetimeRebaseSpec: RebaseSpec,
                                 int96RebaseSpec: RebaseSpec)
-  extends ParquetReadSupport(convertTz, enableVectorizedReader, datetimeRebaseSpec, int96RebaseSpec) {
-
-  def this() = {
-    // Provide same arguments as Spark's default ParquetReadSupport
-    this(
-      None,
-      enableVectorizedReader = true,
-      datetimeRebaseSpec = RebaseSpec(LegacyBehaviorPolicy.CORRECTED),
-      int96RebaseSpec = RebaseSpec(LegacyBehaviorPolicy.LEGACY))
-  }
+  extends ParquetReadSupport(convertTz, enableVectorizedReader, datetimeRebaseSpec, int96RebaseSpec) with SparkAdapterSupport {
 
   override def init(context: InitContext): ReadContext = {
     val readContext = super.init(context)
