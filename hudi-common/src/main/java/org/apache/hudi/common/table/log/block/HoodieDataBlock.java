@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -260,19 +261,13 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * @param <T>           The type of engine-specific record representation to return.
    * @return An iterator containing the records of interest in specified type.
    */
-  public final <T> ClosableIterator<T> getEngineRecordIterator(HoodieReaderContext<T> readerContext, List<String> keys, boolean fullKey) {
+  public final <T> ClosableIterator<T> getEngineRecordIterator(HoodieReaderContext<T> readerContext, List<String> keys, boolean fullKey) throws IOException {
     boolean fullScan = keys.isEmpty();
-
-    // Otherwise, we fetch all the records and filter out all the records, but the
-    // ones requested
-    ClosableIterator<T> allRecords = getEngineRecordIterator(readerContext);
-    if (fullScan) {
-      return allRecords;
+    if (!fullScan) {
+      return lookupEngineRecords(keys, fullKey);
+    } else {
+      return ClosableIterator.wrap(Collections.emptyIterator());
     }
-
-    HashSet<String> keySet = new HashSet<>(keys);
-    return FilteringEngineRecordIterator.getInstance(allRecords, keySet, fullKey, record ->
-        Option.of(readerContext.getRecordContext().getRecordKey(record, readerSchema)));
   }
 
   protected <T> ClosableIterator<HoodieRecord<T>> readRecordsFromBlockPayload(HoodieRecordType type) throws IOException {
@@ -324,6 +319,12 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   }
 
   protected <T> ClosableIterator<HoodieRecord<T>> lookupRecords(List<String> keys, boolean fullKey) throws IOException {
+    throw new UnsupportedOperationException(
+        String.format("Point lookups are not supported by this Data block type (%s)", getBlockType())
+    );
+  }
+
+  protected <T> ClosableIterator<T> lookupEngineRecords(List<String> keys, boolean fullKey) throws IOException {
     throw new UnsupportedOperationException(
         String.format("Point lookups are not supported by this Data block type (%s)", getBlockType())
     );
