@@ -19,12 +19,11 @@ package org.apache.hudi.client.clustering.plan.strategy;
 
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
-import java.util.Optional;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -51,14 +50,16 @@ public class TestFlinkSizeBasedClusteringPlanStrategy {
     HoodieBaseFile smallFile = mock(HoodieBaseFile.class);
     when(smallFile.getFileSize()).thenReturn(1024L * 1024L); // 1MB
     FileSlice slice = mock(FileSlice.class);
-    when(slice.getBaseFile()).thenReturn(Optional.of(smallFile));
+    when(slice.getBaseFile()).thenReturn(Option.of(smallFile));
 
-    // Mock parent call to return only that one slice
+    // Use spy + doReturn to mock the parent method behavior
     doReturn(Stream.of(slice))
-            .when((FlinkSizeBasedClusteringPlanStrategy<?>) strategy)
-            .super_getFileSlicesEligibleForClustering(anyString());
+            .when(strategy)
+            .getFileSlicesEligibleForClustering(anyString());
 
     Stream<FileSlice> result = strategy.getFileSlicesEligibleForClustering("2025/10/09");
+
+    // Since only one small file, clustering should skip
     assertEquals(0, result.count(), "Expected empty stream for single small file partition");
   }
 
@@ -67,18 +68,20 @@ public class TestFlinkSizeBasedClusteringPlanStrategy {
     HoodieBaseFile smallFile1 = mock(HoodieBaseFile.class);
     when(smallFile1.getFileSize()).thenReturn(1 * 1024 * 1024L);
     FileSlice slice1 = mock(FileSlice.class);
-    when(slice1.getBaseFile()).thenReturn(Optional.of(smallFile1));
+    when(slice1.getBaseFile()).thenReturn(Option.of(smallFile1));
 
     HoodieBaseFile smallFile2 = mock(HoodieBaseFile.class);
     when(smallFile2.getFileSize()).thenReturn(2 * 1024 * 1024L);
     FileSlice slice2 = mock(FileSlice.class);
-    when(slice2.getBaseFile()).thenReturn(Optional.of(smallFile2));
+    when(slice2.getBaseFile()).thenReturn(Option.of(smallFile2));
 
     doReturn(Stream.of(slice1, slice2))
-            .when((FlinkSizeBasedClusteringPlanStrategy<?>) strategy)
-            .super_getFileSlicesEligibleForClustering(anyString());
+            .when(strategy)
+            .getFileSlicesEligibleForClustering(anyString());
 
     Stream<FileSlice> result = strategy.getFileSlicesEligibleForClustering("2025/10/09");
+
+    // Multiple small files → clustering should proceed
     assertTrue(result.count() > 0, "Expected non-empty stream for multiple small files");
   }
 }
