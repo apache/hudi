@@ -41,8 +41,13 @@ public class TestFlinkSizeBasedClusteringPlanStrategy {
   void setup() {
     config = mock(HoodieWriteConfig.class);
     when(config.getClusteringSmallFileLimit()).thenReturn(128 * 1024 * 1024L); // 128MB
-    strategy = spy(new FlinkSizeBasedClusteringPlanStrategy<>(null, config));
+
+    HoodieTable table = mock(HoodieTable.class);
+    HoodieEngineContext context = mock(HoodieEngineContext.class);
+
+    strategy = spy(new FlinkSizeBasedClusteringPlanStrategy<>(table, context, config));
   }
+
 
   @Test
   void testSkipSingleSmallFilePartition() {
