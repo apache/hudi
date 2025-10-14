@@ -329,7 +329,7 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         }
       } else {
         logDebug(s"Falling back to parquet-mr")
-        val readSupport = new ParquetReadSupport(
+        val readSupport = new HoodieParquetReadSupport(
           convertTz,
           enableVectorizedReader = false,
           datetimeRebaseSpec,

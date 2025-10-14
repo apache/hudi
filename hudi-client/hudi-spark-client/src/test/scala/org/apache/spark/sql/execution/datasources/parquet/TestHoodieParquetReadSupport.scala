@@ -22,6 +22,13 @@ import org.apache.parquet.schema.Types
 import org.junit.jupiter.api.{Assertions, Test}
 
 class TestHoodieParquetReadSupport {
+
+  /**
+   * Validate that when none of the child fields of a nested struct or array field match between the
+   * requested schema and the actual file schema, the entire struct/array field is removed from
+   * the requested schema. For map fields, the key type is matched and retained even if
+   * the value type does not have any matching fields.
+   */
   @Test
   def testSchemaTrimming_noRemainingFields(): Unit = {
     val requiredNestedField = Types.requiredGroup().addField(Types.required(PrimitiveTypeName.INT32).named("nested_a"))
@@ -47,14 +54,23 @@ class TestHoodieParquetReadSupport {
 
     val trimmedSchema = HoodieParquetReadSupport.trimParquetSchema(requiredSchema, dataSchema)
 
+    // The nested struct field "b" and the array field "list" are removed because they do not have any
+    // matching child fields in the data schema. The map field "key_value" is retained because the key type
+    // matches even though the value struct does not have any matching fields.
     val expectedSchema = Types.buildMessage()
         .addField(Types.required(PrimitiveTypeName.BINARY).named("a"))
+        // only the key value is retained because the value struct does not have any matching fields
+        .addField(Types.requiredMap().key(PrimitiveTypeName.BINARY).named("key_value"))
         .addField(Types.required(PrimitiveTypeName.BINARY).named("e"))
         .named("required")
 
     Assertions.assertEquals(expectedSchema, trimmedSchema)
   }
 
+  /**
+   * Validate that when at least one child field of a nested struct/array/map field matches between the
+   * requested schema and the actual file schema, the entire struct/array/map field is retained.
+   */
   @Test
   def testSchemaTrimming_atLeastOneFieldMatches(): Unit = {
     val requiredNestedField = Types.requiredGroup().addField(Types.required(PrimitiveTypeName.INT32).named("nested_a"))

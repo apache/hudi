@@ -19,10 +19,13 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import org.apache.hudi.common.util.ValidationUtils
+
 import org.apache.parquet.hadoop.api.InitContext
 import org.apache.parquet.hadoop.api.ReadSupport.ReadContext
-import org.apache.parquet.schema.{GroupType, LogicalTypeAnnotation, MessageType, Type, Types}
+import org.apache.parquet.schema.{GroupType, MessageType, Type, Types}
 import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
+import org.apache.spark.sql.internal.LegacyBehaviorPolicy
 
 import java.time.ZoneId
 
@@ -34,6 +37,15 @@ class HoodieParquetReadSupport(
                                 datetimeRebaseSpec: RebaseSpec,
                                 int96RebaseSpec: RebaseSpec)
   extends ParquetReadSupport(convertTz, enableVectorizedReader, datetimeRebaseSpec, int96RebaseSpec) {
+
+  def this() = {
+    // Provide same arguments as Spark's default ParquetReadSupport
+    this(
+      None,
+      enableVectorizedReader = true,
+      datetimeRebaseSpec = RebaseSpec(LegacyBehaviorPolicy.CORRECTED),
+      int96RebaseSpec = RebaseSpec(LegacyBehaviorPolicy.LEGACY))
+  }
 
   override def init(context: InitContext): ReadContext = {
     val readContext = super.init(context)
@@ -65,12 +77,14 @@ object HoodieParquetReadSupport {
     Types.buildMessage().addFields(trimmedFields: _*).named(requestedSchema.getName)
   }
 
-  private def trimParquetType(parquetType: Type, fileType: Type): Option[Type] = {
-    if (parquetType.equals(fileType)) {
-      Some(parquetType)
+  private def trimParquetType(requestedType: Type, fileType: Type): Option[Type] = {
+    if (requestedType.equals(fileType)) {
+      Some(requestedType)
     } else {
-      parquetType match {
+      requestedType match {
         case groupType: GroupType =>
+          ValidationUtils.checkState(!fileType.isPrimitive,
+            "Group type provided by requested schema but existing type in the file is a primitive")
           val fileTypeGroup = fileType.asGroupType()
           var hasMatchingField = false
           val fields = groupType.getFields.asScala.map(field => {
@@ -81,19 +95,12 @@ object HoodieParquetReadSupport {
               Some(field)
             }
           }).filter(_.isDefined).map(_.get).asJava
-          if (groupType.getLogicalTypeAnnotation == LogicalTypeAnnotation.mapType() && !fields.isEmpty) {
-            if (fields.get(0).asGroupType().getFields.size() == 2) {
-              // Map type must have exactly 2 fields: key and value
-              Some(groupType.withNewFields(fields))
-            } else {
-              None
-            }
-          } else if (hasMatchingField && !fields.isEmpty) {
+          if (hasMatchingField && !fields.isEmpty) {
             Some(groupType.withNewFields(fields))
           } else {
             None
           }
-        case _ => Some(parquetType)
+        case _ => Some(requestedType)
       }
     }
   }
