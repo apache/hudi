@@ -26,7 +26,6 @@ import org.apache.parquet.hadoop.api.InitContext
 import org.apache.parquet.hadoop.api.ReadSupport.ReadContext
 import org.apache.parquet.schema.{GroupType, MessageType, Type, Types}
 import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
-import org.apache.spark.sql.internal.LegacyBehaviorPolicy
 
 import java.time.ZoneId
 
