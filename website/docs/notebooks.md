@@ -19,11 +19,11 @@ All you need is a cloned copy of the Hudi repository and Docker installed on you
   * Build Docker Images
     ```sh 
     cd hudi-notebooks
-    ./build.sh
+    bash build.sh
     ```
   * Start the Environment
     ```sh
-    ./run_spark_hudi.sh start
+    bash run_spark_hudi.sh start
     ```
 
 ### Meet Your Notebooks
