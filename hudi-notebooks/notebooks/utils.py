@@ -60,7 +60,6 @@ def ls(base_path):
         if not fs.exists(p):
             print(f"Path does not exist: {base_path}")
             return []
-
         status = fs.listStatus(p)
         files = [str(file.getPath()) for file in status]
         for f in files:
