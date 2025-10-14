@@ -57,7 +57,6 @@ def ls(base_path):
 	    hadoop_conf = spark._jsc.hadoopConfiguration()
         fs = spark._jvm.org.apache.hadoop.fs.FileSystem.get(hadoop_conf)
         p = spark._jvm.org.apache.hadoop.fs.Path(base_path)
-
         if not fs.exists(p):
             print(f"Path does not exist: {base_path}")
             return []
