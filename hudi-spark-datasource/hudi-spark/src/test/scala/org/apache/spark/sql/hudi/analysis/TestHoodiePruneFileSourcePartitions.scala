@@ -108,8 +108,8 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
             case "eager" =>
               // NOTE: In case of partitioned table 3 files will be created, while in case of non-partitioned just 1
               if (partitioned) {
-                assertEquals(1275, f.stats.sizeInBytes.longValue / 1024)
-                assertEquals(1275, lr.stats.sizeInBytes.longValue / 1024)
+                assertEquals(1275, Math.ceil(f.stats.sizeInBytes.longValue * 1.0 / 1024))
+                assertEquals(1275, Math.ceil(lr.stats.sizeInBytes.longValue * 1.0 / 1024))
               } else {
                 // NOTE: We're adding 512 to make sure we always round to the next integer value
                 assertEquals(425, (f.stats.sizeInBytes.longValue + 512) / 1024)
@@ -201,7 +201,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
           // table have to be listed
           listingModeOverride match {
             case "eager" | "lazy" =>
-              assertEquals(1275, lr.stats.sizeInBytes.longValue / 1024)
+              assertEquals(1275, Math.ceil(lr.stats.sizeInBytes.longValue * 1.0 / 1024))
 
             case _ => throw new UnsupportedOperationException()
           }
