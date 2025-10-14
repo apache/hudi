@@ -71,7 +71,6 @@ public class FlinkSizeBasedClusteringPlanStrategy<T>
   }
 
   @Override
-  @Override
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(final String partition) {
     Supplier<Stream<FileSlice>> streamSupplier = () -> super.getFileSlicesEligibleForClustering(partition)
             .filter(slice -> slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L)
