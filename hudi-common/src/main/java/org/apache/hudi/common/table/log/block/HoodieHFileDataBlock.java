@@ -33,7 +33,6 @@ import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import org.apache.avro.Schema;
@@ -191,7 +190,6 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
     HoodieStorage inlineStorage = blockContentLoc.getStorage().newInstance(inlinePath, inlineConf);
-    StoragePathInfo pathInfo = blockContentLoc.getLogFile().getPathInfo();
 
     try (final HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase) HoodieIOFactory
         .getIOFactory(inlineStorage)

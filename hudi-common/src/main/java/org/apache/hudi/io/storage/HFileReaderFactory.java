@@ -66,9 +66,6 @@ public class HFileReaderFactory {
       fileSizeOpt = Option.of(determineFileSize());
     }
     final long fileSize = fileSizeOpt.get();
-    if (fileSize > 17190) {
-      System.out.println("found the reader");
-    }
     final SeekableDataInputStream inputStream = createInputStream(fileSize);
 
     if (shouldEnableBlockCaching()) {

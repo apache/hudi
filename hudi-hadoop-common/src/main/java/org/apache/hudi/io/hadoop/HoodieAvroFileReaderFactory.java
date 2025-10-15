@@ -58,9 +58,6 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
 
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig, StoragePathInfo pathInfo,
                                                 Option<Schema> schemaOption) {
-    if (pathInfo == null) {
-      System.out.println("path info is null");
-    }
     HFileReaderFactory readerFactory = HFileReaderFactory.builder()
         .withStorage(storage).withProps(hoodieConfig.getProps())
         .withPath(pathInfo.getPath()).withFileSize(pathInfo.getLength()).build();
