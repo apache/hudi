@@ -33,6 +33,7 @@ import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import org.apache.avro.Schema;
@@ -189,12 +190,16 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         blockContentLoc.getLogFile().getPath().toUri().getScheme(),
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
-    HoodieStorage inlineStorage = getBlockContentLocation().get().getStorage().newInstance(inlinePath, inlineConf);
+    HoodieStorage inlineStorage = blockContentLoc.getStorage().newInstance(inlinePath, inlineConf);
+    StoragePathInfo pathInfo = blockContentLoc.getLogFile().getPathInfo();
 
     try (final HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase) HoodieIOFactory
         .getIOFactory(inlineStorage)
         .getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER, blockContentLoc.getLogFile().getPathInfo(), HoodieFileFormat.HFILE, Option.of(getSchemaFromHeader()))) {
+        .getFileReader(ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER,
+            inlinePath,
+            HoodieFileFormat.HFILE,
+            Option.of(getSchemaFromHeader()))) {
       // Get writer's schema from the header
       return (ClosableIterator<T>) (fullKey ? reader.getEngineRecordsByKeysIterator(sortedKeys, readerSchema) : reader.getEngineRecordsByKeyPrefixIterator(sortedKeys, readerSchema));
     }
