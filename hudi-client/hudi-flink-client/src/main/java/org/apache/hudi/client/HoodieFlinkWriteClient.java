@@ -363,12 +363,6 @@ public class HoodieFlinkWriteClient<T>
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
-    // only used for metadata table, the compaction happens in single thread
-    return tableServiceClient.compact(compactionInstantTime, shouldComplete);
-  }
-
-  @Override
   public HoodieWriteMetadata<List<WriteStatus>> cluster(final String clusteringInstant, final boolean shouldComplete) {
     throw new HoodieNotSupportedException("Clustering is not supported yet");
   }
