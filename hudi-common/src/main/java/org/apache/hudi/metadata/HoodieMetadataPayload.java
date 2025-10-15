@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
@@ -700,7 +701,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     // the payload key is in the format of "secondaryKey$primaryKey"
     HoodieKey key = new HoodieKey(SecondaryIndexKeyUtils.constructSecondaryIndexKey(secondaryKey, recordKey), partitionPath);
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), new HoodieSecondaryIndexInfo(isDeleted));
-    return new HoodieAvroRecord<>(key, payload);
+    return new HoodieAvroRecord<>(key, payload, null, OrderingValues.getDefault(), isDeleted);
   }
 
   public boolean isSecondaryIndexDeleted() {
@@ -717,7 +718,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     HoodieKey key = new HoodieKey(recordKey, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
     return new HoodieAvroRecord<>(key, isPartitionedRLI
         ? new EmptyHoodieRecordPayloadWithPartition(partitionPath)
-        : new EmptyHoodieRecordPayload());
+        : new EmptyHoodieRecordPayload(), null, OrderingValues.getDefault(), true);
   }
 
   /**
