@@ -112,7 +112,7 @@
     <confluent.version>5.5.0</confluent.version>
     <glassfish.version>2.17</glassfish.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
-    <parquet.version>1.10.1</parquet.version>
+    <parquet.version>1.15.1</parquet.version>
     <junit.jupiter.version>5.13.4</junit.jupiter.version>
     <junit.vintage.version>5.13.4</junit.vintage.version>
     <junit.platform.version>1.13.4</junit.platform.version>
@@ -123,7 +123,7 @@
     <hadoop.version>2.10.2</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.4</hive.version>
-    <hive.parquet.version>1.10.1</hive.parquet.version>
+    <hive.parquet.version>1.15.1</hive.parquet.version>
     <hive.avro.version>1.11.4</hive.avro.version>
     <presto.version>0.273</presto.version>
     <trino.version>390</trino.version>
@@ -153,7 +153,7 @@
     <flink.bundle.version>1.20</flink.bundle.version>
     <!-- This is fixed to match with version from flink-avro -->
     <flink.avro.version>1.11.4</flink.avro.version>
-    <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
+    <flink.format.parquet.version>1.15.1</flink.format.parquet.version>
     <!-- check kafka version -->
     <flink.connector.kafka.version>3.3.0-1.20</flink.connector.kafka.version>
     <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
@@ -2375,7 +2375,7 @@
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
                    synchronized to avoid classpath ambiguity -->
-        <parquet.version>1.13.1</parquet.version>
+        <parquet.version>1.15.1</parquet.version>
         <orc.spark.version>1.9.1</orc.spark.version>
         <avro.version>1.11.4</avro.version>
         <antlr.version>4.9.3</antlr.version>
@@ -2433,7 +2433,7 @@
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
                    synchronized to avoid classpath ambiguity -->
-        <parquet.version>1.12.2</parquet.version>
+        <parquet.version>1.15.1</parquet.version>
         <orc.spark.version>1.7.8</orc.spark.version>
         <avro.version>1.11.4</avro.version>
         <antlr.version>4.8</antlr.version>
@@ -2474,7 +2474,7 @@
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
                    synchronized to avoid classpath ambiguity -->
-        <parquet.version>1.12.3</parquet.version>
+        <parquet.version>1.15.1</parquet.version>
         <orc.spark.version>1.8.3</orc.spark.version>
         <avro.version>1.11.4</avro.version>
         <antlr.version>4.9.3</antlr.version>
@@ -2525,7 +2525,7 @@
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
                    synchronized to avoid classpath ambiguity -->
-        <parquet.version>1.13.1</parquet.version>
+        <parquet.version>1.15.1</parquet.version>
         <orc.spark.version>1.9.1</orc.spark.version>
         <avro.version>1.11.4</avro.version>
         <antlr.version>4.9.3</antlr.version>
@@ -2635,7 +2635,7 @@
         <flink.connector.kafka.version>4.0.0-2.0</flink.connector.kafka.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
-        <flink.format.parquet.version>1.14.4</flink.format.parquet.version>
+        <flink.format.parquet.version>1.15.1</flink.format.parquet.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility</flink.hadoop.compatibility.artifactId>
       </properties>
       <activation>
@@ -2652,7 +2652,7 @@
         <flink.bundle.version>1.20</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
-        <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
+        <flink.format.parquet.version>1.15.1</flink.format.parquet.version>
         <flink.connector.kafka.version>3.3.0-1.20</flink.connector.kafka.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
@@ -2671,7 +2671,7 @@
         <flink.bundle.version>1.19</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
-        <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
+        <flink.format.parquet.version>1.15.1</flink.format.parquet.version>
         <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
@@ -2689,7 +2689,7 @@
         <flink.bundle.version>1.18</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
-        <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
+        <flink.format.parquet.version>1.15.1</flink.format.parquet.version>
         <flink.connector.kafka.version>3.2.0-1.18</flink.connector.kafka.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
@@ -2707,7 +2707,7 @@
         <flink.bundle.version>1.17</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
-        <flink.format.parquet.version>1.12.3</flink.format.parquet.version>
+        <flink.format.parquet.version>1.15.1</flink.format.parquet.version>
         <flink.connector.kafka.version>${flink1.17.version}</flink.connector.kafka.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
