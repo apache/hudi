@@ -487,7 +487,6 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
             table.getMetaClient(),
             slice.getLogFiles()
                 .sorted(HoodieLogFile.getLogFileComparator())
-                .map(file -> file.getPath().toString())
                 .collect(Collectors.toList()),
             config.getMaxDFSStreamBufferSize(),
             instant,
@@ -497,7 +496,6 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
             table.getMetaClient(),
             slice.getLogFiles()
                 .sorted(HoodieLogFile.getLogFileComparator())
-                .map(file -> file.getPath().toString())
                 .collect(Collectors.toList()),
             config.getMaxDFSStreamBufferSize(),
             currentInstant,
