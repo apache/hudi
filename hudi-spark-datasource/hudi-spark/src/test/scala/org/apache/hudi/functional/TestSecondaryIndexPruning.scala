@@ -1767,6 +1767,144 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     )
   }
 
+  /**
+   * Test Secondary Index with partition path update using global record index.
+   * This test validates that when a record moves from one partition (file group) to another
+   * using global index, the secondary index is correctly updated and queries work as expected.
+   *
+   * Test flow:
+   * 1. Create a table with global index enabled
+   * 2. Insert records into different partitions with a secondary index
+   * 3. Update partition path of a record (moving it from partition A to B)
+   * 4. Validate secondary index metadata is correct (no duplicates, no missing entry)
+   * 5. Validate query results using secondary index pruning
+   */
+  @Test
+  def testSecondaryIndexWithPartitionPathUpdateUsingGlobalIndex(): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+      HoodieIndexConfig.INDEX_TYPE.key -> "RECORD_INDEX",
+      HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE.key -> "true")
+    val tableName = "test_secondary_index_with_partition_update_global_index"
+
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  ts bigint,
+         |  record_key_col string,
+         |  not_record_key_col string,
+         |  partition_key_col string
+         |) using hudi
+         | options (
+         |  primaryKey = 'record_key_col',
+         |  type = 'mor',
+         |  hoodie.metadata.enable = 'true',
+         |  hoodie.metadata.record.index.enable = 'true',
+         |  hoodie.datasource.write.recordkey.field = 'record_key_col',
+         |  hoodie.enable.data.skipping = 'true',
+         |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
+         |  hoodie.index.type = 'RECORD_INDEX',
+         |  hoodie.record.index.update.partition.path = 'true'
+         | )
+         | partitioned by (partition_key_col)
+         | location '$basePath'
+       """.stripMargin)
+
+    spark.sql("set hoodie.parquet.small.file.limit=0")
+    // Insert initial records into different partitions
+    spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
+    spark.sql(s"insert into $tableName values(2, 'row2', 'def', 'p2')")
+    spark.sql(s"insert into $tableName values(3, 'row3', 'ghi', 'p2')")
+
+    // Create secondary index
+    spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
+
+    // Validate index created successfully
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .build()
+    assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
+
+    // Validate the secondary index records before partition update
+    checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+      Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false),
+      Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+      Seq(s"ghi${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3", false)
+    )
+
+    // Validate data skipping with filters on secondary key column
+    spark.sql("set hoodie.metadata.enable=true")
+    spark.sql("set hoodie.enable.data.skipping=true")
+    spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+    checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col = 'ghi'")(
+      Seq(3, "row3", "ghi", "p2")
+    )
+
+    // Update partition path - move row3 from p2 to p3 using MERGE INTO
+    // This moves a record from file group A to file group B
+    spark.sql(
+      s"""
+         |MERGE INTO $tableName AS target
+         |USING (SELECT 3 as ts, 'row3' as record_key_col, 'ghi' as not_record_key_col, 'p3' as partition_key_col) AS source
+         |ON target.record_key_col = source.record_key_col
+         |WHEN MATCHED THEN UPDATE SET *
+       """.stripMargin)
+
+    // Validate the secondary index records after partition update
+    checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+      Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false),
+      Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+      Seq(s"ghi${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3", false)
+    )
+
+    // Validate data after partition update
+    checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col = 'ghi'")(
+      Seq(3, "row3", "ghi", "p3")
+    )
+
+    // Validate all records are in correct partitions
+    checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName order by record_key_col")(
+      Seq(1, "row1", "abc", "p1"),
+      Seq(2, "row2", "def", "p2"),
+      Seq(3, "row3", "ghi", "p3")
+    )
+
+    // Validate the secondary index records - should have NO duplicates for row1
+    // The secondary index should only have one entry for 'abc' -> 'row1', not two
+    checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+      Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false),
+      Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+      Seq(s"ghi${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3", false)
+    )
+
+    // Validate data skipping with filters on secondary key column
+    spark.sql("set hoodie.metadata.enable=true")
+    spark.sql("set hoodie.enable.data.skipping=true")
+    spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+
+    // Query using secondary index - should return the correct record in new partition
+    checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col = 'abc'")(
+      Seq(1, "row1", "abc", "p2")
+    )
+
+    // Verify query predicate and data skipping works correctly
+    verifyQueryPredicate(hudiOpts, "not_record_key_col")
+
+    // Query from new partition p2 - should have all 3 records now
+    checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where partition_key_col = 'p2' order by record_key_col")(
+      Seq(1, "row1", "abc", "p2"),
+      Seq(2, "row2", "def", "p2"),
+      Seq(3, "row3", "ghi", "p2")
+    )
+
+    // Query from old partition p1 - should have no records
+    checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where partition_key_col = 'p1'")(
+      // Empty result expected
+    )
+  }
+
   private def deleteLastCompletedCommitFromTimeline(hudiOpts: Map[String, String], metaClient: HoodieTableMetaClient): Unit = {
     val lastInstant = metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant().get()
     assertTrue(hoodieStorage().deleteFile(new StoragePath(metaClient.getTimelinePath, HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant))))
