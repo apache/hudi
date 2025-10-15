@@ -175,6 +175,9 @@ experience the new features and enhancements.
 - We discovered a regression in Hudi 1.0.0 release for backwards compatible writer for MOR table.
 It can silently deletes committed data after upgrade when new data is ingested to the table.
 - We also have a ComplexKeyGenerator related regression reported [here](release-0.14.1#known-regressions). Please refrain from migrating, if you have single field as record key and multiple fields as partition fields.
+- The Hudi 1.0.0 release introduces a regression related to ingestion of timestamp logical types using HoodieDeltaStreamer/HoodieStreamer. This issue was also present in version 0.15.0 and 0.14.1.
+  For timestamp-millis type it will be labeled as timestamp-micros in the parquet and table schemas. For local-timestamp-millis and local-timestamp-micros
+  they will just be longs with no logical type label.
 
 :::tip
 Avoid upgrading any existing table to 1.0.0 if any of the above scenario matches your workload. Incase of backwards compatible writer for MOR table, you are good to upgrade to 1.0.2 release. 
