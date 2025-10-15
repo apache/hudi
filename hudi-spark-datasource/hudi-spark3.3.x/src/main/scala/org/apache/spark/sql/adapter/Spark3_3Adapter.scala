@@ -31,7 +31,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
+import org.apache.spark.sql.catalyst.util.{METADATA_COL_ATTR_KEY, RebaseDateTime}
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.orc.Spark33OrcReader
@@ -166,5 +166,9 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
 
   override def isTimestampNTZType(dataType: DataType): Boolean = {
     dataType.getClass.getSimpleName.startsWith("TimestampNTZType")
+  }
+
+  override def getRebaseSpec(policy: String): RebaseDateTime.RebaseSpec = {
+    RebaseDateTime.RebaseSpec(LegacyBehaviorPolicy.withName(policy))
   }
 }
