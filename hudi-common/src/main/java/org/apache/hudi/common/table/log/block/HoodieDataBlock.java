@@ -35,7 +35,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -266,7 +265,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     if (!fullScan) {
       return lookupEngineRecords(keys, fullKey);
     } else {
-      return ClosableIterator.wrap(Collections.emptyIterator());
+      throw new IllegalStateException("Unexpected code reached. Expected to be called only with keySpec defined for non FILES partition in Metadata table");
     }
   }
 
