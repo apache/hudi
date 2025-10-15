@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hudi.{HoodieBaseRelation, HoodieFileIndex}
+import org.apache.hudi.HoodieFileIndex
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 
 import org.apache.spark.sql.SparkSession
@@ -88,7 +88,6 @@ private object Spark3HoodiePruneFileSourcePartitions extends PredicateHelper {
   private object HoodieRelationMatcher {
     def unapply(relation: BaseRelation): Option[HoodieFileIndex] = relation match {
       case HadoopFsRelation(fileIndex: HoodieFileIndex, _, _, _, _, _) => Some(fileIndex)
-      case r: HoodieBaseRelation => Some(r.fileIndex)
       case _ => None
     }
   }

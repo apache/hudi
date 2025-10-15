@@ -135,20 +135,6 @@ object HoodieAnalysis extends SparkAdapterSupport {
       // Default rules
     )
 
-    val nestedSchemaPruningClass = if (HoodieSparkUtils.gteqSpark4_0) {
-        "org.apache.spark.sql.execution.datasources.Spark40NestedSchemaPruning"
-      } else if (HoodieSparkUtils.gteqSpark3_5) {
-        "org.apache.spark.sql.execution.datasources.Spark35NestedSchemaPruning"
-      } else if (HoodieSparkUtils.gteqSpark3_4) {
-        "org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning"
-      } else {
-        // spark 3.3
-        "org.apache.spark.sql.execution.datasources.Spark33NestedSchemaPruning"
-      }
-
-    val nestedSchemaPruningRule = ReflectionUtils.loadClass(nestedSchemaPruningClass).asInstanceOf[Rule[LogicalPlan]]
-    rules += (_ => nestedSchemaPruningRule)
-
     // NOTE: [[HoodiePruneFileSourcePartitions]] is a replica in kind to Spark's
     //       [[PruneFileSourcePartitions]] and as such should be executed at the same stage.
     //       However, currently Spark doesn't allow [[SparkSessionExtensions]] to inject into

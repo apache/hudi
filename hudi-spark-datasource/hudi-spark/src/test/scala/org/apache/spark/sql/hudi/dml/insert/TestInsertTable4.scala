@@ -467,43 +467,6 @@ class TestInsertTable4 extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test vectorized read nested columns for LegacyHoodieParquetFileFormat") {
-    withSQLConf(
-      "hoodie.datasource.read.use.new.parquet.file.format" -> "false",
-      "hoodie.file.group.reader.enabled" -> "false",
-      "spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true",
-      "spark.sql.parquet.enableVectorizedReader" -> "true") {
-      withTempDir { tmp =>
-        val tableName = generateTableName
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  attributes map<string, string>,
-             |  price double,
-             |  ts long,
-             |  dt string
-             |) using hudi
-             | tblproperties (primaryKey = 'id')
-             | partitioned by (dt)
-             | location '${tmp.getCanonicalPath}'
-                    """.stripMargin)
-        spark.sql(
-          s"""
-             | insert into $tableName values
-             | (1, 'a1', map('color', 'red', 'size', 'M'), 10, 1000, '2021-01-05'),
-             | (2, 'a2', map('color', 'blue', 'size', 'L'), 20, 2000, '2021-01-06'),
-             | (3, 'a3', map('color', 'green', 'size', 'S'), 30, 3000, '2021-01-07')
-                    """.stripMargin)
-        // Check the inserted records with map type attributes
-        checkAnswer(s"select id, name, price, ts, dt from $tableName where attributes.color = 'red'")(
-          Seq(1, "a1", 10.0, 1000, "2021-01-05")
-        )
-      }
-    }
-  }
-
   def ingestAndValidateDataNoPrecombine(tableType: String, tableName: String, tmp: File,
                                         expectedOperationtype: WriteOperationType,
                                         setOptions: List[String] = List.empty) : Unit = {

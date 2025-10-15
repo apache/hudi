@@ -67,10 +67,12 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .sinceVersion("0.6.0")
       .withDocumentation("Selects the mode in which each file/partition in the bootstrapped dataset gets bootstrapped");
 
+  @Deprecated
   public static final ConfigProperty<String> DATA_QUERIES_ONLY = ConfigProperty
       .key("hoodie.bootstrap.data.queries.only")
       .defaultValue("false")
       .markAdvanced()
+      .deprecatedAfter("1.2.0")
       .sinceVersion("0.14.0")
       .withDocumentation("Improves query performance, but queries cannot use hudi metadata fields");
 

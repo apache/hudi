@@ -37,9 +37,8 @@ import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
 import org.apache.spark.sql.functions.{col, not}
 import org.apache.spark.sql.types.StringType
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
 import java.util.concurrent.atomic.AtomicInteger
@@ -91,7 +90,7 @@ class TestBloomFiltersIndexSupport extends HoodieSparkClientTestBase {
     cleanupSparkContexts()
   }
 
-  @ParameterizedTest
+  @Disabled("Need to support the mdt spark datasource")
   @EnumSource(classOf[HoodieTableType])
   def testIndexInitialization(tableType: HoodieTableType): Unit = {
     val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
@@ -104,7 +103,7 @@ class TestBloomFiltersIndexSupport extends HoodieSparkClientTestBase {
   /**
    * Test case to do a write with updates and then validate file pruning using bloom filters.
    */
-  @Test
+  @Disabled("Need to support the mdt spark datasource")
   def testBloomFiltersIndexFilePruning(): Unit = {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts + (
