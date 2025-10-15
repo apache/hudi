@@ -362,7 +362,17 @@ public class TestStreamWriteOperatorCoordinator {
     metadataTableMetaClient.reloadActiveTimeline();
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(14));
-    assertThat(completedTimeline.nthFromLastInstant(1).get().getAction(), is(HoodieTimeline.COMMIT_ACTION));
+    HoodieInstant compactionInstant = completedTimeline.nthFromLastInstant(1).get();
+    assertThat(compactionInstant.getAction(), is(HoodieTimeline.COMMIT_ACTION));
+
+    // remove the last compaction completed file and write another commit
+    TestUtils.deleteInstantFile(metadataTableMetaClient, compactionInstant);
+    assertTrue(metadataTableMetaClient.reloadActiveTimeline().filterPendingCompactionTimeline().containsInstant(compactionInstant.requestedTime()));
+    mockWriteWithMetadata(ckp++);
+    metadataTableMetaClient.reloadActiveTimeline();
+    completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
+    assertThat("The pending compaction should be recommitted",
+        completedTimeline.nthFromLastInstant(3).get(), is(compactionInstant));
   }
 
   @Test
