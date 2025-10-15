@@ -77,10 +77,12 @@ public class FlinkSizeBasedClusteringPlanStrategy<T>
             .filter(slice -> slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L)
                     < getWriteConfig().getClusteringSmallFileLimit());
 
-    Stream<FileSlice> fileSliceStream = streamSupplier.get();
-    long fileCount = fileSliceStream.map(slice -> slice.getBaseFile())
-            .distinct()
-            .count();
+    //  if some special sort columns are declared, we can not skip the clustering.
+    if (!StringUtils.isNullOrEmpty(getWriteConfig().getClusteringSortColumns())) {
+      return streamSupplier.get();
+    }
+
+    long fileCount = streamSupplier.get().count();
 
     if (fileCount > 1L) {
       return streamSupplier.get();
