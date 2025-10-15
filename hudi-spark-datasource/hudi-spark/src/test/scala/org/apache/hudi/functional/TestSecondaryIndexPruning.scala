@@ -1779,14 +1779,16 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
    * 4. Validate secondary index metadata is correct (no duplicates, no missing entry)
    * 5. Validate query results using secondary index pruning
    */
-  @Test
-  def testSecondaryIndexWithPartitionPathUpdateUsingGlobalIndex(): Unit = {
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testSecondaryIndexWithPartitionPathUpdateUsingGlobalIndex(tableType: HoodieTableType): Unit = {
     val hudiOpts = commonOpts ++ Map(
-      DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
       HoodieIndexConfig.INDEX_TYPE.key -> "RECORD_INDEX",
       HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE.key -> "true")
     val tableName = "test_secondary_index_with_partition_update_global_index"
+    val sqlTableType = if (tableType == HoodieTableType.COPY_ON_WRITE) "cow" else "mor"
 
     spark.sql(
       s"""
@@ -1798,7 +1800,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
          |) using hudi
          | options (
          |  primaryKey = 'record_key_col',
-         |  type = 'mor',
+         |  type = '$sqlTableType',
          |  hoodie.metadata.enable = 'true',
          |  hoodie.metadata.record.index.enable = 'true',
          |  hoodie.datasource.write.recordkey.field = 'record_key_col',
