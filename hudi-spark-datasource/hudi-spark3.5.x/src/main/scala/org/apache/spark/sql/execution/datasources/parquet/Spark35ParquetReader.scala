@@ -85,14 +85,15 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
                                 partitionSchema: StructType,
                                 internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema],
                                 filters: scala.Seq[Filter],
-                                sharedConf: Configuration): Iterator[InternalRow] = {
+                                sharedConf: Configuration,
+                                tableSchemaOpt: org.apache.hudi.common.util.Option[org.apache.parquet.schema.MessageType]): Iterator[InternalRow] = {
     assert(file.partitionValues.numFields == partitionSchema.size)
 
     val filePath = file.toPath
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
     val schemaEvolutionUtils = new ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
-      partitionSchema, internalSchemaOpt)
+      partitionSchema, internalSchemaOpt, tableSchemaOpt)
 
     val fileFooter = if (enableVectorizedReader) {
       // When there are vectorized reads, we can avoid reading the footer twice by reading
@@ -211,7 +212,7 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
         readerWithRowIndexes.initialize(split, hadoopAttemptContext)
 
         val fullSchema = toAttributes(requiredSchema) ++ toAttributes(partitionSchema)
-        val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId)
+        val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId, footerFileMetaData.getSchema)
 
         if (partitionSchema.length == 0) {
           // There is no partition columns

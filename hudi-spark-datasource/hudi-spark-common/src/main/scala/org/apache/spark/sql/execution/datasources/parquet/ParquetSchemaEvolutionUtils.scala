@@ -47,7 +47,8 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
                                   filePath: Path,
                                   requiredSchema: StructType,
                                   partitionSchema: StructType,
-                                  internalSchemaOpt: util.Option[InternalSchema]) extends SparkAdapterSupport {
+                                  internalSchemaOpt: util.Option[InternalSchema],
+                                  tableSchemaOpt: util.Option[org.apache.parquet.schema.MessageType] = util.Option.empty()) extends SparkAdapterSupport {
   // Fetch internal schema
   private lazy val querySchemaOption: util.Option[InternalSchema] = pruneInternalSchema(internalSchemaOpt, requiredSchema)
 
@@ -159,8 +160,13 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
     hadoopAttemptConf
   }
 
-  def generateUnsafeProjection(fullSchema: Seq[AttributeReference], timeZoneId: Option[String]): UnsafeProjection = {
-    HoodieParquetFileFormatHelper.generateUnsafeProjection(fullSchema, timeZoneId, typeChangeInfos, requiredSchema, partitionSchema, schemaUtils)
+  def generateUnsafeProjection(fullSchema: Seq[AttributeReference], timeZoneId: Option[String], fileSchemaMessageType: org.apache.parquet.schema.MessageType): UnsafeProjection = {
+    val columnsToMultiply = if (tableSchemaOpt.isPresent) {
+      HoodieParquetFileFormatHelper.findColumnsToMultiply(fileSchemaMessageType, tableSchemaOpt.get())
+    } else {
+      Set.empty[String]
+    }
+    HoodieParquetFileFormatHelper.generateUnsafeProjection(fullSchema, timeZoneId, typeChangeInfos, requiredSchema, partitionSchema, schemaUtils, columnsToMultiply)
   }
 
   def buildVectorizedReader(convertTz: ZoneId,

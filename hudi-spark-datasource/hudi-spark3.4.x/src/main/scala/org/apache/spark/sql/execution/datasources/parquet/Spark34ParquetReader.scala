@@ -86,14 +86,15 @@ class Spark34ParquetReader(enableVectorizedReader: Boolean,
                       partitionSchema: StructType,
                       internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema],
                       filters: Seq[Filter],
-                      sharedConf: Configuration): Iterator[InternalRow] = {
+                      sharedConf: Configuration,
+                      tableSchemaOpt: org.apache.hudi.common.util.Option[org.apache.parquet.schema.MessageType]): Iterator[InternalRow] = {
     assert(file.partitionValues.numFields == partitionSchema.size)
 
     val filePath = file.toPath
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
     val schemaEvolutionUtils = new ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
-      partitionSchema, internalSchemaOpt)
+      partitionSchema, internalSchemaOpt, tableSchemaOpt)
 
     lazy val footerFileMetaData =
       ParquetFooterReader.readFooter(sharedConf, filePath, SKIP_ROW_GROUPS).getFileMetaData
@@ -204,7 +205,7 @@ class Spark34ParquetReader(enableVectorizedReader: Boolean,
         readerWithRowIndexes.initialize(split, hadoopAttemptContext)
 
         val fullSchema = requiredSchema.toAttributes ++ partitionSchema.toAttributes
-        val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId)
+        val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId, footerFileMetaData.getSchema)
 
         if (partitionSchema.length == 0) {
           // There is no partition columns
