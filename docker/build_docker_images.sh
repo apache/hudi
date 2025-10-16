@@ -40,7 +40,7 @@ HADOOP_VERSION="3.3.4"
 SPARK_VERSION="3.5.3"
 HIVE_VERSION="3.1.3"
 # Docker image tags
-VERSION_TAG="1.1.0"
+VERSION_TAG="4e6ebba26cb097cb26cddcbb3958d99dda476320" #Commit ID
 LATEST_TAG="latest"
 DOCKER_CONTEXT_DIR="hoodie/hadoop"
 # List of images to build: "subdir|image_base_name"
