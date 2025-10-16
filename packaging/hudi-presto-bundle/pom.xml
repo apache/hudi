@@ -157,6 +157,7 @@
                     <exclude>META-INF/services/javax.*</exclude>
                     <exclude>META-INF/maven/com.google.guava/**</exclude>
                     <exclude>META-INF/maven/com.fasterxml.jackson.core/**</exclude>
+                    <exclude>META-INF/maven/io.netty/**</exclude>
                     <exclude>**/*.proto</exclude>
                     <exclude>stringBehavior.avsc</exclude>
                   </excludes>
