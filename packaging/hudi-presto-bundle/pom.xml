@@ -208,6 +208,7 @@
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
+      <version>${presto.parquet.version}</version>
       <scope>compile</scope>
     </dependency>
 
