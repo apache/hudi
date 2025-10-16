@@ -734,7 +734,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   protected HoodieTable createTableAndValidate(HoodieWriteConfig config,
                                                BiFunction<HoodieWriteConfig,
-                                                   HoodieEngineContext, HoodieTable> createTableFn,
+                                               HoodieEngineContext, HoodieTable> createTableFn,
                                                boolean skipValidation) {
     HoodieTable table = createTableFn.apply(config, context);
     if (!skipValidation) {
