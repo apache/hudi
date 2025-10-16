@@ -361,7 +361,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
           return false;
         }
 
-        this.next = SerializableMetadataIndexedRecord.fromHFileKeyValueBytes(schema, keyFieldSchema, reader.getKeyValue().get());
+        this.next = SerializableMetadataIndexedRecord.fromHFileKeyValueBytes(schema, datumReader, keyFieldSchema, reader.getKeyValue().get());
         return true;
       } catch (IOException io) {
         throw new HoodieIOException("unable to read next record from hfile ", io);
@@ -434,7 +434,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
           if (reader.seekTo(key) == HFileReader.SEEK_TO_FOUND) {
             // Key is found
             KeyValue keyValue = reader.getKeyValue().get();
-            next = SerializableMetadataIndexedRecord.fromHFileKeyValueBytes(schema, keyFieldSchema, keyValue);
+            next = SerializableMetadataIndexedRecord.fromHFileKeyValueBytes(schema, datumReader, keyFieldSchema, keyValue);
             return true;
           }
         }
@@ -586,7 +586,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
             if (!isPrefixOfKey(lookUpKeyPrefix, keyValue.getKey())) {
               return false;
             }
-            next = SerializableMetadataIndexedRecord.fromHFileKeyValueBytes(writerSchema, keyFieldSchema, keyValue);
+            next = SerializableMetadataIndexedRecord.fromHFileKeyValueBytes(writerSchema, datumReader, keyFieldSchema, keyValue);
             // In case scanner is not able to advance, it means we reached EOF
             eof = !reader.next();
           } catch (IOException e) {

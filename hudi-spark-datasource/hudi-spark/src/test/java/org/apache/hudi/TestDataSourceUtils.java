@@ -34,6 +34,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -304,7 +305,8 @@ public class TestDataSourceUtils extends HoodieClientTestBase {
     byte[] recordToBytes = HoodieAvroUtils.avroToBytes(record);
     GenericRecord genericRecord = HoodieAvroUtils.bytesToAvro(recordToBytes, record.getSchema());
 
-    HoodieMetadataPayload genericRecordHoodieMetadataPayload = new HoodieMetadataPayload(Option.of(genericRecord));
+    HoodieMetadataPayload genericRecordHoodieMetadataPayload = new HoodieMetadataPayload(
+        Option.of(genericRecord), MetadataPartitionType.COLUMN_STATS.getRecordType());
     byte[] bytes = SerializationUtils.serialize(genericRecordHoodieMetadataPayload);
     HoodieMetadataPayload deserGenericRecordHoodieMetadataPayload = SerializationUtils.deserialize(bytes);
 

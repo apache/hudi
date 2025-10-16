@@ -42,6 +42,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.KEY_FIELD_NAME;
 
 public class SerializableMetadataIndexedRecord implements GenericRecord, KryoSerializable, Serializable {
   private static final long serialVersionUID = 1L;
@@ -49,16 +50,20 @@ public class SerializableMetadataIndexedRecord implements GenericRecord, KryoSer
   private static final ConcurrentHashMap<Schema, Schema.Field> CACHED_KEY_SCHEMA_MAP = new ConcurrentHashMap<>();
   private IndexedRecord record;
   private Schema schema;
+  // TODO(yihua): need to have a better way of referencing this reader
+  private GenericDatumReader<GenericRecord> datumReader;
   String key;
   private byte[] keyValueBytes;
   int valueOffset;
   int valueLength;
 
   private SerializableMetadataIndexedRecord(Schema schema,
+                                            GenericDatumReader<GenericRecord> datumReader,
                                             String key,
                                             byte[] keyValueBytes,
                                             int valueOffset,
                                             int valueLength) {
+    this.datumReader = datumReader;
     this.key = key;
     this.keyValueBytes = keyValueBytes;
     this.valueOffset = valueOffset;
@@ -68,11 +73,13 @@ public class SerializableMetadataIndexedRecord implements GenericRecord, KryoSer
   }
 
   public static SerializableMetadataIndexedRecord fromHFileKeyValueBytes(Schema schema,
+                                                                         GenericDatumReader<GenericRecord> datumReader,
                                                                          Schema.Field keyFieldSchema,
                                                                          KeyValue hfileKeyValue) {
     CACHED_KEY_SCHEMA_MAP.computeIfAbsent(schema, k -> keyFieldSchema);
     return new SerializableMetadataIndexedRecord(
         schema,
+        datumReader,
         fromUTF8Bytes(hfileKeyValue.getBytes(), hfileKeyValue.getKeyContentOffset(), hfileKeyValue.getKeyContentLength()),
         hfileKeyValue.getBytes(), hfileKeyValue.getValueOffset(),
         hfileKeyValue.getValueLength());
@@ -114,8 +121,8 @@ public class SerializableMetadataIndexedRecord implements GenericRecord, KryoSer
   public IndexedRecord getData() {
     if (record == null) {
       try {
-        GenericDatumReader<GenericRecord> datumReader = CACHED_DATUM_READER_MAP.computeIfAbsent(
-            schema, GenericDatumReader::new);
+        //GenericDatumReader<GenericRecord> datumReader = CACHED_DATUM_READER_MAP.computeIfAbsent(
+        //    schema, GenericDatumReader::new);
         record = HoodieAvroHFileReaderImplBase.deserialize(
             key, keyValueBytes, valueOffset, valueLength, datumReader,
             CACHED_KEY_SCHEMA_MAP.get(schema));
@@ -163,7 +170,7 @@ public class SerializableMetadataIndexedRecord implements GenericRecord, KryoSer
 
   @Override
   public Object get(String key) {
-    if (CACHED_KEY_SCHEMA_MAP.get(schema).name().equals(key)) {
+    if (KEY_FIELD_NAME.equals(key)) {
       return key;
     }
     getData();
