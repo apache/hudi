@@ -55,7 +55,7 @@ import org.scalatest.Assertions.{assertResult, assertThrows}
 
 import java.util.concurrent.Executors
 
-import scala.collection.{JavaConverters, Seq}
+import scala.collection.JavaConverters
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 
