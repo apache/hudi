@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.HoodieTableFormat;
 import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.config.ConfigProperty;
@@ -65,7 +66,9 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
@@ -73,12 +76,17 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.util.Lazy;
 
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -196,7 +204,6 @@ public class HoodieTableMetaClient implements Serializable {
     this.basePath = new StoragePath(basePath);
     this.metaPath = new StoragePath(basePath, METAFOLDER_NAME);
     this.tableConfig = new HoodieTableConfig(this.storage, metaPath);
-    this.indexMetadataOpt = readIndexDefFromStorage(this.storage, this.basePath, this.tableConfig);
     this.tableType = tableConfig.getTableType();
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
     if (layoutVersion.isPresent() && tableConfigVersion.isPresent()) {
@@ -213,6 +220,10 @@ public class HoodieTableMetaClient implements Serializable {
     this.timelinePath = timelineLayout.getTimelinePathProvider().getTimelinePath(tableConfig, this.basePath);
     this.timelineHistoryPath = timelineLayout.getTimelinePathProvider().getTimelineHistoryPath(tableConfig, this.basePath);
     this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
+    // Get the latest schema using TableSchemaResolver.
+    // Initializing indexMetadataOpt here because certain class members are used.
+    Lazy<Option<Schema>> lazySchemaOpt = Lazy.lazily(() -> getLatestTableSchema(this.tableConfig));
+    this.indexMetadataOpt = readIndexDefFromStorage(this.storage, this.basePath, this.tableConfig, lazySchemaOpt);
     LOG.debug("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ") from " + basePath);
     if (loadActiveTimelineOnLoad) {
       LOG.info("Loading Active commit timeline for " + basePath);
@@ -342,7 +353,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   private static Option<HoodieIndexMetadata> readIndexDefFromStorage(
-      HoodieStorage storage, StoragePath basePath, HoodieTableConfig tableConfig) {
+      HoodieStorage storage, StoragePath basePath, HoodieTableConfig tableConfig, Lazy<Option<Schema>> lazySchemaOpt) {
     Option<String> indexDefinitionPathOpt = tableConfig.getRelativeIndexDefinitionPath();
     if (indexDefinitionPathOpt.isEmpty() || StringUtils.isNullOrEmpty(indexDefinitionPathOpt.get())) {
       return Option.empty();
@@ -351,13 +362,112 @@ public class HoodieTableMetaClient implements Serializable {
     try {
       Option<byte[]> bytesOpt = FileIOUtils.readDataFromPath(storage, indexDefinitionPath, true);
       if (bytesOpt.isPresent()) {
-        return Option.of(HoodieIndexMetadata.fromJson(new String(bytesOpt.get())));
+        return Option.of(disableV1ColumnStatsForTimestampMillisColumns(
+            HoodieIndexMetadata.fromJson(new String(bytesOpt.get())), lazySchemaOpt));
       } else {
         return Option.of(new HoodieIndexMetadata());
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not load index definition at path: " + indexDefinitionPath, e);
     }
+  }
+
+  /**
+   * Gets the latest table schema using TableSchemaResolver.
+   *
+   * @param tableConfig The table configuration
+   * @return Option containing the latest table schema, or empty if schema cannot be resolved
+   */
+  Option<Schema> getLatestTableSchema(HoodieTableConfig tableConfig) {
+    try {
+      TableSchemaResolver schemaResolver = new TableSchemaResolver(this);
+      // Get schema without metadata fields for column type checking
+      return Option.of(schemaResolver.getTableAvroSchema(false));
+    } catch (Exception e) {
+      LOG.warn("Failed to resolve latest table schema, falling back to table create schema", e);
+      // Fallback to table create schema if schema resolution fails
+      return tableConfig.getTableCreateSchema();
+    }
+  }
+
+  static HoodieIndexMetadata disableV1ColumnStatsForTimestampMillisColumns(HoodieIndexMetadata originalMetadata,
+                                                                           Lazy<Option<Schema>> lazySchemaOpt) {
+    Lazy<List<String>> timestampMillisColumns = Lazy.lazily(() -> getTimestampMillisColumns(lazySchemaOpt.get()));
+    Map<String, HoodieIndexDefinition> indexDefinitions = originalMetadata.getIndexDefinitions();
+    Map<String, HoodieIndexDefinition> filteredIndexDefinitions = new HashMap<>();
+
+    for (Map.Entry<String, HoodieIndexDefinition> entry : indexDefinitions.entrySet()) {
+      String indexName = entry.getKey();
+      HoodieIndexDefinition indexDef = entry.getValue();
+      // Only check V1 column stats and partition stats index.
+      if (indexDef.getVersion() == HoodieIndexVersion.V1
+          && (HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS.equals(indexName)
+          || HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS.equals(indexName))
+          && lazySchemaOpt.get().isPresent() && !timestampMillisColumns.get().isEmpty()) {
+        // Filter out timestamp_millis columns from sourceFields
+        List<String> sourceFields = indexDef.getSourceFields();
+        if (sourceFields != null && !sourceFields.isEmpty()) {
+          List<String> filteredSourceFields = sourceFields.stream()
+              .filter(field -> !timestampMillisColumns.get().contains(field))
+              .collect(Collectors.toList());
+          // If all columns were filtered out, skip this index
+          if (filteredSourceFields.isEmpty()) {
+            continue;
+          }
+          // If some columns were filtered out, create a new index definition with filtered sourceFields
+          if (filteredSourceFields.size() < sourceFields.size()) {
+            HoodieIndexDefinition filteredIndexDef = indexDef.toBuilder()
+                .withSourceFields(filteredSourceFields)
+                .build();
+            filteredIndexDefinitions.put(indexName, filteredIndexDef);
+            continue;
+          }
+        }
+      }
+      // Add the index to the filtered map if it wasn't modified
+      filteredIndexDefinitions.put(indexName, indexDef);
+    }
+    return new HoodieIndexMetadata(filteredIndexDefinitions);
+  }
+
+  /**
+   * Extracts column names that are of type timestamp_millis from the given Avro schema.
+   * This includes both timestamp-millis and local-timestamp-millis logical types.
+   *
+   * @param schema The Avro schema to extract timestamp_millis columns from
+   * @return List of column names that are of type timestamp_millis
+   */
+  static List<String> getTimestampMillisColumns(Option<Schema> schema) {
+    List<String> timestampMillisColumns = new ArrayList<>();
+    if (schema == null || schema.isEmpty()) {
+      return timestampMillisColumns;
+    }
+    Schema nonNullableSchema = AvroSchemaUtils.getNonNullTypeFromUnion(schema.get());
+    if (nonNullableSchema.getType() != Schema.Type.RECORD) {
+      return timestampMillisColumns;
+    }
+    for (Schema.Field field : nonNullableSchema.getFields()) {
+      if (isTimestampMillisField(field.schema())) {
+        timestampMillisColumns.add(field.name());
+      }
+    }
+    return timestampMillisColumns;
+  }
+
+  /**
+   * Checks if a schema field is of type timestamp_millis (timestamp-millis or local-timestamp-millis).
+   *
+   * @param fieldSchema The schema of the field to check
+   * @return true if the field is of type timestamp_millis, false otherwise
+   */
+  static boolean isTimestampMillisField(Schema fieldSchema) {
+    Schema nonNullableSchema = AvroSchemaUtils.getNonNullTypeFromUnion(fieldSchema);
+    if (nonNullableSchema.getType() == Schema.Type.LONG) {
+      LogicalType logicalType = nonNullableSchema.getLogicalType();
+      return logicalType instanceof LogicalTypes.TimestampMillis
+          || logicalType instanceof LogicalTypes.LocalTimestampMillis;
+    }
+    return false;
   }
 
   public static HoodieTableMetaClient reload(HoodieTableMetaClient oldMetaClient) {

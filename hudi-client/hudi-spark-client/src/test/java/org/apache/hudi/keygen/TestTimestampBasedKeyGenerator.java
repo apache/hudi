@@ -153,7 +153,7 @@ class TestTimestampBasedKeyGenerator {
     // timezone is GMT+8:00, createTime is BigDecimal
     BigDecimal decimal = new BigDecimal("1578283932000.0001");
     Conversions.DecimalConversion conversion = new Conversions.DecimalConversion();
-    Schema resolvedNullableSchema = AvroSchemaUtils.resolveNullableSchema(schema.getField("createTimeDecimal").schema());
+    Schema resolvedNullableSchema = AvroSchemaUtils.getNonNullTypeFromUnion(schema.getField("createTimeDecimal").schema());
     GenericFixed avroDecimal = conversion.toFixed(decimal, resolvedNullableSchema, LogicalTypes.decimal(20, 4));
     baseRecord.put("createTimeDecimal", avroDecimal);
     properties = getBaseKeyConfig("createTimeDecimal", "EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
@@ -223,7 +223,7 @@ class TestTimestampBasedKeyGenerator {
 
     // Timestamp field is in decimal type, with `EPOCHMICROSECONDS` timestamp type in the key generator
     decimal = new BigDecimal("1578283932123456.0001");
-    resolvedNullableSchema = AvroSchemaUtils.resolveNullableSchema(
+    resolvedNullableSchema = AvroSchemaUtils.getNonNullTypeFromUnion(
         schema.getField("createTimeDecimal").schema());
     avroDecimal = conversion.toFixed(decimal, resolvedNullableSchema, LogicalTypes.decimal(20, 4));
     baseRecord.put("createTimeDecimal", avroDecimal);

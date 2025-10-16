@@ -94,7 +94,7 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
 
   @Override
   public HoodieReaderContext<ArrayWritable> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf, HoodieTableMetaClient metaClient) {
-    HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator = (inputSplit, jobConf) -> new MapredParquetInputFormat().getRecordReader(inputSplit, jobConf, null);
+    HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator = (inputSplit, jobConf, dataSchema) -> new MapredParquetInputFormat().getRecordReader(inputSplit, jobConf, null);
     JobConf jobConf = new JobConf(storageConf.unwrapAs(Configuration.class));
     setupJobconf(jobConf, avroSchema);
     return new HiveHoodieReaderContext(readerCreator,
