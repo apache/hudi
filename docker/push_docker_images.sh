@@ -46,7 +46,8 @@ for IMAGE in "${IMAGE_NAMES[@]}"; do
             echo "--> [FAILED] Failed to push ${FULL_IMAGE}. Check Docker login status and network."
             FAILURE_COUNT=$((FAILURE_COUNT + 1))
         fi
-        echo "------------------------------------------------------------------------"
+        
+	echo "------------------------------------------------------------------------"
     done
 done
 
