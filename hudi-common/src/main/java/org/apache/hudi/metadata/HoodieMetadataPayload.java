@@ -205,7 +205,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private boolean isDeletedRecord = false;
 
   public HoodieMetadataPayload(@Nullable GenericRecord record, Comparable<?> orderingVal) {
-    this(Option.ofNullable(record));
+    // TODO(yihua): can record be null for metadata payload? fix the record type to be derived without deserialization
+    // TODO(yihua): a new merger class might be the way to go?
+    this(Option.ofNullable(record), record != null ? (int) record.get(SCHEMA_FIELD_NAME_TYPE) : 0);
   }
 
   public HoodieMetadataPayload(Option<GenericRecord> recordOpt, int type) {
@@ -305,7 +307,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     String partitionIdentifier = getPartitionIdentifierForFilesPartition(partition);
     HoodieKey key = new HoodieKey(partitionIdentifier, MetadataPartitionType.FILES.getPartitionPath());
     if (isPartitionDeleted) {
-      return new HoodieAvroRecord<>(key, new HoodieMetadataPayload(Option.empty()));
+      return new HoodieAvroRecord<>(key, new HoodieMetadataPayload(Option.empty(), MetadataPartitionType.FILES.getRecordType()));
     }
 
     int size = filesAdded.size() + filesDeleted.size();
@@ -394,7 +396,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRecord, Schema schema, Properties properties) throws IOException {
-    HoodieMetadataPayload anotherPayload = new HoodieMetadataPayload(Option.of((GenericRecord) oldRecord));
+    HoodieMetadataPayload anotherPayload = new HoodieMetadataPayload(Option.of((GenericRecord) oldRecord), type);
     HoodieRecordPayload combinedPayload = preCombine(anotherPayload);
     return combinedPayload.getInsertValue(schema, properties);
   }
