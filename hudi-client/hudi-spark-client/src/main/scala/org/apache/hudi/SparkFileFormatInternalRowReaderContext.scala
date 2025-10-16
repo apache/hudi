@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
+import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
@@ -88,9 +89,19 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
       val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
+
+      // Convert Avro dataSchema to Parquet MessageType for timestamp precision conversion
+      val tableSchemaOpt = if (dataSchema != null) {
+        val hadoopConf = storage.getConf.unwrapAs(classOf[Configuration])
+        val parquetSchema = new AvroSchemaConverter(hadoopConf).convert(dataSchema)
+        org.apache.hudi.common.util.Option.of(parquetSchema)
+      } else {
+        org.apache.hudi.common.util.Option.empty[org.apache.parquet.schema.MessageType]()
+      }
+
       new CloseableInternalRowIterator(baseFileReader.read(fileInfo,
         readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
-        readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
+        readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]], tableSchemaOpt))
     }
   }
 

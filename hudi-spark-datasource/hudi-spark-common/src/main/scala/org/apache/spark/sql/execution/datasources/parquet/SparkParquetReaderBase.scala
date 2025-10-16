@@ -53,6 +53,7 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
    * @param internalSchemaOpt  option of internal schema for schema.on.read
    * @param filters            filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
    * @param storageConf        the hadoop conf
+   * @param tableSchemaOpt     option of table schema for timestamp precision conversion
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
   final def read(file: PartitionedFile,
@@ -60,7 +61,8 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
                  partitionSchema: StructType,
                  internalSchemaOpt: util.Option[InternalSchema],
                  filters: Seq[Filter],
-                 storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
+                 storageConf: StorageConfiguration[Configuration],
+                 tableSchemaOpt: util.Option[org.apache.parquet.schema.MessageType] = util.Option.empty()): Iterator[InternalRow] = {
     val conf = storageConf.unwrapCopy()
     conf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
     conf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, requiredSchema.json)
@@ -78,7 +80,7 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
     }
 
     ParquetWriteSupport.setSchema(requiredSchema, conf)
-    doRead(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, conf)
+    doRead(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, conf, tableSchemaOpt)
   }
 
   /**
@@ -90,6 +92,7 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
    * @param internalSchemaOpt  option of internal schema for schema.on.read
    * @param filters            filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
    * @param sharedConf         the hadoop conf
+   * @param tableSchemaOpt     option of table schema for timestamp precision conversion
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
   protected def doRead(file: PartitionedFile,
@@ -97,7 +100,8 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
                        partitionSchema: StructType,
                        internalSchemaOpt: util.Option[InternalSchema],
                        filters: Seq[Filter],
-                       sharedConf: Configuration): Iterator[InternalRow]
+                       sharedConf: Configuration,
+                       tableSchemaOpt: util.Option[org.apache.parquet.schema.MessageType]): Iterator[InternalRow]
 }
 
 trait SparkParquetReaderBuilder {

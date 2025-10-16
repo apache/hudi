@@ -1208,6 +1208,9 @@ public class HoodieAvroUtils {
           return oldValue;
         case LONG:
           if (oldSchema.getLogicalType() != newSchema.getLogicalType()) {
+            if (oldSchema.getLogicalType() == null || newSchema.getLogicalType() == null) {
+              return oldValue;
+            }
             if (oldSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
               if (newSchema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
                 return DateTimeUtils.millisToMicros((Long) oldValue);
