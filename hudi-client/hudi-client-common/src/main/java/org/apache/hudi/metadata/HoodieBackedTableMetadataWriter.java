@@ -1233,7 +1233,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     maybeInitializeNewFileGroupsForPartitionedRLI(writeStatus, instantTime);
 
-    // Create composite mapper that handles all enabled index types
     Map<MetadataPartitionType, MetadataIndexMapper> indexMapperMap = mdtPartitionsToTag.stream()
         .filter(e -> e.equals(RECORD_INDEX) || e.equals(SECONDARY_INDEX))
         .collect(Collectors.toMap(

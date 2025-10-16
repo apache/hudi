@@ -1871,7 +1871,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     // Validate data after partition update
     checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col = 'ghi'")(
       Seq(3, "row3", "ghi", "p3"),
-      Seq(4, "row4", "ghi", "p2"),
+      Seq(4, "row4", "ghi", "p2")
     )
 
     // Validate all records are in correct partitions
