@@ -20,6 +20,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.client.SecondaryIndexStats;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
@@ -50,33 +51,113 @@ public class MetadataIndexGenerator implements Serializable {
   private static final Logger LOG = LoggerFactory.getLogger(MetadataIndexGenerator.class);
 
   /**
-   * MDT record transformation utility. This function is expected to be invoked from a map Partition call, where one spark task will receive
-   * one WriteStatus as input and the output contains prepared MDT table records for all eligible partitions that can operate on one
-   * WriteStatus instance only.
+   * Abstract base class for metadata index mappers. Each index type can extend this to implement
+   * its own record generation and post-processing logic.
    */
-  static class WriteStatusBasedMetadataIndexMapper implements SerializableFunction<WriteStatus, Iterator<HoodieRecord>> {
-    private final List<MetadataPartitionType> enabledPartitionTypes;
-    private final HoodieWriteConfig dataWriteConfig;
+  public abstract static class MetadataIndexMapper implements SerializableFunction<WriteStatus, Iterator<HoodieRecord>>, Serializable {
+    protected final HoodieWriteConfig dataWriteConfig;
 
-    public WriteStatusBasedMetadataIndexMapper(List<MetadataPartitionType> enabledPartitionTypes, HoodieWriteConfig dataWriteConfig) {
-      this.enabledPartitionTypes = enabledPartitionTypes;
+    public MetadataIndexMapper(HoodieWriteConfig dataWriteConfig) {
       this.dataWriteConfig = dataWriteConfig;
+    }
+
+    /**
+     * Generates metadata index records from a WriteStatus.
+     *
+     * @param writeStatus the write status to process
+     * @return list of metadata records
+     */
+    protected abstract List<HoodieRecord> generateRecords(WriteStatus writeStatus);
+
+    /**
+     * Post-processes the generated records. Default implementation returns records as-is.
+     * Subclasses can override to add deduplication, validation, or other transformations.
+     *
+     * @param records the generated records
+     * @return post-processed records
+     */
+    public HoodieData<HoodieRecord> postProcess(HoodieData<HoodieRecord> records) {
+      return records;
+    }
+
+    @Override
+    public Iterator<HoodieRecord> apply(WriteStatus writeStatus) throws Exception {
+      return generateRecords(writeStatus).iterator();
+    }
+  }
+
+  /**
+   * Mapper for Record Level Index (RLI).
+   */
+  static class RecordIndexMapper extends MetadataIndexMapper {
+    public RecordIndexMapper(HoodieWriteConfig dataWriteConfig) {
+      super(dataWriteConfig);
+    }
+
+    @Override
+    protected List<HoodieRecord> generateRecords(WriteStatus writeStatus) {
+      return processWriteStatusForRLI(writeStatus, dataWriteConfig);
+    }
+
+    // RLI doesn't need post-processing, uses default implementation
+  }
+
+  /**
+   * Mapper for Secondary Index.
+   */
+  static class SecondaryIndexMapper extends MetadataIndexMapper {
+    public SecondaryIndexMapper(HoodieWriteConfig dataWriteConfig) {
+      super(dataWriteConfig);
+    }
+
+    @Override
+    protected List<HoodieRecord> generateRecords(WriteStatus writeStatus) {
+      return processWriteStatusForSecondaryIndex(writeStatus);
+    }
+
+    /**
+     * Post-processes secondary index records by deduplicating records with the same metadata record key.
+     * This handles partition path updates where the same record generates both DELETE and INSERT.
+     */
+    @Override
+    public HoodieData<HoodieRecord> postProcess(HoodieData<HoodieRecord> records) {
+      // Deduplicate by metadata record key (secondaryKey$recordKey)
+      // usePartitionInKey = false because SI keys are globally unique
+      return HoodieTableMetadataUtil.reduceByKeys(records,
+          dataWriteConfig.getMetadataConfig().getSecondaryIndexParallelism(), false);
+    }
+  }
+
+  /**
+   * Composite mapper that delegates to multiple index-specific mappers.
+   */
+  static class CompositeMetadataIndexMapper implements SerializableFunction<WriteStatus, Iterator<HoodieRecord>> {
+    private final List<MetadataIndexMapper> mappers;
+
+    public CompositeMetadataIndexMapper(List<MetadataPartitionType> enabledPartitionTypes, HoodieWriteConfig dataWriteConfig) {
+      this.mappers = new ArrayList<>();
+      if (enabledPartitionTypes.contains(RECORD_INDEX)) {
+        mappers.add(new RecordIndexMapper(dataWriteConfig));
+      }
+      if (enabledPartitionTypes.contains(SECONDARY_INDEX)) {
+        mappers.add(new SecondaryIndexMapper(dataWriteConfig));
+      }
+      // yet to add support for more partitions.
+      // bloom filter
+      // expression index.
     }
 
     @Override
     public Iterator<HoodieRecord> apply(WriteStatus writeStatus) throws Exception {
       List<HoodieRecord> allRecords = new ArrayList<>();
-      if (enabledPartitionTypes.contains(RECORD_INDEX)) {
-        allRecords.addAll(processWriteStatusForRLI(writeStatus, dataWriteConfig));
+      for (MetadataIndexMapper mapper : mappers) {
+        allRecords.addAll(mapper.generateRecords(writeStatus));
       }
-      if (enabledPartitionTypes.contains(SECONDARY_INDEX)) {
-        allRecords.addAll(processWriteStatusForSecondaryIndex(writeStatus));
-      }
-      // yet to add support for more partitions.
-      // bloom filter
-      // secondary index
-      // expression index.
       return allRecords.iterator();
+    }
+
+    public List<MetadataIndexMapper> getMappers() {
+      return mappers;
     }
   }
 

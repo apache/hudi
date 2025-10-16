@@ -1239,12 +1239,23 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     }
 
     maybeInitializeNewFileGroupsForPartitionedRLI(writeStatus, instantTime);
-    HoodieData<HoodieRecord> untaggedRecords = writeStatus.flatMap(
-        new MetadataIndexGenerator.WriteStatusBasedMetadataIndexMapper(mdtPartitionsToTag, dataWriteConfig));
+
+    // Create composite mapper that handles all enabled index types
+    MetadataIndexGenerator.CompositeMetadataIndexMapper compositeMapper =
+        new MetadataIndexGenerator.CompositeMetadataIndexMapper(mdtPartitionsToTag, dataWriteConfig);
+
+    // Generate untagged records from WriteStatus
+    HoodieData<HoodieRecord> untaggedRecords = writeStatus.flatMap(compositeMapper);
+
+    // Apply post-processing for each mapper (e.g., deduplication for secondary index)
+    HoodieData<HoodieRecord> processedRecords = untaggedRecords;
+    for (MetadataIndexGenerator.MetadataIndexMapper mapper : compositeMapper.getMappers()) {
+      processedRecords = mapper.postProcess(processedRecords);
+    }
 
     // tag records w/ location
-    Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> hoodieFileGroupsToUpdateAndTaggedMdtRecords = tagRecordsWithLocationForStreamingWrites(untaggedRecords,
-        mdtPartitionPathsToTag);
+    Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> hoodieFileGroupsToUpdateAndTaggedMdtRecords =
+        tagRecordsWithLocationForStreamingWrites(processedRecords, mdtPartitionPathsToTag);
 
     // write partial writes to MDT table (for those partitions where streaming writes are enabled)
     HoodieData<WriteStatus> writeStatusCollection = convertEngineSpecificDataToHoodieData(streamWriteToMetadataTable(hoodieFileGroupsToUpdateAndTaggedMdtRecords, instantTime));
