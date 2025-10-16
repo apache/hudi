@@ -1881,6 +1881,36 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       Seq(3, "row3", "ghi", "p3"),
       Seq(4, "row4", "ghi", "p2")
     )
+
+    // Update both secondary column value and partition path
+    // This moves a record from file group A to file group B
+    spark.sql(
+      s"""
+         |MERGE INTO $tableName AS target
+         |USING (SELECT 4 as ts, 'row4' as record_key_col, 'jkl' as not_record_key_col, 'p3' as partition_key_col) AS source
+         |ON target.record_key_col = source.record_key_col
+         |WHEN MATCHED THEN UPDATE SET *
+       """.stripMargin)
+
+    checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+      Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false),
+      Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
+      Seq(s"ghi${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3", false),
+      Seq(s"jkl${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row4", false)
+    )
+
+    // Validate data after partition update
+    checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col = 'jkl'")(
+      Seq(4, "row4", "jkl", "p3"),
+    )
+
+    // Validate all records are in correct partitions
+    checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName order by record_key_col")(
+      Seq(1, "row1", "abc", "p1"),
+      Seq(2, "row2", "def", "p2"),
+      Seq(3, "row3", "ghi", "p3"),
+      Seq(4, "row4", "jkl", "p3")
+    )
   }
 
   private def deleteLastCompletedCommitFromTimeline(hudiOpts: Map[String, String], metaClient: HoodieTableMetaClient): Unit = {
