@@ -2,11 +2,75 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2025-10-02T00:00:00.000Z</updated>
+    <updated>2025-10-16T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Modernizing Upstox's Data Platform with Apache Hudi, dbt, and EMR Serverless]]></title>
+        <id>https://hudi.apache.org/blog/2025/10/16/Modernizing-Upstox-Data-Platform-with-Apache-Hudi-DBT-and-EMR-Serverless</id>
+        <link href="https://hudi.apache.org/blog/2025/10/16/Modernizing-Upstox-Data-Platform-with-Apache-Hudi-DBT-and-EMR-Serverless"/>
+        <updated>2025-10-16T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Introduction]]></summary>
+        <content type="html"><![CDATA[<h2 class="anchor anchorWithStickyNavbar_LWe7" id="introduction">Introduction<a href="https://hudi.apache.org/blog/2025/10/16/Modernizing-Upstox-Data-Platform-with-Apache-Hudi-DBT-and-EMR-Serverless#introduction" class="hash-link" aria-label="Direct link to Introduction" title="Direct link to Introduction">​</a></h2>
+<p>In <a href="https://www.youtube.com/watch?v=dAM2zOvnPmw" target="_blank" rel="noopener noreferrer">this community sharing session</a>, Manish Gaurav from Upstox shared insights into the complexities of managing data ingestion at scale. Drawing from the company’s experience as a leading online trading platform in India, the discussion highlighted challenges around file-level upserts, ensuring atomic operations, and handling small files effectively. Upstox shared how they built a modern data platform using Apache Hudi and dbt to address these issues. In this blog post, we’ll break down their solution and why it matters.</p>
+<p>Upstox is a leading online trading platform that enables millions of users to invest in equities, commodities, derivatives, and currencies. With over 12 million customers generating 300,000 data requests daily, the company's data team is responsible for delivering the real-time insights that power key products, including:</p>
+<ul>
+<li>Search functionality</li>
+<li>A customer service chatbot (powered by OpenAI)</li>
+<li>Personalized portfolio recommendations</li>
+</ul>
+<p><img decoding="async" loading="lazy" src="https://hudi.apache.org/assets/images/fig1-3baa485e75ef728786f15b45d2d97d6b.png" width="1999" height="1312" class="img_ev3q"></p>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="data-sources">Data Sources<a href="https://hudi.apache.org/blog/2025/10/16/Modernizing-Upstox-Data-Platform-with-Apache-Hudi-DBT-and-EMR-Serverless#data-sources" class="hash-link" aria-label="Direct link to Data Sources" title="Direct link to Data Sources">​</a></h2>
+<p>Upstox ingests 250–300 GB of structured and semi-structured data per day from a variety of sources:</p>
+<ul>
+<li>Order and transaction data from exchanges</li>
+<li>Microservice telemetry from Cloudflare</li>
+<li>Customer support data from platforms like Freshdesk and SquadStack</li>
+<li>Behavioral analytics from Mixpanel</li>
+<li>Data from operational databases (MongoDB, MySQL, and MS SQL) via AWS DMS</li>
+</ul>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="the-challenges-with-initial-data-platform">The Challenges with Initial Data Platform<a href="https://hudi.apache.org/blog/2025/10/16/Modernizing-Upstox-Data-Platform-with-Apache-Hudi-DBT-and-EMR-Serverless#the-challenges-with-initial-data-platform" class="hash-link" aria-label="Direct link to The Challenges with Initial Data Platform" title="Direct link to The Challenges with Initial Data Platform">​</a></h2>
+<p>As Upstox grew, so did the complexity of its data operations. Here are some of the early bottlenecks the company faced:</p>
+<h3 class="anchor anchorWithStickyNavbar_LWe7" id="data-ingestion-issues">Data Ingestion Issues<a href="https://hudi.apache.org/blog/2025/10/16/Modernizing-Upstox-Data-Platform-with-Apache-Hudi-DBT-and-EMR-Serverless#data-ingestion-issues" class="hash-link" aria-label="Direct link to Data Ingestion Issues" title="Direct link to Data Ingestion Issues">​</a></h3>
+<p>Prior to 2023, Upstox relied on no-code ingestion platforms like Hevo. While easy to adopt, these platforms introduced several limitations, including high licensing costs and a lack of fine-grained control over ingestion logic. File-level upserts required complex joins between incoming CDC (change data capture) datasets and target tables. Additionally, a lack of atomicity often led to inconsistent data writes, and small-file issues were rampant. To combat these problems, the team had to implement time-consuming re-partitioning and coalescing, along with complex salting strategies to distribute data evenly.</p>
+<h3 class="anchor anchorWithStickyNavbar_LWe7" id="downstream-consumption-struggles">Downstream Consumption Struggles<a href="https://hudi.apache.org/blog/2025/10/16/Modernizing-Upstox-Data-Platform-with-Apache-Hudi-DBT-and-EMR-Serverless#downstream-consumption-struggles" class="hash-link" aria-label="Direct link to Downstream Consumption Struggles" title="Direct link to Downstream Consumption Struggles">​</a></h3>
+<p>Analytics queries were primarily served through Amazon Athena, which presented several key limitations. For instance, it frequently timed out when querying large datasets and often exceeded the maximum number of partitions it could handle. Additionally, Athena's lack of support for stored procedures made it challenging to manage and reuse complex query logic. Attempts to improve performance with bucketing often created more small files, and the lack of native support for incremental queries further complicated their analytics workflow.</p>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="the-modern-lakehouse-architecture">The Modern Lakehouse Architecture<a href="https://hudi.apache.org/blog/2025/10/16/Modernizing-Upstox-Data-Platform-with-Apache-Hudi-DBT-and-EMR-Serverless#the-modern-lakehouse-architecture" class="hash-link" aria-label="Direct link to The Modern Lakehouse Architecture" title="Direct link to The Modern Lakehouse Architecture">​</a></h2>
+<p><img decoding="async" loading="lazy" src="https://hudi.apache.org/assets/images/fig2-a2a9161b7ad75628a36b03514ae4a9c4.png" width="1934" height="1016" class="img_ev3q"></p>
+<p>To tackle these problems, Upstox implemented a medallion architecture, organizing data into bronze, silver, and gold layers:</p>
+<ul>
+<li><strong>Bronze (Raw Data):</strong> Data is ingested and stored in its raw format as Parquet files.</li>
+<li><strong>Silver (Cleaned and Filtered):</strong> Data is cleaned, filtered, and stored in Apache Hudi tables, which are updated incrementally.</li>
+<li><strong>Gold (Business-Ready):</strong> Data is aggregated for specific business use cases, modeled with dbt, and stored in Hudi.</li>
+</ul>
+<h3 class="anchor anchorWithStickyNavbar_LWe7" id="the-solution-a-modern-stack-with-hudi-dbt-and-emr-serverless">The Solution: A Modern Stack with Hudi, dbt, and EMR Serverless<a href="https://hudi.apache.org/blog/2025/10/16/Modernizing-Upstox-Data-Platform-with-Apache-Hudi-DBT-and-EMR-Serverless#the-solution-a-modern-stack-with-hudi-dbt-and-emr-serverless" class="hash-link" aria-label="Direct link to The Solution: A Modern Stack with Hudi, dbt, and EMR Serverless" title="Direct link to The Solution: A Modern Stack with Hudi, dbt, and EMR Serverless">​</a></h3>
+<p>Upstox re-architected its platform using Apache Hudi as the core data lake technology, dbt for transformations, and EMR Serverless for scalable compute. Airflow was used to orchestrate the entire workflow. Here's how this new stack addressed their challenges:</p>
+<p><strong>Simplified Data Updates:</strong> Hudi provides built-in support for record-level upserts with atomic guarantees and snapshot isolation. This helped Upstox overcome the challenge of ensuring consistent updates to their fact and dimension tables.</p>
+<p><strong>Improved Upsert Performance:</strong> To optimize upsert performance, the team leveraged Bloom index, especially for transaction-heavy fact tables. Indexing strategies were chosen based on data characteristics to balance latency and efficiency.</p>
+<p><strong>Resolved Small-File Issues:</strong> Small files, which are common in streaming workloads, were mitigated using clustering jobs supported by Hudi. This process was scheduled to run weekly and ensured efficient file sizes and reduced storage overhead without manual intervention.</p>
+<p><strong>Enabled Incremental Processing:</strong> Incremental joins allowed Upstox to process only new data daily. This enabled timely updates to the aggregated tables in the gold layer that power user-facing dashboards—a task that was not feasible with traditional Athena queries.</p>
+<p><strong>Managed Metadata Growth:</strong> The accumulation of commit and metadata files in the Hudi table’s `.hoodie/` directory increased S3 listing costs and slowed down operations. Hudi's archival feature helped manage this by archiving older commits after a certain threshold, keeping metadata lean and efficient.</p>
+<p><strong>Streamlined Data Modeling:</strong> The team used dbt on EMR Serverless to create materialized views over the Hudi datasets. This enabled the creation of efficient transformation layers (silver and gold) using familiar SQL workflows and managed compute.</p>
+<p><strong>Flexible Data Materialization:</strong> dbt supported a variety of model types, including tables, views, and ephemeral models (Common Table Expressions, or CTEs). This gave teams the flexibility to optimize for performance, reuse, or simplicity, depending on the use case.</p>
+<p><strong>Out-of-the-Box Lineage and Documentation:</strong> dbt helps visualize how data flows from one table to another, making it easier to debug and understand dependencies. The glossary feature allows teams to document column meanings and transformations clearly.</p>
+<p><strong>Enforced Data Quality:</strong> With dbt, specific data quality rules can be added to individual tables or pipelines. This adds an extra layer of validation beyond the basic checks performed during data ingestion.</p>
+<h3 class="anchor anchorWithStickyNavbar_LWe7" id="cicd-and-orchestration">CI/CD and Orchestration<a href="https://hudi.apache.org/blog/2025/10/16/Modernizing-Upstox-Data-Platform-with-Apache-Hudi-DBT-and-EMR-Serverless#cicd-and-orchestration" class="hash-link" aria-label="Direct link to CI/CD and Orchestration" title="Direct link to CI/CD and Orchestration">​</a></h3>
+<p><img decoding="async" loading="lazy" src="https://hudi.apache.org/assets/images/fig3-3a9b031ca307c28c17434af09a0ee7bc.png" width="1932" height="882" class="img_ev3q"></p>
+<p>Upstox uses Apache Airflow for orchestration, with dbt pipelines deployed via a Git-based CI/CD process. Merging a pull request in GitLab triggers the CI/CD pipeline, which automatically builds a new dbt image and publishes the updated data catalog. Airflow then runs the corresponding dbt jobs daily or on-demand, automating the entire transformation workflow.</p>
+<h3 class="anchor anchorWithStickyNavbar_LWe7" id="the-impact">The Impact<a href="https://hudi.apache.org/blog/2025/10/16/Modernizing-Upstox-Data-Platform-with-Apache-Hudi-DBT-and-EMR-Serverless#the-impact" class="hash-link" aria-label="Direct link to The Impact" title="Direct link to The Impact">​</a></h3>
+<p>The adoption of this modern data stack had a significant impact on Upstox's data platform. The company achieved extremely high data availability and consistency for critical datasets, reducing SLA breaches for complex joins by 70%. Furthermore, pipeline costs dropped by 40%, and query performance improved drastically thanks to Hudi's clustering and optimized joins.</p>
+<h2 class="anchor anchorWithStickyNavbar_LWe7" id="conclusion">Conclusion<a href="https://hudi.apache.org/blog/2025/10/16/Modernizing-Upstox-Data-Platform-with-Apache-Hudi-DBT-and-EMR-Serverless#conclusion" class="hash-link" aria-label="Direct link to Conclusion" title="Direct link to Conclusion">​</a></h2>
+<p>By leveraging Apache Hudi, dbt, and EMR Serverless, Upstox built a robust and cost-efficient data platform to serve its 12M+ customers, overcoming the significant challenges of data ingestion and analytics at scale. This transformation resolved critical issues like inconsistent data writes, small-file problems, and query timeouts, leading to tangible improvements in both performance and efficiency. With a 70% reduction in SLA breaches and a 40% drop in pipeline costs, the new architecture has empowered their BI and ML teams to move faster. Ultimately, this success story demonstrates how a modern data stack can not only solve immediate technical bottlenecks but also lay the groundwork for a scalable, self-service future that enables continued innovation.</p>]]></content>
+        <author>
+            <name>The Hudi Community</name>
+        </author>
+        <category label="hudi" term="hudi"/>
+        <category label="upstox" term="upstox"/>
+        <category label="dbt" term="dbt"/>
+        <category label="data lakehouse" term="data lakehouse"/>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Real-Time Cloud Security Graphs with Apache Hudi and PuppyGraph]]></title>
         <id>https://hudi.apache.org/blog/2025/10/02/Real-Time-Cloud-Security-Graphs-Hudi+PuppyGraph</id>
@@ -993,141 +1057,5 @@
         <category label="Apache Hudi" term="Apache Hudi"/>
         <category label="Indexing" term="Indexing"/>
         <category label="Performance" term="Performance"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Powering Amazon Unit Economics at Scale Using Apache Hudi]]></title>
-        <id>https://hudi.apache.org/blog/2025/03/31/amazon-hudi</id>
-        <link href="https://hudi.apache.org/blog/2025/03/31/amazon-hudi"/>
-        <updated>2025-03-31T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Amazon’s Profit Intelligence team built Nexus, a configuration-driven platform powered by Apache Hudi, to scale unit economics across thousands of retail use cases. Nexus manages over 1,200 tables, processes hundreds of billions of rows daily, and handles ~1 petabyte of data churn each month. This blog dives into their data lakehouse journey, Nexus architecture, Hudi integration, and key operational learnings.]]></summary>
-        <content type="html"><![CDATA[<div class="theme-admonition theme-admonition-tip admonition_xJq3 alert alert--success"><div class="admonitionHeading_Gvgb"><span class="admonitionIcon_Rf37"><svg viewBox="0 0 12 16"><path fill-rule="evenodd" d="M6.5 0C3.48 0 1 2.19 1 5c0 .92.55 2.25 1 3 1.34 2.25 1.78 2.78 2 4v1h5v-1c.22-1.22.66-1.75 2-4 .45-.75 1-2.08 1-3 0-2.81-2.48-5-5.5-5zm3.64 7.48c-.25.44-.47.8-.67 1.11-.86 1.41-1.25 2.06-1.45 3.23-.02.05-.02.11-.02.17H5c0-.06 0-.13-.02-.17-.2-1.17-.59-1.83-1.45-3.23-.2-.31-.42-.67-.67-1.11C2.44 6.78 2 5.65 2 5c0-2.2 2.02-4 4.5-4 1.22 0 2.36.42 3.22 1.19C10.55 2.94 11 3.94 11 5c0 .66-.44 1.78-.86 2.48zM4 14h5c-.23 1.14-1.3 2-2.5 2s-2.27-.86-2.5-2z"></path></svg></span>TL;DR</div><div class="admonitionContent_BuS1"><p>Amazon’s Profit Intelligence team built Nexus, a configuration-driven platform powered by Apache Hudi, to scale unit economics across thousands of retail use cases. Nexus manages over 1,200 tables, processes hundreds of billions of rows daily, and handles ~1 petabyte of data churn each month. This blog dives into their data lakehouse journey, Nexus architecture, Hudi integration, and key operational learnings.</p></div></div>
-<p>Understanding and improving unit-level profitability at Amazon's scale is a massive challenge - one that requires flexibility, precision, and operational efficiency. In this blog, we walk through how Amazon’s Profit Intelligence team built a scalable, configuration-driven platform called Nexus, and how Apache Hudi became the cornerstone of its data lake architecture.</p>
-<p>By combining declarative configuration with Hudi's advanced table management capabilities, the team has enabled thousands of retail business use cases to run seamlessly, allowing finance and pricing teams to self-serve insights on cost and profitability, without constantly relying on engineering intervention.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="the-business-need-profit-intelligence-and-unit-economics">The Business Need: Profit Intelligence and Unit Economics<a href="https://hudi.apache.org/blog/2025/03/31/amazon-hudi#the-business-need-profit-intelligence-and-unit-economics" class="hash-link" aria-label="Direct link to The Business Need: Profit Intelligence and Unit Economics" title="Direct link to The Business Need: Profit Intelligence and Unit Economics">​</a></h2>
-<p>Within Amazon’s Worldwide Stores, the Selling Partner Services (SPS) team supports seller-facing operations. A key part of this effort is computing <strong>Contribution Profit</strong> - a granular metric that captures revenue, costs, and profitability at the unit level, such as <em>a shipped item to the customer</em>.</p>
-<p>Contribution Profit powers decision-making for a range of downstream teams including:</p>
-<ul>
-<li>Pricing</li>
-<li>Forecasting</li>
-<li>Finance</li>
-</ul>
-<p>The challenge? Supporting the scale and diversity of retail use cases across Amazon's global business, while maintaining a data platform that's both extensible and maintainable.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="amazons-data-lakehouse-journey">Amazon’s Data Lakehouse Journey<a href="https://hudi.apache.org/blog/2025/03/31/amazon-hudi#amazons-data-lakehouse-journey" class="hash-link" aria-label="Direct link to Amazon’s Data Lakehouse Journey" title="Direct link to Amazon’s Data Lakehouse Journey">​</a></h2>
-<p>Over the past decade, the architecture behind Contribution Profit has gone through several phases of evolution, driven by the need to better support Amazon’s growing and diverse retail business use cases.</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="early-phase">Early Phase<a href="https://hudi.apache.org/blog/2025/03/31/amazon-hudi#early-phase" class="hash-link" aria-label="Direct link to Early Phase" title="Direct link to Early Phase">​</a></h3>
-<img src="https://hudi.apache.org/assets/images/blog/fig1_amz.png" alt="redshift" width="800" align="middle">
-<p>Initial implementations relied on ETL pipelines that published data to Redshift, often with unstructured job flows. Business logic could exist at various layers of the ETL and was written entirely in SQL, making it difficult to track, maintain, or modify. These pipelines lacked systematic enforcement of patterns, which led to fragmentation and technical debt.</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="intermediate-phase">Intermediate Phase<a href="https://hudi.apache.org/blog/2025/03/31/amazon-hudi#intermediate-phase" class="hash-link" aria-label="Direct link to Intermediate Phase" title="Direct link to Intermediate Phase">​</a></h3>
-<img src="https://hudi.apache.org/assets/images/blog/fig2_amz.png" alt="flink" width="800" align="middle">
-<p>To improve scalability and support streaming workloads, the team transitioned to a setup involving Apache Flink and a custom-built data lake. Although this introduced broader data processing flexibility, it still had major drawbacks:</p>
-<ul>
-<li>Redshift-based ETLs remained in use.</li>
-<li>Business logic and schema changes required engineering involvement.</li>
-<li>There were ongoing scalability and maintainability issues with the custom data lake.</li>
-<li>Flink introduced operational challenges of its own, such as handling version upgrades through AWS Managed Flink and providing done signal in batch operation.</li>
-</ul>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="current-state-nexus--apache-hudi">Current State: Nexus + Apache Hudi<a href="https://hudi.apache.org/blog/2025/03/31/amazon-hudi#current-state-nexus--apache-hudi" class="hash-link" aria-label="Direct link to Current State: Nexus + Apache Hudi" title="Direct link to Current State: Nexus + Apache Hudi">​</a></h3>
-<p>Each of the prior approaches came with tradeoffs, especially around business logic being tightly coupled with code, making it hard for non-engineers to simulate or change metrics for a specific retail business.</p>
-<p>Recognizing the need for better abstraction and operational maturity, the team built Nexus - a configuration-driven platform for defining and orchestrating data pipelines. All lake interactions including ingestion, transformation, schema evolution, and table management now go through Nexus. Nexus is powered by <a href="https://hudi.apache.org/" target="_blank" rel="noopener noreferrer"><strong>Apache Hudi</strong></a>, which provides the foundation for scalable ingestion, efficient upserts, schema evolution, and transactional guarantees on Amazon S3.</p>
-<p>This new architecture enabled the team to decouple business logic from engineering code, allowing business teams to define logic declaratively. It also introduced standardization across workloads, eliminated redundant pipelines, and laid the groundwork for scaling unit economics calculations across thousands of use cases.</p>
-<h4 class="anchor anchorWithStickyNavbar_LWe7" id="key-modules-of-nexus">Key Modules of Nexus<a href="https://hudi.apache.org/blog/2025/03/31/amazon-hudi#key-modules-of-nexus" class="hash-link" aria-label="Direct link to Key Modules of Nexus" title="Direct link to Key Modules of Nexus">​</a></h4>
-<img src="https://hudi.apache.org/assets/images/blog/fig3_amz.png" alt="nexus" width="800" align="middle">
-<p>Nexus consists of four core components:</p>
-<p><strong>Configuration Layer</strong></p>
-<p>The topmost layer where users define their business logic in a declarative format. These configurations are typically generated and enriched with metadata by internal systems.</p>
-<p><strong>NexusFlow (Orchestration)</strong></p>
-<img src="https://hudi.apache.org/assets/images/blog/fig4_amz.png" alt="orch" width="1000" align="middle">
-<p align="center"><em>Figure: Sample NexusFlow Config</em></p>
-<p>Responsible for generating and executing workflows. It operates on two levels:</p>
-<ul>
-<li>Logical Layer: Comprising NexusETL jobs and other tasks.</li>
-<li>Physical Layer: Implemented via AWS Step Functions to orchestrate EMR jobs and related dependencies. NexusFlow supports extensibility through a federated model and can execute diverse task types like Spark jobs, Redshift queries, wait conditions, and legacy ETLs.</li>
-</ul>
-<p><strong>NexusETL (Execution)</strong></p>
-<img src="https://hudi.apache.org/assets/images/blog/fig5_amz.png" alt="etl" width="1000" align="middle">
-<p align="center"><em>Figure: Sample NexusETL Config</em></p>
-<p>Executes Spark-based data transformation jobs. Jobs are defined entirely in configuration, with support for:</p>
-<ul>
-<li>Built-in transforms like joins and filters</li>
-<li>Custom UDFs</li>
-<li>Source/Sink/Transform operators: It operates at the job abstraction level and is typically invoked by NexusFlow during orchestration.</li>
-</ul>
-<p><strong>NexusDataLake (Storage)</strong></p>
-<img src="https://hudi.apache.org/assets/images/blog/fig5_amz.png" alt="datalake" width="1000" align="middle">
-<p align="center"><em>Figure: Sample NexusDataLake Config</em></p>
-<p>A storage abstraction layer built on Apache Hudi. NexusDataLake manages:</p>
-<ul>
-<li>Table creation</li>
-<li>Schema inference and evolution</li>
-<li>Catalog integration: All interactions with Hudi, such as inserts, upserts, table schema changes, and metadata syncs are funneled through NexusETL and NexusFlow, maintaining consistency across the platform.</li>
-</ul>
-<p>By standardizing how data is defined, processed, and stored, Nexus has enabled a scalable, maintainable, and extensible architecture. Every data lake interaction - from ingestion to table maintenance, is performed through this configuration-first model, which now powers hundreds of use cases across Amazon retail.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="why-apache-hudi">Why Apache Hudi?<a href="https://hudi.apache.org/blog/2025/03/31/amazon-hudi#why-apache-hudi" class="hash-link" aria-label="Direct link to Why Apache Hudi?" title="Direct link to Why Apache Hudi?">​</a></h2>
-<p>Apache Hudi has been central to Nexus’ success, providing the core data lake storage layer for scalable ingestion, updates, and metadata management. It enables fast, incremental updates at massive scale while maintaining transactional guarantees on top of Amazon S3.</p>
-<p>In Amazon’s current architecture:</p>
-<ul>
-<li>Copy-on-Write (COW) table type is used for all Hudi tables.</li>
-<li>Workloads generate hundreds of billions of row updates daily, with write patterns spanning concentrated single-partition updates and wide-range backfills across up to 90 partitions.</li>
-<li>All Hudi interactions, including inserts, schema changes, and metadata syncs, are managed through Nexus.</li>
-</ul>
-<p><strong>Key Capabilities used with Apache Hudi</strong></p>
-<ul>
-<li>
-<p><strong>Efficient Upserts</strong><br>
-<!-- -->Hudi’s design primitives such as <a href="https://hudi.apache.org/docs/indexes" target="_blank" rel="noopener noreferrer">indexes</a> for Copy-on-Write (CoW) tables enable high-throughput update patterns by avoiding the need to join against the entire dataset to determine which files to rewrite, which is particularly critical for our daily workloads.</p>
-</li>
-<li>
-<p><strong>Incremental Processing</strong><br>
-<!-- -->By using Hudi’s native <a href="https://www.onehouse.ai/blog/getting-started-incrementally-process-data-with-apache-hudi" target="_blank" rel="noopener noreferrer">incremental pull</a> capabilities, downstream systems are able to consume only the changes between commits. This is essential for efficiently updating Contribution Profit metrics that power business decision-making.</p>
-</li>
-<li>
-<p><strong>Metadata Table</strong><br>
-<!-- -->Enabling the <a href="https://hudi.apache.org/docs/metadata" target="_blank" rel="noopener noreferrer">metadata table</a> (<code>hoodie.metadata.enable=true</code>) significantly reduced job runtimes by avoiding expensive file listings on S3. This is an important optimization given the scale at which we process updates across more than 1200 Hudi tables.</p>
-</li>
-<li>
-<p><strong>Schema Evolution</strong><br>
-<!-- -->Table creation and evolution are fully managed through configuration in Nexus. Hudi’s built-in support for <a href="https://hudi.apache.org/docs/schema_evolution" target="_blank" rel="noopener noreferrer">schema evolution</a> has allowed the team to onboard new use cases and adapt to changing schemas without requiring expensive rewrites or manual interventions.</p>
-</li>
-</ul>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="key-learnings-from-operating-hudi-at-amazon-scale">Key Learnings from Operating Hudi at Amazon Scale<a href="https://hudi.apache.org/blog/2025/03/31/amazon-hudi#key-learnings-from-operating-hudi-at-amazon-scale" class="hash-link" aria-label="Direct link to Key Learnings from Operating Hudi at Amazon Scale" title="Direct link to Key Learnings from Operating Hudi at Amazon Scale">​</a></h2>
-<p>Operating Apache Hudi at the scale and velocity required by Amazon’s Profit Intelligence workloads surfaced a set of hard-earned lessons, especially around concurrency, metadata handling, and cost optimization. These learnings reflect both architectural refinements and operational trade-offs that others adopting Hudi at large scale may find useful.</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="1-concurrency-control">1. Concurrency Control<a href="https://hudi.apache.org/blog/2025/03/31/amazon-hudi#1-concurrency-control" class="hash-link" aria-label="Direct link to 1. Concurrency Control" title="Direct link to 1. Concurrency Control">​</a></h3>
-<p>At Amazon’s ingestion scale - hundreds of billions of rows per day and thousands of concurrent table updates, multi-writer concurrency is a reality, not an edge case.</p>
-<p>The team initially used Optimistic Concurrency Control (OCC), which works well in environments with low write conflicts. OCC assumes that concurrent writers rarely overlap, and when they do, the job retries after detecting a conflict. However, in high-contention scenarios, like multiple jobs writing to the same partition within a short time window, this led to frequent retries and job failures.</p>
-<p>To resolve this, the team pivoted to a new table structure designed to minimize concurrent insertions. This change helped reduce contention by lowering the likelihood of multiple writers operating on overlapping partitions simultaneously. The updated design enabled using OCC while avoiding the excessive retries and failures we had initially encountered.</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="2-metadata-table-management-async-vs-sync-trade-offs">2. Metadata Table Management: Async vs Sync Trade-Offs<a href="https://hudi.apache.org/blog/2025/03/31/amazon-hudi#2-metadata-table-management-async-vs-sync-trade-offs" class="hash-link" aria-label="Direct link to 2. Metadata Table Management: Async vs Sync Trade-Offs" title="Direct link to 2. Metadata Table Management: Async vs Sync Trade-Offs">​</a></h3>
-<p>Apache Hudi’s metadata table dramatically improves performance by avoiding expensive file listings on cloud object stores like S3. It maintains a persistent <em>index</em> <em>of files</em>, enabling faster operations such as file pruning, and data skipping.</p>
-<p>The team enabled Hudi’s metadata table early (<code>hoodie.metadata.enable=true</code>) and started off with synchronous cleaning but switched to asynchronous cleaning to reduce job runtime. However, we ran into an issue when experimenting with asynchronous cleaning. Due to a <a href="https://github.com/apache/hudi/issues/11535" target="_blank" rel="noopener noreferrer">known issue (#11535)</a>, async cleaning wasn’t properly cleaning up metadata entries.</p>
-<p>To ensure the metadata tables were properly cleaned, we switched all of  our Hudi workloads back to synchronous cleaning.</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="3-cost-management">3. Cost Management<a href="https://hudi.apache.org/blog/2025/03/31/amazon-hudi#3-cost-management" class="hash-link" aria-label="Direct link to 3. Cost Management" title="Direct link to 3. Cost Management">​</a></h3>
-<p>While Apache Hudi helped Amazon reduce data duplication and improve ingestion efficiency, we quickly realized that operational costs were not driven by storage - but by the API interaction patterns with S3.</p>
-<p>Breakdown of the cost profile:</p>
-<ul>
-<li><strong>70% of total cost</strong> came from <code>PUT</code> requests (writes)</li>
-<li>Combined <code>PUT + GET</code> operations accounted for <strong>80%</strong> of the bill</li>
-<li>Storage cost remained a small fraction, even with 3+ PB of total data under management</li>
-</ul>
-<p>Their data ingestion patterns contributed to this:</p>
-<ul>
-<li>Daily workloads: Heavy concentration (99%) of updates into a single partition</li>
-<li>Backfill workloads: Spread evenly across 30–90 partitions</li>
-</ul>
-<p>To manage this:</p>
-<ul>
-<li>We moved to <strong>S3 Intelligent-Tiering</strong> to reduce unused data storage costs</li>
-<li>Enabled <strong>EMR cluster auto-scaling</strong> to dynamically adjust compute resources</li>
-<li>Batched writes and carefully tuned Hudi configurations (e.g., <code>write.batch.size</code>, <code>compaction.small.file.limit</code>) to reduce unnecessary file churn</li>
-</ul>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="operational-scale-nexus-by-the-numbers">Operational Scale: Nexus by the Numbers<a href="https://hudi.apache.org/blog/2025/03/31/amazon-hudi#operational-scale-nexus-by-the-numbers" class="hash-link" aria-label="Direct link to Operational Scale: Nexus by the Numbers" title="Direct link to Operational Scale: Nexus by the Numbers">​</a></h2>
-<table><thead><tr><th style="text-align:left">Metric</th><th style="text-align:left">Value</th></tr></thead><tbody><tr><td style="text-align:left">Tables Managed</td><td style="text-align:left">1200+ (5–15 updates/day per table)</td></tr><tr><td style="text-align:left">Legacy SQL Deprecated</td><td style="text-align:left">300,000+ lines</td></tr><tr><td style="text-align:left">Total Data Managed</td><td style="text-align:left">~3 Petabytes</td></tr><tr><td style="text-align:left">Monthly Data Changes</td><td style="text-align:left">~1 Petabyte added/deleted</td></tr><tr><td style="text-align:left">Daily Record Updates</td><td style="text-align:left">Hundreds of billions</td></tr><tr><td style="text-align:left">Developer Time Saved</td><td style="text-align:left">300+ days</td></tr></tbody></table>
-<p>Nexus with Apache Hudi as the foundation has significantly improved the scale, modularity, and maintainability of the data lake operations at Amazon. As the business use cases scale, the team is also focused on managing the increasing complexity of the data lake, while ensuring that both technical and non-technical stakeholders can interact with Nexus effectively.</p>
-<p>This blog is based on Amazon’s presentation at the Hudi Community Sync. If you are interested in watching the recorded version of the video, you can find it <a href="https://www.youtube.com/watch?v=rMXhlb7Uci8" target="_blank" rel="noopener noreferrer">here</a>.</p>
-<hr>]]></content>
-        <author>
-            <name>Jason, Abhishek, Sethu in collaboration with Dipankar</name>
-        </author>
-        <category label="Apache Hudi" term="Apache Hudi"/>
-        <category label="Amazon" term="Amazon"/>
-        <category label="Community" term="Community"/>
     </entry>
 </feed>
