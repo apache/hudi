@@ -1783,12 +1783,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   @CsvSource(Array("COPY_ON_WRITE,true", "COPY_ON_WRITE,false", "MERGE_ON_READ,true", "MERGE_ON_READ,false"))
   def testSecondaryIndexWithPartitionPathUpdateUsingGlobalIndex(tableType: HoodieTableType,
                                                                 enableStreamingWrite: Boolean): Unit = {
-    val hudiOpts = commonOpts ++ Map(
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
-      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
-      HoodieIndexConfig.INDEX_TYPE.key -> "RECORD_INDEX",
-      HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE.key -> "true",
-      HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key -> enableStreamingWrite.toString)
     val sqlTableType = if (tableType == HoodieTableType.COPY_ON_WRITE) "cow" else "mor"
     val tableName = "test_secondary_index_with_partition_update_global_index_" + sqlTableType + "_" + enableStreamingWrite
 
@@ -1901,7 +1895,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
 
     // Validate data after partition update
     checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col = 'jkl'")(
-      Seq(4, "row4", "jkl", "p3"),
+      Seq(4, "row4", "jkl", "p3")
     )
 
     // Validate all records are in correct partitions
