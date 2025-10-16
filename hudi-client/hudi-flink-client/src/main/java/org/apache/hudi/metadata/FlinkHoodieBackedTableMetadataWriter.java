@@ -124,8 +124,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected void commitInternal(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap, boolean isInitializing,
                                 Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     performTableServices(Option.ofNullable(instantTime), false);
-    // the timeline reload should be unnecessary
-    // metadataMetaClient.reloadActiveTimeline();
+    metadataMetaClient.reloadActiveTimeline();
     super.commitInternal(instantTime, partitionRecordsMap, isInitializing, bulkInsertPartitioner);
   }
 
