@@ -208,8 +208,8 @@ public class UpgradeDowngradeUtils {
       properties.put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), NoopLockProvider.class.getName());
       // if auto adjust it not disabled, chances that InProcessLockProvider will get overridden for single writer use-cases.
       properties.put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "false");
-      // if downgrading to a table version < 8, disable non-blocking concurrency control
-      if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+      // if downgrading to a table version < 8, disable non-blocking concurrency control for MDT
+      if (table.isMetadataTable() && tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
         properties.put(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.SINGLE_WRITER.name());
       }
       HoodieWriteConfig rollbackWriteConfig = HoodieWriteConfig.newBuilder()
