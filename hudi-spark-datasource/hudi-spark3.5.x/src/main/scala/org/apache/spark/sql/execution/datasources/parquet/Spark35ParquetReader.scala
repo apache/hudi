@@ -111,6 +111,9 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
     val int96RebaseSpec = DataSourceUtils.int96RebaseSpec(
       footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
 
+    // Identify columns that need timestamp correction and store in schemaEvolutionUtils
+    schemaEvolutionUtils.setFooterSchema(footerFileMetaData.getSchema)
+
     // Try to push down filters when filter push-down is enabled.
     val pushed = if (enableParquetFilterPushDown) {
       val parquetSchema = footerFileMetaData.getSchema
@@ -124,6 +127,8 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
         isCaseSensitive,
         datetimeRebaseSpec)
       filters.map(schemaEvolutionUtils.rebuildFilterFromParquet)
+        // Adjust filter values for timestamp precision mismatches
+        .map(schemaEvolutionUtils.adjustFilterForTimestampCorrection)
         // Collects all converted Parquet filter predicates. Notice that not all predicates can be
         // converted (`ParquetFilters.createFilter` returns an `Option`). That's why a `flatMap`
         // is used here.
@@ -212,7 +217,7 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
         readerWithRowIndexes.initialize(split, hadoopAttemptContext)
 
         val fullSchema = toAttributes(requiredSchema) ++ toAttributes(partitionSchema)
-        val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId, footerFileMetaData.getSchema)
+        val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId)
 
         if (partitionSchema.length == 0) {
           // There is no partition columns
