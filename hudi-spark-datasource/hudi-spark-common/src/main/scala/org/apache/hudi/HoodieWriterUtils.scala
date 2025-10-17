@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
+import org.apache.hudi.common.config.RecordMergeMode.CUSTOM
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.common.util.StringUtils
@@ -205,6 +206,18 @@ object HoodieWriterUtils {
           && value.equals(classOf[OverwriteWithLatestAvroPayload].getName)
           && tableConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()).equals(classOf[DefaultHoodieRecordPayload].getName)) {
           true
+        } else if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
+          // For >= v9, if the merge mode is not custom, we can skip payload class check since the payload class
+          // is ignored during writes. Meanwhile, we should give a warning about this behavior.
+          val recordMergeMode = tableConfig.getStringOrDefault(HoodieTableConfig.RECORD_MERGE_MODE.key(), "")
+          if (!recordMergeMode.equals(CUSTOM.name)) {
+            if (!StringUtils.isNullOrEmpty(value)) {
+              log.warn(s"Payload class '$value' is ignored since merge behavior is determined by the merge mode: $recordMergeMode")
+            }
+            true
+          } else {
+            ignoreConfig
+          }
         } else {
           ignoreConfig
         }
