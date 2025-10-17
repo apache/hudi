@@ -34,7 +34,7 @@ import org.apache.hudi.table.action.cluster.strategy.PartitionAwareClusteringPla
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,19 +73,19 @@ public class FlinkSizeBasedClusteringPlanStrategy<T>
 
   @Override
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(final String partition) {
-    Supplier<Stream<FileSlice>> streamSupplier = () -> super.getFileSlicesEligibleForClustering(partition)
+    List<FileSlice> fileSlices = super.getFileSlicesEligibleForClustering(partition)
+            // Only files that have base file size smaller than small file size are eligible.
             .filter(slice -> slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L)
-                    < getWriteConfig().getClusteringSmallFileLimit());
+                    < getWriteConfig().getClusteringSmallFileLimit())
+            .collect(Collectors.toList());
 
     //  if some special sort columns are declared, we can not skip the clustering.
     if (!StringUtils.isNullOrEmpty(getWriteConfig().getClusteringSortColumns())) {
-      return streamSupplier.get();
+      return fileSlices.stream();
     }
 
-    long fileCount = streamSupplier.get().count();
-
-    if (fileCount > 1L) {
-      return streamSupplier.get();
+    if (fileSlices.size() > 1) {
+      return fileSlices.stream();
     }
     return Stream.empty();
   }
