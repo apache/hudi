@@ -151,11 +151,9 @@ object HoodieParquetFileFormatHelper {
         case LongType if columnsToMultiply.contains(columnPath) =>
           Multiply(expr, Literal(1000L))
         case TimestampType if columnsToMultiply.contains(columnPath) =>
-          // TimestampType is internally represented as Long (microseconds since epoch)
-          // Cast to Long, multiply, then cast back to TimestampType
-          val asLong = Cast(expr, LongType, None)
-          val multiplied = Multiply(asLong, Literal(1000L))
-          Cast(multiplied, TimestampType, None)
+          val asDouble = Cast(expr, DoubleType, None)
+          val multiplied = Multiply(asDouble, Literal(1000.0))
+          Cast(multiplied, TimestampType, timeZoneId)
         case s: StructType =>
           val structFields = s.fields.zipWithIndex.map {
             case (field, i) =>

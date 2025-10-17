@@ -45,6 +45,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.isTypeNumeric;
+import static org.apache.hudi.common.config.HoodieCommonConfig.SCHEMA_EVOLUTION_ALLOW_LOGICAL_EVOLUTION;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
@@ -85,9 +86,10 @@ public class AvroSchemaCompatibility {
    */
   public static SchemaPairCompatibility checkReaderWriterCompatibility(final Schema reader,
                                                                        final Schema writer,
-                                                                       boolean checkNamingOverride) {
+                                                                       boolean checkNamingOverride,
+                                                                       boolean allowLogicalEvolutions) {
     final SchemaCompatibilityResult compatibility =
-        new ReaderWriterCompatibilityChecker(checkNamingOverride).getCompatibility(reader, writer);
+        new ReaderWriterCompatibilityChecker(checkNamingOverride, allowLogicalEvolutions).getCompatibility(reader, writer);
 
     final String message;
     switch (compatibility.getCompatibility()) {
@@ -228,9 +230,11 @@ public class AvroSchemaCompatibility {
     private final AvroDefaultValueAccessor defaultValueAccessor = new AvroDefaultValueAccessor();
     private final Map<ReaderWriter, SchemaCompatibilityResult> mMemoizeMap = new HashMap<>();
     private final boolean checkNaming;
+    private final boolean allowLogicalEvolutions;
 
-    public ReaderWriterCompatibilityChecker(boolean checkNaming) {
+    public ReaderWriterCompatibilityChecker(boolean checkNaming, boolean allowLogicalEvolutions) {
       this.checkNaming = checkNaming;
+      this.allowLogicalEvolutions = allowLogicalEvolutions;
     }
 
     /**
@@ -335,11 +339,17 @@ public class AvroSchemaCompatibility {
           case NULL:
           case BOOLEAN:
           case INT:
-          case LONG:
           case FLOAT:
           case DOUBLE:
           case BYTES:
           case STRING: {
+            return result;
+          }
+          case LONG: {
+            if (reader.getLogicalType() != writer.getLogicalType() && !allowLogicalEvolutions) {
+              throw new UnsupportedOperationException("Logical type evolutions not allowed. If you are upgrading from 0.14.1, 0.15.0, 1.0.0, 1.0.1, or 1.0.2. "
+                  + "Enable " + SCHEMA_EVOLUTION_ALLOW_LOGICAL_EVOLUTION.key() + "After this has been enabled, you must be careful not to evolve between timestamp types");
+            }
             return result;
           }
           case ARRAY: {

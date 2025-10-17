@@ -155,7 +155,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException {
+  protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type, boolean skipLogicalTimestampEvolution) throws IOException {
     throw new UnsupportedOperationException("Should not be invoked");
   }
 

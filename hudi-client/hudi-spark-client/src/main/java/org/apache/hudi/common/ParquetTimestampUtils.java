@@ -85,6 +85,8 @@ public class ParquetTimestampUtils {
     if (fileType.isPrimitive() && tableType.isPrimitive()) {
       if (isTimestampMicros(fileType) && isTimestampMillis(tableType)) {
         columnsToMultiply.add(path);
+      } else if (isLong(fileType) && isLocalTimestampMillis(tableType)) {
+        columnsToMultiply.add(path);
       }
     }
 
@@ -135,5 +137,34 @@ public class ParquetTimestampUtils {
     }
 
     return false;
+  }
+
+  private static boolean isLocalTimestampMillis(Type parquetType) {
+    if (!parquetType.isPrimitive()) {
+      return false;
+    }
+
+    PrimitiveType primitiveType = parquetType.asPrimitiveType();
+    LogicalTypeAnnotation logicalType = primitiveType.getLogicalTypeAnnotation();
+
+    if (logicalType instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) {
+      LogicalTypeAnnotation.TimestampLogicalTypeAnnotation timestampType =
+          (LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) logicalType;
+      return timestampType.getUnit() == LogicalTypeAnnotation.TimeUnit.MILLIS
+          && !timestampType.isAdjustedToUTC();
+    }
+
+    return false;
+  }
+
+  private static boolean isLong(Type parquetType) {
+    if (!parquetType.isPrimitive()) {
+      return false;
+    }
+
+    PrimitiveType primitiveType = parquetType.asPrimitiveType();
+
+    return primitiveType.getPrimitiveTypeName() == PrimitiveType.PrimitiveTypeName.INT64
+        && primitiveType.getLogicalTypeAnnotation() == null;
   }
 }

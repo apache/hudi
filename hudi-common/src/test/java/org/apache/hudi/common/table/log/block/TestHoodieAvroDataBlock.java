@@ -239,7 +239,7 @@ public class TestHoodieAvroDataBlock {
         NULL_BLOCK_CONTENT_LOCATION, Option.of(SCHEMA), header, new HashMap<>(), RECORD_KEY_FIELD);
 
     // Mock the behavior of deserializeRecords to throw IOException
-    assertThrows(EOFException.class, () -> avroDataBlock.deserializeRecords(content, HoodieRecord.HoodieRecordType.AVRO));
+    assertThrows(EOFException.class, () -> avroDataBlock.deserializeRecords(content, HoodieRecord.HoodieRecordType.AVRO, false));
 
     // Call getRecordIterator and verify the behavior
     assertThrows(HoodieIOException.class, () -> avroDataBlock.getRecordIterator(HoodieRecord.HoodieRecordType.AVRO));
