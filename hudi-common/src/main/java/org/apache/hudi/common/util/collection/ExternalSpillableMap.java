@@ -228,7 +228,7 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
         this.estimatedPayloadSize = (long) (this.estimatedPayloadSize * 0.9 + (keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value)) * 0.1);
         this.currentInMemoryMapSize = this.inMemoryMap.size() * this.estimatedPayloadSize;
         if (this.inMemoryMap.size() / NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 1) {
-          LOG.info("{} : Updated Estimated Payload size {}", loggingContext, this.estimatedPayloadSize);
+          LOG.error("{} : Updated Estimated Payload size {}", loggingContext, this.estimatedPayloadSize);
         }
       }
       this.currentInMemoryMapSize += this.estimatedPayloadSize;
