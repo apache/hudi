@@ -157,16 +157,12 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
       val targetTable = if (targetTableO.resolved) targetTableO else analyzer.execute(targetTableO)
       EliminateSubqueryAliases(targetTable) match {
         case u: UnresolvedRelation =>
-          throw new AnalysisException(
-            s"[TABLE_OR_VIEW_NOT_FOUND] The table or view `${u.multipartIdentifier.mkString(".")}` cannot be found. " +
-            s"Verify the spelling and correctness of the schema and catalog.\n" +
-            s"If you did not qualify the name with a schema, verify the current_schema() output, or " +
-            s"qualify the name with the correct schema and catalog.\n" +
-            s"To tolerate the error on drop use DROP VIEW IF EXISTS or DROP TABLE IF EXISTS."
-          )
+          // If target table is still unresolved after analysis, it means the table doesn't exist
+          sparkAdapter.getCatalystPlanUtils.failTableNotFound(u.multipartIdentifier.mkString("."))
         case _ =>
           // Target table exists, proceed with normal resolution
       }
+
       val sourceTable = if (sourceTableO.resolved) sourceTableO else analyzer.execute(sourceTableO)
       val m = mO.asInstanceOf[MergeIntoTable].copy(targetTable = targetTable, sourceTable = sourceTable)
       // END: custom Hudi change
