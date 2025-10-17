@@ -212,6 +212,8 @@
     <jacoco.version>0.8.12</jacoco.version>
     <presto.bundle.bootstrap.scope>compile</presto.bundle.bootstrap.scope>
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
+    <presto.commons-lang3.version>3.18.0</presto.commons-lang3.version>
+    <presto.parquet.version>1.15.1</presto.parquet.version>
     <trino.bundle.bootstrap.scope>compile</trino.bundle.bootstrap.scope>
     <trino.bundle.bootstrap.shade.prefix>org.apache.hudi.</trino.bundle.bootstrap.shade.prefix>
     <twitter.chill.version>0.10.0</twitter.chill.version>
