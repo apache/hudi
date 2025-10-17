@@ -208,7 +208,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     this(Option.ofNullable(record));
   }
 
-  public HoodieMetadataPayload(Option<GenericRecord> recordOpt) {
+  public HoodieMetadataPayload(Option<GenericRecord> recordOpt, int type) {
     if (recordOpt.isPresent()) {
       GenericRecord record = recordOpt.get();
       // This can be simplified using SpecificData.deepcopy once this bug is fixed
@@ -218,7 +218,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       //       for it to be handled appropriately, therefore these fields have to be reflected
       //       in any (read-)projected schema
       key = record.get(KEY_FIELD_NAME).toString();
-      type = (int) record.get(SCHEMA_FIELD_NAME_TYPE);
+      this.type = type;
       MetadataPartitionType.get(type).constructMetadataPayload(this, record);
     } else {
       this.isDeletedRecord = true;

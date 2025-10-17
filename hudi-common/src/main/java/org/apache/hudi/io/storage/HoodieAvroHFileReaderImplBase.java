@@ -35,7 +35,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.getBinaryDecoder;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
-import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
     implements HoodieSeekingFileReader<IndexedRecord> {
@@ -85,10 +84,10 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
     }
   }
 
-  protected static GenericRecord deserialize(final byte[] keyBytes, int keyOffset, int keyLength,
-                                             final byte[] valueBytes, int valueOffset, int valueLength,
-                                             GenericDatumReader<GenericRecord> datumReader,
-                                             Schema.Field keyFieldSchema) throws IOException {
+  public static GenericRecord deserialize(String key,
+                                          final byte[] valueBytes, int valueOffset, int valueLength,
+                                          GenericDatumReader<GenericRecord> datumReader,
+                                          Schema.Field keyFieldSchema) throws IOException {
     BinaryDecoder binaryDecoder = getBinaryDecoder(valueBytes, valueOffset, valueLength);
     GenericRecord avroRecord = datumReader.read(null, binaryDecoder);
     if (keyFieldSchema == null) {
@@ -96,12 +95,12 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
     }
     final Object keyObject = avroRecord.get(keyFieldSchema.pos());
     if (keyObject != null && keyObject.toString().isEmpty()) {
-      avroRecord.put(keyFieldSchema.pos(), fromUTF8Bytes(keyBytes, keyOffset, keyLength));
+      avroRecord.put(keyFieldSchema.pos(), key);
     }
     return avroRecord;
   }
 
-  static Option<Schema.Field> getKeySchema(Schema schema) {
+  public static Option<Schema.Field> getKeySchema(Schema schema) {
     return schema.getType() != Schema.Type.RECORD ? Option.empty() : Option.ofNullable(schema.getField(KEY_FIELD_NAME));
   }
 }
