@@ -40,6 +40,6 @@ public class HoodieAvroParquetReaderIterator extends ParquetReaderIterator<Index
 
   @Override
   public IndexedRecord next() {
-    return HoodieAvroUtils.rewriteRecordWithNewSchema(super.next(), promotedSchema, renamedColumns);
+    return HoodieAvroUtils.rewriteRecordWithNewSchema(super.next(), promotedSchema, renamedColumns, true);
   }
 }

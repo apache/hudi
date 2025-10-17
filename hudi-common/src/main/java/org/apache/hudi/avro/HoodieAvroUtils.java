@@ -646,8 +646,12 @@ public class HoodieAvroUtils {
    * TODO: See if we can always pass GenericRecord instead of SpecificBaseRecord in some cases.
    */
   public static GenericRecord rewriteRecord(GenericRecord oldRecord, Schema newSchema) {
+    return rewriteRecord(oldRecord, newSchema, false);
+  }
+
+  public static GenericRecord rewriteRecord(GenericRecord oldRecord, Schema newSchema, boolean skipLogicalTimestampEvolution) {
     boolean isSpecificRecord = oldRecord instanceof SpecificRecordBase;
-    Object newRecord = rewriteRecordWithNewSchemaInternal(oldRecord, oldRecord.getSchema(), newSchema, Collections.emptyMap(), new LinkedList<>(), isSpecificRecord);
+    Object newRecord = rewriteRecordWithNewSchemaInternal(oldRecord, oldRecord.getSchema(), newSchema, Collections.emptyMap(), new LinkedList<>(), isSpecificRecord, skipLogicalTimestampEvolution);
     return (GenericRecord) newRecord;
   }
 
@@ -658,7 +662,7 @@ public class HoodieAvroUtils {
    * To better understand conversion rules please check {@link #rewriteRecord(GenericRecord, Schema)}
    */
   public static List<GenericRecord> rewriteRecords(List<GenericRecord> records, Schema newSchema) {
-    return records.stream().map(r -> rewriteRecord(r, newSchema)).collect(Collectors.toList());
+    return records.stream().map(r -> rewriteRecord(r, newSchema, false)).collect(Collectors.toList());
   }
 
   /**
@@ -669,7 +673,7 @@ public class HoodieAvroUtils {
    */
   public static GenericRecord removeFields(GenericRecord record, Set<String> fieldsToRemove) {
     Schema newSchema = removeFields(record.getSchema(), fieldsToRemove);
-    return rewriteRecord(record, newSchema);
+    return rewriteRecord(record, newSchema, false);
   }
 
   /**
@@ -1019,9 +1023,20 @@ public class HoodieAvroUtils {
     return getRecordColumnValues(record, columns, schema.get(), consistentLogicalTimestampEnabled);
   }
 
-  // TODO java-doc
+  // TODO: get rid of this and make sure skipLogicalTimestampEvolution is passed correctly
   public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema) {
-    return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.emptyMap());
+    return rewriteRecordWithNewSchema(oldRecord, newSchema, false);
+  }
+
+  // TODO java-doc
+  public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema, boolean skipLogicalTimestampEvolution) {
+    return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.emptyMap(), skipLogicalTimestampEvolution);
+  }
+
+  //TODO: get rid of this as well?
+  public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema, Map<String, String> renameCols) {
+    Object newRecord = rewriteRecordWithNewSchema(oldRecord, oldRecord.getSchema(), newSchema, renameCols, new LinkedList<>(), false, false);
+    return (GenericRecord) newRecord;
   }
 
   /**
@@ -1036,13 +1051,13 @@ public class HoodieAvroUtils {
    * @param renameCols a map store all rename cols, (k, v)-> (colNameFromNewSchema, colNameFromOldSchema)
    * @return newRecord for new Schema
    */
-  public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema, Map<String, String> renameCols) {
-    Object newRecord = rewriteRecordWithNewSchema(oldRecord, oldRecord.getSchema(), newSchema, renameCols, new LinkedList<>(), false);
+  public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema, Map<String, String> renameCols, boolean skipLogicalTimestampEvolution) {
+    Object newRecord = rewriteRecordWithNewSchema(oldRecord, oldRecord.getSchema(), newSchema, renameCols, new LinkedList<>(), false, skipLogicalTimestampEvolution);
     return (GenericRecord) newRecord;
   }
 
-  public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema, Map<String, String> renameCols, boolean validate) {
-    Object newRecord = rewriteRecordWithNewSchema(oldRecord, oldRecord.getSchema(), newSchema, renameCols, new LinkedList<>(), validate);
+  public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema, Map<String, String> renameCols, boolean validate, boolean skipLogicalTimestampEvolution) {
+    Object newRecord = rewriteRecordWithNewSchema(oldRecord, oldRecord.getSchema(), newSchema, renameCols, new LinkedList<>(), validate, skipLogicalTimestampEvolution);
     return (GenericRecord) newRecord;
   }
 
@@ -1066,7 +1081,8 @@ public class HoodieAvroUtils {
                                                    Schema newSchema,
                                                    Map<String, String> renameCols,
                                                    Deque<String> fieldNames,
-                                                   boolean validate) {
+                                                   boolean validate,
+                                                   boolean skipLogicalTimestampEvolution) {
     if (oldRecord == null) {
       return null;
     }
@@ -1076,7 +1092,7 @@ public class HoodieAvroUtils {
     }
     // try to get real schema for union type
     Schema oldSchema = getActualSchemaFromUnion(oldAvroSchema, oldRecord);
-    Object newRecord = rewriteRecordWithNewSchemaInternal(oldRecord, oldSchema, newSchema, renameCols, fieldNames, false);
+    Object newRecord = rewriteRecordWithNewSchemaInternal(oldRecord, oldSchema, newSchema, renameCols, fieldNames, false, skipLogicalTimestampEvolution);
     // validation is recursive so it only needs to be called on the original input
     if (validate && !ConvertingGenericData.INSTANCE.validate(newSchema, newRecord)) {
       throw new SchemaCompatibilityException(
@@ -1090,7 +1106,8 @@ public class HoodieAvroUtils {
                                                            Schema newSchema,
                                                            Map<String, String> renameCols,
                                                            Deque<String> fieldNames,
-                                                           boolean skipMetadataFields) {
+                                                           boolean skipMetadataFields,
+                                                           boolean skipLogicalTimestampEvolution) {
     switch (newSchema.getType()) {
       case RECORD:
         if (!(oldRecord instanceof IndexedRecord)) {
@@ -1112,7 +1129,7 @@ public class HoodieAvroUtils {
               ? oldSchema.getField(newFieldName)
               : oldSchema.getField(getOldFieldNameWithRenaming(namePrefix, newFieldName, renameCols));
           if (oldField != null) {
-            newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), newField.schema(), renameCols, fieldNames, false));
+            newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), newField.schema(), renameCols, fieldNames, false, skipLogicalTimestampEvolution));
           } else if (newField.defaultVal() instanceof JsonProperties.Null) {
             newRecord.put(i, null);
           } else if (!isNullable(newField.schema()) && newField.defaultVal() == null) {
@@ -1139,7 +1156,7 @@ public class HoodieAvroUtils {
         List<Object> newArray = new ArrayList<>(array.size());
         fieldNames.push("element");
         for (Object element : array) {
-          newArray.add(rewriteRecordWithNewSchema(element, oldSchema.getElementType(), newSchema.getElementType(), renameCols, fieldNames, false));
+          newArray.add(rewriteRecordWithNewSchema(element, oldSchema.getElementType(), newSchema.getElementType(), renameCols, fieldNames, false, skipLogicalTimestampEvolution));
         }
         fieldNames.pop();
         return newArray;
@@ -1151,14 +1168,15 @@ public class HoodieAvroUtils {
         Map<Object, Object> newMap = new HashMap<>(map.size(), 1.0f);
         fieldNames.push("value");
         for (Map.Entry<Object, Object> entry : map.entrySet()) {
-          newMap.put(entry.getKey(), rewriteRecordWithNewSchema(entry.getValue(), oldSchema.getValueType(), newSchema.getValueType(), renameCols, fieldNames, false));
+          newMap.put(entry.getKey(), rewriteRecordWithNewSchema(entry.getValue(), oldSchema.getValueType(), newSchema.getValueType(), renameCols, fieldNames, false, skipLogicalTimestampEvolution));
         }
         fieldNames.pop();
         return newMap;
       case UNION:
-        return rewriteRecordWithNewSchema(oldRecord, getActualSchemaFromUnion(oldSchema, oldRecord), getActualSchemaFromUnion(newSchema, oldRecord), renameCols, fieldNames, false);
+        return rewriteRecordWithNewSchema(oldRecord, getActualSchemaFromUnion(oldSchema, oldRecord),
+            getActualSchemaFromUnion(newSchema, oldRecord), renameCols, fieldNames, false, skipLogicalTimestampEvolution);
       default:
-        return rewritePrimaryType(oldRecord, oldSchema, newSchema);
+        return rewritePrimaryType(oldRecord, oldSchema, newSchema, skipLogicalTimestampEvolution);
     }
   }
 
@@ -1195,7 +1213,7 @@ public class HoodieAvroUtils {
     return result;
   }
 
-  public static Object rewritePrimaryType(Object oldValue, Schema oldSchema, Schema newSchema) {
+  public static Object rewritePrimaryType(Object oldValue, Schema oldSchema, Schema newSchema, boolean skipLogicalTimestampEvolution) {
     if (oldSchema.getType() == newSchema.getType()) {
       switch (oldSchema.getType()) {
         case NULL:
@@ -1208,10 +1226,9 @@ public class HoodieAvroUtils {
           return oldValue;
         case LONG:
           if (oldSchema.getLogicalType() != newSchema.getLogicalType()) {
-            if (oldSchema.getLogicalType() == null || newSchema.getLogicalType() == null) {
+            if (skipLogicalTimestampEvolution || oldSchema.getLogicalType() == null || newSchema.getLogicalType() == null) {
               return oldValue;
-            }
-            if (oldSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
+            } else if (oldSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
               if (newSchema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
                 return DateTimeUtils.millisToMicros((Long) oldValue);
               }
@@ -1488,6 +1505,10 @@ public class HoodieAvroUtils {
       case DOUBLE:
       case FLOAT:
       case LONG:
+        if (readerSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis
+            && writerSchema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
+          return true;
+        }
         return !(writerSchema.getType().equals(Schema.Type.INT) || writerSchema.getType().equals(Schema.Type.LONG));
       default:
         return !writerSchema.getType().equals(readerSchema.getType());
@@ -1612,7 +1633,7 @@ public class HoodieAvroUtils {
   }
 
   public static GenericRecord rewriteRecordDeep(GenericRecord oldRecord, Schema newSchema) {
-    return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.EMPTY_MAP);
+    return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.EMPTY_MAP, false);
   }
 
   public static GenericRecord rewriteRecordDeep(GenericRecord oldRecord, Schema newSchema, boolean validate) {

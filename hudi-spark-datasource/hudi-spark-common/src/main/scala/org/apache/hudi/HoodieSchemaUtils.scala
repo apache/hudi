@@ -179,7 +179,7 @@ object HoodieSchemaUtils {
       // Or it's not merge into writes, we validate schema, and schema is compatible.
       if (shouldValidateSchemasCompatibility) {
         checkSchemaCompatible(latestTableSchema, canonicalizedSourceSchema, true,
-          allowAutoEvolutionColumnDrop, java.util.Collections.emptySet())
+          allowAutoEvolutionColumnDrop, java.util.Collections.emptySet(), true)
       }
       canonicalizedSourceSchema
     }
