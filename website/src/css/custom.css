@@ -138,7 +138,7 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
 }
 
 .header-twitter-link:before {
-  background: url(/assets/images/twitter.png) no-repeat;
+  background: url(/assets/images/x.png) no-repeat;
   content: "";
   display: flex;
   height: 30px;

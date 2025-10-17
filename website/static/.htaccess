@@ -1,0 +1,7 @@
+# Guide: https://infra.apache.org/tools/csp.html
+# CSP permissions for Kapa.ai: https://issues.apache.org/jira/browse/INFRA-27242
+# Ref https://docs.kapa.ai/integrations/understanding-csp-cors
+# CSP permissions for Algolia: https://issues.apache.org/jira/browse/INFRA-27279
+# Ref https://support.algolia.com/hc/en-us/articles/8947249849873-How-do-I-fix-Content-Security-Policy-CSP-errors-on-my-site
+# CSP permissions for YouTube: https://privacy.apache.org/examples/youtube-html/with-youtube-api.html
+SetEnv CSP_PROJECT_DOMAINS "https://*.kapa.ai/ https://kapa-widget-proxy-la7dkmplpq-uc.a.run.app/ https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/ https://hcaptcha.com/ https://*.hcaptcha.com/ https://*.algolia.net/ https://*.algolianet.com/ https://*.algolia.io/ https://www.youtube-nocookie.com https://www.youtube.com"

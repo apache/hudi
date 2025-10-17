@@ -5,6 +5,34 @@ import styles from "./styles.module.css";
 import LinkButton from "@site/src/components/UI/LinkButton";
 import FeatureRender from "./FeatureRender";
 
+function loadScript() {
+    return new Promise((resolve, reject) => {
+        let script = document.createElement('script');
+        script.src = 'https://www.youtube.com/iframe_api';
+        script.addEventListener('load', resolve);
+        script.addEventListener('error', (e) => reject(e));
+        document.body.appendChild(script);
+    });
+}
+
+function addElement() {
+    loadScript().then(() => {
+        window.YT.ready(function() {
+            let player = new YT.Player(styles.ytContainer, {
+            videoId: 'AYaw06_Xazo',
+            playerVars: {
+                'playsinline': 1
+            },
+            events: {
+                'onReady': (event) => {
+                    event.target.playVideo();
+                }
+            }
+            });
+        });
+    });
+}
+
 function HomepageHeader() {
   const { siteConfig } = useDocusaurusContext();
   const [firstHalf, secondHaf] = siteConfig.title.split(" ");
@@ -27,12 +55,9 @@ function HomepageHeader() {
                 </LinkButton>
               </div>
             </div>
-            <div className={styles.imageWrapper}>
-              <img
-                className={clsx("hero__img", styles.heroImg)}
-                src={require("/assets/images/logo-big.png").default}
-                alt="Hudi banner"
-              />
+            <div className={styles.videoWrapper}>
+              <div id={styles.ytContainer} onClick={addElement}></div>
+              <div><i>Clicking on and playing the video above will load and send data from and to Google.</i></div>
             </div>
           </div>
         </div>

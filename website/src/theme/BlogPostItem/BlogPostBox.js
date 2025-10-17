@@ -19,9 +19,10 @@ export default function BlogPostBox({metadata = {}, assets, frontMatter}) {
 
     const image = assets.image ?? frontMatter.image ?? '/assets/images/hudi-logo-medium.png';
 
-    const manageVideoOpen = (videoLink) => {
-        if(videoLink) {
-            window.open(videoLink, '_blank', 'noopener noreferrer');
+    const openResourceInNewTab = (e, resource_url) => {
+        e.preventDefault()
+        if(resource_url) {
+            window.open(resource_url, '_blank', 'noopener noreferrer');
         }
     }
 
@@ -68,14 +69,14 @@ export default function BlogPostBox({metadata = {}, assets, frontMatter}) {
                         <div className="col blogThumbnail" itemProp="blogThumbnail">
                             {
                                 location.pathname.startsWith('/blog') ? <Link itemProp="url" to={permalink}>
-                                        <img
+                                        <img onClick={(e) => openResourceInNewTab(e, permalink)}
                                             src={withBaseUrl(image, {
                                                 absolute: true,
                                             })}
                                             className="blog-image"
                                         />
                                     </Link> :
-                                    <img onClick={() => manageVideoOpen(frontMatter?.navigate)}
+                                    <img onClick={(e) => openResourceInNewTab(e, frontMatter?.navigate)}
                                          src={withBaseUrl(image, {
                                              absolute: true,
                                          })}
@@ -87,18 +88,19 @@ export default function BlogPostBox({metadata = {}, assets, frontMatter}) {
                     )}
                     <TitleHeading className={styles.blogPostTitle} itemProp="headline">
                         {location.pathname.startsWith('/blog') ?
-                                <Link itemProp="url" to={permalink}>
+                                <Link itemProp="url" to={permalink} onClick={(e) => openResourceInNewTab(e, permalink)}>
                                     <TitleHeading className={styles.blogPostTitle} itemProp="headline">
                                         {title}
                                     </TitleHeading>
                                 </Link>
                                 :
-                                <TitleHeading onClick={() => manageVideoOpen(frontMatter?.navigate)}
+                                <TitleHeading onClick={(e) => openResourceInNewTab(e, frontMatter?.navigate)}
                                               className={styles.blogPostTitle} itemProp="headline">
                                     {title}
                                 </TitleHeading>
                         }
                     </TitleHeading>
+
                     <div className={clsx(styles.blogInfo, "margin-top--sm margin-bottom--sm")}>
                         {AuthorsList()}
                     </div>
