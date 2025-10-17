@@ -126,9 +126,11 @@ object HoodieSparkSqlWriter {
             optParams: Map[String, String],
             sourceDf: DataFrame,
             streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
-            hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty):
+            hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty,
+            schemaFromCatalog: Option[Schema] = Option.empty):
   (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
-    new HoodieSparkSqlWriterInternal().write(sqlContext, mode, optParams, sourceDf, streamingWritesParamsOpt, hoodieWriteClient)
+    new HoodieSparkSqlWriterInternal().write(sqlContext, mode, optParams, sourceDf, streamingWritesParamsOpt, hoodieWriteClient,
+      schemaFromCatalog = schemaFromCatalog)
   }
 
   def bootstrap(sqlContext: SQLContext,
@@ -175,7 +177,8 @@ class HoodieSparkSqlWriterInternal {
             optParams: Map[String, String],
             sourceDf: DataFrame,
             streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
-            hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty):
+            hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty,
+            schemaFromCatalog: Option[Schema] = Option.empty):
   (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
 
     val retryWrite: () => (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = () => {
@@ -186,7 +189,8 @@ class HoodieSparkSqlWriterInternal {
 
       while (counter <= maxRetry && !succeeded) {
         try {
-          toReturn = writeInternal(sqlContext, mode, optParams, sourceDf, streamingWritesParamsOpt, hoodieWriteClient)
+          toReturn = writeInternal(sqlContext, mode, optParams, sourceDf, streamingWritesParamsOpt, hoodieWriteClient,
+            schemaFromCatalog = schemaFromCatalog)
           if (counter > 0) {
             log.info(s"Write Succeeded after $counter attempts")
           }
@@ -212,7 +216,8 @@ class HoodieSparkSqlWriterInternal {
                             optParams: Map[String, String],
                             sourceDf: DataFrame,
                             streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
-                            hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty):
+                            hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty,
+                            schemaFromCatalog: Option[Schema] = Option.empty):
   (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
 
     assert(optParams.get("path").exists(!StringUtils.isNullOrEmpty(_)), "'path' must be set")
@@ -353,7 +358,7 @@ class HoodieSparkSqlWriterInternal {
           classOf[Schema]))
 
       val shouldReconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
-      val latestTableSchemaOpt = getLatestTableSchema(spark, tableIdentifier, tableMetaClient)
+      val latestTableSchemaOpt = getLatestTableSchema(tableMetaClient, schemaFromCatalog)
       val df = if (preppedWriteOperation || preppedSparkSqlWrites || preppedSparkSqlMergeInto || sourceDf.isStreaming) {
         sourceDf
       } else {
@@ -669,26 +674,10 @@ class HoodieSparkSqlWriterInternal {
     sparkContext.getConf.registerAvroSchemas(targetAvroSchemas: _*)
   }
 
-  private def getLatestTableSchema(spark: SparkSession,
-                                   tableId: TableIdentifier,
-                                   tableMetaClient: HoodieTableMetaClient): Option[Schema] = {
+  private def getLatestTableSchema(tableMetaClient: HoodieTableMetaClient, schemaFromCatalog: Option[Schema]): Option[Schema] = {
     val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
-    val latestTableSchemaFromCommitMetadata =
-      toScalaOption(tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false))
-    latestTableSchemaFromCommitMetadata.orElse {
-      getCatalogTable(spark, tableId).map { catalogTable =>
-        val (structName, namespace) = getAvroRecordNameAndNamespace(tableId.table)
-        convertStructTypeToAvroSchema(catalogTable.schema, structName, namespace)
-      }
-    }
-  }
-
-  private def getCatalogTable(spark: SparkSession, tableId: TableIdentifier): Option[CatalogTable] = {
-    if (spark.sessionState.catalog.tableExists(tableId)) {
-      Some(spark.sessionState.catalog.getTableMetadata(tableId))
-    } else {
-      None
-    }
+    toScalaOption(tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false))
+      .orElse(schemaFromCatalog)
   }
 
   def bootstrap(sqlContext: SQLContext,
