@@ -20,6 +20,7 @@
 package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
@@ -146,8 +147,26 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
   }
 
   public void write(R object) throws IOException {
-    this.parquetWriter.write(object);
-    writtenRecordCount.incrementAndGet();
+    try {
+      this.parquetWriter.write(object);
+      writtenRecordCount.incrementAndGet();
+    } catch (RuntimeException e) {
+      String errorMessage = e.getMessage() != null ? e.getMessage() : "";
+      if (errorMessage.contains("Null-value for required field")
+          || errorMessage.contains("null value for required")
+          || errorMessage.contains("required field")) {
+        if (errorMessage.contains("_hoodie_is_deleted")) {
+          throw new HoodieException(
+              "'_hoodie_is_deleted' field is missing for some of the incoming records.\n"
+                  + "The table schema claims '_hoodie_is_deleted' field to be non-null and hence "
+                  + "incoming records are expected to have a value set for this field.\n\n"
+                  + "To fix:\n"
+                  + "  1. Ensure ALL records have '_hoodie_is_deleted' field (true/false)\n\n"
+                  + "Original error: " + errorMessage, e);
+        }
+      }
+      throw e;
+    }
   }
 
   protected long getWrittenRecordCount() {
