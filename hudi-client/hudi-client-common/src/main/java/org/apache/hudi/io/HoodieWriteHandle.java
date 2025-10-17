@@ -296,15 +296,6 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
   protected HoodieLogFormat.Writer createLogWriter(String instantTime, String fileSuffix, Option<FileSlice> fileSliceOpt) {
     try {
-      Option<HoodieLogFile> latestLogFile = fileSliceOpt.isPresent()
-          ? fileSliceOpt.get().getLatestLogFile()
-          : Option.empty();
-
-      // Compute the next log file version: use latest version + 1 if available and append is not supported,
-      // otherwise start with the base version
-      int logFileVersion = latestLogFile
-          .map(logFile -> logFile.getLogVersion() +  1)
-          .orElse(HoodieLogFile.LOGFILE_BASE_VERSION);
       if (config.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
         return HoodieLogFormat.newWriterBuilder()
             .onParentPath(FSUtils.constructAbsolutePath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
@@ -318,9 +309,17 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
             .withTableVersion(config.getWriteVersion())
             .withSuffix(fileSuffix)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withLogVersion(logFileVersion)
             .build();
       } else {
+        Option<HoodieLogFile> latestLogFile = fileSliceOpt.isPresent()
+            ? fileSliceOpt.get().getLatestLogFile()
+            : Option.empty();
+
+        // Compute the next log file version: use latest version + 1 if available and append is not supported,
+        // otherwise start with the base version
+        int logFileVersion = latestLogFile
+            .map(logFile -> logFile.getLogVersion() +  1)
+            .orElse(HoodieLogFile.LOGFILE_BASE_VERSION);
         return HoodieLogFormat.newWriterBuilder()
             .onParentPath(FSUtils.constructAbsolutePath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
             .withFileId(fileId)

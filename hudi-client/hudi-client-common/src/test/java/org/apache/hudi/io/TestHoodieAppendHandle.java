@@ -32,9 +32,8 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -65,6 +64,14 @@ public class TestHoodieAppendHandle extends HoodieCommonTestHarness {
   public void setUp() throws IOException {
     initPath();
     initMetaClient();
+
+    writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withMarkersType("DIRECT")
+        .withWriteRecordPositionsEnabled(false)
+        .withWriteTableVersion(HoodieTableVersion.SIX.versionCode())
+        .build();
     taskContextSupplier = new LocalTaskContextSupplier();
 
     mockMethodsNeededByConstructor();
@@ -76,25 +83,13 @@ public class TestHoodieAppendHandle extends HoodieCommonTestHarness {
   }
 
   private void mockMethodsNeededByConstructor() {
+    when(mockHoodieTable.getConfig()).thenReturn(writeConfig);
     when(mockHoodieTable.getMetaClient()).thenReturn(metaClient);
     when(mockHoodieTable.getStorage()).thenReturn(mockStorage);
   }
 
-  @ParameterizedTest
-  @EnumSource(
-      value = HoodieTableVersion.class,
-      names = {"SIX", "EIGHT"}
-  )
-  void testCreateLogFileWriterLogVersion(HoodieTableVersion tableVersion) throws IOException {
-    writeConfig = HoodieWriteConfig.newBuilder()
-        .withPath(basePath)
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
-        .withMarkersType("DIRECT")
-        .withWriteRecordPositionsEnabled(false)
-        .withWriteTableVersion(tableVersion.versionCode())
-        .build();
-    when(mockHoodieTable.getConfig()).thenReturn(writeConfig);
-
+  @Test
+  void testCreateLogFileWriterLogVersion() throws IOException {
     HoodieAppendHandle<Object, Object, Object, Object> appendHandle =
         new HoodieAppendHandle<>(writeConfig, TEST_INSTANT_TIME, mockHoodieTable, TEST_PARTITION_PATH, TEST_FILE_ID, taskContextSupplier);
 
