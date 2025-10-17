@@ -30,7 +30,7 @@ import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtil
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
-import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, HoodieUpgradeDowngradeException}
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.constant.KeyGeneratorType
@@ -43,12 +43,14 @@ import org.apache.hudi.util.JFunction
 
 import org.apache.commons.io.FileUtils
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource, ValueSource}
 
@@ -2259,6 +2261,45 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertThrows(classOf[HoodieException])({
       writeToHudi(opt, firstUpdateDF, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
     })
+  }
+
+  @Test
+  def testMultiWriterScenarioWithoutLockProviderSet(): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.SPARK)
+    // Enable multi writer scenarios, but no lock provide class is set.
+    val updatedWriteOpts = writeOpts ++ Map(
+      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key
+        -> WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name)
+    // Prepare data to write.
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toSeq
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    // Trigger the error.
+    assertThrows(classOf[IllegalArgumentException])(
+      inputDF1.write.format("org.apache.hudi")
+      .options(updatedWriteOpts)
+      .option(
+        DataSourceWriteOptions.TABLE_TYPE.key,
+        DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath))
+    // Trigger with proper configs.
+    val newlyUpdatedWriterOpts = updatedWriteOpts ++ Map(
+      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key
+        -> classOf[InProcessLockProvider].getName)
+    assertDoesNotThrow(
+      new Executable {
+        override def execute(): Unit = {
+          inputDF1.write
+            .format("org.apache.hudi")
+            .options(newlyUpdatedWriterOpts)
+            .option(
+              DataSourceWriteOptions.TABLE_TYPE.key,
+              DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+            .mode(SaveMode.Overwrite)
+            .save(basePath)
+        }
+      }
+    )
   }
 
   private def loadFixtureTable(testBasePath: String, version: HoodieTableVersion): HoodieTableMetaClient = {
