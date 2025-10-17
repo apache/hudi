@@ -97,10 +97,11 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
     val millis = ts.getTime
     val nanos = ts.getNanos % 1000000
 
-    val totalNanos: Long = millis * 1000000L + nanos
+    val totalNanos = BigInt(millis) * 1000000 + nanos
     val scaledNanos = totalNanos / 1000
-    val result = new java.sql.Timestamp(scaledNanos / 1000000L)
-    result.setNanos((scaledNanos % 1000000000L).toInt)
+    val newMillis = (scaledNanos / 1000000).toLong
+    val result = new java.sql.Timestamp(newMillis)
+    result.setNanos((scaledNanos % 1000000000).toInt)
     result
   }
 
