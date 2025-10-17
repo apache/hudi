@@ -1787,7 +1787,8 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | WHEN NOT MATCHED THEN INSERT *
          """.stripMargin)
       }
-      assert(exception.getMessage.contains("Table or view not found"),
+      assert(exception.getMessage.contains("TABLE_OR_VIEW_NOT_FOUND") ||
+             exception.getMessage.contains("Table or view not found"),
         s"Expected TABLE_OR_VIEW_NOT_FOUND error but got: ${exception.getMessage}")
     }
   }
