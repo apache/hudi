@@ -72,8 +72,8 @@ case class ShowIndexes(table: LogicalPlan,
 object ShowIndexes {
   def getOutputAttrs: Seq[Attribute] = Seq(
     AttributeReference("index_name", StringType, nullable = false)(),
-    AttributeReference("col_name", StringType, nullable = false)(),
-    AttributeReference("index_type", StringType, nullable = false)()
+    AttributeReference("index_type", StringType, nullable = false)(),
+    AttributeReference("col_name", StringType, nullable = false)()
   )
 }
 
