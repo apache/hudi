@@ -77,9 +77,7 @@ object HoodieSpark33CatalystPlanUtils extends BaseHoodieCatalystPlanUtils {
   }
 
   override def failTableNotFound(tableName: String): Unit = {
-    throw new AnalysisException(
-      errorClass = "TABLE_OR_VIEW_NOT_FOUND",
-      messageParameters = Map("relationName" -> s"`$tableName`"))
+    throw new AnalysisException(s"Table or view not found: $tableName")
   }
 
   override def unapplyCreateIndex(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])] = {
