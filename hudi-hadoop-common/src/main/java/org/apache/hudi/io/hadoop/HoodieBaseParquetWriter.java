@@ -157,7 +157,7 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
             "'_hoodie_is_deleted' field is missing for some of the incoming records.\n\n"
                 + "The table schema requires '_hoodie_is_deleted' to be non-null, but some records lack this field.\n\n"
                 + "To fix:\n"
-                + "  1. Ensure ALL records have '_hoodie_is_deleted' field set (true/false)\n\n"
+                + "  Ensure ALL records have '_hoodie_is_deleted' field set (true/false)\n\n"
                 + "Original error: " + errorMessage, e);
       }
       throw e;
