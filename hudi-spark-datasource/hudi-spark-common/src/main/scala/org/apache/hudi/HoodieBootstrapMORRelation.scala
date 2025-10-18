@@ -54,11 +54,10 @@ case class HoodieBootstrapMORSplit(dataFile: PartitionedFile, skeletonFile: Opti
  */
 case class HoodieBootstrapMORRelation(override val sqlContext: SQLContext,
                                       private val userSchema: Option[StructType],
-                                      private val globPaths: Seq[StoragePath],
                                       override val metaClient: HoodieTableMetaClient,
                                       override val optParams: Map[String, String],
                                       private val prunedDataSchema: Option[StructType] = None)
-  extends BaseHoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient,
+  extends BaseHoodieBootstrapRelation(sqlContext, userSchema, metaClient,
     optParams, prunedDataSchema) {
 
   override type Relation = HoodieBootstrapMORRelation
@@ -69,12 +68,8 @@ case class HoodieBootstrapMORRelation(override val sqlContext: SQLContext,
   override lazy val mandatoryFields: Seq[String] = mandatoryFieldsForMerging
 
   protected override def getFileSlices(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSlice] = {
-    if (globPaths.isEmpty) {
-      fileIndex.listFileSlices(HoodieFileIndex.
-        convertFilterForTimestampKeyGenerator(metaClient, partitionFilters)).values.flatten.toSeq
-    } else {
-      listLatestFileSlices(globPaths, partitionFilters, dataFilters)
-    }
+    fileIndex.listFileSlices(HoodieFileIndex.
+      convertFilterForTimestampKeyGenerator(metaClient, partitionFilters)).values.flatten.toSeq
   }
 
   protected override def createFileSplit(fileSlice: FileSlice, dataFile: PartitionedFile, skeletonFile: Option[PartitionedFile]): FileSplit = {

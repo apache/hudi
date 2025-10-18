@@ -79,6 +79,7 @@ object DataSourceReadOptions {
   val REALTIME_PAYLOAD_COMBINE_OPT_VAL = HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE
   val REALTIME_MERGE: ConfigProperty[String] = HoodieReaderConfig.MERGE_TYPE
 
+  @Deprecated
   val READ_PATHS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.paths")
     .noDefaultValue()
@@ -88,6 +89,7 @@ object DataSourceReadOptions {
   @Deprecated
   val READ_PRE_COMBINE_FIELD = HoodieWriteConfig.PRECOMBINE_FIELD_NAME
 
+  @Deprecated
   val ENABLE_HOODIE_FILE_INDEX: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.file.index.enable")
     .defaultValue(true)
