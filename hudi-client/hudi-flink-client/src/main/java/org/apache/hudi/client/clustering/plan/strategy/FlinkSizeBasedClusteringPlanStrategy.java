@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
@@ -72,8 +73,20 @@ public class FlinkSizeBasedClusteringPlanStrategy<T>
 
   @Override
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(final String partition) {
-    return super.getFileSlicesEligibleForClustering(partition)
-        // Only files that have base file size smaller than small file size are eligible.
-        .filter(slice -> slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L) < getWriteConfig().getClusteringSmallFileLimit());
+    List<FileSlice> fileSlices = super.getFileSlicesEligibleForClustering(partition)
+            // Only files that have base file size smaller than small file size are eligible.
+            .filter(slice -> slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L)
+                    < getWriteConfig().getClusteringSmallFileLimit())
+            .collect(Collectors.toList());
+
+    //  if some special sort columns are declared, we can not skip the clustering.
+    if (!StringUtils.isNullOrEmpty(getWriteConfig().getClusteringSortColumns())) {
+      return fileSlices.stream();
+    }
+
+    if (fileSlices.size() > 1) {
+      return fileSlices.stream();
+    }
+    return Stream.empty();
   }
 }
