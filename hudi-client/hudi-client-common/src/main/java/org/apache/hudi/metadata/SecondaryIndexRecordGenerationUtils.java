@@ -84,7 +84,6 @@ public class SecondaryIndexRecordGenerationUtils {
    * @param instantTime     instant time
    * @param indexDefinition secondary index definition
    * @param metadataConfig  metadata config
-   * @param fsView          file system view as of instant time
    * @param dataMetaClient  data table meta client
    * @param engineContext   engine context
    * @param writeConfig     hoodie write config.
@@ -97,8 +96,7 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                                       HoodieMetadataConfig metadataConfig,
                                                                                       HoodieTableMetaClient dataMetaClient,
                                                                                       HoodieEngineContext engineContext,
-                                                                                      HoodieWriteConfig writeConfig
-                                                                                      ) {
+                                                                                      HoodieWriteConfig writeConfig) {
     TypedProperties props = writeConfig.getProps();
     // Secondary index cannot support logs having inserts with current offering. So, lets validate that.
     if (allWriteStats.stream().anyMatch(writeStat -> {
@@ -118,7 +116,7 @@ public class SecondaryIndexRecordGenerationUtils {
     int parallelism = Math.max(Math.min(writeStatsByFileId.size(), metadataConfig.getSecondaryIndexParallelism()), 1);
 
     ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(dataMetaClient);
-    return engineContext.parallelize(new ArrayList<>(writeStatsByFileId.entrySet()), parallelism).flatMap(writeStatsByFileIdEntry -> {
+    HoodieData<HoodieRecord> secondaryIndexRecords = engineContext.parallelize(new ArrayList<>(writeStatsByFileId.entrySet()), parallelism).flatMap(writeStatsByFileIdEntry -> {
       String fileId = writeStatsByFileIdEntry.getKey();
       List<HoodieWriteStat> writeStats = writeStatsByFileIdEntry.getValue();
       String partition = writeStats.get(0).getPartitionPath();
@@ -199,6 +197,13 @@ public class SecondaryIndexRecordGenerationUtils {
       });
       return records.iterator();
     });
+
+    // Deduplicate secondary index records by grouping by the secondary index key
+    // (secondaryKey$recordKey). This handles the case where a record moves from one file group to
+    // another (partition path update), which generates both a delete (from old fileId) and an
+    // insert (to new fileId). Similar to how Record Level Index handles partition path update,
+    // we prefer non-deleted records.
+    return HoodieTableMetadataUtil.reduceByKeys(secondaryIndexRecords, parallelism, false);
   }
 
   private static TableFileSystemView.SliceView getSliceView(HoodieWriteConfig config, HoodieTableMetaClient dataMetaClient) {

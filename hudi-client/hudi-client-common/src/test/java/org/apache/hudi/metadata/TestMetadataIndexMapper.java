@@ -32,7 +32,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
@@ -42,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestMetadataIndexGenerator extends HoodieCommonTestHarness {
+public class TestMetadataIndexMapper extends HoodieCommonTestHarness {
 
   @Test
   public void testRLIIndexMapperWithInsertsAndUpserts() throws Exception {
@@ -66,9 +65,8 @@ public class TestMetadataIndexGenerator extends HoodieCommonTestHarness {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath("random")
         .build();
-    MetadataIndexGenerator.WriteStatusBasedMetadataIndexMapper writeStatusBasedMetadataIndexMapper = new MetadataIndexGenerator.WriteStatusBasedMetadataIndexMapper(
-        Collections.singletonList(MetadataPartitionType.RECORD_INDEX), writeConfig);
-    Iterator<HoodieRecord> rliRecords = writeStatusBasedMetadataIndexMapper.apply(writeStatus);
+    RecordIndexMapper recordIndexMapper = new RecordIndexMapper(writeConfig);
+    Iterator<HoodieRecord> rliRecords = recordIndexMapper.apply(writeStatus);
     AtomicInteger totalRLIRecords = new AtomicInteger();
     rliRecords.forEachRemaining(rliRecord -> {
       totalRLIRecords.getAndIncrement();
@@ -103,9 +101,8 @@ public class TestMetadataIndexGenerator extends HoodieCommonTestHarness {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath("random")
         .build();
-    MetadataIndexGenerator.WriteStatusBasedMetadataIndexMapper writeStatusBasedMetadataIndexMapper = new MetadataIndexGenerator.WriteStatusBasedMetadataIndexMapper(
-        Collections.singletonList(MetadataPartitionType.RECORD_INDEX), writeConfig);
-    Iterator<HoodieRecord> rliRecords = writeStatusBasedMetadataIndexMapper.apply(writeStatus);
+    RecordIndexMapper recordIndexMapper = new RecordIndexMapper(writeConfig);
+    Iterator<HoodieRecord> rliRecords = recordIndexMapper.apply(writeStatus);
     AtomicInteger totalRLIRecords = new AtomicInteger();
     rliRecords.forEachRemaining(rliRecord -> {
       totalRLIRecords.getAndIncrement();

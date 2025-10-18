@@ -288,10 +288,6 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     return exprIndexRecords;
   }
 
-  protected MetadataIndexGenerator initializeMetadataIndexGenerator() {
-    return new MetadataIndexGenerator();
-  }
-
   protected SparkRDDMetadataWriteClient getSparkWriteClient(Option<BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>>> writeClientOpt) {
     return ((SparkRDDMetadataWriteClient) writeClientOpt.orElse(getWriteClient()));
   }

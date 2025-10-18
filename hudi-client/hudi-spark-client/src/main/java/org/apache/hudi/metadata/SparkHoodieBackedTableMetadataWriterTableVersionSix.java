@@ -96,11 +96,6 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
   }
 
   @Override
-  MetadataIndexGenerator initializeMetadataIndexGenerator() {
-    throw new UnsupportedOperationException("Streaming writes are not supported for Spark table version six");
-  }
-
-  @Override
   protected void initRegistry() {
     if (metadataWriteConfig.isMetricsOn()) {
       Registry registry;
