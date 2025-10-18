@@ -1759,4 +1759,37 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       }
     }
   }
+
+  test("Test MergeInto with non existent target table") {
+    withTempDir { tmp =>
+      val sourceTable = generateTableName
+      spark.sql(
+        s"""
+           | create table $sourceTable (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts int
+           | ) using parquet
+           | location '${tmp.getCanonicalPath}/$sourceTable'
+         """.stripMargin)
+      spark.sql(s"insert into $sourceTable values(1, 'a1', 10, 1000)")
+      val nonExistentTable = "hudi_test_table"
+      val exception = intercept[org.apache.spark.sql.AnalysisException] {
+        spark.sql(
+          s"""
+             | MERGE INTO $nonExistentTable AS target
+             | USING $sourceTable AS source
+             | ON target.id = source.id
+             | WHEN MATCHED THEN UPDATE SET
+             |   name = source.name,
+             |   ts = source.ts
+             | WHEN NOT MATCHED THEN INSERT *
+         """.stripMargin)
+      }
+      assert(exception.getMessage.contains("TABLE_OR_VIEW_NOT_FOUND") ||
+             exception.getMessage.contains("Table or view not found"),
+        s"Expected TABLE_OR_VIEW_NOT_FOUND error but got: ${exception.getMessage}")
+    }
+  }
 }

@@ -76,6 +76,10 @@ object HoodieSpark33CatalystPlanUtils extends BaseHoodieCatalystPlanUtils {
     a.failAnalysis(s"cannot resolve ${a.sql} in MERGE command given columns [$cols]")
   }
 
+  override def failTableNotFound(tableName: String): Unit = {
+    throw new AnalysisException(s"Table or view not found: $tableName")
+  }
+
   override def unapplyCreateIndex(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])] = {
     plan match {
       case ci @ CreateIndex(table, indexName, indexType, ignoreIfExists, columns, properties) =>
