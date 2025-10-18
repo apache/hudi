@@ -152,21 +152,20 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
       writtenRecordCount.incrementAndGet();
     } catch (RuntimeException e) {
       String errorMessage = e.getMessage() != null ? e.getMessage() : "";
-      if (errorMessage.contains("Null-value for required field")
-          || errorMessage.contains("null value for required")
-          || errorMessage.contains("required field")) {
-        if (errorMessage.contains("_hoodie_is_deleted")) {
-          throw new HoodieException(
-              "'_hoodie_is_deleted' field is missing for some of the incoming records.\n"
-                  + "The table schema claims '_hoodie_is_deleted' field to be non-null and hence "
-                  + "incoming records are expected to have a value set for this field.\n\n"
-                  + "To fix:\n"
-                  + "  1. Ensure ALL records have '_hoodie_is_deleted' field (true/false)\n\n"
-                  + "Original error: " + errorMessage, e);
-        }
+      if (isRequiredFieldNullError(errorMessage) && errorMessage.contains("_hoodie_is_deleted")) {
+        throw new HoodieException(
+            "'_hoodie_is_deleted' field is missing for some of the incoming records.\n\n"
+                + "The table schema requires '_hoodie_is_deleted' to be non-null, but some records lack this field.\n\n"
+                + "To fix:\n"
+                + "  1. Ensure ALL records have '_hoodie_is_deleted' field set (true/false)\n\n"
+                + "Original error: " + errorMessage, e);
       }
       throw e;
     }
+  }
+
+  private static boolean isRequiredFieldNullError(String errorMessage) {
+    return errorMessage.contains("null") && errorMessage.contains("required");
   }
 
   protected long getWrittenRecordCount() {

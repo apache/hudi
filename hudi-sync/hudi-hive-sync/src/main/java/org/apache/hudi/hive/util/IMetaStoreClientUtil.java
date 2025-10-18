@@ -44,9 +44,7 @@ public class IMetaStoreClientUtil {
       try {
         metaStoreClient = Hive.get(hiveConf).getMSC();
       } catch (RuntimeException e) {
-        if (e.getMessage() != null && (e.getMessage().contains("not org.apache.hudi.org.apache.hadoop")
-            || e.getMessage().contains("MetaStoreFilterHook")
-            || e.getMessage().contains("DefaultMetaStoreFilterHookImpl"))) {
+        if (e.getMessage() != null && e.getMessage().contains("not org.apache.hudi.org.apache.hadoop")) {
           throw new HoodieException(
               "Hive Metastore compatibility issue detected. This usually happens due to:\n"
                   + "  1. Hive version mismatch\n"
