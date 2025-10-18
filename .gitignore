@@ -92,3 +92,8 @@ package-lock.json
 hudi-spark-datasource/hudi-spark/src/test/resources/upgrade-downgrade-fixtures/spark-versions/
 
 CLAUDE.md
+
+######################################
+# Notebooks
+######################################
+docker/compose/notebooks/.*
