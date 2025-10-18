@@ -42,6 +42,7 @@ import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertTrue}
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
@@ -475,14 +476,29 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
           .mode(SaveMode.Append)
           .save(basePath)
       })
-      Assertions.assertThrows(classOf[HoodieException], () => {
-        df1.write.format("hudi")
+      if (mergeMode != RecordMergeMode.CUSTOM) {
+        Assertions.assertDoesNotThrow(
+          new Executable {
+            override def execute(): Unit = {
+              df1.write.format("hudi")
+                .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, classOf[EventTimeAvroPayload].getName)
+                .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
+                .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key, "false")
+                .mode(SaveMode.Append)
+                .save(basePath)
+            }
+          }
+        )
+      } else {
+        Assertions.assertThrows(classOf[HoodieException], () => {
+          df1.write.format("hudi")
           .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key, classOf[EventTimeAvroPayload].getName)
           .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
           .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key, "false")
           .mode(SaveMode.Append)
           .save(basePath)
-      })
+        })
+      }
       Assertions.assertThrows(classOf[HoodieException], () => {
         df1.write.format("hudi")
           .option(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key, HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID)

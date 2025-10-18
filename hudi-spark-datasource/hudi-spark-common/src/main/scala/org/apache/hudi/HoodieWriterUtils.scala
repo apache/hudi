@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
+import org.apache.hudi.common.config.RecordMergeMode.CUSTOM
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.common.util.StringUtils
@@ -173,15 +174,15 @@ object HoodieWriterUtils {
       || key.equals(RECORD_MERGE_MODE.key())
       || key.equals(RECORD_MERGE_STRATEGY_ID.key())))
 
-    ignoreConfig = ignoreConfig || (key.equals(PAYLOAD_CLASS_NAME.key()) && shouldIgnorePayloadValidation(value, params, tableConfig))
+    ignoreConfig = ignoreConfig || (key.equals(PAYLOAD_CLASS_NAME.key()) && shouldIgnorePayloadValidation(value, tableConfig))
     // If hoodie.database.name is empty, ignore validation.
     ignoreConfig = ignoreConfig || (key.equals(HoodieTableConfig.DATABASE_NAME.key()) && isNullOrEmpty(getStringFromTableConfigWithAlternatives(tableConfig, key)))
     ignoreConfig
   }
 
-  def shouldIgnorePayloadValidation(value: String, params: Map[String, String], tableConfig: HoodieConfig): Boolean = {
+  def shouldIgnorePayloadValidation(incomingPayloadClass: String, tableConfig: HoodieConfig): Boolean = {
     //don't validate the payload only in the case that insert into is using fallback to some legacy configs
-    val ignoreConfig = value.equals(VALIDATE_DUPLICATE_KEY_PAYLOAD_CLASS_NAME)
+    val ignoreConfig = incomingPayloadClass.equals(VALIDATE_DUPLICATE_KEY_PAYLOAD_CLASS_NAME)
     if (ignoreConfig) {
        ignoreConfig
     } else {
@@ -201,9 +202,17 @@ object HoodieWriterUtils {
           HoodieTableVersion.current()
         }
 
+        val recordMergeMode = tableConfig.getStringOrDefault(HoodieTableConfig.RECORD_MERGE_MODE.key(), "")
         if (tableVersion == HoodieTableVersion.EIGHT && initTableVersion.lesserThan(HoodieTableVersion.EIGHT)
-          && value.equals(classOf[OverwriteWithLatestAvroPayload].getName)
+          && incomingPayloadClass.equals(classOf[OverwriteWithLatestAvroPayload].getName)
           && tableConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()).equals(classOf[DefaultHoodieRecordPayload].getName)) {
+          true
+        } else if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE) && !recordMergeMode.equals(CUSTOM.name)) {
+          // When table version >= v9, if the merge mode is not CUSTOM, we can safely skip payload class check
+          // since the payload class is ignored during these writes. Meanwhile, we should give a warning about this behavior.
+          if (!StringUtils.isNullOrEmpty(incomingPayloadClass)) {
+            log.warn(s"Payload class '$incomingPayloadClass' is ignored since merge behavior is determined by merge mode: $recordMergeMode")
+          }
           true
         } else {
           ignoreConfig

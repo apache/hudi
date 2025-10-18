@@ -18,6 +18,7 @@
 package org.apache.hudi;
 
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -35,6 +36,8 @@ import java.util.Properties;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getMetaClientBuilder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestHoodieWriterUtils extends HoodieClientTestBase {
 
@@ -115,5 +118,45 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
     HoodieConfig config = new HoodieConfig();
     String result = HoodieWriterUtils.getKeyInTableConfig("my.custom.key", config);
     assertEquals("my.custom.key", result);
+  }
+
+  @Test
+  void testShouldIgnorePayloadValidationVersion9WithCustomMergeMode() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.NINE.versionCode()));
+    config.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.CUSTOM.name());
+
+    String payloadClass = "com.example.CustomPayload";
+    assertFalse(HoodieWriterUtils.shouldIgnorePayloadValidation(payloadClass, config));
+  }
+
+  @Test
+  void testShouldIgnorePayloadValidationVersion9WithEmptyPayload() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.NINE.versionCode()));
+    config.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.COMMIT_TIME_ORDERING.name());
+
+    String payloadClass = "";
+    assertTrue(HoodieWriterUtils.shouldIgnorePayloadValidation(payloadClass, config));
+  }
+
+  @Test
+  void testShouldIgnorePayloadValidationVersion9WithCommitTimeOrdering() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.NINE.versionCode()));
+    config.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.COMMIT_TIME_ORDERING.name());
+
+    String payloadClass = "com.example.CustomPayload";
+    assertTrue(HoodieWriterUtils.shouldIgnorePayloadValidation(payloadClass, config));
+  }
+
+  @Test
+  void testShouldIgnorePayloadValidationVersion9WithEventTimeOrdering() {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.NINE.versionCode()));
+    config.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
+
+    String payloadClass = "com.example.CustomPayload";
+    assertTrue(HoodieWriterUtils.shouldIgnorePayloadValidation(payloadClass, config));
   }
 }
