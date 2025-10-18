@@ -34,8 +34,6 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.Properties;
 
-import scala.collection.immutable.Map$;
-
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getMetaClientBuilder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -129,7 +127,7 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
     config.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.CUSTOM.name());
 
     String payloadClass = "com.example.CustomPayload";
-    assertFalse(HoodieWriterUtils.shouldIgnorePayloadValidation(payloadClass, Map$.MODULE$.empty(), config));
+    assertFalse(HoodieWriterUtils.shouldIgnorePayloadValidation(payloadClass, config));
   }
 
   @Test
@@ -139,7 +137,7 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
     config.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.COMMIT_TIME_ORDERING.name());
 
     String payloadClass = "";
-    assertTrue(HoodieWriterUtils.shouldIgnorePayloadValidation(payloadClass, Map$.MODULE$.empty(), config));
+    assertTrue(HoodieWriterUtils.shouldIgnorePayloadValidation(payloadClass, config));
   }
 
   @Test
@@ -149,7 +147,7 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
     config.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.COMMIT_TIME_ORDERING.name());
 
     String payloadClass = "com.example.CustomPayload";
-    assertTrue(HoodieWriterUtils.shouldIgnorePayloadValidation(payloadClass, Map$.MODULE$.empty(), config));
+    assertTrue(HoodieWriterUtils.shouldIgnorePayloadValidation(payloadClass, config));
   }
 
   @Test
@@ -159,6 +157,6 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
     config.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
 
     String payloadClass = "com.example.CustomPayload";
-    assertTrue(HoodieWriterUtils.shouldIgnorePayloadValidation(payloadClass, Map$.MODULE$.empty(), config));
+    assertTrue(HoodieWriterUtils.shouldIgnorePayloadValidation(payloadClass, config));
   }
 }
