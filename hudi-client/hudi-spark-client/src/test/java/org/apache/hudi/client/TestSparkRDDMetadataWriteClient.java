@@ -227,10 +227,11 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
         .withProps(new TypedProperties())
         .withEnableOptimizedLogBlockScan(hoodieWriteConfig.getMetadataConfig().isOptimizedLogBlocksScanEnabled())
         .build();
+    int recordType = MetadataPartitionType.fromPartitionPath(fileSlice.getPartitionPath()).getRecordType();
     try (ClosableIterator<HoodieRecord<IndexedRecord>> records = fileGroupReader.getClosableHoodieRecordIterator()) {
       Map<String, HoodieRecord<HoodieMetadataPayload>> actualMdtRecordMap = new HashMap<>();
       records.forEachRemaining(record -> {
-        HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of((GenericRecord) record.getData()));
+        HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of((GenericRecord) record.getData()), recordType);
         actualMdtRecordMap.put(record.getRecordKey(), new HoodieAvroRecord<>(record.getKey(), payload));
       });
 

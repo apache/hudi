@@ -20,6 +20,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.Predicate;
@@ -136,5 +137,26 @@ class TestHoodieNativeAvroHFileReader {
 
     List<String> prefixes = reader.extractKeyPrefixes(Option.of(startsWithPredicate));
     assertTrue(prefixes.isEmpty());
+  }
+
+  @Test
+  public void testReadHFile() {
+    StoragePath path = new StoragePath("/Users/ethan/Work/tmp/20251014-mdt-compaction/secondary-file-group/.secondary-index-key-0000-0_20251013234907189.log.1_44-274-62496");
+    HoodieStorage storage = HoodieTestUtils.getStorage(path);
+    /**
+     HoodieMergedLogRecordReader<T> logRecordReader = HoodieMergedLogRecordReader.<T>newBuilder()
+     .withHoodieReaderContext(readerContext)
+     .withStorage(storage)
+     .withLogFiles(inputSplit.getLogFiles())
+     .withReverseReader(false)
+     .withBufferSize(getIntWithAltKeys(props, HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))
+     .withInstantRange(readerContext.getInstantRange())
+     .withPartition(inputSplit.getPartitionPath())
+     .withRecordBuffer(recordBuffer)
+     .withAllowInflightInstants(readerParameters.allowInflightInstants())
+     .withMetaClient(hoodieTableMetaClient)
+     .withOptimizedLogBlocksScan(readerParameters.enableOptimizedLogBlockScan())
+     .build()
+     **/
   }
 }

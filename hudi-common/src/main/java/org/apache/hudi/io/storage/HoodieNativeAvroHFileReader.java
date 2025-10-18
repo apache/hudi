@@ -24,6 +24,7 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.SerializableMetadataIndexedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -281,17 +282,6 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     }
   }
 
-  private static GenericRecord getRecordFromKeyValue(KeyValue keyValue,
-                                                     GenericDatumReader<GenericRecord> datumReader,
-                                                     Schema.Field keyFieldSchema) throws IOException {
-    byte[] bytes = keyValue.getBytes();
-    return deserialize(
-        bytes, keyValue.getKeyContentOffset(), keyValue.getKeyContentLength(),
-        bytes, keyValue.getValueOffset(), keyValue.getValueLength(),
-        datumReader,
-        keyFieldSchema);
-  }
-
   private byte[] getHFileMetaInfoFromCache(String key) throws IOException {
     if (!PRELOADED_META_INFO_KEYS.contains(key)) {
       throw new IllegalStateException("HoodieNativeAvroHFileReader#getHFileMetaInfoFromCache"
@@ -346,6 +336,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {
     private final HFileReader reader;
     private final GenericDatumReader<GenericRecord> datumReader;
+    private final Schema schema;
     private final Schema.Field keyFieldSchema;
 
     private IndexedRecord next = null;
@@ -354,6 +345,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     RecordIterator(HFileReader reader, Schema writerSchema, Schema readerSchema) {
       this.reader = reader;
       this.datumReader = new GenericDatumReader<>(writerSchema, readerSchema);
+      this.schema = writerSchema;
       this.keyFieldSchema = getKeySchema(readerSchema).orElse(null);
     }
 
@@ -381,7 +373,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
           return false;
         }
 
-        this.next = getRecordFromKeyValue(reader.getKeyValue().get(), datumReader, keyFieldSchema);
+        this.next = SerializableMetadataIndexedRecord.fromHFileKeyValueBytes(schema, datumReader, keyFieldSchema, reader.getKeyValue().get());
         return true;
       } catch (IOException io) {
         throw new HoodieIOException("unable to read next record from hfile ", io);
@@ -409,6 +401,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     private final Iterator<String> sortedKeyIterator;
     private final HFileReader reader;
     private final Option<BloomFilter> bloomFilterOption;
+    private final Schema schema;
     private final GenericDatumReader<GenericRecord> datumReader;
     private final Schema.Field keyFieldSchema;
 
@@ -430,6 +423,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
       }
       this.bloomFilterOption = Option.ofNullable(bloomFilter);
       this.datumReader = new GenericDatumReader<>(writerSchema, readerSchema);
+      this.schema = writerSchema;
       this.keyFieldSchema = getKeySchema(readerSchema).orElse(null);
     }
 
@@ -452,10 +446,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
           if (reader.seekTo(key) == HFileReader.SEEK_TO_FOUND) {
             // Key is found
             KeyValue keyValue = reader.getKeyValue().get();
-            next = deserialize(
-                key.getBytes(), key.getContentOffset(), key.getContentLength(),
-                keyValue.getBytes(), keyValue.getValueOffset(), keyValue.getValueLength(),
-                datumReader, keyFieldSchema);
+            next = SerializableMetadataIndexedRecord.fromHFileKeyValueBytes(schema, datumReader, keyFieldSchema, keyValue);
             return true;
           }
         }
@@ -607,12 +598,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
             if (!isPrefixOfKey(lookUpKeyPrefix, keyValue.getKey())) {
               return false;
             }
-            byte[] bytes = keyValue.getBytes();
-            next =
-                deserialize(
-                    bytes, keyValue.getKeyContentOffset(), keyValue.getKeyContentLength(),
-                    bytes, keyValue.getValueOffset(), keyValue.getValueLength(),
-                    datumReader, keyFieldSchema);
+            next = SerializableMetadataIndexedRecord.fromHFileKeyValueBytes(writerSchema, datumReader, keyFieldSchema, keyValue);
             // In case scanner is not able to advance, it means we reached EOF
             eof = !reader.next();
           } catch (IOException e) {
