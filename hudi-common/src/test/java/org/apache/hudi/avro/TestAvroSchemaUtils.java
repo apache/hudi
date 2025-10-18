@@ -25,6 +25,8 @@ import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.schema.MessageType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -65,7 +67,23 @@ public class TestAvroSchemaUtils {
       + "           \"scale\" : 2\n"
       + "           }],\n"
       + "       \"default\" : null\n"
-      + "      },\n"
+      + "    },\n"
+      + "    {\n"
+      + "         \"name\" : \"arrayInt\",\n"
+      + "          \"type\" : [ \"null\", {\n"
+      + "            \"type\" : \"array\",\n"
+      + "            \"items\" : [ \"null\", \"int\" ]\n"
+      + "           } ],\n"
+      + "          \"default\" : null\n"
+      + "    },\n"
+      + "    {\n"
+      + "         \"name\" : \"mapStrInt\",\n"
+      + "         \"type\" : [ \"null\", {\n"
+      + "           \"type\" : \"map\",\n"
+      + "           \"values\" : [ \"null\", \"int\" ]\n"
+      + "         } ],\n"
+      + "         \"default\" : null\n"
+      + "    },\n"
       + "    {\n"
       + "      \"name\": \"nested_record\",\n"
       + "      \"type\": {\n"
@@ -82,7 +100,16 @@ public class TestAvroSchemaUtils {
       + "          }\n"
       + "        ]\n"
       + "      }\n"
-      + "    }\n"
+      + "    },\n"
+      + "    { \n"
+      + "      \"name\" : \"f_enum\",\n"
+      + "      \"type\" : [ \"null\", {\n"
+      + "        \"type\" : \"enum\",\n"
+      + "        \"name\" : \"Visibility\",\n"
+      + "        \"namespace\" : \"common.Types\",\n"
+      + "        \"symbols\" : [ \"UNKNOWN\", \"PUBLIC\", \"PRIVATE\", \"SHARED\" ]\n"
+      + "         }]\n"
+      + "   }\n"
       + "  ]\n"
       + "}\n";
 
@@ -219,6 +246,13 @@ public class TestAvroSchemaUtils {
         AvroSchemaUtils.isStrictProjectionOf(
             Schema.createUnion(Schema.create(Schema.Type.NULL), sourceSchema),
             Schema.createUnion(Schema.create(Schema.Type.NULL), projectedNestedSchema)));
+
+    // Case #5: Validate project with field nullability changed
+    // Note: for array type, the nullability of element's type will be changed after conversion:
+    // AvroSchemaConverter: Avro Schema -> Parquet MessageType -> Avro Schema
+    MessageType messageType = new AvroSchemaConverter().convert(sourceSchema);
+    Schema converted = new AvroSchemaConverter().convert(messageType);
+    assertTrue(AvroSchemaUtils.isStrictProjectionOf(sourceSchema, converted));
   }
 
   @Test
