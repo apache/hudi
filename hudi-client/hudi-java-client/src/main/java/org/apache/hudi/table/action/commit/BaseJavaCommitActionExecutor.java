@@ -209,8 +209,8 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
   @SuppressWarnings("unchecked")
   protected Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition, Iterator recordItr,
                                                               Partitioner partitioner) {
-    JavaUpsertPartitioner javaUpsertPartitioner = (JavaUpsertPartitioner) partitioner;
-    BucketInfo binfo = javaUpsertPartitioner.getBucketInfo(partition);
+    JavaPartitioner javaPartitioner = (JavaPartitioner) partitioner;
+    BucketInfo binfo = javaPartitioner.getBucketInfo(partition);
     BucketType btype = binfo.bucketType;
     try {
       if (btype.equals(BucketType.INSERT)) {
@@ -277,6 +277,10 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
   public Partitioner getUpsertPartitioner(WorkloadProfile profile) {
     if (profile == null) {
       throw new HoodieUpsertException("Need workload profile to construct the upsert partitioner.");
+    }
+    // Use bucket index partitioner if bucket index is enabled
+    if (table.getIndex() instanceof org.apache.hudi.index.bucket.HoodieBucketIndex) {
+      return new JavaBucketIndexPartitioner(profile, context, table, config);
     }
     return new JavaUpsertPartitioner(profile, context, table, config);
   }
