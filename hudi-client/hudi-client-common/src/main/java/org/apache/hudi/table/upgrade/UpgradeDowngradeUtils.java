@@ -287,12 +287,13 @@ public class UpgradeDowngradeUtils {
    *
    * @param config        Write config
    * @param context       Engine context
-   * @param table         Hoodie table
+   * @param metaClient    Hoodie table meta client
    * @param operationType Type of operation (upgrade/downgrade)
    */
   public static void dropNonV1IndexPartitions(HoodieWriteConfig config, HoodieEngineContext context,
-                                              HoodieTable table, SupportsUpgradeDowngrade upgradeDowngradeHelper, String operationType) {
-    HoodieTableMetaClient metaClient = table.getMetaClient();
+                                              HoodieTableMetaClient metaClient,
+                                              SupportsUpgradeDowngrade upgradeDowngradeHelper,
+                                              String operationType) {
     try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(config, context)) {
       List<String> mdtPartitions = metaClient.getTableConfig().getMetadataPartitions()
           .stream()
