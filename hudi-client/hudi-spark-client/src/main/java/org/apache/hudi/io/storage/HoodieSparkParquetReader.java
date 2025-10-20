@@ -67,6 +67,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   private final HoodieStorage storage;
   private final FileFormatUtils parquetUtils;
   private final List<ClosableIterator> readerIterators = new ArrayList<>();
+  private Option<MessageType> messageTypeOption = Option.empty();
   private Option<StructType> structTypeOption = Option.empty();
   private Option<Schema> schemaOption = Option.empty();
 
@@ -128,7 +129,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     storage.getConf().set(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), SQLConf.get().getConf(SQLConf.PARQUET_INT96_AS_TIMESTAMP()).toString());
     ParquetReader<InternalRow> reader = ParquetReader.builder(new HoodieParquetReadSupport(Option$.MODULE$.empty(), true,
             SparkAdapterSupport$.MODULE$.sparkAdapter().getRebaseSpec("CORRECTED"),
-            SparkAdapterSupport$.MODULE$.sparkAdapter().getRebaseSpec("LEGACY")),
+            SparkAdapterSupport$.MODULE$.sparkAdapter().getRebaseSpec("LEGACY"), Option.empty()),
             new Path(path.toUri()))
         .withConf(storage.getConf().unwrapAs(Configuration.class))
         .build();
@@ -139,13 +140,21 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     return projectedIterator;
   }
 
+  private MessageType getMessageType() {
+    if (messageTypeOption.isEmpty()) {
+      MessageType messageType = ((ParquetUtils) parquetUtils).readSchema(storage, path);
+      messageTypeOption = Option.of(messageType);
+    }
+    return messageTypeOption.get();
+  }
+
   @Override
   public Schema getSchema() {
     if (schemaOption.isEmpty()) {
       // Some types in avro are not compatible with parquet.
       // Avro only supports representing Decimals as fixed byte array
       // and therefore if we convert to Avro directly we'll lose logical type-info.
-      MessageType messageType = ((ParquetUtils) parquetUtils).readSchema(storage, path);
+      MessageType messageType = getMessageType();
       StructType structType = new ParquetToSparkSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(messageType);
       structTypeOption = Option.of(structType);
       schemaOption = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter()
