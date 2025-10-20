@@ -233,8 +233,8 @@ public class HFileUtils extends FileFormatUtils {
             HoodieAvroHFileReaderImplBase.SCHEMA_KEY,
             getUTF8Bytes(readerSchema.toString()));
       }
+      ostream.flush();
     }
-
     return baos;
   }
 

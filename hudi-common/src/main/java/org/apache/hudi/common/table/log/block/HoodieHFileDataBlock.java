@@ -43,6 +43,7 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -84,6 +85,9 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               String compressionCodec,
                               StoragePath pathForReader) {
     super(records, header, new HashMap<>(), HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME);
+    if (!this.records.isEmpty()) {
+      this.records.get().sort(Comparator.comparing(HoodieRecord::getRecordKey));
+    }
     this.compressionCodec = Option.of(compressionCodec);
     this.pathForReader = pathForReader;
   }
