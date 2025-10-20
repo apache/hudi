@@ -95,7 +95,6 @@ public class SchemaRepair {
     if (reqLogical == null
         && requested.getPrimitiveTypeName() == PrimitiveType.PrimitiveTypeName.INT64
         && tblLogical instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
-        && ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) tblLogical).getUnit() == LogicalTypeAnnotation.TimeUnit.MILLIS
         && !((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) tblLogical).isAdjustedToUTC()) {
       useTableType = true;
     }

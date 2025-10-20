@@ -20,16 +20,11 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.common.ParquetTimestampUtils
-
 import org.apache.parquet.hadoop.metadata.FileMetaData
-import org.apache.parquet.schema.MessageType
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
-import org.apache.spark.sql.catalyst.expressions.{ArrayTransform, Attribute, Cast, CreateNamedStruct, CreateStruct, Expression, GetStructField, LambdaFunction, Literal, MapEntries, MapFromEntries, Multiply, NamedLambdaVariable, UnsafeProjection}
-import org.apache.spark.sql.types.{ArrayType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampNTZType}
-
-import scala.collection.JavaConverters._
+import org.apache.spark.sql.catalyst.expressions.{ArrayTransform, Attribute, Cast, CreateNamedStruct, CreateStruct, Expression, GetStructField, LambdaFunction, Literal, MapEntries, MapFromEntries, NamedLambdaVariable, UnsafeProjection}
+import org.apache.spark.sql.types.{ArrayType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, MapType, StringType, StructField, StructType}
 
 object HoodieParquetFileFormatHelper {
 
@@ -58,18 +53,6 @@ object HoodieParquetFileFormatHelper {
       }
     })
     (implicitTypeChangeInfo, StructType(sparkRequestStructFields))
-  }
-
-  /**
-   * Identifies columns that need multiplication by 1000 when converting from TIMESTAMP_MICROS to TIMESTAMP_MILLIS.
-   * Delegates to Java utility for reusability across Java and Scala code.
-   *
-   * @param fileSchema The Parquet schema from the file (source)
-   * @param tableSchema The Parquet schema from the table (target)
-   * @return Set of column paths (e.g., "timestamp", "metadata.created_at") that need multiplication
-   */
-  def findColumnsToMultiply(fileSchema: MessageType, tableSchema: MessageType): Set[String] = {
-    ParquetTimestampUtils.findColumnsToMultiply(fileSchema, tableSchema).asScala.toSet
   }
 
   def isDataTypeEqual(requiredType: DataType, fileType: DataType): Boolean = (requiredType, fileType) match {
@@ -120,8 +103,7 @@ object HoodieParquetFileFormatHelper {
                                typeChangeInfos: java.util.Map[Integer, org.apache.hudi.common.util.collection.Pair[DataType, DataType]],
                                requiredSchema: StructType,
                                partitionSchema: StructType,
-                               schemaUtils: HoodieSchemaUtils,
-                               columnsToMultiply: Set[String] = Set.empty): UnsafeProjection = {
+                               schemaUtils: HoodieSchemaUtils): UnsafeProjection = {
     val addedCastCache = scala.collection.mutable.HashMap.empty[(DataType, DataType), Boolean]
 
     def hasUnsupportedConversion(src: DataType, dst: DataType): Boolean = {
@@ -130,7 +112,6 @@ object HoodieParquetFileFormatHelper {
           case (FloatType, DoubleType) => true
           case (IntegerType, DecimalType()) => true
           case (LongType, DecimalType()) => true
-          case (LongType, TimestampNTZType) => true
           case (FloatType, DecimalType()) => true
           case (DoubleType, DecimalType()) => true
           case (StringType, DecimalType()) => true
@@ -146,7 +127,7 @@ object HoodieParquetFileFormatHelper {
       })
     }
 
-    def recursivelyCastExpressions(expr: Expression, columnPath: String, srcType: DataType, dstType: DataType): Expression = {
+    def recursivelyCastExpressions(expr: Expression, srcType: DataType, dstType: DataType): Expression = {
       lazy val needTimeZone = Cast.needsTimeZone(srcType, dstType)
       (srcType, dstType) match {
         case (FloatType, DoubleType) =>
@@ -159,23 +140,18 @@ object HoodieParquetFileFormatHelper {
           Cast(expr, dec, if (needTimeZone) timeZoneId else None)
         case (StringType, DateType) =>
           Cast(expr, DateType, if (needTimeZone) timeZoneId else None)
-        case (LongType, TimestampNTZType) if columnsToMultiply.contains(columnPath) =>
-          Multiply(expr, Literal(1000L))
-        case (LongType, TimestampNTZType) => expr // Illegal to attempt cast, but it will work fine if we noop
         case (s: StructType, d: StructType) if hasUnsupportedConversion(s, d) =>
           val structFields = s.fields.zip(d.fields).zipWithIndex.map {
             case ((srcField, dstField), i) =>
               val child = GetStructField(expr, i, Some(dstField.name))
-              val nestedPath = if (columnPath.isEmpty) srcField.name else s"$columnPath.${srcField.name}"
-              recursivelyCastExpressions(child, nestedPath, srcField.dataType, dstField.dataType)
+              recursivelyCastExpressions(child, srcField.dataType, dstField.dataType)
           }
           CreateNamedStruct(d.fields.zip(structFields).flatMap {
             case (f, c) => Seq(Literal(f.name), c)
           })
         case (ArrayType(sElementType, containsNull), ArrayType(dElementType, _)) if hasUnsupportedConversion(sElementType, dElementType) =>
           val lambdaVar = NamedLambdaVariable("element", sElementType, containsNull)
-          val nestedPath = if (columnPath.isEmpty) "element" else s"$columnPath.element"
-          val body = recursivelyCastExpressions(lambdaVar, nestedPath, sElementType, dElementType)
+          val body = recursivelyCastExpressions(lambdaVar, sElementType, dElementType)
           val func = LambdaFunction(body, Seq(lambdaVar))
           ArrayTransform(expr, func)
         case (MapType(sKeyType, sValType, vnull), MapType(dKeyType, dValType, _))
@@ -183,10 +159,8 @@ object HoodieParquetFileFormatHelper {
           val kv = NamedLambdaVariable("kv", new StructType()
             .add("key", sKeyType, nullable = false)
             .add("value", sValType, nullable = vnull), nullable = false)
-          val keyPath = if (columnPath.isEmpty) "key" else s"$columnPath.key"
-          val newKey = recursivelyCastExpressions(GetStructField(kv, 0), keyPath, sKeyType, dKeyType)
-          val valuePath = if (columnPath.isEmpty) "value" else s"$columnPath.value"
-          val newVal = recursivelyCastExpressions(GetStructField(kv, 1), valuePath, sValType, dValType)
+          val newKey = recursivelyCastExpressions(GetStructField(kv, 0), sKeyType, dKeyType)
+          val newVal = recursivelyCastExpressions(GetStructField(kv, 1), sValType, dValType)
           val entry = CreateStruct(Seq(newKey, newVal))
           val func = LambdaFunction(entry, Seq(kv))
           val transformed = ArrayTransform(MapEntries(expr), func)
@@ -211,7 +185,7 @@ object HoodieParquetFileFormatHelper {
         if (typeChangeInfos.containsKey(i)) {
           val srcType = typeChangeInfos.get(i).getRight
           val dstType = typeChangeInfos.get(i).getLeft
-          recursivelyCastExpressions(attr, attr.name, srcType, dstType)
+          recursivelyCastExpressions(attr, srcType, dstType)
         } else attr
       }
       GenerateUnsafeProjection.generate(castSchema, newFullSchema)
