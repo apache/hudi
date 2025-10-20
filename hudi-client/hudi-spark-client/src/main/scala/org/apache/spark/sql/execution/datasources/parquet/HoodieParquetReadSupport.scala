@@ -24,7 +24,7 @@ import org.apache.hudi.common.util.ValidationUtils
 
 import org.apache.parquet.hadoop.api.InitContext
 import org.apache.parquet.hadoop.api.ReadSupport.ReadContext
-import org.apache.parquet.schema.{GroupType, MessageType, Type, Types}
+import org.apache.parquet.schema.{GroupType, MessageType, SchemaRepair, Type, Types}
 import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
 
 import java.time.ZoneId
@@ -35,16 +35,16 @@ class HoodieParquetReadSupport(
                                 convertTz: Option[ZoneId],
                                 enableVectorizedReader: Boolean,
                                 datetimeRebaseSpec: RebaseSpec,
-                                int96RebaseSpec: RebaseSpec)
+                                int96RebaseSpec: RebaseSpec,
+                                tableSchemaOpt: org.apache.hudi.common.util.Option[org.apache.parquet.schema.MessageType] = org.apache.hudi.common.util.Option.empty())
   extends ParquetReadSupport(convertTz, enableVectorizedReader, datetimeRebaseSpec, int96RebaseSpec) with SparkAdapterSupport {
 
   override def init(context: InitContext): ReadContext = {
     val readContext = super.init(context)
-    val requestedParquetSchema = readContext.getRequestedSchema
+    val requestedParquetSchema = SchemaRepair.repairLogicalTypes(readContext.getRequestedSchema, tableSchemaOpt)
     val trimmedParquetSchema = HoodieParquetReadSupport.trimParquetSchema(requestedParquetSchema, context.getFileSchema)
     new ReadContext(trimmedParquetSchema, readContext.getReadSupportMetadata)
   }
-
 }
 
 object HoodieParquetReadSupport {
