@@ -79,9 +79,17 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       assert(getRecordContext.supportsParquetRowIndex())
     }
     val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
+    // Convert Avro dataSchema to Parquet MessageType for timestamp precision conversion
+    val tableSchemaOpt = if (dataSchema != null) {
+      val hadoopConf = storage.getConf.unwrapAs(classOf[Configuration])
+      val parquetSchema = new AvroSchemaConverter(hadoopConf).convert(dataSchema)
+      org.apache.hudi.common.util.Option.of(parquetSchema)
+    } else {
+      org.apache.hudi.common.util.Option.empty[org.apache.parquet.schema.MessageType]()
+    }
     if (FSUtils.isLogFile(filePath)) {
       // TODO: introduce pk filter in log file reader
-      new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
+      new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath, tableSchemaOpt)
         .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(structType).asInstanceOf[ClosableIterator[InternalRow]]
     } else {
       // partition value is empty because the spark parquet reader will append the partition columns to
@@ -89,15 +97,6 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
       val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
-
-      // Convert Avro dataSchema to Parquet MessageType for timestamp precision conversion
-      val tableSchemaOpt = if (dataSchema != null) {
-        val hadoopConf = storage.getConf.unwrapAs(classOf[Configuration])
-        val parquetSchema = new AvroSchemaConverter(hadoopConf).convert(dataSchema)
-        org.apache.hudi.common.util.Option.of(parquetSchema)
-      } else {
-        org.apache.hudi.common.util.Option.empty[org.apache.parquet.schema.MessageType]()
-      }
 
       new CloseableInternalRowIterator(baseFileReader.read(fileInfo,
         readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
