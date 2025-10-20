@@ -47,8 +47,7 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
                                   filePath: Path,
                                   requiredSchema: StructType,
                                   partitionSchema: StructType,
-                                  internalSchemaOpt: util.Option[InternalSchema],
-                                  tableSchemaOpt: util.Option[org.apache.parquet.schema.MessageType] = util.Option.empty()) extends SparkAdapterSupport {
+                                  internalSchemaOpt: util.Option[InternalSchema]) extends SparkAdapterSupport {
   // Fetch internal schema
   private lazy val querySchemaOption: util.Option[InternalSchema] = pruneInternalSchema(internalSchemaOpt, requiredSchema)
 
@@ -68,74 +67,8 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
     null
   }
 
-  // Columns that need timestamp correction (micros labeled as millis)
-  private var columnsToMultiply: Set[String] = Set.empty
-
   def rebuildFilterFromParquet(filter: Filter): Filter = {
     rebuildFilterFromParquetHelper(filter, fileSchema, querySchemaOption.orElse(null))
-  }
-
-  /**
-   * Adjusts timestamp filter values to account for precision mismatches in Parquet schema.
-   * When file schema has timestamps in micros but labeled as millis, filter values need
-   * to be divided by 1000 so they match the mis-labeled data correctly.
-   *
-   * @param filter The filter to adjust
-   * @return Adjusted filter
-   */
-  def adjustFilterForTimestampCorrection(filter: Filter): Filter = {
-    adjustFilterHelper(filter, columnsToMultiply)
-  }
-
-  private def adjustTimestampValue(value: Any): Any = value match {
-    case ts: java.sql.Timestamp => divideBy1000(ts)
-    case l: Long => l / 1000
-    case other => other
-  }
-
-  private def divideBy1000(ts: java.sql.Timestamp): java.sql.Timestamp = {
-    val millis = ts.getTime
-    val nanos = ts.getNanos % 1000000
-
-    val totalNanos = BigInt(millis) * 1000000 + nanos
-    val scaledNanos = totalNanos / 1000
-    val newMillis = (scaledNanos / 1000000).toLong
-    val result = new java.sql.Timestamp(newMillis)
-    result.setNanos((scaledNanos % 1000000000).toInt)
-    result
-  }
-
-  private def adjustFilterHelper(filter: Filter, columnsToMultiply: Set[String]): Filter = {
-    if (columnsToMultiply.isEmpty) {
-      filter
-    } else {
-      filter match {
-        case eq: EqualTo if columnsToMultiply.contains(eq.attribute) =>
-          eq.copy(value = adjustTimestampValue(eq.value))
-        case eqs: EqualNullSafe if columnsToMultiply.contains(eqs.attribute) =>
-          eqs.copy(value = adjustTimestampValue(eqs.value))
-        case gt: GreaterThan if columnsToMultiply.contains(gt.attribute) =>
-          gt.copy(value = adjustTimestampValue(gt.value))
-        case gtr: GreaterThanOrEqual if columnsToMultiply.contains(gtr.attribute) =>
-          gtr.copy(value = adjustTimestampValue(gtr.value))
-        case lt: LessThan if columnsToMultiply.contains(lt.attribute) =>
-          lt.copy(value = adjustTimestampValue(lt.value))
-        case lte: LessThanOrEqual if columnsToMultiply.contains(lte.attribute) =>
-          lte.copy(value = adjustTimestampValue(lte.value))
-        case i: In if columnsToMultiply.contains(i.attribute) =>
-          i.copy(values = i.values.map(adjustTimestampValue))
-        case And(left, right) =>
-          And(adjustFilterHelper(left, columnsToMultiply),
-            adjustFilterHelper(right, columnsToMultiply))
-        case Or(left, right) =>
-          Or(adjustFilterHelper(left, columnsToMultiply),
-            adjustFilterHelper(right, columnsToMultiply))
-        case Not(child) =>
-          Not(adjustFilterHelper(child, columnsToMultiply))
-        case _ =>
-          filter
-      }
-    }
   }
 
   private def rebuildFilterFromParquetHelper(oldFilter: Filter, fileSchema: InternalSchema, querySchema: InternalSchema): Filter = {
@@ -197,16 +130,6 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
 
   protected var typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = null
 
-  def setFooterSchema(fileSchemaMessageType: org.apache.parquet.schema.MessageType): Unit = {
-    columnsToMultiply = if (tableSchemaOpt.isPresent) {
-      HoodieParquetFileFormatHelper.findColumnsToMultiply(fileSchemaMessageType, tableSchemaOpt.get())
-    } else {
-      Set.empty[String]
-    }
-  }
-
-  def getColumnsToMultiply: Set[String] = columnsToMultiply
-
   def getHadoopConfClone(footerFileMetaData: FileMetaData, enableVectorizedReader: Boolean): Configuration = {
     // Clone new conf
     val hadoopAttemptConf = new Configuration(sharedConf)
@@ -237,7 +160,7 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
   }
 
   def generateUnsafeProjection(fullSchema: Seq[AttributeReference], timeZoneId: Option[String]): UnsafeProjection = {
-    HoodieParquetFileFormatHelper.generateUnsafeProjection(fullSchema, timeZoneId, typeChangeInfos, requiredSchema, partitionSchema, schemaUtils, columnsToMultiply)
+    HoodieParquetFileFormatHelper.generateUnsafeProjection(fullSchema, timeZoneId, typeChangeInfos, requiredSchema, partitionSchema, schemaUtils)
   }
 
   def buildVectorizedReader(convertTz: ZoneId,
