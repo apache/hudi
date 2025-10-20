@@ -27,7 +27,7 @@ import org.apache.parquet.schema.MessageType
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.expressions.{ArrayTransform, Attribute, Cast, CreateNamedStruct, CreateStruct, Expression, GetStructField, LambdaFunction, Literal, MapEntries, MapFromEntries, Multiply, NamedLambdaVariable, UnsafeProjection}
-import org.apache.spark.sql.types.{ArrayType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampNTZType, TimestampType}
+import org.apache.spark.sql.types.{ArrayType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampNTZType}
 
 import scala.collection.JavaConverters._
 
@@ -146,50 +146,7 @@ object HoodieParquetFileFormatHelper {
       })
     }
 
-    def recursivelyApplyMultiplication(expr: Expression, columnPath: String, dataType: DataType): Expression = {
-      dataType match {
-        case LongType if columnsToMultiply.contains(columnPath) =>
-          Multiply(expr, Literal(1000L))
-        case TimestampType if columnsToMultiply.contains(columnPath) =>
-          val asDouble = Cast(expr, DoubleType, None)
-          val multiplied = Multiply(asDouble, Literal(1000.0))
-          Cast(multiplied, TimestampType, timeZoneId)
-        case s: StructType =>
-          val structFields = s.fields.zipWithIndex.map {
-            case (field, i) =>
-              val child = GetStructField(expr, i, Some(field.name))
-              val nestedPath = if (columnPath.isEmpty) field.name else s"$columnPath.${field.name}"
-              recursivelyApplyMultiplication(child, nestedPath, field.dataType)
-          }
-          CreateNamedStruct(s.fields.zip(structFields).flatMap {
-            case (f, c) => Seq(Literal(f.name), c)
-          })
-        case ArrayType(elementType, containsNull) =>
-          // For arrays, elements don't have field names, so we keep the same columnPath
-          // This allows matching on the array column itself (e.g., "timestamps" for an array of timestamps)
-          val lambdaVar = NamedLambdaVariable("element", elementType, containsNull)
-          val body = recursivelyApplyMultiplication(lambdaVar, columnPath, elementType)
-          val func = LambdaFunction(body, Seq(lambdaVar))
-          ArrayTransform(expr, func)
-        case MapType(keyType, valueType, vnull) =>
-          // For maps, we only process the value (keys are typically strings and don't need multiplication)
-          // Values keep the same columnPath to allow matching on the map column itself
-          val kv = NamedLambdaVariable("kv", new StructType()
-            .add("key", keyType, nullable = false)
-            .add("value", valueType, nullable = vnull), nullable = false)
-          val key = GetStructField(kv, 0)
-          val value = GetStructField(kv, 1)
-          val newVal = recursivelyApplyMultiplication(value, columnPath, valueType)
-          val entry = CreateStruct(Seq(key, newVal))
-          val func = LambdaFunction(entry, Seq(kv))
-          val transformed = ArrayTransform(MapEntries(expr), func)
-          MapFromEntries(transformed)
-        case _ =>
-          expr
-      }
-    }
-
-    def recursivelyCastExpressions(expr: Expression, srcType: DataType, dstType: DataType): Expression = {
+    def recursivelyCastExpressions(expr: Expression, columnPath: String, srcType: DataType, dstType: DataType): Expression = {
       lazy val needTimeZone = Cast.needsTimeZone(srcType, dstType)
       (srcType, dstType) match {
         case (FloatType, DoubleType) =>
@@ -202,19 +159,23 @@ object HoodieParquetFileFormatHelper {
           Cast(expr, dec, if (needTimeZone) timeZoneId else None)
         case (StringType, DateType) =>
           Cast(expr, DateType, if (needTimeZone) timeZoneId else None)
-        case (LongType, TimestampNTZType) => expr // @ethan I think we just want a no-op here?
+        case (LongType, TimestampNTZType) if columnsToMultiply.contains(columnPath) =>
+          Multiply(expr, Literal(1000L))
+        case (LongType, TimestampNTZType) => expr // Illegal to attempt cast, but it will work fine if we noop
         case (s: StructType, d: StructType) if hasUnsupportedConversion(s, d) =>
           val structFields = s.fields.zip(d.fields).zipWithIndex.map {
             case ((srcField, dstField), i) =>
               val child = GetStructField(expr, i, Some(dstField.name))
-              recursivelyCastExpressions(child, srcField.dataType, dstField.dataType)
+              val nestedPath = if (columnPath.isEmpty) srcField.name else s"$columnPath.${srcField.name}"
+              recursivelyCastExpressions(child, nestedPath, srcField.dataType, dstField.dataType)
           }
           CreateNamedStruct(d.fields.zip(structFields).flatMap {
             case (f, c) => Seq(Literal(f.name), c)
           })
         case (ArrayType(sElementType, containsNull), ArrayType(dElementType, _)) if hasUnsupportedConversion(sElementType, dElementType) =>
           val lambdaVar = NamedLambdaVariable("element", sElementType, containsNull)
-          val body = recursivelyCastExpressions(lambdaVar, sElementType, dElementType)
+          val nestedPath = if (columnPath.isEmpty) "element" else s"$columnPath.element"
+          val body = recursivelyCastExpressions(lambdaVar, nestedPath, sElementType, dElementType)
           val func = LambdaFunction(body, Seq(lambdaVar))
           ArrayTransform(expr, func)
         case (MapType(sKeyType, sValType, vnull), MapType(dKeyType, dValType, _))
@@ -222,8 +183,10 @@ object HoodieParquetFileFormatHelper {
           val kv = NamedLambdaVariable("kv", new StructType()
             .add("key", sKeyType, nullable = false)
             .add("value", sValType, nullable = vnull), nullable = false)
-          val newKey = recursivelyCastExpressions(GetStructField(kv, 0), sKeyType, dKeyType)
-          val newVal = recursivelyCastExpressions(GetStructField(kv, 1), sValType, dValType)
+          val keyPath = if (columnPath.isEmpty) "key" else s"$columnPath.key"
+          val newKey = recursivelyCastExpressions(GetStructField(kv, 0), keyPath, sKeyType, dKeyType)
+          val valuePath = if (columnPath.isEmpty) "value" else s"$columnPath.value"
+          val newVal = recursivelyCastExpressions(GetStructField(kv, 1), valuePath, sValType, dValType)
           val entry = CreateStruct(Seq(newKey, newVal))
           val func = LambdaFunction(entry, Seq(kv))
           val transformed = ArrayTransform(MapEntries(expr), func)
@@ -234,14 +197,8 @@ object HoodieParquetFileFormatHelper {
       }
     }
 
-    if (typeChangeInfos.isEmpty && columnsToMultiply.isEmpty) {
+    if (typeChangeInfos.isEmpty) {
       GenerateUnsafeProjection.generate(fullSchema, fullSchema)
-    } else if (typeChangeInfos.isEmpty && columnsToMultiply.nonEmpty) {
-      // Only multiplication, no type changes
-      val projectionSchema = fullSchema.map { attr =>
-        recursivelyApplyMultiplication(attr, attr.name, attr.dataType)
-      }
-      GenerateUnsafeProjection.generate(projectionSchema, fullSchema)
     } else {
       // find type changed.
       val newSchema = new StructType(requiredSchema.fields.zipWithIndex.map { case (f, i) =>
@@ -251,15 +208,11 @@ object HoodieParquetFileFormatHelper {
       })
       val newFullSchema = schemaUtils.toAttributes(newSchema) ++ schemaUtils.toAttributes(partitionSchema)
       val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
-        val castedExpr = if (typeChangeInfos.containsKey(i)) {
+        if (typeChangeInfos.containsKey(i)) {
           val srcType = typeChangeInfos.get(i).getRight
           val dstType = typeChangeInfos.get(i).getLeft
-          recursivelyCastExpressions(attr, srcType, dstType)
-        } else {
-          attr
-        }
-        // Apply multiplication after casting if needed
-        recursivelyApplyMultiplication(castedExpr, attr.name, attr.dataType)
+          recursivelyCastExpressions(attr, attr.name, srcType, dstType)
+        } else attr
       }
       GenerateUnsafeProjection.generate(castSchema, newFullSchema)
     }
