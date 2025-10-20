@@ -46,16 +46,17 @@ public class IMetaStoreClientUtil {
       } catch (RuntimeException e) {
         if (e.getMessage() != null && e.getMessage().contains("not org.apache.hudi.org.apache.hadoop")) {
           throw new HoodieException(
-              "Hive Metastore compatibility issue detected. This usually happens due to:\n"
-                  + "  1. Hive version mismatch\n"
-                  + "  2. Conflicting Hive libraries in classpath\n"
-                  + "  3. Incompatible hudi-spark-bundle version\n\n"
-                  + "To resolve:\n"
-                  + "  - For Hive 2.x: Use hudi-spark-bundle with 'hive2' classifier\n"
-                  + "  - For Hive 3.x: Use hudi-spark-bundle with 'hive3' classifier\n"
-                  + "  - Ensure no conflicting Hive jars in Spark classpath\n"
-                  + "  - Check: https://hudi.apache.org/docs/syncing_metastore\n\n"
-                  + "Technical details: " + e.getMessage(), e);
+              String.format(
+                  "Hive Metastore compatibility issue detected. This usually happens due to:%n"
+                      + "  (1) Hive version mismatch,%n"
+                      + "  (2) Conflicting Hive libraries in classpath,%n"
+                      + "  (3) Incompatible hudi-spark-bundle version.%n%n"
+                      + "To resolve:%n"
+                      + "  - For Hive 2.x use hudi-spark-bundle with 'hive2' classifier,%n"
+                      + "  - For Hive 3.x use hudi-spark-bundle with 'hive3' classifier,%n"
+                      + "  - Ensure no conflicting Hive jars in Spark classpath.%n%n"
+                      + "Check: https://hudi.apache.org/docs/syncing_metastore.%n%n"
+                      + "Technical details: %s", e.getMessage()), e);
         }
         throw e;
       }

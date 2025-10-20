@@ -154,10 +154,9 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
       String errorMessage = e.getMessage() != null ? e.getMessage() : "";
       if (isRequiredFieldNullError(errorMessage) && errorMessage.contains("_hoodie_is_deleted")) {
         throw new HoodieException(
-            "'_hoodie_is_deleted' field is missing for some of the incoming records.\n\n"
-                + "The table schema requires '_hoodie_is_deleted' to be non-null, but some records lack this field.\n\n"
-                + "To fix:\n"
-                + "  Ensure ALL records have '_hoodie_is_deleted' field set (true/false)\n\n"
+            "'_hoodie_is_deleted' field is missing for some of the incoming records. "
+                + "The table schema requires '_hoodie_is_deleted' to be non-null, but some records lack this field. "
+                + "To fix: Ensure ALL records have '_hoodie_is_deleted' field set (true/false). "
                 + "Original error: " + errorMessage, e);
       }
       throw e;
