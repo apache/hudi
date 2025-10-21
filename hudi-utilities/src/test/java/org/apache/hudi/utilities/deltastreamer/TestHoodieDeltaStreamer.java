@@ -2102,7 +2102,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
     }, "Should error out when schema provider is not provided");
     LOG.debug("Expected error during reading data from source ", e);
-    assertTrue(e.getMessage().contains("Schema provider is required for this operation and for the source of interest. Please set '--schemaprovider-class' in the top level HoodieStreamer config for the source of interest. Based on the schema provider class chosen, additional configs might be required. For eg, if you choose 'org.apache.hudi.utilities.schema.SchemaRegistryProvider', you may need to set configs like 'hoodie.streamer.schemaprovider.registry.url'."));
+    assertTrue(e.getMessage().contains("Schema provider is required for this operation and for the source of interest. "
+        + "Please set '--schemaprovider-class' in the top level HoodieStreamer config for the source of interest. "
+        + "Based on the schema provider class chosen, additional configs might be required. "
+        + "For eg, if you choose 'org.apache.hudi.utilities.schema.SchemaRegistryProvider', "
+        + "you may need to set configs like 'hoodie.streamer.schemaprovider.registry.url'."));
   }
 
   @Test
