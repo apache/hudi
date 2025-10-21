@@ -106,7 +106,8 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
   @Override
   public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema schema) throws IOException {
     ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator();
-    return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieSparkRecord(data)));
+    //TODO .copy() is needed for correctness, to investigate further in future.
+    return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieSparkRecord(data.copy())));
   }
 
   @Override
