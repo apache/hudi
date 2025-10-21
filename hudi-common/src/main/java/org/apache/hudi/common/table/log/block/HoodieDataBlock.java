@@ -19,7 +19,6 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.avro.AvroSchemaCache;
-import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -283,8 +282,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     }
 
     try {
-      return deserializeRecords(getContent().get(), type, getBlockContentLocation()
-          .map(bcl -> bcl.getStorage().getConf().getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ALLOW_LOGICAL_EVOLUTION.key(), false)).orElse(false));
+      return deserializeRecords(getContent().get(), type);
     } finally {
       // Free up content to be GC'd by deflating the block
       deflate();
@@ -333,7 +331,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   protected abstract ByteArrayOutputStream serializeRecords(List<HoodieRecord> records, HoodieStorage storage) throws IOException;
 
-  protected abstract <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type, boolean skipLogicalTimestampEvolution) throws IOException;
+  protected abstract <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException;
 
   /**
    * Streaming deserialization of records.
