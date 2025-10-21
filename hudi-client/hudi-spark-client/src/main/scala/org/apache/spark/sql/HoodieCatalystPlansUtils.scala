@@ -144,6 +144,11 @@ trait HoodieCatalystPlansUtils {
    */
   def failAnalysisForMIT(a: Attribute, cols: String): Unit = {}
 
+  /**
+   * Throws TABLE_OR_VIEW_NOT_FOUND error for non-existent table
+   */
+  def failTableNotFound(tableName: String): Unit = {}
+
   def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan
 
   /**
