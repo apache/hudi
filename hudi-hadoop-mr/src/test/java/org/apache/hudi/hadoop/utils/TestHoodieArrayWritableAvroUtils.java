@@ -331,7 +331,7 @@ public class TestHoodieArrayWritableAvroUtils {
     } else if (javaInput instanceof byte[]) {
       javaInput = ByteBuffer.wrap((byte[]) javaInput);
     }
-    Object javaOutput = HoodieAvroUtils.rewritePrimaryType(javaInput, oldSchema, newSchema, false);
+    Object javaOutput = HoodieAvroUtils.rewritePrimaryType(javaInput, oldSchema, newSchema);
     Object javaExpected = ObjectInspectorConverters.getConverter(writableOINew, newObjectInspector).convert(newWritable);
 
     if (isDecimalSchema(newSchema)) {
