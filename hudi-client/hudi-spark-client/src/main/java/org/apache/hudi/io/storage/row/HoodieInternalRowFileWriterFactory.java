@@ -33,6 +33,7 @@ import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.model.HoodieFileFormat.LANCE;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.util.ParquetUtils.getCompressionCodecName;
 
@@ -59,6 +60,8 @@ public class HoodieInternalRowFileWriterFactory {
     final String extension = FSUtils.getFileExtension(path.getName());
     if (PARQUET.getFileExtension().equals(extension)) {
       return newParquetInternalRowFileWriter(path, hoodieTable, writeConfig, schema, tryInstantiateBloomFilter(writeConfig));
+    } else if (LANCE.getFileExtension().equals(extension)) {
+      return newLanceInternalRowFileWriter(path, hoodieTable, schema);
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
@@ -85,6 +88,13 @@ public class HoodieInternalRowFileWriterFactory {
             writeConfig.getParquetCompressionRatio(),
             writeConfig.parquetDictionaryEnabled()
         ));
+  }
+
+  private static HoodieInternalRowFileWriter newLanceInternalRowFileWriter(StoragePath path,
+                                                                           HoodieTable table,
+                                                                           StructType structType)
+      throws IOException {
+    return new HoodieInternalRowLanceWriter(path, structType, table.getStorage());
   }
 
   private static Option<BloomFilter> tryInstantiateBloomFilter(HoodieWriteConfig writeConfig) {

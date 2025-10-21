@@ -49,6 +49,11 @@ public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
   }
 
   @Override
+  protected HoodieFileReader newLanceFileReader(StoragePath path) {
+    return new HoodieSparkLanceReader(storage, path);
+  }
+
+  @Override
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
                                                 StoragePath path,
                                                 Option<HoodieSchema> schemaOption) throws IOException {

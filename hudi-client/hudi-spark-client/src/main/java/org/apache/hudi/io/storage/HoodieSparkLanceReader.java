@@ -20,6 +20,7 @@ package org.apache.hudi.io.storage;
 
 import com.lancedb.lance.file.LanceFileReader;
 import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.hudi.HoodieSchemaConversionUtils;
@@ -184,9 +185,4 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
       throw new HoodieException("Failed to get row count from Lance file: " + path, e);
     }
   }
-
-  /**
-   * Iterator implementation that reads Lance file batches and converts to UnsafeRows.
-   * Keeps ColumnarBatch alive while iterating to avoid unnecessary data copying.
-   */
 }
