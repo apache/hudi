@@ -3627,8 +3627,8 @@ public class HoodieWriteConfig extends HoodieConfig {
         // Validate if a lock provide class is set properly.
         if (StringUtils.isNullOrEmpty(writeConfig.getLockProviderClass())) {
           throw new IllegalArgumentException(
-              "To support multi-writer scenarios, " +
-                  "configuration 'hoodie.write.lock.provider' should be set properly.");
+              "To support multi-writer scenarios, "
+                  + "configuration 'hoodie.write.lock.provider' should be set properly.");
         }
 
         // In this case, we assume that the user takes care of setting the lock provider used
