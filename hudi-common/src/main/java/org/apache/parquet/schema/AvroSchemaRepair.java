@@ -93,6 +93,18 @@ public class AvroSchemaRepair {
       return repairLogicalTypes(requested, table);
     }
 
+    // Handle array types
+    if (requested.getType() == Schema.Type.ARRAY && table.getType() == Schema.Type.ARRAY) {
+      Schema repairedElementSchema = repairAvroSchema(requested.getElementType(), table.getElementType());
+      return Schema.createArray(repairedElementSchema);
+    }
+
+    // Handle map types
+    if (requested.getType() == Schema.Type.MAP && table.getType() == Schema.Type.MAP) {
+      Schema repairedValueSchema = repairAvroSchema(requested.getValueType(), table.getValueType());
+      return Schema.createMap(repairedValueSchema);
+    }
+
     // Handle primitive types with logical types
     if (isPrimitiveType(requested) && isPrimitiveType(table)) {
       return repairAvroLogicalType(requested, table);

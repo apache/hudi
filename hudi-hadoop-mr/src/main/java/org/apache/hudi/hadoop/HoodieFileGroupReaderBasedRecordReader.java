@@ -93,7 +93,8 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
   public interface HiveReaderCreator {
     org.apache.hadoop.mapred.RecordReader<NullWritable, ArrayWritable> getRecordReader(
         final org.apache.hadoop.mapred.InputSplit split,
-        final org.apache.hadoop.mapred.JobConf job
+        final org.apache.hadoop.mapred.JobConf job,
+        Schema dataSchema
     ) throws IOException;
   }
 

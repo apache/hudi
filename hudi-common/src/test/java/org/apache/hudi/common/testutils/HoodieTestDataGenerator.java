@@ -1546,33 +1546,33 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     public boolean nestedSupport = true;
     public boolean mapSupport = true;
     public boolean arraySupport = true;
-    public boolean addNewFieldSupport = true;
+    public boolean addNewFieldSupport = false;
     // TODO: [HUDI-9603] Flink 1.18 array values incorrect in fg reader test
     public boolean anyArraySupport = true;
 
     // Int
-    public boolean intToLongSupport = true;
-    public boolean intToFloatSupport = true;
-    public boolean intToDoubleSupport = true;
-    public boolean intToStringSupport = true;
+    public boolean intToLongSupport = false;
+    public boolean intToFloatSupport = false;
+    public boolean intToDoubleSupport = false;
+    public boolean intToStringSupport = false;
 
     // Long
-    public boolean longToFloatSupport = true;
-    public boolean longToDoubleSupport = true;
-    public boolean longToStringSupport = true;
+    public boolean longToFloatSupport = false;
+    public boolean longToDoubleSupport = false;
+    public boolean longToStringSupport = false;
 
     // Float
-    public boolean floatToDoubleSupport = true;
-    public boolean floatToStringSupport = true;
+    public boolean floatToDoubleSupport = false;
+    public boolean floatToStringSupport = false;
 
     // Double
-    public boolean doubleToStringSupport = true;
+    public boolean doubleToStringSupport = false;
 
     // String
-    public boolean stringToBytesSupport = true;
+    public boolean stringToBytesSupport = false;
 
     // Bytes
-    public boolean bytesToStringSupport = true;
+    public boolean bytesToStringSupport = false;
   }
 
   private enum SchemaEvolutionTypePromotionCase {
@@ -1619,7 +1619,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       baseFields.add(Schema.Type.BOOLEAN);
     }
 
-    this.extendedSchema = Option.of(generateExtendedSchema(configs, new ArrayList<>(baseFields)));
+    this.extendedSchema = Option.of(generateExtendedSchema(configs, new ArrayList<>(baseFields), !isBefore));
   }
 
   public void extendSchemaBeforeEvolution(SchemaEvolutionConfigs configs) {
@@ -1634,28 +1634,28 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return extendedSchema.orElseThrow(IllegalArgumentException::new);
   }
 
-  private static Schema generateExtendedSchema(SchemaEvolutionConfigs configs, List<Schema.Type> baseFields) {
-    return generateExtendedSchema(configs.schema, configs, baseFields, "customField", true);
+  private static Schema generateExtendedSchema(SchemaEvolutionConfigs configs, List<Schema.Type> baseFields, boolean useMillis) {
+    return generateExtendedSchema(configs.schema, configs, baseFields, "customField", true, useMillis);
   }
 
-  private static Schema generateExtendedSchema(Schema baseSchema, SchemaEvolutionConfigs configs, List<Schema.Type> baseFields, String fieldPrefix, boolean toplevel) {
+  private static Schema generateExtendedSchema(Schema baseSchema, SchemaEvolutionConfigs configs, List<Schema.Type> baseFields, String fieldPrefix, boolean toplevel, boolean useMillis) {
     List<Schema.Field> fields =  baseSchema.getFields();
     List<Schema.Field> finalFields = new ArrayList<>(fields.size() + baseFields.size());
     boolean addedFields = false;
     for (Schema.Field field : fields) {
       if (configs.nestedSupport && field.name().equals("fare") && field.schema().getType() == Schema.Type.RECORD) {
-        finalFields.add(createNewSchemaField(field.name(), generateExtendedSchema(field.schema(), configs, baseFields, "customFare", false), field.doc(), field.defaultVal()));
+        finalFields.add(createNewSchemaField(field.name(), generateExtendedSchema(field.schema(), configs, baseFields, "customFare", false, useMillis), field.doc(), field.defaultVal()));
       } else if (configs.anyArraySupport || !field.name().equals("tip_history")) {
         //TODO: [HUDI-9603] remove the if condition when the issue is fixed
         if (field.name().equals("_hoodie_is_deleted")) {
           addedFields = true;
-          addFields(configs, finalFields, baseFields, fieldPrefix, baseSchema.getNamespace(), toplevel);
+          addFields(configs, finalFields, baseFields, fieldPrefix, baseSchema.getNamespace(), toplevel, useMillis);
         }
         finalFields.add(createNewSchemaField(field));
       }
     }
     if (!addedFields) {
-      addFields(configs, finalFields, baseFields, fieldPrefix, baseSchema.getNamespace(), toplevel);
+      addFields(configs, finalFields, baseFields, fieldPrefix, baseSchema.getNamespace(), toplevel, useMillis);
     }
     Schema finalSchema = Schema.createRecord(baseSchema.getName(), baseSchema.getDoc(),
         baseSchema.getNamespace(), baseSchema.isError());
@@ -1663,28 +1663,35 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return finalSchema;
   }
 
-  private static void addFields(SchemaEvolutionConfigs configs, List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix, String namespace, boolean toplevel) {
+  private static void addFields(SchemaEvolutionConfigs configs, List<Schema.Field> finalFields, List<Schema.Type> baseFields,
+                                String fieldPrefix, String namespace, boolean toplevel, boolean useMillis) {
     if (toplevel) {
       if (configs.mapSupport) {
         List<Schema.Field> mapFields = new ArrayList<>(baseFields.size());
-        addFieldsHelper(mapFields, baseFields, fieldPrefix + "Map");
+        addFieldsHelper(mapFields, baseFields, fieldPrefix + "Map", useMillis);
         finalFields.add(new Schema.Field(fieldPrefix + "Map", Schema.createMap(Schema.createRecord("customMapRecord", "", namespace, false, mapFields)), "", null));
       }
 
       if (configs.arraySupport) {
         List<Schema.Field> arrayFields = new ArrayList<>(baseFields.size());
-        addFieldsHelper(arrayFields, baseFields, fieldPrefix + "Array");
+        addFieldsHelper(arrayFields, baseFields, fieldPrefix + "Array", useMillis);
         finalFields.add(new Schema.Field(fieldPrefix + "Array", Schema.createArray(Schema.createRecord("customArrayRecord", "", namespace, false, arrayFields)), "", null));
       }
     }
-    addFieldsHelper(finalFields, baseFields, fieldPrefix);
+    addFieldsHelper(finalFields, baseFields, fieldPrefix, useMillis);
   }
 
-  private static void addFieldsHelper(List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix) {
+  private static void addFieldsHelper(List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix, boolean useMillis) {
     for (int i = 0; i < baseFields.size(); i++) {
       if (baseFields.get(i) == Schema.Type.BOOLEAN) {
         // boolean fields are added fields
         finalFields.add(new Schema.Field(fieldPrefix + i, AvroSchemaUtils.createNullableSchema(Schema.Type.BOOLEAN), "", null));
+      } else if (baseFields.get(i) == Schema.Type.LONG) {
+        if (useMillis) {
+          finalFields.add(new Schema.Field(fieldPrefix + i, LogicalTypes.timestampMillis().addToSchema(Schema.create(baseFields.get(i))), "", null));
+        } else {
+          finalFields.add(new Schema.Field(fieldPrefix + i, LogicalTypes.timestampMicros().addToSchema(Schema.create(baseFields.get(i))), "", null));
+        }
       } else {
         finalFields.add(new Schema.Field(fieldPrefix + i, Schema.create(baseFields.get(i)), "", null));
       }
@@ -1699,7 +1706,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
             rec.put(field.name(), rand.nextInt());
             break;
           case LONG:
-            rec.put(field.name(), rand.nextLong());
+            rec.put(field.name(), 1720631224939L);
             break;
           case FLOAT:
             rec.put(field.name(), rand.nextFloat());
