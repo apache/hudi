@@ -34,9 +34,7 @@ import org.apache.hudi.table.action.cluster.strategy.PartitionAwareClusteringPla
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -87,6 +85,6 @@ public class FlinkSizeBasedClusteringPlanStrategy<T>
     if (fileSlices.size() > 1) {
       return fileSlices.stream();
     }
-    return Stream.empty();
+    return Collections.<FileSlice>emptyList().stream();
   }
 }
