@@ -29,6 +29,8 @@ to cloud stores.
    Configurations required for JuiceFS and Hudi co-operability.
 * [Oracle Cloud Infrastructure](oci_hoodie) <br/>
    Configurations required for OCI and Hudi co-operability.
+* [KS3 File System](ks3_hoodie) <br/>
+   Configurations required for KS3 FS and Hudi co-operability.
 
 :::note 
 Many cloud object storage systems like [Amazon S3](https://docs.aws.amazon.com/s3/) allow you to set

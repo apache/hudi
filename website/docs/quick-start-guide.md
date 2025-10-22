@@ -1305,7 +1305,7 @@ transformation support, automatic table services and so on.
 
 **Structured Streaming** - Hudi supports Spark Structured Streaming reads and writes as well. Please see [here](writing_tables_streaming_writes#spark-streaming) for more.
 
-Check out more information on [modeling data in Hudi](faq/general#how-do-i-model-the-data-stored-in-hudi) and different ways to perform [batch writes](/docs/writing_data) and [streaming writes](writing_tables_streaming_writes).
+Check out more information on [modeling data in Hudi](/faq/general#how-do-i-model-the-data-stored-in-hudi) and different ways to perform [batch writes](/docs/writing_data) and [streaming writes](writing_tables_streaming_writes).
 
 ### Dockerized Demo
 Even as we showcased the core capabilities, Hudi supports a lot more advanced functionality that can make it easy

@@ -7,7 +7,7 @@ keywords: [hudi, writing, reading]
 
 ### How does Hudi ensure atomicity?
 
-Hudi writers atomically move an inflight write operation to a "completed" state by writing an object/file to the [timeline](timeline) folder, identifying the write operation with an instant time that denotes the time the action is deemed to have occurred. This is achieved on the underlying DFS (in the case of S3/Cloud Storage, by an atomic PUT operation) and can be observed by files of the pattern `<instant>.<action>.<state>` in Hudi’s timeline.
+Hudi writers atomically move an inflight write operation to a "completed" state by writing an object/file to the [timeline](/docs/timeline) folder, identifying the write operation with an instant time that denotes the time the action is deemed to have occurred. This is achieved on the underlying DFS (in the case of S3/Cloud Storage, by an atomic PUT operation) and can be observed by files of the pattern `<instant>.<action>.<state>` in Hudi’s timeline.
 
 ### Does Hudi extend the Hive table layout?
 
@@ -49,7 +49,7 @@ To expand more on the long term approach, Hudi has had a proposal to streamline/
 This has been delayed for a few reasons 
 
 - Large hosted query engines and users not upgrading fast enough. 
-- The issues brought up - \[[1](faq/design_and_concepts#does-hudis-use-of-wall-clock-timestamp-for-instants-pose-any-clock-skew-issues),[2](faq/design_and_concepts#hudis-commits-are-based-on-transaction-start-time-instead-of-completed-time-does-this-cause-data-loss-or-inconsistency-in-case-of-incremental-and-time-travel-queries)\], 
+- The issues brought up - \[[1](design_and_concepts#does-hudis-use-of-wall-clock-timestamp-for-instants-pose-any-clock-skew-issues),[2](design_and_concepts#hudis-commits-are-based-on-transaction-start-time-instead-of-completed-time-does-this-cause-data-loss-or-inconsistency-in-case-of-incremental-and-time-travel-queries)\], 
 relevant to this are not practically very important to users beyond good pedantic discussions, 
 - Wanting to do it alongside [non-blocking concurrency control](https://github.com/apache/hudi/pull/7907) in Hudi version 1.x.
 

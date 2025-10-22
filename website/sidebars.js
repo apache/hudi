@@ -135,7 +135,8 @@ module.exports = {
                         'ibm_cos_hoodie',
                         'bos_hoodie',
                         'jfs_hoodie',
-                        'oci_hoodie'
+                        'oci_hoodie',
+                        'ks3_hoodie',
                     ],
                 },
             ],

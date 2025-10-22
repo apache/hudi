@@ -402,6 +402,10 @@ module.exports = {
               label: "IBM Cloud",
               to: "/docs/ibm_cos_hoodie",
             },
+            {
+              label: "Oracle Cloud",
+              to: "/docs/oci_hoodie",
+            },
           ],
         },
         {
