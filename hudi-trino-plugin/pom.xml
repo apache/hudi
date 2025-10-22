@@ -418,6 +418,7 @@
         <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-avro</artifactId>
+            <version>${trino.parquet.version}</version>
             <scope>test</scope>
         </dependency>
 
