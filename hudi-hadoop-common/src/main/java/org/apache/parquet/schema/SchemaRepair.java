@@ -92,7 +92,7 @@ public class SchemaRepair {
       }
     }
 
-    // Rule 2: requested is LONG (no logical type), table is local-timestamp(millis)
+    // Rule 2: requested is LONG (no logical type), table is local-timestamp
     if (reqLogical == null
         && requested.getPrimitiveTypeName() == PrimitiveType.PrimitiveTypeName.INT64
         && tblLogical instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
