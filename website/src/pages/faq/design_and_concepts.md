@@ -1,7 +1,8 @@
 ---
-title: Design & Concepts
+title: Design & Concepts FAQ
 keywords: [hudi, writing, reading]
 ---
+
 # Design & Concepts FAQ
 
 ### How does Hudi ensure atomicity?

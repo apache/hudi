@@ -196,7 +196,7 @@ module.exports = {
             },
             {
               label: "FAQ",
-              href: "/docs/faq",
+              href: "/faq",
             },
             {
               label: "Tech Specs",
@@ -371,7 +371,7 @@ module.exports = {
             },
             {
               label: "FAQ",
-              href: "/docs/faq",
+              href: "/faq",
             },
           ],
         },

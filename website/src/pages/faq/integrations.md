@@ -1,7 +1,8 @@
 ---
-title: Integrations
+title: Integrations FAQ
 keywords: [hudi, writing, reading]
 ---
+
 # Integrations FAQ
 
 ### Does AWS GLUE support Hudi ?
