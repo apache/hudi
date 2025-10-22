@@ -66,8 +66,12 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
     this.writeClient = writeClient;
   }
 
+  protected String startCommit() {
+    return writeClient.startCommit(getCommitActionType());
+  }
+
   protected void preExecute() {
-    instantTime = writeClient.startCommit(getCommitActionType());
+    instantTime = startCommit();
     table = writeClient.initTable(getWriteOperationType(), Option.ofNullable(instantTime));
     table.validateInsertSchema();
     writeClient.preWrite(instantTime, getWriteOperationType(), table.getMetaClient());
