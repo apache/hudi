@@ -19,7 +19,7 @@ More details can be found [here](/docs/concepts/) and also [Design And Architect
 
 ### How do I migrate my data to Hudi?
 
-Hudi provides built in support for rewriting your entire table into Hudi one-time using the HDFSParquetImporter tool available from the hudi-cli . You could also do this via a simple read and write of the dataset using the Spark datasource APIs. Once migrated, writes can be performed using normal means discussed [here](faq/writing_tables#what-are-some-ways-to-write-a-hudi-table). This topic is discussed in detail [here](/docs/migration_guide/), including ways to doing partial migrations.
+Hudi provides built in support for rewriting your entire table into Hudi one-time using the HDFSParquetImporter tool available from the hudi-cli . You could also do this via a simple read and write of the dataset using the Spark datasource APIs. Once migrated, writes can be performed using normal means discussed [here](/faq/writing_tables#what-are-some-ways-to-write-a-hudi-table). This topic is discussed in detail [here](/docs/migration_guide/), including ways to doing partial migrations.
 
 ### How to convert an existing COW table to MOR?
 
@@ -170,13 +170,13 @@ After first write:
 
 | _hoodie_commit_time | _hoodie_commit_seqno | _hoodie_record_key | _hoodie_partition_path | _hoodie_file_name | Url | ts | uuid |
 | ---| ---| ---| ---| ---| ---| ---| --- |
-| 20220622204044318 | 20220622204044318... | 1 |  | 890aafc0-d897-44d... | [hudi.apache.com](http://hudi.apache.com) | 1 | 1 |
+| 20220622204044318 | 20220622204044318... | 1 |  | 890aafc0-d897-44d... | hudi.apache.org | 1 | 1 |
 
 After the second write:
 
 | _hoodie_commit_time | _hoodie_commit_seqno | _hoodie_record_key | _hoodie_partition_path | _hoodie_file_name | Url | ts | uuid |
 | ---| ---| ---| ---| ---| ---| ---| --- |
-| 20220622204044318 | 20220622204044318... | 1 |  | 890aafc0-d897-44d... | [hudi.apache.com](http://hudi.apache.com) | 1 | 1 |
+| 20220622204044318 | 20220622204044318... | 1 |  | 890aafc0-d897-44d... | hudi.apache.org | 1 | 1 |
 | 20220622204208997 | 20220622204208997... | 2 |  | 890aafc0-d897-44d... | null | 1 | 2 |
 
 ### Can I change keygenerator for an existing table?

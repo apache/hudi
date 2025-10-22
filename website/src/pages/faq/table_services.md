@@ -36,8 +36,8 @@ Depending on how you write to Hudi these are the possible options currently.
   *   Please note it is not possible to disable async compaction for MOR table with spark structured streaming.
 *   Flink:
   *   Async compaction is enabled by default for Merge-On-Read table.
-  *   Offline compaction can be achieved by setting `compaction.async.enabled` to `false` and periodically running [Flink offline Compactor](compaction/#flink-offline-compaction). When running the offline compactor, one needs to ensure there are no active writes to the table.
-  *   Third option (highly recommended over the second one) is to schedule the compactions from the regular ingestion job and executing the compaction plans from an offline job. To achieve this set `compaction.async.enabled` to `false`, `compaction.schedule.enabled` to `true` and then run the [Flink offline Compactor](compaction/#flink-offline-compaction) periodically to execute the plans.
+  *   Offline compaction can be achieved by setting `compaction.async.enabled` to `false` and periodically running [Flink offline Compactor](/docs/compaction/#flink-offline-compaction). When running the offline compactor, one needs to ensure there are no active writes to the table.
+  *   Third option (highly recommended over the second one) is to schedule the compactions from the regular ingestion job and executing the compaction plans from an offline job. To achieve this set `compaction.async.enabled` to `false`, `compaction.schedule.enabled` to `true` and then run the [Flink offline Compactor](/docs/compaction/#flink-offline-compaction) periodically to execute the plans.
 
 ### How to disable all table services in case of multiple writers?
 
@@ -51,6 +51,6 @@ Hudi runs cleaner to remove old file versions as part of writing data either in 
 
 Yes. Hudi provides the ability to post a callback notification about a write commit. You can use a http hook or choose to
 
-be notified via a Kafka/pulsar topic or plug in your own implementation to get notified. Please refer [here](platform_services_post_commit_callback)
+be notified via a Kafka/pulsar topic or plug in your own implementation to get notified. Please refer [here](/docs/platform_services_post_commit_callback)
 
 for details

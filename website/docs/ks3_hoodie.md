@@ -1,7 +1,6 @@
 ---
 title: KS3 Filesystem
-keywords: hudi, hive, aws, s3, spark, presto, ks3
-permalink: /docs/ks3_hoodie.html
+keywords: [hudi, hive, aws, s3, spark, presto, ks3]
 summary: In this page, we go over how to configure Hudi with KS3 filesystem.
 last_modified_at: 2021-08-09T15:59:57-04:00
 ---
