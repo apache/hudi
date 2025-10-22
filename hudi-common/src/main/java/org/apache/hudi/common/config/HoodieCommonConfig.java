@@ -54,14 +54,6 @@ public class HoodieCommonConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Enables support for Schema Evolution feature");
 
-  public static final ConfigProperty<Boolean> SCHEMA_EVOLUTION_ALLOW_LOGICAL_EVOLUTION = ConfigProperty
-      .key("hoodie.schema.evolution.allow.logical.evolution")
-      .defaultValue(true)
-      .sinceVersion("1.1.0")
-      .markAdvanced()
-      // TODO: describe much better
-      .withDocumentation("Enables support for pseudo logical evolutions");
-
   public static final ConfigProperty<String> TIMESTAMP_AS_OF = ConfigProperty
       .key("as.of.instant")
       .noDefaultValue()
