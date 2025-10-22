@@ -293,19 +293,19 @@ public class TestAvroSchemaUtils {
   @ValueSource(booleans = {false, true})
   public void testIsCompatibleProjectionNotAllowed(boolean shouldValidate) {
     assertThrows(SchemaCompatibilityException.class,
-        () -> AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, false, Collections.emptySet(), true));
+        () -> AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, false, Collections.emptySet()));
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   public void testIsCompatibleProjectionAllowed(boolean shouldValidate) {
-    AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, true, Collections.emptySet(), true);
+    AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, true, Collections.emptySet());
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   public void testIsCompatiblePartitionDropCols(boolean shouldValidate) {
-    AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, false, Collections.singleton("c"), true);
+    AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, false, Collections.singleton("c"));
   }
 
   private static final Schema BROKEN_SCHEMA = new Schema.Parser().parse("{\n"
@@ -329,7 +329,7 @@ public class TestAvroSchemaUtils {
   @Test
   public void  testBrokenSchema() {
     assertThrows(SchemaBackwardsCompatibilityException.class,
-        () -> AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, BROKEN_SCHEMA, true, false, Collections.emptySet(), true));
+        () -> AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, BROKEN_SCHEMA, true, false, Collections.emptySet()));
   }
 
   @Test
