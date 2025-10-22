@@ -1546,33 +1546,55 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     public boolean nestedSupport = true;
     public boolean mapSupport = true;
     public boolean arraySupport = true;
-    public boolean addNewFieldSupport = false;
+    public boolean addNewFieldSupport = true;
     // TODO: [HUDI-9603] Flink 1.18 array values incorrect in fg reader test
     public boolean anyArraySupport = true;
 
     // Int
-    public boolean intToLongSupport = false;
-    public boolean intToFloatSupport = false;
-    public boolean intToDoubleSupport = false;
-    public boolean intToStringSupport = false;
+    public boolean intToLongSupport = true;
+    public boolean intToFloatSupport = true;
+    public boolean intToDoubleSupport = true;
+    public boolean intToStringSupport = true;
 
     // Long
-    public boolean longToFloatSupport = false;
-    public boolean longToDoubleSupport = false;
-    public boolean longToStringSupport = false;
+    public boolean longToFloatSupport = true;
+    public boolean longToDoubleSupport = true;
+    public boolean longToStringSupport = true;
 
     // Float
-    public boolean floatToDoubleSupport = false;
-    public boolean floatToStringSupport = false;
+    public boolean floatToDoubleSupport = true;
+    public boolean floatToStringSupport = true;
 
     // Double
-    public boolean doubleToStringSupport = false;
+    public boolean doubleToStringSupport = true;
 
     // String
-    public boolean stringToBytesSupport = false;
+    public boolean stringToBytesSupport = true;
 
     // Bytes
-    public boolean bytesToStringSupport = false;
+    public boolean bytesToStringSupport = true;
+
+    /**
+     * Creates a config with minimal schema evolution support (all type promotions disabled).
+     * Useful for testing basic schema evolution without type promotion complexity.
+     */
+    public static SchemaEvolutionConfigs createMinimalConfig() {
+      SchemaEvolutionConfigs config = new SchemaEvolutionConfigs();
+      config.addNewFieldSupport = false;
+      config.intToLongSupport = false;
+      config.intToFloatSupport = false;
+      config.intToDoubleSupport = false;
+      config.intToStringSupport = false;
+      config.longToFloatSupport = false;
+      config.longToDoubleSupport = false;
+      config.longToStringSupport = false;
+      config.floatToDoubleSupport = false;
+      config.floatToStringSupport = false;
+      config.doubleToStringSupport = false;
+      config.stringToBytesSupport = false;
+      config.bytesToStringSupport = false;
+      return config;
+    }
   }
 
   private enum SchemaEvolutionTypePromotionCase {
@@ -1607,6 +1629,21 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   }
 
   public void extendSchema(SchemaEvolutionConfigs configs, boolean isBefore) {
+    extendSchemaInternal(configs, isBefore, Option.empty());
+  }
+
+  /**
+   * Extends the schema with timestamp logical types for LONG fields.
+   *
+   * @param configs Schema evolution configuration
+   * @param isBefore Whether this is the "before" schema (pre-evolution)
+   * @param useMillis If true, uses timestamp-millis logical type; if false, uses timestamp-micros
+   */
+  public void extendSchemaWithTimestampLogicalType(SchemaEvolutionConfigs configs, boolean isBefore, boolean useMillis) {
+    extendSchemaInternal(configs, isBefore, Option.of(useMillis));
+  }
+
+  private void extendSchemaInternal(SchemaEvolutionConfigs configs, boolean isBefore, Option<Boolean> useMillis) {
     List<Schema.Type> baseFields = new ArrayList<>();
     for (SchemaEvolutionTypePromotionCase evolution : SchemaEvolutionTypePromotionCase.values()) {
       if (evolution.isEnabled.test(configs)) {
@@ -1619,7 +1656,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       baseFields.add(Schema.Type.BOOLEAN);
     }
 
-    this.extendedSchema = Option.of(generateExtendedSchema(configs, new ArrayList<>(baseFields), !isBefore));
+    this.extendedSchema = Option.of(generateExtendedSchema(configs, new ArrayList<>(baseFields), useMillis));
   }
 
   public void extendSchemaBeforeEvolution(SchemaEvolutionConfigs configs) {
@@ -1630,15 +1667,29 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     extendSchema(configs, false);
   }
 
+  /**
+   * Extends the schema before evolution with timestamp logical types.
+   */
+  public void extendSchemaBeforeEvolutionWithTimestampLogicalType(SchemaEvolutionConfigs configs, boolean useMillis) {
+    extendSchemaWithTimestampLogicalType(configs, true, useMillis);
+  }
+
+  /**
+   * Extends the schema after evolution with timestamp logical types.
+   */
+  public void extendSchemaAfterEvolutionWithTimestampLogicalType(SchemaEvolutionConfigs configs, boolean useMillis) {
+    extendSchemaWithTimestampLogicalType(configs, false, useMillis);
+  }
+
   public Schema getExtendedSchema() {
     return extendedSchema.orElseThrow(IllegalArgumentException::new);
   }
 
-  private static Schema generateExtendedSchema(SchemaEvolutionConfigs configs, List<Schema.Type> baseFields, boolean useMillis) {
+  private static Schema generateExtendedSchema(SchemaEvolutionConfigs configs, List<Schema.Type> baseFields, Option<Boolean> useMillis) {
     return generateExtendedSchema(configs.schema, configs, baseFields, "customField", true, useMillis);
   }
 
-  private static Schema generateExtendedSchema(Schema baseSchema, SchemaEvolutionConfigs configs, List<Schema.Type> baseFields, String fieldPrefix, boolean toplevel, boolean useMillis) {
+  private static Schema generateExtendedSchema(Schema baseSchema, SchemaEvolutionConfigs configs, List<Schema.Type> baseFields, String fieldPrefix, boolean toplevel, Option<Boolean> useMillis) {
     List<Schema.Field> fields =  baseSchema.getFields();
     List<Schema.Field> finalFields = new ArrayList<>(fields.size() + baseFields.size());
     boolean addedFields = false;
@@ -1664,7 +1715,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   }
 
   private static void addFields(SchemaEvolutionConfigs configs, List<Schema.Field> finalFields, List<Schema.Type> baseFields,
-                                String fieldPrefix, String namespace, boolean toplevel, boolean useMillis) {
+                                String fieldPrefix, String namespace, boolean toplevel, Option<Boolean> useMillis) {
     if (toplevel) {
       if (configs.mapSupport) {
         List<Schema.Field> mapFields = new ArrayList<>(baseFields.size());
@@ -1681,13 +1732,14 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     addFieldsHelper(finalFields, baseFields, fieldPrefix, useMillis);
   }
 
-  private static void addFieldsHelper(List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix, boolean useMillis) {
+  private static void addFieldsHelper(List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix, Option<Boolean> useMillis) {
     for (int i = 0; i < baseFields.size(); i++) {
       if (baseFields.get(i) == Schema.Type.BOOLEAN) {
         // boolean fields are added fields
         finalFields.add(new Schema.Field(fieldPrefix + i, AvroSchemaUtils.createNullableSchema(Schema.Type.BOOLEAN), "", null));
-      } else if (baseFields.get(i) == Schema.Type.LONG) {
-        if (useMillis) {
+      } else if (baseFields.get(i) == Schema.Type.LONG && useMillis.isPresent()) {
+        // Apply timestamp logical type only when useMillis is present
+        if (useMillis.get()) {
           finalFields.add(new Schema.Field(fieldPrefix + i, LogicalTypes.timestampMillis().addToSchema(Schema.create(baseFields.get(i))), "", null));
         } else {
           finalFields.add(new Schema.Field(fieldPrefix + i, LogicalTypes.timestampMicros().addToSchema(Schema.create(baseFields.get(i))), "", null));
@@ -1698,6 +1750,15 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     }
   }
 
+  // not truly random, but good enough for our purposes
+  private static long nextLong(Random random, long min, long max) {
+    if (min >= max) {
+      throw new IllegalArgumentException("max must be greater than min");
+    }
+    double fraction = random.nextDouble(); // value between 0.0 and 1.0
+    return min + (long)((max - min) * fraction);
+  }
+
   private void generateCustomValues(GenericRecord rec, String customPrefix) {
     for (Schema.Field field : rec.getSchema().getFields()) {
       if (field.name().startsWith(customPrefix)) {
@@ -1706,7 +1767,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
             rec.put(field.name(), rand.nextInt());
             break;
           case LONG:
-            rec.put(field.name(), 1720631224939L);
+            rec.put(field.name(), nextLong(rand, 1129918320000L, 1761084755188L));
             break;
           case FLOAT:
             rec.put(field.name(), rand.nextFloat());
