@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.utils;
 
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
@@ -82,6 +84,7 @@ class TestTransactionUtils extends HoodieCommonTestHarness {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(metaClient.getBasePath().toString())
         .withWriteConcurrencyMode(OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
         .build();
     metaClient.reloadActiveTimeline();
     HoodieTable table = mock(HoodieTable.class);
@@ -121,6 +124,7 @@ class TestTransactionUtils extends HoodieCommonTestHarness {
         .withPath(metaClient.getBasePath().toString())
         .withWriteConcurrencyMode(NON_BLOCKING_CONCURRENCY_CONTROL)
         .withProperties(props)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
         .build();
     metaClient.reloadActiveTimeline();
     HoodieTable table = mock(HoodieTable.class);
