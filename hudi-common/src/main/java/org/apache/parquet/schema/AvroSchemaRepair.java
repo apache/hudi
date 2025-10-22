@@ -35,10 +35,12 @@ public class AvroSchemaRepair {
     List<Schema.Field> repairedFields = new ArrayList<>();
 
     for (Schema.Field requestedField : requestedSchema.getFields()) {
-      Schema.Field repaired = requestedField;
       Schema.Field tableField = tableSchema.getField(requestedField.name());
+      Schema.Field repaired;
       if (tableField != null) {
         repaired = repairAvroField(requestedField, tableField);
+      } else {
+        repaired = new Schema.Field(requestedField.name(), requestedField.schema(), requestedField.doc(), requestedField.defaultVal());
       }
       repairedFields.add(repaired);
     }
