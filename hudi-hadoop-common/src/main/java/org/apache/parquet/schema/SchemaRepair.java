@@ -62,6 +62,7 @@ public class SchemaRepair {
       return new GroupType(
           reqGroup.getRepetition(),
           reqGroup.getName(),
+          reqGroup.getLogicalTypeAnnotation(),
           repairedNested.getFields()
       );
     } else {
