@@ -37,7 +37,7 @@ Depending on how you write to Hudi these are the possible options currently.
 *   Flink:
   *   Async compaction is enabled by default for Merge-On-Read table.
   *   Offline compaction can be achieved by setting `compaction.async.enabled` to `false` and periodically running [Flink offline Compactor](/docs/compaction/#flink-offline-compaction). When running the offline compactor, one needs to ensure there are no active writes to the table.
-  *   Third option (highly recommended over the second one) is to schedule the compactions from the regular ingestion job and executing the compaction plans from an offline job. To achieve this set `compaction.async.enabled` to `false`, `compaction.schedule.enabled` to `true` and then run the [Flink offline Compactor](compaction/#flink-offline-compaction) periodically to execute the plans.
+  *   Third option (highly recommended over the second one) is to schedule the compactions from the regular ingestion job and executing the compaction plans from an offline job. To achieve this set `compaction.async.enabled` to `false`, `compaction.schedule.enabled` to `true` and then run the [Flink offline Compactor](/docs/compaction/#flink-offline-compaction) periodically to execute the plans.
 
 ### How to disable all table services in case of multiple writers?
 
