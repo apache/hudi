@@ -52,6 +52,8 @@ public class HoodieReadStats implements Serializable {
   protected long totalCorruptLogBlock;
   // Total number of rollback blocks seen in a compaction operation
   protected long totalRollbackBlocks;
+  // Total number of corrupt log files
+  protected long totalCorruptLogFiles;
 
   public HoodieReadStats() {
   }
@@ -106,6 +108,10 @@ public class HoodieReadStats implements Serializable {
     return totalRollbackBlocks;
   }
 
+  public long getTotalCorruptLogFiles() {
+    return totalCorruptLogFiles;
+  }
+
   public void incrementNumInserts() {
     numInserts++;
   }
@@ -148,5 +154,9 @@ public class HoodieReadStats implements Serializable {
 
   public void setTotalRollbackBlocks(long totalRollbackBlocks) {
     this.totalRollbackBlocks = totalRollbackBlocks;
+  }
+
+  public void setTotalCorruptLogFiles(long totalCorruptLogFiles) {
+    this.totalCorruptLogFiles = totalCorruptLogFiles;
   }
 }
