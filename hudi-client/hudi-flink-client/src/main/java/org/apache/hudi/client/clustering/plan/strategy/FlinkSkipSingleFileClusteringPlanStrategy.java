@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
@@ -45,12 +46,13 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
  * Clustering Strategy based on following.
  * 1) Creates clustering groups based on max size allowed per group.
  * 2) Excludes files that are greater than 'small.file.limit' from clustering plan.
+ * 3) Skip partitions with only one small file
  */
-public class FlinkSizeBasedClusteringPlanStrategy<T>
+public class FlinkSkipSingleFileClusteringPlanStrategy<T>
     extends PartitionAwareClusteringPlanStrategy<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkSizeBasedClusteringPlanStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkSkipSingleFileClusteringPlanStrategy.class);
 
-  public FlinkSizeBasedClusteringPlanStrategy(HoodieTable table,
+  public FlinkSkipSingleFileClusteringPlanStrategy(HoodieTable table,
                                               HoodieEngineContext engineContext,
                                               HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
@@ -72,8 +74,20 @@ public class FlinkSizeBasedClusteringPlanStrategy<T>
 
   @Override
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(final String partition) {
-    return super.getFileSlicesEligibleForClustering(partition)
-        // Only files that have base file size smaller than small file size are eligible.
-        .filter(slice -> slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L) < getWriteConfig().getClusteringSmallFileLimit());
+    List<FileSlice> fileSlices = super.getFileSlicesEligibleForClustering(partition)
+            // Only files that have base file size smaller than small file size are eligible.
+            .filter(slice -> slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L)
+                    < getWriteConfig().getClusteringSmallFileLimit())
+            .collect(Collectors.toList());
+
+    //  if some special sort columns are declared, we can not skip the clustering.
+    if (!StringUtils.isNullOrEmpty(getWriteConfig().getClusteringSortColumns())) {
+      return fileSlices.stream();
+    }
+
+    if (fileSlices.size() > 1) {
+      return fileSlices.stream();
+    }
+    return Stream.empty();
   }
 }
