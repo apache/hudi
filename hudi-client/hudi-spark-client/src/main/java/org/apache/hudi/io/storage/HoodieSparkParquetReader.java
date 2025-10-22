@@ -40,6 +40,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.SchemaRepair;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
@@ -120,7 +121,9 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   public ClosableIterator<UnsafeRow> getUnsafeRowIterator(Schema requestedSchema) throws IOException {
     StructType structSchema = HoodieInternalRowUtils.getCachedSchema(requestedSchema);
     Option<MessageType> messageSchema = Option.of(getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(requestedSchema));
-    SparkBasicSchemaEvolution evolution = new SparkBasicSchemaEvolution(getStructSchema(), structSchema, SQLConf.get().sessionLocalTimeZone());
+    MessageType dataMessageType = SchemaRepair.repairLogicalTypes(getMessageType(), messageSchema);
+    StructType dataStructType = convertToStruct(dataMessageType);
+    SparkBasicSchemaEvolution evolution = new SparkBasicSchemaEvolution(dataStructType, structSchema, SQLConf.get().sessionLocalTimeZone());
     String readSchemaJson = evolution.getRequestSchema().json();
     storage.getConf().set(ParquetReadSupport.PARQUET_READ_SCHEMA, readSchemaJson);
     storage.getConf().set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA(), readSchemaJson);
@@ -165,10 +168,13 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   protected StructType getStructSchema() {
     if (structTypeOption.isEmpty()) {
       MessageType messageType = getMessageType();
-      StructType structType = new ParquetToSparkSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(messageType);
-      structTypeOption = Option.of(structType);
+      structTypeOption = Option.of(convertToStruct(messageType));
     }
     return structTypeOption.get();
+  }
+
+  private StructType convertToStruct(MessageType messageType) {
+    return new ParquetToSparkSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(messageType);
   }
 
   @Override
