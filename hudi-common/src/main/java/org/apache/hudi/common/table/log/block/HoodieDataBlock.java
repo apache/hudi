@@ -35,7 +35,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -86,9 +85,6 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
                          String keyFieldName) {
     super(header, footer, Option.empty(), Option.empty(), null, false);
     addRecordPositionsIfRequired(records, HoodieRecord::getCurrentPosition);
-    if (needsSortedOutput()) {
-      records.sort(Comparator.comparing(HoodieRecord::getRecordKey));
-    }
     this.records = Option.of(records);
     this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one
@@ -134,10 +130,6 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     }
 
     return serializeRecords(records.get(), storage);
-  }
-
-  protected boolean needsSortedOutput() {
-    return false;
   }
 
   public String getKeyFieldName() {
