@@ -23,7 +23,7 @@
 <li>Personalized portfolio recommendations</li>
 </ul>
 <p><img decoding="async" loading="lazy" src="https://hudi.apache.org/assets/images/fig1-3baa485e75ef728786f15b45d2d97d6b.png" width="1999" height="1312" class="img_ev3q"></p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="data-sources">Data Sources<a href="https://hudi.apache.org/blog/2025/10/16/Modernizing-Upstox-Data-Platform-with-Apache-Hudi-DBT-and-EMR-Serverless#data-sources" class="hash-link" aria-label="Direct link to Data Sources" title="Direct link to Data Sources">​</a></h2>
+<h3 class="anchor anchorWithStickyNavbar_LWe7" id="data-sources">Data Sources<a href="https://hudi.apache.org/blog/2025/10/16/Modernizing-Upstox-Data-Platform-with-Apache-Hudi-DBT-and-EMR-Serverless#data-sources" class="hash-link" aria-label="Direct link to Data Sources" title="Direct link to Data Sources">​</a></h3>
 <p>Upstox ingests 250–300 GB of structured and semi-structured data per day from a variety of sources:</p>
 <ul>
 <li>Order and transaction data from exchanges</li>
@@ -717,7 +717,7 @@
             <guid>https://hudi.apache.org/blog/2025/06/13/Optimizing-Apache-Hudi-Workflows-Automation-for-Clustering-Resizing-Concurrency</guid>
             <pubDate>Fri, 13 Jun 2025 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blog.datumagic.ai/p/apache-hudi-does-xyz-110">here</a></span>]]></content:encoded>
+            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blogs.halodoc.io/optimizing-apache-hudi-workflows-automation-for-clustering-resizing-concurrency/">here</a></span>]]></content:encoded>
             <category>hudi</category>
             <category>blog</category>
             <category>halodoc</category>
