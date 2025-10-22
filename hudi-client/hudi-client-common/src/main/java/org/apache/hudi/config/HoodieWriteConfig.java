@@ -1430,10 +1430,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP);
   }
 
-  public boolean shouldAllowLogicalEvolutions() {
-    return getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ALLOW_LOGICAL_EVOLUTION);
-  }
-
   public String getTableName() {
     return getString(TBL_NAME);
   }

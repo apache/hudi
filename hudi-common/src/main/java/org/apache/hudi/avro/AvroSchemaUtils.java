@@ -99,7 +99,7 @@ public class AvroSchemaUtils {
     }
 
     AvroSchemaCompatibility.SchemaPairCompatibility result =
-        AvroSchemaCompatibility.checkReaderWriterCompatibility(newSchema, prevSchema, checkNaming, true);
+        AvroSchemaCompatibility.checkReaderWriterCompatibility(newSchema, prevSchema, checkNaming);
     return result.getType() == AvroSchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
   }
 
@@ -586,7 +586,6 @@ public class AvroSchemaUtils {
    * @param shouldValidate whether {@link AvroSchemaCompatibility} check being performed
    * @param allowProjection whether column dropping check being performed
    * @param dropPartitionColNames partition column names to being excluded from column dropping check
-   * @param allowLogicalEvolutions should be true, except in the core table validation logic should be controlled by config
    * @throws SchemaCompatibilityException if writer schema is not compatible
    */
   public static void checkSchemaCompatible(
@@ -594,8 +593,7 @@ public class AvroSchemaUtils {
       Schema writerSchema,
       boolean shouldValidate,
       boolean allowProjection,
-      Set<String> dropPartitionColNames,
-      boolean allowLogicalEvolutions) throws SchemaCompatibilityException {
+      Set<String> dropPartitionColNames) throws SchemaCompatibilityException {
 
     if (!allowProjection) {
       List<Schema.Field> missingFields = findMissingFields(tableSchema, writerSchema, dropPartitionColNames);
@@ -608,7 +606,7 @@ public class AvroSchemaUtils {
     //                 being dropped from the data-file after fixing the write schema
     if (dropPartitionColNames.isEmpty() && shouldValidate) {
       AvroSchemaCompatibility.SchemaPairCompatibility result =
-          AvroSchemaCompatibility.checkReaderWriterCompatibility(writerSchema, tableSchema, true, allowLogicalEvolutions);
+          AvroSchemaCompatibility.checkReaderWriterCompatibility(writerSchema, tableSchema, true);
       if (result.getType() != AvroSchemaCompatibility.SchemaCompatibilityType.COMPATIBLE) {
         throw new SchemaBackwardsCompatibilityException(result, writerSchema, tableSchema);
       }
@@ -635,7 +633,7 @@ public class AvroSchemaUtils {
 
     //make sure that the table schema can be read using the incoming schema
     AvroSchemaCompatibility.SchemaPairCompatibility result =
-        AvroSchemaCompatibility.checkReaderWriterCompatibility(incomingSchema, tableSchema, false, true);
+        AvroSchemaCompatibility.checkReaderWriterCompatibility(incomingSchema, tableSchema, false);
     if (result.getType() != AvroSchemaCompatibility.SchemaCompatibilityType.COMPATIBLE) {
       throw new SchemaBackwardsCompatibilityException(result, incomingSchema, tableSchema);
     }
