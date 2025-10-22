@@ -27,8 +27,11 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
+import org.apache.avro.SchemaBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
@@ -36,7 +39,9 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -334,6 +339,71 @@ public class TestAvroSchemaUtils {
   @ValueSource(booleans = {false, true})
   public void testIsCompatibleProjectionAllowed(boolean shouldValidate) {
     AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, true, Collections.emptySet());
+  }
+
+  @ParameterizedTest(name = "[{index}] oldSize={0}, oldPrecision={1}, oldScale={2} -> newSize={3}, newPrecision={4}, newScale={5}")
+  @MethodSource("provideCompatibleDecimalSchemas")
+  void testCompatibleDecimalSchemas(int oldSize, int oldPrecision, int oldScale,
+                                    int newSize, int newPrecision, int newScale) {
+    Schema oldSchema = createFixedDecimalSchema(oldSize, oldPrecision, oldScale);
+    Schema newSchema = createFixedDecimalSchema(newSize, newPrecision, newScale);
+
+    assertDoesNotThrow(() ->
+            AvroSchemaUtils.checkSchemaCompatible(oldSchema, newSchema, true, false, Collections.emptySet()),
+        "Schemas should be compatible"
+    );
+  }
+
+  @ParameterizedTest(name = "[{index}] oldSize={0}, oldPrecision={1}, oldScale={2} -> newSize={3}, newPrecision={4}, newScale={5}")
+  @MethodSource("provideIncompatibleDecimalSchemas")
+  void testIncompatibleDecimalSchemas(int oldSize, int oldPrecision, int oldScale,
+                                      int newSize, int newPrecision, int newScale) {
+    Schema oldSchema = createFixedDecimalSchema(oldSize, oldPrecision, oldScale);
+    Schema newSchema = createFixedDecimalSchema(newSize, newPrecision, newScale);
+
+    assertThrows(Exception.class, () ->
+            AvroSchemaUtils.checkSchemaCompatible(oldSchema, newSchema, true, false, Collections.emptySet()),
+        "Schemas should be incompatible"
+    );
+  }
+
+  private static Stream<Arguments> provideCompatibleDecimalSchemas() {
+    return Stream.of(
+        // Same size, same precision and scale
+        Arguments.of(8, 10, 2, 8, 10, 2),
+
+        // Same size, increased precision, same scale
+        Arguments.of(8, 10, 2, 8, 15, 2),
+
+        // Same size, increased precision and increased scale
+        Arguments.of(16, 20, 5, 16, 25, 10)
+    );
+  }
+
+  private static Stream<Arguments> provideIncompatibleDecimalSchemas() {
+    return Stream.of(
+        // Same size, decreased precision
+        Arguments.of(8, 15, 2, 8, 10, 2),
+
+        // Same size, same precision, increased scale
+        Arguments.of(8, 10, 2, 8, 10, 5),
+
+        // Same size, decreased precision, same scale
+        Arguments.of(16, 25, 3, 16, 20, 3),
+
+        // Same size, both decreased precision and increased scale
+        Arguments.of(8, 18, 4, 8, 15, 6)
+    );
+  }
+
+  private Schema createFixedDecimalSchema(int size, int precision, int scale) {
+    Schema fixedSchema = SchemaBuilder.fixed("FixedDecimal").size(size);
+    Schema decimalSchema = LogicalTypes.decimal(precision, scale).addToSchema(fixedSchema);
+
+    return SchemaBuilder.record("FixedDecimalSchema")
+        .fields()
+        .name("decimalField").type(decimalSchema).noDefault()
+        .endRecord();
   }
 
   @ParameterizedTest
