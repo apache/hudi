@@ -1615,7 +1615,7 @@ public class HoodieAvroUtils {
   }
 
   public static GenericRecord rewriteRecordDeep(GenericRecord oldRecord, Schema newSchema) {
-    return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.EMPTY_MAP, false);
+    return rewriteRecordWithNewSchema(oldRecord, newSchema, Collections.EMPTY_MAP);
   }
 
   public static GenericRecord rewriteRecordDeep(GenericRecord oldRecord, Schema newSchema, boolean validate) {
