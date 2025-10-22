@@ -1,7 +1,8 @@
 ---
-title: General
+title: General FAQ
 keywords: [hudi, writing, reading]
 ---
+
 # General FAQ
 
 ### When is Hudi useful for me or my organization?

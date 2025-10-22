@@ -1,7 +1,8 @@
 ---
-title: Reading Tables
+title: Reading Tables FAQ
 keywords: [hudi, writing, reading]
 ---
+
 # Reading Tables FAQ
 
 ### Does deleted records appear in Hudi's incremental query results?

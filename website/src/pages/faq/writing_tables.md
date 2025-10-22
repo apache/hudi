@@ -1,7 +1,8 @@
 ---
-title: Writing Tables
+title: Writing Tables FAQ
 keywords: [hudi, writing, reading]
 ---
+
 # Writing Tables FAQ
 
 ### What are some ways to write a Hudi table?

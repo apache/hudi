@@ -1,7 +1,8 @@
 ---
-title: Storage
+title: Storage FAQ
 keywords: [hudi, writing, reading]
 ---
+
 # Storage FAQ
 
 ### Does Hudi support cloud storage/object stores?

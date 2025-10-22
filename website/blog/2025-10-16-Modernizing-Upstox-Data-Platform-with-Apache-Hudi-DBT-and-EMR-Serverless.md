@@ -23,7 +23,7 @@ Upstox is a leading online trading platform that enables millions of users to in
 
 ![](/assets/images/blog/2025-10-16-Modernizing-Upstox-Data-Platform-with-Apache-Hudi-DBT-and-EMR-Serverless/fig1.png)
 
-## Data Sources
+### Data Sources
 
 Upstox ingests 250–300 GB of structured and semi-structured data per day from a variety of sources:
 
