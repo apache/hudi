@@ -107,7 +107,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
             .filter(f -> f.isFile())
             .map(file -> file.getPath().getName()).collect(Collectors.toList());
         List<String> residualSchemaFiles =
-            candidateSchemaFiles.stream().filter(f -> !validateCommits.contains(f.split("\\.")[0]))
+            candidateSchemaFiles.stream().filter(f -> !validateCommits.contains(getMetaClient().getInstantFileNameParser().extractTimestamp(f)))
                 .collect(Collectors.toList());
         // clean residual files
         residualSchemaFiles.forEach(f -> {
