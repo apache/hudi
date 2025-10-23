@@ -1714,6 +1714,11 @@
         <artifactId>jaxb-api</artifactId>
         <version>2.3.1</version>
       </dependency>
+      <dependency>
+        <groupId>com.jamesmurty.utils</groupId>
+        <artifactId>java-xmlbuilder</artifactId>
+        <version>1.2</version>
+      </dependency>
 
       <!--  Spring Boot  -->
       <dependency>
