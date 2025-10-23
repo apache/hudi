@@ -34,9 +34,57 @@ public class SchemaRepair {
   }
 
   static MessageType repairLogicalTypes(MessageType requestedSchema, MessageType tableSchema) {
-    List<Type> repairedFields = new ArrayList<>();
+    List<Type> repairedFields = repairFields(requestedSchema.getFields(), tableSchema);
 
-    for (Type requestedField : requestedSchema.getFields()) {
+    // If nothing changed, return the original schema
+    if (repairedFields == null) {
+      return requestedSchema;
+    }
+
+    return new MessageType(requestedSchema.getName(), repairedFields);
+  }
+
+  /**
+   * Repairs a list of fields against a table schema (MessageType or GroupType).
+   * Returns null if no changes were made, otherwise returns the repaired field list.
+   */
+  private static List<Type> repairFields(List<Type> requestedFields, GroupType tableSchema) {
+    // First pass: find the first field that changes
+    int firstChangedIndex = -1;
+    Type firstRepairedField = null;
+
+    for (int i = 0; i < requestedFields.size(); i++) {
+      Type requestedField = requestedFields.get(i);
+      if (tableSchema.containsField(requestedField.getName())) {
+        Type tableField = tableSchema.getType(requestedField.getName());
+        Type repaired = repairField(requestedField, tableField);
+        if (repaired != requestedField) {
+          firstChangedIndex = i;
+          firstRepairedField = repaired;
+          break;
+        }
+      }
+    }
+
+    // If nothing changed, return null
+    if (firstChangedIndex == -1) {
+      return null;
+    }
+
+    // Second pass: build the new field list with repaired fields
+    List<Type> repairedFields = new ArrayList<>(requestedFields.size());
+
+    // Copy all fields before the first changed field
+    for (int i = 0; i < firstChangedIndex; i++) {
+      repairedFields.add(requestedFields.get(i));
+    }
+
+    // Add the first changed field (using cached repaired field)
+    repairedFields.add(firstRepairedField);
+
+    // Process remaining fields
+    for (int i = firstChangedIndex + 1; i < requestedFields.size(); i++) {
+      Type requestedField = requestedFields.get(i);
       Type repaired = requestedField;
       if (tableSchema.containsField(requestedField.getName())) {
         Type tableField = tableSchema.getType(requestedField.getName());
@@ -45,7 +93,7 @@ public class SchemaRepair {
       repairedFields.add(repaired);
     }
 
-    return new MessageType(requestedSchema.getName(), repairedFields);
+    return repairedFields;
   }
 
   private static Type repairField(Type requested, Type table) {
@@ -55,15 +103,20 @@ public class SchemaRepair {
       // recurse into nested structs
       GroupType reqGroup = requested.asGroupType();
       GroupType tblGroup = table.asGroupType();
-      MessageType nestedReq = new MessageType(reqGroup.getName(), reqGroup.getFields());
-      MessageType nestedTbl = new MessageType(tblGroup.getName(), tblGroup.getFields());
-      MessageType repairedNested = repairLogicalTypes(nestedReq, nestedTbl);
+
+      // Repair fields directly without creating MessageType intermediaries
+      List<Type> repairedFields = repairFields(reqGroup.getFields(), tblGroup);
+
+      // If nothing changed, return the original field
+      if (repairedFields == null) {
+        return requested;
+      }
 
       return new GroupType(
           reqGroup.getRepetition(),
           reqGroup.getName(),
           reqGroup.getLogicalTypeAnnotation(),
-          repairedNested.getFields()
+          repairedFields
       );
     } else {
       // fallback: keep requested
@@ -72,40 +125,38 @@ public class SchemaRepair {
   }
 
   private static PrimitiveType repairPrimitiveType(PrimitiveType requested, PrimitiveType table) {
-    LogicalTypeAnnotation reqLogical = requested.getLogicalTypeAnnotation();
-    LogicalTypeAnnotation tblLogical = table.getLogicalTypeAnnotation();
-
-    boolean useTableType = false;
-
-    // Rule 1: requested is timestamp(micros), table is timestamp(millis)
-    if (reqLogical instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
-        && tblLogical instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) {
-
-      LogicalTypeAnnotation.TimestampLogicalTypeAnnotation reqTs = (LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) reqLogical;
-      LogicalTypeAnnotation.TimestampLogicalTypeAnnotation tblTs = (LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) tblLogical;
-
-      if (reqTs.getUnit() == LogicalTypeAnnotation.TimeUnit.MICROS
-          && tblTs.getUnit() == LogicalTypeAnnotation.TimeUnit.MILLIS
-          && tblTs.isAdjustedToUTC()
-          && reqTs.isAdjustedToUTC()) {
-        useTableType = true;
-      }
-    }
-
-    // Rule 2: requested is LONG (no logical type), table is local-timestamp
-    if (reqLogical == null
-        && requested.getPrimitiveTypeName() == PrimitiveType.PrimitiveTypeName.INT64
-        && tblLogical instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
-        && !((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) tblLogical).isAdjustedToUTC()) {
-      useTableType = true;
-    }
-
-    if (useTableType) {
+    // Quick check if repair is needed (no allocations)
+    if (needsLogicalTypeRepair(requested, table)) {
       return Types.primitive(table.getPrimitiveTypeName(), requested.getRepetition())
           .as(table.getLogicalTypeAnnotation())
           .named(requested.getName());
-    } else {
-      return requested;
     }
+    return requested;
+  }
+
+  /**
+   * Quick check if a logical type repair is needed (no allocations).
+   */
+  private static boolean needsLogicalTypeRepair(PrimitiveType requested, PrimitiveType table) {
+    if (requested.getPrimitiveTypeName() != PrimitiveType.PrimitiveTypeName.INT64
+        || table.getPrimitiveTypeName() != PrimitiveType.PrimitiveTypeName.INT64) {
+      return false;
+    }
+    LogicalTypeAnnotation reqLogical = requested.getLogicalTypeAnnotation();
+    LogicalTypeAnnotation tblLogical = table.getLogicalTypeAnnotation();
+
+    // if requested has no logical type, and the table has a local timestamp, then we need to repair
+    if (reqLogical == null) {
+      return tblLogical instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
+          && !((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) tblLogical).isAdjustedToUTC();
+    }
+
+    // if requested is timestamp-micros and table is timestamp-millis then we need to repair
+    return reqLogical instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
+        && tblLogical instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
+        && ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) reqLogical).getUnit() == LogicalTypeAnnotation.TimeUnit.MICROS
+        && ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) tblLogical).getUnit() == LogicalTypeAnnotation.TimeUnit.MILLIS
+        && ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) reqLogical).isAdjustedToUTC()
+        && ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) tblLogical).isAdjustedToUTC();
   }
 }
