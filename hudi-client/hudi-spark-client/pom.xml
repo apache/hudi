@@ -94,6 +94,12 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
 
+    <!-- Lance Spark for Arrow conversion -->
+    <dependency>
+      <groupId>com.lancedb</groupId>
+      <artifactId>lance-spark-base_${scala.binary.version}</artifactId>
+    </dependency>
+
     <!-- Used for adding kryo serializers for protobuf -->
     <dependency>
       <groupId>com.twitter</groupId>

@@ -167,6 +167,13 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
     Spark40OrcReader.build(vectorized, sqlConf, options, hadoopConf, dataSchema)
   }
 
+  override def createLanceFileReader(vectorized: Boolean,
+                                     sqlConf: SQLConf,
+                                     options: Map[String, String],
+                                     hadoopConf: Configuration): SparkColumnarFileReader = {
+    throw new UnsupportedOperationException("Lance format is not supported in Spark 4.0")
+  }
+
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {
     jssc.sc.stop(exitCode)
   }

@@ -238,6 +238,9 @@
     <springboot.version>2.7.3</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>
     <snappy.version>1.1.10.7</snappy.version>
+    <arrow.version>18.3.0</arrow.version>
+    <lance.version>0.38.0</lance.version>
+    <lance.spark.connector.version>0.0.13</lance.spark.connector.version>
     <!-- The following properties are only used for Jacoco coverage report aggregation -->
     <copy.files>false</copy.files>
     <copy.files.target.dir>${maven.multiModuleProjectDirectory}</copy.files.target.dir>
@@ -897,7 +900,29 @@
         <version>${orc.spark.version}</version>
         <scope>compile</scope>
       </dependency>
-
+      <!-- Lance Core SDK -->
+      <dependency>
+        <groupId>com.lancedb</groupId>
+        <artifactId>lance-core</artifactId>
+        <version>${lance.version}</version>
+      </dependency>
+      <!-- Lance Spark for Arrow conversion -->
+      <dependency>
+        <groupId>com.lancedb</groupId>
+        <artifactId>lance-spark-base_${scala.binary.version}</artifactId>
+        <version>${lance.spark.connector.version}</version>
+      </dependency>
+      <!-- Apache Arrow -->
+      <dependency>
+        <groupId>org.apache.arrow</groupId>
+        <artifactId>arrow-vector</artifactId>
+        <version>${arrow.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.arrow</groupId>
+        <artifactId>arrow-memory-netty</artifactId>
+        <version>${arrow.version}</version>
+      </dependency>
       <!-- RoaringBitmap -->
       <dependency>
         <groupId>org.roaringbitmap</groupId>
