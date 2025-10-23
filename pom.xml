@@ -218,14 +218,14 @@
     <trino.bundle.bootstrap.shade.prefix>org.apache.hudi.</trino.bundle.bootstrap.shade.prefix>
     <twitter.chill.version>0.10.0</twitter.chill.version>
     <shadeSources>true</shadeSources>
-    <zk-curator.version>5.7.1</zk-curator.version>
+    <zk-curator.version>5.6.0</zk-curator.version>
     <disruptor.version>3.4.2</disruptor.version>
     <antlr.version>4.8</antlr.version>
     <aws.sdk.version>2.29.52</aws.sdk.version>
     <proto.version>3.25.5</proto.version>
     <protoc.version>3.25.5</protoc.version>
     <dynamodb.lockclient.version>1.2.0</dynamodb.lockclient.version>
-    <zookeeper.version>3.5.7</zookeeper.version>
+    <zookeeper.version>3.7.2</zookeeper.version>
     <openjdk.jol.version>0.16</openjdk.jol.version>
     <google.cloud.pubsub.version>1.120.0</google.cloud.pubsub.version>
     <gcp-libraries-bom.version>26.15.0</gcp-libraries-bom.version>
@@ -1586,6 +1586,12 @@
         <groupId>org.apache.curator</groupId>
         <artifactId>curator-recipes</artifactId>
         <version>${zk-curator.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.apache.zookeeper</groupId>
+        <artifactId>zookeeper</artifactId>
+        <version>${zookeeper.version}</version>
       </dependency>
 
       <!-- Protobuf -->
