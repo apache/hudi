@@ -3624,13 +3624,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       // is properly set to LAZY for multi-writers
       WriteConcurrencyMode writeConcurrencyMode = writeConfig.getWriteConcurrencyMode();
       if (writeConcurrencyMode.supportsMultiWriter()) {
-        // Validate if a lock provide class is set properly.
-        if (StringUtils.isNullOrEmpty(writeConfig.getLockProviderClass())) {
-          throw new IllegalArgumentException(
-              "To support multi-writer scenarios, "
-                  + "configuration 'hoodie.write.lock.provider' should be set properly.");
-        }
-
         // In this case, we assume that the user takes care of setting the lock provider used
         writeConfig.setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
             HoodieFailedWritesCleaningPolicy.LAZY.name());

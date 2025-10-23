@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -222,6 +223,12 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
           .withEngineType(EngineType.SPARK)
           .withProps(configs)
           .build();
+      // Validate if a lock provide class is set properly.
+      if (localWriteConfig.getWriteConcurrencyMode().supportsMultiWriter() && StringUtils.isNullOrEmpty(localWriteConfig.getLockProviderClass())) {
+        throw new IllegalArgumentException(
+            "To support multi-writer scenarios, configuration 'hoodie.write.lock.provider' should be set properly. "
+                + "For single writer InProcessLockProvider can be used.");
+      }
       return new SparkRDDWriteClient(engineContextOpt.get(), localWriteConfig, Option.empty());
     } catch (Exception e) {
       throw new HoodieException("Failed to create write client while performing index operation ", e);

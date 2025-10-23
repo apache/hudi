@@ -645,14 +645,13 @@ public class TestHoodieWriteConfig {
                 .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE)
                 .build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL)
-        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
         .build();
 
     // Verify automatically set hoodie.clean.failed.writes.policy=LAZY for non-blocking concurrency control
     verifyConcurrencyControlRelatedConfigs(writeConfig,
         true, true, true,
         WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL, HoodieFailedWritesCleaningPolicy.LAZY,
-        InProcessLockProvider.class.getName());
+        null);
   }
 
   @Test
