@@ -1112,9 +1112,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       HoodieTableMetaClient metaClient = table.getMetaClient();
       // For secondary index and expression index with wrong parameters, index definition for the MDT partition is
       // removed so that such indices are not recreated while initializing the writer.
+      // Also remove index definitions for col stats and partition stats when they are dropped (e.g., during downgrade).
       metadataPartitions.forEach(partition -> {
-        if (MetadataPartitionType.isExpressionOrSecondaryIndex(partition)) {
-          metaClient.deleteIndexDefinition(partition);
+        if (MetadataPartitionType.isExpressionOrSecondaryIndex(partition)
+            || partition.equals(MetadataPartitionType.COLUMN_STATS.getPartitionPath())
+            || partition.equals(MetadataPartitionType.PARTITION_STATS.getPartitionPath())) {
+          metaClient.getIndexForMetadataPartition(partition).ifPresent(indexDef -> {
+            metaClient.deleteIndexDefinition(partition);
+          });
         }
       });
 
