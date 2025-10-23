@@ -21,6 +21,7 @@ package org.apache.hudi.common.table;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
@@ -50,6 +51,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.Collections;
@@ -257,10 +259,15 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertEquals(7, config.getProps().size());
 
     // 2. Backup properties file is also invalid
+    try (InputStream in = storage.open(cfgPath);
+            OutputStream out = storage.create(backupCfgPath)) {
+      TypedProperties props = new TypedProperties();
+      props.load(in);
+      // Keeping the invalid checksum
+      props.setProperty(TABLE_CHECKSUM.key(), "000000000");
+      props.store(out, "");
+    }
     storage.deleteFile(cfgPath);
-    // create the empty files
-    storage.create(cfgPath);
-    storage.create(backupCfgPath);
     assertThrows(IOException.class, () -> recoverIfNeeded(storage, cfgPath, backupCfgPath));
     assertFalse(storage.exists(backupCfgPath));
     assertFalse(storage.exists(cfgPath));
