@@ -218,7 +218,7 @@
     <trino.bundle.bootstrap.shade.prefix>org.apache.hudi.</trino.bundle.bootstrap.shade.prefix>
     <twitter.chill.version>0.10.0</twitter.chill.version>
     <shadeSources>true</shadeSources>
-    <zk-curator.version>2.7.1</zk-curator.version>
+    <zk-curator.version>5.7.1</zk-curator.version>
     <disruptor.version>3.4.2</disruptor.version>
     <antlr.version>4.8</antlr.version>
     <aws.sdk.version>2.29.52</aws.sdk.version>
