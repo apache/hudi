@@ -17,6 +17,7 @@
     <properties>
         <air.compiler.fail-warnings>true</air.compiler.fail-warnings>
         <dep.hudi.version>1.0.2</dep.hudi.version>
+        <trino.parquet.version>1.15.1</trino.parquet.version>
     </properties>
 
     <dependencies>
