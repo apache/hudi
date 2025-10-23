@@ -27,6 +27,8 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters.asScalaIteratorConverter
 
@@ -49,9 +51,10 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     spark = null
   }
 
-  @Test
-  def testBasicWriteAndRead(): Unit = {
-    val tableName = "test_lance_table"
+  @ParameterizedTest
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testBasicWriteAndRead(tableType: String): Unit = {
+    val tableName = s"test_lance_table_${tableType.toLowerCase}"
     val tablePath = s"$basePath/$tableName"
 
     // Create test data
@@ -66,6 +69,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
@@ -100,9 +104,10 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assertEquals(92.1, result(2).getDouble(3), 0.01)
   }
 
-  @Test
-  def testSchemaProjection(): Unit = {
-    val tableName = "test_lance_projection"
+  @ParameterizedTest
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testSchemaProjection(tableType: String): Unit = {
+    val tableName = s"test_lance_projection_${tableType.toLowerCase}"
     val tablePath = s"$basePath/$tableName"
 
     // Create test data with multiple columns
@@ -117,6 +122,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
@@ -147,9 +153,10 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assertEquals("Charlie", result(2).getString(1))
   }
 
-  @Test
-  def testWhereClauseFiltering(): Unit = {
-    val tableName = "test_lance_where"
+  @ParameterizedTest
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testWhereClauseFiltering(tableType: String): Unit = {
+    val tableName = s"test_lance_where_${tableType.toLowerCase}"
     val tablePath = s"$basePath/$tableName"
 
     // Create test data
@@ -166,6 +173,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
@@ -213,9 +221,10 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assertEquals("Eve", filteredComplex(2).getAs[String]("name"))
   }
 
-  @Test
-  def testMultipleBulkInsertsWithCommitValidation(): Unit = {
-    val tableName = "test_lance_multiple_inserts"
+  @ParameterizedTest
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testMultipleBulkInsertsWithCommitValidation(tableType: String): Unit = {
+    val tableName = s"test_lance_multiple_inserts_${tableType.toLowerCase}"
     val tablePath = s"$basePath/$tableName"
 
     // First insert - records 1-3
@@ -229,6 +238,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df1.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
@@ -249,6 +259,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df2.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
@@ -269,6 +280,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df3.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
@@ -290,11 +302,6 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     // Verify that all commits are bulk_insert commits
     val commits = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.iterator().asScala.toList
     assertEquals(3, commits.size, "Should have exactly 3 commits")
-
-    // Check that each commit is a COMMIT action (bulk_insert creates COMMIT actions)
-    commits.foreach { instant =>
-      assertEquals("commit", instant.getAction, s"Instant ${instant.requestedTime()} should be a commit action")
-    }
 
     // Read back all data and verify total record count
     val readDf = spark.read
@@ -328,9 +335,10 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assertEquals(94.8, result(8).getDouble(3), 0.01)
   }
 
-  @Test
-  def testTimeTravel(): Unit = {
-    val tableName = "test_lance_time_travel"
+  @ParameterizedTest
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testTimeTravel(tableType: String): Unit = {
+    val tableName = s"test_lance_time_travel_${tableType.toLowerCase}"
     val tablePath = s"$basePath/$tableName"
 
     // First insert - records 1-3
@@ -344,12 +352,12 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df1.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
       .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
       .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
-      .option(OPERATION.key(), "bulk_insert")
       .mode(SaveMode.Overwrite)
       .save(tablePath)
 
@@ -364,12 +372,12 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df2.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
       .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
       .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
-      .option(OPERATION.key(), "bulk_insert")
       .mode(SaveMode.Append)
       .save(tablePath)
 
@@ -394,12 +402,12 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df3.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
       .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
       .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
-      .option(OPERATION.key(), "bulk_insert")
       .mode(SaveMode.Append)
       .save(tablePath)
 
@@ -428,9 +436,10 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assertEquals(85.7, result(5).getDouble(3), 0.01)
   }
 
-  @Test
-  def testMultipleRegularInsertsWithCommitValidation(): Unit = {
-    val tableName = "test_lance_regular_inserts"
+  @ParameterizedTest
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testMultipleRegularInsertsWithCommitValidation(tableType: String): Unit = {
+    val tableName = s"test_lance_regular_inserts_${tableType.toLowerCase}"
     val tablePath = s"$basePath/$tableName"
 
     // First insert - records 1-3 using regular insert
@@ -444,6 +453,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df1.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
@@ -464,6 +474,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df2.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
@@ -486,9 +497,11 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     val commits = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.iterator().asScala.toList
     assertEquals(2, commits.size, "Should have exactly 2 commits")
 
-    // Check that each commit is a COMMIT action (insert creates COMMIT actions)
+    // Verify commit action types based on table type
+    val expectedAction = if (tableType == "COPY_ON_WRITE") "commit" else "deltacommit"
     commits.foreach { instant =>
-      assertEquals("commit", instant.getAction, s"Instant ${instant.requestedTime()} should be a commit action")
+      assertEquals(expectedAction, instant.getAction,
+        s"Instant ${instant.requestedTime()} should be a $expectedAction action for $tableType table")
     }
 
     // Read back all data and verify total record count
@@ -526,9 +539,10 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assertEquals(85.7, result(5).getDouble(3), 0.01)
   }
 
-  @Test
-  def testBasicUpsertModifyExistingRow(): Unit = {
-    val tableName = "test_lance_upsert"
+  @ParameterizedTest
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testBasicUpsertModifyExistingRow(tableType: String): Unit = {
+    val tableName = s"test_lance_upsert_${tableType.toLowerCase}"
     val tablePath = s"$basePath/$tableName"
 
     // Initial insert - 3 records
@@ -542,6 +556,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df1.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
@@ -560,6 +575,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df2.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
@@ -579,6 +595,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df3.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
@@ -596,6 +613,14 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     val commitCount = metaClient.getCommitsTimeline.filterCompletedInstants().countInstants()
     assertEquals(3, commitCount, "Should have 3 completed commits (insert + 2 upserts)")
+
+    // Verify commit action types based on table type
+    val expectedAction = if (tableType == "COPY_ON_WRITE") "commit" else "deltacommit"
+    val commits = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.iterator().asScala.toList
+    commits.foreach { instant =>
+      assertEquals(expectedAction, instant.getAction,
+        s"Instant ${instant.requestedTime()} should be a $expectedAction action for $tableType table")
+    }
 
     // Read and verify data
     val readDf = spark.read.format("hudi").load(tablePath)
@@ -629,9 +654,10 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assertEquals(88.0, result(3).getDouble(3), 0.01)
   }
 
-  @Test
-  def testBasicDeleteOperation(): Unit = {
-    val tableName = "test_lance_delete"
+  @ParameterizedTest
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testBasicDeleteOperation(tableType: String): Unit = {
+    val tableName = s"test_lance_delete_${tableType.toLowerCase}"
     val tablePath = s"$basePath/$tableName"
 
     // Initial insert - 5 records
@@ -647,6 +673,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df1.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
@@ -667,6 +694,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     deleteDF.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
@@ -684,6 +712,14 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     val commitCount = metaClient.getCommitsTimeline.filterCompletedInstants().countInstants()
     assertEquals(2, commitCount, "Should have 2 completed commits (insert + delete)")
+
+    // Verify commit action types based on table type
+    val expectedAction = if (tableType == "COPY_ON_WRITE") "commit" else "deltacommit"
+    val commits = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.iterator().asScala.toList
+    commits.foreach { instant =>
+      assertEquals(expectedAction, instant.getAction,
+        s"Instant ${instant.requestedTime()} should be a $expectedAction action for $tableType table")
+    }
 
     // Read and verify data
     val readDf = spark.read.format("hudi").load(tablePath)
@@ -716,9 +752,10 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assert(!ids.contains(4), "David (id=4) should be deleted")
   }
 
-  @Test
-  def testIncrementalQuery(): Unit = {
-    val tableName = "test_lance_incremental"
+  @ParameterizedTest
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testIncrementalQuery(tableType: String): Unit = {
+    val tableName = s"test_lance_incremental_${tableType.toLowerCase}"
     val tablePath = s"$basePath/$tableName"
 
     // First insert - records 1-3
@@ -732,12 +769,12 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df1.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
       .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
       .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
-      .option(OPERATION.key(), "bulk_insert")
       .mode(SaveMode.Overwrite)
       .save(tablePath)
 
@@ -752,12 +789,12 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df2.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
       .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
       .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
-      .option(OPERATION.key(), "bulk_insert")
       .mode(SaveMode.Append)
       .save(tablePath)
 
@@ -782,12 +819,12 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     df3.write
       .format("hudi")
       .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
       .option(RECORDKEY_FIELD.key(), "id")
       .option(PRECOMBINE_FIELD.key(), "age")
       .option(TABLE_NAME.key(), tableName)
       .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
       .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
-      .option(OPERATION.key(), "bulk_insert")
       .mode(SaveMode.Append)
       .save(tablePath)
 

@@ -110,6 +110,7 @@ public class CommonClientUtils {
     }
     HoodieFileFormat baseFileFormat = getBaseFileFormat(writeConfig, tableConfig);
     switch (getBaseFileFormat(writeConfig, tableConfig)) {
+      case LANCE:
       case PARQUET:
       case ORC:
         return HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
