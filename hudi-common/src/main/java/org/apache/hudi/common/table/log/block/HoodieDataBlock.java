@@ -62,7 +62,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   // TODO rebase records/content to leverage Either to warrant
   //      that they are mutex (used by read/write flows respectively)
-  private final Option<List<HoodieRecord>> records;
+  protected Option<List<HoodieRecord>> records;
 
   /**
    * Key field's name w/in the record's schema
