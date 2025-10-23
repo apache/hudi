@@ -23,26 +23,187 @@ import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 
+import org.apache.hudi.avro.AvroSchemaCache;
+import org.apache.hudi.avro.AvroSchemaUtils;
+
 import java.util.ArrayList;
 import java.util.List;
 
 public class AvroSchemaRepair {
   public static Schema repairLogicalTypes(Schema requestedSchema, Schema tableSchema) {
-    if (requestedSchema.getType() != Schema.Type.RECORD) {
+    Schema repairedSchema = repairAvroSchema(requestedSchema, tableSchema);
+    if (repairedSchema != requestedSchema) {
+      return AvroSchemaCache.intern(repairedSchema);
+    }
+    return requestedSchema;
+  }
+
+  /**
+   * Performs schema repair on a schema, handling nullable unions.
+   */
+  private static Schema repairAvroSchema(Schema requested, Schema table) {
+    // Always resolve nullable schemas first (returns unchanged if not a union)
+    Schema requestedNonNull = AvroSchemaUtils.resolveNullableSchema(requested);
+    Schema tableNonNull = AvroSchemaUtils.resolveNullableSchema(table);
+
+    // Perform repair on the non-null types
+    Schema repairedNonNull = repairAvroSchemaNonNull(requestedNonNull, tableNonNull);
+
+    // If nothing changed, return the original schema
+    if (repairedNonNull == requestedNonNull) {
+      return requested;
+    }
+
+    // If the original was a union, wrap the repaired schema back in a nullable union
+    if (requested.getType() == Schema.Type.UNION) {
+      return AvroSchemaUtils.createNullableSchema(repairedNonNull);
+    }
+
+    return repairedNonNull;
+  }
+
+  /**
+   * Repairs non-nullable schemas (after unions have been resolved).
+   */
+  private static Schema repairAvroSchemaNonNull(Schema requested, Schema table) {
+    // If schemas are already equal, nothing to repair
+    if (requested.equals(table)) {
+      return requested;
+    }
+
+    // If types are different, no repair can be done
+    if (requested.getType() != table.getType()) {
+      return requested;
+    }
+
+    // Handle record types (nested structs)
+    if (requested.getType() == Schema.Type.RECORD) {
+      return repairRecord(requested, table);
+    }
+
+    // Handle array types
+    if (requested.getType() == Schema.Type.ARRAY) {
+      Schema repairedElementSchema = repairAvroSchema(requested.getElementType(), table.getElementType());
+      // If element didn't change, return original array schema
+      if (repairedElementSchema == requested.getElementType()) {
+        return requested;
+      }
+      return Schema.createArray(repairedElementSchema);
+    }
+
+    // Handle map types
+    if (requested.getType() == Schema.Type.MAP) {
+      Schema repairedValueSchema = repairAvroSchema(requested.getValueType(), table.getValueType());
+      // If value didn't change, return original map schema
+      if (repairedValueSchema == requested.getValueType()) {
+        return requested;
+      }
+      return Schema.createMap(repairedValueSchema);
+    }
+
+    // Check primitive if we need to repair
+    if (needsLogicalTypeRepair(requested, table)) {
+      // If we need to repair, return the table schema
+      return table;
+    }
+
+    // Default: return requested schema
+    return requested;
+  }
+
+  /**
+   * Quick check if a logical type repair is needed (no allocations).
+   */
+  private static boolean needsLogicalTypeRepair(Schema requested, Schema table) {
+    if (requested.getType() != Schema.Type.LONG || table.getType() != Schema.Type.LONG) {
+      return false;
+    }
+
+    LogicalType reqLogical = requested.getLogicalType();
+    LogicalType tblLogical = table.getLogicalType();
+
+    // if requested has no logical type, and the table has a local timestamp, then we need to repair
+    if (reqLogical == null) {
+      return tblLogical instanceof LogicalTypes.LocalTimestampMillis
+          || tblLogical instanceof LogicalTypes.LocalTimestampMicros;
+    }
+
+    // if requested is timestamp-micros, and the table is timestamp-millis, then we need to repair
+    return reqLogical instanceof LogicalTypes.TimestampMicros
+        && tblLogical instanceof LogicalTypes.TimestampMillis;
+  }
+
+  /**
+   * Performs record repair, returning the original schema if nothing changed.
+   */
+  private static Schema repairRecord(Schema requestedSchema, Schema tableSchema) {
+    List<Schema.Field> fields = requestedSchema.getFields();
+
+    // First pass: find the first field that changes
+    int firstChangedIndex = -1;
+    Schema firstRepairedSchema = null;
+
+    for (int i = 0; i < fields.size(); i++) {
+      Schema.Field requestedField = fields.get(i);
+      Schema.Field tableField = tableSchema.getField(requestedField.name());
+      if (tableField != null) {
+        Schema repairedSchema = repairAvroSchema(requestedField.schema(), tableField.schema());
+        if (repairedSchema != requestedField.schema()) {
+          firstChangedIndex = i;
+          firstRepairedSchema = repairedSchema;
+          break;
+        }
+      }
+    }
+
+    // If nothing changed, return the original schema
+    if (firstChangedIndex == -1) {
       return requestedSchema;
     }
 
-    List<Schema.Field> repairedFields = new ArrayList<>();
+    // Second pass: build the new schema with repaired fields
+    List<Schema.Field> repairedFields = new ArrayList<>(fields.size());
 
-    for (Schema.Field requestedField : requestedSchema.getFields()) {
+    // Copy all fields before the first changed field
+    for (int i = 0; i < firstChangedIndex; i++) {
+      Schema.Field field = fields.get(i);
+      // Must create new Field since they cannot be reused
+      repairedFields.add(new Schema.Field(
+          field.name(),
+          field.schema(),
+          field.doc(),
+          field.defaultVal()
+      ));
+    }
+
+    // Add the first changed field (using cached repaired schema)
+    Schema.Field firstChangedField = fields.get(firstChangedIndex);
+    repairedFields.add(new Schema.Field(
+        firstChangedField.name(),
+        firstRepairedSchema,
+        firstChangedField.doc(),
+        firstChangedField.defaultVal()
+    ));
+
+    // Process remaining fields
+    for (int i = firstChangedIndex + 1; i < fields.size(); i++) {
+      Schema.Field requestedField = fields.get(i);
       Schema.Field tableField = tableSchema.getField(requestedField.name());
-      Schema.Field repaired;
+      Schema repairedSchema;
+
       if (tableField != null) {
-        repaired = repairAvroField(requestedField, tableField);
+        repairedSchema = repairAvroSchema(requestedField.schema(), tableField.schema());
       } else {
-        repaired = new Schema.Field(requestedField.name(), requestedField.schema(), requestedField.doc(), requestedField.defaultVal());
+        repairedSchema = requestedField.schema();
       }
-      repairedFields.add(repaired);
+
+      // Must create new Field since they cannot be reused
+      repairedFields.add(new Schema.Field(
+          requestedField.name(),
+          repairedSchema,
+          requestedField.doc(),
+          requestedField.defaultVal()
+      ));
     }
 
     return Schema.createRecord(
@@ -52,113 +213,5 @@ public class AvroSchemaRepair {
         requestedSchema.isError(),
         repairedFields
     );
-  }
-
-  private static Schema.Field repairAvroField(Schema.Field requested, Schema.Field table) {
-    Schema repairedSchema = repairAvroSchema(requested.schema(), table.schema());
-
-    return new Schema.Field(
-        requested.name(),
-        repairedSchema,
-        requested.doc(),
-        requested.defaultVal(),
-        requested.order()
-    );
-  }
-
-  private static Schema repairAvroSchema(Schema requested, Schema table) {
-    // Handle union types (nullable fields)
-    if (requested.getType() == Schema.Type.UNION) {
-      List<Schema> repairedUnionTypes = new ArrayList<>();
-      for (Schema unionType : requested.getTypes()) {
-        if (unionType.getType() == Schema.Type.NULL) {
-          repairedUnionTypes.add(unionType);
-        } else {
-          // Find corresponding non-null type in table schema
-          Schema tableNonNull = table;
-          if (table.getType() == Schema.Type.UNION) {
-            for (Schema tableUnionType : table.getTypes()) {
-              if (tableUnionType.getType() != Schema.Type.NULL) {
-                tableNonNull = tableUnionType;
-                break;
-              }
-            }
-          }
-          repairedUnionTypes.add(repairAvroSchema(unionType, tableNonNull));
-        }
-      }
-      return Schema.createUnion(repairedUnionTypes);
-    }
-
-    // Handle record types (nested structs)
-    if (requested.getType() == Schema.Type.RECORD && table.getType() == Schema.Type.RECORD) {
-      return repairLogicalTypes(requested, table);
-    }
-
-    // Handle array types
-    if (requested.getType() == Schema.Type.ARRAY && table.getType() == Schema.Type.ARRAY) {
-      Schema repairedElementSchema = repairAvroSchema(requested.getElementType(), table.getElementType());
-      return Schema.createArray(repairedElementSchema);
-    }
-
-    // Handle map types
-    if (requested.getType() == Schema.Type.MAP && table.getType() == Schema.Type.MAP) {
-      Schema repairedValueSchema = repairAvroSchema(requested.getValueType(), table.getValueType());
-      return Schema.createMap(repairedValueSchema);
-    }
-
-    // Handle primitive types with logical types
-    if (isPrimitiveType(requested) && isPrimitiveType(table)) {
-      return repairAvroLogicalType(requested, table);
-    }
-
-    // Default: return requested schema
-    return requested;
-  }
-
-  private static boolean isPrimitiveType(Schema schema) {
-    Schema.Type type = schema.getType();
-    return type == Schema.Type.INT || type == Schema.Type.LONG
-        || type == Schema.Type.FLOAT || type == Schema.Type.DOUBLE
-        || type == Schema.Type.BOOLEAN || type == Schema.Type.STRING
-        || type == Schema.Type.BYTES;
-  }
-
-  private static Schema repairAvroLogicalType(Schema requested, Schema table) {
-    LogicalType reqLogical = requested.getLogicalType();
-    LogicalType tblLogical = table.getLogicalType();
-
-    boolean useTableType = false;
-
-    // Rule 1: requested is timestamp-micros, table is timestamp-millis
-    if (reqLogical instanceof LogicalTypes.TimestampMicros
-        && tblLogical instanceof LogicalTypes.TimestampMillis) {
-      useTableType = true;
-    }
-
-    // Rule 2: requested is LONG (no logical type), table is local-timestamp-millis
-    if (reqLogical == null
-        && requested.getType() == Schema.Type.LONG
-        && tblLogical instanceof LogicalTypes.LocalTimestampMillis) {
-      useTableType = true;
-    }
-
-    // Rule 3: requested is LONG (no logical type), table is local-timestamp-micros
-    if (reqLogical == null
-        && requested.getType() == Schema.Type.LONG
-        && tblLogical instanceof LogicalTypes.LocalTimestampMicros) {
-      useTableType = true;
-    }
-
-    if (useTableType) {
-      // Create a new schema with the table's logical type
-      Schema repaired = Schema.create(table.getType());
-      if (tblLogical != null) {
-        tblLogical.addToSchema(repaired);
-      }
-      return repaired;
-    } else {
-      return requested;
-    }
   }
 }
