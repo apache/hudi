@@ -21,7 +21,7 @@ import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieFileIndex.{collectReferencedColumns, convertFilterForTimestampKeyGenerator, getConfigProperties, DataSkippingFailureMode}
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
@@ -102,6 +102,25 @@ case class HoodieFileIndex(spark: SparkSession,
     fileStatusCache = fileStatusCache,
     startCompletionTime = options.get(DataSourceReadOptions.START_COMMIT.key),
     endCompletionTime = options.get(DataSourceReadOptions.END_COMMIT.key)) with FileIndex {
+
+  // ignore fileStatusCache in equals/hashCode
+  override def equals(obj: Any): Boolean = {
+    obj match {
+      case that: HoodieFileIndex =>
+        this.spark == that.spark &&
+          this.metaClient.equals(that.metaClient) &&
+          this.schemaSpec == that.schemaSpec &&
+          this.options == that.options &&
+          this.includeLogFiles == that.includeLogFiles &&
+          this.shouldEmbedFileSlices == that.shouldEmbedFileSlices
+      case _ => false
+    }
+  }
+
+  override def hashCode(): Int = {
+    val state = Seq(spark, metaClient, schemaSpec, options, includeLogFiles, shouldEmbedFileSlices)
+    state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
+  }
 
   @transient protected var hasPushedDownPartitionPredicates: Boolean = false
 
