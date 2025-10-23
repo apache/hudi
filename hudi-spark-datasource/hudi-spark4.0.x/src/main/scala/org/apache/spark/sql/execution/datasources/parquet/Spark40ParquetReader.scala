@@ -28,12 +28,15 @@ import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.hadoop.{ParquetInputFormat, ParquetRecordReader}
+import org.apache.parquet.hadoop.metadata.{FileMetaData, ParquetMetadata}
+import org.apache.parquet.schema.SchemaRepair
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.catalyst.types.DataTypeUtils.toAttributes
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, FileFormat, PartitionedFile, RecordReaderIterator, SparkColumnarFileReader}
+import org.apache.spark.sql.execution.datasources.parquet.Spark40ParquetReader.repairFooterSchema
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
@@ -95,14 +98,14 @@ class Spark40ParquetReader(enableVectorizedReader: Boolean,
     val schemaEvolutionUtils = new ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
       partitionSchema, internalSchemaOpt, tableSchemaOpt)
 
-    val fileFooter = if (enableVectorizedReader) {
+    val fileFooter = repairFooterSchema(if (enableVectorizedReader) {
       // When there are vectorized reads, we can avoid reading the footer twice by reading
       // all row groups in advance and filter row groups according to filters that require
       // push down (no need to read the footer metadata again).
       ParquetFooterReader.readFooter(sharedConf, file, ParquetFooterReader.WITH_ROW_GROUPS)
     } else {
       ParquetFooterReader.readFooter(sharedConf, file, ParquetFooterReader.SKIP_ROW_GROUPS)
-    }
+    }, tableSchemaOpt)
 
     val footerFileMetaData = fileFooter.getFileMetaData
     val datetimeRebaseSpec = DataSourceUtils.datetimeRebaseSpec(
@@ -287,5 +290,22 @@ object Spark40ParquetReader extends SparkParquetReaderBuilder {
       returningBatch = returningBatch,
       enableRecordFilter = sqlConf.parquetRecordFilterEnabled,
       timeZoneId = Some(sqlConf.sessionLocalTimeZone))
+  }
+
+  // Helper to repair the schema if needed
+  def repairFooterSchema(original: ParquetMetadata,
+                         tableSchemaOpt: org.apache.hudi.common.util.Option[org.apache.parquet.schema.MessageType]): ParquetMetadata = {
+    val repairedSchema = SchemaRepair.repairLogicalTypes(original.getFileMetaData.getSchema, tableSchemaOpt)
+    val oldMeta = original.getFileMetaData
+    new ParquetMetadata(
+      new FileMetaData(
+        repairedSchema,
+        oldMeta.getKeyValueMetaData,
+        oldMeta.getCreatedBy,
+        oldMeta.getEncryptionType,
+        oldMeta.getFileDecryptor
+      ),
+      original.getBlocks
+    )
   }
 }
