@@ -224,7 +224,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    *       partition path, meaning that string value of "2022/01/01" will be appended, and not its original
    *       representation
    */
-  protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = {
+  protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = needExtractPartitionValuesFromPartitionPath()
+
+  protected def needExtractPartitionValuesFromPartitionPath(): Boolean = {
     // Controls whether partition columns (which are the source for the partition path values) should
     // be omitted from persistence in the data files. On the read path it affects whether partition values (values
     // of partition columns) will be read from the data file or extracted from partition path
