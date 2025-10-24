@@ -636,10 +636,18 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
           tableType, sourceOrderingField, checkpoint, false);
     }
 
+    public static HoodieDeltaStreamer.Config makeConfig(String basePath, WriteOperationType op, String sourceClassName,
+                                                        List<String> transformerClassNames, String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass,
+                                                        int sourceLimit, boolean updatePayloadClass, String payloadClassName, String tableType, String sourceOrderingField,
+                                                        String checkpoint, boolean allowCommitOnNoCheckpointChange) {
+      return makeConfig(basePath, op, sourceClassName, transformerClassNames, propsFilename, enableHiveSync, useSchemaProviderClass, sourceLimit, updatePayloadClass, payloadClassName,
+          tableType, sourceOrderingField, checkpoint, allowCommitOnNoCheckpointChange, HoodieTableVersion.current());
+    }
+
     static HoodieDeltaStreamer.Config makeConfig(String basePath, WriteOperationType op, String sourceClassName,
                                                  List<String> transformerClassNames, String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass,
                                                  int sourceLimit, boolean updatePayloadClass, String payloadClassName, String tableType, String sourceOrderingField,
-                                                 String checkpoint, boolean allowCommitOnNoCheckpointChange) {
+                                                 String checkpoint, boolean allowCommitOnNoCheckpointChange, HoodieTableVersion tableVersion) {
       HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
       cfg.targetBasePath = basePath;
       cfg.targetTableName = "hoodie_trips";
@@ -662,7 +670,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       Triple<RecordMergeMode, String, String> mergeCfgs =
           HoodieTableConfig.inferMergingConfigsForWrites(
               cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingFields,
-              HoodieTableVersion.current());
+              tableVersion);
       cfg.recordMergeMode = mergeCfgs.getLeft();
       cfg.payloadClassName = mergeCfgs.getMiddle();
       cfg.recordMergeStrategyId = mergeCfgs.getRight();
