@@ -20,7 +20,6 @@
 package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.util.VisibleForTesting;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
@@ -147,20 +146,8 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
   }
 
   public void write(R object) throws IOException {
-    try {
-      this.parquetWriter.write(object);
-      writtenRecordCount.incrementAndGet();
-    } catch (RuntimeException e) {
-      String errorMessage = e.getMessage() != null ? e.getMessage() : "";
-      if (isRequiredFieldNullError(errorMessage) && errorMessage.contains("_hoodie_is_deleted")) {
-        throw new HoodieException(
-            "'_hoodie_is_deleted' field is missing for some of the incoming records. "
-                + "The table schema requires '_hoodie_is_deleted' to be non-null, but some records lack this field. "
-                + "To fix: Ensure ALL records have '_hoodie_is_deleted' field set (true/false). "
-                + "Original error: " + errorMessage, e);
-      }
-      throw e;
-    }
+    this.parquetWriter.write(object);
+    writtenRecordCount.incrementAndGet();
   }
 
   private static boolean isRequiredFieldNullError(String errorMessage) {

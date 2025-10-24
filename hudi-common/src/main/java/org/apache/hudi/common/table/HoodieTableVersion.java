@@ -84,8 +84,7 @@ public enum HoodieTableVersion {
                     + "This table version is not recognized by this Hudi version.%n%n"
                     + "This can happen if:%n"
                     + "  (1) The table was created with a newer version of Hudi (upgrade your readers),%n"
-                    + "  (2) The table was created with an older version of Hudi (downgrade your readers or upgrade the table),%n"
-                    + "  (3) The table metadata is corrupted.%n%n"
+                    + "  (2) The table metadata is corrupted.%n%n"
                     + "See: https://hudi.apache.org/docs/migration_guide for more information", versionCode)));
   }
 

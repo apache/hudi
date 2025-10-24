@@ -130,11 +130,11 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     if (e instanceof java.io.FileNotFoundException) {
       return String.format(
           "Cannot read Hudi table schema.%n%n"
-              + "Schema is missing from commit metadata, table config, and data files cannot be read to infer schema.%n%n"
+              + "Required data file missing .%n%n"
               + "This indicates:%n"
-              + "  (1) Commits were written without schema metadata (check writer configuration),%n"
-              + "  (2) Table was created without schema in table config,%n"
-              + "  (3) Data files that could provide schema are missing or inaccessible.%n%n"
+              + "  1. Aggressive cleaner retention compared to query run times\n"
+              + "  2. Manual file deletions (timeline files or data files)\n"
+              + "  3. Concurrent writers without proper locking or configurations set\n\n"
               + "Original error: %s", errorMessage);
     }
     return String.format("Failed to read schema from storage.%nError: %s", errorMessage);
