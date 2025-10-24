@@ -96,7 +96,7 @@ class Spark40ParquetReader(enableVectorizedReader: Boolean,
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
     val schemaEvolutionUtils = new ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
-      partitionSchema, internalSchemaOpt, tableSchemaOpt)
+      partitionSchema, internalSchemaOpt)
 
     val fileFooter = repairFooterSchema(if (enableVectorizedReader) {
       // When there are vectorized reads, we can avoid reading the footer twice by reading
@@ -215,7 +215,7 @@ class Spark40ParquetReader(enableVectorizedReader: Boolean,
         readerWithRowIndexes.initialize(split, hadoopAttemptContext)
 
         val fullSchema = toAttributes(requiredSchema) ++ toAttributes(partitionSchema)
-        val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId, footerFileMetaData.getSchema)
+        val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId)
 
         if (partitionSchema.length == 0) {
           // There is no partition columns
