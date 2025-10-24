@@ -39,14 +39,10 @@ module.exports = {
   },
   i18n: {
     defaultLocale: "en",
-    locales: ["en", "cn"],
+    locales: ["en"],
     localeConfigs: {
       en: {
         label: "English",
-        direction: "ltr",
-      },
-      cn: {
-        label: "Chinese",
         direction: "ltr",
       },
     },
@@ -277,10 +273,6 @@ module.exports = {
               })
             ),
           ],
-        },
-        {
-          type: "localeDropdown",
-          position: "right",
         },
         {
           href: "https://github.com/apache/hudi",
