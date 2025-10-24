@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, ScalaAssertionSupport, SparkDatasetMixin}
+import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport, SparkDatasetMixin}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -53,7 +53,9 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource, ValueSource}
 
 import java.io.File
-import java.nio.file.Files
+import java.net.URI
+import java.nio.file.{Files, Paths}
+import java.sql.Timestamp
 import java.util.function.Consumer
 import java.util.stream.Collectors
 
@@ -1257,6 +1259,67 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
     assertEquals(5,
       spark.read.format("hudi").load(basePath).count())
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array("avro, 6", "parquet, 6", "avro, 8", "parquet, 8", "avro, 9", "parquet, 9"))
+  def testLogicalTypesReadRepair(logBlockFormat: String, tableVersion: Int): Unit = {
+    val logBlockString = if (logBlockFormat == "avro") {
+      ""
+    } else {
+      "_parquet_log"
+    }
+    val prevTimezone = spark.conf.get("spark.sql.session.timeZone")
+    try {
+      spark.conf.set("spark.sql.session.timeZone", "UTC")
+      val tableName = "trips_logical_types_json_mor_read_v" + tableVersion + logBlockString
+      val dataPath = "file://" + basePath + "/" + tableName
+      val zipOutput = Paths.get(new URI(dataPath))
+      HoodieTestUtils.extractZipToDirectory("/" + tableName + ".zip", zipOutput, getClass)
+      val tableBasePath = zipOutput.toString
+
+      val df = spark.read.format("org.apache.hudi")
+        .option("hoodie.metadata.enable", "false")
+        .load(tableBasePath)
+
+      val rows = df.collect()
+      assertEquals(20, rows.length)
+      for (row <- rows) {
+        val hash = row.get(6).asInstanceOf[String].hashCode()
+        if ((hash & 1)== 0) {
+          assertEquals("2020-01-01T00:00:00.001Z", row.get(15).asInstanceOf[Timestamp].toInstant.toString)
+          assertEquals("2020-06-01T12:00:00.000001Z", row.get(16).asInstanceOf[Timestamp].toInstant.toString)
+          assertEquals("2015-05-20T12:34:56.001", row.get(17).toString)
+          assertEquals("2017-07-07T07:07:07.000001", row.get(18).toString)
+        } else {
+          assertEquals("2019-12-31T23:59:59.999Z", row.get(15).asInstanceOf[Timestamp].toInstant.toString)
+          assertEquals("2020-06-01T11:59:59.999999Z", row.get(16).asInstanceOf[Timestamp].toInstant.toString)
+          assertEquals("2015-05-20T12:34:55.999", row.get(17).toString)
+          assertEquals("2017-07-07T07:07:06.999999", row.get(18).toString)
+        }
+      }
+      assertEquals(10, df.filter("ts_millis > timestamp('2020-01-01 00:00:00Z')").count())
+      assertEquals(10, df.filter("ts_millis < timestamp('2020-01-01 00:00:00Z')").count())
+      assertEquals(0, df.filter("ts_millis > timestamp('2020-01-01 00:00:001Z')").count())
+      assertEquals(0, df.filter("ts_millis < timestamp('2019-12-31 23:59:59.999Z')").count())
+
+      assertEquals(10, df.filter("ts_micros > timestamp('2020-06-01 12:00:00Z')").count())
+      assertEquals(10, df.filter("ts_micros < timestamp('2020-06-01 12:00:00Z')").count())
+      assertEquals(0, df.filter("ts_micros > timestamp('2020-06-01 12:00:00.000001Z')").count())
+      assertEquals(0, df.filter("ts_micros < timestamp('2020-06-01 11:59:59.999999Z')").count())
+
+      assertEquals(10, df.filter("local_ts_millis > CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)").count())
+      assertEquals(10, df.filter("local_ts_millis < CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)").count())
+      assertEquals(0, df.filter("local_ts_millis > CAST('2015-05-20 12:34:56.001' AS TIMESTAMP_NTZ)").count())
+      assertEquals(0, df.filter("local_ts_millis < CAST('2015-05-20 12:34:55.999' AS TIMESTAMP_NTZ)").count())
+
+      assertEquals(10, df.filter("local_ts_micros > CAST('2017-07-07 07:07:07' AS TIMESTAMP_NTZ)").count())
+      assertEquals(10, df.filter("local_ts_micros < CAST('2017-07-07 07:07:07' AS TIMESTAMP_NTZ)").count())
+      assertEquals(0, df.filter("local_ts_micros > CAST('2017-07-07 07:07:07.000001' AS TIMESTAMP_NTZ)").count())
+      assertEquals(0, df.filter("local_ts_micros < CAST('2017-07-07 07:07:06.999999' AS TIMESTAMP_NTZ)").count())
+    } finally {
+      spark.conf.set("spark.sql.session.timeZone", prevTimezone)
+    }
   }
 
   /**
