@@ -817,23 +817,25 @@ class HoodieSparkSqlWriterInternal {
     val overwriteOperationType = Option(hoodieConfig.getString(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE))
       .map(WriteOperationType.fromValue)
       .orNull
+
+    val commitActionType = CommitUtils.getCommitActionType(overwriteOperationType, tableConfig.getTableType)
+    val instantTime = writeClient.startCommit(commitActionType)
     val executor = mode match {
       case _ if overwriteOperationType == null =>
         // Don't need to overwrite
-        new DatasetBulkInsertCommitActionExecutor(writeConfig, writeClient)
+        new DatasetBulkInsertCommitActionExecutor(writeConfig, writeClient, instantTime)
       case SaveMode.Append if overwriteOperationType == WriteOperationType.INSERT_OVERWRITE =>
         // INSERT OVERWRITE PARTITION uses Append mode
-        new DatasetBulkInsertOverwriteCommitActionExecutor(writeConfig, writeClient)
+        new DatasetBulkInsertOverwriteCommitActionExecutor(writeConfig, writeClient, instantTime)
       case SaveMode.Append if overwriteOperationType == WriteOperationType.BUCKET_RESCALE =>
-        new DatasetBucketRescaleCommitActionExecutor(writeConfig, writeClient)
+        new DatasetBucketRescaleCommitActionExecutor(writeConfig, writeClient, instantTime)
       case SaveMode.Overwrite if overwriteOperationType == WriteOperationType.INSERT_OVERWRITE_TABLE =>
-        new DatasetBulkInsertOverwriteTableCommitActionExecutor(writeConfig, writeClient)
+        new DatasetBulkInsertOverwriteTableCommitActionExecutor(writeConfig, writeClient, instantTime)
       case _ =>
         throw new HoodieException(s"$mode with bulk_insert in row writer path is not supported yet");
     }
 
     val writeResult = executor.execute(df, tableConfig.isTablePartitioned)
-    val instantTime = executor.getInstantTime
 
     try {
       val (writeSuccessful, compactionInstant, clusteringInstant) = commitAndPerformPostOperations(
