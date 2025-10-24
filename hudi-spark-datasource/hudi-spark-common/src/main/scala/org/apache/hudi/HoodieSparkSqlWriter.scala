@@ -818,7 +818,7 @@ class HoodieSparkSqlWriterInternal {
       .map(WriteOperationType.fromValue)
       .orNull
 
-    val commitActionType = CommitUtils.getCommitActionType(overwriteOperationType, tableConfig.getTableType)
+    val commitActionType = CommitUtils.getCommitActionType(overwriteOperationType, writeConfig.getTableType)
     val instantTime = writeClient.startCommit(commitActionType)
     val executor = mode match {
       case _ if overwriteOperationType == null =>
