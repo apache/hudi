@@ -214,6 +214,11 @@ public class ValueMetadata implements Serializable {
       throw new IllegalStateException("ColumnStatsMetadata is null. Handling should happen in the caller.");
     }
 
+    // This may happen when the record is from old table versions.
+    if (!columnStatsRecord.hasField(COLUMN_STATS_FIELD_VALUE_TYPE)) {
+      return V1EmptyMetadata.get();
+    }
+
     GenericRecord valueTypeInfo = (GenericRecord) columnStatsRecord.get(COLUMN_STATS_FIELD_VALUE_TYPE);
     if (valueTypeInfo == null) {
       return V1EmptyMetadata.get();

@@ -71,6 +71,9 @@ SCRIPT_SUFFIX="${SCRIPT_BASE#generate-fixture}"  # Remove generate-fixture prefi
 if [[ "$SCALA_SCRIPT_NAME" == *"mor"* ]]; then
     FIXTURES_DIR="$SCRIPT_DIR/mor-tables"
     echo "Using mor tables directory: $FIXTURES_DIR"
+elif [[ "$SCALA_SCRIPT_NAME" == *"cow"* ]]; then
+    FIXTURES_DIR="$SCRIPT_DIR/cow-tables"
+    echo "Using cow tables directory: $FIXTURES_DIR"
 elif [[ "$SCALA_SCRIPT_NAME" == *"complex-keygen"* ]]; then
     FIXTURES_DIR="$SCRIPT_DIR/complex-keygen-tables"
     echo "Using complex-keygen tables directory: $FIXTURES_DIR"
