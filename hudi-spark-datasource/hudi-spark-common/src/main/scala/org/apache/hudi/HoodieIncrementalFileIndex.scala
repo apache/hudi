@@ -38,7 +38,7 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
                                  override val options: Map[String, String],
                                  @transient override val fileStatusCache: FileStatusCache = NoopCache,
                                  override val includeLogFiles: Boolean,
-                                 mergeOnReadIncrementalRelation: MergeOnReadIncrementalRelation)
+                                 val mergeOnReadIncrementalRelation: MergeOnReadIncrementalRelation)
   extends HoodieFileIndex(
     spark, metaClient, schemaSpec, options, fileStatusCache, includeLogFiles, shouldEmbedFileSlices = true
   ) with FileIndex {
