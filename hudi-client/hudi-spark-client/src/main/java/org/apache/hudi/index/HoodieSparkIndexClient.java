@@ -21,8 +21,6 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
-import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieIndexingConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -44,7 +42,6 @@ import org.apache.hudi.exception.HoodieMetadataIndexException;
 import org.apache.hudi.index.record.HoodieRecordIndex;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.table.action.index.BaseHoodieIndexClient;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -52,7 +49,6 @@ import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -227,7 +223,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
       if (localWriteConfig.getWriteConcurrencyMode().supportsMultiWriter() && StringUtils.isNullOrEmpty(localWriteConfig.getLockProviderClass())) {
         throw new IllegalArgumentException(
             "To support multi-writer scenarios, configuration 'hoodie.write.lock.provider' should be set properly. "
-                + "For single writer InProcessLockProvider can be used.");
+                + "For single writer org.apache.hudi.client.transaction.lock.InProcessLockProvider can be used.");
       }
       return new SparkRDDWriteClient(engineContextOpt.get(), localWriteConfig, Option.empty());
     } catch (Exception e) {
@@ -266,8 +262,6 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     Map<String, String> writeConfig = new HashMap<>();
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
       writeConfig.put(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
-      writeConfig.putAll(getLockOptions(metaClient.getBasePath().toString(),
-          metaClient.getBasePath().toUri().getScheme(), new TypedProperties()));
 
       // [HUDI-7472] Ensure write-config contains the existing MDT partition to prevent those from getting deleted
       metaClient.getTableConfig().getMetadataPartitions().forEach(partitionPath -> {
@@ -295,17 +289,5 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     indexDefinitionOpt.ifPresent(indexDefinition ->
         HoodieIndexingConfig.fromIndexDefinition(indexDefinition).getProps().forEach((key, value) -> writeConfig.put(key.toString(), value.toString())));
     return writeConfig;
-  }
-
-  static Map<String, String> getLockOptions(String tablePath, String scheme, TypedProperties lockConfig) {
-    List<String> customSupportedFSs = lockConfig.getStringList(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key(), ",", new ArrayList<String>());
-    if (scheme == null || customSupportedFSs.contains(scheme) || StorageSchemes.isAtomicCreationSupported(scheme)) {
-      TypedProperties props = FileSystemBasedLockProvider.getLockConfig(tablePath);
-      Map<String, String> toReturn = new HashMap<>();
-      props.stringPropertyNames().stream().forEach(key -> toReturn.put(key, props.getString(key)));
-      return toReturn;
-    } else {
-      return Collections.emptyMap();
-    }
   }
 }

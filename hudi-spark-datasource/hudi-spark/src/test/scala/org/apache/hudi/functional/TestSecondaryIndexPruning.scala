@@ -46,7 +46,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
 import org.apache.spark.sql.types.StringType
-import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.api.{BeforeEach, Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource, ValueSource}
@@ -85,6 +85,12 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   var metaClient: HoodieTableMetaClient = _
 
   override def conf: SparkConf = conf(getSparkSqlConf)
+
+  @BeforeEach
+  override def runBeforeEach(): Unit = {
+    super.runBeforeEach()
+    spark.sql("set hoodie.write.lock.provider = org.apache.hudi.client.transaction.lock.InProcessLockProvider")
+  }
 
   @Test
   def testSecondaryIndexWithoutRecordIndex(): Unit = {
