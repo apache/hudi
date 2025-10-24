@@ -19,6 +19,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.SparkAdapterSupport$;
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -119,8 +120,9 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   }
 
   public ClosableIterator<UnsafeRow> getUnsafeRowIterator(Schema requestedSchema) throws IOException {
-    StructType structSchema = HoodieInternalRowUtils.getCachedSchema(requestedSchema);
-    Option<MessageType> messageSchema = Option.of(getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(requestedSchema));
+    Schema requestNonNull = AvroSchemaUtils.resolveNullableSchema(requestedSchema);
+    StructType structSchema = HoodieInternalRowUtils.getCachedSchema(requestNonNull);
+    Option<MessageType> messageSchema = Option.of(getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(requestNonNull));
     MessageType dataMessageType = SchemaRepair.repairLogicalTypes(getMessageType(), messageSchema);
     StructType dataStructType = convertToStruct(dataMessageType);
     SparkBasicSchemaEvolution evolution = new SparkBasicSchemaEvolution(dataStructType, structSchema, SQLConf.get().sessionLocalTimeZone());
