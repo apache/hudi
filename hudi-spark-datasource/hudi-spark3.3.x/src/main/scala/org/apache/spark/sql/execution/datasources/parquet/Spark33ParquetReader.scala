@@ -100,7 +100,7 @@ class Spark33ParquetReader(enableVectorizedReader: Boolean,
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
     val schemaEvolutionUtils = new ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
-      partitionSchema, internalSchemaOpt, tableSchemaOpt)
+      partitionSchema, internalSchemaOpt)
 
     lazy val fileFooter = repairFooterSchema(
       ParquetFooterReader.readFooter(sharedConf, filePath, SKIP_ROW_GROUPS), tableSchemaOpt)
@@ -211,7 +211,7 @@ class Spark33ParquetReader(enableVectorizedReader: Boolean,
         reader.initialize(split, hadoopAttemptContext)
 
         val fullSchema = requiredSchema.toAttributes ++ partitionSchema.toAttributes
-        val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId, footerFileMetaData.getSchema)
+        val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId)
 
         if (partitionSchema.length == 0) {
           // There is no partition columns
@@ -298,7 +298,6 @@ object Spark33ParquetReader extends SparkParquetReaderBuilder {
         repairedSchema,
         oldMeta.getKeyValueMetaData,
         oldMeta.getCreatedBy,
-        oldMeta.getEncryptionType,
         oldMeta.getFileDecryptor
       ),
       original.getBlocks
