@@ -43,6 +43,18 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
     spark, metaClient, schemaSpec, options, fileStatusCache, includeLogFiles, shouldEmbedFileSlices = true
   ) with FileIndex {
 
+  override def equals(obj: Any): Boolean = {
+    obj match {
+      case other: HoodieIncrementalFileIndex =>
+        super.equals(other) && this.mergeOnReadIncrementalRelation == other.mergeOnReadIncrementalRelation
+      case _ => false
+    }
+  }
+
+  override def hashCode(): Int = {
+    31 * super.hashCode() + mergeOnReadIncrementalRelation.hashCode()
+  }
+
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
     val fileSlices = mergeOnReadIncrementalRelation.listFileSplits(partitionFilters, dataFilters).toSeq.flatMap(
       {

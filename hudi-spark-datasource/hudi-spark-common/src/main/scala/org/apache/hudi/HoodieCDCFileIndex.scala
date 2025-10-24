@@ -47,6 +47,18 @@ class HoodieCDCFileIndex(override val spark: SparkSession,
   val cdcRelation: CDCRelation = CDCRelation.getCDCRelation(spark.sqlContext, metaClient, options, rangeType)
   val cdcExtractor: HoodieCDCExtractor = cdcRelation.cdcExtractor
 
+  override def equals(obj: Any): Boolean = {
+    obj match {
+      case other: HoodieCDCFileIndex =>
+        super.equals(other) && this.rangeType == other.rangeType
+      case _ => false
+    }
+  }
+
+  override def hashCode(): Int = {
+    31 * super.hashCode() + rangeType.hashCode()
+  }
+
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
     hasPushedDownPartitionPredicates = true
     cdcExtractor.extractCDCFileSplits().asScala.map {
