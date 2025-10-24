@@ -187,6 +187,16 @@ public class UpgradeDowngrade {
 
     // Perform rollback and compaction only if a specific handler requires it, before upgrade/downgrade process
     performRollbackAndCompactionIfRequired(fromVersion, toVersion, isUpgrade);
+    // When downgrade from version > 8 to version <= 8, non-V1 index partitions should be removed.
+    // If we handle this logic within nine-to-eight downgrade handler, this operation would refresh
+    // MDT's hoodie.properties, as causes conflicts with MDT downgrade handler since MDT downgrade
+    // happens before DT downgrade.
+    if (fromVersion.greaterThanOrEquals(HoodieTableVersion.NINE)
+        && toVersion.lesserThan(HoodieTableVersion.NINE)) {
+      UpgradeDowngradeUtils.dropNonV1IndexPartitions(
+          config, context, metaClient, upgradeDowngradeHelper,
+          "downgrading from a table version > 8 to a version <= 8");
+    }
 
     // Change metadata table version automatically
     if (toVersion.versionCode() >= HoodieTableVersion.FOUR.versionCode()) {

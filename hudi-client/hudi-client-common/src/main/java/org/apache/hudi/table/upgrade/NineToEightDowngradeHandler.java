@@ -85,9 +85,6 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
         && isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig())) {
       throw new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage("downgrade"));
     }
-    // Handle index Changes
-    UpgradeDowngradeUtils.dropNonV1IndexPartitions(
-        config, context, table, upgradeDowngradeHelper, "downgrading from table version nine to eight");
     // Update table properties.
     Set<ConfigProperty> propertiesToRemove = new HashSet<>();
     Map<ConfigProperty, String> propertiesToAdd = new HashMap<>();
