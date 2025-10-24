@@ -1835,7 +1835,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testBulkInsertRowWriterMultiBatches(true, null);
   }
 
-
   @ParameterizedTest
   @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT", "NINE"})
   public void testBulkInsertRowWriterWithSchemaProviderAndTransformer(HoodieTableVersion tableVersion) throws Exception {
