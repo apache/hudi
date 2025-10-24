@@ -308,8 +308,7 @@ public class UpgradeDowngradeUtils {
       String colStatsPartition = MetadataPartitionType.COLUMN_STATS.getPartitionPath();
       String partitionStatsPartition = MetadataPartitionType.PARTITION_STATS.getPartitionPath();
       if (mdtPartitions.contains(colStatsPartition)
-          && metadataPartitions.contains(partitionStatsPartition)
-          && !mdtPartitions.contains(partitionStatsPartition)) {
+          && metadataPartitions.contains(partitionStatsPartition)) {
         mdtPartitions.add(partitionStatsPartition);
       }
 
