@@ -31,6 +31,7 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
+import static org.apache.hudi.common.model.HoodieFileFormat.LANCE;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
@@ -55,6 +56,9 @@ public class HoodieFileReaderFactory {
     if (ORC.getFileExtension().equals(extension)) {
       return getFileReader(hoodieConfig, path, ORC, Option.empty());
     }
+    if (LANCE.getFileExtension().equals(extension)) {
+      return getFileReader(hoodieConfig, path, LANCE, Option.empty());
+    }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
@@ -72,6 +76,8 @@ public class HoodieFileReaderFactory {
         return newHFileFileReader(hoodieConfig, path, schemaOption);
       case ORC:
         return newOrcFileReader(path);
+      case LANCE:
+        return newLanceFileReader(path);
       default:
         throw new UnsupportedOperationException(format + " format not supported yet.");
     }
@@ -86,6 +92,8 @@ public class HoodieFileReaderFactory {
         return newHFileFileReader(hoodieConfig, pathInfo, schemaOption);
       case ORC:
         return newOrcFileReader(pathInfo.getPath());
+      case LANCE:
+        return newLanceFileReader(pathInfo.getPath());
       default:
         throw new UnsupportedOperationException(format + " format not supported yet.");
     }
@@ -123,6 +131,10 @@ public class HoodieFileReaderFactory {
   }
 
   protected HoodieFileReader newOrcFileReader(StoragePath path) {
+    throw new UnsupportedOperationException();
+  }
+
+  protected HoodieFileReader newLanceFileReader(StoragePath path) {
     throw new UnsupportedOperationException();
   }
 
