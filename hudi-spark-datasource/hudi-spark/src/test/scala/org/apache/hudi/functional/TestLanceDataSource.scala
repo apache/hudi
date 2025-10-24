@@ -18,15 +18,21 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.DefaultSparkRecordMerger
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSparkRecordMerger}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.testutils.HoodieTestUtils
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-
 import org.apache.spark.sql.{SaveMode, SparkSession}
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -49,6 +55,58 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
   override def tearDown(): Unit = {
     super.tearDown()
     spark = null
+  }
+
+  /**
+   * Helper method to count log files in a non-partitioned Hudi table using FileSystemView API.
+   * @param tablePath The path to the Hudi table
+   * @return The total count of log files across all file slices
+   */
+  private def countLogFiles(tablePath: String): Int = {
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+
+    val completedTimeline = metaClient.getCommitsTimeline.filterCompletedInstants()
+    val latestCommit = if (completedTimeline.lastInstant().isPresent) {
+      Some(completedTimeline.lastInstant().get().requestedTime())
+    } else {
+      None
+    }
+
+    var fsView: HoodieTableFileSystemView = null
+
+    try {
+      fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(
+        context, metaClient, completedTimeline)
+
+      // Get all partition paths (for non-partitioned table, returns list with base path)
+      val partitionPaths = FSUtils.getAllPartitionPaths(
+        context, metaClient, false).asScala
+
+      var totalLogFiles = 0
+
+      partitionPaths.foreach { partitionPath =>
+        // Get file slices as of latest commit
+        val fileSlicesStream = latestCommit match {
+          case Some(commit) =>
+            fsView.getLatestFileSlicesBeforeOrOn(partitionPath, commit, false)
+          case None =>
+            fsView.getLatestFileSlices(partitionPath)
+        }
+
+        fileSlicesStream.iterator().asScala.foreach { fileSlice =>
+          totalLogFiles += fileSlice.getLogFiles.count().toInt
+        }
+      }
+
+      totalLogFiles
+    } finally {
+      if (fsView != null) {
+        fsView.close()
+      }
+    }
   }
 
   @ParameterizedTest
@@ -865,4 +923,147 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assertEquals(26, result(2).getInt(2))
     assertEquals(94.8, result(2).getDouble(3), 0.01)
   }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("MERGE_ON_READ"))
+  def testMORCompactionWithLanceBaseAndAvroLog(tableType: String): Unit = {
+    //TODO needed to explicitly set upsert operation in order to trigger compaction
+    val tableName = s"test_lance_compaction_${tableType.toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    // First insert - records 1-3 (initial base file)
+    val records1 = Seq(
+      (1, "Alice", 30, 95.5),
+      (2, "Bob", 25, 87.3),
+      (3, "Charlie", 35, 92.1)
+    )
+    val df1 = spark.createDataFrame(records1).toDF("id", "name", "age", "score")
+
+    df1.write
+      .format("hudi")
+      .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
+      .option(RECORDKEY_FIELD.key(), "id")
+      .option(PRECOMBINE_FIELD.key(), "age")
+      .option(TABLE_NAME.key(), tableName)
+      .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
+      .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
+      .option(OPERATION.key(), "upsert")
+      .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "true")
+      .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3")
+      .mode(SaveMode.Overwrite)
+      .save(tablePath)
+
+    // Second update - update existing records 1-3 (creates log file - delta commit 1)
+    val records2 = Seq(
+      (1, "Alice", 31, 96.0),
+      (2, "Bob", 26, 88.0),
+      (3, "Charlie", 36, 93.0)
+    )
+    val df2 = spark.createDataFrame(records2).toDF("id", "name", "age", "score")
+
+    df2.write
+      .format("hudi")
+      .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
+      .option(RECORDKEY_FIELD.key(), "id")
+      .option(PRECOMBINE_FIELD.key(), "age")
+      .option(TABLE_NAME.key(), tableName)
+      .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
+      .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
+      .option(OPERATION.key(), "upsert")
+      .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "true")
+      .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3")
+      .mode(SaveMode.Append)
+      .save(tablePath)
+
+    // Verify Avro log files exist before compaction (after 2nd update, before 3rd)
+    val logFilesBeforeCompaction = countLogFiles(tablePath)
+    assertTrue(logFilesBeforeCompaction >= 1,
+      s"Should have at least 1 Avro log file before compaction, found $logFilesBeforeCompaction")
+
+    // Third update - update existing records 1-3 again (creates another log file - delta commit 2)
+    val records3 = Seq(
+      (1, "Alice", 32, 97.0),
+      (2, "Bob", 27, 89.0),
+      (3, "Charlie", 37, 94.0)
+    )
+    val df3 = spark.createDataFrame(records3).toDF("id", "name", "age", "score")
+
+    df3.write
+      .format("hudi")
+      .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
+      .option(RECORDKEY_FIELD.key(), "id")
+      .option(PRECOMBINE_FIELD.key(), "age")
+      .option(TABLE_NAME.key(), tableName)
+      .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
+      .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
+      .option(OPERATION.key(), "upsert")
+      .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "true")
+      .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3")
+      .mode(SaveMode.Append)
+      .save(tablePath)
+
+    // Fourth update - update existing records 1-3 again (creates another log file - delta commit 3)
+    // This should trigger compaction after 3 delta commits
+    val records4 = Seq(
+      (1, "Alice", 33, 98.0),
+      (2, "Bob", 28, 90.0),
+      (3, "Charlie", 38, 95.0)
+    )
+    val df4 = spark.createDataFrame(records4).toDF("id", "name", "age", "score")
+
+    df4.write
+      .format("hudi")
+      .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
+      .option(RECORDKEY_FIELD.key(), "id")
+      .option(PRECOMBINE_FIELD.key(), "age")
+      .option(TABLE_NAME.key(), tableName)
+      .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
+      .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
+      .option(OPERATION.key(), "upsert")
+      .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "true")
+      .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3")
+      .mode(SaveMode.Append)
+      .save(tablePath)
+
+    // Verify final data - should only have 3 rows with latest values
+    val result = spark.read
+      .format("hudi")
+      .load(tablePath)
+      .orderBy("id")
+      .collect()
+
+    assertEquals(3, result.length, "Should have 3 records (not 12, since we're updating the same keys)")
+
+    // Verify the latest values
+    assertEquals(1, result(0).getAs[Int]("id"))
+    assertEquals("Alice", result(0).getAs[String]("name"))
+    assertEquals(33, result(0).getAs[Int]("age"))
+    assertEquals(98.0, result(0).getAs[Double]("score"), 0.01)
+
+    assertEquals(2, result(1).getAs[Int]("id"))
+    assertEquals("Bob", result(1).getAs[String]("name"))
+    assertEquals(28, result(1).getAs[Int]("age"))
+    assertEquals(90.0, result(1).getAs[Double]("score"), 0.01)
+
+    // Reload metaClient to get latest commits
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+
+    val allInstants = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.iterator().asScala.toList
+
+    // Should have: 1 initial deltacommit + 3 more deltacommits + exactly 1 compaction commit
+    // Compaction triggers after 3 delta commits (on the 4th write)
+    val deltaCommits = allInstants.filter(_.getAction == "deltacommit")
+    val compactionCommits = allInstants.filter(_.getAction == "commit")
+
+    assertEquals(1, compactionCommits.size, s"Should have exactly 1 compaction commit, found ${compactionCommits.size}")
+    assertTrue(deltaCommits.size >= 3, s"Should have at least 3 delta commits before compaction, found ${deltaCommits.size}")
+  }
+
 }
