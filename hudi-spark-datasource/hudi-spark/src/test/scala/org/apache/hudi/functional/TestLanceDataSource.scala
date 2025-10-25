@@ -25,14 +25,14 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSparkRecordMerger}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -1064,6 +1064,63 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     assertEquals(1, compactionCommits.size, s"Should have exactly 1 compaction commit, found ${compactionCommits.size}")
     assertTrue(deltaCommits.size >= 3, s"Should have at least 3 delta commits before compaction, found ${deltaCommits.size}")
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testClusteringWithLanceBase(tableType: String): Unit = {
+    val tableName = s"test_lance_clustering_${tableType.toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    // Generate simple test data (avoiding complex nested schemas)
+    val records = (1 to 1000).map { i =>
+      (s"key_$i", s"rider_$i", s"driver_$i", i.toLong, i * 1.5, "2025-01-01")
+    }
+    val inputDF = spark.createDataFrame(records)
+      .toDF("id", "rider", "driver", "timestamp", "distance", "partition")
+
+    // Write with inline clustering enabled
+    inputDF.write.format("hudi")
+      .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
+      .option(RECORDKEY_FIELD.key(), "id")
+      .option(PRECOMBINE_FIELD.key(), "timestamp")
+      .option(PARTITIONPATH_FIELD.key(), "partition")
+      .option(TABLE_NAME.key(), tableName)
+      .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
+      .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
+      .option(OPERATION.key(), "bulk_insert")
+      .option("hoodie.clustering.inline", "true")
+      .option("hoodie.clustering.inline.max.commits", "1")
+      .option("hoodie.clustering.plan.strategy.sort.columns", "rider,driver")
+      .mode(SaveMode.Overwrite)
+      .save(tablePath)
+
+    // Verify temp files are cleaned after clustering
+    val tempPath = new Path(tablePath, HoodieTableMetaClient.TEMPFOLDER_NAME)
+    val fs = tempPath.getFileSystem(spark.sparkContext.hadoopConfiguration)
+    assertTrue(fs.listStatus(tempPath).isEmpty, "Temp folder should be empty after clustering")
+
+    // Verify data correctness
+    val resultDF = spark.read.format("hudi").load(tablePath)
+    assertEquals(1000, resultDF.count(), "Should have 1000 records after clustering")
+
+    // Verify table metadata and clustering instant
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+
+    val commits = metaClient.getCommitsTimeline.filterCompletedInstants().getInstants.iterator().asScala.toList
+    assertTrue(commits.nonEmpty, "Should have at least one commit after clustering")
+
+    // Verify clustering actually ran by checking for replacecommit action
+    val replaceCommits = commits.filter(_.getAction == "replacecommit")
+    assertTrue(replaceCommits.nonEmpty, "Should have at least one replacecommit (clustering) on timeline")
+
+    // Verify clustering instant exists
+    assertTrue(metaClient.getActiveTimeline.getLastClusteringInstant.isPresent,
+      "Should have a clustering instant on timeline")
   }
 
 }
