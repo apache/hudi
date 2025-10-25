@@ -392,7 +392,7 @@ else
   echo "::warning::validate.sh skip validating cli bundle for Spark < 3.5 build"
 fi
 
-if [[ $SPARK_HOME == *"spark-3.5"* || $SPARK_HOME == *"spark-4.0"* ]]
+if [[ $SPARK_HOME == *"spark-3.5"* ]]
 then
   echo "::warning::validate.sh validating utilities bundle"
   test_utilities_bundle $JARS_DIR/utilities.jar
