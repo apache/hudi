@@ -106,10 +106,9 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   override def createRelation(sqlContext: SQLContext,
                               metaClient: HoodieTableMetaClient,
                               schema: Schema,
-                              globPaths: Array[StoragePath],
                               parameters: java.util.Map[String, String]): BaseRelation = {
     val dataSchema = Option(schema).map(AvroConversionUtils.convertAvroSchemaToStructType).orNull
-    DefaultSource.createRelation(sqlContext, metaClient, dataSchema, globPaths, parameters.asScala.toMap)
+    DefaultSource.createRelation(sqlContext, metaClient, dataSchema, parameters.asScala.toMap)
   }
 
   override def convertStorageLevelToString(level: StorageLevel): String
