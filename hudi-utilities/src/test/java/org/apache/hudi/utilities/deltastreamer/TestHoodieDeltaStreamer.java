@@ -1012,7 +1012,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @ParameterizedTest
   @CsvSource(value = {"SIX,AVRO,CLUSTER", "EIGHT,AVRO,CLUSTER", "CURRENT,AVRO,NONE", "CURRENT,AVRO,CLUSTER", "CURRENT,SPARK,NONE", "CURRENT,SPARK,CLUSTER"})
   public void testCOWLogicalRepair(String tableVersion, String recordType, String operation) throws Exception {
-
     String dirName = "trips_logical_types_json_cow_write";
     String dataPath = basePath + "/" + dirName;
     java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
@@ -1020,7 +1019,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     String tableBasePath = zipOutput.toString();
 
     TypedProperties properties = new TypedProperties();
-    String schemaPath = getClass().getClassLoader().getResource("logical-repair/cow_write_updates/schema.avsc").toURI().toString();
+    String schemaPath = getClass().getClassLoader().getResource("logical-repair/schema.avsc").toURI().toString();
     properties.setProperty("hoodie.streamer.schemaprovider.source.schema.file", schemaPath);
     properties.setProperty("hoodie.streamer.schemaprovider.target.schema.file", schemaPath);
     String inputDataPath = getClass().getClassLoader().getResource("logical-repair/cow_write_updates/2").toURI().toString();
@@ -1064,7 +1063,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           .option("hoodie.metadata.enable", "false")
           .load(tableBasePath);
 
-      assertDataframe(df, 15);
+      assertDataframe(df, 15, 15);
 
       if ("CLUSTER".equals(operation)) {
         // after we cluster, the raw parquet should be correct
@@ -1085,16 +1084,139 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
         // Read raw parquet files
         Dataset<Row> rawParquetDf = sparkSession.read().parquet(baseFilePaths.toArray(new String[0]));
-        assertDataframe(rawParquetDf, 15);
+        assertDataframe(rawParquetDf, 15, 15);
       }
     } finally {
       sparkSession.conf().set("spark.sql.session.timeZone", prevTimezone);
     }
   }
 
-  public static void assertDataframe(Dataset<Row> df, int halfNum) {
+  @ParameterizedTest
+  @CsvSource(value = {"SIX,AVRO,CLUSTER,AVRO", "EIGHT,AVRO,CLUSTER,AVRO",
+      "CURRENT,AVRO,NONE,AVRO", "CURRENT,AVRO,CLUSTER,AVRO", "CURRENT,AVRO,COMPACT,AVRO",
+      "CURRENT,AVRO,NONE,PARQUET", "CURRENT,AVRO,CLUSTER,PARQUET", "CURRENT,AVRO,COMPACT,PARQUET",
+      "CURRENT,SPARK,NONE,PARQUET", "CURRENT,SPARK,CLUSTER,PARQUET", "CURRENT,SPARK,COMPACT,PARQUET"})
+  public void testMORLogicalRepair(String tableVersion, String recordType, String operation, String logBlockType) throws Exception {
+    String tableSuffix;
+    String logFormatValue;
+    if ("AVRO".equals(logBlockType)) {
+      logFormatValue = "avro";
+      tableSuffix = "avro_log";
+    } else {
+      logFormatValue = "parquet";
+      tableSuffix = "parquet_log";
+    }
+
+    String dirName = "trips_logical_types_json_mor_write_" + tableSuffix;
+    String dataPath = basePath + "/" + dirName;
+    java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
+    HoodieTestUtils.extractZipToDirectory("logical-repair/" + dirName + ".zip", zipOutput, getClass());
+    String tableBasePath = zipOutput.toString();
+
+    TypedProperties properties = new TypedProperties();
+    String schemaPath = getClass().getClassLoader().getResource("logical-repair/schema.avsc").toURI().toString();
+    properties.setProperty("hoodie.streamer.schemaprovider.source.schema.file", schemaPath);
+    properties.setProperty("hoodie.streamer.schemaprovider.target.schema.file", schemaPath);
+    String inputDataPath = getClass().getClassLoader().getResource("logical-repair/mor_write_updates/5").toURI().toString();
+    properties.setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
+    String mergerClass = getMergerClassForRecordType(recordType);
+    String tableVersionString = getTableVersionCode(tableVersion);
+
+    properties.setProperty(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), mergerClass);
+    properties.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
+    properties.setProperty("hoodie.datasource.write.precombine.field", "timestamp");
+    properties.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
+    properties.setProperty("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator");
+    properties.setProperty("hoodie.cleaner.policy", "KEEP_LATEST_COMMITS");
+    properties.setProperty("hoodie.metadtata.enable", "false");
+    properties.setProperty("hoodie.parquet.small.file.limit", "-1");
+    properties.setProperty("hoodie.cleaner.commits.retained", "10");
+    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);
+    properties.setProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logFormatValue);
+
+    boolean disableCompaction;
+    if ("COMPACT".equals(operation)) {
+      properties.setProperty("hoodie.compact.inline", "true");
+      properties.setProperty("hoodie.compact.inline.max.delta.commits", "1");
+      disableCompaction = false;
+    } else {
+      properties.setProperty("hoodie.compact.inline", "false");
+      disableCompaction = true;
+    }
+
+    if ("CLUSTER".equals(operation)) {
+      properties.setProperty("hoodie.clustering.inline", "true");
+      properties.setProperty("hoodie.clustering.inline.max.commits", "1");
+      properties.setProperty("hoodie.clustering.plan.strategy.single.group.clustering.enabled", "true");
+      properties.setProperty("hoodie.clustering.plan.strategy.sort.columns", "ts_millis,_row_key");
+    }
+
+    Option<TypedProperties> propt = Option.of(properties);
+
+    new HoodieStreamer(prepCfgForMorLogicalRepair(tableBasePath, dirName, "123", disableCompaction), jsc, propt).sync();
+
+    String prevTimezone = sparkSession.conf().get("spark.sql.session.timeZone");
+    try {
+      sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
+      Dataset<Row> df = sparkSession.read()
+          .format("org.apache.hudi")
+          .option("hoodie.metadata.enable", "false")
+          .load(tableBasePath);
+
+      assertDataframe(df, 12, 14);
+
+      if ("CLUSTER".equals(operation)) {
+        // after we cluster, the raw parquet should be correct
+
+        // Validate raw parquet files
+        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+            .setConf(storage.getConf())
+            .setBasePath(tableBasePath)
+            .build();
+
+        HoodieTimeline completedCommitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+        Option<HoodieInstant> latestInstant = completedCommitsTimeline.lastInstant();
+        assertTrue(latestInstant.isPresent(), "No completed commits found");
+
+        List<String> baseFilePaths = collectLatestBaseFilePaths(metaClient);
+
+        assertEquals(3, baseFilePaths.size());
+
+        // Read raw parquet files
+        Dataset<Row> rawParquetDf = sparkSession.read().parquet(baseFilePaths.toArray(new String[0]));
+        assertDataframe(rawParquetDf, 12, 14);
+      } else if ("COMPACT".equals(operation)) {
+        // after compaction some files should be ok
+
+        // Validate raw parquet files
+        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+            .setConf(storage.getConf())
+            .setBasePath(tableBasePath)
+            .build();
+
+        HoodieTimeline completedCommitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+        Option<HoodieInstant> latestInstant = completedCommitsTimeline.lastInstant();
+        assertTrue(latestInstant.isPresent(), "No completed commits found");
+
+        List<String> baseFilePaths = collectLatestBaseFilePaths(metaClient);
+
+        assertEquals(7, baseFilePaths.size());
+
+        // Read raw parquet files
+        Dataset<Row> rawParquetDf = sparkSession.read().parquet(baseFilePaths.stream()
+            // only read the compacted ones, the others are still incorrect
+            .filter(path -> path.contains(latestInstant.get().requestedTime()))
+            .toArray(String[]::new));
+        assertDataframe(rawParquetDf, 2, 3);
+      }
+    } finally {
+      sparkSession.conf().set("spark.sql.session.timeZone", prevTimezone);
+    }
+  }
+
+  public static void assertDataframe(Dataset<Row> df, int above, int below) {
     List<Row> rows = df.collectAsList();
-    assertEquals(halfNum * 2, rows.size());
+    assertEquals(above + below, rows.size());
 
     for (Row row : rows) {
       String val = row.getString(6);
@@ -1113,23 +1235,23 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
     }
 
-    assertEquals(halfNum, df.filter("ts_millis > timestamp('2020-01-01 00:00:00Z')").count());
-    assertEquals(halfNum, df.filter("ts_millis < timestamp('2020-01-01 00:00:00Z')").count());
+    assertEquals(above, df.filter("ts_millis > timestamp('2020-01-01 00:00:00Z')").count());
+    assertEquals(below, df.filter("ts_millis < timestamp('2020-01-01 00:00:00Z')").count());
     assertEquals(0, df.filter("ts_millis > timestamp('2020-01-01 00:00:001Z')").count());
     assertEquals(0, df.filter("ts_millis < timestamp('2019-12-31 23:59:59.999Z')").count());
 
-    assertEquals(halfNum, df.filter("ts_micros > timestamp('2020-06-01 12:00:00Z')").count());
-    assertEquals(halfNum, df.filter("ts_micros < timestamp('2020-06-01 12:00:00Z')").count());
+    assertEquals(above, df.filter("ts_micros > timestamp('2020-06-01 12:00:00Z')").count());
+    assertEquals(below, df.filter("ts_micros < timestamp('2020-06-01 12:00:00Z')").count());
     assertEquals(0, df.filter("ts_micros > timestamp('2020-06-01 12:00:00.000001Z')").count());
     assertEquals(0, df.filter("ts_micros < timestamp('2020-06-01 11:59:59.999999Z')").count());
 
-    assertEquals(halfNum, df.filter("local_ts_millis > CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)").count());
-    assertEquals(halfNum, df.filter("local_ts_millis < CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)").count());
+    assertEquals(above, df.filter("local_ts_millis > CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)").count());
+    assertEquals(below, df.filter("local_ts_millis < CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)").count());
     assertEquals(0, df.filter("local_ts_millis > CAST('2015-05-20 12:34:56.001' AS TIMESTAMP_NTZ)").count());
     assertEquals(0, df.filter("local_ts_millis < CAST('2015-05-20 12:34:55.999' AS TIMESTAMP_NTZ)").count());
 
-    assertEquals(halfNum, df.filter("local_ts_micros > CAST('2017-07-07 07:07:07' AS TIMESTAMP_NTZ)").count());
-    assertEquals(halfNum, df.filter("local_ts_micros < CAST('2017-07-07 07:07:07' AS TIMESTAMP_NTZ)").count());
+    assertEquals(above, df.filter("local_ts_micros > CAST('2017-07-07 07:07:07' AS TIMESTAMP_NTZ)").count());
+    assertEquals(below, df.filter("local_ts_micros < CAST('2017-07-07 07:07:07' AS TIMESTAMP_NTZ)").count());
     assertEquals(0, df.filter("local_ts_micros > CAST('2017-07-07 07:07:07.000001' AS TIMESTAMP_NTZ)").count());
     assertEquals(0, df.filter("local_ts_micros < CAST('2017-07-07 07:07:06.999999' AS TIMESTAMP_NTZ)").count());
   }
@@ -1179,10 +1301,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   private HoodieStreamer.Config prepCfgForCowLogicalRepair(String tableBasePath,
                                                            String ignoreCheckpoint) throws Exception {
-
-
-
-
     HoodieStreamer.Config cfg = new HoodieStreamer.Config();
     cfg.targetBasePath = tableBasePath;
     cfg.tableType = "COPY_ON_WRITE";
@@ -1193,6 +1311,23 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.ignoreCheckpoint = ignoreCheckpoint;
     cfg.operation = WriteOperationType.UPSERT;
     cfg.forceDisableCompaction = true;
+    return cfg;
+  }
+
+  private HoodieStreamer.Config prepCfgForMorLogicalRepair(String tableBasePath,
+                                                           String tableName,
+                                                           String ignoreCheckpoint,
+                                                           boolean disableCompaction) throws Exception {
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.targetBasePath = tableBasePath;
+    cfg.tableType = "MERGE_ON_READ";
+    cfg.targetTableName = tableName;
+    cfg.sourceClassName = "org.apache.hudi.utilities.sources.JsonDFSSource";
+    cfg.schemaProviderClassName = "org.apache.hudi.utilities.schema.FilebasedSchemaProvider";
+    cfg.sourceOrderingFields = "timestamp";
+    cfg.ignoreCheckpoint = ignoreCheckpoint;
+    cfg.operation = WriteOperationType.UPSERT;
+    cfg.forceDisableCompaction = disableCompaction;
     return cfg;
   }
 
