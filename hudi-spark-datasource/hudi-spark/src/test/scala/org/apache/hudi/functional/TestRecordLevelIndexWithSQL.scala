@@ -54,6 +54,7 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
       "hoodie.metadata.index.column.stats.enable" -> "false",
       HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "false")
 
+    spark.sql("set hoodie.write.lock.provider = org.apache.hudi.client.transaction.lock.InProcessLockProvider")
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
@@ -65,6 +66,7 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(HoodieTestUtils.getDefaultStorageConf).build()
     assertEquals(isPartitioned, HoodieRecordIndex.isPartitioned(metaClient.getIndexMetadata.get().getIndex(MetadataPartitionType.RECORD_INDEX.getPartitionPath).get()))
     assertTrue(MetadataPartitionType.RECORD_INDEX.isMetadataPartitionAvailable(getLatestMetaClient(true)))
+    spark.sql("set hoodie.write.lock.provider=")
     spark.sql(s"drop table $sqlTempTable")
   }
 

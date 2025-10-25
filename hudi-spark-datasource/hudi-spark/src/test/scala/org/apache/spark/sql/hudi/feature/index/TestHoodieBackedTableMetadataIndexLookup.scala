@@ -124,6 +124,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     tmpDir = Utils.createTempDir()
 
     spark.sql("set hoodie.parquet.small.file.limit=0")
+    spark.sql("set hoodie.write.lock.provider = org.apache.hudi.client.transaction.lock.InProcessLockProvider")
     // Setup shared test data
     setupSharedTestData()
   }

@@ -68,6 +68,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
 
   override protected def beforeAll(): Unit = {
     spark.sql("set hoodie.metadata.index.column.stats.enable=false")
+    spark.sql("set hoodie.write.lock.provider = org.apache.hudi.client.transaction.lock.InProcessLockProvider")
     spark.sparkContext.persistentRdds.foreach(rdd => rdd._2.unpersist())
     initQueryIndexConf()
   }

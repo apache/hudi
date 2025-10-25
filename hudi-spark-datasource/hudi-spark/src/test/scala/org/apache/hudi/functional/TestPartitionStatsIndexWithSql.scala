@@ -44,9 +44,9 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
 
   val sqlTempTable = "hudi_tbl"
 
-  @BeforeAll
-  def init(): Unit = {
+  override protected def beforeAll(): Unit = {
     initQueryIndexConf()
+    spark.sql("set hoodie.write.lock.provider = org.apache.hudi.client.transaction.lock.InProcessLockProvider")
   }
 
   test("Test drop partition stats index") {
