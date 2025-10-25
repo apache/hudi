@@ -27,6 +27,8 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReaderOnJavaTestBase;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.avro.HoodieTimestampAwareParquetInputFormat;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
@@ -37,6 +39,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
+import org.apache.hadoop.hive.ql.io.parquet.read.ParquetRecordReaderWrapper;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.hive.serde2.SerDeException;
 import org.apache.hadoop.hive.serde2.avro.HiveTypeUtils;
@@ -94,7 +97,18 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
 
   @Override
   public HoodieReaderContext<ArrayWritable> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf, HoodieTableMetaClient metaClient) {
-    HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator = (inputSplit, jobConf) -> new MapredParquetInputFormat().getRecordReader(inputSplit, jobConf, null);
+    HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator = (inputSplit, jobConf, dataSchema) -> {
+      if (HoodieColumnProjectionUtils.supportTimestamp(jobConf)) {
+        try {
+          return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(Option.empty(), Option.of(dataSchema)), inputSplit, jobConf, null);
+        } catch (InterruptedException e) {
+          throw new RuntimeException(e);
+        }
+      } else {
+        return new MapredParquetInputFormat().getRecordReader(inputSplit, jobConf, null);
+      }
+    };
+
     JobConf jobConf = new JobConf(storageConf.unwrapAs(Configuration.class));
     setupJobconf(jobConf, avroSchema);
     return new HiveHoodieReaderContext(readerCreator,

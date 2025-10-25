@@ -1208,7 +1208,9 @@ public class HoodieAvroUtils {
           return oldValue;
         case LONG:
           if (oldSchema.getLogicalType() != newSchema.getLogicalType()) {
-            if (oldSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
+            if (oldSchema.getLogicalType() == null || newSchema.getLogicalType() == null) {
+              return oldValue;
+            } else if (oldSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
               if (newSchema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
                 return DateTimeUtils.millisToMicros((Long) oldValue);
               }
@@ -1485,6 +1487,10 @@ public class HoodieAvroUtils {
       case DOUBLE:
       case FLOAT:
       case LONG:
+        if (readerSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis
+            && writerSchema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
+          return true;
+        }
         return !(writerSchema.getType().equals(Schema.Type.INT) || writerSchema.getType().equals(Schema.Type.LONG));
       default:
         return !writerSchema.getType().equals(readerSchema.getType());

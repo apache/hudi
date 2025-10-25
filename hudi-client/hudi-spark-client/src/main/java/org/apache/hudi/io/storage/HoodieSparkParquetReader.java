@@ -19,6 +19,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.SparkAdapterSupport$;
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -40,6 +41,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.SchemaRepair;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
@@ -60,6 +62,7 @@ import scala.Option$;
 
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.parquet.avro.AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS;
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
@@ -67,6 +70,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   private final HoodieStorage storage;
   private final FileFormatUtils parquetUtils;
   private final List<ClosableIterator> readerIterators = new ArrayList<>();
+  private Option<MessageType> messageTypeOption = Option.empty();
   private Option<StructType> structTypeOption = Option.empty();
   private Option<Schema> schemaOption = Option.empty();
 
@@ -116,11 +120,12 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   }
 
   public ClosableIterator<UnsafeRow> getUnsafeRowIterator(Schema requestedSchema) throws IOException {
-    return getUnsafeRowIterator(HoodieInternalRowUtils.getCachedSchema(requestedSchema));
-  }
-
-  public ClosableIterator<UnsafeRow> getUnsafeRowIterator(StructType requestedSchema) throws IOException {
-    SparkBasicSchemaEvolution evolution = new SparkBasicSchemaEvolution(getStructSchema(), requestedSchema, SQLConf.get().sessionLocalTimeZone());
+    Schema requestNonNull = AvroSchemaUtils.resolveNullableSchema(requestedSchema);
+    StructType structSchema = HoodieInternalRowUtils.getCachedSchema(requestNonNull);
+    Option<MessageType> messageSchema = Option.of(getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(requestNonNull));
+    MessageType dataMessageType = SchemaRepair.repairLogicalTypes(getMessageType(), messageSchema);
+    StructType dataStructType = convertToStruct(dataMessageType);
+    SparkBasicSchemaEvolution evolution = new SparkBasicSchemaEvolution(dataStructType, structSchema, SQLConf.get().sessionLocalTimeZone());
     String readSchemaJson = evolution.getRequestSchema().json();
     storage.getConf().set(ParquetReadSupport.PARQUET_READ_SCHEMA, readSchemaJson);
     storage.getConf().set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA(), readSchemaJson);
@@ -128,7 +133,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     storage.getConf().set(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), SQLConf.get().getConf(SQLConf.PARQUET_INT96_AS_TIMESTAMP()).toString());
     ParquetReader<InternalRow> reader = ParquetReader.builder(new HoodieParquetReadSupport(Option$.MODULE$.empty(), true,
             SparkAdapterSupport$.MODULE$.sparkAdapter().getRebaseSpec("CORRECTED"),
-            SparkAdapterSupport$.MODULE$.sparkAdapter().getRebaseSpec("LEGACY")),
+            SparkAdapterSupport$.MODULE$.sparkAdapter().getRebaseSpec("LEGACY"), messageSchema),
             new Path(path.toUri()))
         .withConf(storage.getConf().unwrapAs(Configuration.class))
         .build();
@@ -139,15 +144,22 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     return projectedIterator;
   }
 
+  private MessageType getMessageType() {
+    if (messageTypeOption.isEmpty()) {
+      MessageType messageType = ((ParquetUtils) parquetUtils).readSchema(storage, path);
+      messageTypeOption = Option.of(messageType);
+    }
+    return messageTypeOption.get();
+  }
+
   @Override
   public Schema getSchema() {
     if (schemaOption.isEmpty()) {
       // Some types in avro are not compatible with parquet.
       // Avro only supports representing Decimals as fixed byte array
       // and therefore if we convert to Avro directly we'll lose logical type-info.
-      MessageType messageType = ((ParquetUtils) parquetUtils).readSchema(storage, path);
-      StructType structType = new ParquetToSparkSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(messageType);
-      structTypeOption = Option.of(structType);
+      MessageType messageType = getMessageType();
+      StructType structType = getStructSchema();
       schemaOption = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter()
           .getAvroSchemaConverters()
           .toAvroType(structType, true, messageType.getName(), StringUtils.EMPTY_STRING));
@@ -157,9 +169,14 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   protected StructType getStructSchema() {
     if (structTypeOption.isEmpty()) {
-      getSchema();
+      MessageType messageType = getMessageType();
+      structTypeOption = Option.of(convertToStruct(messageType));
     }
     return structTypeOption.get();
+  }
+
+  private StructType convertToStruct(MessageType messageType) {
+    return new ParquetToSparkSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(messageType);
   }
 
   @Override

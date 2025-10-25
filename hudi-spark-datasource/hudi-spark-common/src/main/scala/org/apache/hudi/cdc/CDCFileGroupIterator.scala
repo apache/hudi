@@ -47,6 +47,7 @@ import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
+import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
@@ -137,6 +138,14 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   private lazy val cdcSparkSchema: StructType = AvroConversionUtils.convertAvroSchemaToStructType(cdcAvroSchema)
 
   private lazy val sparkPartitionedFileUtils = sparkAdapter.getSparkPartitionedFileUtils
+
+  private lazy val tableSchemaOpt = if (avroSchema != null) {
+    val hadoopConf = storage.getConf.unwrapAs(classOf[Configuration])
+    val parquetSchema = getAvroSchemaConverter(hadoopConf).convert(avroSchema)
+    org.apache.hudi.common.util.Option.of(parquetSchema)
+  } else {
+    org.apache.hudi.common.util.Option.empty[org.apache.parquet.schema.MessageType]()
+  }
 
   /**
    * The deserializer used to convert the CDC GenericRecord to Spark InternalRow.
@@ -400,7 +409,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
           val pf = sparkPartitionedFileUtils.createPartitionedFile(
             InternalRow.empty, absCDCPath, 0, fileStatus.getLength)
           recordIter = baseFileReader.read(pf, originTableSchema.structTypeSchema, new StructType(),
-            toJavaOption(originTableSchema.internalSchema), Seq.empty, conf)
+            toJavaOption(originTableSchema.internalSchema), Seq.empty, conf, tableSchemaOpt)
             .map(record => BufferedRecords.fromEngineRecord(record, avroSchema, readerContext.getRecordContext, orderingFieldNames, false))
         case BASE_FILE_DELETE =>
           assert(currentCDCFileSplit.getBeforeFileSlice.isPresent)

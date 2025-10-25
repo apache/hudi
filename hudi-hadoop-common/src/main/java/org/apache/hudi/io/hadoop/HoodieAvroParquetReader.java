@@ -46,6 +46,7 @@ import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.avro.HoodieAvroParquetReaderBuilder;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.parquet.hadoop.ParquetReader;
+import org.apache.parquet.schema.AvroSchemaRepair;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -55,6 +56,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 /**
  * {@link HoodieFileReader} implementation for parquet format.
@@ -178,17 +180,20 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     //       sure that in case the file-schema is not equal to read-schema we'd still
     //       be able to read that file (in case projection is a proper one)
     Configuration hadoopConf = storage.getConf().unwrapCopyAs(Configuration.class);
+    Schema fileSchema = AvroSchemaRepair.repairLogicalTypes(getSchema(), schema);
     Option<Schema> promotedSchema = Option.empty();
-    if (!renamedColumns.isEmpty() || HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(getSchema(), schema)) {
-      AvroReadSupport.setAvroReadSchema(hadoopConf, getSchema());
-      AvroReadSupport.setRequestedProjection(hadoopConf, getSchema());
+    if (!renamedColumns.isEmpty() || HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(fileSchema, schema)) {
+      AvroReadSupport.setAvroReadSchema(hadoopConf, fileSchema);
+      AvroReadSupport.setRequestedProjection(hadoopConf, fileSchema);
       promotedSchema = Option.of(schema);
     } else {
       AvroReadSupport.setAvroReadSchema(hadoopConf, schema);
       AvroReadSupport.setRequestedProjection(hadoopConf, schema);
     }
     ParquetReader<IndexedRecord> reader =
-        new HoodieAvroParquetReaderBuilder<IndexedRecord>(path).withConf(hadoopConf)
+        new HoodieAvroParquetReaderBuilder<IndexedRecord>(path)
+            .withTableSchema(getAvroSchemaConverter(hadoopConf).convert(schema))
+            .withConf(hadoopConf)
             .set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, hadoopConf.get(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS))
             .set(ParquetInputFormat.STRICT_TYPE_CHECKING, hadoopConf.get(ParquetInputFormat.STRICT_TYPE_CHECKING))
             .build();

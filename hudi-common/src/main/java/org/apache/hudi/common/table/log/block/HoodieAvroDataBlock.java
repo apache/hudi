@@ -45,6 +45,7 @@ import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
+import org.apache.parquet.schema.AvroSchemaRepair;
 
 import javax.annotation.Nonnull;
 
@@ -187,11 +188,12 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         this.totalRecords = this.dis.readInt();
       }
 
-      if (recordNeedsRewriteForExtendedAvroTypePromotion(writerSchema, readerSchema)) {
-        this.reader = new GenericDatumReader<>(writerSchema, writerSchema);
+      Schema repairedWriterSchema = AvroSchemaRepair.repairLogicalTypes(writerSchema, readerSchema);
+      if (recordNeedsRewriteForExtendedAvroTypePromotion(repairedWriterSchema, readerSchema)) {
+        this.reader = new GenericDatumReader<>(repairedWriterSchema, repairedWriterSchema);
         this.promotedSchema = Option.of(readerSchema);
       } else {
-        this.reader = new GenericDatumReader<>(writerSchema, readerSchema);
+        this.reader = new GenericDatumReader<>(repairedWriterSchema, readerSchema);
       }
     }
 
@@ -272,11 +274,12 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         this.totalRecords = this.inputStream.readInt();
       }
 
-      if (recordNeedsRewriteForExtendedAvroTypePromotion(writerSchema, readerSchema)) {
-        this.reader = new GenericDatumReader<>(writerSchema, writerSchema);
+      Schema repairedWriterSchema = AvroSchemaRepair.repairLogicalTypes(writerSchema, readerSchema);
+      if (recordNeedsRewriteForExtendedAvroTypePromotion(repairedWriterSchema, readerSchema)) {
+        this.reader = new GenericDatumReader<>(repairedWriterSchema, repairedWriterSchema);
         this.promotedSchema = Option.of(readerSchema);
       } else {
-        this.reader = new GenericDatumReader<>(writerSchema, readerSchema);
+        this.reader = new GenericDatumReader<>(repairedWriterSchema, readerSchema);
       }
 
       this.buffer = ByteBuffer.allocate(Math.min(bufferSize, Math.toIntExact(contentLocation.getBlockSize())));
