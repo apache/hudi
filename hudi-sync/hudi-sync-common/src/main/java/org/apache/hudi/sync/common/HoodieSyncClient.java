@@ -112,7 +112,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     try {
       return tableSchemaResolver.getTableParquetSchema();
     } catch (Exception e) {
-      throw new HoodieSyncException("Failed to read schema from storage.", e);
+      throw new HoodieSyncException(buildSchemaReadErrorMessage(e), e);
     }
   }
 
@@ -121,8 +121,23 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     try {
       return tableSchemaResolver.getTableParquetSchema(includeMetadataField);
     } catch (Exception e) {
-      throw new HoodieSyncException("Failed to read schema from storage.", e);
+      throw new HoodieSyncException(buildSchemaReadErrorMessage(e), e);
     }
+  }
+
+  private String buildSchemaReadErrorMessage(Exception e) {
+    String errorMessage = e.getMessage() != null ? e.getMessage() : e.getClass().getName();
+    if (e instanceof java.io.FileNotFoundException) {
+      return String.format(
+          "Cannot read Hudi table schema.%n%n"
+              + "Required data file missing .%n%n"
+              + "This indicates:%n"
+              + "  1. Aggressive cleaner retention compared to query run times\n"
+              + "  2. Manual file deletions (timeline files or data files)\n"
+              + "  3. Concurrent writers without proper locking or configurations set\n\n"
+              + "Original error: %s", errorMessage);
+    }
+    return String.format("Failed to read schema from storage.%nError: %s", errorMessage);
   }
 
   /**
