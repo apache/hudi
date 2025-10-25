@@ -59,6 +59,7 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
+import static org.apache.hudi.common.table.HoodieTableConfig.NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED;
 
@@ -705,6 +706,16 @@ public class ConfigUtils {
     }
   }
 
+  public static boolean isPropertiesInvalid(TypedProperties props) {
+    // For older versions if checksum is not present, table name needs to be present to generate the checksum
+    if (!props.containsKey(TABLE_CHECKSUM.key())) {
+      return !props.containsKey(NAME.key());
+    }
+
+    // If checkSum is present we need to validate
+    return !HoodieTableConfig.validateChecksum(props);
+  }
+
   public static void recoverIfNeeded(HoodieStorage storage, StoragePath cfgPath,
                                      StoragePath backupCfgPath) throws IOException {
     boolean needCopy = false;
@@ -714,7 +725,7 @@ public class ConfigUtils {
       TypedProperties props = new TypedProperties();
       try (InputStream in = storage.open(cfgPath)) {
         props.load(in);
-        if (!props.containsKey(TABLE_CHECKSUM.key()) || !HoodieTableConfig.validateChecksum(props)) {
+        if (isPropertiesInvalid(props)) {
           // the cfg file is invalid
           storage.deleteFile(cfgPath);
           needCopy = true;
@@ -727,7 +738,7 @@ public class ConfigUtils {
       try (InputStream backupStream = new ByteArrayInputStream(bytes)) {
         TypedProperties backupProps = new TypedProperties();
         backupProps.load(backupStream);
-        if (!backupProps.containsKey(TABLE_CHECKSUM.key()) || !HoodieTableConfig.validateChecksum(backupProps)) {
+        if (isPropertiesInvalid(backupProps)) {
           // need to delete the backup as anyway reads will also fail
           // subsequent writes will recover and update
           storage.deleteFile(backupCfgPath);

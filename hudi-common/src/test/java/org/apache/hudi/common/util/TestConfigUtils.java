@@ -427,4 +427,31 @@ public class TestConfigUtils {
     assertEquals(1, props.size());
     assertEquals("overwrite", props.get("strategy"));
   }
+
+  @Test
+  void testIsPropertiesInvalid() {
+    TypedProperties props = new TypedProperties();
+    // Case-1 : Empty properties - should be invalid
+    assertTrue(ConfigUtils.isPropertiesInvalid(props));
+
+    // Case-2 : Valid properties with valid checksum
+    props.setProperty(HoodieTableConfig.NAME.key(), "test_db.test_table");
+    props.setProperty(HoodieTableConfig.TYPE.key(), "COPY_ON_WRITE");
+    props.setProperty(HoodieTableConfig.VERSION.key(), "6");
+    props.setProperty(HoodieTableConfig.TABLE_CHECKSUM.key(), String.valueOf(HoodieTableConfig.generateChecksum(props)));
+
+    assertFalse(ConfigUtils.isPropertiesInvalid(props));
+
+    // Case-3 : Invalid checksum
+    props.setProperty(HoodieTableConfig.TABLE_CHECKSUM.key(), "0");
+    assertTrue(ConfigUtils.isPropertiesInvalid(props));
+
+    // Case-4: without checksum property, valid properties
+    props.remove(HoodieTableConfig.TABLE_CHECKSUM.key());
+    assertFalse(ConfigUtils.isPropertiesInvalid(props));
+
+    // Case-5: without checksum property, invalid properties
+    props.remove(HoodieTableConfig.NAME.key());
+    assertTrue(ConfigUtils.isPropertiesInvalid(props));
+  }
 }
