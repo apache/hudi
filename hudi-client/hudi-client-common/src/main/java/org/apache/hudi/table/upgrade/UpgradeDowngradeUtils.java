@@ -57,6 +57,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -294,12 +295,23 @@ public class UpgradeDowngradeUtils {
                                               HoodieTable table, SupportsUpgradeDowngrade upgradeDowngradeHelper, String operationType) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
     try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(config, context)) {
-      List<String> mdtPartitions = metaClient.getTableConfig().getMetadataPartitions()
+      Set<String> metadataPartitions = metaClient.getTableConfig().getMetadataPartitions();
+      List<String> mdtPartitions = metadataPartitions
           .stream()
           .filter(partition -> metaClient.getIndexForMetadataPartition(partition)
               .map(indexDef -> HoodieIndexVersion.V1.lowerThan(indexDef.getVersion()))
               .orElse(false))
           .collect(Collectors.toList());
+
+      // If col stats V2 is being deleted and partition stats exists, delete partition stats as well
+      // This handles the case where partition stats might not have an index definition in index.json
+      String colStatsPartition = MetadataPartitionType.COLUMN_STATS.getPartitionPath();
+      String partitionStatsPartition = MetadataPartitionType.PARTITION_STATS.getPartitionPath();
+      if (mdtPartitions.contains(colStatsPartition)
+          && metadataPartitions.contains(partitionStatsPartition)) {
+        mdtPartitions.add(partitionStatsPartition);
+      }
+
       LOG.info("Dropping from MDT partitions for {}: {}", operationType, mdtPartitions);
       if (!mdtPartitions.isEmpty()) {
         writeClient.dropIndex(mdtPartitions);
