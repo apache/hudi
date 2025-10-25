@@ -66,7 +66,7 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(HoodieTestUtils.getDefaultStorageConf).build()
     assertEquals(isPartitioned, HoodieRecordIndex.isPartitioned(metaClient.getIndexMetadata.get().getIndex(MetadataPartitionType.RECORD_INDEX.getPartitionPath).get()))
     assertTrue(MetadataPartitionType.RECORD_INDEX.isMetadataPartitionAvailable(getLatestMetaClient(true)))
-    spark.sql("unset hoodie.write.lock.provider")
+    spark.sql("set hoodie.write.lock.provider=")
     spark.sql(s"drop table $sqlTempTable")
   }
 
