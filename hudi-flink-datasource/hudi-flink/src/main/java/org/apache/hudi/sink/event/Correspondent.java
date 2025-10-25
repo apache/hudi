@@ -71,6 +71,14 @@ public class Correspondent {
     }
   }
 
+  public OperatorID getOperatorID() {
+    return operatorID;
+  }
+
+  public TaskOperatorEventGateway getGateway() {
+    return gateway;
+  }
+
   /**
    * A request for instant time with a given checkpoint id.
    */

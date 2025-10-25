@@ -88,7 +88,7 @@ public abstract class AbstractStreamWriteFunction<I>
   /**
    * Correspondent to request the instant time.
    */
-  private transient Correspondent correspondent;
+  protected transient Correspondent correspondent;
 
   /**
    * Gateway to send operator events to the operator coordinator.
@@ -183,8 +183,16 @@ public abstract class AbstractStreamWriteFunction<I>
     this.correspondent = correspondent;
   }
 
+  public Correspondent getCorrespondent() {
+    return correspondent;
+  }
+
   public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
     this.eventGateway = operatorEventGateway;
+  }
+
+  public OperatorEventGateway getOperatorEventGateway() {
+    return eventGateway;
   }
 
   // -------------------------------------------------------------------------
