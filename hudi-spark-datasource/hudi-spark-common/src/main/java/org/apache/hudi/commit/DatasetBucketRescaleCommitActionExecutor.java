@@ -46,8 +46,8 @@ public class DatasetBucketRescaleCommitActionExecutor extends DatasetBulkInsertO
   private final int bucketNumber;
 
   public DatasetBucketRescaleCommitActionExecutor(HoodieWriteConfig config,
-                                                  SparkRDDWriteClient writeClient) {
-    super(config, writeClient);
+                                                  SparkRDDWriteClient writeClient, String instantTime) {
+    super(config, writeClient, instantTime);
     expression = config.getBucketIndexPartitionExpression();
     rule = config.getBucketIndexPartitionRuleType();
     bucketNumber = config.getBucketIndexNumBuckets();

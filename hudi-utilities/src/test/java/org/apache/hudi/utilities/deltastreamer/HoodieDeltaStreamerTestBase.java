@@ -406,13 +406,20 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
                                          String propsFileName, String parquetSourceRoot, boolean addCommonProps,
                                          String partitionPath, String emptyBatchParam, boolean skipRecordKeyField) throws IOException {
     prepareParquetDFSSource(useSchemaProvider, hasTransformer, sourceSchemaFile, targetSchemaFile, propsFileName, parquetSourceRoot, addCommonProps,
-        partitionPath, emptyBatchParam, null, skipRecordKeyField);
+        partitionPath, emptyBatchParam, null, skipRecordKeyField, false);
+  }
+
+  protected void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
+                                         String propsFileName, String parquetSourceRoot, boolean addCommonProps,
+                                         String partitionPath, String emptyBatchParam, boolean skipRecordKeyField, boolean useRowWriter) throws IOException {
+    prepareParquetDFSSource(useSchemaProvider, hasTransformer, sourceSchemaFile, targetSchemaFile, propsFileName, parquetSourceRoot, addCommonProps,
+        partitionPath, emptyBatchParam, null, skipRecordKeyField, useRowWriter);
   }
 
   protected void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
                                        String propsFileName, String parquetSourceRoot, boolean addCommonProps,
                                        String partitionPath, String emptyBatchParam, TypedProperties extraProps,
-                                         boolean skipRecordKeyField) throws IOException {
+                                         boolean skipRecordKeyField, boolean useRowWriter) throws IOException {
     // Properties used for testing delta-streamer with Parquet source
     TypedProperties parquetProps = TypedProperties.copy(extraProps);
 
@@ -424,6 +431,9 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
     parquetProps.setProperty("include", "base.properties");
     parquetProps.setProperty("hoodie.embed.timeline.server", "false");
+    if (useRowWriter) {
+      parquetProps.setProperty("hoodie.streamer.write.row.writer.enable", "true");
+    }
     if (!skipRecordKeyField) {
       parquetProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
     }
@@ -626,10 +636,18 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
           tableType, sourceOrderingField, checkpoint, false);
     }
 
+    public static HoodieDeltaStreamer.Config makeConfig(String basePath, WriteOperationType op, String sourceClassName,
+                                                        List<String> transformerClassNames, String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass,
+                                                        int sourceLimit, boolean updatePayloadClass, String payloadClassName, String tableType, String sourceOrderingField,
+                                                        String checkpoint, boolean allowCommitOnNoCheckpointChange) {
+      return makeConfig(basePath, op, sourceClassName, transformerClassNames, propsFilename, enableHiveSync, useSchemaProviderClass, sourceLimit, updatePayloadClass, payloadClassName,
+          tableType, sourceOrderingField, checkpoint, allowCommitOnNoCheckpointChange, HoodieTableVersion.current());
+    }
+
     static HoodieDeltaStreamer.Config makeConfig(String basePath, WriteOperationType op, String sourceClassName,
                                                  List<String> transformerClassNames, String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass,
                                                  int sourceLimit, boolean updatePayloadClass, String payloadClassName, String tableType, String sourceOrderingField,
-                                                 String checkpoint, boolean allowCommitOnNoCheckpointChange) {
+                                                 String checkpoint, boolean allowCommitOnNoCheckpointChange, HoodieTableVersion tableVersion) {
       HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
       cfg.targetBasePath = basePath;
       cfg.targetTableName = "hoodie_trips";
@@ -652,7 +670,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       Triple<RecordMergeMode, String, String> mergeCfgs =
           HoodieTableConfig.inferMergingConfigsForWrites(
               cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingFields,
-              HoodieTableVersion.current());
+              tableVersion);
       cfg.recordMergeMode = mergeCfgs.getLeft();
       cfg.payloadClassName = mergeCfgs.getMiddle();
       cfg.recordMergeStrategyId = mergeCfgs.getRight();

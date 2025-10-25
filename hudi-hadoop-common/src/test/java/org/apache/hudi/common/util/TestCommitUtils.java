@@ -35,6 +35,8 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -150,6 +152,39 @@ public class TestCommitUtils {
     assertEquals(Option.of("6"), CommitUtils.getValidCheckpointForCurrentWriter(timeline, SINK_CHECKPOINT_KEY, ID2));
     assertEquals(
         Option.empty(), CommitUtils.getValidCheckpointForCurrentWriter(timeline, SINK_CHECKPOINT_KEY, ID3));
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = WriteOperationType.class,
+      names = {"INSERT_OVERWRITE", "INSERT_OVERWRITE_TABLE", "DELETE_PARTITION", "BUCKET_RESCALE"}
+  )
+  public void testSpecialOverwriteOperationsReturnReplaceCommit(WriteOperationType op) {
+    String resultCOW = CommitUtils.getCommitActionType(op, HoodieTableType.COPY_ON_WRITE);
+    String resultMOR = CommitUtils.getCommitActionType(op, HoodieTableType.MERGE_ON_READ);
+
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, resultCOW);
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, resultMOR);
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = WriteOperationType.class,
+      mode = EnumSource.Mode.EXCLUDE,
+      names = {"INSERT_OVERWRITE", "INSERT_OVERWRITE_TABLE", "DELETE_PARTITION", "BUCKET_RESCALE"}
+  )
+  public void testNormalOperationsDelegateBasedOnTableType(WriteOperationType op) {
+    String resultCOW = CommitUtils.getCommitActionType(op, HoodieTableType.COPY_ON_WRITE);
+    String resultMOR = CommitUtils.getCommitActionType(op, HoodieTableType.MERGE_ON_READ);
+
+    assertEquals(HoodieActiveTimeline.COMMIT_ACTION, resultCOW);
+    assertEquals(HoodieActiveTimeline.DELTA_COMMIT_ACTION, resultMOR);
+  }
+
+  @Test
+  public void testNullOperationFallsBackToTableType() {
+    String result = CommitUtils.getCommitActionType(null, HoodieTableType.COPY_ON_WRITE);
+    assertEquals(HoodieActiveTimeline.COMMIT_ACTION, result);
   }
 
   private HoodieWriteStat createWriteStat(String partition, String fileId) {
