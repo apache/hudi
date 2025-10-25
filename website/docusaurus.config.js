@@ -37,20 +37,6 @@ module.exports = {
     },
     slackUrl: slackUrl,
   },
-  i18n: {
-    defaultLocale: "en",
-    locales: ["en", "cn"],
-    localeConfigs: {
-      en: {
-        label: "English",
-        direction: "ltr",
-      },
-      cn: {
-        label: "Chinese",
-        direction: "ltr",
-      },
-    },
-  },
   plugins: [
     [
       "@docusaurus/plugin-content-blog",
@@ -279,10 +265,6 @@ module.exports = {
           ],
         },
         {
-          type: "localeDropdown",
-          position: "right",
-        },
-        {
           href: "https://github.com/apache/hudi",
           position: "right",
           className: "header-github-link",
@@ -509,13 +491,8 @@ module.exports = {
       {
         docs: {
           sidebarPath: require.resolve("./sidebars.js"),
-          // Please change this to your repo.
-          editUrl: ({ version, versionDocsDirPath, docPath, locale }) => {
-            if (locale != this.defaultLocale) {
+          editUrl: ({ versionDocsDirPath, docPath }) => {
               return `https://github.com/apache/hudi/tree/asf-site/website/${versionDocsDirPath}/${docPath}`;
-            } else {
-              return `https://github.com/apache/hudi/tree/asf-site/website/i18n/${locale}/docusaurus-plugin-content-${versionDocsDirPath}/${version}/${docPath}`;
-            }
           },
           includeCurrentVersion: true,
           versions: {
