@@ -37,16 +37,6 @@ module.exports = {
     },
     slackUrl: slackUrl,
   },
-  i18n: {
-    defaultLocale: "en",
-    locales: ["en"],
-    localeConfigs: {
-      en: {
-        label: "English",
-        direction: "ltr",
-      },
-    },
-  },
   plugins: [
     [
       "@docusaurus/plugin-content-blog",
@@ -501,13 +491,8 @@ module.exports = {
       {
         docs: {
           sidebarPath: require.resolve("./sidebars.js"),
-          // Please change this to your repo.
-          editUrl: ({ version, versionDocsDirPath, docPath, locale }) => {
-            if (locale != this.defaultLocale) {
+          editUrl: ({ versionDocsDirPath, docPath }) => {
               return `https://github.com/apache/hudi/tree/asf-site/website/${versionDocsDirPath}/${docPath}`;
-            } else {
-              return `https://github.com/apache/hudi/tree/asf-site/website/i18n/${locale}/docusaurus-plugin-content-${versionDocsDirPath}/${version}/${docPath}`;
-            }
           },
           includeCurrentVersion: true,
           versions: {
