@@ -13,7 +13,7 @@ jobs:
     env:
       DOCS_ROOT: "./website"
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
@@ -39,9 +39,9 @@ jobs:
           git checkout -b pr
           git remote add hudi https://${{ secrets.GITHUB_TOKEN }}@github.com/apache/hudi.git
           git pull --rebase hudi asf-site
-      - uses: actions/setup-node@v2
+      - uses: actions/setup-node@v6
         with:
-          node-version: '18'
+          node-version: '22'
       - name: Build website
         run: |
           pushd ${{ env.DOCS_ROOT }}

@@ -17,7 +17,11 @@ module.exports = {
   url: "https://hudi.apache.org",
   baseUrl: "/",
   onBrokenLinks: "throw",
-  onBrokenMarkdownLinks: "warn",
+  markdown: {
+    hooks: {
+      onBrokenMarkdownLinks: "warn",
+    },
+  },
   favicon: "/assets/images/favicon.ico",
   organizationName: "apache",
   projectName: "hudi",
