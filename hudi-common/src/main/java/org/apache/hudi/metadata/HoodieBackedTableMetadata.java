@@ -48,7 +48,6 @@ import org.apache.hudi.common.table.read.buffer.ReusableFileGroupRecordBufferLoa
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.ConfigUtils;
-import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -457,11 +456,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         dataMetaClient.getTableConfig().getMetadataPartitions().contains(partitionName),
         () -> "Secondary index is not initialized in MDT for: " + partitionName);
     // Fetch secondary-index records
-    Map<String, Set<String>> secondaryKeyRecords = HoodieDataUtils.collectPairDataAsMap(
-        readSecondaryIndexDataTableRecordKeysWithKeys(HoodieListData.eager(secondaryKeys.collectAsList()), partitionName));
-    // Now collect the record-keys and fetch the RLI records
-    List<String> recordKeys = new ArrayList<>();
-    secondaryKeyRecords.values().forEach(recordKeys::addAll);
+    HoodiePairData<String, String> pairedData = readSecondaryIndexDataTableRecordKeysWithKeys(HoodieListData.eager(secondaryKeys.collectAsList()), partitionName);
+    List<String> recordKeys = pairedData.map(Pair::getValue).collectAsList();
     return readRecordIndexLocationsWithKeys(HoodieListData.eager(recordKeys));
   }
 
