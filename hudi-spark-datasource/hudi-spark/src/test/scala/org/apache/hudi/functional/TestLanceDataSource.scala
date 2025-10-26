@@ -1123,4 +1123,114 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       "Should have a clustering instant on timeline")
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testSchemaEvolutionAddColumn(tableType: String): Unit = {
+    val tableName = s"test_lance_schema_evolution_${tableType.toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    // First insert with base schema - columns: (id, name, age, score)
+    val records1 = Seq(
+      (1, "Alice", 30, 95.5),
+      (2, "Bob", 25, 87.3),
+      (3, "Charlie", 35, 92.1)
+    )
+    val df1 = spark.createDataFrame(records1).toDF("id", "name", "age", "score")
+
+    df1.write
+      .format("hudi")
+      .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
+      .option(RECORDKEY_FIELD.key(), "id")
+      .option(PRECOMBINE_FIELD.key(), "age")
+      .option(TABLE_NAME.key(), tableName)
+      .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
+      .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
+      .option(OPERATION.key(), "insert")
+      .mode(SaveMode.Overwrite)
+      .save(tablePath)
+
+    // Schema evolution - add new column "email" and upsert existing records
+    import org.apache.spark.sql.functions._
+    val records2 = Seq(
+      (1, "Alice", 31, 96.0, "alice@example.com"),
+      (2, "Bob", 26, 88.0, "bob@example.com")
+    )
+    val df2 = spark.createDataFrame(records2).toDF("id", "name", "age", "score", "email")
+
+    df2.write
+      .format("hudi")
+      .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
+      .option(RECORDKEY_FIELD.key(), "id")
+      .option(PRECOMBINE_FIELD.key(), "age")
+      .option(TABLE_NAME.key(), tableName)
+      .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
+      .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
+      .option(OPERATION.key(), "upsert")
+      .mode(SaveMode.Append)
+      .save(tablePath)
+
+    // Insert a new record with the evolved schema
+    val records3 = Seq(
+      (4, "David", 28, 89.5, "david@example.com")
+    )
+    val df3 = spark.createDataFrame(records3).toDF("id", "name", "age", "score", "email")
+
+    df3.write
+      .format("hudi")
+      .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
+      .option(RECORDKEY_FIELD.key(), "id")
+      .option(PRECOMBINE_FIELD.key(), "age")
+      .option(TABLE_NAME.key(), tableName)
+      .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
+      .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
+      .option(OPERATION.key(), "insert")
+      .mode(SaveMode.Append)
+      .save(tablePath)
+
+    // Read and verify schema evolution
+    val result = spark.read
+      .format("hudi")
+      .load(tablePath)
+      .orderBy("id")
+      .collect()
+
+    // Verify we have 4 records
+    assertEquals(4, result.length, "Should have 4 records after schema evolution")
+
+    // Verify schema includes the new "email" column
+    val schema = spark.read.format("hudi").load(tablePath).schema
+    assertTrue(schema.fieldNames.contains("email"), "Schema should include 'email' column")
+
+    // Verify record 1 - Alice (updated with email)
+    assertEquals(1, result(0).getAs[Int]("id"))
+    assertEquals("Alice", result(0).getAs[String]("name"))
+    assertEquals(31, result(0).getAs[Int]("age"))
+    assertEquals(96.0, result(0).getAs[Double]("score"), 0.01)
+    assertEquals("alice@example.com", result(0).getAs[String]("email"))
+
+    // Verify record 2 - Bob (updated with email)
+    assertEquals(2, result(1).getAs[Int]("id"))
+    assertEquals("Bob", result(1).getAs[String]("name"))
+    assertEquals(26, result(1).getAs[Int]("age"))
+    assertEquals(88.0, result(1).getAs[Double]("score"), 0.01)
+    assertEquals("bob@example.com", result(1).getAs[String]("email"))
+
+    // Verify record 3 - Charlie (original record, email should be null)
+    assertEquals(3, result(2).getAs[Int]("id"))
+    assertEquals("Charlie", result(2).getAs[String]("name"))
+    assertEquals(35, result(2).getAs[Int]("age"))
+    assertEquals(92.1, result(2).getAs[Double]("score"), 0.01)
+    assertTrue(result(2).isNullAt(result(2).fieldIndex("email")), "Charlie's email should be null")
+
+    // Verify record 4 - David (new record with email)
+    assertEquals(4, result(3).getAs[Int]("id"))
+    assertEquals("David", result(3).getAs[String]("name"))
+    assertEquals(28, result(3).getAs[Int]("age"))
+    assertEquals(89.5, result(3).getAs[Double]("score"), 0.01)
+    assertEquals("david@example.com", result(3).getAs[String]("email"))
+  }
+
 }
