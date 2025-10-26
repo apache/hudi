@@ -947,10 +947,11 @@ public class StreamSync implements Serializable, Closeable {
       BaseDatasetBulkInsertCommitActionExecutor executor = new HoodieStreamerDatasetBulkInsertCommitActionExecutor(hoodieWriteConfig, writeClient);
       writeClientWriteResult = new WriteClientWriteResult(executor.execute(df, !HoodieStreamerUtils.getPartitionColumns(props).isEmpty()).getWriteStatuses());
     } else {
+      metaClient = HoodieTableMetaClient.reload(metaClient);
       TypedProperties mergeProps = ConfigUtils.getMergeProps(props, metaClient.getTableConfig());
       HoodieRecordType recordType = createRecordMerger(mergeProps).getRecordType();
       Option<JavaRDD<HoodieRecord>> recordsOption = HoodieStreamerUtils.createHoodieRecords(cfg, mergeProps, inputBatch.getBatch(), inputBatch.getSchemaProvider(),
-          recordType, autoGenerateRecordKeys, instantTime, errorTableWriter);
+          recordType, autoGenerateRecordKeys, instantTime, errorTableWriter, metaClient.getTableConfig());
       JavaRDD<HoodieRecord> records = recordsOption.orElseGet(() -> hoodieSparkContext.emptyRDD());
       // filter dupes if needed
       if (cfg.filterDupes) {
