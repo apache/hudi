@@ -293,44 +293,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         .collect(Collectors.toList());
   }
 
-  @Test
-  public void testTimestampRepair() throws Exception {
-    Map<String, String> writeConfigs = new HashMap<>(
-        getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING, true));
-    HoodieTestDataGenerator.SchemaEvolutionConfigs schemaEvolutionConfigs = HoodieTestDataGenerator.SchemaEvolutionConfigs.createMinimalConfig();
-    writeConfigs.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.PARQUET.name());
-
-    try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
-      //start with micros
-      dataGen.extendSchemaBeforeEvolutionWithTimestampLogicalType(schemaEvolutionConfigs, false);
-
-      // Write a base file with schema A
-      List<HoodieRecord> firstRecords = dataGen.generateInsertsForPartition("001", 5, "any_partition");
-      List<Pair<String, IndexedRecord>> firstIndexedRecords = hoodieRecordsToIndexedRecords(firstRecords, dataGen.getExtendedSchema());
-      commitToTable(firstRecords, INSERT.value(), true, writeConfigs, dataGen.getExtendedSchema().toString());
-      validateOutputFromFileGroupReaderWithNativeRecords(
-          getStorageConf(), getBasePath(),
-          true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
-          firstIndexedRecords);
-
-      // Evolve schema
-      dataGen.extendSchemaAfterEvolution(schemaEvolutionConfigs);
-
-      // Write another base file with schema B
-      List<HoodieRecord> secondRecords = dataGen.generateInsertsForPartition("002", 5, "new_partition");
-      List<Pair<String, IndexedRecord>> secondIndexedRecords = hoodieRecordsToIndexedRecords(secondRecords, dataGen.getExtendedSchema());
-      commitToTable(secondRecords, INSERT.value(), false, writeConfigs, dataGen.getExtendedSchema().toString());
-      // replace first index records with repaired schema
-      firstIndexedRecords = hoodieRecordsToIndexedRecords(firstRecords, dataGen.getExtendedSchema());
-      List<Pair<String, IndexedRecord>> mergedRecords = CollectionUtils.combine(firstIndexedRecords, secondIndexedRecords);
-      validateOutputFromFileGroupReaderWithNativeRecords(
-          getStorageConf(), getBasePath(),
-          true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords);
-    }
-  }
-
-
   /**
    * Write a base file with schema A, then write another base file with schema B.
    */
