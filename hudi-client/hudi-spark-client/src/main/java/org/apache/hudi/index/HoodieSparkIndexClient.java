@@ -222,8 +222,8 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
       // Validate if a lock provide class is set properly.
       if (localWriteConfig.getWriteConcurrencyMode().supportsMultiWriter() && StringUtils.isNullOrEmpty(localWriteConfig.getLockProviderClass())) {
         throw new IllegalArgumentException(
-            "To support multi-writer scenarios, configuration 'hoodie.write.lock.provider' should be set properly. "
-                + "For single writer org.apache.hudi.client.transaction.lock.InProcessLockProvider can be used.");
+            "To create index asynchronously, multi-writer configurations need to be enabled and hence 'hoodie.write.lock.provider' is expected to be set for such cases. "
+                + "For single writer mode, feel free to set the config value to org.apache.hudi.client.transaction.lock.InProcessLockProvider and retry index creation");
       }
       return new SparkRDDWriteClient(engineContextOpt.get(), localWriteConfig, Option.empty());
     } catch (Exception e) {
