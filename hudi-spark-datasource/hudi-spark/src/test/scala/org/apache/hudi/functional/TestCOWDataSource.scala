@@ -1831,10 +1831,14 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   @CsvSource(Array("true, 6", "false, 6", "true, 8", "false, 8", "true, 9", "false, 9"))
   def testLogicalTypesReadRepair(vectorizedReadEnabled: Boolean, tableVersion: Int): Unit = {
     // vectorized reader not working for 3.3 and 3.4 yet
-    if (!HoodieSparkUtils.isSpark3_3 && (!vectorizedReadEnabled || HoodieSparkUtils.gteqSpark3_5)) {
+    if (!vectorizedReadEnabled || HoodieSparkUtils.gteqSpark3_5) {
       val prevValue = spark.conf.get("spark.sql.parquet.enableVectorizedReader", "true")
       val prevTimezone = spark.conf.get("spark.sql.session.timeZone")
+      val propertyValue: String = System.getProperty("spark.testing")
       try {
+        if (HoodieSparkUtils.isSpark3_3) {
+          System.setProperty("spark.testing", "true")
+        }
         spark.conf.set("spark.sql.parquet.enableVectorizedReader", vectorizedReadEnabled.toString)
         spark.conf.set("spark.sql.session.timeZone", "UTC")
         val tableName = "trips_logical_types_json_cow_read_v" + tableVersion
@@ -1885,6 +1889,13 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       } finally {
         spark.conf.set("spark.sql.parquet.enableVectorizedReader", prevValue)
         spark.conf.set("spark.sql.session.timeZone", prevTimezone)
+        if (HoodieSparkUtils.isSpark3_3) {
+          if (propertyValue == null) {
+            System.clearProperty("spark.testing")
+          } else {
+            System.setProperty("spark.testing", propertyValue)
+          }
+        }
       }
     }
   }
