@@ -323,7 +323,20 @@ public class DataSourceUtils {
       if (totalErroredRecords > 0) {
         hasErrored.set(true);
         ValidationUtils.checkArgument(writeStatusesOpt.isPresent(), "RDD <WriteStatus> expected to be present when there are errors");
-        LOG.error("{} failed with errors", writeOperationType);
+        long errorCount = HoodieJavaRDD.getJavaRDD(writeStatusesOpt.get())
+            .filter(WriteStatus::hasErrors)
+            .count();
+
+        String errorSummary = String.format(
+            "%s operation failed with %d error(s).%n%n"
+                + "Total write statuses with errors: %d%n%n"
+                + "Check the driver logs for error stacktraces which provide more information on the failure.",
+            writeOperationType,
+            totalErroredRecords,
+            errorCount);
+
+        LOG.error(errorSummary);
+
         if (LOG.isTraceEnabled()) {
           LOG.trace("Printing out the top 100 errors");
 
