@@ -810,9 +810,13 @@ public class StreamSync implements Serializable, Closeable {
   private HoodieWriteConfig prepareHoodieConfigForRowWriter(Schema writerSchema) {
     HoodieConfig hoodieConfig = new HoodieConfig(HoodieStreamer.Config.getProps(conf, cfg));
     hoodieConfig.setValue(DataSourceWriteOptions.TABLE_TYPE(), cfg.tableType);
-    hoodieConfig.setValue(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(), cfg.payloadClassName);
+    if (cfg.payloadClassName != null) {
+      hoodieConfig.setValue(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(), cfg.payloadClassName);
+    }
     hoodieConfig.setValue(DataSourceWriteOptions.RECORD_MERGE_MODE().key(), cfg.recordMergeMode.name());
-    hoodieConfig.setValue(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID().key(), cfg.recordMergeStrategyId);
+    if (cfg.recordMergeStrategyId != null) {
+      hoodieConfig.setValue(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID().key(), cfg.recordMergeStrategyId);
+    }
     hoodieConfig.setValue(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props));
     hoodieConfig.setValue("path", cfg.targetBasePath);
     return HoodieSparkSqlWriter.getBulkInsertRowConfig(writerSchema != InputBatch.NULL_SCHEMA ? Option.of(writerSchema) : Option.empty(),
@@ -944,7 +948,7 @@ public class StreamSync implements Serializable, Closeable {
     if (useRowWriter) {
       Dataset<Row> df = (Dataset<Row>) inputBatch.getBatch().orElseGet(() -> hoodieSparkContext.getSqlContext().emptyDataFrame());
       HoodieWriteConfig hoodieWriteConfig = prepareHoodieConfigForRowWriter(inputBatch.getSchemaProvider().getTargetSchema());
-      BaseDatasetBulkInsertCommitActionExecutor executor = new HoodieStreamerDatasetBulkInsertCommitActionExecutor(hoodieWriteConfig, writeClient);
+      BaseDatasetBulkInsertCommitActionExecutor executor = new HoodieStreamerDatasetBulkInsertCommitActionExecutor(hoodieWriteConfig, writeClient, instantTime);
       writeClientWriteResult = new WriteClientWriteResult(executor.execute(df, !HoodieStreamerUtils.getPartitionColumns(props).isEmpty()).getWriteStatuses());
     } else {
       TypedProperties mergeProps = ConfigUtils.getMergeProps(props, metaClient.getTableConfig());
