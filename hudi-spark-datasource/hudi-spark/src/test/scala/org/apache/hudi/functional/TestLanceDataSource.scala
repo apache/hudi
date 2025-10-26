@@ -687,4 +687,53 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     writer.mode(saveMode).save(tablePath)
   }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testSchemaEvolutionAddColumn(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_schema_evolution_${tableType.name.toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    // First insert with base schema - columns: (id, name, age, score)
+    val records1 = Seq(
+      (1, "Alice", 30, 95.5),
+      (2, "Bob", 25, 87.3),
+      (3, "Charlie", 35, 92.1)
+    )
+
+    val df1 = createDataFrame(records1)
+    writeDataframe(tableType, tableName, tablePath, df1, saveMode = SaveMode.Overwrite, operation = Some("insert"))
+
+    // Schema evolution - add new column "email" and upsert existing records
+    val records2 = Seq(
+      (1, "Alice", 31, 96.0, "alice@example.com"),
+      (2, "Bob", 26, 88.0, "bob@example.com")
+    )
+    val df2 = spark.createDataFrame(records2).toDF("id", "name", "age", "score", "email")
+    writeDataframe(tableType, tableName, tablePath, df2, saveMode = SaveMode.Append, operation = Some("upsert"))
+
+    // Insert a new record with the evolved schema
+    val records3 = Seq(
+      (4, "David", 28, 89.5, "david@example.com")
+    )
+    val df3 = spark.createDataFrame(records3).toDF("id", "name", "age", "score", "email")
+    writeDataframe(tableType, tableName, tablePath, df3, saveMode = SaveMode.Append, operation = Some("upsert"))
+
+    // Read and verify schema evolution
+    val actual = spark.read
+      .format("hudi")
+      .load(tablePath)
+      .select("id", "name", "age", "score", "email")
+
+    // Expected data after schema evolution
+    val expectedDf = spark.createDataFrame(Seq(
+      (1, "Alice", 31, 96.0, "alice@example.com"),
+      (2, "Bob", 26, 88.0, "bob@example.com"),
+      (3, "Charlie", 35, 92.1, null),
+      (4, "David", 28, 89.5, "david@example.com")
+    )).toDF("id", "name", "age", "score", "email")
+
+    assertTrue(expectedDf.except(actual).isEmpty)
+    assertTrue(actual.except(expectedDf).isEmpty)
+  }
 }

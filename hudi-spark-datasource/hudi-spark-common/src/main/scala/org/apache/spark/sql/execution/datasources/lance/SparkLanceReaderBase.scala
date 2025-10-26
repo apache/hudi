@@ -30,10 +30,10 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.schema.MessageType
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.JoinedRow
+import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, JoinedRow}
 import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader}
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.util.LanceArrowUtils
 
 import java.io.IOException
@@ -84,9 +84,20 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
         // Open Lance file reader
         val lanceReader = LanceFileReader.open(filePath, allocator)
 
-        // Extract column names from required schema for projection
-        val columnNames: java.util.List[String] = if (requiredSchema.nonEmpty) {
-          requiredSchema.fields.map(_.name).toList.asJava
+        // Get schema from Lance file
+        val arrowSchema = lanceReader.schema()
+        val fileSchema = LanceArrowUtils.fromArrowSchema(arrowSchema)
+
+        // Read columns that currently exist in the file, as requested col may not be present
+        val fileFieldNames = fileSchema.fieldNames.toSet
+        val (existingFields, missingFields) = if (requiredSchema.nonEmpty) {
+          requiredSchema.fields.partition(f => fileFieldNames.contains(f.name))
+        } else {
+          (Array.empty[StructField], Array.empty[StructField])
+        }
+
+        val columnNames: java.util.List[String] = if (existingFields.nonEmpty) {
+          existingFields.map(_.name).toList.asJava
         } else {
           // If only partition columns requested, read minimal data
           null
@@ -95,12 +106,13 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
         // Read data with column projection (filters not supported yet)
         val arrowReader = lanceReader.readAll(columnNames, null, DEFAULT_BATCH_SIZE)
 
-        val schemaForIterator = if (requiredSchema.nonEmpty) {
-          requiredSchema
+        // Create schema for the data we're actually reading
+        val readSchema = StructType(existingFields)
+
+        val schemaForIterator = if (readSchema.nonEmpty) {
+          readSchema
         } else {
-          // Only compute schema from Lance file when requiredSchema is empty
-          val arrowSchema = lanceReader.schema()
-          LanceArrowUtils.fromArrowSchema(arrowSchema)
+          fileSchema
         }
 
         // Create iterator using shared LanceRecordIterator
@@ -117,17 +129,57 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
           _.addTaskCompletionListener[Unit](_ => lanceIterator.close())
         )
 
-        // Need to convert to scala iterator for proper reading
-        val iter = lanceIterator.asScala
+
+        // Need to convert to scala iterator for row merging
+        val baseIter = lanceIterator.asScala
+        // Add NULL padding for missing columns for schema evolution
+        val iterWithNulls = if (missingFields.nonEmpty) {
+          // Create a row with NULLs for missing columns
+          val nullRow = new GenericInternalRow(missingFields.length)
+          for (i <- missingFields.indices) {
+            nullRow.setNullAt(i)
+          }
+
+          // Reorder columns to match the requiredSchema order
+          val fieldIndexMap = requiredSchema.fields.zipWithIndex.map { case (field, idx) =>
+            field.name -> idx
+          }.toMap
+
+          val existingFieldIndices = existingFields.map(f => fieldIndexMap(f.name))
+          val missingFieldIndices = missingFields.map(f => fieldIndexMap(f.name))
+
+          baseIter.map { row =>
+            // Create result row with correct ordering
+            val resultRow = new GenericInternalRow(requiredSchema.length)
+
+            // Fill in existing columns
+            existingFieldIndices.zipWithIndex.foreach { case (targetIdx, sourceIdx) =>
+              if (row.isNullAt(sourceIdx)) {
+                resultRow.setNullAt(targetIdx)
+              } else {
+                resultRow.update(targetIdx, row.get(sourceIdx, existingFields(sourceIdx).dataType))
+              }
+            }
+
+            // Fill in missing columns with NULL
+            missingFieldIndices.foreach { targetIdx =>
+              resultRow.setNullAt(targetIdx)
+            }
+
+            resultRow.asInstanceOf[InternalRow]
+          }
+        } else {
+          baseIter.asInstanceOf[Iterator[InternalRow]]
+        }
 
         // Handle partition columns
         if (partitionSchema.length == 0) {
           // No partition columns - return rows directly
-          iter.asInstanceOf[Iterator[InternalRow]]
+          iterWithNulls
         } else {
           // Append partition values to each row using JoinedRow
           val joinedRow = new JoinedRow()
-          iter.map(row => joinedRow(row, file.partitionValues))
+          iterWithNulls.map(row => joinedRow(row, file.partitionValues))
         }
 
       } catch {
