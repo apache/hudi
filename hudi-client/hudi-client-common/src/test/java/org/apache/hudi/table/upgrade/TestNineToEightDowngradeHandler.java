@@ -325,4 +325,124 @@ class TestNineToEightDowngradeHandler {
       assertEquals(new HashSet<>(Arrays.asList("secondary_index_v2")), new HashSet<>(capturedIndexes));
     }
   }
+
+  @Test
+  void testDowngradeDropsPartitionStatsWhenColStatsV2IsDeleted() {
+    try (MockedStatic<UpgradeDowngradeUtils> mockedUtils = Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
+      mockedUtils.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(HoodieTable.class),
+          any(HoodieEngineContext.class),
+          any(HoodieWriteConfig.class),
+          any(SupportsUpgradeDowngrade.class),
+          anyBoolean(),
+          any(HoodieTableVersion.class)
+      )).thenAnswer(invocation -> null);
+
+      mockedUtils.when(() -> UpgradeDowngradeUtils.dropNonV1IndexPartitions(
+          eq(config),
+          eq(context),
+          eq(table),
+          eq(upgradeDowngradeHelper),
+          any(String.class)
+      )).thenCallRealMethod();
+
+      // Mocking index definitions: col_stats V2 is present but partition_stats is NOT in index.json
+      Map<String, HoodieIndexDefinition> indexDefs = new HashMap<>();
+      indexDefs.put(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), HoodieIndexDefinition.newBuilder()
+          .withIndexName(MetadataPartitionType.COLUMN_STATS.getPartitionPath())
+          .withIndexType(MetadataPartitionType.COLUMN_STATS.getPartitionPath())
+          .withVersion(HoodieIndexVersion.V2)
+          .build());
+      HoodieIndexMetadata metadata = new HoodieIndexMetadata(indexDefs);
+
+      when(table.getMetaClient()).thenReturn(metaClient);
+      when(metaClient.getIndexMetadata()).thenReturn(Option.of(metadata));
+      when(metaClient.getTableConfig()).thenReturn(tableConfig);
+
+      // Mocking metadata partitions to include both col_stats and partition_stats
+      Set<String> mdtPartitions = new HashSet<>();
+      mdtPartitions.add(MetadataPartitionType.COLUMN_STATS.getPartitionPath());
+      mdtPartitions.add(MetadataPartitionType.PARTITION_STATS.getPartitionPath()); // partition_stats exists but not in index.json
+      when(tableConfig.getMetadataPartitions()).thenReturn(mdtPartitions);
+
+      // Mocking getIndexForMetadataPartition to return the index definition for col_stats but empty for partition_stats
+      when(metaClient.getIndexForMetadataPartition(MetadataPartitionType.COLUMN_STATS.getPartitionPath()))
+          .thenReturn(Option.of(indexDefs.get(MetadataPartitionType.COLUMN_STATS.getPartitionPath())));
+      when(metaClient.getIndexForMetadataPartition(MetadataPartitionType.PARTITION_STATS.getPartitionPath()))
+          .thenReturn(Option.empty()); // partition_stats has no index definition
+
+      BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
+      when(upgradeDowngradeHelper.getWriteClient(config, context)).thenReturn(writeClient);
+
+      handler.downgrade(config, context, "20240101120000", upgradeDowngradeHelper);
+
+      ArgumentCaptor<List<String>> argumentCaptor = ArgumentCaptor.forClass(List.class);
+      verify(writeClient, times(1)).dropIndex(argumentCaptor.capture());
+      List<String> capturedIndexes = argumentCaptor.getValue();
+      assertEquals(new HashSet<>(Arrays.asList(
+          MetadataPartitionType.COLUMN_STATS.getPartitionPath(),
+          MetadataPartitionType.PARTITION_STATS.getPartitionPath()
+      )), new HashSet<>(capturedIndexes));
+    }
+  }
+
+  @Test
+  void testDowngradeDoesNotDropV1Indexes() {
+    try (MockedStatic<UpgradeDowngradeUtils> mockedUtils = Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
+      mockedUtils.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(HoodieTable.class),
+          any(HoodieEngineContext.class),
+          any(HoodieWriteConfig.class),
+          any(SupportsUpgradeDowngrade.class),
+          anyBoolean(),
+          any(HoodieTableVersion.class)
+      )).thenAnswer(invocation -> null);
+
+      mockedUtils.when(() -> UpgradeDowngradeUtils.dropNonV1IndexPartitions(
+          eq(config),
+          eq(context),
+          eq(table),
+          eq(upgradeDowngradeHelper),
+          any(String.class)
+      )).thenCallRealMethod();
+
+      // Mocking index definitions: col_stats and partition_stats both have V1 (created in V8, upgraded to V9)
+      Map<String, HoodieIndexDefinition> indexDefs = new HashMap<>();
+      indexDefs.put(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), HoodieIndexDefinition.newBuilder()
+          .withIndexName(MetadataPartitionType.COLUMN_STATS.getPartitionPath())
+          .withIndexType(MetadataPartitionType.COLUMN_STATS.getPartitionPath())
+          .withVersion(HoodieIndexVersion.V1)
+          .build());
+      indexDefs.put(MetadataPartitionType.PARTITION_STATS.getPartitionPath(), HoodieIndexDefinition.newBuilder()
+          .withIndexName(MetadataPartitionType.PARTITION_STATS.getPartitionPath())
+          .withIndexType(MetadataPartitionType.PARTITION_STATS.getPartitionPath())
+          .withVersion(HoodieIndexVersion.V1)
+          .build());
+      HoodieIndexMetadata metadata = new HoodieIndexMetadata(indexDefs);
+
+      when(table.getMetaClient()).thenReturn(metaClient);
+      when(metaClient.getIndexMetadata()).thenReturn(Option.of(metadata));
+      when(metaClient.getTableConfig()).thenReturn(tableConfig);
+
+      // Mocking metadata partitions to include both col_stats and partition_stats
+      Set<String> mdtPartitions = new HashSet<>();
+      mdtPartitions.add(MetadataPartitionType.COLUMN_STATS.getPartitionPath());
+      mdtPartitions.add(MetadataPartitionType.PARTITION_STATS.getPartitionPath());
+      when(tableConfig.getMetadataPartitions()).thenReturn(mdtPartitions);
+
+      // Mocking getIndexForMetadataPartition to return V1 index definitions
+      when(metaClient.getIndexForMetadataPartition(MetadataPartitionType.COLUMN_STATS.getPartitionPath()))
+          .thenReturn(Option.of(indexDefs.get(MetadataPartitionType.COLUMN_STATS.getPartitionPath())));
+      when(metaClient.getIndexForMetadataPartition(MetadataPartitionType.PARTITION_STATS.getPartitionPath()))
+          .thenReturn(Option.of(indexDefs.get(MetadataPartitionType.PARTITION_STATS.getPartitionPath())));
+
+      BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
+      when(upgradeDowngradeHelper.getWriteClient(config, context)).thenReturn(writeClient);
+
+      handler.downgrade(config, context, "20240101120000", upgradeDowngradeHelper);
+
+      // Verify that dropIndex is not called at all since there are no V2 indexes to drop
+      verify(writeClient, times(0)).dropIndex(any());
+    }
+  }
 }
