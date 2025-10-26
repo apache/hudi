@@ -196,7 +196,8 @@ class Spark34ParquetReader(enableVectorizedReader: Boolean,
         convertTz,
         enableVectorizedReader = false,
         datetimeRebaseSpec,
-        int96RebaseSpec)
+        int96RebaseSpec,
+        tableSchemaOpt)
       val reader = if (pushed.isDefined && enableRecordFilter) {
         val parquetFilter = FilterCompat.get(pushed.get, null)
         new ParquetRecordReader[InternalRow](readSupport, parquetFilter)

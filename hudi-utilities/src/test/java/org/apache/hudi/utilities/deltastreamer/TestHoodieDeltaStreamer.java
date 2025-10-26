@@ -1061,6 +1061,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     String prevTimezone = sparkSession.conf().get("spark.sql.session.timeZone");
     try {
       sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
+      if (!HoodieSparkUtils.gteqSpark3_5()) {
+        sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "false");
+      }
       Dataset<Row> df = sparkSession.read()
           .format("org.apache.hudi")
           .option("hoodie.metadata.enable", "false")
@@ -1091,6 +1094,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
     } finally {
       sparkSession.conf().set("spark.sql.session.timeZone", prevTimezone);
+      if (!HoodieSparkUtils.gteqSpark3_5()) {
+        sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "true");
+      }
     }
   }
 
@@ -1163,6 +1169,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     String prevTimezone = sparkSession.conf().get("spark.sql.session.timeZone");
     try {
+      if (!HoodieSparkUtils.gteqSpark3_5()) {
+        sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "false");
+      }
       sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
       Dataset<Row> df = sparkSession.read()
           .format("org.apache.hudi")
@@ -1217,6 +1226,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
     } finally {
       sparkSession.conf().set("spark.sql.session.timeZone", prevTimezone);
+      if (!HoodieSparkUtils.gteqSpark3_5()) {
+        sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "true");
+      }
     }
   }
 
