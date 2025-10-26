@@ -1831,7 +1831,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   @CsvSource(Array("true, 6", "false, 6", "true, 8", "false, 8", "true, 9", "false, 9"))
   def testLogicalTypesReadRepair(vectorizedReadEnabled: Boolean, tableVersion: Int): Unit = {
     // vectorized reader not working for 3.3 and 3.4 yet
-    if (!vectorizedReadEnabled || HoodieSparkUtils.gteqSpark3_5) {
+    if (!HoodieSparkUtils.isSpark3_3 && (!vectorizedReadEnabled || HoodieSparkUtils.gteqSpark3_5)) {
       val prevValue = spark.conf.get("spark.sql.parquet.enableVectorizedReader", "true")
       val prevTimezone = spark.conf.get("spark.sql.session.timeZone")
       try {
