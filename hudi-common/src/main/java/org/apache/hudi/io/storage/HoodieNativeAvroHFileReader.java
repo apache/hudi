@@ -210,21 +210,33 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   @Override
   public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeysIterator(
       List<String> sortedKeys, Schema schema) throws IOException {
-    HFileReader reader = readerFactory.createHFileReader();
     ClosableIterator<IndexedRecord> iterator =
-        new RecordByKeyIterator(reader, sortedKeys, getSchema(), schema, useBloomFilter);
+        getEngineRecordsByKeysIterator(sortedKeys, schema);
     return new CloseableMappingIterator<>(
         iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 
   @Override
+  public ClosableIterator<IndexedRecord> getEngineRecordsByKeysIterator(
+      List<String> sortedKeys, Schema schema) throws IOException {
+    HFileReader reader = readerFactory.createHFileReader();
+    return new RecordByKeyIterator(reader, sortedKeys, getSchema(), schema, useBloomFilter);
+  }
+
+  @Override
   public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeyPrefixIterator(
       List<String> sortedKeyPrefixes, Schema schema) throws IOException {
-    HFileReader reader = readerFactory.createHFileReader();
     ClosableIterator<IndexedRecord> iterator =
-        new RecordByKeyPrefixIterator(reader, sortedKeyPrefixes, getSchema(), schema);
+        getEngineRecordsByKeyPrefixIterator(sortedKeyPrefixes, schema);
     return new CloseableMappingIterator<>(
         iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
+  }
+
+  @Override
+  public ClosableIterator<IndexedRecord> getEngineRecordsByKeyPrefixIterator(
+      List<String> sortedKeyPrefixes, Schema schema) throws IOException {
+    HFileReader reader = readerFactory.createHFileReader();
+    return new RecordByKeyPrefixIterator(reader, sortedKeyPrefixes, getSchema(), schema);
   }
 
   @Override

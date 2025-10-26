@@ -175,10 +175,17 @@ public class AvroSchemaUtils {
    * </ol>
    */
   public static boolean isStrictProjectionOf(Schema sourceSchema, Schema targetSchema) {
-    return isProjectionOfInternal(sourceSchema, targetSchema, AvroSchemaUtils::isAtomicTypeEquals);
+    return isProjectionOfInternal(sourceSchema, targetSchema, AvroSchemaUtils::isAtomicTypeProjectable);
   }
 
-  private static boolean isAtomicTypeEquals(Schema source, Schema target) {
+  private static boolean isAtomicTypeProjectable(Schema source, Schema target) {
+    // ignore nullability for projectable checking
+    source = resolveNullableSchema(source);
+    target = resolveNullableSchema(target);
+    if (source.getType() == Schema.Type.ENUM && target.getType() == Schema.Type.STRING
+        || source.getType() == Schema.Type.STRING && target.getType() == Schema.Type.ENUM) {
+      return true;
+    }
     // ignore name/namespace for FIXED type
     if (source.getType() == Schema.Type.FIXED && target.getType() == Schema.Type.FIXED) {
       return source.getLogicalType().equals(target.getLogicalType())

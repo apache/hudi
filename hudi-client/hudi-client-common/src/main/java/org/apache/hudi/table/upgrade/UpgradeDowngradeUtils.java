@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -207,6 +208,11 @@ public class UpgradeDowngradeUtils {
       properties.put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), NoopLockProvider.class.getName());
       // if auto adjust it not disabled, chances that InProcessLockProvider will get overridden for single writer use-cases.
       properties.put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "false");
+      // if downgrading from table version 9, disable non-blocking concurrency control for MDT
+      // as version 8 and below do not support streaming, NBCC for MDT
+      if (table.isMetadataTable() && tableVersion.equals(HoodieTableVersion.NINE)) {
+        properties.put(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.SINGLE_WRITER.name());
+      }
       HoodieWriteConfig rollbackWriteConfig = HoodieWriteConfig.newBuilder()
           .withProps(properties)
           .withWriteTableVersion(tableVersion.versionCode())

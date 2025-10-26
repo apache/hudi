@@ -193,15 +193,19 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
    */
   protected Pair<ClosableIterator<T>, Schema> getRecordsIterator(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) {
     ClosableIterator<T> blockRecordsIterator;
-    if (keySpecOpt.isPresent()) {
-      KeySpec keySpec = keySpecOpt.get();
-      blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext, keySpec.getKeys(), keySpec.isFullKey());
-    } else {
-      blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext);
+    try {
+      if (keySpecOpt.isPresent()) {
+        KeySpec keySpec = keySpecOpt.get();
+        blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext, keySpec.getKeys(), keySpec.isFullKey());
+      } else {
+        blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext);
+      }
+      Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
+      return Pair.of(new CloseableMappingIterator<>(
+          blockRecordsIterator, schemaTransformerWithEvolvedSchema.getLeft()), schemaTransformerWithEvolvedSchema.getRight());
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to deser records from log files ", e);
     }
-    Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
-    return Pair.of(new CloseableMappingIterator<>(
-        blockRecordsIterator, schemaTransformerWithEvolvedSchema.getLeft()), schemaTransformerWithEvolvedSchema.getRight());
   }
 
   /**

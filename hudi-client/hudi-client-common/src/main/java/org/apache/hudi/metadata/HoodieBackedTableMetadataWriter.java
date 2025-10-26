@@ -180,7 +180,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   boolean initialized = false;
   private HoodieTableFileSystemView metadataView;
   private final boolean streamingWritesEnabled;
-  private final Option<MetadataIndexGenerator> metadataIndexGenerator;
 
   protected HoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf,
                                             HoodieWriteConfig writeConfig,
@@ -225,17 +224,11 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     }
     ValidationUtils.checkArgument(!initialized || this.metadata != null, "MDT Reader should have been opened post initialization");
     this.streamingWritesEnabled = streamingWritesEnabled;
-    this.metadataIndexGenerator = streamingWritesEnabled ? Option.of(initializeMetadataIndexGenerator()) : Option.empty();
   }
 
   List<MetadataPartitionType> getEnabledPartitions(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient metaClient) {
     return MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient);
   }
-
-  /**
-   * Returns the utilities for metadata index generation.
-   */
-  abstract MetadataIndexGenerator initializeMetadataIndexGenerator();
 
   private void mayBeReinitMetadataReader() {
     if (metadata == null || metadataMetaClient == null || metadata.getMetadataFileSystemView() == null) {
@@ -1239,12 +1232,31 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     }
 
     maybeInitializeNewFileGroupsForPartitionedRLI(writeStatus, instantTime);
-    HoodieData<HoodieRecord> untaggedRecords = writeStatus.flatMap(
-        new MetadataIndexGenerator.WriteStatusBasedMetadataIndexMapper(mdtPartitionsToTag, dataWriteConfig));
+
+    Map<MetadataPartitionType, MetadataIndexMapper> indexMapperMap = mdtPartitionsToTag.stream()
+        .filter(e -> e.equals(RECORD_INDEX) || e.equals(SECONDARY_INDEX))
+        .collect(Collectors.toMap(
+            key -> key,
+            key -> {
+              if (RECORD_INDEX.equals(key)) {
+                return new RecordIndexMapper(dataWriteConfig);
+              }
+              return new SecondaryIndexMapper(dataWriteConfig);
+            }
+        ));
+
+    if (indexMapperMap.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
+
+    HoodieData<HoodieRecord> processedRecords = indexMapperMap.values().stream()
+        .map(indexMapper -> indexMapper.postProcess(writeStatus.flatMap(indexMapper)))
+        .reduce(HoodieData::union)
+        .get();
 
     // tag records w/ location
-    Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> hoodieFileGroupsToUpdateAndTaggedMdtRecords = tagRecordsWithLocationForStreamingWrites(untaggedRecords,
-        mdtPartitionPathsToTag);
+    Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> hoodieFileGroupsToUpdateAndTaggedMdtRecords =
+        tagRecordsWithLocationForStreamingWrites(processedRecords, mdtPartitionPathsToTag);
 
     // write partial writes to MDT table (for those partitions where streaming writes are enabled)
     HoodieData<WriteStatus> writeStatusCollection = convertEngineSpecificDataToHoodieData(streamWriteToMetadataTable(hoodieFileGroupsToUpdateAndTaggedMdtRecords, instantTime));

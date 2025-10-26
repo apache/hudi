@@ -63,11 +63,6 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
     super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
   }
 
-  @Override
-  MetadataIndexGenerator initializeMetadataIndexGenerator() {
-    throw new UnsupportedOperationException("Streaming writes are not supported for Java");
-  }
-
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context,
