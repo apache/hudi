@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.SparkFileFormatInternalRecordContext;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
@@ -327,7 +328,18 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
   @Override
   public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) throws IOException {
-    throw new UnsupportedOperationException();
+    // Convert Spark InternalRow to Avro GenericRecord
+    if (data == null) {
+      throw new IOException("Cannot convert null data to Avro bytes");
+    }
+    // Get or compute the Spark StructType from Avro schema
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
+    // Convert InternalRow to GenericRecord using existing converter
+    GenericRecord avroRecord = AvroConversionUtils
+        .createInternalRowToAvroConverter(structType, recordSchema, false)
+        .apply(data);
+    // Convert GenericRecord to bytes using HoodieAvroUtils
+    return HoodieAvroUtils.avroToBytesStream(avroRecord);
   }
 
   @Override
