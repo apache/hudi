@@ -61,6 +61,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
+import static org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -129,7 +130,7 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
     assertEquals(10, mdtCommitMetadata.getPartitionToWriteStats().get(RECORD_INDEX.getPartitionPath()).size());
     assertFalse(mdtCommitMetadata.getPartitionToWriteStats().containsKey(COLUMN_STATS.getPartitionPath()));
 
-    // Create commit in MDT with col stats enabled
+    // Create commit in MDT with col stats enabled (partition stats is enabled with column stats)
     config.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS, "true");
     instantTime = InProcessTimeGenerator.createNewInstantTime();
     mdtWriter = (HoodieBackedTableMetadataWriter) SparkMetadataWriterFactory.createWithStreamingWrites(storageConf, config,
@@ -138,8 +139,8 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
     mdtWriteStatus = mdtWriter.streamWriteToMetadataPartitions(HoodieJavaRDD.of(Collections.singletonList(writeStatus), context, 1), instantTime);
     mdtWriteStats = mdtWriteStatus.collectAsList().stream().map(WriteStatus::getStat).collect(Collectors.toList());
     mdtWriter.completeStreamingCommit(instantTime, context, mdtWriteStats, commitMetadata);
-    // 3 bootstrap commits for 3 enabled partitions, 2 commits due to update
-    assertEquals(5, mdtMetaClient.reloadActiveTimeline().filterCompletedInstants().countInstants());
+    // 3 bootstrap commits for 4 enabled partitions, 2 commits due to update
+    assertEquals(6, mdtMetaClient.reloadActiveTimeline().filterCompletedInstants().countInstants());
 
     // Verify commit metadata
     mdtCommitMetadata = mdtMetaClient.getActiveTimeline().readCommitMetadata(mdtMetaClient.getActiveTimeline().lastInstant().get());
