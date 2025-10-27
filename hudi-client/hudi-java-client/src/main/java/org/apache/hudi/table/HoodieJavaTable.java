@@ -85,7 +85,7 @@ public abstract class HoodieJavaTable<T>
     if (isMetadataTable()) {
       return Option.empty();
     }
-    if (config.isMetadataTableEnabled()) {
+    if (config.isMetadataTableEnabled() || metaClient.getTableConfig().isMetadataTableAvailable()) {
       // Create the metadata table writer. First time after the upgrade this creation might trigger
       // metadata table bootstrapping. Bootstrapping process could fail and checking the table
       // existence after the creation is needed.

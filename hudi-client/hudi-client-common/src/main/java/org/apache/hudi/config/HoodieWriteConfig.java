@@ -276,7 +276,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "in _hoodie_record_key meta field is in the format of `<field_value>`, "
           + "which conforms to the behavior in 0.14.1, 0.15.0, 1.0.0, 1.0.1, 1.0.2 releases.");
 
-  public static final ConfigProperty<Boolean>  ENABLE_COMPLEX_KEYGEN_VALIDATION = ConfigProperty
+  public static final ConfigProperty<Boolean> ENABLE_COMPLEX_KEYGEN_VALIDATION = ConfigProperty
       .key("hoodie.write.complex.keygen.validation.enable")
       .defaultValue(true)
       .markAdvanced()

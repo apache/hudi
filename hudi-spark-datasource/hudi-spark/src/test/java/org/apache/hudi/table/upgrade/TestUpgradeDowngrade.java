@@ -150,7 +150,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
       assertTrue(finalPendingCommits <= initialPendingCommits,
           "Pending commits should be cleaned up or reduced after " + operation);
     }
-
+    
     int finalCompletedCommits = resultMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
     assertTrue(finalCompletedCommits >= initialCompletedCommits,
         "Completed commits should be preserved or increased after " + operation);
@@ -494,10 +494,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   }
 
   private HoodieWriteConfig createWriteConfig(HoodieTableMetaClient metaClient, boolean autoUpgrade) {
-    return createWriteConfig(metaClient, autoUpgrade, new Properties());
-  }
-
-  private HoodieWriteConfig createWriteConfig(HoodieTableMetaClient metaClient, boolean autoUpgrade, Properties props) {
+    Properties props = new Properties();
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
         .withPath(metaClient.getBasePath().toString())
         .withAutoUpgradeVersion(autoUpgrade)
