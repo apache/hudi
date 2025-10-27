@@ -1220,7 +1220,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     // (3) if mdt is already enabled.
     return !metaClient.isMetadataTable()
         && !config.isMetadataTableEnabled()
-        && config.isAutoDetectAndDeleteMdtPartitions()
         && !metaClient.getTableConfig().getMetadataPartitions().isEmpty();
   }
 

@@ -139,7 +139,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final String CONCURRENCY_PREFIX = "hoodie.write.concurrency.";
 
-  public static final String AUTO_DETECT_AND_DELETE_MDT_PARTITIONS = "hoodie.write.auto.detect.delete.partitions";
+  public static final String AUTO_DETECT_AND_DELETE_MDT_PARTITIONS = "hoodie.write.auto.detect.and.delete.metadata.partitions";
 
   public static final ConfigProperty<String> TBL_NAME = ConfigProperty
       .key(HoodieTableConfig.HOODIE_TABLE_NAME_KEY)
