@@ -97,7 +97,7 @@
     <!-- Lance Spark for Arrow conversion -->
     <dependency>
       <groupId>com.lancedb</groupId>
-      <artifactId>lance-spark-base_${scala.binary.version}</artifactId>
+      <artifactId>${lance.spark.artifact}</artifactId>
     </dependency>
 
     <!-- Used for adding kryo serializers for protobuf -->

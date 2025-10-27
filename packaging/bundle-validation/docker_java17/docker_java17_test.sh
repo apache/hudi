@@ -114,7 +114,7 @@ build_hudi () {
   fi
 
   mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true \
-    -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log \
+    -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Pjava17 \
     -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn \
     -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn \
     -pl packaging/hudi-spark-bundle -am
