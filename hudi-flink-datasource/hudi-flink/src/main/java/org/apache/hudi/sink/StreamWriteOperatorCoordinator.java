@@ -127,7 +127,7 @@ public class StreamWriteOperatorCoordinator
   /**
    * Coordinator context.
    */
-  private final Context context;
+  protected final Context context;
 
   /**
    * Gateways for sending events to sub-tasks.
@@ -167,12 +167,12 @@ public class StreamWriteOperatorCoordinator
   /**
    * A single-thread executor to handle all the write metadata events.
    */
-  private NonThrownExecutor executor;
+  protected NonThrownExecutor executor;
 
   /**
    * A single-thread executor to handle the instant time request.
    */
-  private NonThrownExecutor instantRequestExecutor;
+  protected NonThrownExecutor instantRequestExecutor;
 
   /**
    * A single-thread executor to handle asynchronous hive sync.
