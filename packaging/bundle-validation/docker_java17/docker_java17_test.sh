@@ -107,14 +107,11 @@ stop_hdfs() {
 }
 
 build_hudi () {
-  if [ "$SPARK_PROFILE" = "spark4.0" ]; then
-    change_java_runtime_version
-  else
-    use_default_java_runtime
-  fi
+  # Always use >= Java 11 for Arrow compatibility
+  change_java_runtime_version
 
   mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true \
-    -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Pjava17 \
+    -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Djava.version=11 \
     -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn \
     -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn \
     -pl packaging/hudi-spark-bundle -am
