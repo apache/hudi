@@ -9,6 +9,12 @@ last_modified_at: 2022-12-27T15:59:57-04:00
 ### Release 1.0.2
 * Source Release : [Apache Hudi 1.0.2 Source Release](https://downloads.apache.org/hudi/1.0.2/hudi-1.0.2.src.tgz) ([asc](https://downloads.apache.org/hudi/1.0.2/hudi-1.0.2.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.0.2/hudi-1.0.2.src.tgz.sha512))
 * Release Note : ([Release Note for Apache Hudi 1.0.2](/releases/release-1.0.2))
+* Maven Artifacts :
+    * [hudi-spark3.5-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-spark3.5-bundle_2.12/1.0.2/hudi-spark3.5-bundle_2.12-1.0.2.jar)
+    * [hudi-utilities-slim-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-slim-bundle_2.12/1.0.2/hudi-utilities-slim-bundle_2.12-1.0.2.jar)
+    * [hudi-hive-sync-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-hive-sync-bundle/1.0.2/hudi-hive-sync-bundle-1.0.2.jar)
+    * [hudi-flink1.19-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-flink1.19-bundle/1.0.2/hudi-flink1.19-bundle-1.0.2.jar)
+    * [hudi-cli-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-cli-bundle_2.12/1.0.2/hudi-cli-bundle_2.12-1.0.2.jar)
 
 ### Release 1.0.1
 * Source Release : [Apache Hudi 1.0.1 Source Release](https://downloads.apache.org/hudi/1.0.1/hudi-1.0.1.src.tgz) ([asc](https://downloads.apache.org/hudi/1.0.1/hudi-1.0.1.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.0.1/hudi-1.0.1.src.tgz.sha512))
