@@ -260,7 +260,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
           ctor.newInstance(transformedPredicate).asInstanceOf[BasePredicate]
         } catch {
           case _: NoSuchMethodException | _: IllegalArgumentException =>
-            // Fallback: Try using 2-arg constructor
+            // Fallback: Try using 2-arg constructor for certain Spark runtime
             val clazz = Class.forName("org.apache.spark.sql.catalyst.expressions.InterpretedPredicate")
             val ctor = clazz.getConstructor(classOf[Expression], classOf[Boolean])
             ctor.newInstance(transformedPredicate, java.lang.Boolean.FALSE)
