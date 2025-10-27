@@ -211,7 +211,6 @@ class TestEightToNineUpgradeHandler {
 
   @ParameterizedTest(name = "testUpgradeWith{4}")
   @MethodSource("payloadClassTestCases")
-  
   void testUpgradeWithPayloadClass(String payloadClassName, String expectedMergeProperties,
                                    String expectedRecordMergeMode, String expectedPartialUpdateMode,
                                    String testName) {
