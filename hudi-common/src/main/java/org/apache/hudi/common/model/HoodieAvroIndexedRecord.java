@@ -167,10 +167,10 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public String getRecordKey(Schema recordSchema, String keyFieldName) {
-    decodeRecord(recordSchema);
     if (key != null) {
       return key.getRecordKey();
     }
+    decodeRecord(recordSchema);
     return Option.ofNullable(data.getSchema().getField(keyFieldName))
         .map(keyField -> data.get(keyField.pos()))
         .map(Object::toString).orElse(null);

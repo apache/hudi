@@ -92,10 +92,10 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
       return "/upgrade-downgrade-fixtures/complex-keygen-tables/";
     } else if (suffix.contains("mor")) {
       return "/upgrade-downgrade-fixtures/mor-tables/";
+    } else if (suffix.contains("cow")) {
+      return "/upgrade-downgrade-fixtures/cow-tables/";
     } else if (suffix.contains("payload")) {
       return "/upgrade-downgrade-fixtures/payload-tables/";
-    } else if (suffix.contains("mdt-validation")) {
-      return "/upgrade-downgrade-fixtures/mdt-validation-tables/";
     } else {
       return "/upgrade-downgrade-fixtures/unsupported-upgrade-tables/";
     }
@@ -104,12 +104,12 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   @Disabled
   @ParameterizedTest
   @MethodSource("upgradeDowngradeVersionPairs")
-  public void testUpgradeOrDowngrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) throws Exception {
+  public void testUpgradeOrDowngrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String suffix) throws Exception {
     boolean isUpgrade = fromVersion.lesserThan(toVersion);
     String operation = isUpgrade ? "upgrade" : "downgrade";
     LOG.info("Testing {} from version {} to {}", operation, fromVersion, toVersion);
 
-    HoodieTableMetaClient originalMetaClient = loadFixtureTable(fromVersion, "-mor");
+    HoodieTableMetaClient originalMetaClient = loadFixtureTable(fromVersion, suffix);
     assertEquals(fromVersion, originalMetaClient.getTableConfig().getTableVersion(),
         "Fixture table should be at expected version");
 
@@ -122,7 +122,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
 
     // Confirm that there are log files before rollback and compaction operations
     if (isRollbackAndCompactTransition(fromVersion, toVersion)) {
-      validateLogFilesCount(originalMetaClient, operation, true);
+      validateLogFilesCount(originalMetaClient, operation, suffix.equals("-mor"));
     }
 
     new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
@@ -493,25 +493,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     return metaClient;
   }
 
-  private HoodieTableMetaClient loadMdtValidationFixtureTable(String tableType) throws IOException {
-    String fixtureName = "hudi-v9" + "-table-mdt-validation-" + tableType + ".zip";
-    String resourcePath = "/upgrade-downgrade-fixtures/mdt-validation-tables/" + fixtureName;
-
-    LOG.info("Loading mdt validation fixture from resource path: {}", resourcePath);
-    HoodieTestUtils.extractZipToDirectory(resourcePath, tempDir, getClass());
-
-    String tableName = fixtureName.replace(".zip", "");
-    String tablePath = tempDir.resolve(tableName).toString();
-
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(storageConf().newInstance())
-        .setBasePath(tablePath)
-        .build();
-
-    LOG.info("Loaded payload fixture table {} at version {}", fixtureName, metaClient.getTableConfig().getTableVersion());
-    return metaClient;
-  }
-
   private HoodieWriteConfig createWriteConfig(HoodieTableMetaClient metaClient, boolean autoUpgrade) {
     return createWriteConfig(metaClient, autoUpgrade, new Properties());
   }
@@ -607,12 +588,13 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   private static Stream<Arguments> upgradeDowngradeVersionPairs() {
     return Stream.of(
         // Upgrade test cases for six and greater
-        Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT),   // V6 -> V8
-        Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.NINE),  // V8 -> V9
+        Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, "-mor"),   // V6 -> V8
+        Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.NINE, "-mor"),  // V8 -> V9
+        Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.NINE, "-cow"),  // V8 -> V9
 
         // Downgrade test cases til six
-        Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.EIGHT),  // V9 -> V8
-        Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX)   // V8 -> V6
+        Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.EIGHT, "-mor"),  // V9 -> V8
+        Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX, "-mor")   // V8 -> V6
     );
   }
 
