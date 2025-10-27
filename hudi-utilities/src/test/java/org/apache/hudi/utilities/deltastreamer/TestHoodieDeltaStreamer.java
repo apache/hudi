@@ -74,6 +74,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -2259,6 +2260,33 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(25, numUpdates);
 
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testDeltaStreamerFailureWithChangingOrderingFields(HoodieTableType tableType) throws Exception {
+    String tableBasePath = basePath + "/test_with_changing_ordering_fields";
+    HoodieDeltaStreamer.Config cfg =
+        TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
+    cfg.tableType = tableType.name();
+    cfg.filterDupes = true;
+    cfg.sourceOrderingFields = "timestamp,rider";
+    cfg.recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
+    cfg.payloadClassName = DefaultHoodieRecordPayload.class.getName();
+    cfg.recordMergeStrategyId = HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
+
+    TestDataSource.recordInstantTime = Option.of("001");
+    new HoodieStreamer(cfg, jsc).sync();
+    assertRecordCount(1000, tableBasePath, sqlContext);
+    TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
+
+    // Change ordering fields in deltastreamer
+    Exception e = assertThrows(HoodieValidationException.class, () -> {
+      cfg.sourceOrderingFields = "timestamp";
+      TestDataSource.recordInstantTime = Option.of("002");
+      runStreamSync(cfg, false, 10, WriteOperationType.UPSERT);
+    });
+    assertTrue(e.getMessage().equals("Configured ordering fields: timestamp do not match table ordering fields: [timestamp, rider]"));
   }
 
   private static long getNumUpdates(HoodieCommitMetadata metadata) {

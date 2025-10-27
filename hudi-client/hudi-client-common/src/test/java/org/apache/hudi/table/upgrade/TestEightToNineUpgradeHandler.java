@@ -117,6 +117,7 @@ class TestEightToNineUpgradeHandler {
     when(table.getMetaClient()).thenReturn(metaClient);
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     when(config.autoUpgrade()).thenReturn(true);
+    when(config.getPayloadClass()).thenReturn(null);
 
     // Setup common mocks
     when(upgradeDowngradeHelper.getTable(config, context)).thenReturn(table);
@@ -125,6 +126,7 @@ class TestEightToNineUpgradeHandler {
     when(metaClient.getStorage()).thenReturn(storage);
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.EIGHT);
     when(tableConfig.getOrderingFieldsStr()).thenReturn(Option.empty());
+    when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
 
     // Use a temp file for index definition path
     indexDefPath = new StoragePath(tempDir.resolve("index.json").toString());
@@ -209,6 +211,7 @@ class TestEightToNineUpgradeHandler {
 
   @ParameterizedTest(name = "testUpgradeWith{4}")
   @MethodSource("payloadClassTestCases")
+  
   void testUpgradeWithPayloadClass(String payloadClassName, String expectedMergeProperties,
                                    String expectedRecordMergeMode, String expectedPartialUpdateMode,
                                    String testName) {
@@ -217,7 +220,7 @@ class TestEightToNineUpgradeHandler {
       utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
               any(), any(), any(), any(), anyBoolean(), any()))
           .thenAnswer(invocation -> null);
-      when(tableConfig.getPayloadClass()).thenReturn(payloadClassName);
+      when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.ofNullable(payloadClassName));
       when(tableConfig.getTableType()).thenReturn(HoodieTableType.MERGE_ON_READ);
       when(tableConfig.getRecordMergeStrategyId()).thenReturn(HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID);
       when(metaClient.getIndexMetadata()).thenReturn(Option.empty());

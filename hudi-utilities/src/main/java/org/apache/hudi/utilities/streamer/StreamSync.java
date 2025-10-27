@@ -47,6 +47,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.model.debezium.DebeziumConstants;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -75,6 +77,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetaSyncException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
@@ -1145,6 +1148,16 @@ public class StreamSync implements Serializable, Closeable {
     // Merge strategy id can be NULL.
     if (!StringUtils.isNullOrEmpty(cfg.recordMergeStrategyId)) {
       builder.withRecordMergeStrategyId(cfg.recordMergeStrategyId);
+    }
+
+    if (metaClient != null) {
+      HoodieTableConfig tableConfig = metaClient.getTableConfig();
+      if (tableConfig.getLegacyPayloadClass().equals(MySqlDebeziumAvroPayload.class.getCanonicalName())
+          && cfg.sourceOrderingFields.equals(DebeziumConstants.ADDED_SEQ_COL_NAME)) {
+        cfg.sourceOrderingFields = MySqlDebeziumAvroPayload.getOrderingFields();
+      } else if (StringUtils.nonEmpty(cfg.sourceOrderingFields) && !cfg.sourceOrderingFields.equals(tableConfig.getOrderingFieldsStr().orElse(null))) {
+        throw new HoodieValidationException(String.format("Configured ordering fields: %s do not match table ordering fields: %s", cfg.sourceOrderingFields, tableConfig.getOrderingFields()));
+      }
     }
     HoodiePayloadConfig.Builder payloadConfigBuilder =
         HoodiePayloadConfig.newBuilder().withPayloadOrderingFields(cfg.sourceOrderingFields);

@@ -232,7 +232,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
         .orElse(config.getPayloadClass());
     Option<String> orderingFieldsOpt;
     if (MySqlDebeziumAvroPayload.class.getName().equals(payloadClass)) {
-      orderingFieldsOpt = Option.of(FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME);
+      orderingFieldsOpt = Option.of(MySqlDebeziumAvroPayload.getOrderingFields());
     } else if (PostgresDebeziumAvroPayload.class.getName().equals(payloadClass)) {
       orderingFieldsOpt = Option.of(DebeziumConstants.FLATTENED_LSN_COL_NAME);
     } else {
