@@ -1155,7 +1155,7 @@ public class StreamSync implements Serializable, Closeable {
       if (tableConfig.getLegacyPayloadClass().equals(MySqlDebeziumAvroPayload.class.getCanonicalName())
           && cfg.sourceOrderingFields.equals(DebeziumConstants.ADDED_SEQ_COL_NAME)) {
         cfg.sourceOrderingFields = MySqlDebeziumAvroPayload.getOrderingFields();
-      } else if (StringUtils.nonEmpty(cfg.sourceOrderingFields) && !cfg.sourceOrderingFields.equals(tableConfig.getOrderingFieldsStr().orElse(null))) {
+      } else if (tableConfig.getOrderingFieldsStr().isPresent() && !tableConfig.getOrderingFieldsStr().orElse("").equals(cfg.sourceOrderingFields)) {
         throw new HoodieValidationException(String.format("Configured ordering fields: %s do not match table ordering fields: %s", cfg.sourceOrderingFields, tableConfig.getOrderingFields()));
       }
     }
