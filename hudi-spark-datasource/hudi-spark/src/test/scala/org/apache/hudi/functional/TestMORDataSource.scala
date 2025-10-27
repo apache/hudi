@@ -1307,7 +1307,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       }
       assertEquals(10, df.filter("ts_millis > timestamp('2020-01-01 00:00:00Z')").count())
       assertEquals(10, df.filter("ts_millis < timestamp('2020-01-01 00:00:00Z')").count())
-      assertEquals(0, df.filter("ts_millis > timestamp('2020-01-01 00:00:001Z')").count())
+      assertEquals(0, df.filter("ts_millis > timestamp('2020-01-01 00:00:00.001Z')").count())
       assertEquals(0, df.filter("ts_millis < timestamp('2019-12-31 23:59:59.999Z')").count())
 
       assertEquals(10, df.filter("ts_micros > timestamp('2020-06-01 12:00:00Z')").count())
