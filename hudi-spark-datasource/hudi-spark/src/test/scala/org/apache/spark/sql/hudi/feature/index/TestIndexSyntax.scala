@@ -32,6 +32,10 @@ import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
 
 class TestIndexSyntax extends HoodieSparkSqlTestBase {
 
+  override protected def beforeAll(): Unit = {
+    spark.sql("set hoodie.write.lock.provider = org.apache.hudi.client.transaction.lock.InProcessLockProvider")
+  }
+
   test("Test Create/Drop/Show/Refresh Index") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>

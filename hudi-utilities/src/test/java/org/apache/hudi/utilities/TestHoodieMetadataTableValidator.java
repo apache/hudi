@@ -313,6 +313,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       // To overwrite the table properties created during test setup
       storage.deleteDirectory(metaClient.getBasePath());
 
+      sparkSession.sql("set hoodie.write.lock.provider = org.apache.hudi.client.transaction.lock.InProcessLockProvider");
       sparkSession.sql(
           "create table tbl ("
               + "ts bigint, "
@@ -355,6 +356,8 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
       // validate MDT partition stats
       validateSecondaryIndex();
+
+      sparkSession.sql("set hoodie.write.lock.provider=");
     });
   }
 
