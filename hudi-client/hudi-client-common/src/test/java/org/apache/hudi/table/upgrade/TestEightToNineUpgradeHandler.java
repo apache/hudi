@@ -279,6 +279,7 @@ class TestEightToNineUpgradeHandler {
     if (payloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
       assertTrue(propertiesToAdd.containsKey(HoodieTableConfig.ORDERING_FIELDS));
       assertEquals(FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME, propertiesToAdd.get(HoodieTableConfig.ORDERING_FIELDS));
+      assertTrue(propertiesToRemove.contains(HoodieTableConfig.PRECOMBINE_FIELD));
     } else if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
       assertEquals(FLATTENED_LSN_COL_NAME, propertiesToAdd.get(HoodieTableConfig.ORDERING_FIELDS));
     }

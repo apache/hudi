@@ -1155,10 +1155,11 @@ public class StreamSync implements Serializable, Closeable {
       // After upgrade to table version 9 with MySqlDebeziumAvroPayload, ordering fields are changed from
       // `_event_seq` to `_event_bin_file,_event_pos`. The logic here ensures that deltastreamer config is updated
       // if it points to older ordering field `_event_seq`.
-      if (tableConfig.getTableVersion().equals(HoodieTableVersion.NINE) && tableConfig.getLegacyPayloadClass().equals(MySqlDebeziumAvroPayload.class.getCanonicalName())
+      if (tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.NINE) && tableConfig.getLegacyPayloadClass().equals(MySqlDebeziumAvroPayload.class.getCanonicalName())
           && cfg.sourceOrderingFields.equals(DebeziumConstants.ADDED_SEQ_COL_NAME)) {
         cfg.sourceOrderingFields = MySqlDebeziumAvroPayload.ORDERING_FIELDS;
-      } else if (tableConfig.getOrderingFieldsStr().isPresent() && !tableConfig.getOrderingFieldsStr().orElse("").equals(cfg.sourceOrderingFields)) {
+      } else if (tableConfig.getOrderingFieldsStr().isPresent() && !StringUtils.isNullOrEmpty(cfg.sourceOrderingFields)
+          && !tableConfig.getOrderingFieldsStr().orElse("").equals(cfg.sourceOrderingFields)) {
         throw new HoodieValidationException(String.format("Configured ordering fields: %s do not match table ordering fields: %s", cfg.sourceOrderingFields, tableConfig.getOrderingFields()));
       }
     }
