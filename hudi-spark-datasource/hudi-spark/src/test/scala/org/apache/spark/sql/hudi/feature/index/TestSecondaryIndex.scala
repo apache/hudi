@@ -62,6 +62,10 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
     DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.COMMIT_TIME_ORDERING.name()
   ) ++ metadataOpts
 
+  override protected def beforeAll(): Unit = {
+    spark.sql("set hoodie.write.lock.provider = org.apache.hudi.client.transaction.lock.InProcessLockProvider")
+  }
+
   test("Test Create/Show/Drop Secondary Index with External Table") {
     withRDDPersistenceValidation {
       withTempDir { tmp =>

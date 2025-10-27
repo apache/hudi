@@ -34,6 +34,11 @@ import org.junit.jupiter.api.Tag
  */
 @Tag("functional")
 class TestSecondaryIndexDataTypes extends HoodieSparkSqlTestBase {
+
+  override protected def beforeAll(): Unit = {
+    spark.sql("set hoodie.write.lock.provider = org.apache.hudi.client.transaction.lock.InProcessLockProvider")
+  }
+
   /**
    * Test secondary index creation with all data types and verify query behavior.
    *
