@@ -918,6 +918,13 @@ public class HoodieWriteConfig extends HoodieConfig {
           + " or when using a custom Hoodie Concat Handle Implementation controlled by the config " + CONCAT_HANDLE_CLASS_NAME.key()
               + ", enabling this config results in fallback to the default implementations if instantiation of the custom implementation fails");
 
+  public static final ConfigProperty<Boolean> AUTO_DETECT_AND_DELETE_MDT_PARTITIONS = ConfigProperty
+      .key("hoodie.write.auto.detect.delete.partitions")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("When enabled, the Hoodie Write Client will automatically detect and delete metadata partitions if not enabled");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -2930,6 +2937,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.getSecondaryIndexParallelism();
   }
 
+  public boolean isAutoDetectAndDeleteMdtPartitions() {
+    return getBoolean(AUTO_DETECT_AND_DELETE_MDT_PARTITIONS);
+  }
+
   /**
    * Whether to enable streaming writes to metadata table or not.
    * We have support for streaming writes only in SPARK engine (due to spark task retries intricacies) and for table version >= 8 due to the
@@ -3531,6 +3542,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withFileGroupReaderMergeHandleClassName(String className) {
       writeConfig.setValue(COMPACT_MERGE_HANDLE_CLASS_NAME, className);
+      return this;
+    }
+
+    public Builder withAutoDetectAndDeleteMdtPartitions(boolean autoDetectAndDeleteMdtPartitions) {
+      writeConfig.setValue(AUTO_DETECT_AND_DELETE_MDT_PARTITIONS, String.valueOf(autoDetectAndDeleteMdtPartitions));
       return this;
     }
 

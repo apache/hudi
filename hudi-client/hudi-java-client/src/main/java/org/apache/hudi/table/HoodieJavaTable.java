@@ -81,12 +81,11 @@ public abstract class HoodieJavaTable<T>
   @Override
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
                                                                 HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                                                boolean streamingWrites,
-                                                                boolean autoDetectAndDeleteMdtPartitions) {
+                                                                boolean streamingWrites) {
     if (isMetadataTable()) {
       return Option.empty();
     }
-    if (config.isMetadataTableEnabled() || metaClient.getTableConfig().isMetadataTableAvailable()) {
+    if (config.isMetadataTableEnabled()) {
       // Create the metadata table writer. First time after the upgrade this creation might trigger
       // metadata table bootstrapping. Bootstrapping process could fail and checking the table
       // existence after the creation is needed.
@@ -95,7 +94,7 @@ public abstract class HoodieJavaTable<T>
           Option.of(triggeringInstantTimestamp));
       // even with metadata enabled, some index could have been disabled
       // delete metadata partitions corresponding to such indexes if autoDetectAndDeleteMdtPartitions is enabled
-      if (autoDetectAndDeleteMdtPartitions) {
+      if (config.isAutoDetectAndDeleteMdtPartitions()) {
         deleteMetadataIndexIfNecessary();
       }
       try {

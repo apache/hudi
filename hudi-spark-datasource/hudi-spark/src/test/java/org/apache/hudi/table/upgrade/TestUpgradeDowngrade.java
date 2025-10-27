@@ -18,8 +18,10 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -33,6 +35,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
@@ -57,6 +60,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
 import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -84,6 +88,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
       return "/upgrade-downgrade-fixtures/mor-tables/";
     } else if (suffix.contains("payload")) {
       return "/upgrade-downgrade-fixtures/payload-tables/";
+    } else if (suffix.contains("mdt-validation")) {
+      return "/upgrade-downgrade-fixtures/mdt-validation-tables/";
     } else {
       return "/upgrade-downgrade-fixtures/unsupported-upgrade-tables/";
     }
@@ -144,6 +150,35 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         "Completed commits should be preserved or increased after " + operation);
 
     LOG.info("Successfully completed {} test for version {} -> {}", operation, fromVersion, toVersion);
+  }
+
+  @ParameterizedTest
+  @MethodSource("testMdtValidationDowngrade")
+  public void testMdtPartitionNotDroppedWhenDowngradedFromTableVersionNine(HoodieTableType tableType, HoodieTableVersion toVersion, boolean mdtEnabled) throws Exception {
+    HoodieTableVersion fromVersion = HoodieTableVersion.NINE;
+    String tableTypeSuffix = tableType == HoodieTableType.MERGE_ON_READ ? "mor" : "cow";
+    LOG.info("Testing downgrade from version {} to {}", fromVersion, toVersion);
+
+    HoodieTableMetaClient originalMetaClient = loadMdtValidationFixtureTable(tableTypeSuffix);
+    assertTrue(originalMetaClient.getTableConfig().getMetadataPartitions().contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath()));
+
+    Properties props = new Properties();
+    if (mdtEnabled) {
+      props.put(HoodieMetadataConfig.ENABLE.key(), String.valueOf(true));
+    } else {
+      props.put(HoodieMetadataConfig.ENABLE.key(), String.valueOf(false));
+    }
+    HoodieWriteConfig config = createWriteConfig(originalMetaClient, true, props);
+
+    new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
+        .run(toVersion, null);
+
+    HoodieTableMetaClient resultMetaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf().newInstance())
+        .setBasePath(originalMetaClient.getBasePath())
+        .build();
+
+    assertTrue(resultMetaClient.getTableConfig().getMetadataPartitions().contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath()));
   }
 
   @ParameterizedTest
@@ -425,8 +460,30 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     return metaClient;
   }
 
+  private HoodieTableMetaClient loadMdtValidationFixtureTable(String tableType) throws IOException {
+    String fixtureName = "hudi-v9" + "-table-mdt-validation-" + tableType + ".zip";
+    String resourcePath = "/upgrade-downgrade-fixtures/mdt-validation-tables/" + fixtureName;
+
+    LOG.info("Loading mdt validation fixture from resource path: {}", resourcePath);
+    HoodieTestUtils.extractZipToDirectory(resourcePath, tempDir, getClass());
+
+    String tableName = fixtureName.replace(".zip", "");
+    String tablePath = tempDir.resolve(tableName).toString();
+
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf().newInstance())
+        .setBasePath(tablePath)
+        .build();
+
+    LOG.info("Loaded payload fixture table {} at version {}", fixtureName, metaClient.getTableConfig().getTableVersion());
+    return metaClient;
+  }
+
   private HoodieWriteConfig createWriteConfig(HoodieTableMetaClient metaClient, boolean autoUpgrade) {
-    Properties props = new Properties();
+    return createWriteConfig(metaClient, autoUpgrade, new Properties());
+  }
+
+  private HoodieWriteConfig createWriteConfig(HoodieTableMetaClient metaClient, boolean autoUpgrade, Properties props) {
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
         .withPath(metaClient.getBasePath().toString())
         .withAutoUpgradeVersion(autoUpgrade)
@@ -530,6 +587,19 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     return Stream.of(
         Arguments.of("MOR", RecordMergeMode.EVENT_TIME_ORDERING),
         Arguments.of("MOR", RecordMergeMode.COMMIT_TIME_ORDERING)
+    );
+  }
+
+  private static Stream<Arguments> testMdtValidationDowngrade() {
+    return Stream.of(
+        Arguments.of(HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.EIGHT, true),
+        Arguments.of(HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.EIGHT, false),
+        Arguments.of(HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.SIX, true),
+        Arguments.of(HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.SIX, false),
+        Arguments.of(HoodieTableType.MERGE_ON_READ, HoodieTableVersion.EIGHT, true),
+        Arguments.of(HoodieTableType.MERGE_ON_READ, HoodieTableVersion.EIGHT, false),
+        Arguments.of(HoodieTableType.MERGE_ON_READ, HoodieTableVersion.SIX, true),
+        Arguments.of(HoodieTableType.MERGE_ON_READ, HoodieTableVersion.SIX, false)
     );
   }
 

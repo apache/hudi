@@ -1095,11 +1095,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   public final Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, boolean streamingWrites) {
-    return getMetadataWriter(triggeringInstantTimestamp, EAGER, streamingWrites, true);
-  }
-
-  public final Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, boolean streamingWrites, boolean autoDetectAndDeleteMdtPartitions) {
-    return getMetadataWriter(triggeringInstantTimestamp, EAGER, streamingWrites, autoDetectAndDeleteMdtPartitions);
+    return getMetadataWriter(triggeringInstantTimestamp, EAGER, streamingWrites);
   }
 
   /**
@@ -1109,7 +1105,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @return An instance of {@link HoodieTableMetadataWriter}.
    */
   public Option<HoodieTableMetadataWriter> getIndexingMetadataWriter(String triggeringInstantTimestamp) {
-    return getMetadataWriter(triggeringInstantTimestamp, LAZY, false, true);
+    return getMetadataWriter(triggeringInstantTimestamp, LAZY, false);
   }
 
   /**
@@ -1130,8 +1126,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp,
       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-      boolean streamingWrites,
-      boolean autoDetectAndDeleteMdtPartitions) {
+      boolean streamingWrites) {
     // Each engine is expected to override this and
     // provide the actual metadata writer, if enabled.
     return Option.empty();
@@ -1225,6 +1220,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     // (3) if mdt is already enabled.
     return !metaClient.isMetadataTable()
         && !config.isMetadataTableEnabled()
+        && config.isAutoDetectAndDeleteMdtPartitions()
         && !metaClient.getTableConfig().getMetadataPartitions().isEmpty();
   }
 

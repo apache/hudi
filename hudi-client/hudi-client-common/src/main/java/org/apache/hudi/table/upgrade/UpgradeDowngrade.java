@@ -78,7 +78,7 @@ public class UpgradeDowngrade {
       HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieEngineContext context,
       SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     this.metaClient = metaClient;
-    this.config = config;
+    this.config = getWriteConfigForUpgrade(config);
     this.context = context;
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
   }
@@ -407,5 +407,12 @@ public class UpgradeDowngrade {
           HoodieTableType.MERGE_ON_READ.equals(metaClient.getTableType()),
           tableVersion);
     }
+  }
+
+  private HoodieWriteConfig getWriteConfigForUpgrade(HoodieWriteConfig writeConfig) {
+    return HoodieWriteConfig.newBuilder()
+        .withProps(writeConfig.getProps())
+        .withAutoDetectAndDeleteMdtPartitions(false)
+        .build();
   }
 }

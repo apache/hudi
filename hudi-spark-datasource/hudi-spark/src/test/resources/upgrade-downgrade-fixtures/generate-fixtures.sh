@@ -77,6 +77,9 @@ elif [[ "$SCALA_SCRIPT_NAME" == *"complex-keygen"* ]]; then
 elif [[ "$SCALA_SCRIPT_NAME" == *"payload"* ]]; then
     FIXTURES_DIR="$SCRIPT_DIR/payload-tables"
     echo "Using payload tables directory: $FIXTURES_DIR"
+elif [[ "$SCALA_SCRIPT_NAME" == *"mdt-validation"* ]]; then
+    FIXTURES_DIR="$SCRIPT_DIR/mdt-validation-tables"
+    echo "Using mdt-validation tables directory: $FIXTURES_DIR"
 else
     # Default fallback
     FIXTURES_DIR="$SCRIPT_DIR/complex-keygen-tables"
@@ -219,7 +222,11 @@ generate_fixture() {
         rm -rf "$fixture_path"
     fi
 
-    mkdir -p "$fixture_path"
+    if [[ "$SCALA_SCRIPT_NAME" == *"payload"* || "$SCALA_SCRIPT_NAME" == *"mdt-validation"* ]]; then
+      mkdir -p "$FIXTURES_DIR"
+    else
+      mkdir -p "$fixture_path"
+    fi
 
     # Ensure Spark binary is available
     local spark_home=$(ensure_spark_binary "$spark_version")
@@ -257,8 +264,9 @@ generate_fixture() {
 
     # Copy template and substitute variables
     cp "$SCRIPT_DIR/scala-templates/$actual_script_name" "$temp_script"
+    echo "Final script name ${actual_script_name}"
     # For payload tables, use the fixtures directory as base path, not the specific fixture path
-    if [[ "$SCALA_SCRIPT_NAME" == *"payload"* ]]; then
+    if [[ "$SCALA_SCRIPT_NAME" == *"payload"* || "$SCALA_SCRIPT_NAME" == *"mdt-validation"* ]]; then
         sed -i.bak \
             -e "s/\${FIXTURE_NAME}/$fixture_name/g" \
             -e "s/\${TABLE_NAME}/$table_name/g" \
@@ -329,6 +337,7 @@ echo "Hudi Version -> Spark Version -> Scala Version mapping:"
 
 
 # Create fixtures directory
+echo "Creating fixture directory ${FIXTURES_DIR}"
 mkdir -p "$FIXTURES_DIR"
 
 # Hudi 0.14.0 (Table Version 6) -> Spark 3.4.x (default) -> Scala 2.12
@@ -357,10 +366,12 @@ echo "Fixture generation completed!"
 echo ""
 echo "Compressing fixture tables..."
 
-# Handle payload tables differently (multiple tables created by one script)
-if [[ "$SCALA_SCRIPT_NAME" == *"payload"* ]]; then
+# Handle payload and mdt-validation tables differently (multiple tables created by one script)
+if [[ "$SCALA_SCRIPT_NAME" == *"payload"* || "$SCALA_SCRIPT_NAME" == *"mdt-validation"* ]]; then
     # For payload tables, compress each individual payload table directory
-    for fixture_dir in "$FIXTURES_DIR"/hudi-v*-table-payload-*; do
+    echo "Compressing fixtures from ${FIXTURES_DIR}"
+    for fixture_dir in "$FIXTURES_DIR"/hudi-v*-table${SCRIPT_SUFFIX}-*; do
+        echo "Processing fixture directory: $fixture_dir"
         if [ -d "$fixture_dir" ]; then
             fixture_name=$(basename "$fixture_dir")
             echo "Compressing $fixture_name..."

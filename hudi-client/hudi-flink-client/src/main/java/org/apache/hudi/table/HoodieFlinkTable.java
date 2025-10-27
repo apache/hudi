@@ -100,8 +100,7 @@ public abstract class HoodieFlinkTable<T>
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp,
       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-      boolean streamingWrites,
-      boolean autoDetectAndDeleteMdtPartitions) {
+      boolean streamingWrites) {
     if (isMetadataTable()) {
       return Option.empty();
     }
