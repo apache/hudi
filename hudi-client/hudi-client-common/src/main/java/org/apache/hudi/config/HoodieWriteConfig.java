@@ -139,6 +139,8 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final String CONCURRENCY_PREFIX = "hoodie.write.concurrency.";
 
+  public static final String AUTO_DETECT_AND_DELETE_MDT_PARTITIONS = "hoodie.write.auto.detect.delete.partitions";
+
   public static final ConfigProperty<String> TBL_NAME = ConfigProperty
       .key(HoodieTableConfig.HOODIE_TABLE_NAME_KEY)
       .noDefaultValue()
@@ -917,13 +919,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When using a custom Hoodie Merge Handle Implementation controlled by the config " + MERGE_HANDLE_CLASS_NAME.key()
           + " or when using a custom Hoodie Concat Handle Implementation controlled by the config " + CONCAT_HANDLE_CLASS_NAME.key()
               + ", enabling this config results in fallback to the default implementations if instantiation of the custom implementation fails");
-
-  public static final ConfigProperty<Boolean> AUTO_DETECT_AND_DELETE_MDT_PARTITIONS = ConfigProperty
-      .key("hoodie.write.auto.detect.delete.partitions")
-      .defaultValue(true)
-      .markAdvanced()
-      .sinceVersion("1.1.0")
-      .withDocumentation("When enabled, the Hoodie Write Client will automatically detect and delete metadata partitions if not enabled");
 
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
@@ -2938,7 +2933,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean isAutoDetectAndDeleteMdtPartitions() {
-    return getBoolean(AUTO_DETECT_AND_DELETE_MDT_PARTITIONS);
+    return getBooleanOrDefault(AUTO_DETECT_AND_DELETE_MDT_PARTITIONS, true);
   }
 
   /**
