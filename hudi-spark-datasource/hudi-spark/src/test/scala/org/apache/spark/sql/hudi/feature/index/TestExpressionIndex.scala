@@ -2064,7 +2064,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
       val lastCompletedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline.filterCompletedInstants().lastInstant()
       val configBuilder = getWriteConfigBuilder(Map.empty, metaClient.getBasePath.toString)
       configBuilder.withMetadataConfig(HoodieMetadataConfig.newBuilder()
-        .withMetadataIndexColumnStats(false).withMetadataIndexPartitionStats(false).build())
+        .withMetadataIndexColumnStats(false).build())
       val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)), configBuilder.build())
       writeClient.rollback(lastCompletedInstant.get().requestedTime)
       writeClient.close()
@@ -2386,7 +2386,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
 
   private def getTableFileSystemView(metaClient: HoodieTableMetaClient): HoodieTableFileSystemView = {
     val engineContext = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
-    val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexPartitionStats(true).build()
+    val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
     val metadataTable = new HoodieBackedTableMetadata(engineContext, metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
     new HoodieTableFileSystemView(
       metadataTable,

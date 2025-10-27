@@ -469,7 +469,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       Dataset<Row> inserts = makeInsertDf("000", 5);
       inserts.write().format("hudi").options(writeOptions)
           .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
-          .option(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true")
           .mode(SaveMode.Overwrite)
           .save(basePath);
       // validate MDT partition stats
@@ -478,7 +477,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       Dataset<Row> updates = makeUpdateDf("001", 5);
       updates.write().format("hudi").options(writeOptions)
           .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.UPSERT.value())
-          .option(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true")
           .mode(SaveMode.Append)
           .save(basePath);
 
