@@ -15,7 +15,6 @@ All you need is a cloned copy of the Hudi repository and Docker installed on you
 
 * Clone the [Hudi repository](https://github.com/apache/hudi) to your local machine.
 * Docker Setup: For macOS, follow the steps in [Install Docker Desktop on Mac](https://docs.docker.com/desktop/install/mac-install/). For Spark SQL queries, ensure at least 6 GB of memory and 4 CPUs are allocated to Docker (see Docker > Preferences > Advanced).
-* This setup also requires JDK 8 and Maven to be installed on your system.
 * Build Docker Images
 
   ```shell
@@ -35,7 +34,7 @@ All you need is a cloned copy of the Hudi repository and Docker installed on you
 
 This notebook is a beginner-friendly, practical guide to working with Apache Hudi using PySpark. It walks you through the essential CRUD operations (Create, Read, Update, Delete) on Hudi tables, while also helping you understand key table types such as Copy-On-Write (COW) and Merge-On-Read (MOR).
 
-For storage, we use MinIO as an S3-compatible backend, simulating a modern data lake setup.
+For storage, we use MinIO as an S3-compatible backend.
 
 **What you will learn:**
 
@@ -68,7 +67,7 @@ SCDs help track changes in dimension data over time without losing historical co
 
 #### 4 - Schema Evolution with Apache Hudi: Concepts and Practical Use
 
-In real-world data lake environments, schema changes are not just common—they are expected. Whether you are adding new data attributes, adjusting existing types, or refactoring nested structures, it is essential that your pipelines adapt without introducing instability.
+In real-world data lakehouse environments, schema changes are not just common—they are expected. Whether you are adding new data attributes, adjusting existing types, or refactoring nested structures, it is essential that your pipelines adapt without introducing instability.
 
 Apache Hudi supports powerful schema evolution capabilities that help you maintain schema flexibility while ensuring data consistency. In this notebook, we will explore how Hudi enables safe and efficient schema changes, both at write time and read time.
 
