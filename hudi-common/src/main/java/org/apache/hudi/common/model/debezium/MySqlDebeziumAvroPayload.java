@@ -51,7 +51,7 @@ public class MySqlDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
 
   private static final Logger LOG = LoggerFactory.getLogger(MySqlDebeziumAvroPayload.class);
 
-  private static final String ORDERING_FIELDS = FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME;
+  public static final String ORDERING_FIELDS = FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME;
 
   public MySqlDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
@@ -112,9 +112,5 @@ public class MySqlDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
     long currentPos = Long.parseLong(currentFilePos[1]);
     long newPos = Long.parseLong(newFilePos[1]);
     return newPos < currentPos;
-  }
-
-  public static String getOrderingFields() {
-    return ORDERING_FIELDS;
   }
 }
