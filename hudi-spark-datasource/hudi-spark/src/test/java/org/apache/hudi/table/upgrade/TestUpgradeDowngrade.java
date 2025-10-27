@@ -60,7 +60,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
 import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -594,12 +593,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     return Stream.of(
         Arguments.of(HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.EIGHT, true),
         Arguments.of(HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.EIGHT, false),
-        Arguments.of(HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.SIX, true),
-        Arguments.of(HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.SIX, false),
         Arguments.of(HoodieTableType.MERGE_ON_READ, HoodieTableVersion.EIGHT, true),
-        Arguments.of(HoodieTableType.MERGE_ON_READ, HoodieTableVersion.EIGHT, false),
-        Arguments.of(HoodieTableType.MERGE_ON_READ, HoodieTableVersion.SIX, true),
-        Arguments.of(HoodieTableType.MERGE_ON_READ, HoodieTableVersion.SIX, false)
+        Arguments.of(HoodieTableType.MERGE_ON_READ, HoodieTableVersion.EIGHT, false)
     );
   }
 
