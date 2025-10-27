@@ -18,9 +18,10 @@ All you need is a cloned copy of the Hudi repository and Docker installed on you
 * Build Docker Images
 
   ```shell
+  # under Hudi repo root dir
   cd hudi-notebooks
   sh build.sh
-  ```shell
+  ```
 
 * Start the Environment
 
