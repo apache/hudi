@@ -24,22 +24,17 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Clustering Strategy based on following.
- * 1) Creates clustering groups based on max size allowed per group.
- * 2) Excludes files that are greater than 'small.file.limit' from clustering plan.
- * 3) Skip partitions with only one small file
+ * An extension of {@link FlinkSizeBasedClusteringPlanStrategy} that skips clustering
+ * for partitions containing only one small file.
  */
 public class FlinkSkipSingleFileClusteringPlanStrategy<T>
     extends FlinkSizeBasedClusteringPlanStrategy<T> {
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkSkipSingleFileClusteringPlanStrategy.class);
 
   public FlinkSkipSingleFileClusteringPlanStrategy(HoodieTable table,
                                               HoodieEngineContext engineContext,
