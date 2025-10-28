@@ -57,7 +57,6 @@ import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
-import java.util.Collections
 
 import scala.collection.JavaConverters.mapAsJavaMapConverter
 
@@ -95,6 +94,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     )
   }
 
+  private lazy val supportBatchTimestampRepair = HoodieSparkUtils.gteqSpark3_5 || !AvroSchemaRepair.hasTimestampMillisField(avroTableSchema)
+
   override def shortName(): String = "HudiFileGroup"
 
   override def toString: String = "HoodieFileGroupReaderBasedFileFormat"
@@ -126,8 +127,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
    */
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
     val conf = sparkSession.sessionState.conf
-    val parquetBatchSupported = ParquetUtils.isBatchReadSupportedForSchema(conf, schema) && (HoodieSparkUtils.gteqSpark3_5 ||
-      !AvroSchemaRepair.hasTimestampMillisField(avroTableSchema, AvroConversionUtils.convertStructTypeToAvroSchema(schema, sanitizedTableName)))
+    val parquetBatchSupported = ParquetUtils.isBatchReadSupportedForSchema(conf, schema) && supportBatchTimestampRepair
     val orcBatchSupported = conf.orcVectorizedReaderEnabled &&
       schema.forall(s => OrcUtils.supportColumnarReads(
         s.dataType, sparkSession.sessionState.conf.orcVectorizedReaderNestedColumnEnabled))
