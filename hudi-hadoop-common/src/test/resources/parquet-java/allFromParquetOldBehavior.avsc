@@ -1,0 +1,100 @@
+{
+  "name" : "myrecord",
+  "namespace": "org.apache.parquet.avro",
+  "type" : "record",
+  "fields" : [ {
+    "name" : "myboolean",
+    "type" : "boolean"
+  }, {
+    "name" : "myint",
+    "type" : "int"
+  }, {
+    "name" : "mylong",
+    "type" : "long"
+  }, {
+    "name" : "myfloat",
+    "type" : "float"
+  }, {
+    "name" : "mydouble",
+    "type" : "double"
+  }, {
+    "name" : "mybytes",
+    "type" : "bytes"
+  }, {
+    "name" : "mystring",
+    "type" : "string"
+  }, {
+    "name" : "mynestedrecord",
+    "type" : {
+      "type" : "record",
+      "name" : "mynestedrecord",
+      "namespace" : "",
+      "fields" : [ {
+        "name" : "mynestedint",
+        "type" : "int"
+      } ]
+    }
+  }, {
+    "name" : "myenum",
+    "type" : "string"
+  }, {
+    "name" : "myarray",
+    "type" : {
+      "type" : "array",
+      "items" : "int"
+    }
+  }, {
+    "name" : "myoptionalarray",
+    "type" : [ "null", {
+       "type" : "array",
+       "items" : "int"
+    }],
+    "default" : null
+  }, {
+    "name" : "myarrayofoptional",
+    "type" : {
+       "type" : "array",
+       "items" : {
+          "type": "record",
+          "name": "list",
+          "namespace": "",
+          "fields": [ {
+            "name": "element",
+            "type": ["null", "int"],
+            "default": null
+          } ]
+       }
+    }
+  }, {
+    "name" : "myrecordarray",
+    "type" : {
+      "type" : "array",
+      "items" : {
+        "type" : "record",
+        "name" : "array",
+        "namespace" : "",
+        "fields" : [ {
+           "name" : "a",
+           "type" : "int"
+        }, {
+           "name" : "b",
+           "type" : "int"
+        } ]
+      }
+    }
+  }, {
+    "name" : "mymap",
+    "type" : {
+      "type" : "map",
+      "values" : "int"
+    }
+  }, {
+    "name" : "myfixed",
+    "type" : {
+      "type" : "fixed",
+      "name" : "myfixed",
+      "namespace" : "",
+      "size" : 1
+    }
+  } ]
+}

@@ -1,0 +1,80 @@
+{
+  "name": "fixedToInt96",
+  "namespace": "org.apache.parquet.avro",
+  "type": "record",
+  "fields": [
+    {
+      "name": "int96",
+      "type": {
+        "type": "fixed",
+        "name": "ignored1",
+        "namespace": "",
+        "size": 12
+      }
+    },
+    {
+      "name": "notanint96",
+      "type": {
+        "type": "fixed",
+        "name": "ignored2",
+        "namespace": "",
+        "size": 12
+      }
+    },
+    {
+      "name": "mynestedrecord",
+      "type": {
+        "type": "record",
+        "name": "ignored3",
+        "namespace": "",
+        "fields": [
+          {
+            "name": "int96inrecord",
+            "type": {
+              "type": "fixed",
+              "name": "ignored4",
+              "namespace": "",
+              "size": 12
+            }
+          },
+          {
+            "name": "myarrayofoptional",
+            "type": {
+              "type": "array",
+              "items": [
+                "null",
+                {
+                  "type": "fixed",
+                  "name": "ignored5",
+                  "namespace": "",
+                  "size": 12
+                }
+              ]
+            }
+          },
+          {
+            "name": "mymap",
+            "type": {
+              "type": "map",
+              "values": {
+                "type": "fixed",
+                "name": "ignored6",
+                "namespace": "",
+                "size": 12
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "onebytefixed",
+      "type": {
+        "type": "fixed",
+        "name": "ignored7",
+        "namespace": "",
+        "size": 1
+      }
+    }
+  ]
+}
