@@ -41,6 +41,8 @@ class HoodieParquetReadSupport(
 
   override def init(context: InitContext): ReadContext = {
     val readContext = super.init(context)
+    // repair is needed here because this is the schema that is used by the reader to decide what
+    // conversions are necessary
     val requestedParquetSchema = SchemaRepair.repairLogicalTypes(readContext.getRequestedSchema, tableSchemaOpt)
     val trimmedParquetSchema = HoodieParquetReadSupport.trimParquetSchema(requestedParquetSchema, context.getFileSchema)
     new ReadContext(trimmedParquetSchema, readContext.getReadSupportMetadata)
