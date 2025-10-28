@@ -19,7 +19,6 @@ package org.apache.spark.sql.catalyst.catalog
 
 import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper}
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
-import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
@@ -210,15 +209,17 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
     val catalogDatabaseName = formatName(spark,
       table.identifier.database.getOrElse(spark.sessionState.catalog.getCurrentDatabase))
     if (hoodieTableExists) {
-      checkArgument(StringUtils.isNullOrEmpty(databaseName) || databaseName == catalogDatabaseName,
-        "The database names from this hoodie path and this catalog table is not same.")
-      val recordName = AvroSchemaUtils.getAvroRecordQualifiedName(table.identifier.table)
-      // just persist hoodie.table.create.schema
-      HoodieTableMetaClient.newTableBuilder()
-        .fromProperties(properties)
-        .setDatabaseName(catalogDatabaseName)
-        .setTableCreateSchema(SchemaConverters.toAvroType(dataSchema, recordName = recordName).toString())
-        .initTable(storageConf, tableLocation)
+      if (table.tableType == CatalogTableType.MANAGED) {
+        checkArgument(StringUtils.isNullOrEmpty(databaseName) || databaseName == catalogDatabaseName,
+          "The database names from this hoodie path and this catalog table is not same.")
+        val recordName = AvroSchemaUtils.getAvroRecordQualifiedName(table.identifier.table)
+        // just persist hoodie.table.create.schema
+        HoodieTableMetaClient.newTableBuilder()
+          .fromProperties(properties)
+          .setDatabaseName(catalogDatabaseName)
+          .setTableCreateSchema(SchemaConverters.toAvroType(dataSchema, recordName = recordName).toString())
+          .initTable(storageConf, tableLocation)
+      }
     } else {
       val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(table.identifier.table)
       val schema = SchemaConverters.toAvroType(dataSchema, nullable = false, recordName, namespace)
