@@ -56,6 +56,8 @@ import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.COMM
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.FILENAME_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD;
+import static org.apache.hudi.io.storage.LanceTestUtils.createRow;
+import static org.apache.hudi.io.storage.LanceTestUtils.createRowWithMetaFields;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -457,40 +459,6 @@ public class TestHoodieSparkLanceWriter {
         .add("id", DataTypes.IntegerType, false)
         .add("name", DataTypes.StringType, true)
         .add("age", DataTypes.LongType, true);
-  }
-
-  private InternalRow createRowWithMetaFields(Object... userValues) {
-    // Create row with PLACEHOLDER meta fields (will be updated by writer) + user data
-    Object[] allValues = new Object[5 + userValues.length];
-
-    // Meta fields - use empty strings as placeholders
-    allValues[0] = UTF8String.fromString(""); // commit_time
-    allValues[1] = UTF8String.fromString(""); // commit_seqno
-    allValues[2] = UTF8String.fromString(""); // record_key
-    allValues[3] = UTF8String.fromString(""); // partition_path
-    allValues[4] = UTF8String.fromString(""); // file_name
-
-    // Copy user values
-    for (int i = 0; i < userValues.length; i++) {
-      allValues[5 + i] = processValue(userValues[i]);
-    }
-
-    return new GenericInternalRow(allValues);
-  }
-
-  private InternalRow createRow(Object... values) {
-    Object[] processedValues = new Object[values.length];
-    for (int i = 0; i < values.length; i++) {
-      processedValues[i] = processValue(values[i]);
-    }
-    return new GenericInternalRow(processedValues);
-  }
-
-  private Object processValue(Object value) {
-    if (value instanceof String) {
-      return UTF8String.fromString((String) value);
-    }
-    return value;
   }
 
   private boolean hasField(VectorSchemaRoot root, String fieldName) {
