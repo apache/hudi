@@ -54,7 +54,7 @@ def ls(base_path):
     if not base_path.startswith("s3a://"):
         raise ValueError("Path must start with 's3a://'")
     try:
-	    hadoop_conf = spark._jsc.hadoopConfiguration()
+        hadoop_conf = spark._jsc.hadoopConfiguration()
         fs = spark._jvm.org.apache.hadoop.fs.FileSystem.get(hadoop_conf)
         p = spark._jvm.org.apache.hadoop.fs.Path(base_path)
         if not fs.exists(p):
