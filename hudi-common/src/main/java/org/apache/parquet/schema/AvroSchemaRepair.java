@@ -235,7 +235,8 @@ public class AvroSchemaRepair {
         return hasTimestampMillisField(AvroSchemaUtils.resolveNullableSchema(tableSchema));
 
       default:
-        return tableSchema.getType() == Schema.Type.LONG && tableSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis;
+        return tableSchema.getType() == Schema.Type.LONG
+            && (tableSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis || tableSchema.getLogicalType() instanceof LogicalTypes.LocalTimestampMillis);
     }
   }
 }
