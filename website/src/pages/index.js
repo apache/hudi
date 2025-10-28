@@ -29,7 +29,7 @@ export default function Home() {
       description="Description will go into a meta tag in <head />">
       <NewReleaseMessage />
       <HomepageHeader />
-      <Events />
+      {/* <Events /> */}
       <main>
         <DataLake />
         <HomepageFeatures />
