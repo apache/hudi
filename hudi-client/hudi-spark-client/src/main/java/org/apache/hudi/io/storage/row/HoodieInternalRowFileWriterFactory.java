@@ -38,7 +38,13 @@ import static org.apache.hudi.common.util.ParquetUtils.getCompressionCodecName;
 
 /**
  * Factory to assist in instantiating a new {@link HoodieInternalRowFileWriter}.
+ *
+ * @deprecated Use {@link org.apache.hudi.io.storage.HoodieSparkFileWriterFactory#newParquetFileWriter(
+ *             StoragePath, org.apache.hudi.storage.StorageConfiguration, org.apache.hudi.common.config.HoodieConfig,
+ *             org.apache.spark.sql.types.StructType, String, int)} instead.
+ *             This factory is deprecated and will be removed in a future release.
  */
+@Deprecated
 public class HoodieInternalRowFileWriterFactory {
 
   /**

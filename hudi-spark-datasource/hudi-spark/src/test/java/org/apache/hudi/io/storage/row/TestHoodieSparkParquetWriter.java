@@ -27,9 +27,8 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.storage.HoodieParquetConfig;
+import org.apache.hudi.io.storage.HoodieSparkParquetWriter;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
 
@@ -54,13 +53,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Unit tests {@link HoodieInternalRowParquetWriter}.
+ * Unit tests {@link HoodieSparkParquetWriter}.
  */
-public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHarness {
+public class TestHoodieSparkParquetWriter extends HoodieSparkClientTestHarness {
 
   @BeforeEach
   public void setUp() throws Exception {
-    initSparkContexts("TestHoodieInternalRowParquetWriter");
+    initSparkContexts("TestHoodieSparkParquetWriter");
     initPath();
     initHoodieStorage();
     initTestDataGenerator();
@@ -88,15 +87,19 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
     HoodieRowParquetWriteSupport writeSupport = getWriteSupport(
         writeConfigBuilder, storageConf.unwrap(), parquetWriteLegacyFormatEnabled);
     HoodieWriteConfig cfg = writeConfigBuilder.build();
-    HoodieParquetConfig<HoodieRowParquetWriteSupport> parquetConfig = new HoodieParquetConfig<>(writeSupport,
+    HoodieRowParquetConfig parquetConfig = new HoodieRowParquetConfig(writeSupport,
         CompressionCodecName.SNAPPY, cfg.getParquetBlockSize(), cfg.getParquetPageSize(), cfg.getParquetMaxFileSize(),
-        new HadoopStorageConfiguration(writeSupport.getHadoopConf()), cfg.getParquetCompressionRatio(), cfg.parquetDictionaryEnabled());
+        writeSupport.getHadoopConf(), cfg.getParquetCompressionRatio(), cfg.parquetDictionaryEnabled());
 
-    StoragePath filePath = new StoragePath(basePath + "/internal_row_writer.parquet");
+    StoragePath filePath = new StoragePath(basePath + "/spark_parquet_writer.parquet");
+    String instantTime = "000";
+    int taskPartitionId = 0;
+    boolean populateMetaFields = true;
 
-    try (HoodieInternalRowParquetWriter writer = new HoodieInternalRowParquetWriter(filePath, parquetConfig)) {
+    try (HoodieSparkParquetWriter writer = new HoodieSparkParquetWriter(
+        filePath, parquetConfig, instantTime, taskPartitionId, populateMetaFields)) {
       for (InternalRow row : rows) {
-        writer.writeRow(row.getUTF8String(schema.fieldIndex("record_key")), row);
+        writer.writeRow(row.getUTF8String(schema.fieldIndex("record_key")).toString(), row);
       }
     }
 

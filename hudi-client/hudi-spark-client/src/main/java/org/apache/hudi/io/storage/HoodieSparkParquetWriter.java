@@ -65,6 +65,24 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
     };
   }
 
+  /**
+   * Alternate constructor that takes taskPartitionId directly instead of requiring TaskContextSupplier.
+   * This is useful when the partition ID is known upfront (e.g., in bulk insert scenarios).
+   */
+  public HoodieSparkParquetWriter(StoragePath file,
+                                  HoodieRowParquetConfig parquetConfig,
+                                  String instantTime,
+                                  int taskPartitionId,
+                                  boolean populateMetaFields) throws IOException {
+    super(file, parquetConfig);
+    this.writeSupport = parquetConfig.getWriteSupport();
+    this.fileName = UTF8String.fromString(file.getName());
+    this.instantTime = UTF8String.fromString(instantTime);
+    this.populateMetaFields = populateMetaFields;
+    this.seqIdGenerator = recordIndex ->
+        HoodieRecord.generateSequenceId(instantTime, taskPartitionId, recordIndex);
+  }
+
   @Override
   public void writeRowWithMetadata(HoodieKey key, InternalRow row) throws IOException {
     if (populateMetaFields) {

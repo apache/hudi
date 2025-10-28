@@ -35,6 +35,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.io.storage.HoodieSparkFileWriter;
+import org.apache.hudi.io.storage.HoodieSparkFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -78,7 +80,7 @@ public class HoodieRowCreateHandle implements Serializable {
 
   private final HoodieTimer currTimer;
 
-  protected final HoodieInternalRowFileWriter fileWriter;
+  protected final HoodieSparkFileWriter fileWriter;
   protected final WriteStatus writeStatus;
   private final HoodieRecordLocation newRecordLocation;
 
@@ -144,7 +146,8 @@ public class HoodieRowCreateHandle implements Serializable {
 
       createMarkerFile(partitionPath, fileName, instantTime, table, writeConfig);
 
-      this.fileWriter = HoodieInternalRowFileWriterFactory.getInternalRowFileWriter(path, table, writeConfig, structType);
+      this.fileWriter = HoodieSparkFileWriterFactory.newParquetFileWriter(
+          path, table.getStorageConf(), writeConfig, structType, instantTime, taskPartitionId);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize file writer for path " + path, e);
     }
@@ -189,7 +192,8 @@ public class HoodieRowCreateHandle implements Serializable {
       metaFields[4] = fileName;
       InternalRow updatedRow = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(metaFields, row, true);
       try {
-        fileWriter.writeRow(recordKey, updatedRow);
+        //TODO revisit this covert to regular string
+        fileWriter.writeRow(recordKey.toString(), updatedRow);
         // NOTE: To avoid conversion on the hot-path we only convert [[UTF8String]] into [[String]]
         //       in cases when successful records' writes are being tracked
         HoodieRecordDelegate recordDelegate = writeStatus.isTrackingSuccessfulWrites()
@@ -208,7 +212,7 @@ public class HoodieRowCreateHandle implements Serializable {
     try {
       // TODO make sure writing w/ and w/o meta fields is consistent (currently writing w/o
       //      meta-fields would fail if any record will, while when writing w/ meta-fields it won't)
-      fileWriter.writeRow(row);
+      fileWriter.writeRow(null, row);
       // when metafields disabled, we do not need to track individual records
       writeStatus.markSuccess((HoodieRecordDelegate) null, Option.empty());
     } catch (Exception e) {

@@ -29,7 +29,12 @@ import java.io.IOException;
 
 /**
  * Parquet's impl of {@link HoodieInternalRowFileWriter} to write {@link InternalRow}s.
+ *
+ * @deprecated Use {@link org.apache.hudi.io.storage.HoodieSparkParquetWriter} instead.
+ *             This class is deprecated and will be removed in a future release.
+ *             HoodieSparkParquetWriter provides the same functionality with built-in metadata population support.
  */
+@Deprecated
 public class HoodieInternalRowParquetWriter extends HoodieBaseParquetWriter<InternalRow>
     implements HoodieInternalRowFileWriter {
 
