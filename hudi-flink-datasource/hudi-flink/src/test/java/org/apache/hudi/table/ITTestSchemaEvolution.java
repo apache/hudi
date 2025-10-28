@@ -383,8 +383,7 @@ public class ITTestSchemaEvolution {
         FlinkOptions.COMPACTION_SCHEDULE_ENABLED.key(), false,
         HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED.key(), false,
         HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), true,
-        HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true",
-        HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
+        HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
   }
 
   private void checkAnswerEvolved(String... expectedResult) throws Exception {

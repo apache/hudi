@@ -341,8 +341,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
   public void testKeepLatestFileVersionsWithBootstrapFileClean() throws Exception {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false)
-                .withMetadataIndexPartitionStats(false).build())
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false).build())
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withCleanBootstrapBaseFileEnabled(true)
                 .withCleanerParallelism(1)

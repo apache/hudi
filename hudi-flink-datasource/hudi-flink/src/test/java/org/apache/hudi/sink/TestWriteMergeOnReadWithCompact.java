@@ -19,7 +19,6 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -97,7 +96,6 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     // disable schedule compaction in writers
     conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
     conf.set(FlinkOptions.PRE_COMBINE, true);
-    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false"); // HUDI-8814
 
     // start pipeline1 and insert record: [id1,Danny,null,1,par1], suspend the tx commit
     List<RowData> dataset1 = Collections.singletonList(
@@ -292,7 +290,6 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     // disable schedule compaction in writers
     conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
     conf.set(FlinkOptions.PRE_COMBINE, true);
-    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
 
     Configuration conf1 = conf.clone();
     conf1.set(FlinkOptions.OPERATION, "BULK_INSERT");
