@@ -41,7 +41,6 @@ import static org.apache.avro.Schema.Type.STRING;
 import static org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
 import static org.apache.avro.SchemaCompatibility.checkReaderWriterCompatibility;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
-import static org.apache.parquet.avro.AvroWriteSupport.WRITE_FIXED_AS_INT96;
 import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 import static org.apache.parquet.schema.OriginalType.DATE;
 import static org.apache.parquet.schema.OriginalType.TIMESTAMP_MICROS;
@@ -63,7 +62,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class TestAvroSchemaConverter {
 
   private static final Configuration NEW_BEHAVIOR = new Configuration(false);
-  
+
   @BeforeAll
   public static void setupConf() {
     NEW_BEHAVIOR.setBoolean("parquet.avro.add-list-element-records", false);
@@ -860,7 +859,7 @@ public class TestAvroSchemaConverter {
 
     Configuration conf = new Configuration();
     conf.setStrings(
-        WRITE_FIXED_AS_INT96,
+        "parquet.avro.writeFixedAsInt96",
         "int96",
         "mynestedrecord.int96inrecord",
         "mynestedrecord.myarrayofoptional",
@@ -886,7 +885,7 @@ public class TestAvroSchemaConverter {
             + "  required fixed_len_byte_array(1) onebytefixed;\n"
             + "}");
 
-    conf.setStrings(WRITE_FIXED_AS_INT96, "onebytefixed");
+    conf.setStrings("parquet.avro.writeFixedAsInt96", "onebytefixed");
     assertThrows(
         "Exception should be thrown for fixed types to be converted to INT96 where the size is not 12 bytes",
         IllegalArgumentException.class,
