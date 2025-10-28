@@ -1275,9 +1275,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       if (HoodieSparkUtils.isSpark3_3) {
         System.setProperty("spark.testing", "true")
       }
-      if (!HoodieSparkUtils.gteqSpark3_5) {
-        spark.conf.set("spark.sql.parquet.enableVectorizedReader", "false")
-      }
       spark.conf.set("spark.sql.session.timeZone", "UTC")
       val tableName = "trips_logical_types_json_mor_read_v" + tableVersion + logBlockString
       val dataPath = "file://" + basePath + "/" + tableName
@@ -1326,9 +1323,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       assertEquals(0, df.filter("local_ts_micros < CAST('2017-07-07 07:07:06.999999' AS TIMESTAMP_NTZ)").count())
     } finally {
       spark.conf.set("spark.sql.session.timeZone", prevTimezone)
-      if (!HoodieSparkUtils.gteqSpark3_5) {
-        spark.conf.set("spark.sql.parquet.enableVectorizedReader", "true")
-      }
       if (HoodieSparkUtils.isSpark3_3) {
         if (propertyValue == null) {
           System.clearProperty("spark.testing")
