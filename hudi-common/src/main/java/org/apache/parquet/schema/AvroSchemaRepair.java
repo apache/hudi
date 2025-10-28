@@ -214,4 +214,43 @@ public class AvroSchemaRepair {
         repairedFields
     );
   }
+
+
+  public static boolean hasTimestampMillisField(Schema dataSchema, Schema tableSchema) {
+    return hasTimestampMillisFieldInternal(AvroSchemaUtils.resolveNullableSchema(dataSchema), AvroSchemaUtils.resolveNullableSchema(tableSchema));
+  }
+
+  private static boolean hasTimestampMillisFieldInternal(Schema dataSchema, Schema tableSchema) {
+    switch (tableSchema.getType()) {
+      case RECORD:
+        if (dataSchema.getType() != Schema.Type.RECORD) {
+          throw new IllegalArgumentException("Data schema is not a record");
+        }
+        for (Schema.Field requiredSchemaField : tableSchema.getFields()) {
+          Schema.Field dataSchemaField = dataSchema.getField(requiredSchemaField.name());
+          if (dataSchemaField != null && hasTimestampMillisField(dataSchemaField.schema(), requiredSchemaField.schema())) {
+            return true;
+          }
+        }
+        return false;
+
+      case ARRAY:
+        if (dataSchema.getType() != Schema.Type.ARRAY) {
+          throw new IllegalArgumentException("Data schema is not an array");
+        }
+        return hasTimestampMillisField(dataSchema.getElementType(), tableSchema.getElementType());
+
+      case MAP:
+        if (dataSchema.getType() != Schema.Type.MAP) {
+          throw new IllegalArgumentException("Data schema is not a map");
+        }
+        return hasTimestampMillisField(dataSchema.getValueType(), tableSchema.getValueType());
+
+      case UNION:
+        throw new IllegalArgumentException("Data schema is a union");
+
+      default:
+        return tableSchema.getType() == Schema.Type.LONG && tableSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis;
+    }
+  }
 }
