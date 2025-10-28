@@ -116,7 +116,6 @@ public class UpgradeDowngradeUtils {
         compactionConfig.setValue(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1");
         compactionConfig.setValue(HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY.key(), CompactionTriggerStrategy.NUM_COMMITS.name());
         compactionConfig.setValue(HoodieCompactionConfig.COMPACTION_STRATEGY.key(), UnBoundedCompactionStrategy.class.getName());
-        compactionConfig.setValue(HoodieMetadataConfig.ENABLE.key(), "false");
         try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(compactionConfig, context)) {
           Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty());
           if (compactionInstantOpt.isPresent()) {
@@ -231,7 +230,6 @@ public class UpgradeDowngradeUtils {
       } else {
         rollbackWriteConfig.setValue(HoodieCompactionConfig.INLINE_COMPACT.key(), "false");
       }
-      rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE.key(), "false");
 
       try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(rollbackWriteConfig, context)) {
         writeClient.rollbackFailedWrites(table.getMetaClient());

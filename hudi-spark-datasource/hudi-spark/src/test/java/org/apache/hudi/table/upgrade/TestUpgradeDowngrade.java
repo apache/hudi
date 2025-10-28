@@ -41,6 +41,8 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.table.HoodieSparkTable;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -99,6 +101,20 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     } else {
       return "/upgrade-downgrade-fixtures/unsupported-upgrade-tables/";
     }
+  }
+
+  @Test
+  public void testUpgradeDowngradeUtilsCompaction() throws Exception {
+    HoodieTableVersion originalVersion = HoodieTableVersion.EIGHT;
+    HoodieTableMetaClient originalMetaClient = loadFixtureTable(HoodieTableVersion.EIGHT, "-mor");
+    HoodieWriteConfig config = createWriteConfig(originalMetaClient, false);
+
+    int numCompactionInstants = originalMetaClient.getActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants().countInstants();
+    HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
+    UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(table, context(), config, SparkUpgradeDowngradeHelper.getInstance(), true, originalVersion);
+    originalMetaClient = HoodieTableMetaClient.reload(originalMetaClient);
+    assertEquals(numCompactionInstants + 1, originalMetaClient.getActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants().countInstants());
+    assertTrue(originalMetaClient.getTableConfig().isMetadataTableAvailable());
   }
 
   @Disabled
