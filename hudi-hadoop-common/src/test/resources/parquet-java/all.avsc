@@ -1,0 +1,93 @@
+{
+  "name" : "myrecord",
+  "namespace": "org.apache.parquet.avro",
+  "type" : "record",
+  "fields" : [ {
+    "name" : "mynull",
+    "type" : "null"
+  }, {
+    "name" : "myboolean",
+    "type" : "boolean"
+  }, {
+    "name" : "myint",
+    "type" : "int"
+  }, {
+    "name" : "mylong",
+    "type" : "long"
+  }, {
+    "name" : "myfloat",
+    "type" : "float"
+  }, {
+    "name" : "mydouble",
+    "type" : "double"
+  }, {
+    "name" : "mybytes",
+    "type" : "bytes"
+  }, {
+    "name" : "mystring",
+    "type" : "string"
+  }, {
+    "name" : "mynestedrecord",
+    "type" : {
+      "type" : "record",
+      "name" : "ignored1",
+      "namespace" : "",
+      "fields" : [ {
+        "name" : "mynestedint",
+        "type" : "int"
+      } ]
+    }
+  }, {
+    "name" : "myenum",
+    "type" : {
+      "type" : "enum",
+      "name" : "ignored2",
+      "namespace" : "",
+      "symbols" : [ "a", "b" ]
+    }
+  }, {
+    "name" : "myarray",
+    "type" : {
+      "type" : "array",
+      "items" : "int"
+    }
+  }, {
+    "name" : "myemptyarray",
+    "type" : {
+      "type" : "array",
+      "items" : "int"
+    }
+  }, {
+    "name" : "myoptionalarray",
+    "type" : [ "null", {
+       "type" : "array",
+       "items" : "int"
+    }]
+  }, {
+    "name" : "myarrayofoptional",
+    "type" : {
+       "type" : "array",
+       "items" : [ "null", "int" ]
+    }
+  }, {
+    "name" : "mymap",
+    "type" : {
+      "type" : "map",
+      "values" : "int"
+    }
+  }, {
+    "name" : "myemptymap",
+    "type" : {
+      "type" : "map",
+      "values" : "int"
+    }
+  }, {
+    "name" : "myfixed",
+    "type" : {
+      "type" : "fixed",
+      "name" : "ignored3",
+      "namespace" : "",
+      "size" : 1
+    }
+  } ]
+}
