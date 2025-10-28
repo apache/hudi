@@ -20,7 +20,6 @@ package org.apache.hudi.client.clustering.plan.strategy;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -45,9 +44,6 @@ public class FlinkSkipSingleFileClusteringPlanStrategy<T>
   @Override
   protected Stream<FileSlice> getFileSlicesEligibleForClustering(final String partition) {
     List<FileSlice> fileSlices = super.getFileSlicesEligibleForClustering(partition)
-            // Only files that have base file size smaller than small file size are eligible.
-            .filter(slice -> slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L)
-                    < getWriteConfig().getClusteringSmallFileLimit())
             .collect(Collectors.toList());
 
     //  if some special sort columns are declared, we can not skip the clustering.
