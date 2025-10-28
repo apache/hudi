@@ -1830,71 +1830,70 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   @ParameterizedTest
   @CsvSource(Array("true, 6", "false, 6", "true, 8", "false, 8", "true, 9", "false, 9"))
   def testLogicalTypesReadRepair(vectorizedReadEnabled: Boolean, tableVersion: Int): Unit = {
-    // vectorized reader not working for 3.3 and 3.4 yet
-    if (!vectorizedReadEnabled || HoodieSparkUtils.gteqSpark3_5) {
-      val prevValue = spark.conf.get("spark.sql.parquet.enableVectorizedReader", "true")
-      val prevTimezone = spark.conf.get("spark.sql.session.timeZone")
-      val propertyValue: String = System.getProperty("spark.testing")
-      try {
-        if (HoodieSparkUtils.isSpark3_3) {
-          System.setProperty("spark.testing", "true")
+    // Note: for spark 3.3 and 3.4 we should fall back to nonvectorized reader
+    // if that is not happening then this test will fail
+    val prevValue = spark.conf.get("spark.sql.parquet.enableVectorizedReader")
+    val prevTimezone = spark.conf.get("spark.sql.session.timeZone")
+    val propertyValue: String = System.getProperty("spark.testing")
+    try {
+      if (HoodieSparkUtils.isSpark3_3) {
+        System.setProperty("spark.testing", "true")
+      }
+      spark.conf.set("spark.sql.parquet.enableVectorizedReader", vectorizedReadEnabled.toString)
+      spark.conf.set("spark.sql.session.timeZone", "UTC")
+      val tableName = "trips_logical_types_json_cow_read_v" + tableVersion
+      val dataPath = "file://" + basePath + "/" + tableName
+      val zipOutput = Paths.get(new URI(dataPath))
+      HoodieTestUtils.extractZipToDirectory("/" + tableName + ".zip", zipOutput, getClass)
+      val tableBasePath = zipOutput.toString
+
+      val df = spark.read.format("org.apache.hudi")
+        .option("hoodie.metadata.enable", "false")
+        .load(tableBasePath)
+
+      val rows = df.collect()
+      assertEquals(20, rows.length)
+      for (row <- rows) {
+        val hash = row.get(6).asInstanceOf[String].hashCode()
+        if ((hash & 1)== 0) {
+          assertEquals("2020-01-01T00:00:00.001Z", row.get(15).asInstanceOf[Timestamp].toInstant.toString)
+          assertEquals("2020-06-01T12:00:00.000001Z", row.get(16).asInstanceOf[Timestamp].toInstant.toString)
+          assertEquals("2015-05-20T12:34:56.001", row.get(17).toString)
+          assertEquals("2017-07-07T07:07:07.000001", row.get(18).toString)
+        } else {
+          assertEquals("2019-12-31T23:59:59.999Z", row.get(15).asInstanceOf[Timestamp].toInstant.toString)
+          assertEquals("2020-06-01T11:59:59.999999Z", row.get(16).asInstanceOf[Timestamp].toInstant.toString)
+          assertEquals("2015-05-20T12:34:55.999", row.get(17).toString)
+          assertEquals("2017-07-07T07:07:06.999999", row.get(18).toString)
         }
-        spark.conf.set("spark.sql.parquet.enableVectorizedReader", vectorizedReadEnabled.toString)
-        spark.conf.set("spark.sql.session.timeZone", "UTC")
-        val tableName = "trips_logical_types_json_cow_read_v" + tableVersion
-        val dataPath = "file://" + basePath + "/" + tableName
-        val zipOutput = Paths.get(new URI(dataPath))
-        HoodieTestUtils.extractZipToDirectory("/" + tableName + ".zip", zipOutput, getClass)
-        val tableBasePath = zipOutput.toString
+      }
+      assertEquals(10, df.filter("ts_millis > timestamp('2020-01-01 00:00:00Z')").count())
+      assertEquals(10, df.filter("ts_millis < timestamp('2020-01-01 00:00:00Z')").count())
+      assertEquals(0, df.filter("ts_millis > timestamp('2020-01-01 00:00:00.001Z')").count())
+      assertEquals(0, df.filter("ts_millis < timestamp('2019-12-31 23:59:59.999Z')").count())
 
-        val df = spark.read.format("org.apache.hudi")
-          .option("hoodie.metadata.enable", "false")
-          .load(tableBasePath)
+      assertEquals(10, df.filter("ts_micros > timestamp('2020-06-01 12:00:00Z')").count())
+      assertEquals(10, df.filter("ts_micros < timestamp('2020-06-01 12:00:00Z')").count())
+      assertEquals(0, df.filter("ts_micros > timestamp('2020-06-01 12:00:00.000001Z')").count())
+      assertEquals(0, df.filter("ts_micros < timestamp('2020-06-01 11:59:59.999999Z')").count())
 
-        val rows = df.collect()
-        assertEquals(20, rows.length)
-        for (row <- rows) {
-          val hash = row.get(6).asInstanceOf[String].hashCode()
-          if ((hash & 1)== 0) {
-            assertEquals("2020-01-01T00:00:00.001Z", row.get(15).asInstanceOf[Timestamp].toInstant.toString)
-            assertEquals("2020-06-01T12:00:00.000001Z", row.get(16).asInstanceOf[Timestamp].toInstant.toString)
-            assertEquals("2015-05-20T12:34:56.001", row.get(17).toString)
-            assertEquals("2017-07-07T07:07:07.000001", row.get(18).toString)
-          } else {
-            assertEquals("2019-12-31T23:59:59.999Z", row.get(15).asInstanceOf[Timestamp].toInstant.toString)
-            assertEquals("2020-06-01T11:59:59.999999Z", row.get(16).asInstanceOf[Timestamp].toInstant.toString)
-            assertEquals("2015-05-20T12:34:55.999", row.get(17).toString)
-            assertEquals("2017-07-07T07:07:06.999999", row.get(18).toString)
-          }
-        }
-        assertEquals(10, df.filter("ts_millis > timestamp('2020-01-01 00:00:00Z')").count())
-        assertEquals(10, df.filter("ts_millis < timestamp('2020-01-01 00:00:00Z')").count())
-        assertEquals(0, df.filter("ts_millis > timestamp('2020-01-01 00:00:00.001Z')").count())
-        assertEquals(0, df.filter("ts_millis < timestamp('2019-12-31 23:59:59.999Z')").count())
+      assertEquals(10, df.filter("local_ts_millis > CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)").count())
+      assertEquals(10, df.filter("local_ts_millis < CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)").count())
+      assertEquals(0, df.filter("local_ts_millis > CAST('2015-05-20 12:34:56.001' AS TIMESTAMP_NTZ)").count())
+      assertEquals(0, df.filter("local_ts_millis < CAST('2015-05-20 12:34:55.999' AS TIMESTAMP_NTZ)").count())
 
-        assertEquals(10, df.filter("ts_micros > timestamp('2020-06-01 12:00:00Z')").count())
-        assertEquals(10, df.filter("ts_micros < timestamp('2020-06-01 12:00:00Z')").count())
-        assertEquals(0, df.filter("ts_micros > timestamp('2020-06-01 12:00:00.000001Z')").count())
-        assertEquals(0, df.filter("ts_micros < timestamp('2020-06-01 11:59:59.999999Z')").count())
-
-        assertEquals(10, df.filter("local_ts_millis > CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)").count())
-        assertEquals(10, df.filter("local_ts_millis < CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)").count())
-        assertEquals(0, df.filter("local_ts_millis > CAST('2015-05-20 12:34:56.001' AS TIMESTAMP_NTZ)").count())
-        assertEquals(0, df.filter("local_ts_millis < CAST('2015-05-20 12:34:55.999' AS TIMESTAMP_NTZ)").count())
-
-        assertEquals(10, df.filter("local_ts_micros > CAST('2017-07-07 07:07:07' AS TIMESTAMP_NTZ)").count())
-        assertEquals(10, df.filter("local_ts_micros < CAST('2017-07-07 07:07:07' AS TIMESTAMP_NTZ)").count())
-        assertEquals(0, df.filter("local_ts_micros > CAST('2017-07-07 07:07:07.000001' AS TIMESTAMP_NTZ)").count())
-        assertEquals(0, df.filter("local_ts_micros < CAST('2017-07-07 07:07:06.999999' AS TIMESTAMP_NTZ)").count())
-      } finally {
-        spark.conf.set("spark.sql.parquet.enableVectorizedReader", prevValue)
-        spark.conf.set("spark.sql.session.timeZone", prevTimezone)
-        if (HoodieSparkUtils.isSpark3_3) {
-          if (propertyValue == null) {
-            System.clearProperty("spark.testing")
-          } else {
-            System.setProperty("spark.testing", propertyValue)
-          }
+      assertEquals(10, df.filter("local_ts_micros > CAST('2017-07-07 07:07:07' AS TIMESTAMP_NTZ)").count())
+      assertEquals(10, df.filter("local_ts_micros < CAST('2017-07-07 07:07:07' AS TIMESTAMP_NTZ)").count())
+      assertEquals(0, df.filter("local_ts_micros > CAST('2017-07-07 07:07:07.000001' AS TIMESTAMP_NTZ)").count())
+      assertEquals(0, df.filter("local_ts_micros < CAST('2017-07-07 07:07:06.999999' AS TIMESTAMP_NTZ)").count())
+    } finally {
+      spark.conf.set("spark.sql.parquet.enableVectorizedReader", prevValue)
+      spark.conf.set("spark.sql.session.timeZone", prevTimezone)
+      if (HoodieSparkUtils.isSpark3_3) {
+        if (propertyValue == null) {
+          System.clearProperty("spark.testing")
+        } else {
+          System.setProperty("spark.testing", propertyValue)
         }
       }
     }
