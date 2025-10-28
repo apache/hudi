@@ -46,7 +46,7 @@ public class FlinkSkipSingleFileClusteringPlanStrategy<T>
     List<FileSlice> fileSlices = super.getFileSlicesEligibleForClustering(partition)
             .collect(Collectors.toList());
 
-    //  if some special sort columns are declared, we can not skip the clustering.
+    // if some special sort columns are declared, we can not skip the clustering.
     if (!StringUtils.isNullOrEmpty(getWriteConfig().getClusteringSortColumns())) {
       return fileSlices.stream();
     }
