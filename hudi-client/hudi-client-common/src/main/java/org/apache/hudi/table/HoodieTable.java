@@ -1085,7 +1085,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   public final Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp) {
-    return getMetadataWriter(triggeringInstantTimestamp, false);
+    return getMetadataWriter(triggeringInstantTimestamp, false, true);
   }
 
   /**
@@ -1094,8 +1094,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param triggeringInstantTimestamp - The instant that is triggering this metadata write
    * @return instance of {@link HoodieTableMetadataWriter}
    */
-  public final Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, boolean streamingWrites) {
-    return getMetadataWriter(triggeringInstantTimestamp, EAGER, streamingWrites);
+  public final Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, boolean streamingWrites, boolean autoDetectAndDeleteMetadataPartitions) {
+    return getMetadataWriter(triggeringInstantTimestamp, EAGER, streamingWrites, autoDetectAndDeleteMetadataPartitions);
   }
 
   /**
@@ -1105,7 +1105,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @return An instance of {@link HoodieTableMetadataWriter}.
    */
   public Option<HoodieTableMetadataWriter> getIndexingMetadataWriter(String triggeringInstantTimestamp) {
-    return getMetadataWriter(triggeringInstantTimestamp, LAZY, false);
+    return getMetadataWriter(triggeringInstantTimestamp, LAZY, false, false);
   }
 
   /**
@@ -1121,12 +1121,14 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param triggeringInstantTimestamp The instant that is triggering this metadata write
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    * @param streamingWrites            Whether streaming write is enabled
+   * @param autoDetectAndDeleteMetadataPartitions true when metadata partitions could be deleted based on incoming write config properties.
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp,
       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-      boolean streamingWrites) {
+      boolean streamingWrites,
+      boolean autoDetectAndDeleteMetadataPartitions) {
     // Each engine is expected to override this and
     // provide the actual metadata writer, if enabled.
     return Option.empty();

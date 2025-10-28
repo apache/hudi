@@ -1119,7 +1119,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         });
       });
 
-      Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(dropInstant);
+      Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(dropInstant, false, false);
       // first update table config. Metadata writer initializes the inflight metadata
       // partitions so we need to first remove the metadata before creating the writer
       // Also the partitions need to be removed after creating the metadata writer since the writer
