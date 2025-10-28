@@ -173,7 +173,6 @@ public class TestFileIndex {
     conf.set(READ_DATA_SKIPPING_ENABLED, true);
     conf.set(METADATA_ENABLED, true);
     conf.set(TABLE_TYPE, tableType.name());
-    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true");
     conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       // enable CSI for MOR table to collect col stats for delta write stats,

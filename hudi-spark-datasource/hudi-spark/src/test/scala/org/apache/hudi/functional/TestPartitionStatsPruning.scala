@@ -47,8 +47,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
   def testMetadataPSISimple(testCase: ColumnStatsTestCase): Unit = {
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true"
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
     )
 
     val commonOpts = Map(
@@ -77,8 +76,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
   def testMetadataColumnStatsIndex(testCase: ColumnStatsTestCase): Unit = {
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true"
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
     )
 
     val commonOpts = Map(
@@ -125,7 +123,6 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
     val metadataOpts1 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
       HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c6,c7,c8" // ignore c4
     )
 
@@ -145,7 +142,6 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
     val metadataOpts2 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
       HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c7,c8" // ignore c4,c6
     )
 
@@ -163,8 +159,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
     // disable cols stats
     val metadataOpts3 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "false"
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
     )
 
     // disable col stats
@@ -186,8 +181,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
     val partitionCol : String = "c8"
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "false"
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
     )
 
     val commonOpts = Map(
@@ -216,8 +210,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
 
     val metadataOpts0 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "false"
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
     )
 
     // updates
@@ -245,7 +238,6 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
     val metadataOpts1 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
       HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c4,c5,c6,c7,c8"
     )
 
@@ -342,7 +334,6 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
     val metadataOpts1 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
       HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c4,c5,c6,c7,c8"
     )
 

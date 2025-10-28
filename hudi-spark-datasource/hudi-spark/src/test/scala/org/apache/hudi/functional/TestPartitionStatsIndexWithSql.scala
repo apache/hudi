@@ -687,7 +687,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
   }
 
   private def getTableFileSystemView(metaClient: HoodieTableMetaClient): HoodieTableFileSystemView = {
-    val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexPartitionStats(true).build()
+    val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
     val metadataTable = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(spark.sparkContext),
       metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
     new HoodieTableFileSystemView(

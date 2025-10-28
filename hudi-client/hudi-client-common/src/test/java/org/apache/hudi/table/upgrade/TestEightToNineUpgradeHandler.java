@@ -56,9 +56,11 @@ import org.mockito.MockedStatic;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -117,6 +119,7 @@ class TestEightToNineUpgradeHandler {
     when(table.getMetaClient()).thenReturn(metaClient);
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     when(config.autoUpgrade()).thenReturn(true);
+    when(config.getPayloadClass()).thenReturn(null);
 
     // Setup common mocks
     when(upgradeDowngradeHelper.getTable(config, context)).thenReturn(table);
@@ -125,6 +128,7 @@ class TestEightToNineUpgradeHandler {
     when(metaClient.getStorage()).thenReturn(storage);
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.EIGHT);
     when(tableConfig.getOrderingFieldsStr()).thenReturn(Option.empty());
+    when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
 
     // Use a temp file for index definition path
     indexDefPath = new StoragePath(tempDir.resolve("index.json").toString());
@@ -143,81 +147,55 @@ class TestEightToNineUpgradeHandler {
   }
 
   static Stream<Arguments> payloadClassTestCases() {
-    return Stream.of(
-        Arguments.of(
-            DefaultHoodieRecordPayload.class.getName(),
-            "",
-            null,
-            null,
-            "DefaultHoodieRecordPayload"
-        ),
-        Arguments.of(
-            EventTimeAvroPayload.class.getName(),
-            "",
-            EVENT_TIME_ORDERING.name(),
-            null,
-            "EventTimeAvroPayload"
-        ),
-        Arguments.of(
-            OverwriteWithLatestAvroPayload.class.getName(),
-            "",
-            null,
-            null,
-            "OverwriteWithLatestAvroPayload"
-        ),
-        Arguments.of(
-            AWSDmsAvroPayload.class.getName(),
-            RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY + "=Op,"
-                + RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER + "=D", // mergeProperties
-            COMMIT_TIME_ORDERING.name(),
-            null,
-            "AWSDmsAvroPayload"
-        ),
-        Arguments.of(
-            PostgresDebeziumAvroPayload.class.getName(),
-            RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE + "=" + DEBEZIUM_UNAVAILABLE_VALUE + ","
-                + RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY + "=_change_operation_type,"
-                + RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER + "=d",
-            EVENT_TIME_ORDERING.name(),
-            FILL_UNAVAILABLE.name(),
-            "PostgresDebeziumAvroPayload"
-        ),
-        Arguments.of(
-            PartialUpdateAvroPayload.class.getName(),
-            "",
-            EVENT_TIME_ORDERING.name(),
-            PartialUpdateMode.IGNORE_DEFAULTS.name(),
-            "PartialUpdateAvroPayload"
-        ),
-        Arguments.of(
-            MySqlDebeziumAvroPayload.class.getName(),
-            RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY + "=_change_operation_type,"
-                + RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER + "=d",
-            EVENT_TIME_ORDERING.name(),
-            null,
-            "MySqlDebeziumAvroPayload"
-        ),
-        Arguments.of(
-            OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
-            "",
-            COMMIT_TIME_ORDERING.name(),
-            PartialUpdateMode.IGNORE_DEFAULTS.name(),
-            "OverwriteNonDefaultsWithLatestAvroPayload"
-        )
-    );
+    List<Arguments> arguments = new ArrayList<>();
+    arguments.addAll(getArguments(DefaultHoodieRecordPayload.class.getName(), "",
+        null, null, "DefaultHoodieRecordPayload"));
+    arguments.addAll(getArguments(EventTimeAvroPayload.class.getName(), "",
+        EVENT_TIME_ORDERING.name(), null, "EventTimeAvroPayload"));
+    arguments.addAll(getArguments(OverwriteWithLatestAvroPayload.class.getName(), "",
+        null, null, "OverwriteWithLatestAvroPayload"));
+    arguments.addAll(getArguments(AWSDmsAvroPayload.class.getName(), RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY + "=Op,"
+            + RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER + "=D", // mergeProperties
+        COMMIT_TIME_ORDERING.name(), null, "AWSDmsAvroPayload"));
+    arguments.addAll(getArguments(PostgresDebeziumAvroPayload.class.getName(), RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE + "=" + DEBEZIUM_UNAVAILABLE_VALUE + ","
+            + RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY + "=_change_operation_type,"
+            + RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER + "=d",
+        EVENT_TIME_ORDERING.name(), FILL_UNAVAILABLE.name(), "PostgresDebeziumAvroPayload"));
+    arguments.addAll(getArguments(PartialUpdateAvroPayload.class.getName(), "",
+        EVENT_TIME_ORDERING.name(), PartialUpdateMode.IGNORE_DEFAULTS.name(), "PartialUpdateAvroPayload"));
+    arguments.addAll(getArguments(MySqlDebeziumAvroPayload.class.getName(), RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY + "=_change_operation_type,"
+            + RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER + "=d",
+        EVENT_TIME_ORDERING.name(), null, "MySqlDebeziumAvroPayload"));
+    arguments.addAll(getArguments(OverwriteNonDefaultsWithLatestAvroPayload.class.getName(), "",
+        COMMIT_TIME_ORDERING.name(), PartialUpdateMode.IGNORE_DEFAULTS.name(), "OverwriteNonDefaultsWithLatestAvroPayload"));
+    return arguments.stream();
+  }
+
+  private static List<Arguments> getArguments(String payloadClassName, String expectedMergeProperties,
+                                              String expectedRecordMergeMode, String expectedPartialUpdateMode,
+                                              String testName) {
+    return Arrays.asList(
+        Arguments.of(payloadClassName, expectedMergeProperties,
+            expectedRecordMergeMode, expectedPartialUpdateMode, testName, true),
+        Arguments.of(payloadClassName, expectedMergeProperties,
+            expectedRecordMergeMode, expectedPartialUpdateMode, testName, false));
   }
 
   @ParameterizedTest(name = "testUpgradeWith{4}")
   @MethodSource("payloadClassTestCases")
   void testUpgradeWithPayloadClass(String payloadClassName, String expectedMergeProperties,
                                    String expectedRecordMergeMode, String expectedPartialUpdateMode,
-                                   String testName) {
+                                   String testName, boolean isPayloadClassConfiguredInTableConfig) {
     try (org.mockito.MockedStatic<UpgradeDowngradeUtils> utilities =
              org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
       utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
               any(), any(), any(), any(), anyBoolean(), any()))
           .thenAnswer(invocation -> null);
-      when(tableConfig.getPayloadClass()).thenReturn(payloadClassName);
+      if (isPayloadClassConfiguredInTableConfig) {
+        when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.ofNullable(payloadClassName));
+      } else {
+        when(config.getPayloadClass()).thenReturn(payloadClassName);
+      }
       when(tableConfig.getTableType()).thenReturn(HoodieTableType.MERGE_ON_READ);
       when(tableConfig.getRecordMergeStrategyId()).thenReturn(HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID);
       when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
@@ -301,6 +279,7 @@ class TestEightToNineUpgradeHandler {
     if (payloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
       assertTrue(propertiesToAdd.containsKey(HoodieTableConfig.ORDERING_FIELDS));
       assertEquals(FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME, propertiesToAdd.get(HoodieTableConfig.ORDERING_FIELDS));
+      assertTrue(propertiesToRemove.contains(HoodieTableConfig.PRECOMBINE_FIELD));
     } else if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
       assertEquals(FLATTENED_LSN_COL_NAME, propertiesToAdd.get(HoodieTableConfig.ORDERING_FIELDS));
     }

@@ -66,24 +66,6 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
   val sqlTempTable = "hudi_tbl"
 
   /**
-   * Test case to validate partition stats cannot be created without column stats.
-   */
-  @Test
-  def testPartitionStatsWithoutColumnStats(): Unit = {
-    // remove column stats enable key from commonOpts
-    val hudiOpts = commonOpts + (HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false")
-    // should throw an exception as column stats is required for partition stats
-    try {
-      doWriteAndValidateDataAndPartitionStats(hudiOpts,
-        operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-        saveMode = SaveMode.Overwrite)
-      fail("Should have thrown exception")
-    } catch {
-      case e: HoodieException => assertTrue(e.getCause.getMessage.startsWith("Column stats partition must be enabled to generate partition stats."))
-    }
-  }
-
-  /**
    * Test case to validate partition stats for a logical type column
    */
   @Test
@@ -411,7 +393,6 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
       HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true")
 
     // First ingest.
@@ -483,7 +464,6 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     val partitionStatsIndex = new PartitionStatsIndexSupport(
       spark, latestDf.schema, HoodieMetadataConfig.newBuilder()
         .enable(true)
-        .withMetadataIndexPartitionStats(true)
         .build(),
       metaClient)
     val partitionStats = partitionStatsIndex.loadColumnStatsIndexRecords(
@@ -495,7 +475,6 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     val columnStatsIndex = new ColumnStatsIndexSupport(
       spark, latestDf.schema, HoodieMetadataConfig.newBuilder()
         .enable(true)
-        .withMetadataIndexPartitionStats(true)
         .build(),
       metaClient)
     val columnStats = columnStatsIndex
@@ -559,7 +538,6 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
       HoodieMetadataConfig.ENABLE.key() -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key() -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key() -> "true",
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
 
     doWriteAndValidateDataAndPartitionStats(
