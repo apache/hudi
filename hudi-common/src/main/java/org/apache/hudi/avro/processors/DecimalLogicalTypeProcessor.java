@@ -27,6 +27,7 @@ import org.apache.avro.Schema;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 public abstract class DecimalLogicalTypeProcessor extends JsonFieldProcessor {
@@ -97,6 +98,10 @@ public abstract class DecimalLogicalTypeProcessor extends JsonFieldProcessor {
   }
 
   protected static byte[] decodeStringToBigDecimalBytes(Object value) {
-    return Base64.getDecoder().decode(((String) value).getBytes());
+    try {
+      return Base64.getDecoder().decode(((String) value).getBytes());
+    } catch (IllegalArgumentException e) {
+      return ((String) value).getBytes(StandardCharsets.ISO_8859_1);
+    }
   }
 }
