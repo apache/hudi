@@ -27,8 +27,10 @@ import org.apache.avro.SchemaBuilder;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests {@link AvroSchemaRepair}.
@@ -638,5 +640,344 @@ public class TestAvroSchemaRepair {
     assertSame(requestedSchema.getField("name").schema(), result.getField("name").schema());
     // Verify timestamp field repaired
     assertEquals(LogicalTypes.localTimestampMillis(), result.getField("timestamp").schema().getLogicalType());
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldPrimitiveLongWithTimestampMillis() {
+    Schema schema = LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
+    assertTrue(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return true for LONG with timestamp-millis logical type");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldPrimitiveLongWithoutLogicalType() {
+    Schema schema = Schema.create(Schema.Type.LONG);
+    assertFalse(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return false for LONG without logical type");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldPrimitiveLongWithTimestampMicros() {
+    Schema schema = LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
+    assertFalse(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return false for LONG with timestamp-micros logical type");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldPrimitiveLongWithLocalTimestampMillis() {
+    Schema schema = LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
+    assertTrue(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return true for LONG with local-timestamp-millis logical type");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldPrimitiveLongWithLocalTimestampMicros() {
+    Schema schema = LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
+    assertFalse(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return false for LONG with local-timestamp-micros logical type");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldOtherPrimitiveTypes() {
+    assertFalse(AvroSchemaRepair.hasTimestampMillisField(Schema.create(Schema.Type.STRING)),
+        "Should return false for STRING type");
+    assertFalse(AvroSchemaRepair.hasTimestampMillisField(Schema.create(Schema.Type.INT)),
+        "Should return false for INT type");
+    assertFalse(AvroSchemaRepair.hasTimestampMillisField(Schema.create(Schema.Type.FLOAT)),
+        "Should return false for FLOAT type");
+    assertFalse(AvroSchemaRepair.hasTimestampMillisField(Schema.create(Schema.Type.DOUBLE)),
+        "Should return false for DOUBLE type");
+    assertFalse(AvroSchemaRepair.hasTimestampMillisField(Schema.create(Schema.Type.BOOLEAN)),
+        "Should return false for BOOLEAN type");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldRecordWithTimestampMillis() {
+    Schema schema = SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("id").type().intType().noDefault()
+        .name("timestamp").type(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))).noDefault()
+        .name("name").type().stringType().noDefault()
+        .endRecord();
+
+    assertTrue(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return true for record containing timestamp-millis field");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldRecordWithoutTimestampMillis() {
+    Schema schema = SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("id").type().intType().noDefault()
+        .name("timestamp").type(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))).noDefault()
+        .name("name").type().stringType().noDefault()
+        .endRecord();
+
+    assertFalse(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return false for record without timestamp-millis field");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldRecordEmpty() {
+    Schema schema = SchemaBuilder.record("EmptyRecord").fields().endRecord();
+
+    assertFalse(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return false for empty record");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldNestedRecord() {
+    Schema innerSchema = SchemaBuilder.record("InnerRecord")
+        .fields()
+        .name("timestamp").type(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))).noDefault()
+        .endRecord();
+
+    Schema outerSchema = SchemaBuilder.record("OuterRecord")
+        .fields()
+        .name("id").type().intType().noDefault()
+        .name("inner").type(innerSchema).noDefault()
+        .endRecord();
+
+    assertTrue(AvroSchemaRepair.hasTimestampMillisField(outerSchema),
+        "Should return true for nested record containing timestamp-millis field");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldDeeplyNestedRecord() {
+    Schema level3 = SchemaBuilder.record("Level3")
+        .fields()
+        .name("timestamp").type(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))).noDefault()
+        .endRecord();
+
+    Schema level2 = SchemaBuilder.record("Level2")
+        .fields()
+        .name("data").type(level3).noDefault()
+        .endRecord();
+
+    Schema level1 = SchemaBuilder.record("Level1")
+        .fields()
+        .name("nested").type(level2).noDefault()
+        .endRecord();
+
+    assertTrue(AvroSchemaRepair.hasTimestampMillisField(level1),
+        "Should return true for deeply nested record containing timestamp-millis field");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldArrayWithTimestampMillis() {
+    Schema schema = Schema.createArray(
+        LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))
+    );
+
+    assertTrue(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return true for array with timestamp-millis elements");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldArrayWithoutTimestampMillis() {
+    Schema schema = Schema.createArray(Schema.create(Schema.Type.STRING));
+
+    assertFalse(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return false for array without timestamp-millis elements");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldArrayOfRecordsWithTimestampMillis() {
+    Schema elementSchema = SchemaBuilder.record("Element")
+        .fields()
+        .name("timestamp").type(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))).noDefault()
+        .endRecord();
+
+    Schema schema = Schema.createArray(elementSchema);
+
+    assertTrue(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return true for array of records containing timestamp-millis field");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldMapWithTimestampMillis() {
+    Schema schema = Schema.createMap(
+        LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))
+    );
+
+    assertTrue(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return true for map with timestamp-millis values");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldMapWithoutTimestampMillis() {
+    Schema schema = Schema.createMap(Schema.create(Schema.Type.STRING));
+
+    assertFalse(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return false for map without timestamp-millis values");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldMapOfRecordsWithTimestampMillis() {
+    Schema valueSchema = SchemaBuilder.record("Value")
+        .fields()
+        .name("timestamp").type(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))).noDefault()
+        .endRecord();
+
+    Schema schema = Schema.createMap(valueSchema);
+
+    assertTrue(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return true for map of records containing timestamp-millis field");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldUnionWithTimestampMillis() {
+    Schema schema = Schema.createUnion(
+        Schema.create(Schema.Type.NULL),
+        LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))
+    );
+
+    assertTrue(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return true for nullable union with timestamp-millis");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldUnionWithoutTimestampMillis() {
+    Schema schema = Schema.createUnion(
+        Schema.create(Schema.Type.NULL),
+        Schema.create(Schema.Type.LONG)
+    );
+
+    assertFalse(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return false for nullable union without timestamp-millis");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldUnionWithRecordContainingTimestampMillis() {
+    Schema recordSchema = SchemaBuilder.record("Record")
+        .fields()
+        .name("timestamp").type(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))).noDefault()
+        .endRecord();
+
+    Schema schema = Schema.createUnion(
+        Schema.create(Schema.Type.NULL),
+        recordSchema
+    );
+
+    assertTrue(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return true for nullable union with record containing timestamp-millis");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldComplexNestedStructure() {
+    // Create a complex schema with arrays, maps, and nested records
+    Schema innerRecordSchema = SchemaBuilder.record("InnerRecord")
+        .fields()
+        .name("timestamp").type(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))).noDefault()
+        .endRecord();
+
+    Schema complexSchema = SchemaBuilder.record("ComplexRecord")
+        .fields()
+        .name("id").type().intType().noDefault()
+        .name("arrayOfRecords").type().array().items(innerRecordSchema).noDefault()
+        .name("mapOfStrings").type().map().values().stringType().noDefault()
+        .endRecord();
+
+    assertTrue(AvroSchemaRepair.hasTimestampMillisField(complexSchema),
+        "Should return true for complex nested structure containing timestamp-millis field");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldComplexStructureWithoutTimestampMillis() {
+    Schema innerRecordSchema = SchemaBuilder.record("InnerRecord")
+        .fields()
+        .name("value").type().longType().noDefault()
+        .endRecord();
+
+    Schema complexSchema = SchemaBuilder.record("ComplexRecord")
+        .fields()
+        .name("id").type().intType().noDefault()
+        .name("arrayOfRecords").type().array().items(innerRecordSchema).noDefault()
+        .name("mapOfLongs").type().map().values(
+            LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))
+        ).noDefault()
+        .endRecord();
+
+    assertFalse(AvroSchemaRepair.hasTimestampMillisField(complexSchema),
+        "Should return false for complex structure without timestamp-millis field");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldFirstFieldMatches() {
+    Schema schema = SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("timestamp").type(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))).noDefault()
+        .name("id").type().intType().noDefault()
+        .name("name").type().stringType().noDefault()
+        .endRecord();
+
+    assertTrue(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return true when first field is timestamp-millis");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldLastFieldMatches() {
+    Schema schema = SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("id").type().intType().noDefault()
+        .name("name").type().stringType().noDefault()
+        .name("timestamp").type(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))).noDefault()
+        .endRecord();
+
+    assertTrue(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return true when last field is timestamp-millis");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldMultipleTimestampMillisFields() {
+    Schema schema = SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("createdAt").type(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))).noDefault()
+        .name("id").type().intType().noDefault()
+        .name("updatedAt").type(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))).noDefault()
+        .endRecord();
+
+    assertTrue(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return true when multiple timestamp-millis fields exist");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldNullableFieldWithTimestampMillis() {
+    Schema schema = SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("id").type().intType().noDefault()
+        .name("timestamp").type().optional().type(
+            LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))
+        )
+        .endRecord();
+
+    assertTrue(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return true for nullable field with timestamp-millis");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldArrayOfNullableTimestampMillis() {
+    Schema elementSchema = Schema.createUnion(
+        Schema.create(Schema.Type.NULL),
+        LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))
+    );
+
+    Schema schema = Schema.createArray(elementSchema);
+
+    assertTrue(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return true for array of nullable timestamp-millis elements");
+  }
+
+  @Test
+  public void testHasTimestampMillisFieldMapOfNullableTimestampMillis() {
+    Schema valueSchema = Schema.createUnion(
+        Schema.create(Schema.Type.NULL),
+        LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))
+    );
+
+    Schema schema = Schema.createMap(valueSchema);
+
+    assertTrue(AvroSchemaRepair.hasTimestampMillisField(schema),
+        "Should return true for map of nullable timestamp-millis values");
   }
 }
