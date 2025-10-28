@@ -353,41 +353,36 @@ stages:
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_7
-        displayName: UT Hudi Streamer & FT utilities
+        displayName: UT Hudi Streamer & FT utilities (Java 11)
         timeoutInMinutes: '90'
         steps:
-          - task: Docker@2
-            displayName: "login to docker hub"
+          - task: Maven@4
+            displayName: maven install
             inputs:
-              command: "login"
-              containerRegistry: "apachehudi-docker-hub"
-          - task: Docker@2
-            displayName: "load repo into image"
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source -pl hudi-utilities -am
+              publishJUnitResults: false
+              jdkVersionOption: '1.11'
+          - task: Maven@4
+            displayName: UT Hudi Streamer (TestHoodie*)
             inputs:
-              containerRegistry: 'apachehudi-docker-hub'
-              repository: 'apachehudi/hudi-ci-bundle-validation-base'
-              command: 'build'
-              Dockerfile: '**/Dockerfile'
-              ImageName: $(Build.BuildId)
-          - task: Docker@2
-            displayName: "UT Hudi Streamer & FT utilities"
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE1_ARG) -Dtest="TestHoodie*" -DfailIfNoTests=false -pl hudi-utilities
+              publishJUnitResults: false
+              jdkVersionOption: '1.11'
+              mavenOptions: '-Xmx4g'
+          - task: Maven@4
+            displayName: FT utilities
             inputs:
-              containerRegistry: 'apachehudi-docker-hub'
-              repository: 'apachehudi/hudi-ci-bundle-validation-base'
-              command: 'run'
-              arguments: >
-                -v $(Build.SourcesDirectory):/hudi
-                -i docker.io/apachehudi/hudi-ci-bundle-validation-base:$(Build.BuildId)
-                /bin/bash -c "mvn clean install $(MVN_OPTS_INSTALL) -Djava.version=11 -Phudi-platform-service -Pthrift-gen-source -pl hudi-utilities -am
-                && mvn test  $(MVN_OPTS_TEST) -Djava.version=11 -Punit-tests $(JACOCO_AGENT_DESTFILE1_ARG) -Dtest="TestHoodie*" -DfailIfNoTests=false -DargLine="-Xmx4g" -pl hudi-utilities
-                && mvn test  $(MVN_OPTS_TEST) -Djava.version=11 -Pfunctional-tests $(JACOCO_AGENT_DESTFILE2_ARG) -DfailIfNoTests=false -DargLine="-Xmx4g" -pl hudi-utilities"
-          - task: PublishTestResults@2
-            displayName: 'Publish Test Results'
-            inputs:
-              testResultsFormat: 'JUnit'
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests $(JACOCO_AGENT_DESTFILE2_ARG) -DfailIfNoTests=false -pl hudi-utilities
+              publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              searchFolder: '$(Build.SourcesDirectory)'
-              failTaskOnFailedTests: true
+              jdkVersionOption: '1.11'
+              mavenOptions: '-Xmx4g'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
               ./scripts/jacoco/merge_jacoco_exec_files.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
