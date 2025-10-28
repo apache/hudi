@@ -137,7 +137,7 @@ public class StreamingMetadataWriteHandler {
       return this.metadataWriterMap.get(triggeringInstant);
     }
 
-    Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(triggeringInstant, true);
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(triggeringInstant, true, true);
     metadataWriterMap.put(triggeringInstant, metadataWriterOpt); // populate this for every new instant time.
     // if metadata table does not exist, the map will contain an entry, with value Option.empty.
     // if not, it will contain the metadata writer instance.

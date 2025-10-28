@@ -139,8 +139,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final String CONCURRENCY_PREFIX = "hoodie.write.concurrency.";
 
-  public static final String AUTO_DETECT_AND_DELETE_MDT_PARTITIONS = "hoodie.write.auto.detect.and.delete.metadata.partitions";
-
   public static final ConfigProperty<String> TBL_NAME = ConfigProperty
       .key(HoodieTableConfig.HOODIE_TABLE_NAME_KEY)
       .noDefaultValue()
@@ -2932,10 +2930,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.getSecondaryIndexParallelism();
   }
 
-  public boolean isAutoDetectAndDeleteMdtPartitions() {
-    return getBooleanOrDefault(AUTO_DETECT_AND_DELETE_MDT_PARTITIONS, true);
-  }
-
   /**
    * Whether to enable streaming writes to metadata table or not.
    * We have support for streaming writes only in SPARK engine (due to spark task retries intricacies) and for table version >= 8 due to the
@@ -3537,11 +3531,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withFileGroupReaderMergeHandleClassName(String className) {
       writeConfig.setValue(COMPACT_MERGE_HANDLE_CLASS_NAME, className);
-      return this;
-    }
-
-    public Builder withAutoDetectAndDeleteMdtPartitions(boolean autoDetectAndDeleteMdtPartitions) {
-      writeConfig.setValue(AUTO_DETECT_AND_DELETE_MDT_PARTITIONS, String.valueOf(autoDetectAndDeleteMdtPartitions));
       return this;
     }
 

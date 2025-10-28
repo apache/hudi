@@ -172,7 +172,6 @@ public class HoodieIndexer {
       LOG.error(String.format("Metadata is not enabled. Please set %s to true.", HoodieMetadataConfig.ENABLE.key()));
       return -1;
     }
-    props.setProperty(HoodieWriteConfig.AUTO_DETECT_AND_DELETE_MDT_PARTITIONS, "false");
 
     // all inflight or completed metadata partitions have already been initialized
     // so enable corresponding indexes in the props so that they're not deleted

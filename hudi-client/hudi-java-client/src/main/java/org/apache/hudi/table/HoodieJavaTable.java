@@ -81,7 +81,8 @@ public abstract class HoodieJavaTable<T>
   @Override
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
                                                                 HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                                                boolean streamingWrites) {
+                                                                boolean streamingWrites,
+                                                                boolean autoDetectAndDeleteMetadataPartitions) {
     if (isMetadataTable()) {
       return Option.empty();
     }
@@ -94,7 +95,7 @@ public abstract class HoodieJavaTable<T>
           Option.of(triggeringInstantTimestamp));
       // even with metadata enabled, some index could have been disabled
       // delete metadata partitions corresponding to such indexes if autoDetectAndDeleteMdtPartitions is enabled
-      if (config.isAutoDetectAndDeleteMdtPartitions()) {
+      if (autoDetectAndDeleteMetadataPartitions) {
         deleteMetadataIndexIfNecessary();
       }
       try {
