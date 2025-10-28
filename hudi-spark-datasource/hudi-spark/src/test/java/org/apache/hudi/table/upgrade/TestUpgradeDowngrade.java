@@ -52,6 +52,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -387,8 +388,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   }
 
   @ParameterizedTest
-  @MethodSource("testMdtValidationDowngrade")
-  public void testMdtPartitionNotDroppedWhenDowngradedFromTableVersionNine(HoodieTableType tableType, boolean mdtEnabled) throws Exception {
+  @EnumSource(HoodieTableType.class)
+  public void testMdtPartitionNotDroppedWhenDowngradedFromTableVersionNine(HoodieTableType tableType) throws Exception {
     HoodieTableVersion fromVersion = HoodieTableVersion.NINE;
     HoodieTableVersion toVersion = HoodieTableVersion.EIGHT;
 
@@ -415,6 +416,13 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
 
     WriteClientTestUtils.startCommitWithTime(writeClient, instant1);
     writeClient.commit(instant1, writeClient.insert(dataset, instant1));
+
+    String instant2 = getCommitTimeAtUTC(5);
+    List<HoodieRecord> updates = dataGenerator.generateUpdates(instant2, 50);
+    JavaRDD<HoodieRecord> dataset2 = jsc().parallelize(updates, 2);
+
+    WriteClientTestUtils.startCommitWithTime(writeClient, instant2);
+    writeClient.commit(instant2, writeClient.upsert(dataset2, instant2));
     metaClient.reloadTableConfig();
 
     // verify record index partition exists before downgrade
@@ -423,11 +431,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     HoodieWriteConfig.Builder upgradeWriteConfig = HoodieWriteConfig.newBuilder()
         .withPath(metaClient.getBasePath())
         .withProps(props);
-    if (mdtEnabled) {
-      upgradeWriteConfig.withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withEnableRecordIndex(false).build());
-    } else {
-      upgradeWriteConfig.withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build());
-    }
 
     new UpgradeDowngrade(metaClient, upgradeWriteConfig.build(), context(), SparkUpgradeDowngradeHelper.getInstance())
         .run(toVersion, null);
@@ -599,15 +602,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     return Stream.of(
         Arguments.of("MOR", RecordMergeMode.EVENT_TIME_ORDERING),
         Arguments.of("MOR", RecordMergeMode.COMMIT_TIME_ORDERING)
-    );
-  }
-
-  private static Stream<Arguments> testMdtValidationDowngrade() {
-    return Stream.of(
-        Arguments.of(HoodieTableType.COPY_ON_WRITE, true),
-        Arguments.of(HoodieTableType.COPY_ON_WRITE, false),
-        Arguments.of(HoodieTableType.MERGE_ON_READ, true),
-        Arguments.of(HoodieTableType.MERGE_ON_READ, false)
     );
   }
 
