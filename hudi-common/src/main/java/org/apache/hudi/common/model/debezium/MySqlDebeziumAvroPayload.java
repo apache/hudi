@@ -32,6 +32,9 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Objects;
 
+import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_FILE_COL_NAME;
+import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_POS_COL_NAME;
+
 /**
  * Provides support for seamlessly applying changes captured via Debezium for MysqlDB.
  * <p>
@@ -47,6 +50,8 @@ import java.util.Objects;
 public class MySqlDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
 
   private static final Logger LOG = LoggerFactory.getLogger(MySqlDebeziumAvroPayload.class);
+
+  public static final String ORDERING_FIELDS = FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME;
 
   public MySqlDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);

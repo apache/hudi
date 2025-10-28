@@ -801,6 +801,13 @@ public class HoodieTableConfig extends HoodieConfig {
     return HoodieRecordPayload.getPayloadClassName(this);
   }
 
+  /**
+   * Read the payload class if present for HoodieRecords from the table properties.
+   */
+  public Option<String> getPayloadClassIfPresent() {
+    return HoodieRecordPayload.getPayloadClassNameIfPresent(this.getProps());
+  }
+
   public String getLegacyPayloadClass() {
     return getStringOrDefault(LEGACY_PAYLOAD_CLASS_NAME, EMPTY_STRING);
   }

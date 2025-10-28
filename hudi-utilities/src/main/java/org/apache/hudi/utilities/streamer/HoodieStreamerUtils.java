@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Either;
@@ -88,9 +89,10 @@ public class HoodieStreamerUtils {
    */
   public static Option<JavaRDD<HoodieRecord>> createHoodieRecords(HoodieStreamer.Config cfg, TypedProperties props, Option<JavaRDD<GenericRecord>> avroRDDOptional,
                                                                   SchemaProvider schemaProvider, HoodieRecord.HoodieRecordType recordType, boolean autoGenerateRecordKeys,
-                                                                  String instantTime, Option<BaseErrorTableWriter> errorTableWriter) {
+                                                                  String instantTime, Option<BaseErrorTableWriter> errorTableWriter, HoodieTableConfig tableConfig) {
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
-    boolean shouldUseOrderingField = shouldCombine && !StringUtils.isNullOrEmpty(cfg.sourceOrderingFields);
+    String orderingFieldsStr = tableConfig.getOrderingFieldsStr().orElse(cfg.sourceOrderingFields);
+    boolean shouldUseOrderingField = shouldCombine && !StringUtils.isNullOrEmpty(orderingFieldsStr);
     boolean shouldErrorTable = errorTableWriter.isPresent() && props.getBoolean(ERROR_ENABLE_VALIDATE_RECORD_CREATION.key(), ERROR_ENABLE_VALIDATE_RECORD_CREATION.defaultValue());
     boolean useConsistentLogicalTimestamp = ConfigUtils.getBooleanWithAltKeys(
         props, KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
@@ -129,7 +131,7 @@ public class HoodieStreamerUtils {
                   GenericRecord gr = isDropPartitionColumns(props) ? HoodieAvroUtils.removeFields(genRec, partitionColumns) : genRec;
                   boolean isDelete = AvroRecordContext.getFieldAccessorInstance().isDeleteRecord(gr, deleteContext);
                   Comparable orderingValue = shouldUseOrderingField
-                      ? OrderingValues.create(cfg.sourceOrderingFields.split(","),
+                      ? OrderingValues.create(orderingFieldsStr.split(","),
                          field -> (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, field, false, useConsistentLogicalTimestamp))
                       : null;
                   HoodieRecord record = shouldUseOrderingField ? HoodieRecordUtils.createHoodieRecord(gr, orderingValue, hoodieKey, payloadClassName, requiresPayload, isDelete)
