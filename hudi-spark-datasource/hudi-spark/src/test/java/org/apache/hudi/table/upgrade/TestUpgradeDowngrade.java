@@ -18,8 +18,13 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -27,15 +32,18 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Disabled;
@@ -49,6 +57,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -57,6 +66,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getCommitTimeAtUTC;
 import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -98,31 +108,31 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     boolean isUpgrade = fromVersion.lesserThan(toVersion);
     String operation = isUpgrade ? "upgrade" : "downgrade";
     LOG.info("Testing {} from version {} to {}", operation, fromVersion, toVersion);
-    
+
     HoodieTableMetaClient originalMetaClient = loadFixtureTable(fromVersion, suffix);
     assertEquals(fromVersion, originalMetaClient.getTableConfig().getTableVersion(),
         "Fixture table should be at expected version");
-    
+
     HoodieWriteConfig config = createWriteConfig(originalMetaClient, true);
-    
+
     int initialPendingCommits = originalMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
     int initialCompletedCommits = originalMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
-    
+
     Dataset<Row> originalData = readTableData(originalMetaClient, "before " + operation);
-    
+
     // Confirm that there are log files before rollback and compaction operations
     if (isRollbackAndCompactTransition(fromVersion, toVersion)) {
       validateLogFilesCount(originalMetaClient, operation, suffix.equals("-mor"));
     }
-    
+
     new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
         .run(toVersion, null);
-    
+
     HoodieTableMetaClient resultMetaClient = HoodieTableMetaClient.builder()
         .setConf(storageConf().newInstance())
         .setBasePath(originalMetaClient.getBasePath())
         .build();
-    
+
     assertTableVersionOnDataAndMetadataTable(resultMetaClient, toVersion);
     validateVersionSpecificProperties(resultMetaClient, toVersion);
     validateDataConsistency(originalData, resultMetaClient, "after " + operation);
@@ -376,6 +386,62 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     }
   }
 
+  @ParameterizedTest
+  @MethodSource("testMdtValidationDowngrade")
+  public void testMdtPartitionNotDroppedWhenDowngradedFromTableVersionNine(HoodieTableType tableType, boolean mdtEnabled) throws Exception {
+    HoodieTableVersion fromVersion = HoodieTableVersion.NINE;
+    HoodieTableVersion toVersion = HoodieTableVersion.EIGHT;
+
+    Properties props = new Properties();
+    props.put(HoodieTableConfig.TYPE.key(), tableType.name());
+    HoodieTableMetaClient metaClient =
+        getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), props);
+
+    HoodieWriteConfig writeConfig = getConfigBuilder(true)
+        .withPath(metaClient.getBasePath())
+        .withWriteTableVersion(fromVersion.versionCode())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+                .withEnableRecordIndex(true).build())
+        .withProps(props)
+        .build();
+
+    SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig);
+    String partitionPath = "2021/09/11";
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[]{partitionPath});
+
+    String instant1 = getCommitTimeAtUTC(1);
+    List<HoodieRecord> records = dataGenerator.generateInserts(instant1, 100);
+    JavaRDD<HoodieRecord> dataset = jsc().parallelize(records, 2);
+
+    WriteClientTestUtils.startCommitWithTime(writeClient, instant1);
+    writeClient.commit(instant1, writeClient.insert(dataset, instant1));
+    metaClient.reloadTableConfig();
+
+    // verify record index partition exists before downgrade
+    assertTrue(metaClient.getTableConfig().getMetadataPartitions().contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath()));
+
+    HoodieWriteConfig.Builder upgradeWriteConfig = HoodieWriteConfig.newBuilder()
+        .withPath(metaClient.getBasePath())
+        .withProps(props);
+    if (mdtEnabled) {
+      upgradeWriteConfig.withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withEnableRecordIndex(false).build());
+    } else {
+      upgradeWriteConfig.withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build());
+    }
+
+    new UpgradeDowngrade(metaClient, upgradeWriteConfig.build(), context(), SparkUpgradeDowngradeHelper.getInstance())
+        .run(toVersion, null);
+
+    HoodieTableMetaClient resultMetaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf().newInstance())
+        .setBasePath(metaClient.getBasePath())
+        .build();
+
+    resultMetaClient.reloadTableConfig();
+    // verify record index partition exists after downgrade
+    assertTrue(resultMetaClient.getTableConfig().getMetadataPartitions().contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath()));
+  }
+
   /**
    * Load a fixture table from resources and copy it to a temporary location for testing.
    */
@@ -533,6 +599,15 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     return Stream.of(
         Arguments.of("MOR", RecordMergeMode.EVENT_TIME_ORDERING),
         Arguments.of("MOR", RecordMergeMode.COMMIT_TIME_ORDERING)
+    );
+  }
+
+  private static Stream<Arguments> testMdtValidationDowngrade() {
+    return Stream.of(
+        Arguments.of(HoodieTableType.COPY_ON_WRITE, true),
+        Arguments.of(HoodieTableType.COPY_ON_WRITE, false),
+        Arguments.of(HoodieTableType.MERGE_ON_READ, true),
+        Arguments.of(HoodieTableType.MERGE_ON_READ, false)
     );
   }
 

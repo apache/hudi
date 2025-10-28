@@ -269,7 +269,7 @@ public class UpgradeDowngrade {
 
       HoodieTable table = upgradeDowngradeHelper.getTable(updatedConfig, context);
       String newInstant = table.getMetaClient().createNewInstantTime(false);
-      Option<HoodieTableMetadataWriter> mdtWriterOpt = table.getMetadataWriter(newInstant);
+      Option<HoodieTableMetadataWriter> mdtWriterOpt = table.getMetadataWriter(newInstant, false, false);
       mdtWriterOpt.ifPresent(mdtWriter -> {
         HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
         commitMetadata.setOperationType(WriteOperationType.UPSERT);
