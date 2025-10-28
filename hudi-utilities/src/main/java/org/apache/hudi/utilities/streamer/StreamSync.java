@@ -47,6 +47,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.model.debezium.DebeziumConstants;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -75,6 +77,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetaSyncException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
@@ -951,10 +954,11 @@ public class StreamSync implements Serializable, Closeable {
       BaseDatasetBulkInsertCommitActionExecutor executor = new HoodieStreamerDatasetBulkInsertCommitActionExecutor(hoodieWriteConfig, writeClient, instantTime);
       writeClientWriteResult = new WriteClientWriteResult(executor.execute(df, !HoodieStreamerUtils.getPartitionColumns(props).isEmpty()).getWriteStatuses());
     } else {
+      metaClient = HoodieTableMetaClient.reload(metaClient);
       TypedProperties mergeProps = ConfigUtils.getMergeProps(props, metaClient.getTableConfig());
       HoodieRecordType recordType = createRecordMerger(mergeProps).getRecordType();
       Option<JavaRDD<HoodieRecord>> recordsOption = HoodieStreamerUtils.createHoodieRecords(cfg, mergeProps, inputBatch.getBatch(), inputBatch.getSchemaProvider(),
-          recordType, autoGenerateRecordKeys, instantTime, errorTableWriter);
+          recordType, autoGenerateRecordKeys, instantTime, errorTableWriter, metaClient.getTableConfig());
       JavaRDD<HoodieRecord> records = recordsOption.orElseGet(() -> hoodieSparkContext.emptyRDD());
       // filter dupes if needed
       if (cfg.filterDupes) {
@@ -1148,6 +1152,20 @@ public class StreamSync implements Serializable, Closeable {
     // Merge strategy id can be NULL.
     if (!StringUtils.isNullOrEmpty(cfg.recordMergeStrategyId)) {
       builder.withRecordMergeStrategyId(cfg.recordMergeStrategyId);
+    }
+
+    if (metaClient != null) {
+      HoodieTableConfig tableConfig = metaClient.getTableConfig();
+      // After upgrade to table version 9 with MySqlDebeziumAvroPayload, ordering fields are changed from
+      // `_event_seq` to `_event_bin_file,_event_pos`. The logic here ensures that deltastreamer config is updated
+      // if it points to older ordering field `_event_seq`.
+      if (tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.NINE) && tableConfig.getLegacyPayloadClass().equals(MySqlDebeziumAvroPayload.class.getCanonicalName())
+          && cfg.sourceOrderingFields.equals(DebeziumConstants.ADDED_SEQ_COL_NAME)) {
+        cfg.sourceOrderingFields = MySqlDebeziumAvroPayload.ORDERING_FIELDS;
+      } else if (tableConfig.getOrderingFieldsStr().isPresent() && !StringUtils.isNullOrEmpty(cfg.sourceOrderingFields)
+          && !tableConfig.getOrderingFieldsStr().orElse("").equals(cfg.sourceOrderingFields)) {
+        throw new HoodieValidationException(String.format("Configured ordering fields: %s do not match table ordering fields: %s", cfg.sourceOrderingFields, tableConfig.getOrderingFields()));
+      }
     }
     HoodiePayloadConfig.Builder payloadConfigBuilder =
         HoodiePayloadConfig.newBuilder().withPayloadOrderingFields(cfg.sourceOrderingFields);

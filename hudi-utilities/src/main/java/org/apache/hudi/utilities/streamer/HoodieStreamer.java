@@ -161,7 +161,6 @@ public class HoodieStreamer implements Serializable {
             cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingFields,
             HoodieTableVersion.fromVersionCode(ConfigUtils.getIntWithAltKeys(this.properties, HoodieWriteConfig.WRITE_TABLE_VERSION)));
     cfg.recordMergeMode = mergingConfigs.getLeft();
-    cfg.payloadClassName = mergingConfigs.getMiddle();
     cfg.recordMergeStrategyId = mergingConfigs.getRight();
     if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
       InitialCheckPointProvider checkPointProvider =

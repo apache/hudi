@@ -48,8 +48,6 @@ import java.util.Set;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
-import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_FILE_COL_NAME;
-import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_POS_COL_NAME;
 import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
@@ -127,22 +125,22 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
           metaClient.getTableConfig().getTableVersion());
     }
     // Handle merge mode config.
-    reconcileMergeModeConfig(tablePropsToAdd, tablePropsToRemove, tableConfig);
+    reconcileMergeModeConfig(tablePropsToAdd, tablePropsToRemove, tableConfig, config);
     // Handle partial update mode config.
-    reconcilePartialUpdateModeConfig(tablePropsToAdd, tableConfig);
+    reconcilePartialUpdateModeConfig(tablePropsToAdd, tableConfig, config);
     // Handle merge properties config.
     reconcileMergePropertiesConfig(tablePropsToAdd, tableConfig, config);
     // Handle payload class configs.
-    reconcilePayloadClassConfig(tablePropsToAdd, tablePropsToRemove, tableConfig);
+    reconcilePayloadClassConfig(tablePropsToAdd, tablePropsToRemove, tableConfig, config);
     // Handle ordering fields config.
-    reconcileOrderingFieldsConfig(tablePropsToAdd, tablePropsToRemove, tableConfig);
+    reconcileOrderingFieldsConfig(tablePropsToAdd, tablePropsToRemove, tableConfig, config);
     return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, tablePropsToRemove);
   }
 
-  private void reconcileMergeModeConfig(Map<ConfigProperty, String> tablePropsToAdd,
-                                        Set<ConfigProperty> tablePropsToRemove,
-                                        HoodieTableConfig tableConfig) {
-    String payloadClass = tableConfig.getPayloadClass();
+  private void reconcileMergeModeConfig(Map<ConfigProperty, String> tablePropsToAdd, Set<ConfigProperty> tablePropsToRemove,
+                                        HoodieTableConfig tableConfig, HoodieWriteConfig config) {
+    String payloadClass = tableConfig.getPayloadClassIfPresent()
+        .orElse(config.getPayloadClass());
     RecordMergeMode mergeMode = tableConfig.getRecordMergeMode();
     if (mergeMode != RecordMergeMode.CUSTOM) {
       // For commit time or event time based table, remove merge strategy id.
@@ -162,10 +160,10 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     // else: No op, which means merge strategy id and merge mode are not changed.
   }
 
-  private void reconcilePayloadClassConfig(Map<ConfigProperty, String> tablePropsToAdd,
-                                           Set<ConfigProperty> tablePropsToRemove,
-                                           HoodieTableConfig tableConfig) {
-    String payloadClass = tableConfig.getPayloadClass();
+  private void reconcilePayloadClassConfig(Map<ConfigProperty, String> tablePropsToAdd, Set<ConfigProperty> tablePropsToRemove,
+                                           HoodieTableConfig tableConfig, HoodieWriteConfig config) {
+    String payloadClass = tableConfig.getPayloadClassIfPresent()
+        .orElse(config.getPayloadClass());
     if (StringUtils.isNullOrEmpty(payloadClass)) {
       return;
     }
@@ -176,8 +174,9 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
   }
 
   private void reconcilePartialUpdateModeConfig(Map<ConfigProperty, String> tablePropsToAdd,
-                                                HoodieTableConfig tableConfig) {
-    String payloadClass = tableConfig.getPayloadClass();
+                                                HoodieTableConfig tableConfig, HoodieWriteConfig config) {
+    String payloadClass = tableConfig.getPayloadClassIfPresent()
+        .orElse(config.getPayloadClass());
     if (StringUtils.isNullOrEmpty(payloadClass)) {
       return;
     }
@@ -190,7 +189,8 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
   }
 
   private void reconcileMergePropertiesConfig(Map<ConfigProperty, String> tablePropsToAdd, HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
-    String payloadClass = tableConfig.getPayloadClass();
+    String payloadClass = tableConfig.getPayloadClassIfPresent()
+        .orElse(writeConfig.getPayloadClass());
     if (StringUtils.isNullOrEmpty(payloadClass)) {
       return;
     }
@@ -224,13 +224,13 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     }
   }
 
-  private void reconcileOrderingFieldsConfig(Map<ConfigProperty, String> tablePropsToAdd,
-                                             Set<ConfigProperty> tablePropsToRemove,
-                                             HoodieTableConfig tableConfig) {
-    String payloadClass = tableConfig.getPayloadClass();
+  private void reconcileOrderingFieldsConfig(Map<ConfigProperty, String> tablePropsToAdd, Set<ConfigProperty> tablePropsToRemove,
+                                             HoodieTableConfig tableConfig, HoodieWriteConfig config) {
+    String payloadClass = tableConfig.getPayloadClassIfPresent()
+        .orElse(config.getPayloadClass());
     Option<String> orderingFieldsOpt;
     if (MySqlDebeziumAvroPayload.class.getName().equals(payloadClass)) {
-      orderingFieldsOpt = Option.of(FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME);
+      orderingFieldsOpt = Option.of(MySqlDebeziumAvroPayload.ORDERING_FIELDS);
     } else if (PostgresDebeziumAvroPayload.class.getName().equals(payloadClass)) {
       orderingFieldsOpt = Option.of(DebeziumConstants.FLATTENED_LSN_COL_NAME);
     } else {
