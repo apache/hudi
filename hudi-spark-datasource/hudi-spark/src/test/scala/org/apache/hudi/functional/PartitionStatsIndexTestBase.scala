@@ -42,7 +42,6 @@ class PartitionStatsIndexTestBase extends HoodieStatsIndexTestBase {
   val targetColumnsToIndex: Seq[String] = Seq("rider", "driver")
   val metadataOpts: Map[String, String] = Map(
     HoodieMetadataConfig.ENABLE.key -> "true",
-    HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
     HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
     HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> targetColumnsToIndex.mkString(",")
   )
@@ -113,7 +112,7 @@ class PartitionStatsIndexTestBase extends HoodieStatsIndexTestBase {
     val partitionStatsIndex = new PartitionStatsIndexSupport(
       spark,
       inputDf.schema,
-      HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexPartitionStats(true).build(),
+      HoodieMetadataConfig.newBuilder().enable(true).build(),
       metaClient)
     val partitionStats = partitionStatsIndex.loadColumnStatsIndexRecords(List("partition", "trip_type"), shouldReadInMemory = true).collectAsList()
     assertEquals(0, partitionStats.size())

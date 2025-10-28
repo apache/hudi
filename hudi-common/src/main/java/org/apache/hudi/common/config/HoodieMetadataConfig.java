@@ -420,21 +420,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("1.0.1")
       .withDocumentation("Options for the expression index, e.g. \"expr='from_unixtime', format='yyyy-MM-dd'\"");
 
-  public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_PARTITION_STATS = ConfigProperty
-      .key(METADATA_PREFIX + ".index.partition.stats.enable")
-      // The defaultValue(false) here is the initial default, but it's overridden later based on
-      // column stats setting.
-      .defaultValue(false)
-      .sinceVersion("1.0.0")
-      .withDocumentation("Enable aggregating stats for each column at the storage partition level. "
-          + "Enabling this can improve query performance by leveraging partition and column stats "
-          + "for (partition) filtering. "
-          + "Important: The default value for this configuration is dynamically set based on the "
-          + "effective value of " + ENABLE_METADATA_INDEX_COLUMN_STATS.key() + ". If column stats "
-          + "index is enabled (default for Spark engine), partition stats indexing will also be "
-          + "enabled by default. Conversely, if column stats indexing is disabled (default for "
-          + "Flink and Java engines), partition stats indexing will also be disabled by default.");
-
   public static final ConfigProperty<Integer> METADATA_INDEX_PARTITION_STATS_FILE_GROUP_COUNT = ConfigProperty
       .key(METADATA_PREFIX + ".index.partition.stats.file.group.count")
       .defaultValue(1)
@@ -811,7 +796,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   }
 
   public boolean isPartitionStatsIndexEnabled() {
-    return getBooleanOrDefault(ENABLE_METADATA_INDEX_PARTITION_STATS);
+    return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS);
   }
 
   public int getPartitionStatsIndexFileGroupCount() {
@@ -1114,11 +1099,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withMetadataIndexPartitionStats(boolean enable) {
-      metadataConfig.setValue(ENABLE_METADATA_INDEX_PARTITION_STATS, String.valueOf(enable));
-      return this;
-    }
-
     public Builder withMetadataIndexPartitionStatsFileGroupCount(int fileGroupCount) {
       metadataConfig.setValue(METADATA_INDEX_PARTITION_STATS_FILE_GROUP_COUNT, String.valueOf(fileGroupCount));
       return this;
@@ -1187,7 +1167,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     public HoodieMetadataConfig build() {
       metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
       metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_COLUMN_STATS, getDefaultColStatsEnable(engineType));
-      metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_PARTITION_STATS, metadataConfig.isColumnStatsIndexEnabled());
       metadataConfig.setDefaultValue(SECONDARY_INDEX_ENABLE_PROP, getDefaultSecondaryIndexEnable(engineType));
       metadataConfig.setDefaultValue(STREAMING_WRITE_ENABLED, getDefaultForStreamingWriteEnabled(engineType));
       // fix me: disable when schema on read is enabled.
@@ -1243,6 +1222,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       }
     }
   }
+
+  /**
+   * The config is now deprecated. Partition stats are configured using the column stats config itself.
+   */
+  @Deprecated
+  public static final String ENABLE_METADATA_INDEX_PARTITION_STATS =
+      METADATA_PREFIX + ".index.partition.stats.enable";
 
   /**
    * @deprecated Use {@link #ENABLE} and its methods.
