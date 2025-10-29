@@ -385,7 +385,6 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
   @MethodSource("schemaTestParams")
   void testGetTableAvroSchema(Schema inputSchema, boolean includeMetadataFields, Schema expectedSchema) throws Exception {
     metaClient = HoodieTestUtils.getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, new Properties(),"")
-        .setTableCreateSchema(SCHEMA_WITH_METADATA.toString())
         .initTable(getDefaultStorageConf(), basePath);
     testTable = HoodieTestTable.of(metaClient);
 
@@ -444,7 +443,6 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
   @MethodSource("createSchemaTestParam")
   void testGetTableCreateAvroSchema(boolean includeMetadataFields, Schema expectedSchema) throws Exception {
     metaClient = HoodieTestUtils.getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, new Properties(),"")
-        .setTableCreateSchema(SCHEMA_WITH_METADATA.toString())
         .initTable(getDefaultStorageConf(), basePath);
     testTable = HoodieTestTable.of(metaClient);
 
@@ -463,7 +461,6 @@ public class TestConcurrentSchemaEvolutionTableSchemaGetter extends HoodieCommon
     String[] partitionFields = new String[] {"partition_path"};
     metaClient.getTableConfig().setValue(PARTITION_FIELDS, String.join(",", partitionFields));
     metaClient.getTableConfig().setValue(HoodieTableConfig.DROP_PARTITION_COLUMNS, "true");
-    metaClient.getTableConfig().setValue(HoodieTableConfig.CREATE_SCHEMA, SCHEMA_WITH_METADATA.toString());
     metaClient.reloadActiveTimeline();
 
     ConcurrentSchemaEvolutionTableSchemaGetter resolver = new ConcurrentSchemaEvolutionTableSchemaGetter(metaClient);

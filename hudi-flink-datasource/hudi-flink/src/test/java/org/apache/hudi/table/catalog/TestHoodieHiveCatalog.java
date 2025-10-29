@@ -217,12 +217,6 @@ public class TestHoodieHiveCatalog {
     assertEquals(Collections.singletonList("uuid"), table1.getUnresolvedSchema().getPrimaryKey().get().getColumnNames());
     assertEquals(Collections.singletonList("par1"), ((CatalogTable) table1).getPartitionKeys());
 
-    // validate the full name of table create schema
-    HoodieTableConfig tableConfig = StreamerUtil.getTableConfig(table1.getOptions().get(FlinkOptions.PATH.key()), hoodieCatalog.getHiveConf()).get();
-    Option<org.apache.avro.Schema> tableCreateSchema = tableConfig.getTableCreateSchema();
-    assertTrue(tableCreateSchema.isPresent(), "Table should have been created");
-    assertThat(tableCreateSchema.get().getFullName(), is("hoodie.test.test_record"));
-
     // validate explicit primary key
     options.put(FlinkOptions.RECORD_KEY_FIELD.key(), "id");
     table = CatalogUtils.createCatalogTable(schema, partitions, options, "hudi table");

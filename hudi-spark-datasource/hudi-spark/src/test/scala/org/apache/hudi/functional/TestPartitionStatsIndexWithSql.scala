@@ -144,7 +144,6 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
           .setConf(HoodieTestUtils.getDefaultStorageConf)
           .build()
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
-        assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("dt")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
         assertResult("ts")(properties(HoodieTableConfig.ORDERING_FIELDS.key))
         assertResult(tableName)(metaClient.getTableConfig.getTableName)

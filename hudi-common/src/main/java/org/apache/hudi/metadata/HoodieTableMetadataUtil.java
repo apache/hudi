@@ -1568,7 +1568,7 @@ public class HoodieTableMetadataUtil {
 
     // NOTE: Writer schema added to commit metadata will not contain Hudi's metadata fields
     Option<Schema> tableSchema = writerSchema.isEmpty()
-        ? tableConfig.getTableCreateSchema() // the write schema does not set up correctly
+        ? Option.empty() // the write schema does not set up correctly
         : writerSchema.map(schema -> tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema);
 
     HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, dataMetaClient);

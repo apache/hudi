@@ -183,13 +183,6 @@ public class TableSchemaResolver {
         (instantOpt.isPresent()
             ? getTableSchemaFromCommitMetadata(instantOpt.get(), includeMetadataFields)
             : getTableSchemaFromLatestCommitMetadata(includeMetadataFields))
-            .or(() ->
-                metaClient.getTableConfig().getTableCreateSchema()
-                    .map(tableSchema ->
-                        includeMetadataFields
-                            ? HoodieAvroUtils.addMetadataFields(tableSchema, hasOperationField.get())
-                            : tableSchema)
-            )
             .or(() -> {
               Option<Schema> schemaFromDataFile = getTableAvroSchemaFromDataFileInternal();
               return includeMetadataFields

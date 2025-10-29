@@ -138,7 +138,6 @@ class TestBucketIndexSupport extends HoodieSparkClientTestBase with PredicateHel
     configProperties.setProperty(HoodieTableConfig.RECORDKEY_FIELDS.key, "A")
     configProperties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key, "A")
     configProperties.setProperty(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key, String.valueOf(bucketNumber))
-    metaClient.getTableConfig.setValue(HoodieTableConfig.CREATE_SCHEMA.key(), avroSchemaStr)
     val metadataConfig = HoodieMetadataConfig.newBuilder
       .fromProperties(configProperties)
       .enable(configProperties.getBoolean(ENABLE.key, true)).build()
@@ -253,7 +252,6 @@ class TestBucketIndexSupport extends HoodieSparkClientTestBase with PredicateHel
     configProperties.setProperty(HoodieTableConfig.RECORDKEY_FIELDS.key, "A,B")
     configProperties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key, "A,B")
     configProperties.setProperty(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key, String.valueOf(bucketNumber))
-    metaClient.getTableConfig.setValue(HoodieTableConfig.CREATE_SCHEMA.key(), avroSchemaStr)
     val metadataConfig = HoodieMetadataConfig.newBuilder
       .fromProperties(configProperties)
       .enable(configProperties.getBoolean(ENABLE.key, true)).build()

@@ -285,7 +285,6 @@ public class StreamerUtil {
     final String basePath = conf.get(FlinkOptions.PATH);
     if (!tableExists(basePath, hadoopConf)) {
       HoodieTableMetaClient.newTableBuilder()
-          .setTableCreateSchema(conf.get(FlinkOptions.SOURCE_AVRO_SCHEMA))
           .setTableType(conf.get(FlinkOptions.TABLE_TYPE))
           .setTableName(conf.get(FlinkOptions.TABLE_NAME))
           .setTableVersion(conf.get(FlinkOptions.WRITE_TABLE_VERSION))

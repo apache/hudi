@@ -97,7 +97,6 @@ public class TestHoodieIncrSourceE2EAutoUpgrade extends S3EventsHoodieIncrSource
         .setTableType(COPY_ON_WRITE)
         .setPayloadClass(HoodieAvroPayload.class)
         .setTableVersion(ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION))
-        .setTableCreateSchema(schemaStr)
         .fromProperties(props)
         .initTable(storageConf.newInstance(), basePath);
   }

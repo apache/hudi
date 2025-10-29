@@ -87,11 +87,6 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     assertResult(tableName)(tableConfig.getTableName)
     assertFalse(tableConfig.contains(OPERATION.key()))
 
-    val schemaOpt = tableConfig.getTableCreateSchema
-    assertTrue(schemaOpt.isPresent, "Table create schema should be persisted")
-    assertFalse(schemaOpt.get().getFields.asScala.exists(f => HoodieRecord.HOODIE_META_COLUMNS.contains(f.name())),
-      "Table create schema should not include metadata fields")
-
     spark.sql("use default")
   }
 
@@ -138,7 +133,6 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     val tablePath = table.storage.properties("path")
     val metaClient = createMetaClient(spark, tablePath)
     val tableConfig = metaClient.getTableConfig.getProps.asScala.toMap
-    assertResult(true)(tableConfig.contains(HoodieTableConfig.CREATE_SCHEMA.key))
     assertResult("dt")(tableConfig(HoodieTableConfig.PARTITION_FIELDS.key))
     assertResult("id")(tableConfig(HoodieTableConfig.RECORDKEY_FIELDS.key))
     assertResult("ts")(tableConfig(HoodieTableConfig.ORDERING_FIELDS.key))
@@ -907,7 +901,6 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         // Check the missing properties for spark sql
         val metaClient = createMetaClient(spark, tablePath)
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
-        assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("dt")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
         assertResult("ts")(properties(HoodieTableConfig.ORDERING_FIELDS.key))
         assertResult("hudi_database")(metaClient.getTableConfig.getDatabaseName)
@@ -978,7 +971,6 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         // Check the missing properties for spark sql
         val metaClient = createMetaClient(spark, tablePath)
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
-        assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
         assertResult("ts")(properties(HoodieTableConfig.ORDERING_FIELDS.key))
 
@@ -1064,7 +1056,6 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         // Check the missing properties for spark sql
         val metaClient = createMetaClient(spark, tablePath)
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
-        assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
         assertResult("ts")(properties(HoodieTableConfig.ORDERING_FIELDS.key))
 
@@ -1156,7 +1147,6 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       // Check the missing properties for spark sql
       val metaClient = createMetaClient(spark, tablePath)
       val properties = metaClient.getTableConfig.getProps.asScala.toMap
-      assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
       assertResult("id,name")(properties(HoodieTableConfig.RECORDKEY_FIELDS.key))
       assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
       assertResult("ts")(properties(HoodieTableConfig.ORDERING_FIELDS.key))
@@ -1227,7 +1217,6 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       // Check the missing properties for spark sql
       val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
       val properties = metaClient.getTableConfig.getProps.asScala.toMap
-      assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
       assertResult("ts")(properties(HoodieTableConfig.ORDERING_FIELDS.key))
 
       // Test insert into
@@ -1540,7 +1529,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       // drop the table without purging hdfs directory
       spark.sql(s"drop table $tableName".stripMargin)
 
-      val tableSchemaAfterCreate1 = createMetaClient(spark, tablePath).getTableConfig.getTableCreateSchema
+      val recordKeyField1 = createMetaClient(spark, tablePath).getTableConfig.getRawRecordKeyFieldProp
 
       // avro schema name and namespace should not change should not change
       spark.newSession().sql(
@@ -1559,9 +1548,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            | )
        """.stripMargin)
 
-      val tableSchemaAfterCreate2 = createMetaClient(spark, tablePath).getTableConfig.getTableCreateSchema
+      val recordKeyField2 = createMetaClient(spark, tablePath).getTableConfig.getRawRecordKeyFieldProp
 
-      assertResult(tableSchemaAfterCreate1.get)(tableSchemaAfterCreate2.get)
+      assertResult(recordKeyField1)(recordKeyField2)
     }
   }
 

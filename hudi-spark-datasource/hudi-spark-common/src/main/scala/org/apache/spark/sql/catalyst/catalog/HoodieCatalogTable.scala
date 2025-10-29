@@ -212,12 +212,10 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
     if (hoodieTableExists) {
       checkArgument(StringUtils.isNullOrEmpty(databaseName) || databaseName == catalogDatabaseName,
         "The database names from this hoodie path and this catalog table is not same.")
-      val recordName = AvroSchemaUtils.getAvroRecordQualifiedName(table.identifier.table)
       // just persist hoodie.table.create.schema
       HoodieTableMetaClient.newTableBuilder()
         .fromProperties(properties)
         .setDatabaseName(catalogDatabaseName)
-        .setTableCreateSchema(SchemaConverters.toAvroType(dataSchema, recordName = recordName).toString())
         .initTable(storageConf, tableLocation)
     } else {
       val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(table.identifier.table)
@@ -236,7 +234,6 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         .setTableFormat(getStringWithAltKeys(tableConfigs, HoodieTableConfig.TABLE_FORMAT))
         .setDatabaseName(catalogDatabaseName)
         .setTableName(table.identifier.table)
-        .setTableCreateSchema(schema.toString())
         .setPartitionFields(partitionColumns)
         .initTable(storageConf, tableLocation)
     }

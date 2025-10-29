@@ -259,11 +259,7 @@ public class HoodieCatalogUtil {
       org.apache.hadoop.conf.Configuration hadoopConf) {
     return FlinkWriteClients.createWriteClientV2(
         org.apache.flink.configuration.Configuration.fromMap(options)
-            .set(FlinkOptions.TABLE_NAME, tablePath.getObjectName())
-            .set(
-                FlinkOptions.SOURCE_AVRO_SCHEMA,
-                StreamerUtil.createMetaClient(tablePathStr, hadoopConf)
-                    .getTableConfig().getTableCreateSchema().get().toString()));
+            .set(FlinkOptions.TABLE_NAME, tablePath.getObjectName()));
   }
 
   private static boolean sameOptions(Map<String, String> parameters1, Map<String, String> parameters2, ConfigOption<String> option) {
