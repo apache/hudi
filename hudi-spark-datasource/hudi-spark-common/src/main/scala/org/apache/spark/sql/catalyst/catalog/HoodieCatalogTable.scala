@@ -20,13 +20,11 @@ package org.apache.spark.sql.catalyst.catalog
 import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper}
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.HoodieWriterUtils._
-import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
 import org.apache.hudi.common.table.timeline.TimelineUtils
-import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -194,33 +192,22 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
    * Initializes table meta on filesystem when applying CREATE TABLE clause.
    */
   def initHoodieTable(): Unit = {
-    logInfo(s"Init hoodie.properties for ${table.identifier.unquotedString}")
-    val (finalSchema, tableConfigs) = parseSchemaAndConfigs()
-    // The TableSchemaResolver#getTableAvroSchemaInternal has a premise that
-    // the table create schema does not include the metadata fields.
-    // When flag includeMetadataFields is false, no metadata fields should be included in the resolved schema.
-    val dataSchema = removeMetaFields(finalSchema)
+    if (!hoodieTableExists) {
+      logInfo(s"Init hoodie.properties for ${table.identifier.unquotedString}")
+      val (finalSchema, tableConfigs) = parseSchemaAndConfigs()
+      // The TableSchemaResolver#getTableAvroSchemaInternal has a premise that
+      // the table create schema does not include the metadata fields.
+      // When flag includeMetadataFields is false, no metadata fields should be included in the resolved schema.
+      val dataSchema = removeMetaFields(finalSchema)
 
-    table = table.copy(schema = finalSchema)
+      table = table.copy(schema = finalSchema)
 
-    // Save all the table config to the hoodie.properties.
-    val properties = TypedProperties.fromMap(tableConfigs.asJava)
+      // Save all the table config to the hoodie.properties.
+      val properties = TypedProperties.fromMap(tableConfigs.asJava)
 
-    val catalogDatabaseName = formatName(spark,
-      table.identifier.database.getOrElse(spark.sessionState.catalog.getCurrentDatabase))
-    if (hoodieTableExists) {
-      if (table.tableType == CatalogTableType.MANAGED) {
-        checkArgument(StringUtils.isNullOrEmpty(databaseName) || databaseName == catalogDatabaseName,
-          "The database names from this hoodie path and this catalog table is not same.")
-        val recordName = AvroSchemaUtils.getAvroRecordQualifiedName(table.identifier.table)
-        // just persist hoodie.table.create.schema
-        HoodieTableMetaClient.newTableBuilder()
-          .fromProperties(properties)
-          .setDatabaseName(catalogDatabaseName)
-          .setTableCreateSchema(SchemaConverters.toAvroType(dataSchema, recordName = recordName).toString())
-          .initTable(storageConf, tableLocation)
-      }
-    } else {
+      val catalogDatabaseName = formatName(spark,
+        table.identifier.database.getOrElse(spark.sessionState.catalog.getCurrentDatabase))
+
       val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(table.identifier.table)
       val schema = SchemaConverters.toAvroType(dataSchema, nullable = false, recordName, namespace)
       val partitionColumns = if (SparkConfigUtils.containsConfigProperty(tableConfigs, KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)) {
