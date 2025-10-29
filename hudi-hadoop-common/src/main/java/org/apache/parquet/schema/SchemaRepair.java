@@ -26,35 +26,35 @@ import java.util.List;
 
 public class SchemaRepair {
 
-  public static MessageType repairLogicalTypes(MessageType requestedSchema, Option<MessageType> tableSchema) {
+  public static MessageType repairLogicalTypes(MessageType fileSchema, Option<MessageType> tableSchema) {
     if (tableSchema.isEmpty()) {
-      return requestedSchema;
+      return fileSchema;
     }
-    return repairLogicalTypes(requestedSchema, tableSchema.get());
+    return repairLogicalTypes(fileSchema, tableSchema.get());
   }
 
-  static MessageType repairLogicalTypes(MessageType requestedSchema, MessageType tableSchema) {
-    List<Type> repairedFields = repairFields(requestedSchema.getFields(), tableSchema);
+  static MessageType repairLogicalTypes(MessageType fileSchema, MessageType tableSchema) {
+    List<Type> repairedFields = repairFields(fileSchema.getFields(), tableSchema);
 
     // If nothing changed, return the original schema
     if (repairedFields == null) {
-      return requestedSchema;
+      return fileSchema;
     }
 
-    return new MessageType(requestedSchema.getName(), repairedFields);
+    return new MessageType(fileSchema.getName(), repairedFields);
   }
 
   /**
    * Repairs a list of fields against a table schema (MessageType or GroupType).
    * Returns null if no changes were made, otherwise returns the repaired field list.
    */
-  private static List<Type> repairFields(List<Type> requestedFields, GroupType tableSchema) {
+  private static List<Type> repairFields(List<Type> fileSchemaFields, GroupType tableSchema) {
     // First pass: find the first field that changes
     int firstChangedIndex = -1;
     Type firstRepairedField = null;
 
-    for (int i = 0; i < requestedFields.size(); i++) {
-      Type requestedField = requestedFields.get(i);
+    for (int i = 0; i < fileSchemaFields.size(); i++) {
+      Type requestedField = fileSchemaFields.get(i);
       if (tableSchema.containsField(requestedField.getName())) {
         Type tableField = tableSchema.getType(requestedField.getName());
         Type repaired = repairField(requestedField, tableField);
@@ -72,23 +72,23 @@ public class SchemaRepair {
     }
 
     // Second pass: build the new field list with repaired fields
-    List<Type> repairedFields = new ArrayList<>(requestedFields.size());
+    List<Type> repairedFields = new ArrayList<>(fileSchemaFields.size());
 
     // Copy all fields before the first changed field
     for (int i = 0; i < firstChangedIndex; i++) {
-      repairedFields.add(requestedFields.get(i));
+      repairedFields.add(fileSchemaFields.get(i));
     }
 
     // Add the first changed field (using cached repaired field)
     repairedFields.add(firstRepairedField);
 
     // Process remaining fields
-    for (int i = firstChangedIndex + 1; i < requestedFields.size(); i++) {
-      Type requestedField = requestedFields.get(i);
-      Type repaired = requestedField;
-      if (tableSchema.containsField(requestedField.getName())) {
-        Type tableField = tableSchema.getType(requestedField.getName());
-        repaired = repairField(requestedField, tableField);
+    for (int i = firstChangedIndex + 1; i < fileSchemaFields.size(); i++) {
+      Type fileSchemaField = fileSchemaFields.get(i);
+      Type repaired = fileSchemaField;
+      if (tableSchema.containsField(fileSchemaField.getName())) {
+        Type tableSchemaField = tableSchema.getType(fileSchemaField.getName());
+        repaired = repairField(fileSchemaField, tableSchemaField);
       }
       repairedFields.add(repaired);
     }
@@ -96,20 +96,20 @@ public class SchemaRepair {
     return repairedFields;
   }
 
-  private static Type repairField(Type requested, Type table) {
-    if (requested.isPrimitive() && table.isPrimitive()) {
-      return repairPrimitiveType(requested.asPrimitiveType(), table.asPrimitiveType());
-    } else if (!requested.isPrimitive() && !table.isPrimitive()) {
+  private static Type repairField(Type fileSchemaFieldType, Type tableSchemaFieldType) {
+    if (fileSchemaFieldType.isPrimitive() && tableSchemaFieldType.isPrimitive()) {
+      return repairPrimitiveType(fileSchemaFieldType.asPrimitiveType(), tableSchemaFieldType.asPrimitiveType());
+    } else if (!fileSchemaFieldType.isPrimitive() && !tableSchemaFieldType.isPrimitive()) {
       // recurse into nested structs
-      GroupType reqGroup = requested.asGroupType();
-      GroupType tblGroup = table.asGroupType();
+      GroupType reqGroup = fileSchemaFieldType.asGroupType();
+      GroupType tblGroup = tableSchemaFieldType.asGroupType();
 
       // Repair fields directly without creating MessageType intermediaries
       List<Type> repairedFields = repairFields(reqGroup.getFields(), tblGroup);
 
       // If nothing changed, return the original field
       if (repairedFields == null) {
-        return requested;
+        return fileSchemaFieldType;
       }
 
       return new GroupType(
@@ -120,43 +120,43 @@ public class SchemaRepair {
       );
     } else {
       // fallback: keep requested
-      return requested;
+      return fileSchemaFieldType;
     }
   }
 
-  private static PrimitiveType repairPrimitiveType(PrimitiveType requested, PrimitiveType table) {
+  private static PrimitiveType repairPrimitiveType(PrimitiveType fileSchemaPrimitiveType, PrimitiveType tableSchemaPrimitiveType) {
     // Quick check if repair is needed (no allocations)
-    if (needsLogicalTypeRepair(requested, table)) {
-      return Types.primitive(table.getPrimitiveTypeName(), requested.getRepetition())
-          .as(table.getLogicalTypeAnnotation())
-          .named(requested.getName());
+    if (needsLogicalTypeRepair(fileSchemaPrimitiveType, tableSchemaPrimitiveType)) {
+      return Types.primitive(tableSchemaPrimitiveType.getPrimitiveTypeName(), fileSchemaPrimitiveType.getRepetition())
+          .as(tableSchemaPrimitiveType.getLogicalTypeAnnotation())
+          .named(fileSchemaPrimitiveType.getName());
     }
-    return requested;
+    return fileSchemaPrimitiveType;
   }
 
   /**
    * Quick check if a logical type repair is needed (no allocations).
    */
-  private static boolean needsLogicalTypeRepair(PrimitiveType requested, PrimitiveType table) {
-    if (requested.getPrimitiveTypeName() != PrimitiveType.PrimitiveTypeName.INT64
-        || table.getPrimitiveTypeName() != PrimitiveType.PrimitiveTypeName.INT64) {
+  private static boolean needsLogicalTypeRepair(PrimitiveType fileSchemaPrimitiveType, PrimitiveType tableSchemaPrimitiveType) {
+    if (fileSchemaPrimitiveType.getPrimitiveTypeName() != PrimitiveType.PrimitiveTypeName.INT64
+        || tableSchemaPrimitiveType.getPrimitiveTypeName() != PrimitiveType.PrimitiveTypeName.INT64) {
       return false;
     }
-    LogicalTypeAnnotation reqLogical = requested.getLogicalTypeAnnotation();
-    LogicalTypeAnnotation tblLogical = table.getLogicalTypeAnnotation();
+    LogicalTypeAnnotation fileLogicalTypeAnnotation = fileSchemaPrimitiveType.getLogicalTypeAnnotation();
+    LogicalTypeAnnotation tableLogicalTypeAnnotation = tableSchemaPrimitiveType.getLogicalTypeAnnotation();
 
     // if requested has no logical type, and the table has a local timestamp, then we need to repair
-    if (reqLogical == null) {
-      return tblLogical instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
-          && !((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) tblLogical).isAdjustedToUTC();
+    if (fileLogicalTypeAnnotation == null) {
+      return tableLogicalTypeAnnotation instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
+          && !((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) tableLogicalTypeAnnotation).isAdjustedToUTC();
     }
 
     // if requested is timestamp-micros and table is timestamp-millis then we need to repair
-    return reqLogical instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
-        && tblLogical instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
-        && ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) reqLogical).getUnit() == LogicalTypeAnnotation.TimeUnit.MICROS
-        && ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) tblLogical).getUnit() == LogicalTypeAnnotation.TimeUnit.MILLIS
-        && ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) reqLogical).isAdjustedToUTC()
-        && ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) tblLogical).isAdjustedToUTC();
+    return fileLogicalTypeAnnotation instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
+        && tableLogicalTypeAnnotation instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
+        && ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) fileLogicalTypeAnnotation).getUnit() == LogicalTypeAnnotation.TimeUnit.MICROS
+        && ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) tableLogicalTypeAnnotation).getUnit() == LogicalTypeAnnotation.TimeUnit.MILLIS
+        && ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) fileLogicalTypeAnnotation).isAdjustedToUTC()
+        && ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) tableLogicalTypeAnnotation).isAdjustedToUTC();
   }
 }

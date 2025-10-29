@@ -1855,7 +1855,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       assertEquals(20, rows.length)
       for (row <- rows) {
         val hash = row.get(6).asInstanceOf[String].hashCode()
-        if ((hash & 1)== 0) {
+        if ((hash & 1) == 0) {
           assertEquals("2020-01-01T00:00:00.001Z", row.get(15).asInstanceOf[Timestamp].toInstant.toString)
           assertEquals("2020-06-01T12:00:00.000001Z", row.get(16).asInstanceOf[Timestamp].toInstant.toString)
           assertEquals("2015-05-20T12:34:56.001", row.get(17).toString)
