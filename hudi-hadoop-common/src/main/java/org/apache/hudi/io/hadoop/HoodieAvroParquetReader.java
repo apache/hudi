@@ -180,11 +180,11 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     //       sure that in case the file-schema is not equal to read-schema we'd still
     //       be able to read that file (in case projection is a proper one)
     Configuration hadoopConf = storage.getConf().unwrapCopyAs(Configuration.class);
-    Schema fileSchema = AvroSchemaRepair.repairLogicalTypes(getSchema(), schema);
+    Schema repairedFileSchema = AvroSchemaRepair.repairLogicalTypes(getSchema(), schema);
     Option<Schema> promotedSchema = Option.empty();
-    if (!renamedColumns.isEmpty() || HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(fileSchema, schema)) {
-      AvroReadSupport.setAvroReadSchema(hadoopConf, fileSchema);
-      AvroReadSupport.setRequestedProjection(hadoopConf, fileSchema);
+    if (!renamedColumns.isEmpty() || HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(repairedFileSchema, schema)) {
+      AvroReadSupport.setAvroReadSchema(hadoopConf, repairedFileSchema);
+      AvroReadSupport.setRequestedProjection(hadoopConf, repairedFileSchema);
       promotedSchema = Option.of(schema);
     } else {
       AvroReadSupport.setAvroReadSchema(hadoopConf, schema);

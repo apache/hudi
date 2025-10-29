@@ -30,114 +30,114 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class AvroSchemaRepair {
-  public static Schema repairLogicalTypes(Schema requestedSchema, Schema tableSchema) {
-    Schema repairedSchema = repairAvroSchema(requestedSchema, tableSchema);
-    if (repairedSchema != requestedSchema) {
+  public static Schema repairLogicalTypes(Schema fileSchema, Schema tableSchema) {
+    Schema repairedSchema = repairAvroSchema(fileSchema, tableSchema);
+    if (repairedSchema != fileSchema) {
       return AvroSchemaCache.intern(repairedSchema);
     }
-    return requestedSchema;
+    return fileSchema;
   }
 
   /**
    * Performs schema repair on a schema, handling nullable unions.
    */
-  private static Schema repairAvroSchema(Schema requested, Schema table) {
+  private static Schema repairAvroSchema(Schema fileSchema, Schema tableSchema) {
     // Always resolve nullable schemas first (returns unchanged if not a union)
-    Schema requestedNonNull = AvroSchemaUtils.resolveNullableSchema(requested);
-    Schema tableNonNull = AvroSchemaUtils.resolveNullableSchema(table);
+    Schema nonNullFileSchema = AvroSchemaUtils.resolveNullableSchema(fileSchema);
+    Schema nonNullTableSchema = AvroSchemaUtils.resolveNullableSchema(tableSchema);
 
     // Perform repair on the non-null types
-    Schema repairedNonNull = repairAvroSchemaNonNull(requestedNonNull, tableNonNull);
+    Schema nonNullRepairedSchema = repairAvroSchemaNonNull(nonNullFileSchema, nonNullTableSchema);
 
     // If nothing changed, return the original schema
-    if (repairedNonNull == requestedNonNull) {
-      return requested;
+    if (nonNullRepairedSchema == nonNullFileSchema) {
+      return fileSchema;
     }
 
     // If the original was a union, wrap the repaired schema back in a nullable union
-    if (requested.getType() == Schema.Type.UNION) {
-      return AvroSchemaUtils.createNullableSchema(repairedNonNull);
+    if (fileSchema.getType() == Schema.Type.UNION) {
+      return AvroSchemaUtils.createNullableSchema(nonNullRepairedSchema);
     }
 
-    return repairedNonNull;
+    return nonNullRepairedSchema;
   }
 
   /**
    * Repairs non-nullable schemas (after unions have been resolved).
    */
-  private static Schema repairAvroSchemaNonNull(Schema requested, Schema table) {
+  private static Schema repairAvroSchemaNonNull(Schema fileSchema, Schema tableSchema) {
     // If schemas are already equal, nothing to repair
-    if (requested.equals(table)) {
-      return requested;
+    if (fileSchema.equals(tableSchema)) {
+      return fileSchema;
     }
 
     // If types are different, no repair can be done
-    if (requested.getType() != table.getType()) {
-      return requested;
+    if (fileSchema.getType() != tableSchema.getType()) {
+      return fileSchema;
     }
 
     // Handle record types (nested structs)
-    if (requested.getType() == Schema.Type.RECORD) {
-      return repairRecord(requested, table);
+    if (fileSchema.getType() == Schema.Type.RECORD) {
+      return repairRecord(fileSchema, tableSchema);
     }
 
     // Handle array types
-    if (requested.getType() == Schema.Type.ARRAY) {
-      Schema repairedElementSchema = repairAvroSchema(requested.getElementType(), table.getElementType());
+    if (fileSchema.getType() == Schema.Type.ARRAY) {
+      Schema repairedElementSchema = repairAvroSchema(fileSchema.getElementType(), tableSchema.getElementType());
       // If element didn't change, return original array schema
-      if (repairedElementSchema == requested.getElementType()) {
-        return requested;
+      if (repairedElementSchema == fileSchema.getElementType()) {
+        return fileSchema;
       }
       return Schema.createArray(repairedElementSchema);
     }
 
     // Handle map types
-    if (requested.getType() == Schema.Type.MAP) {
-      Schema repairedValueSchema = repairAvroSchema(requested.getValueType(), table.getValueType());
+    if (fileSchema.getType() == Schema.Type.MAP) {
+      Schema repairedValueSchema = repairAvroSchema(fileSchema.getValueType(), tableSchema.getValueType());
       // If value didn't change, return original map schema
-      if (repairedValueSchema == requested.getValueType()) {
-        return requested;
+      if (repairedValueSchema == fileSchema.getValueType()) {
+        return fileSchema;
       }
       return Schema.createMap(repairedValueSchema);
     }
 
     // Check primitive if we need to repair
-    if (needsLogicalTypeRepair(requested, table)) {
+    if (needsLogicalTypeRepair(fileSchema, tableSchema)) {
       // If we need to repair, return the table schema
-      return table;
+      return tableSchema;
     }
 
-    // Default: return requested schema
-    return requested;
+    // Default: return file schema
+    return fileSchema;
   }
 
   /**
    * Quick check if a logical type repair is needed (no allocations).
    */
-  private static boolean needsLogicalTypeRepair(Schema requested, Schema table) {
-    if (requested.getType() != Schema.Type.LONG || table.getType() != Schema.Type.LONG) {
+  private static boolean needsLogicalTypeRepair(Schema fileSchema, Schema tableSchema) {
+    if (fileSchema.getType() != Schema.Type.LONG || tableSchema.getType() != Schema.Type.LONG) {
       return false;
     }
 
-    LogicalType reqLogical = requested.getLogicalType();
-    LogicalType tblLogical = table.getLogicalType();
+    LogicalType fileSchemaLogicalType = fileSchema.getLogicalType();
+    LogicalType tableSchemaLogicalType = tableSchema.getLogicalType();
 
-    // if requested has no logical type, and the table has a local timestamp, then we need to repair
-    if (reqLogical == null) {
-      return tblLogical instanceof LogicalTypes.LocalTimestampMillis
-          || tblLogical instanceof LogicalTypes.LocalTimestampMicros;
+    // if file scheam has no logical type, and the table has a local timestamp, then we need to repair
+    if (fileSchemaLogicalType == null) {
+      return tableSchemaLogicalType instanceof LogicalTypes.LocalTimestampMillis
+          || tableSchemaLogicalType instanceof LogicalTypes.LocalTimestampMicros;
     }
 
-    // if requested is timestamp-micros, and the table is timestamp-millis, then we need to repair
-    return reqLogical instanceof LogicalTypes.TimestampMicros
-        && tblLogical instanceof LogicalTypes.TimestampMillis;
+    // if file schema is timestamp-micros, and the table is timestamp-millis, then we need to repair
+    return fileSchemaLogicalType instanceof LogicalTypes.TimestampMicros
+        && tableSchemaLogicalType instanceof LogicalTypes.TimestampMillis;
   }
 
   /**
    * Performs record repair, returning the original schema if nothing changed.
    */
-  private static Schema repairRecord(Schema requestedSchema, Schema tableSchema) {
-    List<Schema.Field> fields = requestedSchema.getFields();
+  private static Schema repairRecord(Schema fileSchema, Schema tableSchema) {
+    List<Schema.Field> fields = fileSchema.getFields();
 
     // First pass: find the first field that changes
     int firstChangedIndex = -1;
@@ -158,7 +158,7 @@ public class AvroSchemaRepair {
 
     // If nothing changed, return the original schema
     if (firstChangedIndex == -1) {
-      return requestedSchema;
+      return fileSchema;
     }
 
     // Second pass: build the new schema with repaired fields
@@ -207,10 +207,10 @@ public class AvroSchemaRepair {
     }
 
     return Schema.createRecord(
-        requestedSchema.getName(),
-        requestedSchema.getDoc(),
-        requestedSchema.getNamespace(),
-        requestedSchema.isError(),
+        fileSchema.getName(),
+        fileSchema.getDoc(),
+        fileSchema.getNamespace(),
+        fileSchema.isError(),
         repairedFields
     );
   }

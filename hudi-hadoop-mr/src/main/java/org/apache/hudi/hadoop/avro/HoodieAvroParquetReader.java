@@ -18,7 +18,9 @@
 
 package org.apache.hudi.hadoop.avro;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.HoodieColumnProjectionUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
 import org.apache.avro.Schema;
@@ -42,6 +44,8 @@ import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 
 import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 import static org.apache.parquet.hadoop.ParquetInputFormat.getFilter;
@@ -69,6 +73,14 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
             true,
             true).mergeSchema();
         baseSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema, baseSchema.getFullName());
+      }
+
+      // if exists read columns, we need to filter columns.
+      List<String> readColNames = Arrays.asList(HoodieColumnProjectionUtils.getReadColumnNames(conf));
+      if (!readColNames.isEmpty()) {
+        Schema filterSchema = HoodieAvroUtils.generateProjectionSchema(baseSchema, readColNames);
+        AvroReadSupport.setAvroReadSchema(conf, filterSchema);
+        AvroReadSupport.setRequestedProjection(conf, filterSchema);
       }
     }
     parquetRecordReader = new ParquetRecordReader<>(new AvroReadSupport<>(), getFilter(conf));
