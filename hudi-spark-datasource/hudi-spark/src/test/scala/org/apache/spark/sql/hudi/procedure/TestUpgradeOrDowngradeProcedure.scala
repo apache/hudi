@@ -21,10 +21,12 @@ import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
 import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, StringUtils}
+import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.NAME_FORMAT_0_X
+import org.junit.jupiter.api.Assertions.assertTrue
 
 import java.io.IOException
 import java.time.Instant
@@ -148,7 +150,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
-  test("Test downgrade table from version eight to version seven") {
+  test("Test downgrade table to version seven") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -174,27 +176,33 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
       spark.sql("set hoodie.clean.commits.retained = 2")
       spark.sql("set hoodie.keep.min.commits = 3")
       spark.sql("set hoodie.keep.min.commits = 4")
+      spark.sql("set hoodie.metadata.record.index.enable = true")
+
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 11, 1000)")
+      spark.sql(s"insert into $tableName values(3, 'a3', 12, 1000)")
+      spark.sql(s"insert into $tableName values(4, 'a4', 13, 1000)")
+      spark.sql(s"insert into $tableName values(5, 'a5', 14, 1000)")
 
       var metaClient = createMetaClient(spark, tablePath)
-      // verify hoodie.table.version of the table is EIGHT
-      if (metaClient.getTableConfig.getTableVersion.versionCode().equals(HoodieTableVersion.EIGHT.versionCode())) {
-        // downgrade table from version eight to version seven
-        checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'SEVEN')""")(Seq(true))
-        metaClient = HoodieTableMetaClient.reload(metaClient)
-        assertResult(HoodieTableVersion.SEVEN.versionCode) {
-          metaClient.getTableConfig.getTableVersion.versionCode()
-        }
-        // Verify whether the naming format of instant files is consistent with 0.x
-        metaClient.reloadActiveTimeline().getInstants.iterator().asScala.forall(f => NAME_FORMAT_0_X.matcher(INSTANT_FILE_NAME_GENERATOR.getFileName(f)).find())
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 10.0, 1000)
-        )
+      // downgrade table to version seven
+      checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'SEVEN')""")(Seq(true))
+      metaClient = HoodieTableMetaClient.reload(metaClient)
+      assertResult(HoodieTableVersion.SEVEN.versionCode) {
+        metaClient.getTableConfig.getTableVersion.versionCode()
       }
+      // Verify whether the naming format of instant files is consistent with 0.x
+      metaClient.reloadActiveTimeline().getInstants.iterator().asScala.forall(f => NAME_FORMAT_0_X.matcher(INSTANT_FILE_NAME_GENERATOR.getFileName(f)).find())
+      checkAnswer(s"select id, name, price, ts from $tableName")(
+        Seq(1, "a1", 10.0, 1000),
+        Seq(2, "a2", 11.0, 1000),
+        Seq(3, "a3", 12.0, 1000),
+        Seq(4, "a4", 13.0, 1000),
+        Seq(5, "a5", 14.0, 1000)
+      )
+      // Ensure files and record index partition are available after downgrade
+      assertTrue(metaClient.getTableConfig.isMetadataTableAvailable)
+      assertTrue(metaClient.getTableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX))
     }
   }
 
