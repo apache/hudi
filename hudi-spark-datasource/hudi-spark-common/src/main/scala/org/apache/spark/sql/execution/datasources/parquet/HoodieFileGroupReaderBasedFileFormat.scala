@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, ParquetTableSchemaResolver}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
+import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.exception.HoodieNotSupportedException
@@ -39,7 +40,7 @@ import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.mapreduce.Job
-import org.apache.parquet.schema.AvroSchemaRepair
+import org.apache.parquet.schema.{AvroSchemaRepair, MessageType}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
@@ -88,8 +89,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
   private lazy val avroTableSchema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
 
-  private lazy val tableSchemaAsMessageType: org.apache.hudi.common.util.Option[org.apache.parquet.schema.MessageType] = {
-    org.apache.hudi.common.util.Option.ofNullable(
+  private lazy val tableSchemaAsMessageType: HOption[MessageType] = {
+    HOption.ofNullable(
       ParquetTableSchemaResolver.convertAvroSchemaToParquet(avroTableSchema, new Configuration())
     )
   }
@@ -174,10 +175,10 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     }
   }
 
-  private lazy val internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema] = if (tableSchema.internalSchema.isEmpty) {
-    org.apache.hudi.common.util.Option.empty()
+  private lazy val internalSchemaOpt: HOption[InternalSchema] = if (tableSchema.internalSchema.isEmpty) {
+    HOption.empty()
   } else {
-    org.apache.hudi.common.util.Option.of(tableSchema.internalSchema.get)
+    HOption.of(tableSchema.internalSchema.get)
   }
 
   override def isSplitable(sparkSession: SparkSession,
