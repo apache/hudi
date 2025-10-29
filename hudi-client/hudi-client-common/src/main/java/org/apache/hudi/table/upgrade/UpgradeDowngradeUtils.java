@@ -100,35 +100,6 @@ public class UpgradeDowngradeUtils {
       PostgresDebeziumAvroPayload.class.getName()));
 
   /**
-   * Utility method to run compaction for MOR table as part of downgrade step.
-   *
-   * @Deprecated Use {@link UpgradeDowngradeUtils#rollbackFailedWritesAndCompact(HoodieTable, HoodieEngineContext, HoodieWriteConfig, SupportsUpgradeDowngrade, boolean, HoodieTableVersion)} instead.
-   */
-  public static void runCompaction(HoodieTable table, HoodieEngineContext context, HoodieWriteConfig config,
-                                   SupportsUpgradeDowngrade upgradeDowngradeHelper) {
-    try {
-      if (table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
-        // set required configs for scheduling compaction.
-        HoodieInstantTimeGenerator.setCommitTimeZone(table.getMetaClient().getTableConfig().getTimelineTimezone());
-        HoodieWriteConfig compactionConfig = HoodieWriteConfig.newBuilder().withProps(config.getProps()).build();
-        compactionConfig.setValue(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
-        compactionConfig.setValue(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1");
-        compactionConfig.setValue(HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY.key(), CompactionTriggerStrategy.NUM_COMMITS.name());
-        compactionConfig.setValue(HoodieCompactionConfig.COMPACTION_STRATEGY.key(), UnBoundedCompactionStrategy.class.getName());
-        try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(compactionConfig, context)) {
-          Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty());
-          if (compactionInstantOpt.isPresent()) {
-            HoodieWriteMetadata result = writeClient.compact(compactionInstantOpt.get());
-            writeClient.commitCompaction(compactionInstantOpt.get(), result, Option.of(table));
-          }
-        }
-      }
-    } catch (Exception e) {
-      throw new HoodieException(e);
-    }
-  }
-
-  /**
    * See HUDI-6040.
    */
   public static void syncCompactionRequestedFileToAuxiliaryFolder(HoodieTable table) {
