@@ -58,7 +58,6 @@ class TestPartitionBucketIndexSupport extends TestBucketIndexSupport {
     configProperties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key, "A")
 
     configProperties.setProperty(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key, String.valueOf(DEFAULT_BUCKET_NUMBER))
-    metaClient.getTableConfig.setValue(HoodieTableConfig.CREATE_SCHEMA.key(), avroSchemaStr)
     val metadataConfig = HoodieMetadataConfig.newBuilder
       .fromProperties(configProperties)
       .enable(configProperties.getBoolean(HoodieMetadataConfig.ENABLE.key, true)).build()
@@ -121,7 +120,6 @@ class TestPartitionBucketIndexSupport extends TestBucketIndexSupport {
     configProperties.setProperty(HoodieTableConfig.RECORDKEY_FIELDS.key, "A,B")
     configProperties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key, "A,B")
     configProperties.setProperty(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key, String.valueOf(DEFAULT_BUCKET_NUMBER))
-    metaClient.getTableConfig.setValue(HoodieTableConfig.CREATE_SCHEMA.key(), avroSchemaStr)
     val metadataConfig = HoodieMetadataConfig.newBuilder
       .fromProperties(configProperties)
       .enable(configProperties.getBoolean(HoodieMetadataConfig.ENABLE.key, true)).build()

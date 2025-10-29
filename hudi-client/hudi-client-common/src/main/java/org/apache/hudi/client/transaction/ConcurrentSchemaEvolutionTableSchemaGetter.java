@@ -100,13 +100,8 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
 
   public Option<Schema> getTableAvroSchemaIfPresent(boolean includeMetadataFields, Option<HoodieInstant> instant) {
     return getTableAvroSchemaFromTimelineWithCache(instant) // Get table schema from schema evolution timeline.
-        .or(this::getTableCreateSchemaWithoutMetaField) // Fall back: read create schema from table config.
         .map(tableSchema -> includeMetadataFields ? HoodieAvroUtils.addMetadataFields(tableSchema, false) : HoodieAvroUtils.removeMetadataFields(tableSchema))
         .map(this::handlePartitionColumnsIfNeeded);
-  }
-
-  private Option<Schema> getTableCreateSchemaWithoutMetaField() {
-    return metaClient.getTableConfig().getTableCreateSchema();
   }
 
   private void setCachedLatestCommitWithValidSchema(Option<HoodieInstant> instantOption) {

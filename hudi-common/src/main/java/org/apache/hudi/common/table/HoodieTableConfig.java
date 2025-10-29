@@ -63,7 +63,6 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -217,12 +216,6 @@ public class HoodieTableConfig extends HoodieConfig {
       .defaultValue(HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER.name())
       .withDocumentation(HoodieCDCSupplementalLoggingMode.class)
       .sinceVersion("0.13.0");
-
-  // TODO: is this necessary? won't we just use a table schema.
-  public static final ConfigProperty<String> CREATE_SCHEMA = ConfigProperty
-      .key("hoodie.table.create.schema")
-      .noDefaultValue()
-      .withDocumentation("Schema used when creating the table");
 
   public static final ConfigProperty<HoodieFileFormat> BASE_FILE_FORMAT = ConfigProperty
       .key("hoodie.table.base.file.format")
@@ -1111,14 +1104,6 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public Option<String> getBootstrapBasePath() {
     return Option.ofNullable(getString(BOOTSTRAP_BASE_PATH));
-  }
-
-  public Option<Schema> getTableCreateSchema() {
-    if (contains(CREATE_SCHEMA)) {
-      return Option.of(new Schema.Parser().parse(getString(CREATE_SCHEMA)));
-    } else {
-      return Option.empty();
-    }
   }
 
   /**

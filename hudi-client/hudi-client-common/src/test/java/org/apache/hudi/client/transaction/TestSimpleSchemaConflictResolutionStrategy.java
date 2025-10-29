@@ -95,7 +95,6 @@ public class TestSimpleSchemaConflictResolutionStrategy {
   private void setupInstants(String tableSchemaAtTxnStart, String tableSchemaAtTxnValidation,
                              String writerSchemaOfTxn, Boolean enableResolution, boolean setupLegacyClustering) throws Exception {
     metaClient = HoodieTestUtils.getMetaClientBuilder(HoodieTableType.COPY_ON_WRITE, new Properties(), "")
-        .setTableCreateSchema(SCHEMA1)
         .initTable(getDefaultStorageConf(), basePath.toString());
     dummyInstantGenerator = HoodieTestTable.of(metaClient);
 

@@ -1425,9 +1425,6 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE)) {
         setCDCSupplementalLoggingMode(hoodieConfig.getString(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE));
       }
-      if (hoodieConfig.contains(HoodieTableConfig.CREATE_SCHEMA)) {
-        setTableCreateSchema(hoodieConfig.getString(HoodieTableConfig.CREATE_SCHEMA));
-      }
       if (hoodieConfig.contains(HoodieTableConfig.POPULATE_META_FIELDS)) {
         setPopulateMetaFields(hoodieConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS));
       }
@@ -1500,10 +1497,6 @@ public class HoodieTableMetaClient implements Serializable {
 
       tableConfig.setTableVersion(tableVersion);
       tableConfig.setInitialVersion(tableVersion);
-
-      if (null != tableCreateSchema) {
-        tableConfig.setValue(HoodieTableConfig.CREATE_SCHEMA, tableCreateSchema);
-      }
 
       if (!StringUtils.isNullOrEmpty(archiveLogFolder)) {
         tableConfig.setValue(HoodieTableConfig.ARCHIVELOG_FOLDER, archiveLogFolder);
