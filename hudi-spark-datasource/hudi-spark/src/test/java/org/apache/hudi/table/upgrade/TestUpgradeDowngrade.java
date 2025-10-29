@@ -401,7 +401,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         .withPath(metaClient.getBasePath())
         .withWriteTableVersion(fromVersion.versionCode())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-                .withEnableRecordIndex(true).build())
+                .withEnableGlobalRecordLevelIndex(true).build())
         .withProps(props)
         .build();
 
@@ -424,7 +424,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         .withPath(metaClient.getBasePath())
         .withProps(props);
     if (mdtEnabled) {
-      upgradeWriteConfig.withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withEnableRecordIndex(false).build());
+      upgradeWriteConfig.withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withEnableGlobalRecordLevelIndex(false).build());
     } else {
       upgradeWriteConfig.withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build());
     }
