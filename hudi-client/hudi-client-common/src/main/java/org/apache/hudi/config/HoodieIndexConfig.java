@@ -51,10 +51,11 @@ import static org.apache.hudi.index.HoodieIndex.IndexType.BLOOM;
 import static org.apache.hudi.index.HoodieIndex.IndexType.BUCKET;
 import static org.apache.hudi.index.HoodieIndex.IndexType.FLINK_STATE;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_BLOOM;
+import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_SIMPLE;
 import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
 import static org.apache.hudi.index.HoodieIndex.IndexType.RECORD_INDEX;
-import static org.apache.hudi.index.HoodieIndex.IndexType.PARTITIONED_RECORD_INDEX;
+import static org.apache.hudi.index.HoodieIndex.IndexType.RECORD_LEVEL_INDEX;
 import static org.apache.hudi.index.HoodieIndex.IndexType.SIMPLE;
 
 /**
@@ -75,7 +76,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       // Builder#getDefaultIndexType has already set it according to engine type
       .noDefaultValue()
       .withValidValues(INMEMORY.name(), BLOOM.name(), GLOBAL_BLOOM.name(), SIMPLE.name(), GLOBAL_SIMPLE.name(),
-          BUCKET.name(), FLINK_STATE.name(), RECORD_INDEX.name(), PARTITIONED_RECORD_INDEX.name())
+          BUCKET.name(), FLINK_STATE.name(), RECORD_INDEX.name(), RECORD_LEVEL_INDEX.name(), GLOBAL_RECORD_LEVEL_INDEX.name())
       .withDocumentation(HoodieIndex.IndexType.class);
 
 

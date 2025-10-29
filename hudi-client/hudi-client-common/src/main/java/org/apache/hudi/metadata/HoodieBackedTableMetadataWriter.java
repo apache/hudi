@@ -471,7 +471,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
             initializeFilegroupsAndCommit(partitionType, COLUMN_STATS.getPartitionPath(), fileGroupCountAndRecordsPair, instantTimeForPartition, colStatsColumnsAndRecord.getKey());
             break;
           case RECORD_INDEX:
-            boolean isPartitionedRLI = dataWriteConfig.isPartitionedRecordIndexEnabled();
+            boolean isPartitionedRLI = dataWriteConfig.isRecordLevelIndexEnabled();
             initializeFilegroupsAndCommitToRecordIndexPartition(instantTimeForPartition, lazyLatestMergedPartitionFileSliceList, isPartitionedRLI);
             break;
           case EXPRESSION_INDEX:
@@ -808,7 +808,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   private int estimateFileGroupCount(long recordCount) {
     int minFileGroupCount;
     int maxFileGroupCount;
-    if (dataWriteConfig.isPartitionedRecordIndexEnabled()) {
+    if (dataWriteConfig.isRecordLevelIndexEnabled()) {
       minFileGroupCount = dataWriteConfig.getPartitionedRecordIndexMinFileGroupCount();
       maxFileGroupCount = dataWriteConfig.getPartitionedRecordIndexMaxFileGroupCount();
     } else {
@@ -1400,14 +1400,14 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    * @param instantTime    Timestamp for the mdt commit
    */
   private void maybeInitializeNewFileGroupsForPartitionedRLI(HoodieCommitMetadata commitMetadata, String instantTime) {
-    if (dataWriteConfig.isPartitionedRecordIndexEnabled()) {
+    if (dataWriteConfig.isRecordLevelIndexEnabled()) {
       Set<String> partitionsTouchedByInflightCommit = new HashSet<>(commitMetadata.getPartitionToWriteStats().keySet());
       initializeNewFileGroupsForPartitionedRLIHelper(partitionsTouchedByInflightCommit, instantTime);
     }
   }
 
   private void maybeInitializeNewFileGroupsForPartitionedRLI(HoodieData<WriteStatus> writeStatus, String instantTime) {
-    if (dataWriteConfig.isPartitionedRecordIndexEnabled()) {
+    if (dataWriteConfig.isRecordLevelIndexEnabled()) {
       Set<String> partitionsTouchedByInflightCommit = new HashSet<>(writeStatus.map(WriteStatus::getPartitionPath).collectAsList());
       initializeNewFileGroupsForPartitionedRLIHelper(partitionsTouchedByInflightCommit, instantTime);
     }
@@ -1875,13 +1875,13 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       for (Map.Entry<String, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
         final String partitionPath = entry.getKey();
         HoodieData<HoodieRecord> records = entry.getValue();
-        boolean isPartitionedRLI = Objects.equals(partitionPath, RECORD_INDEX.getPartitionPath()) && dataWriteConfig.isPartitionedRecordIndexEnabled();
+        boolean isNonGlobalRLI = Objects.equals(partitionPath, RECORD_INDEX.getPartitionPath()) && dataWriteConfig.isRecordLevelIndexEnabled();
         List<FileSlice> fileSlices =
             HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), partitionPath);
         // scheduling of INDEX only initializes the file group and not add commit
         // so if there are no committed file slices, look for inflight slices
-        if (isPartitionedRLI) {
-          // For isPartitionedRLI, new partitions added to the data table will cause new filegroups that are not yet commited
+        if (isNonGlobalRLI) {
+          // For isNonGlobalRLI, new partitions added to the data table will cause new filegroups that are not yet commited
           // therefore, we always need to look for inflight filegroups
           fileSlices = getPartitionLatestFileSlicesIncludingInflight(metadataMetaClient, Option.ofNullable(fsView), partitionPath);
         } else if (fileSlices.isEmpty()) {
@@ -1902,7 +1902,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     MetadataPartitionType partitionType = MetadataPartitionType.fromPartitionPath(partitionPath);
     // Determine key format once per partition to avoid repeated checks
     SerializableBiFunction<String, Integer, Integer> mappingFunction = partitionType.getFileGroupMappingFunction(indexVersion);
-    if (partitionType == RECORD_INDEX && dataWriteConfig.isPartitionedRecordIndexEnabled()) {
+    if (partitionType == RECORD_INDEX && dataWriteConfig.isRecordLevelIndexEnabled()) {
       return getRecordTaggerPartitionedRLI(fileSlices, mappingFunction);
     }
     final int fileGroupCount = fileSlices.size();
@@ -2164,7 +2164,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         dataMetaClient.getBasePath(),
         storageConf,
         this.getClass().getSimpleName(),
-        dataWriteConfig.isPartitionedRecordIndexEnabled());
+        dataWriteConfig.isRecordLevelIndexEnabled());
   }
 
   private HoodieData<HoodieRecord> getRecordIndexAdditionalUpserts(HoodieData<HoodieRecord> updatesFromWriteStatuses, HoodieCommitMetadata commitMetadata) {

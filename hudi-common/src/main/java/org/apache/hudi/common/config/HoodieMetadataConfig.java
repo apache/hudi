@@ -274,15 +274,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("When there is a pending instant in data table, this config limits the allowed number of deltacommits in metadata table to "
           + "prevent the metadata table's timeline from growing unboundedly as compaction won't be triggered due to the pending data table instant.");
 
-  public static final ConfigProperty<Boolean> RECORD_INDEX_ENABLE_PROP = ConfigProperty
-      .key(METADATA_PREFIX + ".record.index.enable")
+  public static final ConfigProperty<Boolean> GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".global.record.level.index.enable")
       .defaultValue(false)
+      .withAlternatives(METADATA_PREFIX + ".record.index.enable")
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Create the HUDI Record Index within the Metadata Table");
 
-  public static final ConfigProperty<Boolean> PARTITIONED_RECORD_INDEX_ENABLE_PROP = ConfigProperty
-      .key(METADATA_PREFIX + ".partitioned.record.index.enable")
+  public static final ConfigProperty<Boolean> RECORD_LEVEL_INDEX_ENABLE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".record.level.index.enable")
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("1.1.0")
@@ -615,12 +616,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS);
   }
 
-  public boolean isRecordIndexEnabled() {
-    return isEnabled() && getBooleanOrDefault(RECORD_INDEX_ENABLE_PROP);
+  public boolean isGlobalRecordLevelIndexEnabled() {
+    return isEnabled() && getBooleanOrDefault(GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP);
   }
 
-  public boolean isPartitionedRecordIndexEnabled() {
-    return isEnabled() && getBooleanOrDefault(PARTITIONED_RECORD_INDEX_ENABLE_PROP);
+  public boolean isRecordLevelIndexEnabled() {
+    return isEnabled() && getBooleanOrDefault(RECORD_LEVEL_INDEX_ENABLE_PROP);
   }
 
   public List<String> getColumnsEnabledForColumnStatsIndex() {
@@ -809,7 +810,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean isSecondaryIndexEnabled() {
     // Secondary index is enabled only iff record index (primary key index) is also enabled and a secondary index column is specified.
-    return isRecordIndexEnabled() && getBoolean(SECONDARY_INDEX_ENABLE_PROP) && StringUtils.nonEmpty(getSecondaryIndexColumn())
+    return isGlobalRecordLevelIndexEnabled() && getBoolean(SECONDARY_INDEX_ENABLE_PROP) && StringUtils.nonEmpty(getSecondaryIndexColumn())
         && !isDropMetadataIndex(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath());
   }
 
@@ -1026,8 +1027,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withEnableRecordIndex(boolean enabled) {
-      metadataConfig.setValue(RECORD_INDEX_ENABLE_PROP, String.valueOf(enabled));
+    public Builder withEnableGlobalRecordLevelIndex(boolean enabled) {
+      metadataConfig.setValue(GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP, String.valueOf(enabled));
       return this;
     }
 

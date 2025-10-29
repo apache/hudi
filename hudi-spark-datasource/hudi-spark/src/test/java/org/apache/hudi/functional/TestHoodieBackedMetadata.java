@@ -1140,7 +1140,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     writeConfig = getWriteConfigBuilder(false, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withEnableRecordIndex(true)
+            .withEnableGlobalRecordLevelIndex(true)
             // Disable the other two default index for this test because the test orchestrates
             // the rollback with the assumption of init commits being in certain order
             .withMetadataIndexColumnStats(false)
@@ -1721,7 +1721,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withEnableRecordIndex(true)
+            .withEnableGlobalRecordLevelIndex(true)
             .withRecordIndexFileGroupCount(5, 5)
             .build())
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
@@ -1746,7 +1746,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withEnableRecordIndex(true)
+            .withEnableGlobalRecordLevelIndex(true)
             .withRecordIndexFileGroupCount(5, 5)
             .build())
         .build();
@@ -1793,7 +1793,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withEnableRecordIndex(true)
+            .withEnableGlobalRecordLevelIndex(true)
             .withRecordIndexFileGroupCount(3, 3)
             .build())
         .build();
@@ -2849,7 +2849,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(HoodieTableType.COPY_ON_WRITE);
     // Enable Record index and set index type to record index.
     Properties props = new Properties();
-    props.setProperty(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true");
+    props.setProperty(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
     props.setProperty(HoodieIndexConfig.INDEX_TYPE.key(), "RECORD_INDEX");
     HoodieWriteConfig cfg = getWriteConfigBuilder(true, true, false)
         .withProps(props).build();
@@ -3332,7 +3332,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .enable(true)
             .enableMetrics(false)
             .ignoreSpuriousDeletes(false)
-            .withEnableRecordIndex(true)
+            .withEnableGlobalRecordLevelIndex(true)
             .build())
         .build();
 
@@ -3591,7 +3591,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(HoodieTableType.COPY_ON_WRITE, true);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withEnableRecordIndex(true).withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withEnableGlobalRecordLevelIndex(true).withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.RECORD_INDEX).build())
         .build();
 

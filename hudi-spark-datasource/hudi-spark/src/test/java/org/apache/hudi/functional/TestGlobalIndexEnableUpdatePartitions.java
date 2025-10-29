@@ -383,7 +383,7 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
   private HoodieWriteConfig getWriteConfig(Class<?> payloadClass, IndexType indexType) {
     HoodieMetadataConfig.Builder metadataConfigBuilder = HoodieMetadataConfig.newBuilder();
     if (indexType == IndexType.RECORD_INDEX) {
-      metadataConfigBuilder.enable(true).withEnableRecordIndex(true);
+      metadataConfigBuilder.enable(true).withEnableGlobalRecordLevelIndex(true);
     } else {
       metadataConfigBuilder.enable(false);
     }

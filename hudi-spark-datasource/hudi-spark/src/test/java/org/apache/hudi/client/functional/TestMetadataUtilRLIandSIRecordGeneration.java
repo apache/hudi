@@ -245,7 +245,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
 
         // poll into generateRLIMetadataHoodieRecordsForBaseFile to fetch MDT RLI records for inserts and deletes.
         Iterator<HoodieRecord> rliRecordsItr = BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(),
-            writeStatus.getStat(), writeConfig.getWritesFileIdEncoding(), finalCommitTime, metaClient.getStorage(), writeConfig.isPartitionedRecordIndexEnabled());
+            writeStatus.getStat(), writeConfig.getWritesFileIdEncoding(), finalCommitTime, metaClient.getStorage(), writeConfig.isRecordLevelIndexEnabled());
         while (rliRecordsItr.hasNext()) {
           HoodieRecord rliRecord = rliRecordsItr.next();
           String key = rliRecord.getRecordKey();
@@ -657,7 +657,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
         }
 
         Iterator<HoodieRecord> rliRecordsItr = BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(), writeStatus.getStat(),
-            writeConfig.getWritesFileIdEncoding(), commitTime, metaClient.getStorage(), writeConfig.isPartitionedRecordIndexEnabled());
+            writeConfig.getWritesFileIdEncoding(), commitTime, metaClient.getStorage(), writeConfig.isRecordLevelIndexEnabled());
         while (rliRecordsItr.hasNext()) {
           HoodieRecord rliRecord = rliRecordsItr.next();
           String key = rliRecord.getRecordKey();

@@ -50,11 +50,11 @@ import java.util.Map;
 import scala.Tuple2;
 
 /**
- * Index to be used with partitioned RLI. Queries the record index for tables with non-global record keys
+ * Index to be used with RLI. Queries the record index for tables with non-global record keys
  */
-public class SparkMetadataTablePartitionedRecordIndex extends SparkMetadataTableRecordIndex {
+public class SparkMetadataTableRecordLevelIndex extends SparkMetadataTableGlobalRecordLevelIndex {
 
-  public SparkMetadataTablePartitionedRecordIndex(HoodieWriteConfig config) {
+  public SparkMetadataTableRecordLevelIndex(HoodieWriteConfig config) {
     super(config);
   }
 

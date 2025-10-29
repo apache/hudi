@@ -1629,7 +1629,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
       HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
       HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key -> "0",
-      HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true",
       HoodieIndexConfig.INDEX_TYPE.key -> IndexType.RECORD_INDEX.name()
     )
     readOpts = readOpts ++ Map(
@@ -1710,7 +1710,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
       HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
       HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key -> "0",
-      HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true",
       HoodieIndexConfig.INDEX_TYPE.key -> IndexType.RECORD_INDEX.name()
     )
     readOpts = readOpts ++ Map(

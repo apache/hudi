@@ -159,7 +159,7 @@ public enum MetadataPartitionType {
   RECORD_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, "record-index-", 5) {
     @Override
     public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig, HoodieTableConfig tableConfig) {
-      return metadataConfig.isRecordIndexEnabled() || metadataConfig.isPartitionedRecordIndexEnabled();
+      return metadataConfig.isGlobalRecordLevelIndexEnabled() || metadataConfig.isRecordLevelIndexEnabled();
     }
 
     @Override
