@@ -24,10 +24,12 @@ public class InlineSeekableDataInputStream
     private final long length;
 
     public InlineSeekableDataInputStream(TrinoInputStream stream, long startOffset, long length)
+            throws IOException
     {
         super(stream);
         this.startOffset = startOffset;
         this.length = length;
+        stream.seek(startOffset);
     }
 
     @Override
