@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.row.HoodieRowParquetConfig;
 import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
@@ -36,6 +37,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.spark.sql.HoodieInternalRowUtils;
+import org.apache.spark.sql.types.MetadataBuilder;
+import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
@@ -109,8 +112,42 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
                                                 TaskContextSupplier taskContextSupplier) throws IOException {
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
     StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
+    StructType enrichedStructType = enrichStructTypeWithLanceMetadata(structType, config);
 
-    return new HoodieSparkLanceWriter(path, structType, instantTime, taskContextSupplier, storage, populateMetaFields);
+    return new HoodieSparkLanceWriter(path, enrichedStructType, instantTime, taskContextSupplier, storage, populateMetaFields);
+  }
+
+  /**
+   * Enriches a StructType with Lance-specific metadata based on table properties.
+   *
+   * Table properties format:
+   * - hoodie.lance.vector.columns: "col1:dim1,col2:dim2" (e.g., "embeddings:128")
+   */
+  private static StructType enrichStructTypeWithLanceMetadata(StructType schema, HoodieConfig config) {
+    String vectorCols = config.getStringOrDefault(HoodieWriteConfig.LANCE_VECTOR_COLUMNS);
+
+    // Fast path - no work needed
+    if (vectorCols.isEmpty()) {
+      return schema;
+    }
+
+    StructField[] fields = schema.fields();  // Get array reference
+
+    // Process vector columns: "embeddings:128,other:256"
+    for (String spec : vectorCols.split(",")) {
+      if (spec.trim().isEmpty()) {
+        continue;
+      }
+      String[] parts = spec.trim().split(":");
+      int idx = schema.fieldIndex(parts[0].trim());
+      StructField old = fields[idx];
+
+      MetadataBuilder mb = new MetadataBuilder().withMetadata(old.metadata());
+      mb.putLong("arrow.fixed-size-list.size", Integer.parseInt(parts[1].trim()));
+      fields[idx] = new StructField(old.name(), old.dataType(), old.nullable(), mb.build());
+    }
+
+    return new StructType(fields);
   }
 
   private static HoodieRowParquetWriteSupport getHoodieRowParquetWriteSupport(StorageConfiguration<?> conf, Schema schema,

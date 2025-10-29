@@ -20,6 +20,7 @@ package org.apache.hudi.io.storage;
 
 import com.lancedb.lance.file.LanceFileReader;
 import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -34,7 +35,9 @@ import org.apache.spark.sql.vectorized.ColumnarBatch;
 import org.apache.spark.sql.vectorized.LanceArrowColumnVector;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 
 /**
  * Shared iterator implementation for reading Lance files and converting Arrow batches to Spark rows.
@@ -103,10 +106,13 @@ public class HoodieLanceRecordIterator implements ClosableIterator<UnsafeRow> {
       if (arrowReader.loadNextBatch()) {
         VectorSchemaRoot root = arrowReader.getVectorSchemaRoot();
 
-        // Wrap each Arrow FieldVector in LanceArrowColumnVector for type-safe access
-        ColumnVector[] columns = root.getFieldVectors().stream()
-                .map(LanceArrowColumnVector::new)
-                .toArray(ColumnVector[]::new);
+        // Create column vectors from Arrow field vectors
+        List<ColumnVector> columnsList = new ArrayList<>();
+        for (FieldVector fieldVector : root.getFieldVectors()) {
+          columnsList.add(new LanceArrowColumnVector(fieldVector));
+        }
+
+        ColumnVector[] columns = columnsList.toArray(new ColumnVector[0]);
 
         // Create ColumnarBatch and keep it alive while iterating
         currentBatch = new ColumnarBatch(columns, root.getRowCount());

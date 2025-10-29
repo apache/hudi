@@ -30,13 +30,15 @@ import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, Hoodie
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hadoop.fs.Path
-import org.apache.spark.sql.{SaveMode, SparkSession}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.apache.spark.sql.{Row, SaveMode, SparkSession}
+import org.apache.spark.sql.types._
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.JavaConverters._
+import scala.util.Random
 
 /**
  * Basic functional tests for Lance file format with Hudi Spark datasource.
@@ -1151,7 +1153,6 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       .save(tablePath)
 
     // Schema evolution - add new column "email" and upsert existing records
-    import org.apache.spark.sql.functions._
     val records2 = Seq(
       (1, "Alice", 31, 96.0, "alice@example.com"),
       (2, "Bob", 26, 88.0, "bob@example.com")
@@ -1231,6 +1232,206 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assertEquals(28, result(3).getAs[Int]("age"))
     assertEquals(89.5, result(3).getAs[Double]("score"), 0.01)
     assertEquals("david@example.com", result(3).getAs[String]("email"))
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testVectorColumnSupport(tableType: String): Unit = {
+    val tableName = s"test_lance_vector_${tableType.toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    // Create schema with vector column
+    val schema = new StructType(Array(
+      StructField("id", IntegerType, nullable = false),
+      StructField("name", StringType, nullable = true),
+      StructField("embeddings", ArrayType(FloatType, containsNull = false), nullable = false)
+    ))
+
+    // Create test data with vectors
+    val rows = (1 to 5).map { i =>
+      val vector = (0 until 128).map(j => i * 0.01f + j * 0.001f).toArray
+      Row(i, s"item_$i", vector)
+    }
+
+    val df = spark.createDataFrame(
+      spark.sparkContext.parallelize(rows),
+      schema
+    )
+
+    // Write with Lance format
+    df.write
+      .format("hudi")
+      .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
+      .option(RECORDKEY_FIELD.key(), "id")
+      .option(PRECOMBINE_FIELD.key(), "id")
+      .option(TABLE_NAME.key(), tableName)
+      .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
+      .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
+      .option(HoodieWriteConfig.LANCE_VECTOR_COLUMNS.key(), "embeddings:128")
+      .mode(SaveMode.Overwrite)
+      .save(tablePath)
+
+    // Read and verify
+    val result = spark.read.format("hudi").load(tablePath).orderBy("id").collect()
+    assertEquals(5, result.length, "Should have 5 records")
+
+    // Verify first row vector
+    val firstRow = result(0)
+    assertEquals(1, firstRow.getAs[Int]("id"))
+    assertEquals("item_1", firstRow.getAs[String]("name"))
+
+    val embeddings = firstRow.getSeq[Float](firstRow.fieldIndex("embeddings"))
+    assertEquals(128, embeddings.size, "Vector should have 128 dimensions")
+
+    // Verify a few vector values
+    assertEquals(0.01f, embeddings(0), 0.0001f, "First embedding value should be correct")
+    assertEquals(0.011f, embeddings(1), 0.0001f, "Second embedding value should be correct")
+    assertEquals(0.137f, embeddings(127), 0.0001f, "Last embedding value should be correct")
+
+    // Verify last row vector
+    val lastRow = result(4)
+    assertEquals(5, lastRow.getAs[Int]("id"))
+    assertEquals("item_5", lastRow.getAs[String]("name"))
+
+    val lastEmbeddings = lastRow.getSeq[Float](lastRow.fieldIndex("embeddings"))
+    assertEquals(128, lastEmbeddings.size, "Vector should have 128 dimensions")
+    assertEquals(0.05f, lastEmbeddings(0), 0.0001f, "First embedding value of last row should be correct")
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testBlobColumnSupport(tableType: String): Unit = {
+    val tableName = s"test_lance_blob_${tableType.toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    // Create schema with blob column
+    val schema = new StructType(Array(
+      StructField("id", IntegerType, nullable = false),
+      StructField("data", BinaryType, nullable = true)
+    ))
+
+    // Create test data with large blobs (100KB each)
+    val random = new Random(42)
+    val rows = (1 to 5).map { i =>
+      val largeData = new Array[Byte](100000) // 100KB
+      random.nextBytes(largeData)
+      Row(i, largeData)
+    }
+
+    val df = spark.createDataFrame(
+      spark.sparkContext.parallelize(rows),
+      schema
+    )
+
+    // Write with Lance format
+    df.write
+      .format("hudi")
+      .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
+      .option(RECORDKEY_FIELD.key(), "id")
+      .option(PRECOMBINE_FIELD.key(), "id")
+      .option(TABLE_NAME.key(), tableName)
+      .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
+      .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
+      .mode(SaveMode.Overwrite)
+      .save(tablePath)
+
+    // Read and verify
+    val result = spark.read.format("hudi").load(tablePath).orderBy("id").collect()
+    assertEquals(5, result.length, "Should have 5 records")
+
+    // Verify records can be read successfully
+    val firstRow = result(0)
+    assertEquals(1, firstRow.getAs[Int]("id"))
+
+    // Verify blob data IS materialized (with LanceFileWriter, blobs are embedded)
+    val blobData = firstRow.get(firstRow.fieldIndex("data"))
+    assertTrue(blobData != null, "Blob data field should not be null")
+    assertTrue(blobData.isInstanceOf[Array[Byte]], "Blob data should be byte array")
+    val blobBytes = blobData.asInstanceOf[Array[Byte]]
+    assertEquals(100000, blobBytes.length, "Blob data should be materialized (100KB)")
+
+    // Verify all IDs are present
+    val ids = result.map(_.getAs[Int]("id")).toSet
+    assertEquals(5, ids.size, "Should have 5 unique IDs")
+    (1 to 5).foreach { i =>
+      assertTrue(ids.contains(i), s"Should contain ID $i")
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testVectorColumnDimensionValidation(tableType: String): Unit = {
+    val tableName = s"test_lance_vector_validation_${tableType.toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    // Create schema with vector column
+    val schema = new StructType(Array(
+      StructField("id", IntegerType, nullable = false),
+      StructField("embeddings", ArrayType(FloatType, containsNull = false), nullable = false)
+    ))
+
+    // First insert with correct dimension (128)
+    val correctRows = (1 to 3).map { i =>
+      val vector = (0 until 128).map(j => i * 0.01f + j * 0.001f).toArray
+      Row(i, vector)
+    }
+
+    val df1 = spark.createDataFrame(spark.sparkContext.parallelize(correctRows), schema)
+
+    df1.write
+      .format("hudi")
+      .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+      .option(TABLE_TYPE.key(), tableType)
+      .option(RECORDKEY_FIELD.key(), "id")
+      .option(PRECOMBINE_FIELD.key(), "id")
+      .option(TABLE_NAME.key(), tableName)
+      .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
+      .option(HoodieWriteConfig.LANCE_VECTOR_COLUMNS.key(), "embeddings:128")
+      .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
+      .mode(SaveMode.Overwrite)
+      .save(tablePath)
+
+    // Verify correct insert succeeded
+    val result1 = spark.read.format("hudi").load(tablePath).collect()
+    assertEquals(3, result1.length, "Should have 3 records after initial insert")
+
+    // Verify vectors have correct dimension
+    val firstVec = result1(0).getSeq[Float](result1(0).fieldIndex("embeddings"))
+    assertEquals(128, firstVec.size, "Initial vectors should have 128 dimensions")
+
+    // Try to insert with WRONG dimension (64 instead of 128) - should fail
+    val wrongDimensionRows = Seq(
+      Row(4, (0 until 64).map(j => 0.01f * j).toArray) // Only 64 dimensions!
+    )
+
+    val df2 = spark.createDataFrame(spark.sparkContext.parallelize(wrongDimensionRows), schema)
+
+    // Expect this to fail with dimension mismatch error
+    val exception = assertThrows(classOf[Exception], new org.junit.jupiter.api.function.Executable {
+      def execute(): Unit = {
+        df2.write
+          .format("hudi")
+          .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE")
+          .option(TABLE_TYPE.key(), tableType)
+          .option(RECORDKEY_FIELD.key(), "id")
+          .option(PRECOMBINE_FIELD.key(), "id")
+          .option(TABLE_NAME.key(), tableName)
+          .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
+          .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
+          .mode(SaveMode.Append)
+          .save(tablePath)
+      }
+    })
+
+    // Print exception details for debugging
+    println(s"Caught expected exception: ${exception.getClass.getName}")
+    println(s"Exception message: ${exception.getMessage}")
+
+    // Verify only original 3 records remain (write should have failed)
+    val result2 = spark.read.format("hudi").load(tablePath).orderBy("id").collect()
+    assertEquals(3, result2.length, "Should still have only 3 records after failed insert attempt")
   }
 
 }

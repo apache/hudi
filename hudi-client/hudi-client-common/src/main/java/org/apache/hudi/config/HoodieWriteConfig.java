@@ -320,6 +320,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation(HoodieFileFormat.class, "File format to store all the base file data.");
 
+  public static final ConfigProperty<String> LANCE_VECTOR_COLUMNS = ConfigProperty
+      .key("hoodie.lance.vector.columns")
+      .defaultValue("")
+      .markAdvanced()
+      .withDocumentation("Comma-separated list of vector columns with dimensions in format 'col1:dim1,col2:dim2'. "
+          + "Example: 'embeddings:128,other_vec:256'. Used when base file format is LANCE to configure "
+          + "fixed-size list encoding for vector columns.");
+
   public static final ConfigProperty<String> BASE_PATH = HoodieCommonConfig.BASE_PATH;
 
   public static final ConfigProperty<String> AVRO_SCHEMA_STRING = ConfigProperty
