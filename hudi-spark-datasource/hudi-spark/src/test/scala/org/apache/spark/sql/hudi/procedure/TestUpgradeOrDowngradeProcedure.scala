@@ -150,7 +150,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
-  test("Test downgrade table to version seven") {
+  test("Test downgrade table to version six") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -171,34 +171,33 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
            | )
        """.stripMargin)
 
+      spark.sql("set hoodie.merge.small.file.group.candidates.limit=0")
       spark.sql("set hoodie.compact.inline=true")
-      spark.sql("set hoodie.compact.inline.max.delta.commits=1")
+      spark.sql("set hoodie.compact.inline.max.delta.commits=4")
       spark.sql("set hoodie.clean.commits.retained = 2")
       spark.sql("set hoodie.keep.min.commits = 3")
       spark.sql("set hoodie.keep.min.commits = 4")
       spark.sql("set hoodie.metadata.record.index.enable = true")
 
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      spark.sql(s"insert into $tableName values(2, 'a2', 11, 1000)")
-      spark.sql(s"insert into $tableName values(3, 'a3', 12, 1000)")
-      spark.sql(s"insert into $tableName values(4, 'a4', 13, 1000)")
-      spark.sql(s"insert into $tableName values(5, 'a5', 14, 1000)")
+      spark.sql(s"update $tableName set name = 'a2' where id = 1")
+      spark.sql(s"update $tableName set name = 'a3' where id = 1")
 
       var metaClient = createMetaClient(spark, tablePath)
-      // downgrade table to version seven
-      checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'SEVEN')""")(Seq(true))
-      metaClient = HoodieTableMetaClient.reload(metaClient)
-      assertResult(HoodieTableVersion.SEVEN.versionCode) {
+      val numCompactionInstants = metaClient.getActiveTimeline.filterCompletedOrMajorOrMinorCompactionInstants.countInstants
+      // Disabling record index should not affect downgrade
+      spark.sql("set hoodie.metadata.record.index.enable = false")
+      // downgrade table to version six
+      checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'SIX')""")(Seq(true))
+      metaClient = createMetaClient(spark, tablePath)
+      assertResult(numCompactionInstants + 1)(metaClient.getActiveTimeline.filterCompletedOrMajorOrMinorCompactionInstants.countInstants)
+      assertResult(HoodieTableVersion.SIX.versionCode) {
         metaClient.getTableConfig.getTableVersion.versionCode()
       }
       // Verify whether the naming format of instant files is consistent with 0.x
       metaClient.reloadActiveTimeline().getInstants.iterator().asScala.forall(f => NAME_FORMAT_0_X.matcher(INSTANT_FILE_NAME_GENERATOR.getFileName(f)).find())
       checkAnswer(s"select id, name, price, ts from $tableName")(
-        Seq(1, "a1", 10.0, 1000),
-        Seq(2, "a2", 11.0, 1000),
-        Seq(3, "a3", 12.0, 1000),
-        Seq(4, "a4", 13.0, 1000),
-        Seq(5, "a5", 14.0, 1000)
+        Seq(1, "a3", 10.0, 1000)
       )
       // Ensure files and record index partition are available after downgrade
       assertTrue(metaClient.getTableConfig.isMetadataTableAvailable)
