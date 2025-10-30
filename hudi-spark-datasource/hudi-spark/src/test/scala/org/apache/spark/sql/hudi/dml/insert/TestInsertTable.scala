@@ -802,29 +802,32 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | partitioned by (dt)
           """.stripMargin
       )
+      spark.conf.unset("hoodie.datasource.insert.dup.policy")
 
-      spark.sql(
-        s"""
-           | insert overwrite table $tableName partition(dt) values
-           | (0, 'a0', 10, 1000, '2023-12-06'),
-           | (1, 'a1', 10, 1000, '2023-12-06'),
-           | (2, 'a2', 10, 1000, '2023-12-06'),
-           | (3, 'a3', 10, 1000, '2023-12-06')
+      withSQLConf("hoodie.datasource.overwrite.mode" -> "dynamic") {
+        spark.sql(
+          s"""
+             | insert overwrite table $tableName partition(dt) values
+             | (0, 'a0', 10, 1000, '2023-12-06'),
+             | (1, 'a1', 10, 1000, '2023-12-06'),
+             | (2, 'a2', 10, 1000, '2023-12-06'),
+             | (3, 'a3', 10, 1000, '2023-12-06')
           """.stripMargin)
-      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-        Seq(0, "a0", 10.0, 1000, "2023-12-06"),
-        Seq(1, "a1", 10.0, 1000, "2023-12-06"),
-        Seq(2, "a2", 10.0, 1000, "2023-12-06"),
-        Seq(3, "a3", 10.0, 1000, "2023-12-06")
-      )
-      // test insert overwrite partitions with partial partition values
-      spark.sql("set hoodie.datasource.write.operation=upsert")
-      spark.sql(
-        s"""
-           | insert into table $tableName partition (dt='2023-12-06') values
-           | (1, 'a1', 11, 2000),
-           | (4, 'a4', 10, 1000)
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(0, "a0", 10.0, 1000, "2023-12-06"),
+          Seq(1, "a1", 10.0, 1000, "2023-12-06"),
+          Seq(2, "a2", 10.0, 1000, "2023-12-06"),
+          Seq(3, "a3", 10.0, 1000, "2023-12-06")
+        )
+      }
+      withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+        spark.sql(
+          s"""
+             | insert into table $tableName partition (dt='2023-12-06') values
+             | (1, 'a1', 11, 2000),
+             | (4, 'a4', 10, 1000)
             """.stripMargin)
+      }
 
       checkAnswer(s"select id, name, price, ts, dt from $tableName")(
         Seq(0, "a0", 10.0, 1000, "2023-12-06"),
