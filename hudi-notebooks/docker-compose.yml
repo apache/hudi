@@ -80,6 +80,7 @@ services:
 
   hive-metastore:
     image: apachehudi/hive:latest
+    platform: linux/amd64
     container_name: hive-metastore
     command: /opt/hive/bin/hive --service metastore
     environment:
