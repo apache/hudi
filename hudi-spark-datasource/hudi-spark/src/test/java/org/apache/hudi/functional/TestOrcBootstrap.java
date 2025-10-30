@@ -250,7 +250,7 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
             .withMetadataIndexColumnStats(false).build()) // HUDI-8774
         .build();
 
-    SparkRDDWriteClient client = new SparkRDDWriteClient(context, config);
+    SparkRDDWriteClient client = new SparkRDDWriteClient(context, config, true);
     client.bootstrap(Option.empty());
     checkBootstrapResults(totalRecords, schema, bootstrapCommitInstantTs, checkNumRawFiles, numInstantsAfterBootstrap,
         numInstantsAfterBootstrap, timestamp, timestamp, deltaCommit, bootstrapInstants, true);
@@ -274,7 +274,7 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
     client.close();
 
     // Run bootstrap again
-    client = new SparkRDDWriteClient(context, config);
+    client = new SparkRDDWriteClient(context, config, true);
     client.bootstrap(Option.empty());
 
     metaClient.reloadActiveTimeline();

@@ -421,7 +421,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         .withProps(props)
         .build();
 
-    SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig);
+    SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig, true);
     String partitionPath = "2021/09/11";
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[]{partitionPath});
 

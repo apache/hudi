@@ -65,7 +65,7 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
         .fromProperties(props)
         .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath);
 
-    client = new SparkRDDWriteClient(context, config);
+    client = new SparkRDDWriteClient(context, config, true);
 
     writeData(false, 100, true);
     writeData(false, 100, true);
@@ -101,7 +101,7 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
         .setPayloadClass(HoodieAvroPayload.class)
         .fromProperties(props)
         .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath);
-    client = new SparkRDDWriteClient(context, config);
+    client = new SparkRDDWriteClient(context, config, true);
 
     writeData(false, 100, true);
     writeData(false, 100, true);

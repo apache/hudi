@@ -99,6 +99,7 @@ public class TestStreamingMetadataWriteHandler extends SparkClientFunctionalTest
     private HoodieTableMetadataWriter mdtWriter;
 
     MockStreamingMetadataWriteHandler(HoodieTableMetadataWriter mdtWriter) {
+      super(true);
       this.mdtWriter = mdtWriter;
     }
 

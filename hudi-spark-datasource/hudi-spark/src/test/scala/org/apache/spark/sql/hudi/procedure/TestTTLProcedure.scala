@@ -94,9 +94,7 @@ class TestTTLProcedure extends HoodieSparkProcedureTestBase with SparkDatasetMix
   }
 
   private def getHoodieWriteClient(cfg: HoodieWriteConfig): SparkRDDWriteClient[Nothing] = {
-    val writeClient = new SparkRDDWriteClient[Nothing](
-      new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)), cfg
-    )
+    val writeClient = new SparkRDDWriteClient[Nothing](new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)), cfg, true)
     writeClient
   }
 

@@ -80,7 +80,7 @@ class TestHoodieDataSourceInternalBatchWrite extends
     HoodieWriteConfig cfg = getWriteConfig(populateMetaFields);
     // init writer
     String instantTime;
-    try (SparkRDDWriteClient<?> writeClient = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(new JavaSparkContext(sparkSession.sparkContext())), cfg)) {
+    try (SparkRDDWriteClient<?> writeClient = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(new JavaSparkContext(sparkSession.sparkContext())), cfg, true)) {
       instantTime = writeClient.startCommit();
     }
 
@@ -338,7 +338,7 @@ class TestHoodieDataSourceInternalBatchWrite extends
 
   private String createInstant(HoodieWriteConfig cfg) {
     String instantTime;
-    try (SparkRDDWriteClient<?> writeClient = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(new JavaSparkContext(sparkSession.sparkContext())), cfg)) {
+    try (SparkRDDWriteClient<?> writeClient = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(new JavaSparkContext(sparkSession.sparkContext())), cfg, true)) {
       instantTime = writeClient.startCommit();
     }
     return instantTime;

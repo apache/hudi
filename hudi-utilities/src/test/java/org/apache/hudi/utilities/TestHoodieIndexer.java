@@ -491,7 +491,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieWriteConfig.Builder writeConfigBuilder = getWriteConfigBuilder(basePath(), tableName);
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfig).build();
     // do one upsert with synchronous metadata update
-    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig, true)) {
       String instant = writeClient.startCommit();
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
       List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(records, 1), instant).collect();
@@ -543,7 +543,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true).withMetadataIndexColumnStats(false);
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
     // do one upsert with synchronous metadata update
-    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig, true)) {
       String instant = writeClient.startCommit();
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
       List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(records, 1), instant).collect();
@@ -596,7 +596,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false).withMetadataIndexColumnStats(false);
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
     // do one upsert with synchronous metadata update
-    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig, true)) {
       String instant = writeClient.startCommit();
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
       List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(records, 1), instant).collect();

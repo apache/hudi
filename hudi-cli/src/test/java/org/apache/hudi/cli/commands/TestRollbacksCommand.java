@@ -113,7 +113,7 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
           .withBaseFilesInPartitions(partitionAndFileId);
 
       // generate two rollback
-      try (BaseHoodieWriteClient client = new SparkRDDWriteClient(context(), config)) {
+      try (BaseHoodieWriteClient client = new SparkRDDWriteClient(context(), config, true)) {
         // Rollback inflight commit3 and commit2
         client.rollback("102");
         client.rollback("101");

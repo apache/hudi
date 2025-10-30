@@ -416,7 +416,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     assertTrue(initialMetadataPartitions.contains(MetadataPartitionType.COLUMN_STATS.getPartitionPath))
     assertTrue(initialMetadataPartitions.contains(MetadataPartitionType.PARTITION_STATS.getPartitionPath))
     // Do a savepoint on the second commit.
-    val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), getWriteConfig(hudiOpts))
+    val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), getWriteConfig(hudiOpts), true)
     writeClient.savepoint(secondCompletedInstant.requestedTime, "testUser", "savepoint to second commit")
     writeClient.close()
     val savepointTimestamp = metaClient.reloadActiveTimeline()

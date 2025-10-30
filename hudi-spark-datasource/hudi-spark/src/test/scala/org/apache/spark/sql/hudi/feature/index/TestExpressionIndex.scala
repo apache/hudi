@@ -2066,7 +2066,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
       val configBuilder = getWriteConfigBuilder(Map.empty, metaClient.getBasePath.toString)
       configBuilder.withMetadataConfig(HoodieMetadataConfig.newBuilder()
         .withMetadataIndexColumnStats(false).build())
-      val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)), configBuilder.build())
+      val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)), configBuilder.build(), true)
       writeClient.rollback(lastCompletedInstant.get().requestedTime)
       writeClient.close()
       // validate the expression index

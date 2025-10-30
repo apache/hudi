@@ -127,7 +127,7 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
       mergedDfList = mergedDfList.take(mergedDfList.size - 1)
     }
     val writeConfig = getWriteConfig(hudiOpts)
-    val client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+    val client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig, true)
     client.rollback(lastInstant.requestedTime)
     client.close()
 

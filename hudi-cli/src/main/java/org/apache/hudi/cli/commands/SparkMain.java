@@ -584,7 +584,7 @@ public class SparkMain {
 
   private static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, Boolean rollbackUsingMarkers, boolean lazyCleanPolicy) throws Exception {
     HoodieWriteConfig config = getWriteConfig(basePath, rollbackUsingMarkers, lazyCleanPolicy);
-    return new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), config);
+    return new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), config, true);
   }
 
   private static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, boolean lazyCleanPolicy) throws Exception {

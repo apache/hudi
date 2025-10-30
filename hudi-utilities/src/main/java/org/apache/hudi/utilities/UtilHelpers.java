@@ -416,7 +416,7 @@ public class UtilHelpers {
             .withSchema(schemaStr).combineInput(true, true).withCompactionConfig(compactionConfig)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
             .withProps(properties).build();
-    return new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), config);
+    return new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), config, true);
   }
 
   public static int handleErrors(JavaSparkContext jsc, String instantTime, JavaRDD<WriteStatus> writeResponse) {

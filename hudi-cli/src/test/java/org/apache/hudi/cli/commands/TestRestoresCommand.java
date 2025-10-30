@@ -114,7 +114,7 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
 
       hoodieTestTable.addCommit("103").withBaseFilesInPartitions(partitionAndFileId);
 
-      try (BaseHoodieWriteClient client = new SparkRDDWriteClient(context(), config)) {
+      try (BaseHoodieWriteClient client = new SparkRDDWriteClient(context(), config, true)) {
         client.rollback("103");
         client.restoreToSavepoint("102");
 

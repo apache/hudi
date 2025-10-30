@@ -190,7 +190,7 @@ public class ITTestTableCommand extends HoodieCLIIntegrationTestBase {
         .forTable(tableName)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
 
-    try (SparkRDDWriteClient<HoodieAvroPayload> client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), cfg)) {
+    try (SparkRDDWriteClient<HoodieAvroPayload> client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), cfg, true)) {
       String instantTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(instantTime, 2);
       upsert(jsc, client, records, instantTime);

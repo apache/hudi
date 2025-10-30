@@ -439,7 +439,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     ) ++ metadataOpts
     setupTable(testCase, metadataOpts, commonOpts, shouldValidate = false)
 
-    val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), getWriteConfig(commonOpts))
+    val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), getWriteConfig(commonOpts), true)
     writeClient.scheduleCompaction(org.apache.hudi.common.util.Option.empty())
     writeClient.close()
 

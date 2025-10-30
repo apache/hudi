@@ -69,7 +69,7 @@ object HoodieMorCompactionJob {
         .withInlineCompaction(true)
         .withMaxNumDeltaCommitsBeforeCompaction(1).build())
       .build()
-    val client = new SparkRDDWriteClient[HoodieRecordPayload[Nothing]](new HoodieSparkEngineContext(spark.sparkContext), cfg)
+    val client = new SparkRDDWriteClient[HoodieRecordPayload[Nothing]](new HoodieSparkEngineContext(spark.sparkContext), cfg, true)
     try {
       val instant = client.scheduleCompaction(Option.empty())
       val result = client.compact(instant.get())

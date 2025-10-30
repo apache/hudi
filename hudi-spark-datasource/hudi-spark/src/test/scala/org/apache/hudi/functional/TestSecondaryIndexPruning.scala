@@ -1466,7 +1466,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     )
     // Do a savepoint
     val firstCompletedInstant = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant()
-    val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), getWriteConfig(hudiOpts))
+    val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), getWriteConfig(hudiOpts), true)
     writeClient.savepoint(firstCompletedInstant.get().requestedTime, "testUser", "savepoint to first commit")
     writeClient.close()
     val savepointTimestamp = metaClient.reloadActiveTimeline().getSavePointTimeline.filterCompletedInstants().lastInstant().get().requestedTime

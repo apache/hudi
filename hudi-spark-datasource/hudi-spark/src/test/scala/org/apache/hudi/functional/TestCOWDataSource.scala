@@ -2026,7 +2026,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         }
         if (firstClusteringState == HoodieInstant.State.REQUESTED.name()) {
           val table = HoodieSparkTable.create(writeConfig, context)
-          val client = new SparkRDDWriteClient(context, writeConfig)
+          val client = new SparkRDDWriteClient(context, writeConfig, true)
           try {
             table.rollbackInflightClustering(
               metaClient.getActiveTimeline.getLastClusteringInstant.get,
@@ -2043,7 +2043,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
             metaClient.getActiveTimeline.getLastClusteringInstant.get)
         }
         // This should not schedule any new clustering
-        val client = new SparkRDDWriteClient(context, writeConfig)
+        val client = new SparkRDDWriteClient(context, writeConfig, true)
         client.scheduleClustering(org.apache.hudi.common.util.Option.of(Map[String, String]().asJava))
         client.close()
         assertEquals(lastInstant.requestedTime,

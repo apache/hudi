@@ -77,6 +77,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected final TransactionManager txnManager;
   protected final TimeGenerator timeGenerator;
 
+  boolean autoDetectAndDeleteMetadataPartitions = true;
+
   /**
    * Timeline Server has the same lifetime as that of Client. Any operations done on the same timeline service will be
    * able to take advantage of the cached file-system view. New completed actions will be synced automatically in an
@@ -279,7 +281,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    */
   protected void writeTableMetadata(HoodieTable table, String instantTime, HoodieCommitMetadata metadata) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
-    Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime, false, autoDetectAndDeleteMetadataPartitions);
     if (metadataWriterOpt.isPresent()) {
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
         metadataWriter.update(metadata, instantTime);

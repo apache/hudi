@@ -289,7 +289,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
         .withDeleteParallelism(2).forTable(tableName)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
 
-    try (SparkRDDWriteClient<HoodieAvroPayload> client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), cfg)) {
+    try (SparkRDDWriteClient<HoodieAvroPayload> client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), cfg, true)) {
 
       List<HoodieRecord> records = insert(jsc, client, dataGen);
       upsert(jsc, client, dataGen, records);

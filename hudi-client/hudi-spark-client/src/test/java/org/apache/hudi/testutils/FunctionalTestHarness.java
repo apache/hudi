@@ -140,7 +140,7 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
 
   @Override
   public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) throws IOException {
-    return new SparkRDDWriteClient(context(), cfg);
+    return new SparkRDDWriteClient(context(), cfg, true);
   }
 
   @BeforeEach

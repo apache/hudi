@@ -203,7 +203,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(useFileListingMetadata).build())
         .withPath(basePath).build();
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       // rollback 2nd commit and ensure stats reflect the info.
       List<HoodieRollbackStat> stats = testUpdateAndRollback(useFileListingMetadata, writeConfig, writeClient);
 
@@ -229,7 +229,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
         .withPath(basePath).build();
 
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
 
       // rollback 2nd commit and ensure stats reflect the info.
       List<HoodieRollbackStat> stats = testInsertAndRollback(writeClient);

@@ -235,7 +235,7 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     // enable files and bloom_filters on the regular write client
     HoodieWriteConfig writeConfig = writeConfigBuilder.build();
     // do one upsert with synchronous metadata update
-    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context, writeConfig)) {
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context, writeConfig, true)) {
       List<HoodieRecord> records;
       WriteClientTestUtils.startCommitWithTime(writeClient, instant);
       if (update) {

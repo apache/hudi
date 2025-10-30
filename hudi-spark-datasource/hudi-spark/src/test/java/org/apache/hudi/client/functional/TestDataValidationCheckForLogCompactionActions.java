@@ -351,7 +351,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(true).build())
         .withProperties(properties)
         .build();
-    SparkRDDWriteClient client = new SparkRDDWriteClient(context, config);
+    SparkRDDWriteClient client = new SparkRDDWriteClient(context, config, true);
     return new TestTableContents(basePath, tableName, metaClient, config, client);
   }
 
@@ -370,14 +370,14 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
         .build();
 
     // Create writeClient
-    SparkRDDWriteClient client2 = new SparkRDDWriteClient(context, config2);
+    SparkRDDWriteClient client2 = new SparkRDDWriteClient(context, config2, true);
 
     // Create logcompaction client.
     HoodieWriteConfig logCompactionConfig = HoodieWriteConfig.newBuilder().withProps(config2.getProps())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withLogCompactionBlocksThreshold(2).build())
         .build();
-    SparkRDDWriteClient logCompactionClient = new SparkRDDWriteClient(context, logCompactionConfig);
+    SparkRDDWriteClient logCompactionClient = new SparkRDDWriteClient(context, logCompactionConfig, true);
 
     return new TestTableContents(basePath2, tableName2, metaClient2, config2, client2, logCompactionClient);
   }

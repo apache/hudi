@@ -59,12 +59,12 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
   private int invocationCounts = 0;
 
   public SparkRDDMetadataWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
-    super(context, clientConfig);
+    super(context, clientConfig, false);
   }
 
   public SparkRDDMetadataWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                                      Option<EmbeddedTimelineService> timelineService) {
-    super(context, writeConfig, timelineService);
+    super(context, writeConfig, timelineService, false);
   }
 
   @Override

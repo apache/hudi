@@ -425,8 +425,8 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         .withCompactionConfig(compactionConfig).build();
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.INMEMORY)
         .build();
-    try (SparkRDDWriteClient lcClient = new SparkRDDWriteClient(context, lcConfig);
-         SparkRDDWriteClient client = new SparkRDDWriteClient(context, config)) {
+    try (SparkRDDWriteClient lcClient = new SparkRDDWriteClient(context, lcConfig, true);
+         SparkRDDWriteClient client = new SparkRDDWriteClient(context, config, true)) {
 
       // First insert
       String newCommitTime = WriteClientTestUtils.createNewInstantTime();
@@ -525,8 +525,8 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(2).build())
         .build();
 
-    try (SparkRDDWriteClient lcWriteClient = new SparkRDDWriteClient(context, lcWriteConfig);
-         SparkRDDWriteClient client = new SparkRDDWriteClient(context, config)) {
+    try (SparkRDDWriteClient lcWriteClient = new SparkRDDWriteClient(context, lcWriteConfig, true);
+         SparkRDDWriteClient client = new SparkRDDWriteClient(context, config, true)) {
 
       // First insert
       String newCommitTime = WriteClientTestUtils.createNewInstantTime();

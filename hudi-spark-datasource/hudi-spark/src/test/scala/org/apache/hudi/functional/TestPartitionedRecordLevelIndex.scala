@@ -204,7 +204,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase with Spar
     val holder = new testPartitionedRecordLevelIndexHolder
     testPartitionedRecordLevelIndex(testCase.tableType, testCase.streamingWriteEnabled, holder)
     val writeConfig = getWriteConfig(holder.options)
-    new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+    new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig, true)
       .rollback(metaClient.getActiveTimeline.lastInstant().get().requestedTime())
     val metadata = metadataWriter(writeConfig).getTableMetadata
     try {
@@ -224,7 +224,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase with Spar
     val writeConfig = getWriteConfig(holder.options)
     var metadata = metadataWriter(writeConfig).getTableMetadata
     doAllAssertions(holder, metadata)
-    val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+    val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig, true)
     val timeOpt = writeClient.scheduleCompaction(HOption.empty())
     assertTrue(timeOpt.isPresent)
     writeClient.compact(timeOpt.get())
@@ -244,7 +244,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase with Spar
     val writeConfig = getWriteConfig(holder.options ++ Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key() -> HoodieTestDataGenerator.AVRO_SCHEMA.toString))
     var metadata = metadataWriter(writeConfig).getTableMetadata
     doAllAssertions(holder, metadata)
-    val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+    val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig, true)
     val timeOpt = writeClient.scheduleClustering(HOption.empty())
     assertTrue(timeOpt.isPresent)
     writeClient.cluster(timeOpt.get())
@@ -391,7 +391,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase with Spar
           .mapAsJavaMapConverter(options ++ Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key() -> latestTableSchemaFromCommitMetadata.get().toString)).asJava))
         .withPath(basePath)
         .build()
-      new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+      new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig, true)
         .rollback(lastInstant.requestedTime())
     }
 
@@ -400,7 +400,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase with Spar
       val writeConfig = getWriteConfig(options ++
         Map(HoodieCompactionConfig.COMPACTION_STRATEGY.key() -> classOf[UnBoundedCompactionStrategy].getName,
           HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "1"))
-      val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+      val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig, true)
       val timeOpt = writeClient.scheduleCompaction(HOption.empty())
       assertTrue(timeOpt.isPresent)
       writeClient.compact(timeOpt.get())
@@ -412,7 +412,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase with Spar
       assertEquals(if (tableType.equals(HoodieTableType.MERGE_ON_READ)) "deltacommit" else "commit",
         metaClient.getActiveTimeline.lastInstant().get().getAction)
       val writeConfig = getWriteConfig(options ++ Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key() -> HoodieTestDataGenerator.AVRO_SCHEMA.toString))
-      val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+      val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig, true)
       val timeOpt = writeClient.scheduleClustering(HOption.empty())
       assertTrue(timeOpt.isPresent)
       writeClient.cluster(timeOpt.get())

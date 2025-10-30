@@ -53,7 +53,7 @@ public class HoodieJavaWriteClient<T> extends
     BaseHoodieWriteClient<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 
   public HoodieJavaWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
-    super(context, writeConfig, JavaUpgradeDowngradeHelper.getInstance());
+    super(context, writeConfig, JavaUpgradeDowngradeHelper.getInstance(), autoDetectAndDeleteMetadataPartitions);
     this.tableServiceClient = new HoodieJavaTableServiceClient<>(context, writeConfig, getTimelineServer());
   }
 

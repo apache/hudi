@@ -117,7 +117,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     HoodieWriteConfig writeConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER).build();
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       // Insert
       String commitTime = client.startCommit();
       List<HoodieRecord> records1 = dataGen.generateInserts(commitTime, 100);
@@ -223,7 +223,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
             .withInlineCompaction(false)
             .compactionSmallFileSize(0).build()).build();
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       // Insert
       String commitTime = client.startCommit();
       List<HoodieRecord> records1 = dataGen.generateInserts(commitTime, 100);
@@ -321,7 +321,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
             .withInlineCompaction(false)
             .compactionSmallFileSize(0).build()).build();
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       // Insert
       String commitTime = client.startCommit();
       int initialRecordsCount = 10;

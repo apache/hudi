@@ -48,6 +48,12 @@ public class StreamingMetadataWriteHandler {
   // This will be cleaned up when action is completed or when write client is closed.
   private final Map<String, Option<HoodieTableMetadataWriter>> metadataWriterMap = new HashMap<>();
 
+  private final boolean autoDetectAndDeleteMetadataPartitions;
+
+  public StreamingMetadataWriteHandler(boolean autoDetectAndDeleteMetadataPartitions) {
+    this.autoDetectAndDeleteMetadataPartitions = autoDetectAndDeleteMetadataPartitions;
+  }
+
   /**
    * Called by data table write client and table service client to perform streaming writes to metadata table.
    *
@@ -137,7 +143,7 @@ public class StreamingMetadataWriteHandler {
       return this.metadataWriterMap.get(triggeringInstant);
     }
 
-    Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(triggeringInstant, true, true);
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(triggeringInstant, true, autoDetectAndDeleteMetadataPartitions);
     metadataWriterMap.put(triggeringInstant, metadataWriterOpt); // populate this for every new instant time.
     // if metadata table does not exist, the map will contain an entry, with value Option.empty.
     // if not, it will contain the metadata writer instance.

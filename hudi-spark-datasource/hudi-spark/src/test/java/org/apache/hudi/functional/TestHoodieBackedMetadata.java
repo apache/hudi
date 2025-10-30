@@ -283,7 +283,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(COPY_ON_WRITE, Option.of(cfg), true, false, false);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     // metadata enabled with only FILES partition
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, cfg)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, cfg, true)) {
       // Insert
       String commitTime = "0000001";
       List<HoodieRecord> records = dataGen.generateInserts(commitTime, 20);
@@ -318,7 +318,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .withMetadataIndexColumnStats(true)
             .build())
         .build();
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, cfgWithColStatsEnabled)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, cfgWithColStatsEnabled, true)) {
       // Upsert
       String commitTime = "0000003";
       WriteClientTestUtils.startCommitWithTime(client, commitTime);
@@ -345,7 +345,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .build())
         .build();
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, cfgWithColStatsDisabled)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, cfgWithColStatsDisabled, true)) {
       // Upsert
       String commitTime = "0000004";
       WriteClientTestUtils.startCommitWithTime(client, commitTime);
@@ -372,7 +372,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .build())
         .build();
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, cfgWithBloomFilterEnabled)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, cfgWithBloomFilterEnabled, true)) {
       // Upsert
       String commitTime = "0000005";
       WriteClientTestUtils.startCommitWithTime(client, commitTime);
@@ -396,7 +396,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .build();
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, cfgWithMetadataDisabled)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, cfgWithMetadataDisabled, true)) {
       // Upsert
       String commitTime = "0000006";
       WriteClientTestUtils.startCommitWithTime(client, commitTime);
@@ -770,7 +770,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, cfg)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, cfg, true)) {
       // Write 1 (Bulk insert)
       String newCommitTime = "0000001";
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
@@ -1082,7 +1082,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       // Write 1 (Bulk insert)
       String newCommitTime1 = "0000001";
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime1, 100);
@@ -1152,7 +1152,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // First write that will be rolled back
     String newCommitTime1 = "20230809230000000";
     List<HoodieRecord> records1 = dataGen.generateInserts(newCommitTime1, 100);
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       WriteClientTestUtils.startCommitWithTime(client, newCommitTime1);
       JavaRDD writeStatuses = client.insert(jsc.parallelize(records1, 1), newCommitTime1);
       client.commit(newCommitTime1, writeStatuses);
@@ -1165,7 +1165,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Second write
     String newCommitTime2 = "20230809232000000";
     List<HoodieRecord> records2 = dataGen.generateInserts(newCommitTime2, 20);
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       WriteClientTestUtils.startCommitWithTime(client, newCommitTime2);
       JavaRDD writeStatuses = client.insert(jsc.parallelize(records2, 1), newCommitTime2);
       client.commit(newCommitTime2, writeStatuses);
@@ -1751,7 +1751,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .build())
         .build();
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       // Write
       String newCommitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
@@ -1799,7 +1799,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .build();
 
     // Another commit which should bootstrap the MDT again
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       // Write
       String newCommitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
@@ -1833,7 +1833,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
-        getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).build())) {
+        getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).build(), true)) {
 
       // Write 1
       String commitTime = "0000001";
@@ -1939,7 +1939,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .build())
         .build();
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
 
       String firstCommit = "0000001";
       List<HoodieRecord> records = dataGen.generateInserts(firstCommit, 20);
@@ -2053,7 +2053,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     initPath();
     init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig);
+    SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true);
     // Write 1 (Bulk insert)
     String commit1 = client.startCommit();
     List<HoodieRecord> records = dataGen.generateInserts(commit1, 20);
@@ -2078,7 +2078,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // Write 3 (updates)
     client.close();
-    client = new SparkRDDWriteClient(engineContext, writeConfig);
+    client = new SparkRDDWriteClient(engineContext, writeConfig, true);
     String commit3 = client.startCommit();
     records = dataGen.generateUniqueUpdates(commit3, 10);
     writeStatuses = client.upsert(jsc.parallelize(records, 1), commit3).collect();
@@ -2123,7 +2123,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<HoodieRecord> records = new ArrayList<>();
     List<WriteStatus> writeStatuses = null;
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       // Write 1 (Bulk insert)
       newCommitTime = client.startCommit();
       records = dataGen.generateInserts(newCommitTime, 20);
@@ -2177,7 +2177,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     }
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
 
       // Compaction
       if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
@@ -2226,7 +2226,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .build();
 
     // Create commit1 with single writer.
-    SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig);
+    SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig, true);
     String initialCommit = "0000000";
     List<HoodieRecord> initialRecords = dataGen.generateInserts(initialCommit, 100);
     WriteClientTestUtils.startCommitWithTime(writeClient, initialCommit);
@@ -2239,7 +2239,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Create clients in advance
     SparkRDDWriteClient[] writeClients = new SparkRDDWriteClient[dataGen.getPartitionPaths().length];
     for (int i = 0; i < dataGen.getPartitionPaths().length; i++) {
-      writeClients[i] = new SparkRDDWriteClient(engineContext, writeConfig);
+      writeClients[i] = new SparkRDDWriteClient(engineContext, writeConfig, true);
     }
 
     // Parallel commits for separate partitions
@@ -2302,7 +2302,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withProperties(properties)
         .build();
 
-    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       String partitionPath = dataGen.getPartitionPaths()[0];
       for (int j = 0; j < 6; j++) {
         String newCommitTime = writeClient.startCommit();
@@ -2470,7 +2470,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<HoodieRecord> records;
     List<WriteStatus> writeStatuses;
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true), true)) {
       String[] commitTimestamps = {WriteClientTestUtils.createNewInstantTime(), WriteClientTestUtils.createNewInstantTime()};
       records = dataGen.generateInserts(commitTimestamps[0], 5);
       WriteClientTestUtils.startCommitWithTime(client, commitTimestamps[0]);
@@ -2497,7 +2497,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<HoodieRecord> records;
     List<WriteStatus> writeStatuses;
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true), true)) {
       String[] commitTimestamps = {WriteClientTestUtils.createNewInstantTime(), WriteClientTestUtils.createNewInstantTime(),
           WriteClientTestUtils.createNewInstantTime(), WriteClientTestUtils.createNewInstantTime()};
 
@@ -2570,7 +2570,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     List<HoodieRecord> records;
     String newCommitTime;
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, config)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, config, true)) {
       // Some initial commits so compaction is not triggered.
       // 1 deltacommit will be from bootstrap. So we can perform maxDeltaCommitsBeforeCompaction - 2 more commits before
       // compaction will be attempted.
@@ -2653,7 +2653,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     initMetaClient(COPY_ON_WRITE, tableConfig.getProps());
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false).withWriteTableVersion(6).build();
     String commitTimestamp;
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       commitTimestamp = client.startCommit();
       records = dataGen.generateInserts(commitTimestamp, 5);
       writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), commitTimestamp).collect();
@@ -2677,7 +2677,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // With next commit the table should be deleted (as part of upgrade) and then re-bootstrapped automatically
     metaClient.reloadActiveTimeline();
     StoragePathInfo prevInfo = storage.getPathInfo(new StoragePath(metadataTableBasePath));
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig2)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig2, true)) {
       commitTimestamp = client.startCommit();
       records = dataGen.generateInserts(commitTimestamp, 5);
       writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), commitTimestamp).collect();
@@ -2737,7 +2737,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     tableConfig.setTableVersion(HoodieTableVersion.SIX);
     initMetaClient(COPY_ON_WRITE, tableConfig.getProps());
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       commitTimestamp = client.startCommit();
       records = dataGen.generateInserts(commitTimestamp, 5);
       writeStatuses = client.insert(jsc.parallelize(records, 1), commitTimestamp);
@@ -2751,7 +2751,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // trigger partial commit
     metaClient.reloadActiveTimeline();
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       commitTimestamp = client.startCommit();
       records = dataGen.generateInserts(commitTimestamp, 5);
       writeStatuses = client.insert(jsc.parallelize(records, 1), commitTimestamp);
@@ -2774,7 +2774,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // With next commit the table should be re-bootstrapped and partial commit should be rolled back.
     metaClient.reloadActiveTimeline();
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       commitTimestamp = client.startCommit();
       records = dataGen.generateInserts(commitTimestamp, 5);
       writeStatuses = client.insert(jsc.parallelize(records, 1), commitTimestamp);
@@ -2800,7 +2800,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
         getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, false, false).build(),
-        Option.empty())) {
+        Option.empty(), true)) {
       String newCommitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 10);
       List<HoodieRecord> upsertRecords = new ArrayList<>();
@@ -2832,7 +2832,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
         getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, false, false).build(),
-        Option.empty())) {
+        Option.empty(), true)) {
       String newCommitTime = client.startCommit();
       // Next insert
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
@@ -2917,7 +2917,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // create initial commit
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false).build();
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       // Write
       String newCommitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 1);
@@ -2937,7 +2937,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         "metadata table should not exist after being deleted.");
 
     writeConfig = getWriteConfigBuilder(true, true, false).build();
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       // Write
       String newCommitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 1);
@@ -3046,7 +3046,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // should be rolled back to last valid commit.
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
         getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, false, false).build(),
-        Option.empty())) {
+        Option.empty(), true)) {
       String newCommitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 10);
       List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
@@ -3071,7 +3071,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
         getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, false, false).build(),
-        Option.empty())) {
+        Option.empty(), true)) {
       String newCommitTime = client.startCommit();
       // Next insert
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 5);
@@ -3144,7 +3144,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     HoodieTestDataGenerator nonPartitionedGenerator = new HoodieTestDataGenerator(new String[] {""});
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true), true)) {
       // Write 1 (Bulk insert)
       String newCommitTime = "0000001";
       List<HoodieRecord> records = nonPartitionedGenerator.generateInserts(newCommitTime, 10);
@@ -3166,7 +3166,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieTestDataGenerator nonPartitionedGenerator = new HoodieTestDataGenerator(new String[] {""});
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).build()).build();
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       // Write 1 (Bulk insert)
       String newCommitTime = "0000001";
       List<HoodieRecord> records = nonPartitionedGenerator.generateInserts(newCommitTime, 10);
@@ -3196,7 +3196,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     HoodieTestDataGenerator partitionedGenerator = new HoodieTestDataGenerator();
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       // Write 1 (Bulk insert)
       String newCommitTime = "0000001";
       List<HoodieRecord> records = partitionedGenerator.generateInserts(newCommitTime, 10);
@@ -3253,7 +3253,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(HoodieTableType.COPY_ON_WRITE, false);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfigBuilder(true, true, true).build())) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfigBuilder(true, true, true).build(), true)) {
       // Write
       String newCommitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
@@ -3310,7 +3310,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .build();
 
     List<HoodieRecord> recordsFirstBatch = new ArrayList<>();
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, customConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, customConfig, true)) {
       String firstCommitTime = client.startCommit();
       // Create a commit, with record index disabled
       List<HoodieRecord> insertRecords = dataGen.generateInserts(firstCommitTime, 100);
@@ -3336,7 +3336,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .build())
         .build();
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, customConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, customConfig, true)) {
       // Create a commit, with record index enabled
       String secondCommitTime = client.startCommit();
       List<HoodieRecord> recordsSecondBatch = dataGen.generateInserts(secondCommitTime, 100);
@@ -3363,7 +3363,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Perform three writes so we can initiate a clean
     int index = 0;
     final String partition = "2015/03/16";
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       for (; index < 3; ++index) {
         String newCommitTime = client.startCommit();
         List<HoodieRecord> records = index == 0 ? dataGen.generateInsertsForPartition(newCommitTime, 10, partition)
@@ -3374,7 +3374,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
     assertEquals(3, metaClient.reloadActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants().countInstants());
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       // Perform a clean
       HoodieCleanMetadata cleanMetadata = client.clean();
       // 1 partition should be cleaned
@@ -3564,7 +3564,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     metadataProps.setProperty(INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3");
     HoodieWriteConfig metadataWriteConfig = HoodieWriteConfig.newBuilder()
         .withProperties(metadataProps).build();
-    try (SparkRDDWriteClient metadataWriteClient = new SparkRDDWriteClient(context, metadataWriteConfig, Option.empty())) {
+    try (SparkRDDWriteClient metadataWriteClient = new SparkRDDWriteClient(context, metadataWriteConfig, Option.empty(), true)) {
       Option<String> compactionInstantTimeOpt = metadataWriteClient.scheduleCompaction(Option.empty());
       assertTrue(compactionInstantTimeOpt.isPresent());
       final String compactionInstantTime = compactionInstantTimeOpt.get();
@@ -3601,7 +3601,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<HoodieRecord> recordsToDelete;
 
     // Initialize the dataset and add some commits.
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       String firstCommitTime = client.startCommit();
       // First commit
       List<HoodieRecord> firstBatchOfrecords = dataGen.generateInserts(firstCommitTime, 10);
@@ -3655,7 +3655,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // Compaction should work too by removing the deleted keys from the base files
     // To perform compaction, we need to create a new write client as compaction is attempted before any operations in write client
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig, true)) {
       // An empty delete to trigger compaction
       String deleteTime = client.startCommit();
       List<WriteStatus> writeStatuses = client.delete(jsc.emptyRDD(), deleteTime).collect();
@@ -3698,7 +3698,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     SparkRDDWriteClient client;
     if (config.isEmbeddedTimelineServerEnabled()) {
       testClient.close();
-      client = new SparkRDDWriteClient(testClient.getEngineContext(), testClient.getConfig());
+      client = new SparkRDDWriteClient(testClient.getEngineContext(), testClient.getConfig(), true);
     } else {
       client = testClient;
     }

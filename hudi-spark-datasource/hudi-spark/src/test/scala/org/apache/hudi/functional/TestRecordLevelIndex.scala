@@ -450,7 +450,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     val lastCleanInstant = getLatestMetaClient(false).getActiveTimeline.getCleanerTimeline.lastInstant()
     assertTrue(lastCleanInstant.isPresent)
     val writeConfig = getWriteConfig(hudiOpts)
-    val client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+    val client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig, true)
     client.savepoint("user", "note")
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
@@ -665,7 +665,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     // create a savepoint on the data table before the metadata table clean operation
     assertFalse(getMetadataMetaClient(hudiOpts).getActiveTimeline.getCleanerTimeline.lastInstant().isPresent)
     val writeConfig = getWriteConfig(hudiOpts)
-    val client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+    val client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig, true)
     client.savepoint("user", "note")
 
     // validate that the clean is present in the metadata table timeline

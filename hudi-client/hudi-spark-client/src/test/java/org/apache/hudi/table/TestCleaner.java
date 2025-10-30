@@ -291,7 +291,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
 
     HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig, true)) {
 
       final String partition1 = "2023/06/01";
       final String partition2 = "2023/06/02";
@@ -371,7 +371,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
     HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE, HoodieFileFormat.PARQUET,
         true, "org.apache.hudi.keygen.NonpartitionedKeyGenerator", true);
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig, true)) {
       String instantTime;
       for (int idx = 0; idx < 3; ++idx) {
         instantTime = client.startCommit();
@@ -419,7 +419,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
     int index = 0;
     String cleanInstantTime;
     final String partition = "2015/03/16";
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig, true)) {
       // Three writes so we can initiate a clean
       for (; index < 3; ++index) {
         String newCommitTime = client.startCommit();
@@ -429,7 +429,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
       }
     }
 
-    try (SparkRDDWriteClient<?> client = new SparkRDDWriteClient<>(context, writeConfig)) {
+    try (SparkRDDWriteClient<?> client = new SparkRDDWriteClient<>(context, writeConfig, true)) {
       // mimic failed/leftover clean by scheduling a clean but not performing it
       Pair<String, HoodieCleanerPlan> cleanPlanPair = scheduleCleaning(client);
       cleanInstantTime = cleanPlanPair.getLeft();
@@ -438,7 +438,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
       assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().countInstants(), 1);
     }
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig, true)) {
       // Next commit. This is required so that there is an additional file version to clean.
       String newCommitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 1, partition);

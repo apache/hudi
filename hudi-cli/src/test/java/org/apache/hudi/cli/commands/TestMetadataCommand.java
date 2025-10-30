@@ -81,7 +81,7 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath).withSchema(TRIP_EXAMPLE_SCHEMA).build();
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context(), config)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context(), config, true)) {
       String newCommitTime = "001";
       int numRecords = 10;
       WriteClientTestUtils.startCommitWithTime(client, newCommitTime);

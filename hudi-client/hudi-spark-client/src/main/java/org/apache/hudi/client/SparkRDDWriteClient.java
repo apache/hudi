@@ -71,16 +71,16 @@ public class SparkRDDWriteClient<T> extends
     BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkRDDWriteClient.class);
-  private final StreamingMetadataWriteHandler streamingMetadataWriteHandler = new StreamingMetadataWriteHandler();
+  private final StreamingMetadataWriteHandler streamingMetadataWriteHandler = new StreamingMetadataWriteHandler(autoDetectAndDeleteMetadataPartitions);
 
-  public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
-    this(context, clientConfig, Option.empty());
+  public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig, boolean autoDetectAndDeleteMetadataPartitions) {
+    this(context, clientConfig, Option.empty(), autoDetectAndDeleteMetadataPartitions);
   }
 
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
-                             Option<EmbeddedTimelineService> timelineService) {
-    super(context, writeConfig, timelineService, SparkUpgradeDowngradeHelper.getInstance());
-    this.tableServiceClient = new SparkRDDTableServiceClient<T>(context, writeConfig, getTimelineServer());
+                             Option<EmbeddedTimelineService> timelineService, boolean autoDetectAndDeleteMetadataPartitions) {
+    super(context, writeConfig, timelineService, SparkUpgradeDowngradeHelper.getInstance(), autoDetectAndDeleteMetadataPartitions);
+    this.tableServiceClient = new SparkRDDTableServiceClient<T>(context, writeConfig, getTimelineServer(), this.autoDetectAndDeleteMetadataPartitions);
   }
 
   @Override

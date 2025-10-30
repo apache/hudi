@@ -107,7 +107,7 @@ public class SparkSampleWritesUtils {
         .withPath(sampleWritesBasePath)
         .build();
     Pair<Boolean, String> emptyRes = Pair.of(false, null);
-    try (SparkRDDWriteClient sampleWriteClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), sampleWriteConfig, Option.empty())) {
+    try (SparkRDDWriteClient sampleWriteClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), sampleWriteConfig, Option.empty(), true)) {
       int size = writeConfig.getIntOrDefault(SAMPLE_WRITES_SIZE);
       return recordsOpt.map(records -> {
         List<HoodieRecord> samples = records.coalesce(1).take(size);

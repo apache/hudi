@@ -1719,7 +1719,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     protected final Throwable throwable;
 
     public WriteClientBrokenBase(HoodieEngineContext context, HoodieWriteConfig clientConfig, Throwable throwable) {
-      super(context, clientConfig);
+      super(context, clientConfig, true);
       this.throwable = throwable;
     }
   }

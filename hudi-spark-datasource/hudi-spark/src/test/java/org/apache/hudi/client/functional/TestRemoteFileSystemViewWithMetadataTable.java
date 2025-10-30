@@ -258,7 +258,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
         .withEmbeddedTimelineServerReuseEnabled(reuseTimelineServer)
         .forTable(tableName)
         .build();
-    return new SparkRDDWriteClient(context, writeConfig, timelineService);
+    return new SparkRDDWriteClient(context, writeConfig, timelineService, true);
   }
 
   private void writeToTable(int round, SparkRDDWriteClient writeClient) throws IOException {

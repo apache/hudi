@@ -217,7 +217,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
 
   @Override
   public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) throws IOException {
-    return new SparkRDDWriteClient(context(), cfg);
+    return new SparkRDDWriteClient(context(), cfg, true);
   }
 
   @BeforeEach

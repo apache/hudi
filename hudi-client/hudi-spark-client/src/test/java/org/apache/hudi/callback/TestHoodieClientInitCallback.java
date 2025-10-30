@@ -81,7 +81,7 @@ public class TestHoodieClientInitCallback {
         .build(false);
     assertFalse(config.contains(CUSTOM_CONFIG_KEY1));
 
-    try (SparkRDDWriteClient<Object> writeClient = new SparkRDDWriteClient<>(engineContext, config)) {
+    try (SparkRDDWriteClient<Object> writeClient = new SparkRDDWriteClient<>(engineContext, config, true)) {
 
       assertFalse(writeClient.getConfig().contains(CUSTOM_CONFIG_KEY1));
       assertFalse(writeClient.getTableServiceClient().getConfig().contains(CUSTOM_CONFIG_KEY1));
@@ -101,7 +101,7 @@ public class TestHoodieClientInitCallback {
     assertFalse(new Schema.Parser().parse(config.getWriteSchema())
         .getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
 
-    try (SparkRDDWriteClient<Object> writeClient = new SparkRDDWriteClient<>(engineContext, config)) {
+    try (SparkRDDWriteClient<Object> writeClient = new SparkRDDWriteClient<>(engineContext, config, true)) {
 
       HoodieWriteConfig updatedConfig = writeClient.getConfig();
       assertFalse(updatedConfig.contains(CUSTOM_CONFIG_KEY1));
@@ -132,7 +132,7 @@ public class TestHoodieClientInitCallback {
     assertFalse(new Schema.Parser().parse(config.getWriteSchema())
         .getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
 
-    try (SparkRDDWriteClient<Object> writeClient = new SparkRDDWriteClient<>(engineContext, config)) {
+    try (SparkRDDWriteClient<Object> writeClient = new SparkRDDWriteClient<>(engineContext, config, true)) {
 
       HoodieWriteConfig updatedConfig = writeClient.getConfig();
       assertTrue(updatedConfig.contains(CUSTOM_CONFIG_KEY1));
@@ -161,7 +161,7 @@ public class TestHoodieClientInitCallback {
         .build(false);
     HoodieIOException exception = assertThrows(
         HoodieIOException.class,
-        () -> new SparkRDDWriteClient<>(engineContext, config),
+        () -> new SparkRDDWriteClient<>(engineContext, config, true),
         "Expects the initialization to throw a HoodieIOException");
     assertEquals(
         "Throwing exception during client initialization.",
@@ -178,7 +178,7 @@ public class TestHoodieClientInitCallback {
         .build(false);
     HoodieException exception = assertThrows(
         HoodieException.class,
-        () -> new SparkRDDWriteClient<>(engineContext, config),
+        () -> new SparkRDDWriteClient<>(engineContext, config, true),
         "Expects the initialization to throw a HoodieException");
     assertEquals(errorMsg, exception.getMessage());
   }

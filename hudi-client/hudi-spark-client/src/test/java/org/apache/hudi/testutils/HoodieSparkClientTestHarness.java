@@ -417,7 +417,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
       writeClient.close();
       writeClient = null;
     }
-    writeClient = new SparkRDDWriteClient(context, cfg);
+    writeClient = new SparkRDDWriteClient(context, cfg, true);
     return writeClient;
   }
 

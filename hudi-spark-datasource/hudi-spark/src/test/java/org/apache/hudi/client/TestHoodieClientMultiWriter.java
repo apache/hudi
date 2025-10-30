@@ -143,7 +143,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
    **/
   @Override
   public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
-    return new SparkRDDWriteClient(context, cfg);
+    return new SparkRDDWriteClient(context, cfg, true);
   }
 
   @BeforeEach

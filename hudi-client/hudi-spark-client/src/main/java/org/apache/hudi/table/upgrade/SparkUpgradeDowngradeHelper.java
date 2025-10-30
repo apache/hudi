@@ -54,6 +54,6 @@ public class SparkUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
 
   @Override
   public BaseHoodieWriteClient getWriteClient(HoodieWriteConfig config, HoodieEngineContext context) {
-    return new SparkRDDWriteClient(context, config);
+    return new SparkRDDWriteClient(context, config, false);
   }
 }

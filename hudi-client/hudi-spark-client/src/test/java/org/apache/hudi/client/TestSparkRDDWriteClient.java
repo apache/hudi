@@ -107,7 +107,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
     if (passInTimelineServer) {
       EmbeddedTimelineService timelineService = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(context(), null, writeConfig);
       writeConfig.setViewStorageConfig(timelineService.getRemoteFileSystemViewConfig(writeConfig));
-      writeClient = new SparkRDDWriteClient(context(), writeConfig, Option.of(timelineService));
+      writeClient = new SparkRDDWriteClient(context(), writeConfig, Option.of(timelineService), true);
       // Both the write client and the table service client should use the same passed-in
       // timeline server instance.
       assertEquals(timelineService, writeClient.getTimelineServer().get());
@@ -116,7 +116,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
       assertEquals(writeConfig, writeClient.getConfig());
       timelineService.stopForBasePath(writeConfig.getBasePath());
     } else {
-      writeClient = new SparkRDDWriteClient(context(), writeConfig);
+      writeClient = new SparkRDDWriteClient(context(), writeConfig, true);
       // Only one timeline server should be instantiated, and the same timeline server
       // should be used by both the write client and the table service client.
       assertEquals(
@@ -308,6 +308,10 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
 
     boolean enforceCoalesceWithRepartition;
     int coalesceDivisorForDataTableWrites;
+
+    MockStreamingMetadataWriteHandler() {
+      super(true);
+    }
 
     @Override
     public HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieTable table, HoodieData<WriteStatus> dataTableWriteStatuses, String instantTime,

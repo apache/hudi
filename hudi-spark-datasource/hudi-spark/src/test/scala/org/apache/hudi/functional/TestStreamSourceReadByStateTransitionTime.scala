@@ -79,7 +79,7 @@ class TestStreamSourceReadByStateTransitionTime extends StreamTest  {
           .build()
 
         val context = new HoodieSparkEngineContext(sparkContext)
-        val writeClient = new SparkRDDWriteClient(context, writeConfig)
+        val writeClient = new SparkRDDWriteClient(context, writeConfig, true)
         val instantTime1 = makeNewCommitTime(1, "%09d")
         val instantTime2 = makeNewCommitTime(2,"%09d")
 

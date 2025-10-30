@@ -57,8 +57,9 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   private final StreamingMetadataWriteHandler streamingMetadataWriteHandler;
   protected SparkRDDTableServiceClient(HoodieEngineContext context,
                                        HoodieWriteConfig clientConfig,
-                                       Option<EmbeddedTimelineService> timelineService) {
-    this(context, clientConfig, timelineService, new StreamingMetadataWriteHandler());
+                                       Option<EmbeddedTimelineService> timelineService,
+                                       boolean autoDetectAndDeleteMetadataPartitions) {
+    this(context, clientConfig, timelineService, new StreamingMetadataWriteHandler(autoDetectAndDeleteMetadataPartitions));
   }
 
   @VisibleForTesting

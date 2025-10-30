@@ -78,7 +78,7 @@ public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
         .fromProperties(props)
         .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath);
 
-    client = new SparkRDDWriteClient(context, config);
+    client = new SparkRDDWriteClient(context, config, true);
 
     writeData(true, 100, true);
     writeData(true, 100, true);

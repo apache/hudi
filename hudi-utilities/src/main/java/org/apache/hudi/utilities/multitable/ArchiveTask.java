@@ -41,7 +41,7 @@ class ArchiveTask extends TableServiceTask {
   void run() {
     LOG.info("Run Archive with props: " + props);
     HoodieWriteConfig hoodieCfg = HoodieWriteConfig.newBuilder().withPath(basePath).withProps(props).build();
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), hoodieCfg)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), hoodieCfg, true)) {
       UtilHelpers.retry(retry, () -> {
         client.archive();
         return 0;

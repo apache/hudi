@@ -225,7 +225,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
             "To create index asynchronously, multi-writer configurations need to be enabled and hence 'hoodie.write.lock.provider' is expected to be set for such cases. "
                 + "For single writer mode, feel free to set the config value to org.apache.hudi.client.transaction.lock.InProcessLockProvider and retry index creation");
       }
-      return new SparkRDDWriteClient(engineContextOpt.get(), localWriteConfig, Option.empty());
+      return new SparkRDDWriteClient(engineContextOpt.get(), localWriteConfig, Option.empty(), false);
     } catch (Exception e) {
       throw new HoodieException("Failed to create write client while performing index operation ", e);
     }

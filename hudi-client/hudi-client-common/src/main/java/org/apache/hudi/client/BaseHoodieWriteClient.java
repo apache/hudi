@@ -148,14 +148,18 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   /**
    * Create a write client, with new hudi index.
-   * @param context HoodieEngineContext
-   * @param writeConfig instance of HoodieWriteConfig
-   * @param upgradeDowngradeHelper engine-specific instance of {@link SupportsUpgradeDowngrade}
+   *
+   * @param context                               HoodieEngineContext
+   * @param writeConfig                           instance of HoodieWriteConfig
+   * @param timelineService
+   * @param upgradeDowngradeHelper                engine-specific instance of {@link SupportsUpgradeDowngrade}
+   * @param autoDetectAndDeleteMetadataPartitions If true, client auto detects disabled metadata partitions from configs and deletes them
    */
   @Deprecated
   public BaseHoodieWriteClient(HoodieEngineContext context,
                                HoodieWriteConfig writeConfig,
-                               SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+                               Option<EmbeddedTimelineService> timelineService, SupportsUpgradeDowngrade upgradeDowngradeHelper,
+                               boolean autoDetectAndDeleteMetadataPartitions) {
     this(context, writeConfig, Option.empty(), upgradeDowngradeHelper);
   }
 
