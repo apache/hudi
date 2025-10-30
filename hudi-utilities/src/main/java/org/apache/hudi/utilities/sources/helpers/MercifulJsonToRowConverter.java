@@ -30,8 +30,10 @@ import org.apache.hudi.avro.processors.LocalTimestampMilliLogicalTypeProcessor;
 import org.apache.hudi.avro.processors.Parser;
 import org.apache.hudi.avro.processors.TimestampMicroLogicalTypeProcessor;
 import org.apache.hudi.avro.processors.TimestampMilliLogicalTypeProcessor;
+import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.stats.SparkValueMetadataUtils;
 import org.apache.hudi.stats.ValueType;
 import org.apache.hudi.utilities.exception.HoodieJsonToRowConversionException;
 
@@ -47,7 +49,6 @@ import org.apache.spark.sql.RowFactory;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoField;
@@ -63,19 +64,21 @@ import scala.collection.JavaConverters;
  * Converts Json record to Row Record.
  */
 public class MercifulJsonToRowConverter extends MercifulJsonConverter {
+  private final boolean useJava8api;
 
   /**
    * Allows enabling sanitization and allows choice of invalidCharMask for sanitization
    */
-  public MercifulJsonToRowConverter(boolean shouldSanitize, String invalidCharMask) {
-    this(new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS), shouldSanitize, invalidCharMask);
+  public MercifulJsonToRowConverter(boolean shouldSanitize, String invalidCharMask, boolean useJava8api) {
+    this(new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS), shouldSanitize, invalidCharMask, useJava8api);
   }
 
   /**
    * Allows a configured ObjectMapper to be passed for converting json records to row.
    */
-  public MercifulJsonToRowConverter(ObjectMapper mapper, boolean shouldSanitize, String invalidCharMask) {
+  public MercifulJsonToRowConverter(ObjectMapper mapper, boolean shouldSanitize, String invalidCharMask, boolean useJava8api) {
     super(mapper, shouldSanitize, invalidCharMask);
+    this.useJava8api = useJava8api;
   }
 
   /**
@@ -102,7 +105,7 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
     for (Schema.Field f : fields) {
       Object val = shouldSanitize ? getFieldFromJson(f, inputJson, schema.getFullName(), invalidCharMask) : inputJson.get(f.name());
       if (val != null) {
-        values.set(f.pos(), convertJsonField(val, f.name(), f.schema()));
+        values.set(f.pos(), SparkValueMetadataUtils.convertJavaTypeToSparkType(convertJsonField(val, f.name(), f.schema()), useJava8api));
       }
     }
     return RowFactory.create(values.toArray());
@@ -238,7 +241,7 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
           },
           value, schema);
       if (result.getLeft()) {
-        return Pair.of(true, new Timestamp((Long) result.getRight()));
+        return Pair.of(true, Instant.ofEpochMilli((Long) result.getRight()));
       }
       return Pair.of(false, null);
     }
@@ -275,8 +278,7 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
           },
           value, schema);
       if (result.getLeft()) {
-        // timestamp in spark sql doesn't support precision to the micro.
-        return Pair.of(true, new Timestamp(((Long) result.getRight()) / 1000));
+        return Pair.of(true, DateTimeUtils.microsToInstant((Long) result.getRight()));
       }
       return Pair.of(false, null);
     }

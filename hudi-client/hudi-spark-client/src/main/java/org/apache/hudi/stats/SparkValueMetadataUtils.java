@@ -144,7 +144,7 @@ public class SparkValueMetadataUtils {
    * we need to return java.sql.Timestamp and java.sql.Date
    *
    */
-  public static Object convertJavaTypeToSparkType(Comparable<?> javaVal, boolean useJava8api) {
+  public static Object convertJavaTypeToSparkType(Object javaVal, boolean useJava8api) {
     if (!useJava8api) {
       if (javaVal instanceof Instant) {
         return Timestamp.from((Instant) javaVal);

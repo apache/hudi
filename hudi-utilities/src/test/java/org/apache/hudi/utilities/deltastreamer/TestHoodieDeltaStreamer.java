@@ -111,7 +111,7 @@ import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.sources.SqlSource;
 import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.sources.TestParquetDFSSourceEmptyBatch;
-import org.apache.hudi.utilities.sources.helpers.TestMercifulJsonToRowConverter;
+import org.apache.hudi.utilities.sources.helpers.TestMercifulJsonToRowConverterBase;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy;
 import org.apache.hudi.utilities.streamer.StreamSync;
@@ -789,9 +789,91 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testLogicalTypesWithJsonSource(boolean hasTransformer) throws Exception {
+    try {
+      //use v6 schema because decimal parsing iso 8859-1 support not available currently
+      String schemaStr;
+      if (HoodieSparkUtils.isSpark3_3()) {
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.sourceSchema =
+            HoodieTestDataGenerator.AVRO_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6;
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.targetSchema =
+            HoodieTestDataGenerator.AVRO_TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6;
+        schemaStr = HoodieTestDataGenerator.TRIP_LOGICAL_TYPES_SCHEMA_NO_LTS_V6;
+      } else {
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.sourceSchema =
+            HoodieTestDataGenerator.AVRO_TRIP_LOGICAL_TYPES_SCHEMA_V6;
+        TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.targetSchema =
+            HoodieTestDataGenerator.AVRO_TRIP_LOGICAL_TYPES_SCHEMA_V6;
+        schemaStr = HoodieTestDataGenerator.TRIP_LOGICAL_TYPES_SCHEMA_V6;
+      }
+      defaultSchemaProviderClassName =
+          TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.class.getName();
+      String tableBasePath = basePath + "testTimestampMillis";
+      prepareJsonKafkaDFSSource(
+          PROPS_FILENAME_TEST_JSON_KAFKA, "earliest", topicName);
+
+      // Insert data produced with Schema A, pass Schema A
+      prepareJsonKafkaDFSFilesWithSchema(
+          1000, true, topicName, schemaStr);
+      HoodieDeltaStreamer.Config cfg = getConfigForLogicalTypesWithJsonSource(tableBasePath, WriteOperationType.INSERT, hasTransformer);
+      new HoodieDeltaStreamer(cfg, jsc).sync();
+      // Validate.
+      assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
+      assertRecordCount(1000, tableBasePath, sqlContext);
+      TestHelpers.assertCommitMetadata(topicName + ",0:500,1:500", tableBasePath, 1);
+      TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
+          HoodieTestUtils.createMetaClient(storage, tableBasePath));
+      Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
+      Map<String, String> hudiOpts = new HashMap<>();
+      hudiOpts.put("hoodie.datasource.write.recordkey.field", "id");
+      logicalAssertions(tableSchema, tableBasePath, hudiOpts, HoodieTableVersion.EIGHT.versionCode());
+
+      // Update data.
+      prepareJsonKafkaDFSFilesWithSchema(
+          1000, false, topicName, schemaStr);
+      cfg = getConfigForLogicalTypesWithJsonSource(tableBasePath, WriteOperationType.UPSERT, hasTransformer);
+      new HoodieDeltaStreamer(cfg, jsc).sync();
+      // Validate.
+      assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
+      assertRecordCount(2000, tableBasePath, sqlContext);
+      TestHelpers.assertCommitMetadata(topicName + ",0:1000,1:1000", tableBasePath, 2);
+      tableSchemaResolver = new TableSchemaResolver(
+          HoodieTestUtils.createMetaClient(storage, tableBasePath));
+      tableSchema = tableSchemaResolver.getTableAvroSchema(false);
+      logicalAssertions(tableSchema, tableBasePath, hudiOpts, HoodieTableVersion.EIGHT.versionCode());
+    } finally {
+      defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
+    }
+  }
+
+  private static HoodieDeltaStreamer.Config getConfigForLogicalTypesWithJsonSource(String tableBasePath, WriteOperationType operationType, boolean hasTransformer) {
+    List<String> transformerClassNames;
+    if (hasTransformer) {
+      transformerClassNames = Collections.singletonList(TestIdentityTransformer.class.getName());
+    } else {
+      transformerClassNames = Collections.emptyList();
+    }
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(
+        tableBasePath, operationType, JsonKafkaSource.class.getName(),
+        transformerClassNames,
+        PROPS_FILENAME_TEST_JSON_KAFKA,
+        false, true, 100000, false, null,
+        HoodieTableType.MERGE_ON_READ.name(),
+        "timestamp", null);
+    cfg.payloadClassName = DefaultHoodieRecordPayload.class.getName();
+    cfg.recordMergeStrategyId = HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
+    cfg.recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
+    cfg.configs.add(String.format("%s=%s", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0"));
+    cfg.configs.add("hoodie.datasource.write.row.writer.enable=false");
+    cfg.configs.add("hoodie.streamer.source.sanitize.invalid.schema.field.names=true");
+    return cfg;
+  }
+
+  @ParameterizedTest
   @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
   public void testBackwardsCompatibility(HoodieTableVersion version) throws Exception {
-    TestMercifulJsonToRowConverter.timestampNTZCompatibility(() -> {
+    TestMercifulJsonToRowConverterBase.timestampNTZCompatibility(() -> {
       String dirName = "colstats-upgrade-test-v" + version.versionCode();
       String dataPath = basePath + "/" + dirName;
       java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
@@ -2379,10 +2461,18 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   private void prepareJsonKafkaDFSFiles(int numRecords, boolean createTopic, String topicName) {
-    prepareJsonKafkaDFSFiles(numRecords, createTopic, topicName, 2);
+    prepareJsonKafkaDFSFiles(numRecords, createTopic, topicName, 2, HoodieTestDataGenerator.TRIP_SCHEMA);
   }
 
   private void prepareJsonKafkaDFSFiles(int numRecords, boolean createTopic, String topicName, int numPartitions) {
+    prepareJsonKafkaDFSFiles(numRecords, createTopic, topicName, numPartitions, HoodieTestDataGenerator.TRIP_SCHEMA);
+  }
+
+  private void prepareJsonKafkaDFSFilesWithSchema(int numRecords, boolean createTopic, String topicName, String schemaStr) {
+    prepareJsonKafkaDFSFiles(numRecords, createTopic, topicName, 2, schemaStr);
+  }
+
+  private void prepareJsonKafkaDFSFiles(int numRecords, boolean createTopic, String topicName, int numPartitions, String schemaStr) {
     if (createTopic) {
       try {
         testUtils.createTopic(topicName, numPartitions);
@@ -2392,7 +2482,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.sendMessages(topicName,
-        UtilitiesTestBase.Helpers.jsonifyRecordsByPartitions(dataGenerator.generateInsertsAsPerSchema("000", numRecords, HoodieTestDataGenerator.TRIP_SCHEMA), numPartitions));
+        UtilitiesTestBase.Helpers.jsonifyRecordsByPartitions(
+            dataGenerator.generateInsertsAsPerSchema(
+                "000", numRecords, schemaStr), numPartitions));
   }
 
   private void testParquetDFSSource(boolean useSchemaProvider, List<String> transformerClassNames) throws Exception {
