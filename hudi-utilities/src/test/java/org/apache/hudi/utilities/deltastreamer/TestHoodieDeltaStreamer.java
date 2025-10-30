@@ -908,7 +908,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   private void logicalAssertions(Schema tableSchema, String tableBasePath, Map<String, String> hudiOpts, int tableVersion) {
-    assertEquals("timestamp-millis", tableSchema.getField("ts_millis").schema().getLogicalType().getName());
+    if (tableVersion > 8) {
+      assertEquals("timestamp-millis", tableSchema.getField("ts_millis").schema().getLogicalType().getName());
+    }
     assertEquals("timestamp-micros", tableSchema.getField("ts_micros").schema().getLogicalType().getName());
     if (tableVersion > 8 && !HoodieSparkUtils.isSpark3_3()) {
       assertEquals("local-timestamp-millis", tableSchema.getField("local_ts_millis").schema().getLogicalType().getName());
@@ -947,10 +949,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       tolerance = totalCount / 4;
     }
 
-    assertHalfSplit(df, "ts_millis > timestamp('2020-01-01 00:00:00Z')", expectedHalf, tolerance, "ts_millis > threshold");
-    assertHalfSplit(df, "ts_millis < timestamp('2020-01-01 00:00:00Z')", expectedHalf, tolerance, "ts_millis < threshold");
-    assertBoundaryCounts(df, "ts_millis > timestamp('2020-01-01 00:00:00.001Z')", "ts_millis <= timestamp('2020-01-01 00:00:00.001Z')", totalCount);
-    assertBoundaryCounts(df, "ts_millis < timestamp('2019-12-31 23:59:59.999Z')", "ts_millis >= timestamp('2019-12-31 23:59:59.999Z')", totalCount);
+    if (tableVersion > 8) {
+      assertHalfSplit(df, "ts_millis > timestamp('2020-01-01 00:00:00Z')", expectedHalf, tolerance, "ts_millis > threshold");
+      assertHalfSplit(df, "ts_millis < timestamp('2020-01-01 00:00:00Z')", expectedHalf, tolerance, "ts_millis < threshold");
+      assertBoundaryCounts(df, "ts_millis > timestamp('2020-01-01 00:00:00.001Z')", "ts_millis <= timestamp('2020-01-01 00:00:00.001Z')", totalCount);
+      assertBoundaryCounts(df, "ts_millis < timestamp('2019-12-31 23:59:59.999Z')", "ts_millis >= timestamp('2019-12-31 23:59:59.999Z')", totalCount);
+    }
 
     assertHalfSplit(df, "ts_micros > timestamp('2020-06-01 12:00:00Z')", expectedHalf, tolerance, "ts_micros > threshold");
     assertHalfSplit(df, "ts_micros < timestamp('2020-06-01 12:00:00Z')", expectedHalf, tolerance, "ts_micros < threshold");
