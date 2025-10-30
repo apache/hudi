@@ -58,6 +58,6 @@ public class FlinkUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
     // The write config inherits from the info of the currently running timeline server started in coordinator, even though the flag is disabled, it still can
     // access the remote timeline server started before.
     config.setValue(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), "false");
-    return new HoodieFlinkWriteClient(context, config);
+    return new HoodieFlinkWriteClient(context, config, false);
   }
 }

@@ -71,7 +71,7 @@ public class FlinkWriteClients {
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf) throws IOException {
     HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, true, false);
     // build the write client to start the embedded timeline server
-    final HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient<>(new HoodieFlinkEngineContext(HadoopConfigurations.getHadoopConf(conf)), writeConfig);
+    final HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient<>(new HoodieFlinkEngineContext(HadoopConfigurations.getHadoopConf(conf)), writeConfig, true);
     writeClient.setOperationType(WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION)));
     // create the filesystem view storage properties for client
     final FileSystemViewStorageConfig viewStorageConfig = writeConfig.getViewStorageConfig();
@@ -105,7 +105,7 @@ public class FlinkWriteClients {
   public static HoodieFlinkWriteClient createWriteClientV2(Configuration conf) {
     HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, true, false);
     // build the write client to start the embedded timeline server
-    final HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient<>(new HoodieFlinkEngineContext(HadoopConfigurations.getHadoopConf(conf)), writeConfig);
+    final HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient<>(new HoodieFlinkEngineContext(HadoopConfigurations.getHadoopConf(conf)), writeConfig, true);
     writeClient.setOperationType(WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION)));
     // create the filesystem view storage properties for client
     final FileSystemViewStorageConfig viewStorageConfig = writeConfig.getViewStorageConfig();
@@ -134,7 +134,7 @@ public class FlinkWriteClients {
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf, boolean enableEmbeddedTimelineService, boolean loadFsViewStorageConfig) {
     HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(HadoopConfigurations.getHadoopConf(conf));
     HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, enableEmbeddedTimelineService, loadFsViewStorageConfig);
-    return new HoodieFlinkWriteClient<>(context, writeConfig);
+    return new HoodieFlinkWriteClient<>(context, writeConfig, true);
   }
 
   /**
@@ -151,7 +151,7 @@ public class FlinkWriteClients {
             new FlinkTaskContextSupplier(runtimeContext));
 
     HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, loadFsViewStorageConfig);
-    return new HoodieFlinkWriteClient<>(context, writeConfig);
+    return new HoodieFlinkWriteClient<>(context, writeConfig, true);
   }
 
   /**

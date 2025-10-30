@@ -1140,7 +1140,7 @@ public class TestInputFormat {
     }
     // cleaning
     HoodieFlinkWriteClient<?> writeClient = new HoodieFlinkWriteClient<>(
-        HoodieFlinkEngineContext.DEFAULT, FlinkWriteClients.getHoodieClientConfig(conf));
+        HoodieFlinkEngineContext.DEFAULT, FlinkWriteClients.getHoodieClientConfig(conf), true);
     writeClient.clean();
 
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(

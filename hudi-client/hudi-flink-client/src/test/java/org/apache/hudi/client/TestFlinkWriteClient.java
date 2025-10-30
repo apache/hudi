@@ -49,7 +49,7 @@ public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
         .withEmbeddedTimelineServerEnabled(enableEmbeddedTimelineServer)
         .build();
 
-    HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(context, writeConfig);
+    HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(context, writeConfig, true);
     // Only one timeline server should be instantiated, and the same timeline server
     // should be used by both the write client and the table service client.
     assertEquals(

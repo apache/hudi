@@ -135,7 +135,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   public BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> initializeWriteClient() {
-    return new HoodieFlinkWriteClient(engineContext, metadataWriteConfig);
+    return new HoodieFlinkWriteClient(engineContext, metadataWriteConfig, false);
   }
 
   @Override

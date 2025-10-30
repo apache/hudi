@@ -88,7 +88,7 @@ public class TestFlinkWriteClients {
     assertFalse(writeConfig.isSecondaryIndexEnabled(), "secondary index is by default disabled");
     assertFalse(writeConfig.isExpressionIndexEnabled(), "expression index is by default disabled");
     // create write client
-    try (HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(HoodieFlinkEngineContext.DEFAULT, writeConfig)) {
+    try (HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(HoodieFlinkEngineContext.DEFAULT, writeConfig, true)) {
       // init metadata table
       writeClient.initMetadataTable();
       // reload the table config been updated by the metadata table
