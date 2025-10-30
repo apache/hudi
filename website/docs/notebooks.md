@@ -28,6 +28,8 @@ All you need is a cloned copy of the Hudi repository and Docker installed on you
   ```shell
   sh run_spark_hudi.sh start
   ```
+  
+You can explore and practice our example notebooks directly from your browser! Once your environment is up and running, open http://localhost:8888 to access Jupyter Notebook. From there, you can explore, edit, and run the provided notebooks, and build hands-on experience in a fully interactive workspace.
 
 ### Meet Your Notebooks
 
