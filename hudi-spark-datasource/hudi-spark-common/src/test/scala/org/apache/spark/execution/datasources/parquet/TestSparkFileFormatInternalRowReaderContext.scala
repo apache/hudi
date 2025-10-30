@@ -20,12 +20,11 @@
 package org.apache.spark.execution.datasources.parquet
 
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext
-import org.apache.hudi.SparkFileFormatInternalRowReaderContext.filterIsSafeForBootstrap
+import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, filterIsSafeForPrimaryKey}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
-
 import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
 import org.apache.spark.sql.sources.{And, IsNotNull, Or}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
@@ -61,6 +60,32 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
 
     val legalNestedFilter = And(legalComplexFilter, recordKeyFilter)
     assertTrue(filterIsSafeForBootstrap(legalNestedFilter))
+  }
+
+  @Test
+  def testPKFilter(): Unit = {
+    val recordKeyField = HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName
+    val pk1 = "pk1"
+    val pk2 = "pk2"
+    val dataField = "data_col"
+    val pkFieldsSet = Set(pk1, pk2)
+
+    // case1: only record key or pk fields
+    val recordKeyFilter = IsNotNull(recordKeyField)
+    assertTrue(filterIsSafeForPrimaryKey(recordKeyFilter, pkFieldsSet))
+    val pkFieldFilter = IsNotNull(pk1)
+    assertTrue(filterIsSafeForPrimaryKey(pkFieldFilter, pkFieldsSet))
+    val pkFieldsFilter = And(IsNotNull(pk1), IsNotNull(pk2))
+    assertTrue(filterIsSafeForPrimaryKey(pkFieldsFilter, pkFieldsSet))
+    val pkAndRecordKeyFilter = And(And(IsNotNull(recordKeyField), IsNotNull(pk1)), IsNotNull(pk2))
+    assertTrue(filterIsSafeForPrimaryKey(pkAndRecordKeyFilter, pkFieldsSet))
+    // case2: with data field
+    val dataFieldFilter = IsNotNull(dataField)
+    assertFalse(filterIsSafeForPrimaryKey(dataFieldFilter, pkFieldsSet))
+    val illegalComplexFilter = Or(recordKeyFilter, dataFieldFilter)
+    assertFalse(filterIsSafeForPrimaryKey(illegalComplexFilter, pkFieldsSet))
+    val illegalNestedFilter = And(illegalComplexFilter, pkFieldFilter)
+    assertFalse(filterIsSafeForPrimaryKey(illegalNestedFilter, pkFieldsSet))
   }
 
   @Test

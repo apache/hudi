@@ -21,11 +21,11 @@ package org.apache.hudi
 
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, getAppliedRequiredSchema}
+import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, filterIsSafeForPrimaryKey, getAppliedRequiredSchema}
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -62,7 +62,9 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
                                               tableConfig: HoodieTableConfig)
   extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig, SparkFileFormatInternalRecordContext.apply(tableConfig)) {
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
+  private lazy val recordKeyFields = Option(tableConfig.getRecordKeyFields.orElse(null)).map(_.map(_.toLowerCase).toSet).getOrElse(Set.empty)
   private lazy val bootstrapSafeFilters: Seq[Filter] = filters.filter(filterIsSafeForBootstrap) ++ requiredFilters
+  private lazy val morFilters = filters.filter(filterIsSafeForPrimaryKey(_, recordKeyFields)) ++ requiredFilters
   private lazy val allFilters = filters ++ requiredFilters
 
   override def getFileRecordIterator(filePath: StoragePath,
@@ -77,6 +79,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     }
     val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
     if (FSUtils.isLogFile(filePath)) {
+      // TODO: introduce pk filter in log file reader
       new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
         .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(structType).asInstanceOf[ClosableIterator[InternalRow]]
     } else {
@@ -98,7 +101,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     } else if (!getHasLogFiles && hasRowIndexField) {
       (schemaForRead, bootstrapSafeFilters)
     } else {
-      (schemaForRead, requiredFilters)
+      (schemaForRead, morFilters)
     }
   }
 
@@ -260,6 +263,13 @@ object SparkFileFormatInternalRowReaderContext {
   def filterIsSafeForBootstrap(filter: Filter): Boolean = {
     val metaRefCount = filter.references.count(c => HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(c.toLowerCase))
     metaRefCount == filter.references.length || metaRefCount == 0
+  }
+
+  /**
+   * Only valid if the filter's references only include primary key columns or {@link HoodieRecord.RECORD_KEY_METADATA_FIELD}
+   */
+  def filterIsSafeForPrimaryKey(filter: Filter, recordKeyFields: Set[String]): Boolean = {
+    filter.references.forall(c => recordKeyFields.contains(c.toLowerCase) || c.equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD))
   }
 
   private def isIndexTempColumn(field: StructField): Boolean = {
