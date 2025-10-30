@@ -184,7 +184,7 @@ public class TestMultipleHoodieJavaWriteClient {
     int numHudiWriteClients = 3;
     IntStream.range(0, numHudiWriteClients).forEach(i -> {
       HoodieJavaWriteClient writer =
-          new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(storageConf), cfg);
+          new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(storageConf), cfg, true);
       try {
         writerQueue.put(writer);
       } catch (InterruptedException e) {

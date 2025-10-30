@@ -52,7 +52,7 @@ import java.util.stream.Collectors;
 public class HoodieJavaWriteClient<T> extends
     BaseHoodieWriteClient<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 
-  public HoodieJavaWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
+  public HoodieJavaWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean autoDetectAndDeleteMetadataPartitions) {
     super(context, writeConfig, JavaUpgradeDowngradeHelper.getInstance(), autoDetectAndDeleteMetadataPartitions);
     this.tableServiceClient = new HoodieJavaTableServiceClient<>(context, writeConfig, getTimelineServer());
   }
@@ -66,7 +66,7 @@ public class HoodieJavaWriteClient<T> extends
                                HoodieWriteConfig writeConfig,
                                boolean rollbackPending,
                                Option<EmbeddedTimelineService> timelineService) {
-    super(context, writeConfig, timelineService, JavaUpgradeDowngradeHelper.getInstance());
+    super(context, writeConfig, timelineService, JavaUpgradeDowngradeHelper.getInstance(), true);
     this.tableServiceClient = new HoodieJavaTableServiceClient<>(context, writeConfig, getTimelineServer());
   }
 

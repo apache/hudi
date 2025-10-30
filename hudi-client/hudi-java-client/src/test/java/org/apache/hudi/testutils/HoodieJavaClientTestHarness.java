@@ -263,7 +263,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       writeClient.close();
       writeClient = null;
     }
-    writeClient = new HoodieJavaWriteClient(context, cfg);
+    writeClient = new HoodieJavaWriteClient(context, cfg, true);
     return writeClient;
   }
 

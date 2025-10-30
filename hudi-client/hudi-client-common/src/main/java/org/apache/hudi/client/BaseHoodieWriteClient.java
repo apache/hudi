@@ -151,34 +151,36 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    *
    * @param context                               HoodieEngineContext
    * @param writeConfig                           instance of HoodieWriteConfig
-   * @param timelineService
    * @param upgradeDowngradeHelper                engine-specific instance of {@link SupportsUpgradeDowngrade}
    * @param autoDetectAndDeleteMetadataPartitions If true, client auto detects disabled metadata partitions from configs and deletes them
    */
   @Deprecated
   public BaseHoodieWriteClient(HoodieEngineContext context,
                                HoodieWriteConfig writeConfig,
-                               Option<EmbeddedTimelineService> timelineService, SupportsUpgradeDowngrade upgradeDowngradeHelper,
+                               SupportsUpgradeDowngrade upgradeDowngradeHelper,
                                boolean autoDetectAndDeleteMetadataPartitions) {
-    this(context, writeConfig, Option.empty(), upgradeDowngradeHelper);
+    this(context, writeConfig, Option.empty(), upgradeDowngradeHelper, autoDetectAndDeleteMetadataPartitions);
   }
 
   /**
    * Create a write client, allows to specify all parameters.
    *
-   * @param context         HoodieEngineContext
-   * @param writeConfig     instance of HoodieWriteConfig
-   * @param timelineService Timeline Service that runs as part of write client.
+   * @param context                               HoodieEngineContext
+   * @param writeConfig                           instance of HoodieWriteConfig
+   * @param timelineService                       Timeline Service that runs as part of write client.
+   * @param autoDetectAndDeleteMetadataPartitions If true, client auto detects disabled metadata partitions from configs and deletes them
    */
   @Deprecated
   public BaseHoodieWriteClient(HoodieEngineContext context,
                                HoodieWriteConfig writeConfig,
                                Option<EmbeddedTimelineService> timelineService,
-                               SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+                               SupportsUpgradeDowngrade upgradeDowngradeHelper,
+                               boolean autoDetectAndDeleteMetadataPartitions) {
     super(context, writeConfig, timelineService);
     this.index = createIndex(writeConfig);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
     this.metrics.emitIndexTypeMetrics(config.getIndexType().ordinal());
+    this.autoDetectAndDeleteMetadataPartitions = autoDetectAndDeleteMetadataPartitions;
   }
 
   @VisibleForTesting

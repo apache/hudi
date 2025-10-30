@@ -126,7 +126,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
       assertEquals(writeConfig, writeClient.getConfig());
       timelineService.stopForBasePath(writeConfig.getBasePath());
     } else {
-      writeClient = new HoodieJavaWriteClient(context, writeConfig);
+      writeClient = new HoodieJavaWriteClient(context, writeConfig, true);
       // Only one timeline server should be instantiated, and the same timeline server
       // should be used by both the write client and the table service client.
       assertEquals(

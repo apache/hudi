@@ -97,7 +97,7 @@ public class HoodieJavaWriteClientExample {
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(20, 30).build()).build();
 
     try (HoodieJavaWriteClient<HoodieAvroPayload> client =
-             new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(storageConf), cfg)) {
+             new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(storageConf), cfg, true)) {
 
       // inserts
       String newCommitTime = client.startCommit();

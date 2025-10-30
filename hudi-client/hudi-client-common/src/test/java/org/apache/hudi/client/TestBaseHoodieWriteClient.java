@@ -303,7 +303,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
 
     public TestWriteClient(HoodieWriteConfig writeConfig, HoodieTable<String, String, String, String> table, Option<EmbeddedTimelineService> timelineService,
                            BaseHoodieTableServiceClient<String, String, String> tableServiceClient) {
-      super(new HoodieLocalEngineContext(getDefaultStorageConf()), writeConfig, timelineService, null);
+      super(new HoodieLocalEngineContext(getDefaultStorageConf()), writeConfig, timelineService, null, true);
       this.table = table;
       this.tableServiceClient = tableServiceClient;
     }

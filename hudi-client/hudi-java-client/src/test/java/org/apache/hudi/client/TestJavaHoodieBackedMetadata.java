@@ -718,7 +718,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig, true)) {
       // Write 1 (Bulk insert)
       String newCommitTime1 = "0000001";
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime1, 100);
@@ -1231,7 +1231,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
             .build())
         .build();
 
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig, true)) {
       // Write
       String newCommitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
@@ -1277,7 +1277,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         .build();
 
     // Another commit which should bootstrap the MDT again
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig, true)) {
       // Write
       String newCommitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
@@ -1311,7 +1311,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext,
-        getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).build())) {
+        getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).build(), true)) {
 
       // Write 1
       String commitTime = "0000001";
@@ -1415,7 +1415,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
             .build())
         .build();
 
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig, true)) {
 
       String firstCommit = "0000001";
       List<HoodieRecord> records = dataGen.generateInserts(firstCommit, 20);
@@ -1534,7 +1534,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     initPath();
     init(tableType);
     HoodieJavaEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
-    HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig);
+    HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig, true);
     // Write 1 (Bulk insert)
     String commit1 = client.startCommit();
     List<HoodieRecord> records = dataGen.generateInserts(commit1, 20);
@@ -1557,7 +1557,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // Write 3 (updates)
     client.close();
-    client = new HoodieJavaWriteClient(engineContext, writeConfig);
+    client = new HoodieJavaWriteClient(engineContext, writeConfig, true);
     String commit3 = client.startCommit();
     records = dataGen.generateUniqueUpdates(commit3, 10);
     writeStatuses = client.upsert(records, commit3);
@@ -1602,7 +1602,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<WriteStatus> writeStatuses = null;
     String instantToRestore = null;
 
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig, true)) {
       // Write 1 (Bulk insert)
       newCommitTime = client.startCommit();
       records = dataGen.generateInserts(newCommitTime, 20);
@@ -1655,7 +1655,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       validateMetadata(client);
     }
 
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig, true)) {
 
       // Compaction
       if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
@@ -1705,7 +1705,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         .build();
 
     // Create commit1 with single writer.
-    HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(engineContext, writeConfig);
+    HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(engineContext, writeConfig, true);
     String initialCommit = "0000000";
     List<HoodieRecord> initialRecords = dataGen.generateInserts(initialCommit, 100);
     WriteClientTestUtils.startCommitWithTime(writeClient, initialCommit);
@@ -1718,7 +1718,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Create clients in advance
     HoodieJavaWriteClient[] writeClients = new HoodieJavaWriteClient[dataGen.getPartitionPaths().length];
     for (int i = 0; i < dataGen.getPartitionPaths().length; i++) {
-      writeClients[i] = new HoodieJavaWriteClient(engineContext, writeConfig);
+      writeClients[i] = new HoodieJavaWriteClient(engineContext, writeConfig, true);
     }
 
     // Parallel commits for separate partitions
@@ -1780,7 +1780,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withProperties(properties)
         .build();
 
-    try (HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+    try (HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(engineContext, writeConfig, true)) {
       String partitionPath = dataGen.getPartitionPaths()[0];
       for (int j = 0; j < 6; j++) {
         String newCommitTime = writeClient.startCommit();
@@ -1953,7 +1953,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<HoodieRecord> records;
     List<WriteStatus> writeStatuses;
 
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, getWriteConfig(true, true))) {
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, getWriteConfig(true, true), true)) {
       String[] commitTimestamps = {WriteClientTestUtils.createNewInstantTime(), WriteClientTestUtils.createNewInstantTime()};
 
       records = dataGen.generateInserts(commitTimestamps[0], 5);
@@ -1981,7 +1981,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<HoodieRecord> records;
     List<WriteStatus> writeStatuses;
 
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, getWriteConfig(true, true))) {
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, getWriteConfig(true, true), true)) {
       String[] commitTimestamps = {WriteClientTestUtils.createNewInstantTime(), WriteClientTestUtils.createNewInstantTime(), WriteClientTestUtils.createNewInstantTime(),
           WriteClientTestUtils.createNewInstantTime()};
 
@@ -2054,7 +2054,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     List<HoodieRecord> records;
     String newCommitTime;
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, config)) {
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, config, true)) {
       // Some initial commits so compaction is not triggered.
       // 1 deltacommit will be from bootstrap. So we can perform maxDeltaCommitsBeforeCompaction - 2 more commits before
       // compaction will be attempted.
@@ -2148,7 +2148,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withProperties(properties)
         .build();
     String commitTimestamp;
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig, true)) {
       commitTimestamp = client.startCommit();
       records = dataGen.generateInserts(commitTimestamp, 5);
       writeStatuses = client.insert(records, commitTimestamp);
@@ -2162,7 +2162,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // trigger partial commit
     metaClient.reloadActiveTimeline();
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig, true)) {
       commitTimestamp = client.startCommit();
       records = dataGen.generateInserts(commitTimestamp, 5);
       writeStatuses = client.insert(records, commitTimestamp);
@@ -2186,7 +2186,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // With next commit the table should be re-bootstrapped and partial commit should be rolled back.
     metaClient.reloadActiveTimeline();
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig, true)) {
       commitTimestamp = client.startCommit();
       records = dataGen.generateInserts(commitTimestamp, 5);
       writeStatuses = client.insert(records, commitTimestamp);
@@ -2267,7 +2267,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // create initial commit
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false).build();
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig, true)) {
       // Write
       String newCommitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 1);
@@ -2286,7 +2286,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         "metadata table should not exist after being deleted.");
 
     writeConfig = getWriteConfigBuilder(true, true, false).build();
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig, true)) {
       // Write
       String newCommitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 1);
@@ -2390,7 +2390,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     HoodieTestDataGenerator nonPartitionedGenerator = new HoodieTestDataGenerator(new String[] {""});
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, getWriteConfig(true, true))) {
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, getWriteConfig(true, true), true)) {
       // Write 1 (Bulk insert)
       String newCommitTime = "0000001";
       List<HoodieRecord> records = nonPartitionedGenerator.generateInserts(newCommitTime, 10);
@@ -2413,7 +2413,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
 
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, true).build();
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig, true)) {
       // Write
       String newCommitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
@@ -2469,7 +2469,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Perform three writes so we can initiate a clean
     int index = 0;
     final String partition = "2015/03/16";
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig, true)) {
       for (; index < 3; ++index) {
         String newCommitTime = "00" + index;
         List<HoodieRecord> records = index == 0 ? dataGen.generateInsertsForPartition(newCommitTime, 10, partition)
@@ -2480,7 +2480,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
     assertEquals(metaClient.reloadActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants().countInstants(), 3);
 
-    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig, true)) {
       // Perform a clean
       HoodieCleanMetadata cleanMetadata = client.clean();
       // 1 partition should be cleaned
@@ -2677,7 +2677,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       metadataProps.setProperty(INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3");
       HoodieWriteConfig metadataWriteConfig = HoodieWriteConfig.newBuilder()
           .withProperties(metadataProps).build();
-      try (HoodieJavaWriteClient metadataWriteClient = new HoodieJavaWriteClient(context, metadataWriteConfig)) {
+      try (HoodieJavaWriteClient metadataWriteClient = new HoodieJavaWriteClient(context, metadataWriteConfig, true)) {
         final Option<String> compactionInstantTime = metadataWriteClient.scheduleCompaction(Option.empty());
         assertTrue(compactionInstantTime.isPresent());
 
@@ -2712,7 +2712,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieJavaWriteClient client;
     if (config.isEmbeddedTimelineServerEnabled()) {
       testClient.close();
-      client = new HoodieJavaWriteClient(testClient.getEngineContext(), testClient.getConfig());
+      client = new HoodieJavaWriteClient(testClient.getEngineContext(), testClient.getConfig(), true);
     } else {
       client = testClient;
     }

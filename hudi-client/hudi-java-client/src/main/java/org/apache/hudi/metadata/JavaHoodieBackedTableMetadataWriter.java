@@ -135,7 +135,7 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
 
   @Override
   protected BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> initializeWriteClient() {
-    return new HoodieJavaWriteClient(engineContext, metadataWriteConfig);
+    return new HoodieJavaWriteClient(engineContext, metadataWriteConfig, false);
   }
 
   @Override

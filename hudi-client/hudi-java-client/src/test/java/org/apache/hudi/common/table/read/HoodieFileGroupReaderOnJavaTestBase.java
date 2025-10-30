@@ -100,7 +100,7 @@ public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieF
       throw new RuntimeException(e);
     }
 
-    try (HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(context, writeConfig)) {
+    try (HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(context, writeConfig, true)) {
       String instantTime = writeClient.startCommit();
       // Make a copy of the records for writing. The writer will clear out the data field.
       List<HoodieRecord> recordsCopy = new ArrayList<>(recordList.size());

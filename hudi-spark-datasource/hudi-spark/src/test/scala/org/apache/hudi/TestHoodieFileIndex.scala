@@ -216,7 +216,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       .withProps(props.asJava)
       .build()
     val context = new HoodieJavaEngineContext(HoodieTestUtils.getDefaultStorageConf)
-    val writeClient = new HoodieJavaWriteClient(context, writeConfig)
+    val writeClient = new HoodieJavaWriteClient(context, writeConfig, true)
     val instantTime = writeClient.startCommit()
 
     val records: java.util.List[HoodieRecord[Nothing]] =

@@ -75,7 +75,7 @@ public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
         .withSchema(SCHEMA.toString())
         .withProps(Collections.singletonMap(HoodieWriteConfig.TBL_NAME.key(), "hoodie_test_table"))
         .build();
-    return new HoodieJavaWriteClient<>(context, config);
+    return new HoodieJavaWriteClient<>(context, config, true);
   }
 
   private void prepareTable(HoodieJavaWriteClient<IndexedRecord> writeClient) {

@@ -54,6 +54,6 @@ public class JavaUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
 
   @Override
   public BaseHoodieWriteClient getWriteClient(HoodieWriteConfig config, HoodieEngineContext context) {
-    return new HoodieJavaWriteClient(context, config);
+    return new HoodieJavaWriteClient(context, config, false);
   }
 }

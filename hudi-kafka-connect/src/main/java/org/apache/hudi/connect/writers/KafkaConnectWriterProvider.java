@@ -98,7 +98,7 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
 
       context = new HoodieJavaEngineContext(storageConf);
 
-      hudiJavaClient = new HoodieJavaWriteClient<>(context, writeConfig);
+      hudiJavaClient = new HoodieJavaWriteClient<>(context, writeConfig, true);
     } catch (Throwable e) {
       throw new HoodieException("Fatal error instantiating Hudi Write Provider ", e);
     }

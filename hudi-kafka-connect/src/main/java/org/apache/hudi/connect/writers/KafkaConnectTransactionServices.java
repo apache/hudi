@@ -106,7 +106,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
           .fromProperties(connectConfigs.getProps())
           .initTable(storageConf.newInstance(), tableBasePath));
 
-      javaClient = new HoodieJavaWriteClient<>(context, writeConfig);
+      javaClient = new HoodieJavaWriteClient<>(context, writeConfig, true);
     } catch (Exception exception) {
       throw new HoodieException("Fatal error instantiating Hudi Transaction Services ", exception);
     }
