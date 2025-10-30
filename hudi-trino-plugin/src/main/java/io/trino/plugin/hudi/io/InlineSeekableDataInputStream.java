@@ -17,6 +17,26 @@ import io.trino.filesystem.TrinoInputStream;
 
 import java.io.IOException;
 
+/**
+ * A seekable data input stream that reads inline content from an outer file at a specific offset and length.
+ * <p>
+ * This class is used when reading inline files stored within larger files (e.g., log blocks embedded in Hudi log files).
+ * It provides a view of a segment of the underlying stream as if it were an independent file.
+ * <p>
+ * Example InlineFS URL:
+ * <pre>
+ * inlinefs://tests_7af7f087-c807-4f5e-a759-65fd9c21063b/hudi_multi_fg_pt_v8_mor/.hoodie/metadata/column_stats/
+ * .col-stats-0001-0_20250429145946675.log.1_1-120-382/local/?start_offset=8036&length=6959
+ * </pre>
+ * <p>
+ * Key behaviors:
+ * <ul>
+ *   <li>Upon initialization, the underlying stream is immediately seeked to the start offset to ensure correct positioning</li>
+ *   <li>{@link #getPos()} returns positions relative to the start offset (0-based from the inline content start)</li>
+ *   <li>{@link #seek(long)} accepts positions relative to the start offset and translates them to absolute positions</li>
+ *   <li>Attempting to seek beyond the length throws an {@link IOException}</li>
+ * </ul>
+ */
 public class InlineSeekableDataInputStream
         extends TrinoSeekableDataInputStream
 {
