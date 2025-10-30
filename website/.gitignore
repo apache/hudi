@@ -1,7 +1,0 @@
-# Consolidated at repo root
-#
-# Ignore rules for the website/ project are now maintained in the
-# repository root .gitignore under the section:
-#   "Website (Docusaurus)"
-#
-# This file is intentionally left minimal to avoid duplication.
