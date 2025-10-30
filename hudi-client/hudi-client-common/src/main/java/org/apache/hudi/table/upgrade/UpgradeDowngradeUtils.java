@@ -20,6 +20,7 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.transaction.lock.NoopLockProvider;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -82,6 +83,8 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMI
 public class UpgradeDowngradeUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(UpgradeDowngradeUtils.class);
+  static final String FALSE = "false";
+  static final String TRUE = "true";
 
   // Map of actions that were renamed in table version 8
   static final Map<String, String> SIX_TO_EIGHT_TIMELINE_ACTION_MAP = CollectionUtils.createImmutableMap(
@@ -200,6 +203,12 @@ public class UpgradeDowngradeUtils {
         rollbackWriteConfig.setValue(HoodieCompactionConfig.INLINE_COMPACT.key(), "false");
       }
 
+      // Set properties based on existing and inflight metadata partitions.
+      Set<String> existingMetadataPartitions = table.getMetaClient().getTableConfig().getMetadataPartitions();
+      existingMetadataPartitions.addAll(table.getMetaClient().getTableConfig().getMetadataPartitionsInflight());
+      setPropertiesBasedOnMetadataPartitions(rollbackWriteConfig, existingMetadataPartitions);
+
+      // Do the rollback and compact.
       try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(rollbackWriteConfig, context)) {
         writeClient.rollbackFailedWrites(table.getMetaClient());
         if (shouldCompact) {
@@ -212,6 +221,40 @@ public class UpgradeDowngradeUtils {
       }
     } catch (Exception e) {
       throw new HoodieException(e);
+    }
+  }
+
+  static void setPropertiesBasedOnMetadataPartitions(HoodieWriteConfig rollbackWriteConfig,
+                                                     Set<String> existingMetadataPartitions) {
+    if (existingMetadataPartitions.isEmpty()) {
+      rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE.key(), FALSE);
+      return;
+    }
+
+    rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE.key(), TRUE);
+    for (String partition : existingMetadataPartitions) {
+      switch (partition) {
+        case HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS:
+          rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), TRUE);
+          break;
+        case HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS:
+          rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key(), TRUE);
+          break;
+        case HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS:
+          rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), TRUE);
+          break;
+        case HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX:
+          rollbackWriteConfig.setValue(HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key(), TRUE);
+          break;
+        case HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX:
+          rollbackWriteConfig.setValue(HoodieMetadataConfig.EXPRESSION_INDEX_ENABLE_PROP.key(), TRUE);
+          break;
+        case HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX:
+          rollbackWriteConfig.setValue(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), TRUE);
+          break;
+        default:
+          throw new IllegalStateException("Unexpected value: " + partition);
+      }
     }
   }
 

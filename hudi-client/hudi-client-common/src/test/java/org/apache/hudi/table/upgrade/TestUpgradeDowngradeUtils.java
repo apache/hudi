@@ -18,19 +18,28 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.HashSet;
+import java.util.Set;
 
+import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.FALSE;
+import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.TRUE;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.convertCompletionTimeToEpoch;
+import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.setPropertiesBasedOnMetadataPartitions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestUpgradeDowngradeUtils {
+class TestUpgradeDowngradeUtils {
 
   @Test
   void testConvertCompletionTimeToEpoch() {
@@ -52,5 +61,108 @@ public class TestUpgradeDowngradeUtils {
     HoodieInstant inValidInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, "dummy_action", "20231112153045678", invalidCompletionTime, InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
 
     assertEquals(-1, convertCompletionTimeToEpoch(inValidInstant), "Epoch time for invalid input should be -1.");
+  }
+
+  @Test
+  void testSetPropertiesBasedOnMetadataPartitionsWithEmptySet() {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
+    Set<String> emptyPartitions = new HashSet<>();
+
+    setPropertiesBasedOnMetadataPartitions(config, emptyPartitions);
+    assertEquals(FALSE, config.getString(HoodieMetadataConfig.ENABLE.key()));
+  }
+
+  @Test
+  void testSetPropertiesBasedOnMetadataPartitionsWithColumnStats() {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
+    Set<String> partitions = new HashSet<>();
+    partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
+
+    setPropertiesBasedOnMetadataPartitions(config, partitions);
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key()));
+  }
+
+  @Test
+  void testSetPropertiesBasedOnMetadataPartitionsWithBloomFilters() {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
+    Set<String> partitions = new HashSet<>();
+    partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS);
+
+    setPropertiesBasedOnMetadataPartitions(config, partitions);
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key()));
+  }
+
+  @Test
+  void testSetPropertiesBasedOnMetadataPartitionsWithPartitionStats() {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
+    Set<String> partitions = new HashSet<>();
+    partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS);
+
+    setPropertiesBasedOnMetadataPartitions(config, partitions);
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key()));
+  }
+
+  @Test
+  void testSetPropertiesBasedOnMetadataPartitionsWithSecondaryIndex() {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
+    Set<String> partitions = new HashSet<>();
+    partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX);
+
+    setPropertiesBasedOnMetadataPartitions(config, partitions);
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key()));
+  }
+
+  @Test
+  void testSetPropertiesBasedOnMetadataPartitionsWithExpressionIndex() {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
+    Set<String> partitions = new HashSet<>();
+    partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX);
+
+    setPropertiesBasedOnMetadataPartitions(config, partitions);
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.EXPRESSION_INDEX_ENABLE_PROP.key()));
+  }
+
+  @Test
+  void testSetPropertiesBasedOnMetadataPartitionsWithRecordIndex() {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
+    Set<String> partitions = new HashSet<>();
+    partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX);
+
+    setPropertiesBasedOnMetadataPartitions(config, partitions);
+
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key()));
+  }
+
+  @Test
+  void testSetPropertiesBasedOnMetadataPartitionsWithMultiplePartitions() {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
+    Set<String> partitions = new HashSet<>();
+
+    partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
+    partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS);
+    partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX);
+
+    setPropertiesBasedOnMetadataPartitions(config, partitions);
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key()));
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key()));
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key()));
+  }
+
+  @Test
+  void testSetPropertiesBasedOnMetadataPartitionsWithUnexpectedPartition() {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
+    Set<String> partitions = new HashSet<>();
+
+    partitions.add("unexpected_partition");
+    IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+      setPropertiesBasedOnMetadataPartitions(config, partitions);
+    }, "Should throw IllegalStateException for unexpected partition");
   }
 }
