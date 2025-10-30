@@ -192,9 +192,10 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
    * Initializes table meta on filesystem when applying CREATE TABLE clause.
    */
   def initHoodieTable(): Unit = {
+    logInfo(s"Init hoodie.properties for ${table.identifier.unquotedString}")
+    // This runs validation against table to make sure there is no conflict of the table already exists
+    val (finalSchema, tableConfigs) = parseSchemaAndConfigs()
     if (!hoodieTableExists) {
-      logInfo(s"Init hoodie.properties for ${table.identifier.unquotedString}")
-      val (finalSchema, tableConfigs) = parseSchemaAndConfigs()
       // The TableSchemaResolver#getTableAvroSchemaInternal has a premise that
       // the table create schema does not include the metadata fields.
       // When flag includeMetadataFields is false, no metadata fields should be included in the resolved schema.

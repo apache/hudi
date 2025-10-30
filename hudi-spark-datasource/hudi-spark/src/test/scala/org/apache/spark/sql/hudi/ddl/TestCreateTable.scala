@@ -38,7 +38,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, getLastCommitMetadata}
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNull, assertTrue}
 
 import scala.collection.JavaConverters._
 
@@ -985,10 +985,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         // Check the missing properties for spark sql
         val metaClient = createMetaClient(spark, tablePath)
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
-        assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("dt")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
         assertResult("ts")(properties(HoodieTableConfig.ORDERING_FIELDS.key))
-        assertResult("hudi_database")(metaClient.getTableConfig.getDatabaseName)
+        assertNull(metaClient.getTableConfig.getDatabaseName)
         assertResult(s"original_$tableName")(metaClient.getTableConfig.getTableName)
 
         // Test insert into
@@ -1142,7 +1141,6 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         // Check the missing properties for spark sql
         val metaClient = createMetaClient(spark, tablePath)
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
-        assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
         assertResult("ts")(properties(HoodieTableConfig.ORDERING_FIELDS.key))
 
@@ -1234,7 +1232,6 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       // Check the missing properties for spark sql
       val metaClient = createMetaClient(spark, tablePath)
       val properties = metaClient.getTableConfig.getProps.asScala.toMap
-      assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
       assertResult("id,name")(properties(HoodieTableConfig.RECORDKEY_FIELDS.key))
       assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
       assertResult("ts")(properties(HoodieTableConfig.ORDERING_FIELDS.key))
@@ -1305,7 +1302,6 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       // Check the missing properties for spark sql
       val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
       val properties = metaClient.getTableConfig.getProps.asScala.toMap
-      assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
       assertResult("ts")(properties(HoodieTableConfig.ORDERING_FIELDS.key))
 
       // Test insert into
