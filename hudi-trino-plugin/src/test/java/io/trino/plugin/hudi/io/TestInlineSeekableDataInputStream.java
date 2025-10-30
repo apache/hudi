@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class InlineSeekableDataInputStreamTest
+class TestInlineSeekableDataInputStream
 {
     public static final String CONST_STR_FOR_BYTES = "0123456789ABCDEFGHIJ";
 
