@@ -37,7 +37,6 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.TRUE;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.convertCompletionTimeToEpoch;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.setPropertiesBasedOnMetadataPartitions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class TestUpgradeDowngradeUtils {
 
@@ -113,7 +112,6 @@ class TestUpgradeDowngradeUtils {
 
     setPropertiesBasedOnMetadataPartitions(config, partitions);
     assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
-    assertEquals(TRUE, config.getString(HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key()));
   }
 
   @Test
@@ -124,7 +122,6 @@ class TestUpgradeDowngradeUtils {
 
     setPropertiesBasedOnMetadataPartitions(config, partitions);
     assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
-    assertEquals(TRUE, config.getString(HoodieMetadataConfig.EXPRESSION_INDEX_ENABLE_PROP.key()));
   }
 
   @Test
@@ -153,16 +150,5 @@ class TestUpgradeDowngradeUtils {
     assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key()));
     assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key()));
     assertEquals(TRUE, config.getString(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key()));
-  }
-
-  @Test
-  void testSetPropertiesBasedOnMetadataPartitionsWithUnexpectedPartition() {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
-    Set<String> partitions = new HashSet<>();
-
-    partitions.add("unexpected_partition");
-    IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
-      setPropertiesBasedOnMetadataPartitions(config, partitions);
-    }, "Should throw IllegalStateException for unexpected partition");
   }
 }

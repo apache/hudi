@@ -243,17 +243,11 @@ public class UpgradeDowngradeUtils {
         case HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS:
           rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), TRUE);
           break;
-        case HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX:
-          rollbackWriteConfig.setValue(HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key(), TRUE);
-          break;
-        case HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX:
-          rollbackWriteConfig.setValue(HoodieMetadataConfig.EXPRESSION_INDEX_ENABLE_PROP.key(), TRUE);
-          break;
         case HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX:
           rollbackWriteConfig.setValue(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), TRUE);
           break;
         default:
-          throw new IllegalStateException("Unexpected value: " + partition);
+          // No op.
       }
     }
   }
