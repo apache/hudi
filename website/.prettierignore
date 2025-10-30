@@ -1,0 +1,15 @@
+# Build output
+build/
+.docusaurus/
+node_modules/
+
+# Generated files
+.cache/
+
+# Versioned docs (optional - remove if you want to format these too)
+versioned_docs/
+versioned_sidebars/
+
+# Lock files
+package-lock.json
+yarn.lock

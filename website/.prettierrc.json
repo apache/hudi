@@ -1,0 +1,18 @@
+{
+  "proseWrap": "preserve",
+  "printWidth": 120,
+  "tabWidth": 2,
+  "useTabs": false,
+  "singleQuote": false,
+  "trailingComma": "es5",
+  "bracketSpacing": true,
+  "overrides": [
+    {
+      "files": ["*.md", "*.mdx"],
+      "options": {
+        "proseWrap": "preserve",
+        "printWidth": 120
+      }
+    }
+  ]
+}
