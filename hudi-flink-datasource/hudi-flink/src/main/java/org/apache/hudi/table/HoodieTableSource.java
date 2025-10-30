@@ -23,8 +23,9 @@ import org.apache.hudi.adapter.InputFormatSourceFunctionAdapter;
 import org.apache.hudi.adapter.TableFunctionProviderAdapter;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.BaseFile;
-import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -111,7 +112,6 @@ import java.io.Serializable;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -397,30 +397,32 @@ public class HoodieTableSource implements
       throw new HoodieException("No files found for reading in user provided path.");
     }
 
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
-        // file-slice after pending compaction-requested instant-time is also considered valid
-        metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(),
-        pathInfoList);
-    if (!fsView.getLastInstant().isPresent()) {
-      return Collections.emptyList();
+    String latestCommit;
+    List<FileSlice> allFileSlices;
+    // file-slice after pending compaction-requested instant-time is also considered valid
+    try (HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(
+        metaClient, metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), pathInfoList)) {
+      if (!fsView.getLastInstant().isPresent()) {
+        return Collections.emptyList();
+      }
+      latestCommit = fsView.getLastInstant().get().requestedTime();
+      allFileSlices = relPartitionPaths.stream()
+          .flatMap(par -> fsView.getLatestMergedFileSlicesBeforeOrOn(par, latestCommit)).collect(Collectors.toList());
     }
-    String latestCommit = fsView.getLastInstant().get().requestedTime();
+    List<FileSlice> fileSlices = fileIndex.filterFileSlices(allFileSlices, pathInfoList);
+
     final String mergeType = this.conf.get(FlinkOptions.MERGE_TYPE);
     final AtomicInteger cnt = new AtomicInteger(0);
     // generates one input split for each file group
-    return relPartitionPaths.stream()
-        .map(relPartitionPath -> fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, latestCommit)
-            .map(fileSlice -> {
-              String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
-              Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
-                  .sorted(HoodieLogFile.getLogFileComparator())
-                  .map(logFile -> logFile.getPath().toString())
-                  .collect(Collectors.toList()));
-              return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths, latestCommit,
-                  metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, mergeType, null, fileSlice.getFileId());
-            }).collect(Collectors.toList()))
-        .flatMap(Collection::stream)
-        .collect(Collectors.toList());
+    return fileSlices.stream().map(fileSlice -> {
+      String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
+      Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
+          .sorted(HoodieLogFile.getLogFileComparator())
+          .map(logFile -> logFile.getPath().toString())
+          .collect(Collectors.toList()));
+      return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths, latestCommit,
+          metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, mergeType, null, fileSlice.getFileId());
+    }).collect(Collectors.toList());
   }
 
   public InputFormat<RowData, ?> getInputFormat() {
@@ -574,15 +576,12 @@ public class HoodieTableSource implements
   }
 
   private InputFormat<RowData, ?> baseFileOnlyInputFormat() {
-    final List<StoragePathInfo> pathInfoList = getReadFiles();
-    if (pathInfoList.isEmpty()) {
+    final List<FileSlice> fileSlices = getBaseFileOnlyFileSlices();
+    if (fileSlices.isEmpty()) {
       return InputFormats.EMPTY_INPUT_FORMAT;
     }
 
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
-        metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants(), pathInfoList);
-    Path[] paths = fsView.getLatestBaseFiles()
-        .map(HoodieBaseFile::getPathInfo)
+    Path[] paths = fileSlices.stream().map(fileSlice -> fileSlice.getBaseFile().get().getPathInfo())
         .map(e -> new Path(e.getPath().toUri())).toArray(Path[]::new);
 
     if (paths.length == 0) {
@@ -679,12 +678,21 @@ public class HoodieTableSource implements
    * Get the reader paths with partition path expanded.
    */
   @VisibleForTesting
-  public List<StoragePathInfo> getReadFiles() {
+  public List<FileSlice> getBaseFileOnlyFileSlices() {
     List<String> relPartitionPaths = getReadPartitions();
     if (relPartitionPaths.isEmpty()) {
       return Collections.emptyList();
     }
-    return fileIndex.getFilesInPartitions();
+    List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
+    try (HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
+        metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants(), pathInfoList)) {
+
+      List<FileSlice> allFileSlices = relPartitionPaths.stream()
+          .flatMap(par -> fsView.getLatestBaseFiles(par)
+              .map(baseFile -> new FileSlice(new HoodieFileGroupId(par, baseFile.getFileId()), baseFile.getCommitTime(), baseFile, Collections.emptyList())))
+          .collect(Collectors.toList());
+      return fileIndex.filterFileSlices(allFileSlices, pathInfoList);
+    }
   }
 
   @VisibleForTesting

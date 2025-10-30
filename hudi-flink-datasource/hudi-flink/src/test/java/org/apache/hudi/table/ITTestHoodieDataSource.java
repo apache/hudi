@@ -1927,6 +1927,54 @@ public class ITTestHoodieDataSource {
         + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
   }
 
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testDataSkippingByFilteringFileSlice(HoodieTableType tableType) {
+    // Case: column for different files inside one file slice can be different,
+    // so if any file in the file slice satisfy the predicate based on column stats,
+    // then the file slice should be read.
+    // E.g., query predicate is age <> '25', base file contains: {key=k1, orderingVal=1, age=23},
+    // log file contains: {key=k1, orderingVal=2, age=25}, then the file slice should be read.
+    TableEnvironment tableEnv = batchTableEnv;
+    String path = tempFile.getAbsolutePath();
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, path)
+        .option(FlinkOptions.METADATA_ENABLED, true)
+        .option("hoodie.metadata.index.column.stats.enable", true)
+        .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.COMPACTION_DELTA_COMMITS, 1)
+        .option(FlinkOptions.COMPACTION_TASKS, 1)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(tableEnv, TestSQL.INSERT_T1);
+
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where age <> 25 and `partition` = 'par1'").execute().collect());
+    assertRowsEquals(result1, "["
+        + "+I[id1, Danny, 23, 1970-01-01T00:00:01, par1], "
+        + "+I[id2, Stephen, 33, 1970-01-01T00:00:02, par1]]");
+
+    batchTableEnv.executeSql("drop table t1");
+
+    hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, path)
+        .option(FlinkOptions.METADATA_ENABLED, true)
+        .option("hoodie.metadata.index.column.stats.enable", true)
+        .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    final String INSERT_T2 = "insert into t1 values\n"
+        + "('id1','Danny',25,TIMESTAMP '1970-01-01 00:01:01','par1')\n";
+    execInsertSql(tableEnv, INSERT_T2);
+    result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where age <> 25 and `partition` = 'par1'").execute().collect());
+    assertRowsEquals(result1, "[+I[id2, Stephen, 33, 1970-01-01T00:00:02, par1]]");
+  }
+
   @Test
   void testParquetLogBlockDataSkipping() {
     TableEnvironment tableEnv = batchTableEnv;
