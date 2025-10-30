@@ -826,7 +826,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
       Map<String, String> hudiOpts = new HashMap<>();
       hudiOpts.put("hoodie.datasource.write.recordkey.field", "id");
-      logicalAssertions(tableSchema, tableBasePath, hudiOpts, HoodieTableVersion.SIX.versionCode());
+      logicalAssertions(tableSchema, tableBasePath, hudiOpts, HoodieTableVersion.EIGHT.versionCode());
 
       // Update data.
       prepareJsonKafkaDFSFilesWithSchema(
@@ -840,7 +840,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       tableSchemaResolver = new TableSchemaResolver(
           HoodieTestUtils.createMetaClient(storage, tableBasePath));
       tableSchema = tableSchemaResolver.getTableAvroSchema(false);
-      logicalAssertions(tableSchema, tableBasePath, hudiOpts, HoodieTableVersion.SIX.versionCode());
+      logicalAssertions(tableSchema, tableBasePath, hudiOpts, HoodieTableVersion.EIGHT.versionCode());
     } finally {
       defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
     }
