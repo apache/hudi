@@ -11,3 +11,23 @@ _site
 *.iml
 .DS_Store
 node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Website (Docusaurus)
+website/build/
+website/.docusaurus
+website/.cache-loader
+website/.node_modules/
+website/package-lock.json
+website/yarn.lock
+website/.env.local
+website/.env.development.local
+website/.env.test.local
+website/.env.production.local
+website/.idea/
+website/.vscode
+website/.changelog
