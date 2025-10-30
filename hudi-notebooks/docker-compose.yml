@@ -32,8 +32,6 @@ services:
       - "18080:18080" # Spark History Server UI
     volumes:
       - ./data/spark-events:/opt/spark/spark-events
-      - ./conf/spark/log4j2.properties:/opt/spark/conf/log4j2.properties:ro
-      - ./conf/spark/log4j.properties:/opt/spark/conf/log4j.properties:ro
     environment:
       - AWS_ACCESS_KEY_ID=admin
       - AWS_SECRET_ACCESS_KEY=password
