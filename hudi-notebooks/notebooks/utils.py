@@ -19,12 +19,13 @@ from IPython.display import display as display_html, HTML
 import boto3
 from urllib.parse import urlparse
 
-def get_spark_session(app_name="Hudi-Notebooks"):
+def get_spark_session(app_name="Hudi-Notebooks", log_level="WARN"):
     """
     Initialize a SparkSession
     
     Parameters:
     - app_name (str): Optional name for the Spark application.
+    - log_level (str): Log level for Spark (DEBUG, INFO, WARN, ERROR). Defaults to WARN.
     
     Returns:
     - SparkSession object
@@ -33,11 +34,11 @@ def get_spark_session(app_name="Hudi-Notebooks"):
     spark_session = SparkSession.builder \
         .appName(app_name) \
 	    .config("spark.hadoop.fs.defaultFS", "s3a://warehouse") \
+        .config("spark.log.level", log_level) \
         .enableHiveSupport() \
         .getOrCreate()
         
-    spark_session.sparkContext.setLogLevel("ERROR")
-    print(f"SparkSession started with app name: {app_name}")
+    print(f"SparkSession started with app name: {app_name}, log level: {log_level}")
     
     return spark_session
 

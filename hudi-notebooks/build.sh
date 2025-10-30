@@ -36,7 +36,9 @@ docker build \
 
 echo "Building Hive Docker image using Hive version: $HIVE_VERSION"
 
-docker build \
+export TARGET_PLATFORM=linux/amd64
+docker buildx build \
+    --platform $TARGET_PLATFORM \
     --build-arg HIVE_VERSION="$HIVE_VERSION" \
     -t apachehudi/hive:latest \
     -t apachehudi/hive:"$HIVE_VERSION_TAG" \

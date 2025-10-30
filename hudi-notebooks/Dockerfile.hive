@@ -15,8 +15,9 @@
 # limitations under the License.
 
 ARG HIVE_VERSION=${HIVE_VERSION:-3.1.3}
+ARG TARGET_PLATFORM=${TARGET_PLATFORM:-linux/amd64}
 
-FROM apache/hive:$HIVE_VERSION
+FROM --platform=$TARGET_PLATFORM apache/hive:$HIVE_VERSION
 
 USER root
 
