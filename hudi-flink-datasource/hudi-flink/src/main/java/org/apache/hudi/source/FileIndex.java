@@ -168,7 +168,7 @@ public class FileIndex implements Serializable {
   /**
    * Filter file slices by pruning based on bucket id and column stats.
    */
-  public List<FileSlice> filterFileSlices(List<FileSlice> fileSlices, List<StoragePathInfo> allFiles) {
+  public List<FileSlice> filterFileSlices(List<FileSlice> fileSlices) {
     List<FileSlice> filteredFileSlices;
     // bucket pruning
     if (this.partitionBucketIdFunc != null) {
@@ -185,8 +185,8 @@ public class FileIndex implements Serializable {
     }
 
     // data skipping based on column stats
-    Set<String> candidateFiles = fileStatsIndex.computeCandidateFiles(
-        colStatsProbe, allFiles.stream().map(f -> f.getPath().getName()).collect(Collectors.toList()));
+    List<String> allFiles = fileSlices.stream().map(FileSlice::getAllFiles).flatMap(List::stream).collect(Collectors.toList());
+    Set<String> candidateFiles = fileStatsIndex.computeCandidateFiles(colStatsProbe, allFiles);
     if (candidateFiles == null) {
       // no need to filter by col stats or error occurs.
       return filteredFileSlices;

@@ -230,7 +230,7 @@ public class TestFileIndex {
         return Collections.emptyList();
       }
     }
-    return fileIndex.filterFileSlices(allFileSlices, pathInfoList);
+    return fileIndex.filterFileSlices(allFileSlices);
   }
 
   private void writeBigintDataset(Configuration conf) throws Exception {

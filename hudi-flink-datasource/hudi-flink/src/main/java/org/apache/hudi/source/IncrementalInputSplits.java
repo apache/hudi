@@ -185,7 +185,7 @@ public class IncrementalInputSplits implements Serializable {
       }
       fileInfoList = fileIndex.getFilesInPartitions();
       List<FileSlice> allFileSlices = getFileSlices(metaClient, commitTimeline, readPartitions, fileInfoList, analyzingResult.getMaxCompletionTime(), false);
-      fileSlices = fileIndex.filterFileSlices(allFileSlices, fileInfoList);
+      fileSlices = fileIndex.filterFileSlices(allFileSlices);
     } else {
       if (cdcEnabled) {
         // case1: cdc change log enabled
@@ -218,7 +218,7 @@ public class IncrementalInputSplits implements Serializable {
         }
         fileInfoList = fileIndex.getFilesInPartitions();
         List<FileSlice> allFileSlices = getFileSlices(metaClient, commitTimeline, readPartitions, fileInfoList, analyzingResult.getMaxCompletionTime(), false);
-        fileSlices = fileIndex.filterFileSlices(allFileSlices, fileInfoList);
+        fileSlices = fileIndex.filterFileSlices(allFileSlices);
       } else {
         fileSlices = getFileSlices(metaClient, commitTimeline, readPartitions, files, analyzingResult.getMaxCompletionTime(), false);
       }
@@ -291,7 +291,7 @@ public class IncrementalInputSplits implements Serializable {
         return Result.EMPTY;
       }
       List<FileSlice> allFileSlices = getFileSlices(metaClient, commitTimeline, readPartitions, pathInfoList, offsetToIssue, false);
-      List<FileSlice> fileSlices = fileIndex.filterFileSlices(allFileSlices, pathInfoList);
+      List<FileSlice> fileSlices = fileIndex.filterFileSlices(allFileSlices);
 
       List<MergeOnReadInputSplit> inputSplits = getInputSplits(fileSlices, metaClient, endInstant, null);
 

@@ -409,7 +409,7 @@ public class HoodieTableSource implements
       allFileSlices = relPartitionPaths.stream()
           .flatMap(par -> fsView.getLatestMergedFileSlicesBeforeOrOn(par, latestCommit)).collect(Collectors.toList());
     }
-    List<FileSlice> fileSlices = fileIndex.filterFileSlices(allFileSlices, pathInfoList);
+    List<FileSlice> fileSlices = fileIndex.filterFileSlices(allFileSlices);
 
     final String mergeType = this.conf.get(FlinkOptions.MERGE_TYPE);
     final AtomicInteger cnt = new AtomicInteger(0);
@@ -691,7 +691,7 @@ public class HoodieTableSource implements
           .flatMap(par -> fsView.getLatestBaseFiles(par)
               .map(baseFile -> new FileSlice(new HoodieFileGroupId(par, baseFile.getFileId()), baseFile.getCommitTime(), baseFile, Collections.emptyList())))
           .collect(Collectors.toList());
-      return fileIndex.filterFileSlices(allFileSlices, pathInfoList);
+      return fileIndex.filterFileSlices(allFileSlices);
     }
   }
 

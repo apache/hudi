@@ -146,7 +146,7 @@ public class FileSlice implements Serializable {
    */
   public List<String> getAllFiles() {
     List<String> fileList = getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList());
-    getBaseFile().ifPresent(hoodieBaseFile -> fileList.add(hoodieBaseFile.getFileName()));
+    getBaseFile().ifPresent(hoodieBaseFile -> fileList.add(0, hoodieBaseFile.getFileName()));
     return fileList;
   }
 
