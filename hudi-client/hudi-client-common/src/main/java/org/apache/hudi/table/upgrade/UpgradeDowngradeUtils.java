@@ -73,6 +73,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -208,7 +209,7 @@ public class UpgradeDowngradeUtils {
       // Set properties based on existing and inflight metadata partitions.
       Set<String> existingMetadataPartitions = table.getMetaClient().getTableConfig().getMetadataPartitions();
       existingMetadataPartitions.addAll(table.getMetaClient().getTableConfig().getMetadataPartitionsInflight());
-      setPropertiesBasedOnMetadataPartitions(rollbackWriteConfig, existingMetadataPartitions);
+      setPropertiesBasedOnMetadataPartitions(rollbackWriteConfig, existingMetadataPartitions, table);
 
       // Do the rollback and compact.
       try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(rollbackWriteConfig, context)) {
@@ -233,60 +234,40 @@ public class UpgradeDowngradeUtils {
       rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE.key(), FALSE);
       return;
     }
-
     Option<HoodieIndexMetadata> indexMetadataOpt = table.getMetaClient().getIndexMetadata();
+    Map<String, HoodieIndexDefinition> indexDefinitions = indexMetadataOpt.isEmpty()
+        ? Collections.emptyMap()
+        : indexMetadataOpt.get().getIndexDefinitions();
     rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE.key(), TRUE);
-    if (indexMetadataOpt.isEmpty()) {
-      // Only use the metadata partitions.
-      for (String partition : existingMetadataPartitions) {
-        switch (partition) {
-          case HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS:
-            rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), TRUE);
-            break;
-          case HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS:
-            rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key(), TRUE);
-            break;
-          case HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS:
-            rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), TRUE);
-            break;
-          case HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX:
-            rollbackWriteConfig.setValue(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), TRUE);
-            break;
-          default:
-            // No op.
-        }
-      }
-    } else {
-      // Use index definitions.
-      HoodieIndexMetadata indexMetadata = indexMetadataOpt.get();
-      for (HoodieIndexDefinition indexDefinition : indexMetadata.getIndexDefinitions().values()) {
-         String type = indexDefinition.getIndexType();
-        List<String> sourceFields = indexDefinition.getSourceFields();
-        switch (type) {
-          case HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS:
-          case HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS:
-            rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), TRUE);
+    // Only use the metadata partitions.
+    for (String partition : existingMetadataPartitions) {
+      switch (partition) {
+        case HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS:
+        case HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS:
+          rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), TRUE);
+          if (indexDefinitions.containsKey(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)) {
+            List<String> sourceFields = indexDefinitions.get(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS).getSourceFields();
             if (!sourceFields.isEmpty()) {
               rollbackWriteConfig.setValue(HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key(), String.join(",", sourceFields));
             }
-            break;
-          case HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS:
-            rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key(), TRUE);
-            if (!sourceFields.isEmpty()) {
-              rollbackWriteConfig.setValue(HoodieMetadataConfig.BLOOM_FILTER_INDEX_FOR_COLUMNS.key(), String.join(",", sourceFields));
-            }
-            break;
-          case HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX:
-            Map<String, String> options = indexDefinition.getIndexOptions();
-            if (options.getOrDefault("isPartitioned", FALSE).equals(FALSE)) {
-              rollbackWriteConfig.setValue(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), TRUE);
-            } else {
+          }
+          break;
+        case HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS:
+          rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key(), TRUE);
+          break;
+        case HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX:
+          rollbackWriteConfig.setValue(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), TRUE);
+          if (indexDefinitions.containsKey(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)) {
+            Map<String, String> options = indexDefinitions.get(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX).getIndexOptions();
+            if (options.getOrDefault("isPartitioned", FALSE).equals(TRUE)) {
               rollbackWriteConfig.setValue(HoodieMetadataConfig.PARTITIONED_RECORD_INDEX_ENABLE_PROP.key(), TRUE);
+            } else {
+              rollbackWriteConfig.setValue(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), TRUE);
             }
-            break;
-          default:
-            // No op.
-        }
+          }
+          break;
+        default:
+          // No op.
       }
     }
   }

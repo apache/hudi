@@ -19,17 +19,28 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.FALSE;
@@ -37,8 +48,19 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.TRUE;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.convertCompletionTimeToEpoch;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.setPropertiesBasedOnMetadataPartitions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 class TestUpgradeDowngradeUtils {
+
+  private HoodieTable createMockTable(Option<HoodieIndexMetadata> indexMetadataOpt) {
+    HoodieTable table = mock(HoodieTable.class);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(table.getMetaClient()).thenReturn(metaClient);
+    when(metaClient.getIndexMetadata()).thenReturn(indexMetadataOpt);
+    return table;
+  }
 
   @Test
   void testConvertCompletionTimeToEpoch() {
@@ -67,19 +89,8 @@ class TestUpgradeDowngradeUtils {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
     Set<String> emptyPartitions = new HashSet<>();
 
-    setPropertiesBasedOnMetadataPartitions(config, emptyPartitions);
+    setPropertiesBasedOnMetadataPartitions(config, emptyPartitions, null);
     assertEquals(FALSE, config.getString(HoodieMetadataConfig.ENABLE.key()));
-  }
-
-  @Test
-  void testSetPropertiesBasedOnMetadataPartitionsWithColumnStats() {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
-    Set<String> partitions = new HashSet<>();
-    partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
-
-    setPropertiesBasedOnMetadataPartitions(config, partitions);
-    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
-    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key()));
   }
 
   @Test
@@ -87,53 +98,22 @@ class TestUpgradeDowngradeUtils {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
     Set<String> partitions = new HashSet<>();
     partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS);
+    HoodieTable table = createMockTable(Option.empty());
 
-    setPropertiesBasedOnMetadataPartitions(config, partitions);
+    setPropertiesBasedOnMetadataPartitions(config, partitions, table);
     assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
     assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key()));
   }
 
   @Test
-  void testSetPropertiesBasedOnMetadataPartitionsWithPartitionStats() {
+  void testSetPropertiesBasedOnMetadataPartitionsWithAnyOtherIndexes() {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
     Set<String> partitions = new HashSet<>();
-    partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS);
+    partitions.add("any_other_index");
+    HoodieTable table = createMockTable(Option.empty());
 
-    setPropertiesBasedOnMetadataPartitions(config, partitions);
+    setPropertiesBasedOnMetadataPartitions(config, partitions, table);
     assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
-    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key()));
-  }
-
-  @Test
-  void testSetPropertiesBasedOnMetadataPartitionsWithSecondaryIndex() {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
-    Set<String> partitions = new HashSet<>();
-    partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX);
-
-    setPropertiesBasedOnMetadataPartitions(config, partitions);
-    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
-  }
-
-  @Test
-  void testSetPropertiesBasedOnMetadataPartitionsWithExpressionIndex() {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
-    Set<String> partitions = new HashSet<>();
-    partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX);
-
-    setPropertiesBasedOnMetadataPartitions(config, partitions);
-    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
-  }
-
-  @Test
-  void testSetPropertiesBasedOnMetadataPartitionsWithRecordIndex() {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
-    Set<String> partitions = new HashSet<>();
-    partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX);
-
-    setPropertiesBasedOnMetadataPartitions(config, partitions);
-
-    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
-    assertEquals(TRUE, config.getString(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key()));
   }
 
   @Test
@@ -144,11 +124,81 @@ class TestUpgradeDowngradeUtils {
     partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
     partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS);
     partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX);
+    HoodieTable table = createMockTable(Option.empty());
 
-    setPropertiesBasedOnMetadataPartitions(config, partitions);
+    setPropertiesBasedOnMetadataPartitions(config, partitions, table);
     assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
     assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key()));
     assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key()));
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key()));
+  }
+
+  @Test
+  void testSetPropertiesBasedOnMetadataPartitionsWithColumnStatsAndSourceFields() {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
+    Set<String> partitions = new HashSet<>();
+    partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
+
+    Map<String, HoodieIndexDefinition> indexDefinitions = new HashMap<>();
+    List<String> sourceFields = Arrays.asList("field1", "field2", "field3");
+    HoodieIndexDefinition columnStatsDef = HoodieIndexDefinition.newBuilder()
+        .withIndexName(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
+        .withIndexType(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
+        .withSourceFields(sourceFields)
+        .build();
+    indexDefinitions.put(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, columnStatsDef);
+    HoodieIndexMetadata indexMetadata = new HoodieIndexMetadata(indexDefinitions);
+    HoodieTable table = createMockTable(Option.of(indexMetadata));
+
+    setPropertiesBasedOnMetadataPartitions(config, partitions, table);
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key()));
+    assertEquals("field1,field2,field3", config.getString(HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key()));
+  }
+
+  @Test
+  void testSetPropertiesBasedOnMetadataPartitionsWithRecordIndexPartitioned() {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
+    Set<String> partitions = new HashSet<>();
+    partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX);
+
+    Map<String, HoodieIndexDefinition> indexDefinitions = new HashMap<>();
+    Map<String, String> indexOptions = new HashMap<>();
+    indexOptions.put("isPartitioned", TRUE);
+    HoodieIndexDefinition recordIndexDef = HoodieIndexDefinition.newBuilder()
+        .withIndexName(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)
+        .withIndexType(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)
+        .withIndexOptions(indexOptions)
+        .build();
+    indexDefinitions.put(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, recordIndexDef);
+    HoodieIndexMetadata indexMetadata = new HoodieIndexMetadata(indexDefinitions);
+    HoodieTable table = createMockTable(Option.of(indexMetadata));
+
+    setPropertiesBasedOnMetadataPartitions(config, partitions, table);
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.PARTITIONED_RECORD_INDEX_ENABLE_PROP.key()));
+  }
+
+  @Test
+  void testSetPropertiesBasedOnMetadataPartitionsWithRecordIndexNonPartitioned() {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp/test").build();
+    Set<String> partitions = new HashSet<>();
+    partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX);
+
+    Map<String, HoodieIndexDefinition> indexDefinitions = new HashMap<>();
+    Map<String, String> indexOptions = new HashMap<>();
+    indexOptions.put("isPartitioned", FALSE);
+    HoodieIndexDefinition recordIndexDef = HoodieIndexDefinition.newBuilder()
+        .withIndexName(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)
+        .withIndexType(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)
+        .withIndexOptions(indexOptions)
+        .build();
+    indexDefinitions.put(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, recordIndexDef);
+    HoodieIndexMetadata indexMetadata = new HoodieIndexMetadata(indexDefinitions);
+    HoodieTable table = createMockTable(Option.of(indexMetadata));
+
+    setPropertiesBasedOnMetadataPartitions(config, partitions, table);
+    assertEquals(TRUE, config.getString(HoodieMetadataConfig.ENABLE.key()));
     assertEquals(TRUE, config.getString(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key()));
   }
 }
