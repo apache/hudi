@@ -22,10 +22,10 @@ import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeSet;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -144,9 +144,10 @@ public class FileSlice implements Serializable {
   /**
    * Return file names list of base file and log files.
    */
-  public List<String> getAllFiles() {
-    List<String> fileList = getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList());
-    getBaseFile().ifPresent(hoodieBaseFile -> fileList.add(0, hoodieBaseFile.getFileName()));
+  public List<String> getAllFileNames() {
+    List<String> fileList = new ArrayList<>();
+    getBaseFile().ifPresent(hoodieBaseFile -> fileList.add(hoodieBaseFile.getFileName()));
+    getLogFiles().forEach(hoodieLogFile -> fileList.add(hoodieLogFile.getFileName()));
     return fileList;
   }
 

@@ -71,7 +71,7 @@ public class TestFileSlice {
         Collections.emptyList()
     );
 
-    List<String> allFiles = fileSlice.getAllFiles();
+    List<String> allFiles = fileSlice.getAllFileNames();
     assertEquals(1, allFiles.size());
     assertTrue(allFiles.contains(baseFile.getFileName()));
   }
@@ -90,7 +90,7 @@ public class TestFileSlice {
         Arrays.asList(logFile1, logFile2)
     );
 
-    List<String> allFiles = fileSlice.getAllFiles();
+    List<String> allFiles = fileSlice.getAllFileNames();
     assertEquals(2, allFiles.size());
     assertTrue(allFiles.contains(logFile1.getFileName()));
     assertTrue(allFiles.contains(logFile2.getFileName()));
@@ -112,7 +112,7 @@ public class TestFileSlice {
         Arrays.asList(logFile1, logFile2)
     );
 
-    List<String> allFiles = fileSlice.getAllFiles();
+    List<String> allFiles = fileSlice.getAllFileNames();
     assertEquals(3, allFiles.size());
     assertTrue(allFiles.contains(baseFile.getFileName()));
     assertTrue(allFiles.contains(logFile1.getFileName()));
@@ -124,7 +124,7 @@ public class TestFileSlice {
     // Test with an empty file slice (no files and no base file)
     FileSlice fileSlice = new FileSlice(PARTITION_PATH, BASE_INSTANT, FILE_ID);
 
-    List<String> allFiles = fileSlice.getAllFiles();
+    List<String> allFiles = fileSlice.getAllFileNames();
     assertEquals(0, allFiles.size());
   }
 }

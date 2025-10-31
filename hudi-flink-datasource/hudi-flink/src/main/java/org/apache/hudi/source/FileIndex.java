@@ -185,7 +185,7 @@ public class FileIndex implements Serializable {
     }
 
     // data skipping based on column stats
-    List<String> allFiles = fileSlices.stream().map(FileSlice::getAllFiles).flatMap(List::stream).collect(Collectors.toList());
+    List<String> allFiles = fileSlices.stream().map(FileSlice::getAllFileNames).flatMap(List::stream).collect(Collectors.toList());
     Set<String> candidateFiles = fileStatsIndex.computeCandidateFiles(colStatsProbe, allFiles);
     if (candidateFiles == null) {
       // no need to filter by col stats or error occurs.
@@ -194,7 +194,7 @@ public class FileIndex implements Serializable {
     List<FileSlice> result = filteredFileSlices.stream().filter(fileSlice -> {
       // if any file in the file slice is part of candidate file names, we need to include the file slice.
       // in other words, if all files in the file slice are not present in candidate file names, we can filter out the file slice.
-      return fileSlice.getAllFiles().stream().anyMatch(candidateFiles::contains);
+      return fileSlice.getAllFileNames().stream().anyMatch(candidateFiles::contains);
     }).collect(Collectors.toList());
     logPruningMsg(filteredFileSlices.size(), result.size(), "column stats pruning");
     return result;
