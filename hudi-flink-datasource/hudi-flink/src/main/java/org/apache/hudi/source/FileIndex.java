@@ -173,12 +173,8 @@ public class FileIndex implements Serializable {
     // bucket pruning
     if (this.partitionBucketIdFunc != null) {
       filteredFileSlices = fileSlices.stream().filter(fileSlice -> {
-        // if any file in the file slice has bucket id in the file name, then the file slice is included.
         String bucketIdStr = BucketIdentifier.bucketIdStr(partitionBucketIdFunc.apply(fileSlice.getPartitionPath()));
-        if (fileSlice.getBaseFile().map(hoodieBaseFile -> hoodieBaseFile.getFileId().contains(bucketIdStr)).orElse(false)) {
-          return true;
-        }
-        return fileSlice.getLogFiles().anyMatch(hoodieLogFile -> hoodieLogFile.getFileId().contains(bucketIdStr));
+        return fileSlice.getFileGroupId().getFileId().contains(bucketIdStr);
       }).collect(Collectors.toList());
       logPruningMsg(fileSlices.size(), filteredFileSlices.size(), "bucket pruning");
     } else {
@@ -198,10 +194,7 @@ public class FileIndex implements Serializable {
     List<FileSlice> result = filteredFileSlices.stream().filter(fileSlice -> {
       // if any file in the file slice is part of candidate file names, we need to include the file slice.
       // in other words, if all files in the file slice are not present in candidate file names, we can filter out the file slice.
-      if (fileSlice.getBaseFile().map(baseFile -> candidateFiles.contains(baseFile.getFileName())).orElse(false)) {
-        return true;
-      }
-      return fileSlice.getLogFiles().anyMatch(hoodieLogFile -> candidateFiles.contains(hoodieLogFile.getFileName()));
+      return fileSlice.getAllFiles().stream().anyMatch(candidateFiles::contains);
     }).collect(Collectors.toList());
     logPruningMsg(filteredFileSlices.size(), result.size(), "column stats pruning");
     return result;

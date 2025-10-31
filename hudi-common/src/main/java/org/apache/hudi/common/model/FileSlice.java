@@ -25,6 +25,7 @@ import java.io.Serializable;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -138,6 +139,15 @@ public class FileSlice implements Serializable {
 
   public Option<HoodieLogFile> getLatestLogFile() {
     return Option.fromJavaOptional(logFiles.stream().findFirst());
+  }
+
+  /**
+   * Return file names list of base file and log files.
+   */
+  public List<String> getAllFiles() {
+    List<String> fileList = getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList());
+    getBaseFile().ifPresent(hoodieBaseFile -> fileList.add(hoodieBaseFile.getFileName()));
+    return fileList;
   }
 
   public long getTotalFileSize() {
