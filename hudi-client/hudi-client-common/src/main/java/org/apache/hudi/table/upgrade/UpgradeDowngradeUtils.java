@@ -28,6 +28,8 @@ import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
@@ -225,29 +227,66 @@ public class UpgradeDowngradeUtils {
   }
 
   static void setPropertiesBasedOnMetadataPartitions(HoodieWriteConfig rollbackWriteConfig,
-                                                     Set<String> existingMetadataPartitions) {
+                                                     Set<String> existingMetadataPartitions,
+                                                     HoodieTable table) {
     if (existingMetadataPartitions.isEmpty()) {
       rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE.key(), FALSE);
       return;
     }
 
+    Option<HoodieIndexMetadata> indexMetadataOpt = table.getMetaClient().getIndexMetadata();
     rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE.key(), TRUE);
-    for (String partition : existingMetadataPartitions) {
-      switch (partition) {
-        case HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS:
-          rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), TRUE);
-          break;
-        case HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS:
-          rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key(), TRUE);
-          break;
-        case HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS:
-          rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), TRUE);
-          break;
-        case HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX:
-          rollbackWriteConfig.setValue(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), TRUE);
-          break;
-        default:
-          // No op.
+    if (indexMetadataOpt.isEmpty()) {
+      // Only use the metadata partitions.
+      for (String partition : existingMetadataPartitions) {
+        switch (partition) {
+          case HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS:
+            rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), TRUE);
+            break;
+          case HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS:
+            rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key(), TRUE);
+            break;
+          case HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS:
+            rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), TRUE);
+            break;
+          case HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX:
+            rollbackWriteConfig.setValue(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), TRUE);
+            break;
+          default:
+            // No op.
+        }
+      }
+    } else {
+      // Use index definitions.
+      HoodieIndexMetadata indexMetadata = indexMetadataOpt.get();
+      for (HoodieIndexDefinition indexDefinition : indexMetadata.getIndexDefinitions().values()) {
+         String type = indexDefinition.getIndexType();
+        List<String> sourceFields = indexDefinition.getSourceFields();
+        switch (type) {
+          case HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS:
+          case HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS:
+            rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), TRUE);
+            if (!sourceFields.isEmpty()) {
+              rollbackWriteConfig.setValue(HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key(), String.join(",", sourceFields));
+            }
+            break;
+          case HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS:
+            rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key(), TRUE);
+            if (!sourceFields.isEmpty()) {
+              rollbackWriteConfig.setValue(HoodieMetadataConfig.BLOOM_FILTER_INDEX_FOR_COLUMNS.key(), String.join(",", sourceFields));
+            }
+            break;
+          case HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX:
+            Map<String, String> options = indexDefinition.getIndexOptions();
+            if (options.getOrDefault("isPartitioned", FALSE).equals(FALSE)) {
+              rollbackWriteConfig.setValue(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), TRUE);
+            } else {
+              rollbackWriteConfig.setValue(HoodieMetadataConfig.PARTITIONED_RECORD_INDEX_ENABLE_PROP.key(), TRUE);
+            }
+            break;
+          default:
+            // No op.
+        }
       }
     }
   }
@@ -255,9 +294,9 @@ public class UpgradeDowngradeUtils {
   // If the metadata table is enabled for the data table, and
   // existing metadata table is behind the data table, then delete it.
   static void checkAndHandleMetadataTable(HoodieEngineContext context,
-                                                 HoodieTable table,
-                                                 HoodieWriteConfig config,
-                                                 HoodieTableMetaClient metaClient, boolean checkforMetadataLagging) {
+                                          HoodieTable table,
+                                          HoodieWriteConfig config,
+                                          HoodieTableMetaClient metaClient, boolean checkforMetadataLagging) {
     if (!table.isMetadataTable()
         && config.isMetadataTableEnabled()
         && (!checkforMetadataLagging || isMetadataTableBehindDataTable(config, metaClient))) {
@@ -266,7 +305,7 @@ public class UpgradeDowngradeUtils {
   }
 
   static boolean isMetadataTableBehindDataTable(HoodieWriteConfig config,
-                                                       HoodieTableMetaClient metaClient) {
+                                                HoodieTableMetaClient metaClient) {
     // if metadata table does not exist, then it is not behind
     if (!metaClient.getTableConfig().isMetadataTableAvailable()) {
       return false;
