@@ -685,7 +685,7 @@ public class HoodieTableSource implements
     }
     List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
     try (HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
-        metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants(), pathInfoList)) {
+        metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), pathInfoList)) {
 
       List<FileSlice> allFileSlices = relPartitionPaths.stream()
           .flatMap(par -> fsView.getLatestBaseFiles(par)
