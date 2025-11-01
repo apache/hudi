@@ -21,6 +21,7 @@ package org.apache.hudi.source;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -148,7 +149,7 @@ public class FileIndex implements Serializable {
   }
 
   /**
-   * Returns all the file statuses under the table base path.
+   * Return all files in the filtered partitions.
    */
   public List<StoragePathInfo> getFilesInPartitions() {
     if (!tableExists) {
@@ -161,41 +162,42 @@ public class FileIndex implements Serializable {
     }
     Map<String, List<StoragePathInfo>> filesInPartitions = FSUtils.getFilesInPartitions(
         new HoodieFlinkEngineContext(hadoopConf), metaClient, metadataConfig, partitions);
-    int totalFilesNum = filesInPartitions.values().stream().mapToInt(List::size).sum();
-    if (totalFilesNum < 1) {
-      // returns early for empty table.
+    return filesInPartitions.values().stream().flatMap(Collection::stream).collect(Collectors.toList());
+  }
+
+  /**
+   * Filter file slices by pruning based on bucket id and column stats.
+   */
+  public List<FileSlice> filterFileSlices(List<FileSlice> fileSlices) {
+    List<FileSlice> filteredFileSlices;
+    // bucket pruning
+    if (this.partitionBucketIdFunc != null) {
+      filteredFileSlices = fileSlices.stream().filter(fileSlice -> {
+        String bucketIdStr = BucketIdentifier.bucketIdStr(partitionBucketIdFunc.apply(fileSlice.getPartitionPath()));
+        return fileSlice.getFileGroupId().getFileId().contains(bucketIdStr);
+      }).collect(Collectors.toList());
+      logPruningMsg(fileSlices.size(), filteredFileSlices.size(), "bucket pruning");
+    } else {
+      filteredFileSlices = fileSlices;
+    }
+    if (filteredFileSlices.isEmpty()) {
       return Collections.emptyList();
     }
 
-    List<StoragePathInfo> allFiles;
-    // bucket pruning
-    if (this.partitionBucketIdFunc != null) {
-      allFiles = filesInPartitions.entrySet().stream().flatMap(entry -> {
-        String bucketIdStr = BucketIdentifier.bucketIdStr(partitionBucketIdFunc.apply(entry.getKey()));
-        return entry.getValue().stream().filter(fileInfo -> fileInfo.getPath().getName().contains(bucketIdStr));
-      }).collect(Collectors.toList());
-      logPruningMsg(totalFilesNum, allFiles.size(), "bucket pruning");
-    } else {
-      allFiles = filesInPartitions.values().stream().flatMap(Collection::stream).collect(Collectors.toList());
-    }
-
-    if (allFiles.isEmpty()) {
-      // returns early for empty table.
-      return allFiles;
-    }
-
-    // data skipping
-    Set<String> candidateFiles = fileStatsIndex.computeCandidateFiles(
-        colStatsProbe, allFiles.stream().map(f -> f.getPath().getName()).collect(Collectors.toList()));
+    // data skipping based on column stats
+    List<String> allFiles = fileSlices.stream().map(FileSlice::getAllFileNames).flatMap(List::stream).collect(Collectors.toList());
+    Set<String> candidateFiles = fileStatsIndex.computeCandidateFiles(colStatsProbe, allFiles);
     if (candidateFiles == null) {
       // no need to filter by col stats or error occurs.
-      return allFiles;
+      return filteredFileSlices;
     }
-    List<StoragePathInfo> results = allFiles.stream().parallel()
-        .filter(fileStatus -> candidateFiles.contains(fileStatus.getPath().getName()))
-        .collect(Collectors.toList());
-    logPruningMsg(allFiles.size(), results.size(), "data skipping");
-    return results;
+    List<FileSlice> result = filteredFileSlices.stream().filter(fileSlice -> {
+      // if any file in the file slice is part of candidate file names, we need to include the file slice.
+      // in other words, if all files in the file slice are not present in candidate file names, we can filter out the file slice.
+      return fileSlice.getAllFileNames().stream().anyMatch(candidateFiles::contains);
+    }).collect(Collectors.toList());
+    logPruningMsg(filteredFileSlices.size(), result.size(), "column stats pruning");
+    return result;
   }
 
   /**
@@ -261,15 +263,15 @@ public class FileIndex implements Serializable {
     return false;
   }
 
-  private void logPruningMsg(int numTotalFiles, int numLeftFiles, String action) {
+  private void logPruningMsg(int numTotalFileSlices, int numLeftFileSlices, String action) {
     LOG.info("\n"
         + "------------------------------------------------------------\n"
         + "---------- action:        {}\n"
-        + "---------- total files:   {}\n"
-        + "---------- left files:    {}\n"
+        + "---------- total file slices:   {}\n"
+        + "---------- left file slices:    {}\n"
         + "---------- skipping rate: {}\n"
         + "------------------------------------------------------------",
-        action, numTotalFiles, numLeftFiles, percentage(numTotalFiles, numLeftFiles));
+        action, numTotalFileSlices, numLeftFileSlices, percentage(numTotalFileSlices, numLeftFileSlices));
   }
 
   private static double percentage(double total, double left) {

@@ -49,6 +49,7 @@ import org.apache.flink.table.catalog.CatalogView;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.ResolvedCatalogTable;
 import org.apache.flink.table.catalog.ResolvedSchema;
+import org.apache.flink.table.catalog.UniqueConstraint;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.flink.table.catalog.exceptions.DatabaseAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.DatabaseNotEmptyException;
@@ -603,10 +604,20 @@ public class HoodieCatalog extends AbstractCatalog {
 
   private void refreshTableProperties(ObjectPath tablePath, CatalogBaseTable newCatalogTable) {
     Map<String, String> options = newCatalogTable.getOptions();
+    ResolvedCatalogTable resolvedTable =  (ResolvedCatalogTable) newCatalogTable;
     final String avroSchema = AvroSchemaConverter.convertToSchema(
-        ((ResolvedCatalogTable) newCatalogTable).getResolvedSchema().toPhysicalRowDataType().getLogicalType(),
+        resolvedTable.getResolvedSchema().toPhysicalRowDataType().getLogicalType(),
         AvroSchemaUtils.getAvroRecordQualifiedName(tablePath.getObjectName())).toString();
     options.put(FlinkOptions.SOURCE_AVRO_SCHEMA.key(), avroSchema);
+    java.util.Optional<UniqueConstraint> pkConstraintOpt = resolvedTable.getResolvedSchema().getPrimaryKey();
+    if (pkConstraintOpt.isPresent()) {
+      options.put(TableOptionProperties.PK_COLUMNS, String.join(",", pkConstraintOpt.get().getColumns()));
+      options.put(TableOptionProperties.PK_CONSTRAINT_NAME, pkConstraintOpt.get().getName());
+    }
+    if (resolvedTable.isPartitioned()) {
+      final String partitions = String.join(",", resolvedTable.getPartitionKeys());
+      options.put(TableOptionProperties.PARTITION_COLUMNS, partitions);
+    }
     String tablePathStr = inferTablePath(catalogPathStr, tablePath);
     try {
       TableOptionProperties.overwriteProperties(tablePathStr, hadoopConf, options);

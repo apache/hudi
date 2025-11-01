@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeSet;
@@ -138,6 +139,16 @@ public class FileSlice implements Serializable {
 
   public Option<HoodieLogFile> getLatestLogFile() {
     return Option.fromJavaOptional(logFiles.stream().findFirst());
+  }
+
+  /**
+   * Return file names list of base file and log files.
+   */
+  public List<String> getAllFileNames() {
+    List<String> fileList = new ArrayList<>();
+    getBaseFile().ifPresent(hoodieBaseFile -> fileList.add(hoodieBaseFile.getFileName()));
+    getLogFiles().forEach(hoodieLogFile -> fileList.add(hoodieLogFile.getFileName()));
+    return fileList;
   }
 
   public long getTotalFileSize() {
