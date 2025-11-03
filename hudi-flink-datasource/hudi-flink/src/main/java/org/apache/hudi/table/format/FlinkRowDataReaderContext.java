@@ -73,8 +73,8 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   private final List<ExpressionPredicates.Predicate> allPredicates;
   private final Lazy<List<ExpressionPredicates.Predicate>> lazyBootstrapSafeFilters;
   private final Lazy<List<ExpressionPredicates.Predicate>> lazyMorSafeFilters;
+  private final Lazy<List<String>> lazyRecordKeys;
   private final Supplier<InternalSchemaManager> internalSchemaManager;
-  private final List<String> recordKeys;
 
   public FlinkRowDataReaderContext(
       StorageConfiguration<?> storageConfiguration,
@@ -87,7 +87,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     this.allPredicates = allPredicates;
     this.lazyBootstrapSafeFilters = Lazy.lazily(() -> allPredicates.stream().filter(this::filterIsSafeForBootstrap).collect(Collectors.toList()));
     this.lazyMorSafeFilters = Lazy.lazily(() -> allPredicates.stream().filter(this::filterIsSafeForMorMerging).collect(Collectors.toList()));
-    this.recordKeys = tableConfig.getRecordKeyFields().map(keys -> Arrays.stream(keys).collect(Collectors.toList())).orElse(Collections.emptyList());
+    this.lazyRecordKeys = Lazy.lazily(() -> tableConfig.getRecordKeyFields().map(keys -> Arrays.stream(keys).collect(Collectors.toList())).orElse(Collections.emptyList()));
   }
 
   @Override
@@ -233,6 +233,6 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
    * or retained, to make the later mering process correct.
    */
   private boolean filterIsSafeForMorMerging(ExpressionPredicates.Predicate predicate) {
-    return predicate.references().stream().allMatch(c -> recordKeys.contains(c.toLowerCase()) || c.equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+    return predicate.references().stream().allMatch(c -> lazyRecordKeys.get().contains(c.toLowerCase()) || c.equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD));
   }
 }
