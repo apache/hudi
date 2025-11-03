@@ -53,18 +53,20 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
         df.write.parquet(sourcePath + StoragePath.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i))
       }
 
-      spark.sql("set hoodie.bootstrap.parallelism = 20")
-      spark.sql("set hoodie.metadata.index.column.stats.enable = false")
-      checkAnswer(
-        s"""call run_bootstrap(
-           |table => '$tableName',
-           |base_path => '$tablePath',
-           |table_type => '${HoodieTableType.COPY_ON_WRITE.name}',
-           |bootstrap_path => '$sourcePath',
-           |rowKey_field => '$RECORD_KEY_FIELD',
-           |partition_path_field => '$PARTITION_FIELD',
-           |bootstrap_overwrite => true)""".stripMargin) {
-        Seq(0)
+      withSQLConf(
+        "hoodie.bootstrap.parallelism" -> "20",
+        "hoodie.metadata.index.column.stats.enable" -> "false") {
+        checkAnswer(
+          s"""call run_bootstrap(
+             |table => '$tableName',
+             |base_path => '$tablePath',
+             |table_type => '${HoodieTableType.COPY_ON_WRITE.name}',
+             |bootstrap_path => '$sourcePath',
+             |rowKey_field => '$RECORD_KEY_FIELD',
+             |partition_path_field => '$PARTITION_FIELD',
+             |bootstrap_overwrite => true)""".stripMargin) {
+          Seq(0)
+        }
       }
 
       // create table
@@ -91,11 +93,10 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       // cluster with row writer disabled and assert that records match with that before clustering
       // NOTE: the row writer path is already tested in TestDataSourceForBootstrap
       val beforeClusterDf = spark.sql(s"select * from $tableName")
-      spark.sql("set hoodie.datasource.write.row.writer.enable = false")
-      spark.sql(s"""call run_clustering(table => '$tableName')""".stripMargin)
-      assertResult(0)(spark.sql(s"select * from $tableName").except(beforeClusterDf).count())
-
-      spark.sessionState.conf.unsetConf("unset hoodie.metadata.index.column.stats.enable") // HUDI-8774
+      withSQLConf("hoodie.datasource.write.row.writer.enable" -> "false") {
+        spark.sql(s"""call run_clustering(table => '$tableName')""".stripMargin)
+        assertResult(0)(spark.sql(s"select * from $tableName").except(beforeClusterDf).count())
+      }
     }
   }
 
@@ -121,19 +122,21 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
         df.write.parquet(sourcePath + StoragePath.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i))
       }
 
-      spark.sql("set hoodie.bootstrap.parallelism = 20")
-      spark.sql("set hoodie.metadata.index.column.stats.enable = false")
-      checkAnswer(
-        s"""call run_bootstrap(
-           |table => '$tableName',
-           |base_path => '$tablePath',
-           |table_type => '${HoodieTableType.COPY_ON_WRITE.name}',
-           |bootstrap_path => '$sourcePath',
-           |rowKey_field => '$RECORD_KEY_FIELD',
-           |partition_path_field => '$PARTITION_FIELD',
-           |options => 'hoodie.datasource.write.hive_style_partitioning=true',
-           |bootstrap_overwrite => true)""".stripMargin) {
-        Seq(0)
+      withSQLConf(
+        "hoodie.bootstrap.parallelism" -> "20",
+        "hoodie.metadata.index.column.stats.enable" -> "false") {
+        checkAnswer(
+          s"""call run_bootstrap(
+             |table => '$tableName',
+             |base_path => '$tablePath',
+             |table_type => '${HoodieTableType.COPY_ON_WRITE.name}',
+             |bootstrap_path => '$sourcePath',
+             |rowKey_field => '$RECORD_KEY_FIELD',
+             |partition_path_field => '$PARTITION_FIELD',
+             |options => 'hoodie.datasource.write.hive_style_partitioning=true',
+             |bootstrap_overwrite => true)""".stripMargin) {
+          Seq(0)
+        }
       }
 
       // create table
@@ -162,7 +165,6 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       assertResult("true") {
         metaClient.getTableConfig.getString(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE)
       };
-      spark.sessionState.conf.unsetConf("unset hoodie.metadata.index.column.stats.enable")
     }
   }
 
@@ -184,19 +186,21 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       val df: Dataset[Row] = TestBootstrap.generateTestRawTripDataset(timestamp, 0, NUM_OF_RECORDS, null, jsc, spark.sqlContext)
       df.write.parquet(sourcePath)
 
-      spark.sql("set hoodie.bootstrap.parallelism = 20")
-      spark.sql("set hoodie.metadata.index.column.stats.enable = false")
-      // run bootstrap
-      checkAnswer(
-        s"""call run_bootstrap(
-           |table => '$tableName',
-           |base_path => '$tablePath',
-           |table_type => '${HoodieTableType.COPY_ON_WRITE.name}',
-           |bootstrap_path => '$sourcePath',
-           |rowKey_field => '$RECORD_KEY_FIELD',
-           |key_generator_class => 'NON_PARTITION',
-           |bootstrap_overwrite => true)""".stripMargin) {
-        Seq(0)
+      withSQLConf(
+        "hoodie.bootstrap.parallelism" -> "20",
+        "hoodie.metadata.index.column.stats.enable" -> "false") {
+        // run bootstrap
+        checkAnswer(
+          s"""call run_bootstrap(
+             |table => '$tableName',
+             |base_path => '$tablePath',
+             |table_type => '${HoodieTableType.COPY_ON_WRITE.name}',
+             |bootstrap_path => '$sourcePath',
+             |rowKey_field => '$RECORD_KEY_FIELD',
+             |key_generator_class => 'NON_PARTITION',
+             |bootstrap_overwrite => true)""".stripMargin) {
+          Seq(0)
+        }
       }
 
       // create table
@@ -216,10 +220,10 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       // cluster with row writer disabled and assert that records match with that before clustering
       // NOTE: the row writer path is already tested in TestDataSourceForBootstrap
       val beforeClusterDf = spark.sql(s"select * from $tableName")
-      spark.sql("set hoodie.datasource.write.row.writer.enable = false")
-      spark.sql(s"""call run_clustering(table => '$tableName')""".stripMargin)
+      withSQLConf("hoodie.datasource.write.row.writer.enable" -> "false") {
+        spark.sql(s"""call run_clustering(table => '$tableName')""".stripMargin)
+      }
       assertResult(0)(spark.sql(s"select * from $tableName").except(beforeClusterDf).count())
-      spark.sessionState.conf.unsetConf("unset hoodie.metadata.index.column.stats.enable")
     }
   }
 
@@ -245,23 +249,23 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
         df.write.parquet(sourcePath + StoragePath.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i))
       }
 
-      spark.sql("set hoodie.bootstrap.parallelism = 20")
-      spark.sql("set hoodie.table.ordering.fields=timestamp")
-      spark.sql("set hoodie.metadata.index.column.stats.enable = false")
-
-      checkAnswer(
-        s"""call run_bootstrap(
-           |table => '$tableName',
-           |base_path => '$tablePath',
-           |table_type => '${HoodieTableType.MERGE_ON_READ.name}',
-           |bootstrap_path => '$sourcePath',
-           |rowKey_field => '$RECORD_KEY_FIELD',
-           |selector_class => 'org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector',
-           |partition_path_field => '$PARTITION_FIELD',
-           |bootstrap_overwrite => true)""".stripMargin) {
-        Seq(0)
+      withSQLConf(
+        "hoodie.bootstrap.parallelism" -> "20",
+        "hoodie.table.ordering.fields" -> "timestamp",
+        "hoodie.metadata.index.column.stats.enable" -> "false") {
+        checkAnswer(
+          s"""call run_bootstrap(
+             |table => '$tableName',
+             |base_path => '$tablePath',
+             |table_type => '${HoodieTableType.MERGE_ON_READ.name}',
+             |bootstrap_path => '$sourcePath',
+             |rowKey_field => '$RECORD_KEY_FIELD',
+             |selector_class => 'org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector',
+             |partition_path_field => '$PARTITION_FIELD',
+             |bootstrap_overwrite => true)""".stripMargin) {
+          Seq(0)
+        }
       }
-      spark.sessionState.conf.unsetConf("unset hoodie.metadata.index.column.stats.enable")
     }
   }
 }
