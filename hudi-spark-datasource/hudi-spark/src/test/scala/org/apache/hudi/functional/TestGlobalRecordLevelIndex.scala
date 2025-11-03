@@ -154,6 +154,7 @@ class TestGlobalRecordLevelIndex extends RecordLevelIndexTestBase {
     "RECORD_INDEX",
     "GLOBAL_RECORD_LEVEL_INDEX")
   )
+  // tests b/w compatibility of configs for global RLI
   def testRLIUpsertIndexTypes(indexType: String): Unit = {
     testRLIUpsert(HoodieTableType.COPY_ON_WRITE, indexType)
   }
@@ -163,6 +164,7 @@ class TestGlobalRecordLevelIndex extends RecordLevelIndexTestBase {
     "hoodie.metadata.record.index.enable",
     "hoodie.metadata.global.record.level.index.enable")
   )
+  // tests b/w compatibility of configs for global RLI
   def testRLIUpsertRecordKIndexWriteConfigVariants(recordIndexWriteConfigToEnable: String): Unit = {
     testRLIUpsert(HoodieTableType.COPY_ON_WRITE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name(), recordIndexWriteConfigToEnable)
   }
