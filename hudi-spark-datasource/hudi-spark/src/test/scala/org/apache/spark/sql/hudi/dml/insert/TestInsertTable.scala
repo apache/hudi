@@ -810,13 +810,13 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              | insert overwrite table $tableName partition(dt) values
              | (0, 'a0', 10, 1000, '2023-12-06'),
              | (1, 'a1', 10, 1000, '2023-12-06'),
-             | (2, 'a2', 10, 1000, '2023-12-06'),
+             | (2, 'a2', 11, 1000, '2023-12-06'),
              | (3, 'a3', 10, 1000, '2023-12-06')
           """.stripMargin)
         checkAnswer(s"select id, name, price, ts, dt from $tableName")(
           Seq(0, "a0", 10.0, 1000, "2023-12-06"),
           Seq(1, "a1", 10.0, 1000, "2023-12-06"),
-          Seq(2, "a2", 10.0, 1000, "2023-12-06"),
+          Seq(2, "a2", 11.0, 1000, "2023-12-06"),
           Seq(3, "a3", 10.0, 1000, "2023-12-06")
         )
       }
@@ -832,7 +832,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id, name, price, ts, dt from $tableName")(
         Seq(0, "a0", 10.0, 1000, "2023-12-06"),
         Seq(1, "a1", 11.0, 2000, "2023-12-06"),
-        Seq(2, "a2", 10.0, 1000, "2023-12-06"),
+        Seq(2, "a2", 11.0, 1000, "2023-12-06"),
         Seq(3, "a3", 10.0, 1000, "2023-12-06"),
         Seq(4, "a4", 10.0, 1000, "2023-12-06")
       )
@@ -842,10 +842,18 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           Seq(11.0, 2000, "2023-12-06")
         )
         // Filter(id = 1) and Filter(name = 'a3') can be push down, Filter(price <> 10) can't be push down since it's not primary key
-        val df = spark.sql(s"select price, ts, dt from $tableName where (id = 1 or name = 'a3') and price <> 10")
+        var df = spark.sql(s"select price, ts, dt from $tableName where (id = 1 or name = 'a3') and price <> 10")
         // only execute file scan physical plan
-        // expected in file scan only (id: 1), (id: 3) and (id: 4) matched, (id: 3) and (id: 4)  matched but will be filtered later
+        // expected in file scan only (id: 1), (id: 3) and (id: 4, from log file) matched, (id: 3) and (id: 4, from log file)  matched but will be filtered later
         assertResult(3)(df.queryExecution.sparkPlan.children(0).children(0).executeCollect().length)
+
+        checkAnswer(s"select price, ts, dt from $tableName where (id > 1 or name = 'a3') and price <> 10")(
+          Seq(11.0, 1000, "2023-12-06")
+        )
+        // Filter(id > 1) and Filter(name = 'a3') can be push down, Filter(price <> 10) can't be push down since it's not primary key
+        df = spark.sql(s"select price, ts, dt from $tableName where (id > 1 or name = 'a3') and price <> 10")
+        // expected in file scan only (id: 1, from log file) (id: 2), (id: 3) and (id: 4, from log file) matched, (id: 1, from log file) (id: 3) and (id: 4)  matched but will be filtered later
+        assertResult(4)(df.queryExecution.sparkPlan.children(0).children(0).executeCollect().length)
       }
 
       withSQLConf(s"${SQLConf.PARQUET_RECORD_FILTER_ENABLED.key}" -> "false") {
@@ -853,9 +861,15 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         checkAnswer(s"select price, ts, dt from $tableName where (id = 1 or name = 'a3') and price <> 10")(
           Seq(11.0, 2000, "2023-12-06")
         )
-        val df = spark.sql(s"select price, ts, dt from $tableName where (id = 1 or name = 'a3') and price <> 10")
+        var df = spark.sql(s"select price, ts, dt from $tableName where (id = 1 or name = 'a3') and price <> 10")
         // only execute file scan physical plan
         // expected all ids in the table are scanned, and filtered later
+        assertResult(5)(df.queryExecution.sparkPlan.children(0).children(0).executeCollect().length)
+
+        checkAnswer(s"select price, ts, dt from $tableName where (id > 1 or name = 'a3') and price <> 10")(
+          Seq(11.0, 1000, "2023-12-06")
+        )
+        df = spark.sql(s"select price, ts, dt from $tableName where (id > 1 or name = 'a3') and price <> 10")
         assertResult(5)(df.queryExecution.sparkPlan.children(0).children(0).executeCollect().length)
       }
 
