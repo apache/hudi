@@ -196,8 +196,8 @@ public abstract class HoodieIndex<I, O> implements Serializable {
         + "HUDI Metadata Table. Record index is a global index, enforcing key uniqueness across all "
         + "partitions in the table. Supports sharding to achieve very high scale. For a table with "
         + "keys that are only unique inside each partition, use `RECORD_LEVEL_INDEX` instead. "
-        + "This enum is deprecated. Use GLOBAL_RECORD_LEVEL_INDEX for global uniqueness of record " +
-        "keys or RECORD_LEVEL_INDEX for partition-level uniqueness of record keys.")
+        + "This enum is deprecated. Use GLOBAL_RECORD_LEVEL_INDEX for global uniqueness of record "
+        + "keys or RECORD_LEVEL_INDEX for partition-level uniqueness of record keys.")
     RECORD_INDEX,
 
     @EnumFieldDescription("Index which saves the record key to location mappings in the "
