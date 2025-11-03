@@ -100,8 +100,10 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       (schemaForRead, allFilters)
     } else if (!getHasLogFiles && hasRowIndexField) {
       (schemaForRead, bootstrapSafeFilters)
-    } else {
+    } else if (!getNeedsBootstrapMerge) {
       (schemaForRead, morFilters)
+    } else {
+      (schemaForRead, requiredFilters)
     }
   }
 
