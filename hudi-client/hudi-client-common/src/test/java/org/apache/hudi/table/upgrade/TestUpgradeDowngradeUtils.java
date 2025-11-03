@@ -31,6 +31,8 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
@@ -179,15 +181,18 @@ class TestUpgradeDowngradeUtils {
     assertEquals(TRUE, properties.getString(HoodieMetadataConfig.PARTITIONED_RECORD_INDEX_ENABLE_PROP.key()));
   }
 
-  @Test
-  void testSetPropertiesBasedOnMetadataPartitionsWithRecordIndexNonPartitioned() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testSetPropertiesBasedOnMetadataPartitionsWithRecordIndexNonPartitioned(boolean explicitlySetPartitionedInIndexDef) {
     TypedProperties properties = new TypedProperties();
     Set<String> partitions = new HashSet<>();
     partitions.add(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX);
 
     Map<String, HoodieIndexDefinition> indexDefinitions = new HashMap<>();
     Map<String, String> indexOptions = new HashMap<>();
-    indexOptions.put("isPartitioned", FALSE);
+    if (explicitlySetPartitionedInIndexDef) {
+      indexOptions.put("isPartitioned", FALSE);
+    }
     HoodieIndexDefinition recordIndexDef = HoodieIndexDefinition.newBuilder()
         .withIndexName(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)
         .withIndexType(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)

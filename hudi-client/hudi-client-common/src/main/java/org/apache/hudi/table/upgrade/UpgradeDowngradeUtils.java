@@ -48,6 +48,7 @@ import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -229,7 +230,8 @@ public class UpgradeDowngradeUtils {
     }
   }
 
-  static void setPropertiesBasedOnMetadataPartitions(TypedProperties properties,
+  @VisibleForTesting
+  public static void setPropertiesBasedOnMetadataPartitions(TypedProperties properties,
                                                      Set<String> metadataPartitions,
                                                      HoodieTable table) {
     if (metadataPartitions.isEmpty()) {
