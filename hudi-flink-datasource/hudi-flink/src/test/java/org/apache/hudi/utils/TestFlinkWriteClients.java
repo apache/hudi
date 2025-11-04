@@ -35,9 +35,14 @@ import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
+import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.DirectWriteMarkers;
+import org.apache.hudi.table.marker.TimelineServerBasedWriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -46,12 +51,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -94,6 +101,28 @@ public class TestFlinkWriteClients {
       // reload the table config been updated by the metadata table
       metaClient.reloadTableConfig();
       assertThat(metaClient.getTableConfig().getMetadataPartitions().toString(), is("[files]"));
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(MarkerType.class)
+  void testMarkerType(MarkerType markerType) throws Exception {
+    // create table
+    StreamerUtil.initTableIfNotExists(conf);
+    // This is expected to be used by the driver, the client can then send requests for files view.
+    FlinkWriteClients.createWriteClient(conf);
+
+    // This is expected to be used by writer client
+    conf.setString(HoodieWriteConfig.MARKERS_TYPE.key(), markerType.toString());
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, true);
+    try (HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(HoodieFlinkEngineContext.DEFAULT, writeConfig)) {
+      HoodieTable table = writeClient.getHoodieTable();
+      String markerClass = WriteMarkersFactory.get(writeConfig.getMarkersType(), table, "001").getClass().getSimpleName();
+      if (markerType == MarkerType.DIRECT) {
+        assertEquals(DirectWriteMarkers.class.getSimpleName(), markerClass);
+      } else {
+        assertEquals(TimelineServerBasedWriteMarkers.class.getSimpleName(), markerClass);
+      }
     }
   }
 
