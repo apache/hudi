@@ -91,6 +91,8 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
+import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
+import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.DummySchemaProvider;
 import org.apache.hudi.utilities.HoodieClusteringJob;
@@ -944,7 +946,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       properties.setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
 
       String mergerClass = getMergerClassForRecordType(recordType);
-      String tableVersionString = getTableVersionCode(tableVersion);
+      int tableVersionCode = getTableVersionCode(tableVersion);
 
       properties.setProperty(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), mergerClass);
       properties.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
@@ -956,12 +958,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       properties.setProperty("hoodie.metadtata.enable", "false");
       properties.setProperty("hoodie.parquet.small.file.limit", "-1");
       properties.setProperty("hoodie.cleaner.commits.retained", "10");
-      properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);
+      properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(tableVersionCode));
 
       Option<TypedProperties> propt = Option.of(properties);
 
       new HoodieStreamer(prepCfgForCowLogicalRepair(tableBasePath, "456"), jsc, propt).sync();
-
 
       inputDataPath = getClass().getClassLoader().getResource("logical-repair/cow_write_updates/3").toURI().toString();
       propt.get().setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
@@ -1033,6 +1034,19 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       HoodieTestUtils.extractZipToDirectory("logical-repair/" + dirName + ".zip", zipOutput, getClass());
       String tableBasePath = zipOutput.toString();
 
+      sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
+      Dataset<Row> df = sparkSession.read()
+          .format("org.apache.hudi")
+          .option("hoodie.metadata.enable", "false")
+          .load(tableBasePath);
+
+      assertDataframe(df, 12, 13);
+
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+          .setConf(storage.getConf())
+          .setBasePath(tableBasePath)
+          .build();
+
       TypedProperties properties = new TypedProperties();
       String schemaPath = getClass().getClassLoader().getResource("logical-repair/schema.avsc").toURI().toString();
       properties.setProperty("hoodie.streamer.schemaprovider.source.schema.file", schemaPath);
@@ -1040,7 +1054,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       String inputDataPath = getClass().getClassLoader().getResource("logical-repair/mor_write_updates/5").toURI().toString();
       properties.setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
       String mergerClass = getMergerClassForRecordType(recordType);
-      String tableVersionString = getTableVersionCode(tableVersion);
+      int tableVersionCode = getTableVersionCode(tableVersion);
 
       properties.setProperty(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), mergerClass);
       properties.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
@@ -1051,8 +1065,22 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       properties.setProperty("hoodie.metadtata.enable", "false");
       properties.setProperty("hoodie.parquet.small.file.limit", "-1");
       properties.setProperty("hoodie.cleaner.commits.retained", "10");
-      properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);
+      properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(tableVersionCode));
       properties.setProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logFormatValue);
+
+      HoodieWriteConfig upgradeWriteConfig = HoodieWriteConfig.newBuilder()
+          .withPath(metaClient.getBasePath())
+          .withProps(properties)
+          .build();
+
+      new UpgradeDowngrade(metaClient, upgradeWriteConfig, context, SparkUpgradeDowngradeHelper.getInstance())
+          .run(HoodieTableVersion.fromVersionCode(tableVersionCode), null);
+
+      df = sparkSession.read()
+          .format("org.apache.hudi")
+          .option("hoodie.metadata.enable", "false")
+          .load(tableBasePath);
+      assertDataframe(df, 12, 14);
 
       boolean disableCompaction;
       if ("COMPACT".equals(operation)) {
@@ -1081,21 +1109,20 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "false");
         }
         sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
-        Dataset<Row> df = sparkSession.read()
+        df = sparkSession.read()
             .format("org.apache.hudi")
             .option("hoodie.metadata.enable", "false")
             .load(tableBasePath);
 
         assertDataframe(df, 12, 14);
 
+        metaClient = HoodieTableMetaClient.builder()
+            .setConf(storage.getConf())
+            .setBasePath(tableBasePath)
+            .build();
+
         if ("CLUSTER".equals(operation)) {
           // after we cluster, the raw parquet should be correct
-
-          // Validate raw parquet files
-          HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-              .setConf(storage.getConf())
-              .setBasePath(tableBasePath)
-              .build();
 
           HoodieTimeline completedCommitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
           Option<HoodieInstant> latestInstant = completedCommitsTimeline.lastInstant();
@@ -1110,12 +1137,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           assertDataframe(rawParquetDf, 12, 14);
         } else if ("COMPACT".equals(operation)) {
           // after compaction some files should be ok
-
-          // Validate raw parquet files
-          HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-              .setConf(storage.getConf())
-              .setBasePath(tableBasePath)
-              .build();
 
           HoodieTimeline completedCommitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
           Option<HoodieInstant> latestInstant = completedCommitsTimeline.lastInstant();
@@ -1213,14 +1234,14 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
   }
 
-  private String getTableVersionCode(String tableVersion) {
+  private int getTableVersionCode(String tableVersion) {
     switch (tableVersion) {
       case "SIX":
-        return String.valueOf(HoodieTableVersion.SIX.versionCode());
+        return HoodieTableVersion.SIX.versionCode();
       case "EIGHT":
-        return String.valueOf(HoodieTableVersion.EIGHT.versionCode());
+        return HoodieTableVersion.EIGHT.versionCode();
       case "CURRENT":
-        return String.valueOf(HoodieTableVersion.current().versionCode());
+        return HoodieTableVersion.current().versionCode();
       default:
         throw new IllegalArgumentException("Invalid table version: " + tableVersion);
     }
