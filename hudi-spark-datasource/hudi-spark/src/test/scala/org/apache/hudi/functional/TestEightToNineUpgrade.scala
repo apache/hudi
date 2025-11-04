@@ -129,7 +129,7 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
     val payloadClass = classOf[MySqlDebeziumAvroPayload].getName
     var opts: Map[String, String] = Map(
       HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> payloadClass,
-      HoodieMetadataConfig.ENABLE.key() -> "false"
+      HoodieMetadataConfig.ENABLE.key() -> "true"
     )
     val columns = Seq("ts", "key", "rider", "driver", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME,
       DebeziumConstants.ADDED_SEQ_COL_NAME, DebeziumConstants.FLATTENED_OP_COL_NAME)
