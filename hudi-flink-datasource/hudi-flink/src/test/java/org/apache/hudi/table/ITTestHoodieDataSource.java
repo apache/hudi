@@ -1976,6 +1976,48 @@ public class ITTestHoodieDataSource {
   }
 
   @Test
+  void testPredicateForBaseFileWithMor() {
+    // Case:
+    // * records in base file can not survive from the predicate
+    // * records in log file can survive from the predicate
+    // * records in base file have higher ordering value
+    // E.g., base file: (uuid:'k1', age: 23, ts: 1003)
+    // log file: (uuid: 'k1', age: 25, ts: 1001)
+    // query filter: age = 25;
+    // Then the expected result should be empty, but if predicate age = 25 is pushed down
+    // into the parquet reader, the result would be wrong as (uuid: 'k1', age: 25, ts: 1001)
+    TableEnvironment tableEnv = batchTableEnv;
+    String path = tempFile.getAbsolutePath();
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, path)
+        .option(FlinkOptions.TABLE_TYPE, MERGE_ON_READ)
+        .option(FlinkOptions.COMPACTION_DELTA_COMMITS, 1)
+        .option(FlinkOptions.COMPACTION_TASKS, 1)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    final String INSERT_T1 = "insert into t1 values\n"
+        + "('id1','Danny',23,TIMESTAMP '1970-01-01 01:00:01','par1')\n";
+    execInsertSql(tableEnv, INSERT_T1);
+
+    batchTableEnv.executeSql("drop table t1");
+
+    hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, path)
+        .option(FlinkOptions.METADATA_ENABLED, true)
+        .option(FlinkOptions.TABLE_TYPE, MERGE_ON_READ)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    final String INSERT_T2 = "insert into t1 values\n"
+        + "('id1','Danny',25,TIMESTAMP '1970-01-01 00:00:01','par1')\n";
+    execInsertSql(tableEnv, INSERT_T2);
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where age = 25 and `partition` = 'par1'").execute().collect());
+    assertRowsEquals(result1, "[]");
+  }
+
+  @Test
   void testParquetLogBlockDataSkipping() {
     TableEnvironment tableEnv = batchTableEnv;
     String hoodieTableDDL = sql("t1")
