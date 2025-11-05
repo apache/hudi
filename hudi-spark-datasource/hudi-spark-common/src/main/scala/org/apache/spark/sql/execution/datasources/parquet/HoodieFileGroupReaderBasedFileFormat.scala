@@ -234,6 +234,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       .builder().setConf(augmentedStorageConf).setBasePath(tablePath).build
 
     (file: PartitionedFile) => {
+      // executor
       val storageConf = new HadoopStorageConfiguration(broadcastedStorageConf.value.value)
       val iter = file.partitionValues match {
         // Snapshot or incremental queries.
@@ -377,6 +378,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     }
   }
 
+  // executor
   private def readBaseFile(file: PartitionedFile, parquetFileReader: SparkColumnarFileReader, requestedSchema: StructType,
                            remainingPartitionSchema: StructType, fixedPartitionIndexes: Set[Int], requiredSchema: StructType,
                            partitionSchema: StructType, outputSchema: StructType, filters: Seq[Filter],
