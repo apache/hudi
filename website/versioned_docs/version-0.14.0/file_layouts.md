@@ -10,7 +10,7 @@ The following describes the general file layout structure for Apache Hudi. Pleas
 * Each file group contains several file slices 
 * Each slice contains a base file (*.parquet/*.orc) (defined by the config - [hoodie.table.base.file.format](https://hudi.apache.org/docs/configurations/#hoodietablebasefileformat) ) produced at a certain commit/compaction instant time, along with set of log files (*.log.*) that contain inserts/updates to the base file since the base file was produced. 
 
-Hudi adopts Multiversion Concurrency Control (MVCC), where [compaction](/docs/compaction) action merges logs and base files to produce new 
+Hudi adopts Multiversion Concurrency Control (MVCC), where [compaction](compaction) action merges logs and base files to produce new 
 file slices and [cleaning](hoodie_cleaner) action gets rid of unused/older file slices to reclaim space on the file system.
 
 ![Partition On HDFS](/assets/images/hudi_partitions_HDFS.png)

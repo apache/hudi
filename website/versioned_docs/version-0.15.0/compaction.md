@@ -182,7 +182,7 @@ This model may need a lock provider **if** metadata table is enabled.
 :::
 
 #### Hudi Compactor Utility
-Hudi provides a standalone tool to execute specific compactions asynchronously. Below is an example and you can read more in the [deployment guide](/docs/cli#compactions)
+Hudi provides a standalone tool to execute specific compactions asynchronously. Below is an example and you can read more in the [deployment guide](cli#compactions)
 The compactor utility allows to do scheduling and execution of compaction.
 
 Example:
@@ -199,7 +199,7 @@ Note, the `instant-time` parameter is now optional for the Hudi Compactor Utilit
 the spark-submit will execute the earliest scheduled compaction on the Hudi timeline.  
 
 #### Hudi CLI
-Hudi CLI is yet another way to execute specific compactions asynchronously. Here is an example and you can read more in the [deployment guide](/docs/cli#compactions)
+Hudi CLI is yet another way to execute specific compactions asynchronously. Here is an example and you can read more in the [deployment guide](cli#compactions)
 
 Example:
 ```properties

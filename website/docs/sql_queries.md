@@ -8,11 +8,11 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-Hudi stores and organizes data on storage while providing different ways of [querying](/docs/concepts#query-types), across a wide range of query engines.
+Hudi stores and organizes data on storage while providing different ways of [querying](concepts#query-types), across a wide range of query engines.
 This page will show how to issue different queries and discuss any specific instructions for each query engine.
 
 ## Spark SQL
-The Spark [quickstart](/docs/quick-start-guide) provides a good overview of how to use Spark SQL to query Hudi tables. This section will go into more advanced configurations and functionalities.
+The Spark [quickstart](quick-start-guide) provides a good overview of how to use Spark SQL to query Hudi tables. This section will go into more advanced configurations and functionalities.
 
 ### Snapshot Query
 Snapshot queries are the most common query type for Hudi tables. Spark SQL supports snapshot queries on both COPY_ON_WRITE and MERGE_ON_READ tables.
@@ -90,7 +90,7 @@ show the files scanned as 1 compared to 3 files scanned without index.
 
 :::note
 Please note in order to create secondary index:
-1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](/docs/next/record_merger#commit_time_ordering).
+1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](record_merger#commit_time_ordering).
 2. Record index must be enabled. This can be done by setting `hoodie.metadata.record.index.enable=true` and then creating `record_index`. Please note the example below.
 :::
 
@@ -323,7 +323,7 @@ For e.g the table has received 10 million modifications across 1 million records
 see all changes in a given time window and not just the latest values.
 :::
 
-Please refer to [configurations](/docs/basic_configurations) section for the important configuration options.
+Please refer to [configurations](basic_configurations) section for the important configuration options.
 
 :::note Incremental Query Checkpointing between Hudi 0.x and 1.0.
 In Hudi 1.0, we switch the incremental and CDC query to used completion time, instead of instant time, to determine the
@@ -406,7 +406,7 @@ and the corresponding type column value.
 
 ## Flink SQL
 Once the Flink Hudi tables have been registered to the Flink catalog, they can be queried using the Flink SQL. It supports all query types across both Hudi table types,
-relying on the custom Hudi input formats like Hive. Typically, notebook users and Flink SQL CLI users leverage flink sql for querying Hudi tables. Please add hudi-flink-bundle as described in the [Flink Quickstart](/docs/flink-quick-start-guide).
+relying on the custom Hudi input formats like Hive. Typically, notebook users and Flink SQL CLI users leverage flink sql for querying Hudi tables. Please add hudi-flink-bundle as described in the [Flink Quickstart](flink-quick-start-guide).
 
 
 ### Snapshot Query 

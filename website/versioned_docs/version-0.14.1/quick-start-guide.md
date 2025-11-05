@@ -948,7 +948,7 @@ Note that CDC queries are currently only supported on Copy-on-Write tables.
 
 The examples thus far have showcased one of the two table types, that Hudi supports - Copy-on-Write (COW) tables. Hudi also supports
 a more advanced write-optimized table type called Merge-on-Read (MOR) tables, that can balance read and write performance in a more
-flexible manner. See [table types](/docs/table_types) for more details.
+flexible manner. See [table types](table_types) for more details.
 
 Any of these examples can be run on a Merge-on-Read table by simply changing the table type to MOR, while creating the table, as below.
 

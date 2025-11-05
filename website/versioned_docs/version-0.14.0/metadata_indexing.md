@@ -5,7 +5,7 @@ toc: true
 last_modified_at:
 ---
 
-Hudi maintains a scalable [metadata](/docs/metadata) that has some auxiliary data about the table.
+Hudi maintains a scalable [metadata](metadata) that has some auxiliary data about the table.
 The [pluggable indexing subsystem](https://www.onehouse.ai/blog/introducing-multi-modal-index-for-the-lakehouse-in-apache-hudi)
 of Hudi depends on the metadata table. Different types of index, from `files` index for locating records efficiently
 to `column_stats` index for data skipping, are part of the metadata table. A fundamental tradeoff in any data system
@@ -25,7 +25,7 @@ feature, please check out [this blog](https://www.onehouse.ai/blog/asynchronous-
 
 ## Setup Async Indexing
 
-First, we will generate a continuous workload. In the below example, we are going to start a [Hudi Streamer](/docs/hoodie_streaming_ingestion#hudi-streamer) which will continuously write data
+First, we will generate a continuous workload. In the below example, we are going to start a [Hudi Streamer](hoodie_streaming_ingestion#hudi-streamer) which will continuously write data
 from raw parquet to Hudi table. We used the widely available [NY Taxi dataset](https://registry.opendata.aws/nyc-tlc-trip-records-pds/), whose setup details are as below:
 <details>
   <summary>Ingestion write config</summary>
@@ -78,8 +78,8 @@ us schedule the indexing for COLUMN_STATS index. First we need to define a prope
 
 As mentioned before, metadata indices are pluggable. One can add any index at any point in time depending on changing
 business requirements. Some configurations to enable particular indices are listed below. Currently, available indices under
-metadata table can be explored [here](/docs/metadata#metadata-table-indices) along with [configs](/docs/metadata#enable-hudi-metadata-table-and-multi-modal-index-in-write-side) 
-to enable them. The full set of metadata configurations can be explored [here](/docs/configurations/#Metadata-Configs).
+metadata table can be explored [here](metadata#metadata-table-indices) along with [configs](metadata#enable-hudi-metadata-table-and-multi-modal-index-in-write-side) 
+to enable them. The full set of metadata configurations can be explored [here](configurations/#Metadata-Configs).
 
 :::note
 Enabling the metadata table and configuring a lock provider are the prerequisites for using async indexer. Checkout a sample
