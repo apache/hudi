@@ -844,20 +844,23 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         // Filter(id = 1) and Filter(name = 'a3') can be push down, Filter(price <> 10) can't be push down since it's not primary key
         var df = spark.sql(s"select price, ts, dt from $tableName where (id = 1 or name = 'a3') and price <> 10")
         // only execute file scan physical plan
-        // expected in file scan only (id: 1), (id: 3) and (id: 4, from log file) matched, (id: 3) and (id: 4, from log file)  matched but will be filtered later
-        assertResult(3)(df.queryExecution.sparkPlan.children(0).children(0).executeCollect().length)
+        // expected in file scan only (id: 1), (id: 3) matched, (id: 3)  matched but will be filtered later
+        // Filter(id = 1) and Filter(name = 'a3') will filter out (id: 2, 4) in base file,
+        // and filter out (id: 4) in log file
+        assertResult(2)(df.queryExecution.sparkPlan.children(0).children(0).executeCollect().length)
 
         checkAnswer(s"select price, ts, dt from $tableName where (id > 1 or name = 'a3') and price <> 10")(
           Seq(11.0, 1000, "2023-12-06")
         )
         // Filter(id > 1) and Filter(name = 'a3') can be push down, Filter(price <> 10) can't be push down since it's not primary key
         df = spark.sql(s"select price, ts, dt from $tableName where (id > 1 or name = 'a3') and price <> 10")
-        // expected in file scan only (id: 1, from log file) (id: 2), (id: 3) and (id: 4, from log file) matched, (id: 1, from log file) (id: 3) and (id: 4)  matched but will be filtered later
-        assertResult(4)(df.queryExecution.sparkPlan.children(0).children(0).executeCollect().length)
+        // expected in file scan only (id: 2), (id: 3) and (id: 4, from log file) matched, (id: 3) and (id: 4)  matched but will be filtered later
+        // Filter(id > 1) and Filter(name = 'a3') will filter out (id: 0, 1) in base file,
+        // and filter out (id: 0) in log file
+        assertResult(3)(df.queryExecution.sparkPlan.children(0).children(0).executeCollect().length)
       }
 
       withSQLConf(s"${SQLConf.PARQUET_RECORD_FILTER_ENABLED.key}" -> "false") {
-        spark.sql(s"set ${SQLConf.PARQUET_RECORD_FILTER_ENABLED.key}=false")
         checkAnswer(s"select price, ts, dt from $tableName where (id = 1 or name = 'a3') and price <> 10")(
           Seq(11.0, 2000, "2023-12-06")
         )

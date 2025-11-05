@@ -46,6 +46,8 @@ import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{LongType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 
+import scala.collection.JavaConverters._
+
 /**
  * Implementation of [[HoodieReaderContext]] to read [[InternalRow]]s with
  * [[ParquetFileFormat]] on Spark.
@@ -80,17 +82,17 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     if (hasRowIndexField) {
       assert(getRecordContext.supportsParquetRowIndex())
     }
+    val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
+    val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
     if (FSUtils.isLogFile(filePath)) {
-      // TODO: introduce pk filter in log file reader
+      // NOTE: now only primary key based filtering is supported for log files
       new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
-        .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(requiredSchema).asInstanceOf[ClosableIterator[InternalRow]]
+        .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(requiredSchema, readFilters.asJava).asInstanceOf[ClosableIterator[InternalRow]]
     } else {
-      val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
       // partition value is empty because the spark parquet reader will append the partition columns to
       // each row if they are given. That is the only usage of the partition values in the reader.
       val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
-      val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
 
       // Convert Avro dataSchema to Parquet MessageType for timestamp precision conversion
       val tableSchemaOpt = if (dataSchema != null) {
