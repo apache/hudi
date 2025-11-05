@@ -1142,6 +1142,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         properties.setProperty("hoodie.compact.inline", "true");
         properties.setProperty("hoodie.compact.inline.max.delta.commits", "1");
         disableCompaction = false;
+        // validate that there are no completed compaction (commit) instants in timeline.
       } else {
         properties.setProperty("hoodie.compact.inline", "false");
         disableCompaction = true;
