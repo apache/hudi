@@ -32,4 +32,4 @@ df = df.where(df["foo"] > 5)
 df.show()
 ```
 
-Check out the Daft docs for [Hudi integration](https://www.getdaft.io/projects/docs/en/latest/user_guide/integrations/hudi.html).
+Check out the Daft docs for [Hudi integration](https://docs.daft.ai/en/stable/connectors/hudi/).

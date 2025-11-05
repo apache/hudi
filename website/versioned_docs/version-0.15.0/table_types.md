@@ -149,4 +149,4 @@ Refer [here](https://hudi.apache.org/docs/next/configurations#Flink-Options) for
 
 * [Comparing Apache Hudi's MOR and COW Tables, Use Cases from Uber](https://youtu.be/BiTXyzFNHlA)
 * [Different table types in Apache Hudi, MOR and COW, Deep Dive](https://youtu.be/vyEvlt57L-s)
-* [How to Query Hudi Tables in Incremental Fashion and Get only New data on AWS Glue | Hands on Lab](https://www.youtube.com/watch?v=c6DCJR91rBQx)
+* [How to Query Hudi Tables in Incremental Fashion and Get only New data on AWS Glue | Hands on Lab](https://www.youtube.com/watch?v=c6DCJR91rBQ)

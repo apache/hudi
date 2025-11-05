@@ -88,7 +88,7 @@ AWS glue data libraries are needed if AWS glue data is used
 
 ## AWS S3 Versioned Bucket
 
-With versioned buckets any object deleted creates a [Delete Marker](https://docs.aws.amazon.com/AmazonS3/latest/userguide/DeleteMarker.html), as Hudi cleans up files using [Cleaner utility](https://hudi.apache.orghoodie_cleaner) the number of Delete Markers increases over time.
+With versioned buckets any object deleted creates a [Delete Marker](https://docs.aws.amazon.com/AmazonS3/latest/userguide/DeleteMarker.html), as Hudi cleans up files using [Cleaner utility](cleaning) the number of Delete Markers increases over time.
 It is important to configure the [Lifecycle Rule](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lifecycle-mgmt.html) correctly
 to clean up these delete markers as the List operation can choke if the number of delete markers reaches 1000.
 We recommend cleaning up Delete Markers after 1 day in Lifecycle Rule.

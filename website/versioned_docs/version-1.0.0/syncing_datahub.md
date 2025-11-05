@@ -3,7 +3,7 @@ title: DataHub
 keywords: [hudi, datahub, sync]
 ---
 
-[DataHub](https://datahubproject.io/) is a rich metadata platform that supports features like data discovery, data
+[DataHub](https://datahub.com/) is a rich metadata platform that supports features like data discovery, data
 obeservability, federated governance, etc.
 
 Since Hudi 0.11.0, you can now sync to a DataHub instance by setting `DataHubSyncTool` as one of the sync tool classes
