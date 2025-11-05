@@ -74,7 +74,7 @@ public class RecordIndexMapper extends MetadataIndexMapper {
           }
         } else {
           // Delete existing index for a deleted record
-          hoodieRecord = HoodieMetadataPayload.createRecordIndexDelete(recordDelegate.getRecordKey(), recordDelegate.getPartitionPath(), dataWriteConfig.isPartitionedRecordIndexEnabled());
+          hoodieRecord = HoodieMetadataPayload.createRecordIndexDelete(recordDelegate.getRecordKey(), recordDelegate.getPartitionPath(), dataWriteConfig.isRecordLevelIndexEnabled());
           allRecords.add(hoodieRecord);
         }
       }

@@ -67,7 +67,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
 
   val metadataOpts: Map[String, String] = Map(
     HoodieMetadataConfig.ENABLE.key -> "true",
-    HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true"
+    HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true"
   )
   val commonOpts: Map[String, String] = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",

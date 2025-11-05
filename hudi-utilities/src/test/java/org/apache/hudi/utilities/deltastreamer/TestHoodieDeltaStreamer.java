@@ -1572,7 +1572,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         // Schedule an indexing instant
         HoodieIndexer scheduleIndexingJob = new HoodieIndexer(jsc,
             buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, null, UtilHelpers.SCHEDULE, "RECORD_INDEX",
-            Arrays.asList(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key() + "=true", HoodieWriteConfig.MARKERS_TYPE.key() + "=DIRECT")));
+            Arrays.asList(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() + "=true", HoodieWriteConfig.MARKERS_TYPE.key() + "=DIRECT")));
         scheduleIndexInstantTime = scheduleIndexingJob.doSchedule();
         TestHelpers.assertPendingIndexCommit(tableBasePath);
         LOG.info("Schedule indexing success, now build index with instant time " + scheduleIndexInstantTime.get());
@@ -1584,7 +1584,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         });
         HoodieIndexer runIndexingJob = new HoodieIndexer(jsc,
             buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, scheduleIndexInstantTime.get(), UtilHelpers.EXECUTE, "RECORD_INDEX",
-                Arrays.asList(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key() + "=true", HoodieWriteConfig.MARKERS_TYPE.key() + "=DIRECT")));
+                Arrays.asList(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() + "=true", HoodieWriteConfig.MARKERS_TYPE.key() + "=DIRECT")));
         runIndexingJob.start(0);
         LOG.info("Metadata indexing success");
         TestHelpers.assertCompletedIndexCommit(tableBasePath);
@@ -1644,7 +1644,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         try {
           HoodieIndexer runIndexingJob = new HoodieIndexer(jsc,
               buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, scheduleIndexInstantTime.get(), UtilHelpers.EXECUTE, "RECORD_INDEX",
-                  Arrays.asList(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key() + "=true", HoodieMetadataConfig.METADATA_INDEX_CHECK_TIMEOUT_SECONDS.key() + "=20")));
+                  Arrays.asList(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() + "=true", HoodieMetadataConfig.METADATA_INDEX_CHECK_TIMEOUT_SECONDS.key() + "=20")));
           runIndexingJob.start(0);
           // Clustering commit fails because of conflict with indexing commit
           fail("Indexing should fail with catchup failure");

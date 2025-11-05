@@ -41,7 +41,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP;
 import static org.apache.hudi.index.HoodieIndexUtils.validateDataTypeForSecondaryIndex;
 import static org.apache.hudi.index.HoodieIndexUtils.validateDataTypeForSecondaryOrExpressionIndex;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
@@ -112,7 +112,7 @@ public class TestHoodieIndexUtils {
       // Test case 2: Secondary index with record index enabled in options
       // Given: No record index partition but enabled in options
       when(mockTableConfig.getMetadataPartitions()).thenReturn(Collections.emptySet());
-      options.put(RECORD_INDEX_ENABLE_PROP.key(), "true");
+      options.put(GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
 
       // When: Checking eligibility for secondary index
       // Then: Should not throw exception because data type is supported and record index is enabled
@@ -449,7 +449,7 @@ public class TestHoodieIndexUtils {
 
       // Test case 2: Record index explicitly disabled
       // Given: Record index is explicitly disabled in options
-      options.put(RECORD_INDEX_ENABLE_PROP.key(), "false");
+      options.put(GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "false");
       
       // When: Checking eligibility for secondary index
       // Then: Should throw exception because record index is disabled

@@ -59,7 +59,7 @@ import scala.collection.JavaConverters;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP;
 import static org.apache.hudi.index.HoodieIndexUtils.indexExists;
 import static org.apache.hudi.index.HoodieIndexUtils.register;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
@@ -114,7 +114,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
 
     Map<String, String> overrideOpts = Collections.emptyMap();
     if (HoodieRecordIndex.isPartitioned(options)) {
-      overrideOpts = Collections.singletonMap(HoodieMetadataConfig.PARTITIONED_RECORD_INDEX_ENABLE_PROP.key(), "true");
+      overrideOpts = Collections.singletonMap(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
     }
     HoodieIndexVersion version = HoodieIndexVersion.getCurrentVersion(metaClient.getTableConfig().getTableVersion(), MetadataPartitionType.RECORD_INDEX);
     LOG.info("Creating index {} using version {}", fullIndexName, version);
@@ -266,7 +266,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
       // [HUDI-7472] Ensure write-config contains the existing MDT partition to prevent those from getting deleted
       metaClient.getTableConfig().getMetadataPartitions().forEach(partitionPath -> {
         if (partitionPath.equals(MetadataPartitionType.RECORD_INDEX.getPartitionPath())) {
-          writeConfig.put(RECORD_INDEX_ENABLE_PROP.key(), "true");
+          writeConfig.put(GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
         }
 
         if (partitionPath.equals(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath())) {
@@ -281,7 +281,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
       if (indexTypeOpt.isPresent()) {
         String indexType = indexTypeOpt.get();
         if (indexType.equals(PARTITION_NAME_RECORD_INDEX)) {
-          writeConfig.put(RECORD_INDEX_ENABLE_PROP.key(), "true");
+          writeConfig.put(GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
         }
       }
     }

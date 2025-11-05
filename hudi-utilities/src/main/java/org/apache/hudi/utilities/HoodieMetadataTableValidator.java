@@ -1835,7 +1835,7 @@ public class HoodieMetadataTableValidator implements Serializable {
             .enable(enableMetadataTable)
             .withMetadataIndexBloomFilter(enableMetadataTable)
             .withMetadataIndexColumnStats(enableMetadataTable)
-            .withEnableRecordIndex(enableMetadataTable)
+            .withEnableGlobalRecordLevelIndex(enableMetadataTable)
                  .build();
         props.put(FileSystemViewStorageConfig.VIEW_TYPE.key(), viewStorageType);
         FileSystemViewStorageConfig viewConf = FileSystemViewStorageConfig.newBuilder().fromProperties(props).build();

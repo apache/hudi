@@ -84,7 +84,7 @@ public class TestMetadataPartitionType {
         expectedEnabledPartitions = 3;
         break;
       case SECONDARY_INDEX:
-        metadataConfigBuilder.enable(true).withEnableRecordIndex(true).withSecondaryIndexEnabled(true).withSecondaryIndexForColumn("col1");
+        metadataConfigBuilder.enable(true).withEnableGlobalRecordLevelIndex(true).withSecondaryIndexEnabled(true).withSecondaryIndexForColumn("col1");
         expectedEnabledPartitions = 4;
         break;
       case BLOOM_FILTERS:
@@ -92,7 +92,7 @@ public class TestMetadataPartitionType {
         expectedEnabledPartitions = 3;
         break;
       case RECORD_INDEX:
-        metadataConfigBuilder.enable(true).withEnableRecordIndex(true);
+        metadataConfigBuilder.enable(true).withEnableGlobalRecordLevelIndex(true);
         expectedEnabledPartitions = 3;
         break;
       default:
@@ -122,7 +122,7 @@ public class TestMetadataPartitionType {
     Mockito.when(tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.FILES)).thenReturn(true);
     Mockito.when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
     Mockito.when(metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)).thenReturn(true);
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withEnableRecordIndex(false).build();
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withEnableGlobalRecordLevelIndex(false).build();
 
     List<MetadataPartitionType> enabledPartitions = MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient);
 
