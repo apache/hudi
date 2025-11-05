@@ -2138,21 +2138,21 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
-   * Determines if the record index is enabled.
+   * Determines if the global record index is enabled.
    *
-   * <p>The record index is enabled if the record index is enabled in the metadata configuration.
+   * <p>The global record index is enabled if the record index is enabled in the metadata configuration.
    *
    * <p>IMPORTANT: Make sure the logic is consistent with {@code MetadataPartitionType.isMetadataPartitionEnabled}
    * which is the only truth that defines whether the index is enabled(through table config {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}).
    *
    * @return {@code true} if the record index is enabled, {@code false} otherwise.
    */
-  public boolean isRecordIndexEnabled() {
-    return metadataConfig.isRecordIndexEnabled();
+  public boolean isGlobalRecordLevelIndexEnabled() {
+    return metadataConfig.isGlobalRecordLevelIndexEnabled();
   }
 
-  public boolean isPartitionedRecordIndexEnabled() {
-    return metadataConfig.isPartitionedRecordIndexEnabled();
+  public boolean isRecordLevelIndexEnabled() {
+    return metadataConfig.isRecordLevelIndexEnabled();
   }
 
   public int getPartitionStatsIndexParallelism() {

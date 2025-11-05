@@ -61,7 +61,7 @@ public class TestAppendHandle extends BaseTestHandle {
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withEnableRecordIndex(true)
+            .withEnableGlobalRecordLevelIndex(true)
             .withStreamingWriteEnabled(true)
             .withSecondaryIndexEnabled(true)
             .withSecondaryIndexName("sec-rider")

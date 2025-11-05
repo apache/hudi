@@ -48,7 +48,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
   var instantTime: AtomicInteger = _
   val metadataOpts = Map(
     HoodieMetadataConfig.ENABLE.key -> "true",
-    HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true"
+    HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true"
   )
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",

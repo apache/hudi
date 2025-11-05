@@ -393,7 +393,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true")
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true")
 
     // First ingest.
     doWriteAndValidateDataAndPartitionStats(

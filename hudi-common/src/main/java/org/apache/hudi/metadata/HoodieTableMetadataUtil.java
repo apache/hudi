@@ -877,7 +877,7 @@ public class HoodieTableMetadataUtil {
                   .flatMap(writeStat -> {
                     HoodieStorage storage = HoodieStorageUtils.getStorage(new StoragePath(writeStat.getPath()), storageConfiguration);
                     return CollectionUtils.toStream(BaseFileRecordParsingUtils
-                        .generateRLIMetadataHoodieRecordsForBaseFile(basePath, writeStat, writesFileIdEncoding, instantTime, storage, metadataConfig.isPartitionedRecordIndexEnabled()));
+                        .generateRLIMetadataHoodieRecordsForBaseFile(basePath, writeStat, writesFileIdEncoding, instantTime, storage, metadataConfig.isRecordLevelIndexEnabled()));
                   })
                   .iterator();
             }
@@ -907,7 +907,7 @@ public class HoodieTableMetadataUtil {
                   .collect(Collectors.toList());
               // Process deleted keys to create deletes
               List<HoodieRecord> deletedRecords = deletedKeys.stream()
-                  .map(key -> HoodieMetadataPayload.createRecordIndexDelete(key, partitionPath, metadataConfig.isPartitionedRecordIndexEnabled()))
+                  .map(key -> HoodieMetadataPayload.createRecordIndexDelete(key, partitionPath, metadataConfig.isRecordLevelIndexEnabled()))
                   .collect(Collectors.toList());
               // Combine all records into one list
               List<HoodieRecord> allRecords = new ArrayList<>();
@@ -933,7 +933,7 @@ public class HoodieTableMetadataUtil {
       // (TODO: make this configurable)
       long targetPartitionSize = 100 * 1024 * 1024;
       parallelism = (int) Math.max(1, (totalWriteBytesForRLI + targetPartitionSize - 1) / targetPartitionSize);
-      return reduceByKeys(recordIndexRecords, parallelism, metadataConfig.isPartitionedRecordIndexEnabled());
+      return reduceByKeys(recordIndexRecords, parallelism, metadataConfig.isRecordLevelIndexEnabled());
     } catch (Exception e) {
       throw new HoodieException("Failed to generate RLI records for metadata table", e);
     }
@@ -2383,7 +2383,7 @@ public class HoodieTableMetadataUtil {
     }
 
     // Does any enabled partition being enabled need to track the written records
-    return config.isRecordIndexEnabled() || config.isPartitionedRecordIndexEnabled();
+    return config.isGlobalRecordLevelIndexEnabled() || config.isRecordLevelIndexEnabled();
   }
 
   /**

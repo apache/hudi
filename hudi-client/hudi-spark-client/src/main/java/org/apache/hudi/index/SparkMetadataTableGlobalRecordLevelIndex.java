@@ -58,13 +58,13 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVers
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 
 /**
- * Hoodie Index implementation backed by the record index present in the Metadata Table.
+ * Hoodie Index implementation backed by the global record level index present in the Metadata Table.
  */
-public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
+public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object, Object> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(SparkMetadataTableRecordIndex.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkMetadataTableGlobalRecordLevelIndex.class);
 
-  public SparkMetadataTableRecordIndex(HoodieWriteConfig config) {
+  public SparkMetadataTableGlobalRecordLevelIndex(HoodieWriteConfig config) {
     super(config);
   }
 

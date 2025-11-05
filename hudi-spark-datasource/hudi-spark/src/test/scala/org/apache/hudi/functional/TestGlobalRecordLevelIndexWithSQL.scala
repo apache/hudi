@@ -43,7 +43,7 @@ import java.util.Properties
 import scala.util.Using
 
 @Tag("functional")
-class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
+class TestGlobalRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   val sqlTempTable = "tbl"
 
   @ParameterizedTest
@@ -52,7 +52,7 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
       "hoodie.metadata.index.column.stats.enable" -> "false",
-      HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "false")
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "false")
 
     spark.sql("set hoodie.write.lock.provider = org.apache.hudi.client.transaction.lock.InProcessLockProvider")
     doWriteAndValidateDataAndRecordIndex(hudiOpts,

@@ -93,7 +93,7 @@ import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 import static org.apache.hudi.common.util.HoodieRecordUtils.getOrderingFieldNames;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -771,14 +771,15 @@ public class HoodieIndexUtils {
       boolean hasRecordIndex = metaClient.getTableConfig().getMetadataPartitions().stream()
           .anyMatch(partition -> partition.equals(MetadataPartitionType.RECORD_INDEX.getPartitionPath()));
       boolean recordIndexEnabled = Boolean.parseBoolean(
-          options.getOrDefault(RECORD_INDEX_ENABLE_PROP.key(), RECORD_INDEX_ENABLE_PROP.defaultValue().toString()));
+          options.getOrDefault(GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), options.getOrDefault("hoodie.metadata.record.index.enable",
+              GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.defaultValue().toString())));
 
       if (!hasRecordIndex && !recordIndexEnabled) {
         throw new HoodieMetadataIndexException(String.format(
             "Cannot create secondary index '%s': Record index is required for secondary indexes but is not enabled. "
             + "Please enable the record index by setting '%s' to 'true' in the index creation options, "
             + "or create a record index first using: CREATE INDEX record_index ON %s USING record_index",
-            userIndexName, RECORD_INDEX_ENABLE_PROP.key(), metaClient.getTableConfig().getTableName()));
+            userIndexName, GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), metaClient.getTableConfig().getTableName()));
       }
     }
   }

@@ -148,7 +148,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         .withMetadataIndexBloomFilter(enableMetadataIndex)
         .withMetadataIndexColumnStats(enableMetadataIndex);
     if (indexType == IndexType.RECORD_INDEX) {
-      metadataConfigBuilder.withEnableRecordIndex(true);
+      metadataConfigBuilder.withEnableGlobalRecordLevelIndex(true);
     }
 
     config = getConfigBuilder()

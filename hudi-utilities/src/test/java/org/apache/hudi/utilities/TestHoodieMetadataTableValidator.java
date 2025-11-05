@@ -210,7 +210,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     Dataset<Row> inserts = makeInsertDf("000", 5).cache();
     inserts.write().format("hudi").options(writeOptions)
         .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
-        .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true")
         .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
         .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
         .mode(SaveMode.Overwrite)
@@ -219,7 +219,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     Dataset<Row> updates = makeUpdateDf("001", 5).cache();
     updates.write().format("hudi").options(writeOptions)
         .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.UPSERT.value())
-        .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true")
         .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
         .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
         .mode(SaveMode.Append)
@@ -269,7 +269,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     Dataset<Row> inserts = makeInsertDf("000", 5).cache();
     inserts.write().format("hudi").options(writeOptions)
         .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
-        .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true")
         .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
         .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
         .mode(SaveMode.Overwrite)
@@ -284,7 +284,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     Dataset<Row> updates = makeUpdateDf("001", 5).cache();
     updates.write().format("hudi").options(writeOptions)
         .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.UPSERT.value())
-        .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true")
         .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
         .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
         .mode(SaveMode.Append)
@@ -1296,7 +1296,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
     writeOptions.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
     writeOptions.put(DataSourceWriteOptions.OPERATION().key(),"bulk_insert");
-    writeOptions.put(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true");
+    writeOptions.put(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
 
     Dataset<Row> inserts = makeInsertDf("000", 50).cache();
     inserts.write().format("hudi").options(writeOptions)
@@ -1397,7 +1397,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       Dataset<Row> inserts = makeInsertDf("000", 5).cache();
       inserts.write().format("hudi").options(writeOptions)
           .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
-          .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
+          .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true")
           .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
           .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
           .mode(SaveMode.Overwrite)
@@ -1406,7 +1406,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       Dataset<Row> updates = makeUpdateDf("001", 5).cache();
       updates.write().format("hudi").options(writeOptions)
           .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.UPSERT.value())
-          .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
+          .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true")
           .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
           .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
           .mode(SaveMode.Append)
@@ -1416,7 +1416,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       Dataset<Row> inserts2 = makeInsertDf("002", 5).cache();
       inserts2.write().format("hudi").options(writeOptions)
           .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
-          .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
+          .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true")
           .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
           .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
           .mode(SaveMode.Append)
