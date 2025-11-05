@@ -131,7 +131,7 @@ public class TestAvroSchemaRepair {
     assertEquals(Schema.Type.UNION, result.getType());
     assertEquals(2, result.getTypes().size());
 
-    Schema nonNullType = AvroSchemaUtils.resolveNullableSchema(result);
+    Schema nonNullType = AvroSchemaUtils.getNonNullTypeFromUnion(result);
     assertEquals(LogicalTypes.localTimestampMillis(), nonNullType.getLogicalType());
   }
 
@@ -151,7 +151,7 @@ public class TestAvroSchemaRepair {
     assertNotSame(requestedSchema, result, "Should create new nullable schema");
     assertEquals(Schema.Type.UNION, result.getType());
 
-    Schema nonNullType = AvroSchemaUtils.resolveNullableSchema(result);
+    Schema nonNullType = AvroSchemaUtils.getNonNullTypeFromUnion(result);
     assertEquals(LogicalTypes.timestampMillis(), nonNullType.getLogicalType());
   }
 
@@ -266,7 +266,7 @@ public class TestAvroSchemaRepair {
     Schema fieldSchema = result.getField("timestamp").schema();
     assertEquals(Schema.Type.UNION, fieldSchema.getType());
 
-    Schema nonNullType = AvroSchemaUtils.resolveNullableSchema(fieldSchema);
+    Schema nonNullType = AvroSchemaUtils.getNonNullTypeFromUnion(fieldSchema);
     assertEquals(LogicalTypes.localTimestampMillis(), nonNullType.getLogicalType());
   }
 
@@ -313,7 +313,7 @@ public class TestAvroSchemaRepair {
     Schema elementSchema = result.getElementType();
     assertEquals(Schema.Type.UNION, elementSchema.getType());
 
-    Schema nonNullType = AvroSchemaUtils.resolveNullableSchema(elementSchema);
+    Schema nonNullType = AvroSchemaUtils.getNonNullTypeFromUnion(elementSchema);
     assertEquals(LogicalTypes.localTimestampMicros(), nonNullType.getLogicalType());
   }
 
@@ -360,7 +360,7 @@ public class TestAvroSchemaRepair {
     Schema valueSchema = result.getValueType();
     assertEquals(Schema.Type.UNION, valueSchema.getType());
 
-    Schema nonNullType = AvroSchemaUtils.resolveNullableSchema(valueSchema);
+    Schema nonNullType = AvroSchemaUtils.getNonNullTypeFromUnion(valueSchema);
     assertEquals(LogicalTypes.localTimestampMillis(), nonNullType.getLogicalType());
   }
 

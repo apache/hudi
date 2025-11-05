@@ -109,7 +109,7 @@ public class AvroInternalSchemaConverter {
         return;
 
       case UNION:
-        collectColNamesFromAvroSchema(AvroSchemaUtils.resolveNullableSchema(schema), visited, resultSet);
+        collectColNamesFromAvroSchema(AvroSchemaUtils.getNonNullTypeFromUnion(schema), visited, resultSet);
         return;
 
       case ARRAY:
@@ -132,7 +132,7 @@ public class AvroInternalSchemaConverter {
   }
 
   private static void addFullNameIfLeafNode(Schema schema, String name, Deque<String> visited, List<String> resultSet) {
-    addFullNameIfLeafNode(AvroSchemaUtils.resolveNullableSchema(schema).getType(), name, visited, resultSet);
+    addFullNameIfLeafNode(AvroSchemaUtils.getNonNullTypeFromUnion(schema).getType(), name, visited, resultSet);
   }
 
   private static void addFullNameIfLeafNode(Schema.Type type, String name, Deque<String> visited, List<String> resultSet) {

@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command.payload
 import org.apache.hudi.AvroConversionUtils.{convertAvroSchemaToStructType, convertStructTypeToAvroSchema}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.hudi.avro.AvroSchemaUtils.{isNullable, resolveNullableSchema}
+import org.apache.hudi.avro.AvroSchemaUtils.{isNullable, getNonNullTypeFromUnion}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.{bytesToAvro, createNewSchemaField}
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload, SerializableIndexedRecord}
@@ -549,8 +549,8 @@ object ExpressionPayload {
         .zipWithIndex
         .foreach {
           case ((expectedField, targetField), idx) =>
-            val expectedFieldSchema = resolveNullableSchema(expectedField.schema())
-            val targetFieldSchema = resolveNullableSchema(targetField.schema())
+            val expectedFieldSchema = getNonNullTypeFromUnion(expectedField.schema())
+            val targetFieldSchema = getNonNullTypeFromUnion(targetField.schema())
 
             val equal = Objects.equals(expectedFieldSchema, targetFieldSchema)
             ValidationUtils.checkState(equal,
