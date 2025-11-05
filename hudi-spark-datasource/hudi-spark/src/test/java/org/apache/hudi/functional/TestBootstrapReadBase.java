@@ -48,6 +48,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
@@ -76,10 +77,10 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
 
   @BeforeEach
   public void setUp() throws Exception {
-    bootstrapBasePath = tmpFolder.toAbsolutePath() + "/bootstrapBasePath";
-    hudiBasePath = tmpFolder.toAbsolutePath() + "/hudiBasePath";
-    bootstrapTargetPath = tmpFolder.toAbsolutePath() + "/bootstrapTargetPath";
-    initSparkContexts();
+    bootstrapBasePath = tmpFolder.toAbsolutePath() + UUID.randomUUID().toString() + "/bootstrapBasePath";
+    hudiBasePath = tmpFolder.toAbsolutePath() + UUID.randomUUID().toString() + "/hudiBasePath";
+    bootstrapTargetPath = tmpFolder.toAbsolutePath() + UUID.randomUUID().toString() + "/bootstrapTargetPath";
+    initSparkContexts(this.getClass().getSimpleName() + UUID.randomUUID());
   }
 
   @AfterEach
