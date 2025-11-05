@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [asf-site]
 
+# Cancel in-progress runs when a new push is made to the same PR or branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   hudi-asf-site-ci:
     name: "Apache Hudi asf-site CI"
