@@ -261,7 +261,7 @@ object Spark33ParquetReader extends SparkParquetReaderBuilder {
 
     // Should always be set by FileSourceScanExec while creating this.
     // Check conf before checking the option, to allow working around an issue by changing conf.
-    val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
+    val returningBatch = vectorized && sqlConf.parquetVectorizedReaderEnabled &&
       options.get(FileFormat.OPTION_RETURNING_BATCH)
         .getOrElse {
           throw new IllegalArgumentException(

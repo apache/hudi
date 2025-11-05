@@ -188,6 +188,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         this.totalRecords = this.dis.readInt();
       }
 
+      // writer schema could refer to table schema. 
       Schema repairedWriterSchema = AvroSchemaRepair.repairLogicalTypes(writerSchema, readerSchema);
       if (recordNeedsRewriteForExtendedAvroTypePromotion(repairedWriterSchema, readerSchema)) {
         this.reader = new GenericDatumReader<>(repairedWriterSchema, repairedWriterSchema);
