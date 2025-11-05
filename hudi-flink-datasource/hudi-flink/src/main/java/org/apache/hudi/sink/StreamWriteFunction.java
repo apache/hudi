@@ -381,7 +381,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     return true;
   }
 
-  private void flushRemaining(boolean endInput) {
+  public void flushRemaining(boolean endInput) {
     writeMetrics.startDataFlush();
     this.currentInstant = instantToWrite(hasData());
     if (this.currentInstant == null) {
