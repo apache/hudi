@@ -133,32 +133,41 @@ versioned_sidebars/version-0.7.0-sidebars.json
 
 Relative paths work well. - Files will be linked to correct corresponding version.
 
-- PREFER RELATIVE PATHS to be consistent with linking.
+- Referring to versioned docs pages within `docs/` MUST USE relative paths.
   - **Good Example of linking.**
-    For ex say we are updating a 0.12.0 version doc which is older.
+    Say we are updating a 0.12.0 version doc which is older.
+
     ```md
     A [callback notification](writing_data#commit-notifications) is exposed
     ```
+
     This automatically resolves to /docs/0.12.0/writing_data#commit-notifications.
   - **Bad example of linking.**
-    For ex say we are updating a 0.12.0 version doc which is older.
+    Say we are updating a 0.12.0 version doc which is older.
+
     ```md
     A [callback notification](/docs/writing_data#commit-notifications) is exposed
     ```
+
     This will resolve to the most recent release, specifically /docs/writing_data#commit-notifications . We do not want a 0.12.0 doc page to point to a page from a later release.
 - DO NOT use next version when linking.
   - Good Example of linking when you are working on unreleased version (from next version).
+
     ```md
     Hudi adopts Multiversion Concurrency Control (MVCC), where [compaction](compaction) action merges logs and base files to produce new
     file slices and [cleaning](cleaning) action gets rid of unused/older file slices to reclaim space on the file system.
     ```
+
     This automatically resolves to /docs/next/compaction and /docs/next/cleaning pages.
   - Bad Example of linking when you are working on unreleased version (from next version).
+
     ```md
     Hudi adopts Multiversion Concurrency Control (MVCC), where [compaction](/docs/next/compaction) action merges logs and base files to produce new
     file slices and [cleaning](/docs/next/cleaning) action gets rid of unused/older file slices to reclaim space on the file system.
     ```
+
     Even though it directly points to /docs/next which is intended target, this accumulates as tech debt when this copy of docs gets released, we will hav a older doc always pointing to /docs/next/
+- Refer to `/docs/...` or `/docs/<version>/...` (when a specific version is needed) from pages that are outside of `/docs/` dir.
 
 ## Versions
 
