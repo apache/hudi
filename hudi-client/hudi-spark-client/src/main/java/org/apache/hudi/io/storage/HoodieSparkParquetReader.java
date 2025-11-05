@@ -123,14 +123,15 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     Schema nonNullSchema = AvroSchemaUtils.getNonNullTypeFromUnion(requestedSchema);
     StructType structSchema = HoodieInternalRowUtils.getCachedSchema(nonNullSchema);
     Option<MessageType> messageSchema = Option.of(getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(nonNullSchema));
-    StructType repairedDataStructType = convertToStruct(SchemaRepair.repairLogicalTypes(getFileSchema(), messageSchema));
-    SparkBasicSchemaEvolution evolution = new SparkBasicSchemaEvolution(repairedDataStructType, structSchema, SQLConf.get().sessionLocalTimeZone());
+    boolean enableTimestampFieldRepair = storage.getConf().getBoolean("logicalTimestampField.repair.enable", true);
+    StructType dataStructType = convertToStruct(enableTimestampFieldRepair ? SchemaRepair.repairLogicalTypes(getFileSchema(), messageSchema) : getFileSchema());
+    SparkBasicSchemaEvolution evolution = new SparkBasicSchemaEvolution(dataStructType, structSchema, SQLConf.get().sessionLocalTimeZone());
     String readSchemaJson = evolution.getRequestSchema().json();
     storage.getConf().set(ParquetReadSupport.PARQUET_READ_SCHEMA, readSchemaJson);
     storage.getConf().set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA(), readSchemaJson);
     storage.getConf().set(SQLConf.PARQUET_BINARY_AS_STRING().key(), SQLConf.get().getConf(SQLConf.PARQUET_BINARY_AS_STRING()).toString());
     storage.getConf().set(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), SQLConf.get().getConf(SQLConf.PARQUET_INT96_AS_TIMESTAMP()).toString());
-    ParquetReader<InternalRow> reader = ParquetReader.builder(new HoodieParquetReadSupport(Option$.MODULE$.empty(), true,
+    ParquetReader<InternalRow> reader = ParquetReader.builder(new HoodieParquetReadSupport(Option$.MODULE$.empty(), true, true,
             SparkAdapterSupport$.MODULE$.sparkAdapter().getRebaseSpec("CORRECTED"),
             SparkAdapterSupport$.MODULE$.sparkAdapter().getRebaseSpec("LEGACY"), messageSchema),
             new Path(path.toUri()))
