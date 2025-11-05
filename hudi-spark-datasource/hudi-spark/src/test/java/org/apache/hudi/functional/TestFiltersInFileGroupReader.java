@@ -26,6 +26,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
+import org.apache.spark.sql.internal.SQLConf;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -48,6 +49,7 @@ public class TestFiltersInFileGroupReader extends TestBootstrapReadBase {
     this.nPartitions = 2;
     this.nInserts = 100;
     this.nUpdates = 20;
+    sparkSession.conf().set(SQLConf.PARQUET_RECORD_FILTER_ENABLED().key(), "true");
     setupDirs();
 
     //do bootstrap
