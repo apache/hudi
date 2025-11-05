@@ -212,6 +212,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val requestedAvroSchema = AvroSchemaUtils.pruneDataSchema(avroTableSchema, AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName), exclusionFields)
     val dataAvroSchema = AvroSchemaUtils.pruneDataSchema(avroTableSchema, AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName), exclusionFields)
 
+    spark.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", supportVectorizedRead.toString)
+
     val baseFileReader = spark.sparkContext.broadcast(buildBaseFileReader(spark, options, augmentedStorageConf.unwrap(), dataSchema, supportVectorizedRead))
     val fileGroupBaseFileReader = if (isMOR && supportVectorizedRead) {
       // for file group reader to perform read, we always need to read the record without vectorized reader because our merging is based on row level.

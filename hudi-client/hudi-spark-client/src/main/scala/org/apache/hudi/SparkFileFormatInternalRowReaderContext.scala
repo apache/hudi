@@ -73,7 +73,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
   override def getFileRecordIterator(filePath: StoragePath,
                                      start: Long,
                                      length: Long,
-                                     dataSchema: Schema,
+                                     dataSchema: Schema, // dataSchema refers to table schema in most cases(non log file reads).
                                      requiredSchema: Schema,
                                      storage: HoodieStorage): ClosableIterator[InternalRow] = {
     val hasRowIndexField = AvroSchemaUtils.containsFieldInSchema(requiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME)
