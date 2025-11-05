@@ -56,15 +56,15 @@
     <module>packaging/hudi-presto-bundle</module>
     <module>packaging/hudi-utilities-bundle</module>
     <module>packaging/hudi-utilities-slim-bundle</module>
-    <module>packaging/hudi-timeline-server-bundle</module>
+<!--    <module>packaging/hudi-timeline-server-bundle</module>-->
     <module>packaging/hudi-trino-bundle</module>
-    <module>hudi-examples</module>
+<!--    <module>hudi-examples</module>-->
     <module>hudi-flink-datasource</module>
     <module>hudi-flink-datasource/${hudi.flink.module}</module>
-    <module>hudi-kafka-connect</module>
-    <module>packaging/hudi-flink-bundle</module>
+<!--    <module>hudi-kafka-connect</module>-->
+<!--    <module>packaging/hudi-flink-bundle</module>-->
     <module>packaging/hudi-kafka-connect-bundle</module>
-    <module>packaging/hudi-cli-bundle</module>
+<!--    <module>packaging/hudi-cli-bundle</module>-->
     <module>hudi-tests-common</module>
   </modules>
 

@@ -26,7 +26,7 @@ import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieSparkSqlWriter.StreamingWriteParams
 import org.apache.hudi.HoodieSparkSqlWriterInternal.{handleInsertDuplicates, shouldDropDuplicatesForInserts, shouldFailWhenDuplicatesFound}
 import org.apache.hudi.HoodieWriterUtils._
-import org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema
+import org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -789,7 +789,7 @@ class HoodieSparkSqlWriterInternal {
 
   def validateSchemaForHoodieIsDeleted(schema: Schema): Unit = {
     if (schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) != null &&
-      resolveNullableSchema(schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD).schema()).getType != Schema.Type.BOOLEAN) {
+      getNonNullTypeFromUnion(schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD).schema()).getType != Schema.Type.BOOLEAN) {
       throw new HoodieException(HoodieRecord.HOODIE_IS_DELETED_FIELD + " has to be BOOLEAN type. Passed in dataframe's schema has type "
         + schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD).schema().getType)
     }

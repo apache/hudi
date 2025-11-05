@@ -312,7 +312,7 @@ public enum ValueType {
         }
         throw new IllegalArgumentException("Unsupported logical type for Fixed: " + schema.getLogicalType());
       case UNION:
-        return fromSchema(AvroSchemaUtils.resolveNullableSchema(schema));
+        return fromSchema(AvroSchemaUtils.getNonNullTypeFromUnion(schema));
       default:
         throw new IllegalArgumentException("Unsupported type: " + schema.getType());
     }

@@ -120,11 +120,11 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   }
 
   public ClosableIterator<UnsafeRow> getUnsafeRowIterator(Schema requestedSchema) throws IOException {
-    Schema nonNullSchema = AvroSchemaUtils.resolveNullableSchema(requestedSchema);
-    StructType nonNullStructSchema = HoodieInternalRowUtils.getCachedSchema(nonNullSchema);
+    Schema nonNullSchema = AvroSchemaUtils.getNonNullTypeFromUnion(requestedSchema);
+    StructType structSchema = HoodieInternalRowUtils.getCachedSchema(nonNullSchema);
     Option<MessageType> messageSchema = Option.of(getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(nonNullSchema));
     StructType repairedDataStructType = convertToStruct(SchemaRepair.repairLogicalTypes(getFileSchema(), messageSchema));
-    SparkBasicSchemaEvolution evolution = new SparkBasicSchemaEvolution(repairedDataStructType, nonNullStructSchema, SQLConf.get().sessionLocalTimeZone());
+    SparkBasicSchemaEvolution evolution = new SparkBasicSchemaEvolution(repairedDataStructType, structSchema, SQLConf.get().sessionLocalTimeZone());
     String readSchemaJson = evolution.getRequestSchema().json();
     storage.getConf().set(ParquetReadSupport.PARQUET_READ_SCHEMA, readSchemaJson);
     storage.getConf().set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA(), readSchemaJson);

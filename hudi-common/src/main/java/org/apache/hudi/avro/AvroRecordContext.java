@@ -74,7 +74,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     String[] path = fieldName.split("\\.");
     for (int i = 0; i < path.length; i++) {
       if (currentSchema.isUnion()) {
-        currentSchema = AvroSchemaUtils.resolveNullableSchema(currentSchema);
+        currentSchema = AvroSchemaUtils.getNonNullTypeFromUnion(currentSchema);
       }
       Schema.Field field = currentSchema.getField(path[i]);
       if (field == null) {

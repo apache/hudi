@@ -33,7 +33,7 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 
 public class PartitionPathParser {
   public static final String DEPRECATED_DEFAULT_PARTITION_PATH = "default";
@@ -62,7 +62,7 @@ public class PartitionPathParser {
       String partitionField = partitionFields[i];
       Schema.Field field = schema.getField(partitionField);
       // if the field is not present in the schema, we assume it is a string
-      Schema fieldSchema = field == null ? Schema.create(Schema.Type.STRING) : resolveNullableSchema(field.schema());
+      Schema fieldSchema = field == null ? Schema.create(Schema.Type.STRING) : getNonNullTypeFromUnion(field.schema());
       LogicalType logicalType = fieldSchema.getLogicalType();
       if (isTimeBasedLogicalType(logicalType)) {
         if (hasDateField) {

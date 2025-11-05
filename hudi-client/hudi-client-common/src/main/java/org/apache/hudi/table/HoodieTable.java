@@ -117,7 +117,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.LAZY;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
@@ -1019,7 +1019,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       
       if (writerField != null && !tableField.schema().equals(writerField.schema())) {
         // Check if this is just making the field nullable/non-nullable, which is safe from SI perspective
-        if (resolveNullableSchema(tableField.schema()).equals(resolveNullableSchema(writerField.schema()))) {
+        if (getNonNullTypeFromUnion(tableField.schema()).equals(getNonNullTypeFromUnion(writerField.schema()))) {
           continue;
         }
         

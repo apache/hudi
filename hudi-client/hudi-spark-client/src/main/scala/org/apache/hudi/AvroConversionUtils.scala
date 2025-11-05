@@ -101,7 +101,7 @@ object AvroConversionUtils {
                             recordNamespace: String): Row => GenericRecord = {
     val serde = getCatalystRowSerDe(sourceSqlType)
     val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(sourceSqlType, structName, recordNamespace)
-    val nullable = AvroSchemaUtils.resolveNullableSchema(avroSchema) != avroSchema
+    val nullable = AvroSchemaUtils.getNonNullTypeFromUnion(avroSchema) != avroSchema
 
     val converter = AvroConversionUtils.createInternalRowToAvroConverter(sourceSqlType, avroSchema, nullable)
 

@@ -76,7 +76,7 @@ import java.util.Map;
 import scala.Enumeration;
 import scala.Function1;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_FIELD_ID_WRITE_ENABLED;
 import static org.apache.hudi.config.HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD;
 import static org.apache.hudi.config.HoodieWriteConfig.AVRO_SCHEMA_STRING;
@@ -226,7 +226,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   }
 
   private ValueWriter makeWriter(Schema avroSchema, DataType dataType) {
-    Schema resolvedSchema = avroSchema == null ? null : resolveNullableSchema(avroSchema);
+    Schema resolvedSchema = avroSchema == null ? null : getNonNullTypeFromUnion(avroSchema);
     LogicalType logicalType = resolvedSchema != null ? resolvedSchema.getLogicalType() : null;
 
     if (dataType == DataTypes.BooleanType) {
@@ -429,7 +429,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   }
 
   private Type convertField(Schema avroFieldSchema, StructField structField, Type.Repetition repetition) {
-    Schema resolvedSchema = avroFieldSchema == null ? null : resolveNullableSchema(avroFieldSchema);
+    Schema resolvedSchema = avroFieldSchema == null ? null : getNonNullTypeFromUnion(avroFieldSchema);
     LogicalType logicalType = resolvedSchema != null ? resolvedSchema.getLogicalType() : null;
 
     DataType dataType = structField.dataType();
