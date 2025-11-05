@@ -2,9 +2,9 @@ name: asf-site CI
 
 on:
   push:
-    branches: [asf-site]
+    branches: [ asf-site ]
   pull_request:
-    branches: [asf-site]
+    branches: [ asf-site ]
 
 # Cancel in-progress runs when a new push is made to the same PR or branch
 concurrency:
