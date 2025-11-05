@@ -129,7 +129,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     boolean isParquetOrOrc = filePath.getFileExtension().equals(HoodieFileFormat.PARQUET.getFileExtension())
         || filePath.getFileExtension().equals(HoodieFileFormat.ORC.getFileExtension());
     Schema avroFileSchema = AvroSchemaRepair.repairLogicalTypes(isParquetOrOrc ? HoodieIOFactory.getIOFactory(storage)
-        .getFileFormatUtils(filePath).readAvroSchema(storage, filePath) : dataSchema, requiredSchema);
+        .getFileFormatUtils(filePath).readAvroSchema(storage, filePath) : dataSchema, dataSchema);
     Schema actualRequiredSchema = isParquetOrOrc ? AvroSchemaUtils.pruneDataSchema(avroFileSchema, requiredSchema, Collections.emptySet()) : requiredSchema;
     JobConf jobConfCopy = new JobConf(storage.getConf().unwrapAs(Configuration.class));
     if (getNeedsBootstrapMerge()) {
