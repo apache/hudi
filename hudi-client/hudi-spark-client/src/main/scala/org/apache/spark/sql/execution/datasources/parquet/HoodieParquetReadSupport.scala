@@ -34,6 +34,7 @@ import scala.collection.JavaConverters._
 class HoodieParquetReadSupport(
                                 convertTz: Option[ZoneId],
                                 enableVectorizedReader: Boolean,
+                                val enableTimestampFieldRepair: Boolean,
                                 datetimeRebaseSpec: RebaseSpec,
                                 int96RebaseSpec: RebaseSpec,
                                 tableSchemaOpt: org.apache.hudi.common.util.Option[org.apache.parquet.schema.MessageType] = org.apache.hudi.common.util.Option.empty())
@@ -43,7 +44,11 @@ class HoodieParquetReadSupport(
     val readContext = super.init(context)
     // repair is needed here because this is the schema that is used by the reader to decide what
     // conversions are necessary
-    val requestedParquetSchema = SchemaRepair.repairLogicalTypes(readContext.getRequestedSchema, tableSchemaOpt)
+    val requestedParquetSchema = if (enableTimestampFieldRepair) {
+      SchemaRepair.repairLogicalTypes(readContext.getRequestedSchema, tableSchemaOpt)
+    } else {
+      readContext.getRequestedSchema
+    }
     val trimmedParquetSchema = HoodieParquetReadSupport.trimParquetSchema(requestedParquetSchema, context.getFileSchema)
     new ReadContext(trimmedParquetSchema, readContext.getReadSupportMetadata)
   }

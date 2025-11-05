@@ -43,6 +43,7 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
                                       capacity: Int,
                                       returningBatch: Boolean,
                                       enableRecordFilter: Boolean,
+                                      enableRepair: Boolean,
                                       timeZoneId: Option[String]) extends SparkColumnarFileReader {
   /**
    * Read an individual parquet file

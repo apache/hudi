@@ -20,7 +20,6 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.internal.schema.InternalSchema
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.FileSplit
 import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
@@ -54,6 +53,7 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
                            capacity: Int,
                            returningBatch: Boolean,
                            enableRecordFilter: Boolean,
+                           enableLogicalTimestampRepair: Boolean,
                            timeZoneId: Option[String]) extends SparkParquetReaderBase(
   enableVectorizedReader = enableVectorizedReader,
   enableParquetFilterPushDown = enableParquetFilterPushDown,
@@ -67,6 +67,7 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
   capacity = capacity,
   returningBatch = returningBatch,
   enableRecordFilter = enableRecordFilter,
+  enableRepair = enableLogicalTimestampRepair,
   timeZoneId = timeZoneId) {
 
   /**
@@ -96,14 +97,20 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
     val schemaEvolutionUtils = new ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
       partitionSchema, internalSchemaOpt)
 
-    val fileFooter = repairFooterSchema(if (enableVectorizedReader) {
+    val originalFooter = if (enableVectorizedReader) {
       // When there are vectorized reads, we can avoid reading the footer twice by reading
       // all row groups in advance and filter row groups according to filters that require
       // push down (no need to read the footer metadata again).
       ParquetFooterReader.readFooter(sharedConf, file, ParquetFooterReader.WITH_ROW_GROUPS)
     } else {
       ParquetFooterReader.readFooter(sharedConf, file, ParquetFooterReader.SKIP_ROW_GROUPS)
-    }, tableSchemaOpt)
+    }
+
+    val fileFooter = if (enableLogicalTimestampRepair) {
+      repairFooterSchema(originalFooter, tableSchemaOpt);
+    } else {
+      originalFooter
+    }
 
     val footerFileMetaData = fileFooter.getFileMetaData
     val datetimeRebaseSpec = DataSourceUtils.datetimeRebaseSpec(
@@ -198,6 +205,7 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
       val readSupport = new HoodieParquetReadSupport(
         convertTz,
         enableVectorizedReader = false,
+        enableLogicalTimestampRepair,
         datetimeRebaseSpec,
         int96RebaseSpec,
         tableSchemaOpt)
@@ -264,6 +272,7 @@ object Spark35ParquetReader extends SparkParquetReaderBuilder {
     )
     hadoopConf.setBoolean(SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED.key, sqlConf.parquetInferTimestampNTZEnabled)
 
+    val enableLogicalTimestampRepair = hadoopConf.getBoolean("logicalTimestampField.repair.enable", true)
     val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
       options.getOrElse(FileFormat.OPTION_RETURNING_BATCH,
         throw new IllegalArgumentException(
@@ -288,6 +297,7 @@ object Spark35ParquetReader extends SparkParquetReaderBuilder {
       capacity = sqlConf.parquetVectorizedReaderBatchSize,
       returningBatch = returningBatch,
       enableRecordFilter = sqlConf.parquetRecordFilterEnabled,
+      enableLogicalTimestampRepair = enableLogicalTimestampRepair,
       timeZoneId = Some(sqlConf.sessionLocalTimeZone))
   }
 }
