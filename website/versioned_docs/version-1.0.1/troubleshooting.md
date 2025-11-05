@@ -40,7 +40,7 @@ You can increase `hoodie.commits.archival.batch` moving forward to increase the 
 In addition, you can increase the difference between the 2 watermark configurations : `hoodie.keep.max.commits` (default : 30) 
 and `hoodie.keep.min.commits` (default : 20). This way, you can reduce the number of archive files created and also 
 at the same time increase the number of metadata archived per archive file. Note that post 0.7.0 release where we are 
-adding consolidated Hudi metadata ([RFC-15](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+15%3A+HUDI+File+Listing+Improvements)), 
+adding consolidated Hudi metadata ([RFC-15](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=147427331)), 
 the follow up work would involve re-organizing archival metadata so that we can do periodic compactions to control 
 file-sizing of these archive files.
 

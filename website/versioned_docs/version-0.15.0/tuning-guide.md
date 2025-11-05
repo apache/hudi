@@ -57,7 +57,7 @@ When upsert large input data, hudi spills part of input data to disk when reach 
 
 ### How to tune shuffle parallelism of Hudi jobs ?
 
-First, let's understand what the term parallelism means in the context of Hudi jobs. For any Hudi job using Spark, parallelism equals to the number of spark partitions that should be generated for a particular stage in the DAG. To understand more about spark partitions, read this [article](https://www.dezyre.com/article/how-data-partitioning-in-spark-helps-achieve-more-parallelism/297). In spark, each spark partition is mapped to a spark task that can be executed on an executor. Typically, for a spark application the following hierarchy holds true
+First, let's understand what the term parallelism means in the context of Hudi jobs. For any Hudi job using Spark, parallelism equals to the number of spark partitions that should be generated for a particular stage in the DAG. To understand more about spark partitions, read this [article](https://www.projectpro.io/article/how-data-partitioning-in-spark-helps-achieve-more-parallelism/297). In spark, each spark partition is mapped to a spark task that can be executed on an executor. Typically, for a spark application the following hierarchy holds true
 
 (Spark Application → N Spark Jobs → M Spark Stages → T Spark Tasks) on (E executors with C cores)
 

@@ -647,7 +647,7 @@ for more details.
 ## Doris
 
 The Doris integration currently support Copy on Write and Merge On Read tables in Hudi since version 0.10.0. You can query Hudi tables via Doris from Doris version 2.0. Doris offers a multi-catalog, which is designed to make it easier to connect to external data catalogs to enhance Doris's data lake analysis and federated data query capabilities. Please refer
-to [Doris Hudi Catalog](https://doris.apache.org/docs/lakehouse/datalake-analytics/hudi/) for more details on the setup.
+to [Doris Hudi Catalog](https://doris.apache.org/docs/3.x/lakehouse/catalogs/hudi-catalog) for more details on the setup.
 
 :::note
 The current default supported version of Hudi is 0.10.0 ~ 0.13.1, and has not been tested in other versions. More versions will be supported in the future.

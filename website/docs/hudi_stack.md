@@ -57,7 +57,7 @@ File Slices. File groups contain multiple versions of File Slices and are split 
 the file-group is uniquely identified by the write that created its base file or the first log file, which helps order the File Slices.
 
 - **Metadata Table** : Implemented as another merge-on-read Hudi table, the [metadata table](./metadata) efficiently handles quick updates with low write amplification. 
-It leverages a [SSTable](https://cassandra.apache.org/doc/stable/cassandra/architecture/storage_engine.html#sstables) based file format for quick, indexed key lookups, 
+It leverages a [SSTable](https://cassandra.apache.org/doc/stable/cassandra/architecture/storage-engine.html#sstables) based file format for quick, indexed key lookups, 
 storing vital information like file paths, column statistics and schema. This approach streamlines operations by reducing the necessity for expensive cloud file listings. 
 
 Hudi’s approach of recording updates into Log Files is more efficient and involves low merge overhead than systems like Hive ACID, where merging all delta records against 

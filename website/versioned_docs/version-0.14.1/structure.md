@@ -9,7 +9,7 @@ Hudi (pronounced “Hoodie”) ingests & manages storage of large analytical tab
 
  * **Read Optimized query** - Provides excellent query performance on pure columnar storage, much like plain [Parquet](https://parquet.apache.org/) tables.
  * **Incremental query** - Provides a change stream out of the dataset to feed downstream jobs/ETLs.
- * **Snapshot query** - Provides queries on real-time data, using a combination of columnar & row based storage (e.g Parquet + [Avro](http://avro.apache.org/docs/current/mr))
+ * **Snapshot query** - Provides queries on real-time data, using a combination of columnar & row based storage (e.g Parquet + [Avro](https://avro.apache.org/docs/++version++/mapreduce-guide/))
 
 <figure>
     <img className="docimage" src={require("/assets/images/hudi_intro_1.png").default} alt="hudi_intro_1.png" />

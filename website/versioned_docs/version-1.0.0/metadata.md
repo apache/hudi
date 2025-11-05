@@ -46,7 +46,7 @@ is tracked using internal tables. This approach provides the following advantage
 
 Following are the different types of metadata currently supported.
 
-- ***[files listings](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+15%3A+HUDI+File+Listing+Improvements)***: 
+- ***[files listings](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=147427331)***: 
   Stored as *files* partition in the metadata table. Contains file information such as file name, size, and active state
   for each partition in the data table, along with list of all partitions in the table. Improves the files listing performance 
   by avoiding direct storage calls such as *exists, listStatus* and *listFiles* on the data table.
