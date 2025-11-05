@@ -14,7 +14,7 @@ how to learn more to get started.
 ## What is Apache Hudi
 Apache Hudi (pronounced “hoodie”) is the next generation [streaming data lake platform](/blog/2021/07/21/streaming-data-lake-platform).
  Hudi brings core warehouse and database functionality directly to a data lake. Hudi provides [tables](sql_ddl),
-[transactions](timeline), [efficient upserts/deletes](write_operations), [advanced indexes](indexes),
+[transactions](timeline), [efficient upserts/deletes](write_operations), [advanced indexes](indexing),
 [ingestion services](hoodie_streaming_ingestion), data [clustering](clustering)/[compaction](compaction) optimizations,
 and [concurrency](concurrency_control) all while keeping your data in open source file formats.
 
@@ -35,7 +35,7 @@ expands the use of Apache Hudi for a diverse range of use cases in the non-JVM e
 
 If you are relatively new to Apache Hudi, it is important to be familiar with a few core concepts:
 - [Hudi Timeline](timeline) – How Hudi manages transactions and other table services
-- [Hudi File Layout](storage_layouts) - How the files are laid out on storage
+- [Hudi File Layout](file_layouts) - How the files are laid out on storage
 - [Hudi Table Types](table_types) – `COPY_ON_WRITE` and `MERGE_ON_READ`
 - [Hudi Query Types](table_types#query-types) – Snapshot Queries, Incremental Queries, Read-Optimized Queries
 
