@@ -188,7 +188,9 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         this.totalRecords = this.dis.readInt();
       }
 
-      // writer schema could refer to table schema. 
+      // writer schema could refer to table schema.
+      // avoid this for MDT for sure.
+      // and for tables having no logical ts column.
       Schema repairedWriterSchema = AvroSchemaRepair.repairLogicalTypes(writerSchema, readerSchema);
       if (recordNeedsRewriteForExtendedAvroTypePromotion(repairedWriterSchema, readerSchema)) {
         this.reader = new GenericDatumReader<>(repairedWriterSchema, repairedWriterSchema);
