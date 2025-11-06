@@ -21,12 +21,11 @@ jobs:
       - uses: actions/checkout@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          # Use shallow clone with only 50 commits of history
-          fetch-depth: 50
-          # Don't fetch tags (this can save significant time)
+          # For PR: only need recent commits for diff
+          # For push: only need latest commit to check content/
+          fetch-depth: ${{ github.event_name == 'pull_request' && 50 || 1 }}
+          # Skip tags - this saves significant time
           fetch-tags: false
-          # Only fetch the PR branch and base branch
-          filter: 'tree:0'
       - name: Check for files in content/
         if: github.event_name == 'pull_request'
         run: |
