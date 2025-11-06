@@ -234,16 +234,30 @@ public class FSUtils {
 
     String fullPartitionPathStr = fullPartitionPath.toString();
 
-    if (!fullPartitionPathStr.startsWith(basePath.toString())) {
+    /*if (!fullPartitionPathStr.startsWith(basePath.toString())) {
       throw new IllegalArgumentException("Partition path \"" + fullPartitionPathStr
           + "\" does not belong to base-path \"" + basePath + "\"");
-    }
+    }*/
 
     int partitionStartIndex = fullPartitionPathStr.indexOf(basePath.getName(),
         basePath.getParent() == null ? 0 : basePath.getParent().toString().length());
     // Partition-Path could be empty for non-partitioned tables
     return partitionStartIndex + basePath.getName().length() == fullPartitionPathStr.length() ? ""
         : fullPartitionPathStr.substring(partitionStartIndex + basePath.getName().length() + 1);
+  }
+
+  public static String getRelativePartitionPath(Path fullPartitionPath, int numPartitionPathLevels) {
+    if (numPartitionPathLevels == 0) {
+      return StringUtils.EMPTY_STRING;
+    } else {
+      int levelsSoFar = 1;
+      Path tableBasePath = fullPartitionPath.getParent();
+      while (levelsSoFar < numPartitionPathLevels) {
+        tableBasePath = tableBasePath.getParent();
+        levelsSoFar++;
+      }
+      return getRelativePartitionPath(tableBasePath, fullPartitionPath);
+    }
   }
 
   /**

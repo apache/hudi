@@ -104,9 +104,15 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected final WriteLock writeLock = globalLock.writeLock();
 
   private BootstrapIndex bootstrapIndex;
+  protected boolean allowBasePathOverrides = false;
+  protected int numPartitionPathLevels = 0;
 
   private String getPartitionPathFor(HoodieBaseFile baseFile) {
-    return FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), baseFile.getHadoopPath().getParent());
+    if (allowBasePathOverrides) {
+      return FSUtils.getRelativePartitionPath(baseFile.getHadoopPath().getParent(), numPartitionPathLevels);
+    } else {
+      return FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), baseFile.getHadoopPath().getParent());
+    }
   }
 
   /**
@@ -114,6 +120,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
     this.metaClient = metaClient;
+    this.allowBasePathOverrides = metaClient.getTableConfig().shouldAllowBasePathOverridesWithMetadata();
+    if (allowBasePathOverrides) {
+      this.numPartitionPathLevels = metaClient.getTableConfig().getNumPartitionPathLevels();
+    }
     refreshTimeline(visibleActiveTimeline);
     resetFileGroupsReplaced(visibleCommitsAndCompactionTimeline);
     this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);
@@ -187,7 +197,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
     Map<Pair<String, String>, List<HoodieLogFile>> logFiles = logFileStream.collect(Collectors.groupingBy((logFile) -> {
       String partitionPathStr =
-          FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), logFile.getPath().getParent());
+          FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), logFile.getPath().getParent()); // to fix base path generation
       return Pair.of(partitionPathStr, logFile.getFileId());
     }));
 

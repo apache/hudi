@@ -82,6 +82,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   protected boolean isMetadataTableInitialized;
   protected final boolean hiveStylePartitioningEnabled;
   protected final boolean urlEncodePartitioningEnabled;
+  private final boolean enableBasePathForPartitions;
 
   protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String dataBasePath) {
     super(engineContext, engineContext.getHadoopConf(), dataBasePath);
@@ -95,7 +96,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     this.urlEncodePartitioningEnabled = Boolean.parseBoolean(dataMetaClient.getTableConfig().getUrlEncodePartitioning());
     this.metadataConfig = metadataConfig;
     this.isMetadataTableInitialized = dataMetaClient.getTableConfig().isMetadataTableAvailable();
-
+    this.enableBasePathForPartitions = metadataConfig.shouldEnableBasePathForPartitions();
     if (metadataConfig.enableMetrics()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(Registry.getRegistry("HoodieMetadata")));
     } else {
@@ -365,8 +366,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   Map<String, FileStatus[]> fetchAllFilesInPartitionPaths(List<Path> partitionPaths) throws IOException {
-    Map<String, Path> partitionIdToPathMap =
-        partitionPaths.parallelStream()
+    Map<String, Path> partitionIdToPathMap = partitionPaths.parallelStream()
             .collect(
                 Collectors.toMap(partitionPath -> {
                   String partitionId = FSUtils.getRelativePartitionPath(dataBasePath.get(), partitionPath);
@@ -384,10 +384,16 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     Map<String, FileStatus[]> partitionPathToFilesMap = partitionIdRecordPairs.entrySet().stream()
         .map(e -> {
           final String partitionId = e.getKey();
-          Path partitionPath = partitionIdToPathMap.get(partitionId);
 
           HoodieMetadataPayload metadataPayload = e.getValue().getData();
           checkForSpuriousDeletes(metadataPayload, partitionId);
+
+          Path partitionPath;
+          if (enableBasePathForPartitions) {
+            partitionPath = new Path(metadataPayload.getBasePathForPartition(), partitionId);
+          } else {
+           partitionPath = partitionIdToPathMap.get(partitionId);
+          }
 
           FileStatus[] files = metadataPayload.getFileStatuses(fs, partitionPath);
           return Pair.of(partitionPath.toString(), files);

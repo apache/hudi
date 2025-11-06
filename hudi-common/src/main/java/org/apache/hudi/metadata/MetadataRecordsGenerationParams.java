@@ -42,9 +42,12 @@ public class MetadataRecordsGenerationParams implements Serializable {
   private final int columnStatsIndexParallelism;
   private final List<String> targetColumnsForColumnStatsIndex;
   private final List<String> targetColumnsForBloomFilterIndex;
+  private final boolean enableBasePathForPartition;
+  private final String basePathOverride;
 
   MetadataRecordsGenerationParams(HoodieTableMetaClient dataMetaClient, List<MetadataPartitionType> enabledPartitionTypes, String bloomFilterType, int bloomIndexParallelism,
-                                  boolean isColumnStatsIndexEnabled, int columnStatsIndexParallelism, List<String> targetColumnsForColumnStatsIndex, List<String> targetColumnsForBloomFilterIndex) {
+                                  boolean isColumnStatsIndexEnabled, int columnStatsIndexParallelism, List<String> targetColumnsForColumnStatsIndex, List<String> targetColumnsForBloomFilterIndex,
+                                  boolean enableBasePathForPartition, String basePathOverride) {
     this.dataMetaClient = dataMetaClient;
     this.enabledPartitionTypes = enabledPartitionTypes;
     this.bloomFilterType = bloomFilterType;
@@ -53,6 +56,8 @@ public class MetadataRecordsGenerationParams implements Serializable {
     this.columnStatsIndexParallelism = columnStatsIndexParallelism;
     this.targetColumnsForColumnStatsIndex = targetColumnsForColumnStatsIndex;
     this.targetColumnsForBloomFilterIndex = targetColumnsForBloomFilterIndex;
+    this.enableBasePathForPartition = enableBasePathForPartition;
+    this.basePathOverride = basePathOverride;
   }
 
   public HoodieTableMetaClient getDataMetaClient() {
@@ -85,5 +90,13 @@ public class MetadataRecordsGenerationParams implements Serializable {
 
   public List<String> getSecondaryKeysForBloomFilterIndex() {
     return targetColumnsForBloomFilterIndex;
+  }
+
+  public boolean shouldEnableBasePathForPartition() {
+    return enableBasePathForPartition;
+  }
+
+  public String getBasePathOverride() {
+    return basePathOverride;
   }
 }

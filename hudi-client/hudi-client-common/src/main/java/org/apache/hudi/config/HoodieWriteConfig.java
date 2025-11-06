@@ -1929,6 +1929,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getMetadataConfig().getColumnsEnabledForBloomFilterIndex();
   }
 
+  public boolean shouldEnableBasePathForPartitions() {
+    return getMetadataConfig().shouldEnableBasePathForPartitions();
+  }
+
   public int getIndexingCheckTimeoutSeconds() {
     return getMetadataConfig().getIndexingCheckTimeoutSeconds();
   }

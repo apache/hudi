@@ -588,10 +588,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     // Records which save the file listing of each partition
     engineContext.setJobStatus(this.getClass().getSimpleName(), "Creating records for metadata FILES partition");
+    boolean enableBasePathForPartitions = dataWriteConfig.shouldEnableBasePathForPartitions();
+    String basePath = dataMetaClient.getBasePath();
+
     HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
       Map<String, Long> fileNameToSizeMap = partitionInfo.getFileNameToSizeMap();
       return HoodieMetadataPayload.createPartitionFilesRecord(
-          HoodieTableMetadataUtil.getPartitionIdentifier(partitionInfo.getRelativePath()), fileNameToSizeMap, Collections.emptyList());
+          HoodieTableMetadataUtil.getPartitionIdentifier(partitionInfo.getRelativePath()), fileNameToSizeMap, Collections.emptyList(),
+          enableBasePathForPartitions, dataWriteConfig.getMetadataConfig().getBasePathOverride());
     });
     ValidationUtils.checkState(fileListRecords.count() == partitions.size());
 
@@ -828,7 +832,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
         dataWriteConfig.getColumnStatsIndexParallelism(),
         dataWriteConfig.getColumnsEnabledForColumnStatsIndex(),
-        dataWriteConfig.getColumnsEnabledForBloomFilterIndex());
+        dataWriteConfig.getColumnsEnabledForBloomFilterIndex(),
+        dataWriteConfig.shouldEnableBasePathForPartitions(),
+        dataWriteConfig.getMetadataConfig().getBasePathOverride());
   }
 
   /**
@@ -992,7 +998,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // or a timestamp with suffix which we use for MDT clean, compaction etc.
       String syncCommitTime = HoodieTableMetadataUtil.createRestoreTimestamp(HoodieActiveTimeline.createNewInstantTime());
       processAndCommit(syncCommitTime, () -> HoodieTableMetadataUtil.convertMissingPartitionRecords(engineContext,
-          partitionsToDelete, partitionFilesToAdd, partitionFilesToDelete, syncCommitTime));
+          partitionsToDelete, partitionFilesToAdd, partitionFilesToDelete, syncCommitTime,
+          dataWriteConfig.shouldEnableBasePathForPartitions(), dataWriteConfig.getMetadataConfig().getBasePathOverride()));
       closeInternal();
     } catch (IOException e) {
       throw new HoodieMetadataException("IOException during MDT restore sync", e);
@@ -1029,7 +1036,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // both above list should only be added to FILES partition.
 
       String rollbackInstantTime = createRollbackTimestamp(instantTime);
-      processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, dataMetaClient, rollbackMetadata, instantTime));
+      processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, dataMetaClient, rollbackMetadata, instantTime,
+          dataWriteConfig.getMetadataConfig().shouldEnableBasePathForPartitions(), dataWriteConfig.getMetadataConfig().getBasePathOverride()));
 
       if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
         LOG.info("Rolling back MDT deltacommit " + commitToRollbackInstantTime);
