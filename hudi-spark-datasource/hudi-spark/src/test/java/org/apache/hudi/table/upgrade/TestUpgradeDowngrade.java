@@ -48,8 +48,8 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.jupiter.api.Disabled;
 import org.apache.spark.sql.SaveMode;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -431,7 +431,17 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
 
     WriteClientTestUtils.startCommitWithTime(writeClient, instant1);
     writeClient.commit(instant1, writeClient.insert(dataset, instant1));
+
+    String instant2 = getCommitTimeAtUTC(5);
+    List<HoodieRecord> updates = dataGenerator.generateUpdates(instant2, 50);
+    JavaRDD<HoodieRecord> dataset2 = jsc().parallelize(updates, 2);
+
+    WriteClientTestUtils.startCommitWithTime(writeClient, instant2);
+    writeClient.commit(instant2, writeClient.upsert(dataset2, instant2));
     metaClient.reloadTableConfig();
+
+    int compactionCountBefore = metaClient.getActiveTimeline()
+        .filterCompletedOrMajorOrMinorCompactionInstants().countInstants();
 
     // verify record index partition exists before downgrade
     assertTrue(metaClient.getTableConfig().getMetadataPartitions().contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath()));
@@ -454,6 +464,10 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         .build();
 
     resultMetaClient.reloadTableConfig();
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      assertEquals(compactionCountBefore + 1, resultMetaClient.getActiveTimeline()
+          .filterCompletedOrMajorOrMinorCompactionInstants().countInstants());
+    }
     // verify record index partition exists after downgrade
     assertTrue(resultMetaClient.getTableConfig().getMetadataPartitions().contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath()));
   }
