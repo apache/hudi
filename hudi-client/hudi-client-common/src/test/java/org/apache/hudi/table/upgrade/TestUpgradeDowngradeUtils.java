@@ -132,7 +132,7 @@ class TestUpgradeDowngradeUtils {
     assertEquals(TRUE, properties.getString(HoodieMetadataConfig.ENABLE.key()));
     assertEquals(TRUE, properties.getString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key()));
     assertEquals(TRUE, properties.getString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key()));
-    assertEquals(TRUE, properties.getString(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key()));
+    assertEquals(TRUE, properties.getString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key()));
   }
 
   @Test
@@ -178,7 +178,7 @@ class TestUpgradeDowngradeUtils {
 
     setPropertiesBasedOnMetadataPartitions(properties, partitions, table);
     assertEquals(TRUE, properties.getString(HoodieMetadataConfig.ENABLE.key()));
-    assertEquals(TRUE, properties.getString(HoodieMetadataConfig.PARTITIONED_RECORD_INDEX_ENABLE_PROP.key()));
+    assertEquals(TRUE, properties.getString(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key()));
   }
 
   @ParameterizedTest
@@ -204,6 +204,6 @@ class TestUpgradeDowngradeUtils {
 
     setPropertiesBasedOnMetadataPartitions(properties, partitions, table);
     assertEquals(TRUE, properties.getString(HoodieMetadataConfig.ENABLE.key()));
-    assertEquals(TRUE, properties.getString(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key()));
+    assertEquals(TRUE, properties.getString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key()));
   }
 }
