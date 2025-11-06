@@ -13,19 +13,24 @@
  */
 package io.trino.plugin.hudi.partition;
 
-import io.airlift.concurrent.MoreFutures;
+import com.google.common.util.concurrent.ListenableFuture;
 import io.trino.plugin.hive.HivePartitionKey;
 import io.trino.plugin.hive.util.AsyncQueue;
+import io.trino.plugin.hive.util.ResumableTask;
+import io.trino.plugin.hive.util.ResumableTask.TaskStatus;
 import io.trino.plugin.hudi.query.HudiDirectoryLister;
 import io.trino.plugin.hudi.split.HudiSplitFactory;
 import io.trino.spi.connector.ConnectorSplit;
 import org.apache.hudi.common.model.FileSlice;
 
 import java.util.Deque;
+import java.util.Iterator;
 import java.util.List;
 
+import static com.google.common.util.concurrent.Futures.immediateVoidFuture;
+
 public class HudiPartitionInfoLoader
-        implements Runnable
+        implements ResumableTask
 {
     private final HudiDirectoryLister hudiDirectoryLister;
     private final HudiSplitFactory hudiSplitFactory;
@@ -33,6 +38,7 @@ public class HudiPartitionInfoLoader
     private final Deque<HiveHudiPartitionInfo> partitionQueue;
     private final String commitTime;
     private final boolean useIndex;
+    private final Deque<Iterator<ConnectorSplit>> splitIterators;
 
     private boolean isRunning;
 
@@ -42,7 +48,8 @@ public class HudiPartitionInfoLoader
             HudiSplitFactory hudiSplitFactory,
             AsyncQueue<ConnectorSplit> asyncQueue,
             Deque<HiveHudiPartitionInfo> partitionQueue,
-            boolean useIndex)
+            boolean useIndex,
+            Deque<Iterator<ConnectorSplit>> splitIterators)
     {
         this.hudiDirectoryLister = hudiDirectoryLister;
         this.commitTime = commitTime;
@@ -51,28 +58,58 @@ public class HudiPartitionInfoLoader
         this.partitionQueue = partitionQueue;
         this.isRunning = true;
         this.useIndex = useIndex;
+        this.splitIterators = splitIterators;
     }
 
     @Override
-    public void run()
+    public TaskStatus process()
     {
-        while (isRunning || !partitionQueue.isEmpty()) {
-            HiveHudiPartitionInfo hudiPartitionInfo = partitionQueue.poll();
-
-            if (hudiPartitionInfo != null && hudiPartitionInfo.getHivePartitionName() != null) {
-                generateSplitsFromPartition(hudiPartitionInfo);
+        while (isRunning || (!partitionQueue.isEmpty() || !splitIterators.isEmpty())) {
+            try {
+                ListenableFuture<Void> future = loadSplits();
+                if (!future.isDone()) {
+                    return TaskStatus.continueOn(future);
+                }
+            }
+            catch (Exception e) {
+                throw new RuntimeException("Error loading splits", e);
             }
         }
+
+        return TaskStatus.finished();
     }
 
-    private void generateSplitsFromPartition(HiveHudiPartitionInfo hudiPartitionInfo)
+    private ListenableFuture<Void> loadSplits()
+    {
+        Iterator<ConnectorSplit> splits = splitIterators.poll();
+        if (splits == null) {
+            HiveHudiPartitionInfo partition = partitionQueue.poll();
+            if (partition == null) {
+                return immediateVoidFuture();
+            }
+            splits = generateSplitsFromPartition(partition);
+        }
+
+        while (splits.hasNext()) {
+            ConnectorSplit split = splits.next();
+            ListenableFuture<Void> future = asyncQueue.offer(split);
+            if (!future.isDone()) {
+                splitIterators.addFirst(splits);
+                return future;
+            }
+        }
+
+        return immediateVoidFuture();
+    }
+
+    private Iterator<ConnectorSplit> generateSplitsFromPartition(HiveHudiPartitionInfo hudiPartitionInfo)
     {
         List<HivePartitionKey> partitionKeys = hudiPartitionInfo.getHivePartitionKeys();
         List<FileSlice> partitionFileSlices = hudiDirectoryLister.listStatus(hudiPartitionInfo, useIndex);
-        partitionFileSlices.stream()
+        return partitionFileSlices.stream()
                 .flatMap(slice -> hudiSplitFactory.createSplits(partitionKeys, slice, this.commitTime).stream())
-                .map(asyncQueue::offer)
-                .forEachOrdered(MoreFutures::getFutureValue);
+                .map(ConnectorSplit.class::cast)
+                .iterator();
     }
 
     public void stopRunning()

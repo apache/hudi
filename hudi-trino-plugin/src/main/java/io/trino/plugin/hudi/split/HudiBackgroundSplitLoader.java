@@ -25,13 +25,13 @@ import io.trino.metastore.Partition;
 import io.trino.metastore.StorageFormat;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hive.util.AsyncQueue;
+import io.trino.plugin.hive.util.ResumableTasks;
 import io.trino.plugin.hudi.HudiTableHandle;
 import io.trino.plugin.hudi.partition.HiveHudiPartitionInfo;
 import io.trino.plugin.hudi.partition.HudiPartitionInfoLoader;
 import io.trino.plugin.hudi.query.HudiDirectoryLister;
 import io.trino.plugin.hudi.query.index.HudiPartitionStatsIndexSupport;
 import io.trino.plugin.hudi.query.index.IndexSupportFactory;
-import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.ConnectorSplit;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -50,11 +50,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HexFormat;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
@@ -64,7 +64,6 @@ import java.util.stream.IntStream;
 
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static io.airlift.concurrent.MoreFutures.addExceptionCallback;
-import static io.trino.plugin.hudi.HudiErrorCode.HUDI_CANNOT_OPEN_SPLIT;
 import static io.trino.plugin.hudi.HudiSessionProperties.getSplitGeneratorParallelism;
 import static io.trino.plugin.hudi.HudiSessionProperties.getTargetSplitSize;
 import static io.trino.plugin.hudi.HudiSessionProperties.isMetadataPartitionListingEnabled;
@@ -155,10 +154,11 @@ public class HudiBackgroundSplitLoader
         Executor splitGeneratorExecutor = new BoundedExecutor(executor, splitGeneratorParallelism);
 
         for (int i = 0; i < splitGeneratorParallelism; i++) {
+            Deque<Iterator<ConnectorSplit>> splitIterators = new ConcurrentLinkedDeque<>();
             HudiPartitionInfoLoader generator = new HudiPartitionInfoLoader(hudiDirectoryLister, tableHandle.getLatestCommitTime(), hudiSplitFactory,
-                    asyncQueue, partitionQueue, useIndex);
+                    asyncQueue, partitionQueue, useIndex, splitIterators);
             splitGenerators.add(generator);
-            ListenableFuture<Void> future = Futures.submit(generator, splitGeneratorExecutor);
+            ListenableFuture<Void> future = ResumableTasks.submit(splitGeneratorExecutor, generator);
             addExceptionCallback(future, errorListener);
             futures.add(future);
         }
@@ -166,19 +166,12 @@ public class HudiBackgroundSplitLoader
         // Signal all generators to stop once partition queue is drained
         splitGenerators.forEach(HudiPartitionInfoLoader::stopRunning);
 
-        log.info("Wait for partition pruning split generation to finish on table %s.%s", tableHandle.getSchemaName(), tableHandle.getTableName());
-        try {
-            Futures.whenAllComplete(futures)
-                    .run(asyncQueue::finish, directExecutor())
-                    .get();
-            log.info("Partition pruning split generation finished on table %s.%s", tableHandle.getSchemaName(), tableHandle.getTableName());
-        }
-        catch (InterruptedException | ExecutionException e) {
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            throw new TrinoException(HUDI_CANNOT_OPEN_SPLIT, "Error generating Hudi split", e);
-        }
+        Futures.whenAllComplete(futures)
+                .run(() -> {
+                    asyncQueue.finish();
+                    log.info("Partition pruning split generation finished on table %s.%s", tableHandle.getSchemaName(), tableHandle.getTableName());
+                }, directExecutor());
+        log.info("Started partition pruning split generation on table %s.%s", tableHandle.getSchemaName(), tableHandle.getTableName());
     }
 
     private Deque<HiveHudiPartitionInfo> getPartitionInfos(boolean useIndex)
