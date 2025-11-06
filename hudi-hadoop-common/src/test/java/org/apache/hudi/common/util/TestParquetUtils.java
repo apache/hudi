@@ -517,7 +517,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     writeParquetFile(BloomFilterTypeCode.SIMPLE.name(), filePath, rowKeys);
 
     ParquetMetadata metadata = parquetUtils.readMetadata(HoodieTestUtils.getStorage(filePath), new StoragePath(filePath));
-    ParquetMetadata metadataWithSkipRowGroups = parquetUtils.readMetadataWithSkipRowGroups(HoodieTestUtils.getStorage(filePath), new StoragePath(filePath));
+    ParquetMetadata metadataWithSkipRowGroups = parquetUtils.readFileMetadataOnly(HoodieTestUtils.getStorage(filePath), new StoragePath(filePath));
     assertTrue(metadata.getFileMetaData() != null);
     assertTrue(metadataWithSkipRowGroups.getFileMetaData() != null);
     assertFalse(metadata.getBlocks().isEmpty());

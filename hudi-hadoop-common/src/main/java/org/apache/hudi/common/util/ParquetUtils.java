@@ -115,7 +115,7 @@ public class ParquetUtils extends FileFormatUtils {
     return readMetadata(storage, parquetFilePath, NO_FILTER);
   }
 
-  public static ParquetMetadata readMetadataWithSkipRowGroups(HoodieStorage storage, StoragePath parquetFilePath) {
+  public static ParquetMetadata readFileMetadataOnly(HoodieStorage storage, StoragePath parquetFilePath) {
     return readMetadata(storage, parquetFilePath, SKIP_ROW_GROUPS);
   }
 
@@ -244,7 +244,7 @@ public class ParquetUtils extends FileFormatUtils {
    * Get the schema of the given parquet file.
    */
   public MessageType readSchema(HoodieStorage storage, StoragePath parquetFilePath) {
-    return readMetadataWithSkipRowGroups(storage, parquetFilePath).getFileMetaData().getSchema();
+    return readFileMetadataOnly(storage, parquetFilePath).getFileMetaData().getSchema();
   }
   
   /**
@@ -266,7 +266,7 @@ public class ParquetUtils extends FileFormatUtils {
   public Map<String, String> readFooter(HoodieStorage storage, boolean required,
                                         StoragePath filePath, String... footerNames) {
     Map<String, String> footerVals = new HashMap<>();
-    ParquetMetadata footer = readMetadataWithSkipRowGroups(storage, filePath);
+    ParquetMetadata footer = readFileMetadataOnly(storage, filePath);
     Map<String, String> metadata = footer.getFileMetaData().getKeyValueMetaData();
     for (String footerName : footerNames) {
       if (metadata.containsKey(footerName)) {
