@@ -21,12 +21,11 @@ jobs:
       - uses: actions/checkout@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          # Use shallow clone with only 50 commits of history
-          fetch-depth: 50
-          # Don't fetch tags (this can save significant time)
+          # For PR: need enough commits for diff (100 should cover most PRs)
+          # For push: only need latest commit
+          fetch-depth: ${{ github.event_name == 'pull_request' && 100 || 1 }}
+          # Skip tags - this saves significant time
           fetch-tags: false
-          # Only fetch the PR branch and base branch
-          filter: 'tree:0'
       - name: Check for files in content/
         if: github.event_name == 'pull_request'
         run: |
@@ -43,6 +42,7 @@ jobs:
             echo "✅ No files under content/ directory."
           fi
       - name: Check for absolute /docs/ paths in markdown links
+        if: github.event_name == 'pull_request'
         run: |
           echo "🔍 Checking for absolute /docs/ paths in markdown links..."
 
@@ -111,7 +111,7 @@ jobs:
         run: |
           git config --global user.name "CI BOT"
           git config --global user.email "cibot@hudi.apache.org"
-          git checkout -b pr
+          git checkout -b ci-build
           git remote add hudi https://${{ secrets.GITHUB_TOKEN }}@github.com/apache/hudi.git
           git pull --rebase hudi asf-site
       - uses: actions/setup-node@v6
@@ -131,4 +131,4 @@ jobs:
           cp -R ${{ env.DOCS_ROOT }}/build content
           git add -A
           git commit -am "GitHub Actions build asf-site"
-          git push hudi pr:asf-site
+          git push hudi ci-build:asf-site
