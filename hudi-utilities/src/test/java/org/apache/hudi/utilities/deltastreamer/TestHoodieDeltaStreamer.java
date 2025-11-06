@@ -1012,7 +1012,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @ParameterizedTest
   @CsvSource(value = {"SIX,AVRO,CLUSTER", "EIGHT,AVRO,CLUSTER", "CURRENT,AVRO,NONE", "CURRENT,AVRO,CLUSTER", "CURRENT,SPARK,NONE", "CURRENT,SPARK,CLUSTER"})
   public void testCOWLogicalRepair(String tableVersion, String recordType, String operation) throws Exception {
-    TestMercifulJsonToRowConverter.timestampNTZCompatibility(() -> {
+    TestMercifulJsonToRowConverterBase.timestampNTZCompatibility(() -> {
       String dirName = "trips_logical_types_json_cow_write";
       String dataPath = basePath + "/" + dirName;
       java.nio.file.Path zipOutput = Paths.get(new URI(dataPath));
@@ -1099,7 +1099,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       "CURRENT,AVRO,NONE,PARQUET", "CURRENT,AVRO,CLUSTER,PARQUET", "CURRENT,AVRO,COMPACT,PARQUET",
       "CURRENT,SPARK,NONE,PARQUET", "CURRENT,SPARK,CLUSTER,PARQUET", "CURRENT,SPARK,COMPACT,PARQUET"})
   public void testMORLogicalRepair(String tableVersion, String recordType, String operation, String logBlockType) throws Exception {
-    TestMercifulJsonToRowConverter.timestampNTZCompatibility(() -> {
+    TestMercifulJsonToRowConverterBase.timestampNTZCompatibility(() -> {
       String tableSuffix;
       String logFormatValue;
       if ("AVRO".equals(logBlockType)) {
