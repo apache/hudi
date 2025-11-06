@@ -60,6 +60,7 @@ class Spark33ParquetReader(enableVectorizedReader: Boolean,
                            capacity: Int,
                            returningBatch: Boolean,
                            enableRecordFilter: Boolean,
+                           enableLogicalTimestampRepair: Boolean,
                            timeZoneId: Option[String]) extends SparkParquetReaderBase(
   enableVectorizedReader = enableVectorizedReader,
   enableParquetFilterPushDown = enableParquetFilterPushDown,
@@ -73,6 +74,7 @@ class Spark33ParquetReader(enableVectorizedReader: Boolean,
   capacity = capacity,
   returningBatch = returningBatch,
   enableRecordFilter = enableRecordFilter,
+  enableRepair = enableLogicalTimestampRepair,
   timeZoneId = timeZoneId) {
 
   /**
@@ -102,8 +104,12 @@ class Spark33ParquetReader(enableVectorizedReader: Boolean,
     val schemaEvolutionUtils = new ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
       partitionSchema, internalSchemaOpt)
 
-    lazy val fileFooter = repairFooterSchema(
-      ParquetFooterReader.readFooter(sharedConf, filePath, SKIP_ROW_GROUPS), tableSchemaOpt)
+    lazy val originalFooter = ParquetFooterReader.readFooter(sharedConf, filePath, SKIP_ROW_GROUPS)
+    lazy val fileFooter = if (enableLogicalTimestampRepair) {
+      repairFooterSchema(originalFooter, tableSchemaOpt)
+    } else {
+      originalFooter
+    }
 
     lazy val footerFileMetaData = fileFooter.getFileMetaData
     val datetimeRebaseSpec = DataSourceUtils.datetimeRebaseSpec(
@@ -198,6 +204,7 @@ class Spark33ParquetReader(enableVectorizedReader: Boolean,
       val readSupport = new HoodieParquetReadSupport(
         convertTz,
         enableVectorizedReader = false,
+        enableLogicalTimestampRepair,
         datetimeRebaseSpec,
         int96RebaseSpec,
         tableSchemaOpt)
@@ -259,6 +266,7 @@ object Spark33ParquetReader extends SparkParquetReaderBuilder {
       sqlConf.getConfString("spark.sql.legacy.parquet.nanosAsLong", "false").toBoolean
     )
 
+    val enableLogicalTimestampRepair = hadoopConf.getBoolean("logicalTimestampField.repair.enable", true)
     // Should always be set by FileSourceScanExec while creating this.
     // Check conf before checking the option, to allow working around an issue by changing conf.
     val returningBatch = vectorized && sqlConf.parquetVectorizedReaderEnabled &&
@@ -286,6 +294,7 @@ object Spark33ParquetReader extends SparkParquetReaderBuilder {
       capacity = sqlConf.parquetVectorizedReaderBatchSize,
       returningBatch = returningBatch,
       enableRecordFilter = sqlConf.parquetRecordFilterEnabled,
+      enableLogicalTimestampRepair = enableLogicalTimestampRepair,
       timeZoneId = Some(sqlConf.sessionLocalTimeZone))
   }
 
