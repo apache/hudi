@@ -10,7 +10,7 @@ This page contains older release information, for bookkeeping purposes. It's rec
 more recent releases listed [here](/releases/download)
 
 
-## [Release 0.5.3](https://github.com/apache/hudi/releases/tag/release-0.5.3) ([docs](/docs/quick-start-guide))
+## [Release 0.5.3](https://github.com/apache/hudi/releases/tag/release-0.5.3)
 
 ### Migration Guide for this release
 * This is a bug fix only release and no special migration steps needed when upgrading from 0.5.2. If you are upgrading from earlier releases “X”, please make sure you read the migration guide for each subsequent release between “X” and 0.5.3
@@ -54,7 +54,7 @@ For example hudi-spark-bundle pom dependency would look like:
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12348256)
 
 
-## [Release 0.5.2-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.2-incubating) ([docs](/docs/quick-start-guide))
+## [Release 0.5.2-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.2-incubating)
 
 ### Migration Guide for this release
 * Write Client restructuring has moved classes around ([HUDI-554](https://issues.apache.org/jira/browse/HUDI-554)). Package `client` now has all the various client classes, that do the transaction management. `func` renamed to `execution` and some helpers moved to `client/utils`. All compaction code under `io` now under `table/compact`. Rollback code under `table/rollback` and in general all code for individual operations under `table`. This change only affects the apps/projects depending on hudi-client. Users of deltastreamer/datasource will not need to change anything.
@@ -76,7 +76,7 @@ temp_query --sql "select Instant, NumInserts, NumWrites from satishkotha_debug w
 ### Raw Release Notes
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12346606)
 
-## [Release 0.5.1-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.1-incubating) ([docs](/docs/quick-start-guide))
+## [Release 0.5.1-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.1-incubating)
 
 ### Migration Guide for this release
 * Upgrade hudi readers (query engines) first with 0.5.1-incubating release before upgrading writer.
@@ -117,7 +117,7 @@ The raw release notes are available [here](https://issues.apache.org/jira/secure
 ### Raw Release Notes
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12346183)
 
-## [Release 0.5.0-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.0-incubating) ([docs](/docs/quick-start-guide))
+## [Release 0.5.0-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.0-incubating)
 
 ### Release Highlights
 * Package and format renaming from com.uber.hoodie to org.apache.hudi (See migration guide section below)

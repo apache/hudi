@@ -7,7 +7,7 @@ toc: true
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 0.9.0](https://github.com/apache/hudi/releases/tag/release-0.9.0) ([docs](/docs/0.9.0/quick-start-guide))
+## [Release 0.9.0](https://github.com/apache/hudi/releases/tag/release-0.9.0)
 
 ## Migration Guide for this release
 - If migrating from an older release, please also check the upgrade instructions for each subsequent release below.
@@ -35,8 +35,7 @@ import TabItem from '@theme/TabItem';
 operable by all personas (non-engineers, analysts etc). Users can now use `CREATE TABLE....USING HUDI` and `CREATE TABLE .. AS SELECT`
 statements to directly create and manage tables in catalogs like Hive. Users can then use `INSERT`, `UPDATE`, `MERGE INTO` and `DELETE`
 sql statements to manipulate data. In addition, `INSERT OVERWRITE` statement can be used to overwrite existing data in the table or partition
-for existing batch ETL pipelines. For more information, checkout our docs [here](/docs/quick-start-guide) clicking on `SparkSQL` tab.
-Please see [RFC-25](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+25%3A+Spark+SQL+Extension+For+Hudi)
+for existing batch ETL pipelines. Please see [RFC-25](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+25%3A+Spark+SQL+Extension+For+Hudi)
 for more implementation details.
 
 ### Query side improvements
@@ -44,8 +43,7 @@ for more implementation details.
 Hudi tables are now registered with Hive as spark datasource tables, meaning Spark SQL on these tables now uses the datasource as well,
 instead of relying on the Hive fallbacks within Spark, which are ill-maintained/cumbersome. This unlocks many optimizations such as the
 use of Hudi's own [FileIndex](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-spark-datasource/hudi-spark/src/main/scala/org/apache/hudi/HoodieFileIndex.scala#L46)
-implementation for optimized caching and the use of the Hudi metadata table, for faster listing of large tables. We have also added support for
-[timetravel query](/docs/0.9.0/quick-start-guide#time-travel-query), for spark datasource.
+implementation for optimized caching and the use of the Hudi metadata table, for faster listing of large tables. We have also added support for time-travel query, for spark datasource.
 
 ### Writer side improvements
 

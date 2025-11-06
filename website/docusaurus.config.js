@@ -1,6 +1,5 @@
 const { themes } = require("prism-react-renderer");
 const versions = require("./versions.json");
-const VersionsArchived = require("./versionsArchived.json");
 const { slackUrl } = require('./constants');
 const allDocHomesPaths = [
   "/docs/",
@@ -259,14 +258,6 @@ module.exports = {
           type: "docsVersionDropdown",
           position: "right",
           dropdownActiveClassDisabled: true,
-          dropdownItemsAfter: [
-            ...Object.entries(VersionsArchived).map(
-              ([versionName, versionUrl]) => ({
-                label: versionName,
-                href: versionUrl,
-              })
-            ),
-          ],
         },
         {
           href: "https://github.com/apache/hudi",

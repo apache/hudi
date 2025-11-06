@@ -7,7 +7,7 @@ toc: true
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 0.8.0](https://github.com/apache/hudi/releases/tag/release-0.8.0) ([docs](/docs/0.8.0/quick-start-guide))
+## [Release 0.8.0](https://github.com/apache/hudi/releases/tag/release-0.8.0)
 
 ## Migration Guide for this release
 - If migrating from release older than 0.5.3, please also check the upgrade instructions for each subsequent release below.
@@ -28,8 +28,7 @@ Flink writer for MOR table, batch reader for COW&MOR table, streaming reader for
 In the 0.8.0 release, user is able to use all those features with Flink 1.11+.
 
 Please see [RFC-24](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+24%3A+Hoodie+Flink+Writer+Proposal)
-for more implementation details for the Flink writer and follow this [page](/docs/flink-quick-start-guide)
-to get started with Flink!
+for more implementation details for the Flink writer.
 
 ### Parallel Writers Support
 As many users requested, now Hudi supports multiple ingestion writers to the same Hudi Table with optimistic concurrency control.

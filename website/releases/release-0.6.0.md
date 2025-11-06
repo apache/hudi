@@ -7,7 +7,7 @@ toc: true
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 0.6.0](https://github.com/apache/hudi/releases/tag/release-0.6.0) ([docs](/docs/0.6.0/quick-start-guide))
+## [Release 0.6.0](https://github.com/apache/hudi/releases/tag/release-0.6.0)
 
 ## Migration Guide for this release
 - If migrating from release older than 0.5.3, please also check the upgrade instructions for each subsequent release below.
@@ -39,7 +39,7 @@ import TabItem from '@theme/TabItem';
 - Added a new tool - InitialCheckPointProvider, to set checkpoints when migrating to DeltaStreamer after an initial load of the table is complete.
 - Delta Streamer tool now supports ingesting CSV data sources, chaining of multiple transformers to build more advanced ETL jobs.
 - Introducing a new `CustomKeyGenerator` key generator class, that provides flexible configurations to provide enable different types of key, partition path generation in  single class.
-  We also added support for more time units and date/time formats in `TimestampBasedKeyGenerator`. See [docs](https://hudi.apache.org/docs/writing_data#key-generation) for more.
+  We also added support for more time units and date/time formats in `TimestampBasedKeyGenerator`.
 
 ### Query side improvements:
 - Starting 0.6.0, snapshot queries are feasible on MOR tables using spark datasource. (experimental feature)
