@@ -212,12 +212,20 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
     Dataset<Row> difference1 = df1.except(df2);
     long diff1Count = difference1.count();
     if (diff1Count > 0) {
+      LOG.warn("Difference in records found for first dataset:");
       difference1.show(100, false);
     }
     Dataset<Row> difference2 = df2.except(df1);
     long diff2Count = difference2.count();
     if (diff2Count > 0) {
+      LOG.warn("Difference in records found for second dataset:");
       difference2.show(100, false);
+    }
+    if (diff1Count > 0 || diff2Count > 0) {
+      LOG.warn("first dataset");
+      df1.show(200, false);
+      LOG.warn("second dataset:");
+      df2.show(200, false);
     }
     assertEquals(0, diff1Count);
     assertEquals(0, diff2Count);
