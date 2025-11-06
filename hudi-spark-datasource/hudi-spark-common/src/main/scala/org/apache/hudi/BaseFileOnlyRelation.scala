@@ -66,8 +66,11 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
   //                 For more details please check HUDI-4161
   // NOTE: This override has to mirror semantic of whenever this Relation is converted into [[HadoopFsRelation]],
   //       which is currently done for all cases, except when Schema Evolution is enabled
-  override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean =
-  internalSchemaOpt.isEmpty
+  override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean = {
+    if (hasSchemaOnRead) {
+      super.needExtractPartitionValuesFromPartitionPath()
+    } else true
+  }
 
   override lazy val mandatoryFields: Seq[String] = Seq.empty
 
@@ -140,27 +143,12 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
     val enableFileIndex = HoodieSparkConfUtils.getConfigValue(optParams, sparkSession.sessionState.conf,
       ENABLE_HOODIE_FILE_INDEX.key, ENABLE_HOODIE_FILE_INDEX.defaultValue.toString).toBoolean
     if (enableFileIndex && globPaths.isEmpty) {
-      // NOTE: There are currently 2 ways partition values could be fetched:
-      //          - Source columns (producing the values used for physical partitioning) will be read
-      //          from the data file
-      //          - Values parsed from the actual partition path would be appended to the final dataset
-      //
-      //        In the former case, we don't need to provide the partition-schema to the relation,
-      //        therefore we simply stub it w/ empty schema and use full table-schema as the one being
-      //        read from the data file.
-      //
-      //        In the latter, we have to specify proper partition schema as well as "data"-schema, essentially
-      //        being a table-schema with all partition columns stripped out
-      val (partitionSchema, dataSchema) = if (shouldExtractPartitionValuesFromPartitionPath) {
-        (fileIndex.partitionSchema, fileIndex.dataSchema)
-      } else {
-        (StructType(Nil), tableStructSchema)
-      }
-
+      // We will convert BaseFileOnlyRelation to HadoopFsRelation only if schema evolution is not applied,
+      // in which case shouldExtractPartitionValuesFromPartitionPath is true, so we just use schema from fileIndex.
       HadoopFsRelation(
         location = fileIndex,
-        partitionSchema = partitionSchema,
-        dataSchema = dataSchema,
+        partitionSchema = fileIndex.partitionSchema,
+        dataSchema = fileIndex.dataSchema,
         bucketSpec = None,
         fileFormat = fileFormat,
         optParams)(sparkSession)
