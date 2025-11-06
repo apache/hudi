@@ -55,11 +55,11 @@ last_modified_at: 2022-12-27T15:59:57-04:00
 
 ## End-of-life releases
 
-As new Hudi releases come out for each development stream, the end-of-life releases will be archived:
+The end-of-life releases will be archived:
 
 * The release artifacts are still available at [the archive repo](https://archive.apache.org/dist/hudi/)
-* The release notes will be kept available at `https://hudi.apache.org/releases/release-<release-version>`
-* The versioned docs will be removed
+* The release notes' links will be removed from this download page, but kept accessible via `https://hudi.apache.org/releases/release-<release-version>`
+* The corresponding versioned docs will be removed from the website
 
 ## Verify Release
 
