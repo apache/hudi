@@ -119,7 +119,7 @@ Here are the basic configs relevant to the write operations types mentioned abov
 ## Write path
 The following is an inside look on the Hudi write path and the sequence of events that occur during a write.
 
-1. [Deduping](/docs/configurations#hoodiecombinebeforeinsert) : First your input records may have duplicate keys within the same batch and duplicates need to be combined or reduced by key.
+1. [Deduping](configurations#hoodiecombinebeforeinsert) : First your input records may have duplicate keys within the same batch and duplicates need to be combined or reduced by key.
 2. [Index Lookup](indexes) : Next, an index lookup is performed to try and match the input records to identify which file groups they belong to.
 3. [File Sizing](file_sizing): Then, based on the average size of previous commits, Hudi will make a plan to add enough records to a small file to get it close to the configured maximum limit.
 4. [Partitioning](storage_layouts): We now arrive at partitioning where we decide what file groups certain updates and inserts will be placed in or if new file groups will be created

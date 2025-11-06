@@ -60,7 +60,7 @@ allocated with enough memory, we can try to set these memory options.
 | `write.bucket_assign.tasks`  |  The parallelism of bucket assigner operators. No default value, using Flink `parallelism.default`  | [`parallelism.default`](#parallelism) |  Increases the parallelism also increases the number of buckets, thus the number of small files (small buckets)  |
 | `write.index_boostrap.tasks` |  The parallelism of index bootstrap. Increasing parallelism can speed up the efficiency of the bootstrap stage. The bootstrap stage will block checkpointing. Therefore, it is necessary to set more checkpoint failure tolerance times. Default using Flink `parallelism.default` | [`parallelism.default`](#parallelism) | It only take effect when `index.bootsrap.enabled` is `true` |
 | `read.tasks` | The parallelism of read operators (batch and stream). Default `4`  | `4` |  |
-| `compaction.tasks` | The parallelism of online compaction. Default `4` | `4` | `Online compaction` will occupy the resources of the write task. It is recommended to use [`offline compaction`](/docs/compaction/#flink-offline-compaction) |
+| `compaction.tasks` | The parallelism of online compaction. Default `4` | `4` | `Online compaction` will occupy the resources of the write task. It is recommended to use [`offline compaction`](compaction/#flink-offline-compaction) |
 
 ### Compaction
 

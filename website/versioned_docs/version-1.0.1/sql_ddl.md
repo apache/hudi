@@ -75,7 +75,7 @@ should be specified as `PARTITIONED BY (dt, hh)`.
 
 ### Create table with record keys and ordering fields
 
-As discussed [here](/docs/quick-start-guide#keys), tables track each record in the table using a record key. Hudi auto-generated a highly compressed 
+As discussed [here](quick-start-guide#keys), tables track each record in the table using a record key. Hudi auto-generated a highly compressed 
 key for each new record in the examples so far. If you want to use an existing field as the key, you can set the `primaryKey` option. 
 Typically, this is also accompanied by configuring a `preCombineField` option to deal with out-of-order data and potential 
 duplicate records with the same key in the incoming writes.
@@ -147,7 +147,7 @@ LOCATION 'file:///tmp/hudi_table_merge_mode_custom/';
 ```
 
 ### Create table from an external location
-Often, Hudi tables are created from streaming writers like the [streamer tool](/docs/hoodie_streaming_ingestion#hudi-streamer), which
+Often, Hudi tables are created from streaming writers like the [streamer tool](hoodie_streaming_ingestion#hudi-streamer), which
 may later need some SQL statements to run on them. You can create an External table using the `location` statement.
 
 ```sql
@@ -270,7 +270,7 @@ Both index and column on which the index is created can be qualified with some o
 
 :::note
 Please note in order to create secondary index:
-1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](/docs/next/record_merger#commit_time_ordering).
+1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](record_merger#commit_time_ordering).
 2. Record index must be enabled. This can be done by setting `hoodie.metadata.record.index.enable=true` and then creating `record_index`. Please note the example below.
 3. Secondary index is not supported for [complex types](https://avro.apache.org/docs/1.11.1/specification/#complex-types).
 :::
@@ -577,7 +577,7 @@ Users can set table properties while creating a table. The important table prope
 
 | Parameter Name | Default | Description                                                                                                                                                                                                                                                                                 |
 |------------------|--------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| type       | cow | The table type to create. `type = 'cow'` creates a COPY-ON-WRITE table, while `type = 'mor'` creates a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`. More details can be found [here](/docs/table_types)                                                               |
+| type       | cow | The table type to create. `type = 'cow'` creates a COPY-ON-WRITE table, while `type = 'mor'` creates a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`. More details can be found [here](table_types)                                                               |
 | primaryKey | uuid | The primary key field names of the table separated by commas. Same as `hoodie.datasource.write.recordkey.field`. If this config is ignored, hudi will auto-generate primary keys. If explicitly set, primary key generation will honor user configuration.                                  |
 | preCombineField |  | The pre-combine field of the table. It is used for resolving the final version of the record among multiple versions. Generally, `event time` or another similar column will be used for ordering purposes. Hudi will be able to handle out-of-order data using the preCombine field value. |
 

@@ -58,7 +58,7 @@ quick start tool for SQL users.
 ### Start Flink SQL client
 
 Hudi supports packaged bundle jar for Flink, which should be loaded in the Flink SQL Client when it starts up.
-You can build the jar manually under path `hudi-source-dir/packaging/hudi-flink-bundle`(see [Build Flink Bundle Jar](/docs/syncing_metastore#install)), or download it from the
+You can build the jar manually under path `hudi-source-dir/packaging/hudi-flink-bundle`(see [Build Flink Bundle Jar](syncing_metastore#install)), or download it from the
 [Apache Official Repository](https://repo.maven.apache.org/maven2/org/apache/hudi/).
 
 Now start the SQL CLI:
@@ -280,7 +280,7 @@ Refer Full Streaming Reader Example [here](https://github.com/ad1happy2go/hudi-e
 >
 
 This statement queries snapshot view of the dataset. 
-Refers to [Table types and queries](/docs/concepts#table-types--queries) for more info on all table types and query types supported.
+Refers to [Table types and queries](concepts#table-types--queries) for more info on all table types and query types supported.
 
 ## Update Data
 
@@ -323,7 +323,7 @@ Refer Update Example [here](https://github.com/ad1happy2go/hudi-examples/blob/ma
 </Tabs
 >
 
-[Querying](#query-data) the data again will now show updated records. Each write operation generates a new [commit](/docs/concepts) 
+[Querying](#query-data) the data again will now show updated records. Each write operation generates a new [commit](concepts) 
 denoted by the timestamp.
 
 
@@ -404,7 +404,7 @@ select * from t1;
 
 :::info Key requirements
 The bundle jar with **hive profile** is needed for streaming query, by default the officially released flink bundle is built **without**
-**hive profile**, the jar needs to be built manually, see [Build Flink Bundle Jar](/docs/syncing_metastore#install) for more details.
+**hive profile**, the jar needs to be built manually, see [Build Flink Bundle Jar](syncing_metastore#install) for more details.
 :::
 
 ## Change Data Capture Query
@@ -455,11 +455,11 @@ feature is that it now lets you author streaming pipelines on streaming or batch
 - **Quick Start** : Read [Quick Start](#quick-start) to get started quickly Flink sql client to write to(read from) Hudi.
 - **Configuration** : For [Global Configuration](flink_tuning#global-configurations), sets up through `$FLINK_HOME/conf/flink-conf.yaml`. For per job configuration, sets up through [Table Option](flink_tuning#table-options).
 - **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](hoodie_streaming_ingestion#cdc-ingestion), [Bulk Insert](hoodie_streaming_ingestion#bulk-insert), [Index Bootstrap](hoodie_streaming_ingestion#index-bootstrap), [Changelog Mode](hoodie_streaming_ingestion#changelog-mode) and [Append Mode](hoodie_streaming_ingestion#append-mode). Flink also supports multiple streaming writers with [non-blocking concurrency control](writing_data#non-blocking-concurrency-control-experimental).
-- **Querying Data** : Flink supports different modes for reading, such as [Streaming Query](sql_queries#streaming-query) and [Incremental Query](/docs/querying_data#incremental-query).
+- **Querying Data** : Flink supports different modes for reading, such as [Streaming Query](sql_queries#streaming-query) and [Incremental Query](querying_data#incremental-query).
 - **Tuning** : For write/read tasks, this guide gives some tuning suggestions, such as [Memory Optimization](flink_tuning#memory-optimization) and [Write Rate Limit](flink_tuning#write-rate-limit).
-- **Optimization**: Offline compaction is supported [Offline Compaction](/docs/compaction#flink-offline-compaction).
-- **Query Engines**: Besides Flink, many other engines are integrated: [Hive Query](/docs/syncing_metastore#flink-setup), [Presto Query](sql_queries#presto).
-- **Catalog**: A Hudi specific catalog is supported: [Hudi Catalog](/docs/sql_ddl/#create-catalog).
+- **Optimization**: Offline compaction is supported [Offline Compaction](compaction#flink-offline-compaction).
+- **Query Engines**: Besides Flink, many other engines are integrated: [Hive Query](syncing_metastore#flink-setup), [Presto Query](sql_queries#presto).
+- **Catalog**: A Hudi specific catalog is supported: [Hudi Catalog](sql_ddl/#create-catalog).
 
 If you are relatively new to Apache Hudi, it is important to be familiar with a few core concepts:
   - [Hudi Timeline](timeline) – How Hudi manages transactions and other table services
@@ -474,5 +474,5 @@ Take a look at recent [blog posts](/blog) that go in depth on certain topics or 
 Hudi tables can be queried from query engines like Hive, Spark, Flink, Presto and much more. We have put together a 
 [demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) that show cases all of this on a docker based setup with all 
 dependent systems running locally. We recommend you replicate the same setup and run the demo yourself, by following 
-steps [here](/docs/docker_demo) to get a taste for it. Also, if you are looking for ways to migrate your existing data 
-to Hudi, refer to [migration guide](/docs/migration_guide). 
+steps [here](docker_demo) to get a taste for it. Also, if you are looking for ways to migrate your existing data 
+to Hudi, refer to [migration guide](migration_guide). 

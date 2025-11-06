@@ -5,7 +5,7 @@ toc: true
 last_modified_at:
 ---
 
-Hudi maintains a scalable [metadata](/docs/metadata) that has some auxiliary data about the table.
+Hudi maintains a scalable [metadata](metadata) that has some auxiliary data about the table.
 The [pluggable indexing subsystem](https://www.onehouse.ai/blog/introducing-multi-modal-index-for-the-lakehouse-in-apache-hudi)
 of Hudi depends on the metadata table. Different types of index, from `files` index for locating records efficiently
 to `column_stats` index for data skipping, are part of the metadata table. A fundamental tradeoff in any data system
@@ -35,7 +35,7 @@ For more information on these indexes please refer [metadata section](metadata/#
 
 :::note
 Please note in order to create secondary index:
-1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](/docs/next/record_merger#commit_time_ordering).
+1. The table must have a primary key and merge mode should be [COMMIT_TIME_ORDERING](record_merger#commit_time_ordering).
 2. Record index must be enabled. This can be done by setting `hoodie.metadata.record.index.enable=true` and then creating `record_index`. Please note the example below.
 :::
 
@@ -129,7 +129,7 @@ In the example we will have continuous writing using Hudi Streamer and also crea
 in example is done using HoodieIndexer so that schedule and execute phases are clearly visible for indexing. The asynchronous
 configurations can be used with Datasource and SQL based configs to create index as well.
 
-First, we will generate a continuous workload. In the below example, we are going to start a [Hudi Streamer](/docs/hoodie_streaming_ingestion#hudi-streamer) which will continuously write data
+First, we will generate a continuous workload. In the below example, we are going to start a [Hudi Streamer](hoodie_streaming_ingestion#hudi-streamer) which will continuously write data
 from raw parquet to Hudi table. We used the widely available [NY Taxi dataset](https://registry.opendata.aws/nyc-tlc-trip-records-pds/), whose setup details are as below:
 <details>
   <summary>Ingestion write config</summary>

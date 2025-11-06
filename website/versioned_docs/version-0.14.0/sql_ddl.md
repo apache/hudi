@@ -75,7 +75,7 @@ should be specified as `PARTITIONED BY (dt, hh)`.
 
 ### Create table with record keys and ordering fields
 
-As discussed [here](/docs/quick-start-guide#keys), tables track each record in the table using a record key. Hudi auto-generated a highly compressed 
+As discussed [here](quick-start-guide#keys), tables track each record in the table using a record key. Hudi auto-generated a highly compressed 
 key for each new record in the examples so far. If you want to use an existing field as the key, you can set the `primaryKey` option. 
 Typically, this is also accompanied by configuring a `preCombineField` option to deal with out-of-order data and potential 
 duplicate records with the same key in the incoming writes.
@@ -104,7 +104,7 @@ TBLPROPERTIES (
 ```
 
 ### Create table from an external location
-Often, Hudi tables are created from streaming writers like the [streamer tool](/docs/hoodie_streaming_ingestion#hudi-streamer), which
+Often, Hudi tables are created from streaming writers like the [streamer tool](hoodie_streaming_ingestion#hudi-streamer), which
 may later need some SQL statements to run on them. You can create an External table using the `location` statement.
 
 ```sql
@@ -240,7 +240,7 @@ Users can set table properties while creating a table. The important table prope
 
 | Parameter Name | Default | Description                                                                                                                                                                                                                                                                                 |
 |------------------|--------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| type       | cow | The table type to create. `type = 'cow'` creates a COPY-ON-WRITE table, while `type = 'mor'` creates a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`. More details can be found [here](/docs/table_types)                                                               |
+| type       | cow | The table type to create. `type = 'cow'` creates a COPY-ON-WRITE table, while `type = 'mor'` creates a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`. More details can be found [here](table_types)                                                               |
 | primaryKey | uuid | The primary key field names of the table separated by commas. Same as `hoodie.datasource.write.recordkey.field`. If this config is ignored, hudi will auto-generate primary keys. If explicitly set, primary key generation will honor user configuration.                                  |
 | preCombineField |  | The pre-combine field of the table. It is used for resolving the final version of the record among multiple versions. Generally, `event time` or another similar column will be used for ordering purposes. Hudi will be able to handle out-of-order data using the preCombine field value. |
 
@@ -392,7 +392,7 @@ CREATE CATALOG hoodie_catalog
 
 ### Create Table
 
-The following is an example of creating a Flink table. Read the [Flink Quick Start](/docs/flink-quick-start-guide) guide for more examples.
+The following is an example of creating a Flink table. Read the [Flink Quick Start](flink-quick-start-guide) guide for more examples.
 
 ```sql 
 CREATE TABLE hudi_table2(

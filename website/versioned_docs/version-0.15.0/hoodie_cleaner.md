@@ -11,7 +11,7 @@ concurrency. These file versions provide history and enable time travel and roll
 how much history you keep to balance your costs. Cleaning service plays a crucial role in managing the tradeoff between 
 retaining the long history of data and the associated storage costs.  
 
-Hudi enables [Automatic Hudi cleaning](/docs/configurations/#hoodiecleanautomatic) by default. Cleaning is invoked 
+Hudi enables [Automatic Hudi cleaning](configurations/#hoodiecleanautomatic) by default. Cleaning is invoked 
 immediately after each commit, to delete older file slices. It's recommended to leave this enabled to ensure metadata 
 and data storage growth is bounded. Cleaner can also be scheduled after every few commits instead of after every commit by 
 configuring [hoodie.clean.max.commits](https://hudi.apache.org/docs/configurations#hoodiecleanmaxcommits).
@@ -126,7 +126,7 @@ spark-submit --master local --class org.apache.hudi.utilities.HoodieCleaner `ls 
 Note: The parallelism takes the min value of number of partitions to clean and `hoodie.cleaner.parallelism`.
 
 #### CLI
-You can also use [Hudi CLI](/docs/cli) to run Hoodie Cleaner.
+You can also use [Hudi CLI](cli) to run Hoodie Cleaner.
 
 CLI provides the below commands for cleaner service:
 - `cleans show`

@@ -7,9 +7,9 @@ keywords: [hudi, writing, reading]
 The FAQs are split into following pages. Please refer to the specific pages for more info.
 
 - [General](faq_general)
-- [Design & Concepts](/docs/faq_design_and_concepts)
-- [Writing Tables](/docs/faq_writing_tables)
-- [Reading Tables](/docs/faq_reading_tables)
-- [Table Services](/docs/faq_table_services)
-- [Storage](/docs/faq_storage)
-- [Integrations](/docs/faq_integrations)
+- [Design & Concepts](faq_design_and_concepts)
+- [Writing Tables](faq_writing_tables)
+- [Reading Tables](faq_reading_tables)
+- [Table Services](faq_table_services)
+- [Storage](faq_storage)
+- [Integrations](faq_integrations)

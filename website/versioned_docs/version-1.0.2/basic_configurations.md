@@ -1,11 +1,11 @@
 ---
 title: Basic Configurations
-summary: This page covers the basic configurations you may use to write/read Hudi tables. This page only features a subset of the most frequently used configurations. For a full list of all configs, please visit the [All Configurations](/docs/configurations) page.
+summary: This page covers the basic configurations you may use to write/read Hudi tables. This page only features a subset of the most frequently used configurations. For a full list of all configs, please visit the [All Configurations](configurations) page.
 last_modified_at: 2025-05-02T16:59:00.595581
 ---
 
 
-This page covers the basic configurations you may use to write/read Hudi tables. This page only features a subset of the most frequently used configurations. For a full list of all configs, please visit the [All Configurations](/docs/configurations) page.
+This page covers the basic configurations you may use to write/read Hudi tables. This page only features a subset of the most frequently used configurations. For a full list of all configs, please visit the [All Configurations](configurations) page.
 
 - [**Hudi Table Config**](#TABLE_CONFIG): Basic Hudi Table configuration parameters.
 - [**Spark Datasource Configs**](#SPARK_DATASOURCE): These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records or choosing query type to read.

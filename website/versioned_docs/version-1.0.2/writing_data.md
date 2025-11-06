@@ -28,15 +28,15 @@ Default value: `"partitionpath"`<br/>
 **PRECOMBINE_FIELD**: When two records within the same batch have the same key value, the record with the largest value from the field specified will be choosen. If you are using default payload of OverwriteWithLatestAvroPayload for HoodieRecordPayload (`WRITE_PAYLOAD_CLASS`), an incoming record will always takes precendence compared to the one in storage ignoring this `PRECOMBINE_FIELD_OPT_KEY`. <br/>
 Default value: `"ts"`<br/>
 
-**OPERATION**: The [write operations](/docs/write_operations) to use.<br/>
+**OPERATION**: The [write operations](write_operations) to use.<br/>
 Available values:<br/>
 `"upsert"` (default), `"bulk_insert"`, `"insert"`, `"delete"`
 
-**TABLE_TYPE**: The [type of table](/docs/concepts#table-types) to write to. Note: After the initial creation of a table, this value must stay consistent when writing to (updating) the table using the Spark `SaveMode.Append` mode.<br/>
+**TABLE_TYPE**: The [type of table](concepts#table-types) to write to. Note: After the initial creation of a table, this value must stay consistent when writing to (updating) the table using the Spark `SaveMode.Append` mode.<br/>
 Available values:<br/>
-[`COW_TABLE_TYPE_OPT_VAL`](/docs/concepts#copy-on-write-table) (default), [`MOR_TABLE_TYPE_OPT_VAL`](/docs/concepts#merge-on-read-table)
+[`COW_TABLE_TYPE_OPT_VAL`](concepts#copy-on-write-table) (default), [`MOR_TABLE_TYPE_OPT_VAL`](concepts#merge-on-read-table)
 
-**KEYGENERATOR_CLASS_NAME**: Refer to [Key Generation](/docs/key_generation) section below.
+**KEYGENERATOR_CLASS_NAME**: Refer to [Key Generation](key_generation) section below.
 
 
 Example:
@@ -84,9 +84,9 @@ You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<
 (`uuid` in [schema](https://github.com/apache/hudi/blob/6f9b02decb5bb2b83709b1b6ec04a97e4d102c11/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)), partition field (`region/country/city`) and combine logic (`ts` in
 [schema](https://github.com/apache/hudi/blob/6f9b02decb5bb2b83709b1b6ec04a97e4d102c11/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)) to ensure trip records are unique within each partition. For more info, refer to
 [Modeling data stored in Hudi](faq_general/#how-do-i-model-the-data-stored-in-hudi)
-and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/hoodie_streaming_ingestion).
+and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](hoodie_streaming_ingestion).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue
-`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/write_operations)
+`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](write_operations)
 :::
 </TabItem>
 
@@ -120,9 +120,9 @@ You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<
 (`uuid` in [schema](https://github.com/apache/hudi/blob/2e6e302efec2fa848ded4f88a95540ad2adb7798/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)), partition field (`region/country/city`) and combine logic (`ts` in
 [schema](https://github.com/apache/hudi/blob/2e6e302efec2fa848ded4f88a95540ad2adb7798/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L60)) to ensure trip records are unique within each partition. For more info, refer to
 [Modeling data stored in Hudi](faq_general/#how-do-i-model-the-data-stored-in-hudi)
-and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/hoodie_streaming_ingestion).
+and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](hoodie_streaming_ingestion).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue
-`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/write_operations)
+`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](write_operations)
 :::
 </TabItem>
 
@@ -421,7 +421,7 @@ Then any record you want to delete you can mark `_hoodie_is_deleted` as true:
 
 Following is an example of how to use `optimistic_concurrency_control` via Spark DataSource API.
 
-Read more in-depth details about concurrency control in the [concurrency control concepts](/docs/concurrency_control) section.
+Read more in-depth details about concurrency control in the [concurrency control concepts](concurrency_control) section.
 
 ```java
 inputDF.write.format("hudi")

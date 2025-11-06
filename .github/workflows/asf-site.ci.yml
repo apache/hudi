@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ asf-site ]
 
+# Cancel in-progress runs when a new push is made to the same PR or branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   hudi-asf-site-ci:
     name: "Apache Hudi asf-site CI"
@@ -37,6 +42,71 @@ jobs:
           else
             echo "✅ No files under content/ directory."
           fi
+      - name: Check for absolute /docs/ paths in markdown links
+        run: |
+          echo "🔍 Checking for absolute /docs/ paths in markdown links..."
+
+          # Get the base branch
+          git fetch origin ${{ github.base_ref }}
+
+          # Get list of changed files in the PR
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} HEAD)
+
+          # Filter for .md and .mdx files in website/docs/
+          DOCS_FILES=$(echo "$CHANGED_FILES" | grep -E '^website/docs/.*\.(md|mdx)$' || true)
+
+          if [ -z "$DOCS_FILES" ]; then
+            echo "✅ No markdown files changed in website/docs/"
+            exit 0
+          fi
+
+          echo "📝 Checking the following files:"
+          echo "$DOCS_FILES"
+          echo ""
+
+          # Variable to track if we found any issues
+          FOUND_ISSUES=false
+          ISSUE_FILES=""
+
+          # Check each file for markdown links starting with /docs/
+          while IFS= read -r file; do
+            if [ -f "$file" ]; then
+              # Look for markdown links with /docs/ paths
+              # Pattern: [text](/docs/...)
+              if grep -Hn '\[.*\](\s*/docs/[^)]*)' "$file" > /dev/null 2>&1; then
+                FOUND_ISSUES=true
+                ISSUE_FILES="${ISSUE_FILES}${file}\n"
+                echo "❌ Found absolute /docs/ paths in: $file"
+                echo "   Lines with issues:"
+                grep -Hn '\[.*\](\s*/docs/[^)]*)' "$file" | while IFS= read -r line; do
+                  echo "     $line"
+                done
+                echo ""
+              fi
+            fi
+          done <<< "$DOCS_FILES"
+
+          if [ "$FOUND_ISSUES" = true ]; then
+            echo ""
+            echo "========================================="
+            echo "❌ ERROR: Found absolute /docs/ paths in markdown links!"
+            echo "========================================="
+            echo ""
+            echo "📋 Files with issues:"
+            echo -e "$ISSUE_FILES"
+            echo "💡 SUGGESTION: Use relative paths instead of absolute paths."
+            echo ""
+            echo "Examples:"
+            echo "  ❌ Bad:  [link text](/docs/guide/overview)"
+            echo "  ✅ Good: [link text](overview) or [link text](../guide/overview)"
+            echo ""
+            echo "Relative paths ensure links work correctly across different versions"
+            echo "and environments. Please update the links to use relative paths."
+            exit 1
+          else
+            echo ""
+            echo "✅ All markdown links use appropriate paths (no absolute /docs/ paths found)"
+          fi
       - name: Prepare branch
         run: |
           git config --global user.name "CI BOT"
@@ -46,7 +116,7 @@ jobs:
           git pull --rebase hudi asf-site
       - uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: "22"
       - name: Build website
         run: |
           pushd ${{ env.DOCS_ROOT }}

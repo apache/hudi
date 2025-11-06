@@ -19,7 +19,7 @@ it is unfortunately often solved in a piecemeal fashion, using a medley of inges
 ### Why Hudi? 
 
 - Unique design choices like Merge-On-Read tables, record-level indexes and asynchronous compaction, approach theoretical optimality for absorbing changes to tables quickly and efficiently.
-- Built-in ingestion tools on [Spark](/docs/hoodie_streaming_ingestion), [Flink](/docs/ingestion_flink) and [Kafka Connect](/docs/ingestion_kafka_connect), that let you ingest data with a single command.
+- Built-in ingestion tools on [Spark](hoodie_streaming_ingestion), [Flink](ingestion_flink) and [Kafka Connect](ingestion_kafka_connect), that let you ingest data with a single command.
 - Support for incremental ingestion with automatic checkpoint management from streaming sources (Kafka, Pulsar, ...), Cloud storage (S3, GCS, ADLS, etc.) and even JDBC.
 - Support for widely used data formats (Protobuf, Avro, JSON), file formats (parquet, orc, avro, etc.) and change log formats like [Debezium](http://debezium.io/).
 - Even for scalable de-duplication for high-volume append-only streaming data, by employing bloom filter indexes and advanced data structures like interval trees for efficient range pruning.

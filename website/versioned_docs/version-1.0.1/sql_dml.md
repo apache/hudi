@@ -49,7 +49,7 @@ INSERT INTO hudi_cow_pt_tbl PARTITION(dt, hh) SELECT 1 AS id, 'a1' AS name, 1000
 ```
 
 :::note Mapping to write operations
-Hudi offers flexibility in choosing the underlying [write operation](/docs/write_operations) of a `INSERT INTO` statement using 
+Hudi offers flexibility in choosing the underlying [write operation](write_operations) of a `INSERT INTO` statement using 
 the `hoodie.spark.sql.insert.into.operation` configuration. Possible options include *"bulk_insert"* (large inserts), *"insert"* (with small file management), 
 and *"upsert"* (with deduplication/merging). If a precombine field is not set, *"insert"* is chosen as the default. For a table with preCombine field set,
 *"upsert"* is chosen as the default operation.

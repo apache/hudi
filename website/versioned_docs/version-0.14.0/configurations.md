@@ -12,7 +12,7 @@ last_modified_at: 2023-09-22T14:14:21.68
 This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
 
 :::tip
-With [externalized config file](/docs/configurations#externalized-config-file),
+With [externalized config file](configurations#externalized-config-file),
 instead of directly passing configuration settings to every Hudi job,
 you can also centrally set them in a configuration file `hudi-defaults.conf`.
 :::
