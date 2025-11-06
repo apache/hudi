@@ -188,8 +188,12 @@ module.exports = {
               to: "/learn/talks",
             },
             {
+              label: "Blog",
+              to: "/learn/blog",
+            },
+            {
               label: "Video Guides",
-              to: "videos",
+              to: "/learn/videos",
             },
             {
               label: "FAQ",
@@ -365,15 +369,15 @@ module.exports = {
             },
             {
               label: "Blog",
-              to: "/blog",
+              to: "/learn/blog",
             },
             {
               label: "Talks",
-              to: "talks",
+              to: "/learn/talks",
             },
             {
               label: "Video Guides",
-              to: "videos",
+              to: "/learn/videos",
             },
             {
               label: "FAQ",
