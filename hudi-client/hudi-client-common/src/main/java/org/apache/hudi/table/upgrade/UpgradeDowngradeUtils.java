@@ -56,9 +56,9 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -76,9 +76,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
@@ -265,12 +265,12 @@ public class UpgradeDowngradeUtils {
           if (indexDefinitions.containsKey(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)) {
             Map<String, String> options = indexDefinitions.get(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX).getIndexOptions();
             if (options.getOrDefault("isPartitioned", FALSE).equals(TRUE)) {
-              properties.put(HoodieMetadataConfig.PARTITIONED_RECORD_INDEX_ENABLE_PROP.key(), TRUE);
+              properties.put(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key(), TRUE);
             } else {
-              properties.put(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), TRUE);
+              properties.put(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), TRUE);
             }
           } else {
-            properties.put(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), TRUE);
+            properties.put(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), TRUE);
           }
           break;
         default:
