@@ -27,13 +27,15 @@ import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.hadoop.{ParquetInputFormat, ParquetRecordReader}
-import org.apache.parquet.schema.SchemaRepair.repairFooterSchema
+import org.apache.parquet.hadoop.metadata.{FileMetaData, ParquetMetadata}
+import org.apache.parquet.schema.SchemaRepair
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.catalyst.types.DataTypeUtils.toAttributes
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, FileFormat, PartitionedFile, RecordReaderIterator, SparkColumnarFileReader}
+import org.apache.spark.sql.execution.datasources.parquet.Spark35ParquetReader.repairFooterSchema
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
@@ -299,5 +301,23 @@ object Spark35ParquetReader extends SparkParquetReaderBuilder {
       enableRecordFilter = sqlConf.parquetRecordFilterEnabled,
       enableLogicalTimestampRepair = enableLogicalTimestampRepair,
       timeZoneId = Some(sqlConf.sessionLocalTimeZone))
+  }
+
+
+  // Helper to repair the schema if needed
+  def repairFooterSchema(original: ParquetMetadata,
+                         tableSchemaOpt: org.apache.hudi.common.util.Option[org.apache.parquet.schema.MessageType]): ParquetMetadata = {
+    val repairedSchema = SchemaRepair.repairLogicalTypes(original.getFileMetaData.getSchema, tableSchemaOpt)
+    val oldMeta = original.getFileMetaData
+    new ParquetMetadata(
+      new FileMetaData(
+        repairedSchema,
+        oldMeta.getKeyValueMetaData,
+        oldMeta.getCreatedBy,
+        oldMeta.getEncryptionType,
+        oldMeta.getFileDecryptor
+      ),
+      original.getBlocks
+    )
   }
 }
