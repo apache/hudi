@@ -67,7 +67,7 @@ public class BaseFileRecordParsingUtils {
                                                                                    boolean isPartitionedRLI) {
     String partition = writeStat.getPartitionPath();
     String latestFileName = FSUtils.getFileNameFromPath(writeStat.getPath());
-    String fileId = FSUtils.getFileId(latestFileName);
+    String fileId = FSUtils.getFileIdFromFileName(latestFileName);
 
     Set<RecordStatus> recordStatuses = new HashSet<>();
     recordStatuses.add(RecordStatus.INSERT);

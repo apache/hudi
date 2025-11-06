@@ -326,7 +326,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     if (config.populateMetaFields()) {
       String seqId =
           HoodieRecord.generateSequenceId(instantTime, getPartitionId(), RECORD_COUNTER.getAndIncrement());
-      metadataValues.setFileName(fileId);
+      metadataValues.setFileName(writer.getLogFile().getFileName());
       metadataValues.setPartitionPath(partitionPath);
       metadataValues.setRecordKey(hoodieRecord.getRecordKey());
       if (!this.isLogCompaction) {

@@ -21,6 +21,7 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
 import org.apache.hudi.common.data.HoodieListData
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
@@ -31,8 +32,8 @@ import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataU
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
-import scala.collection.{mutable, JavaConverters}
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.util.Using
 
 class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
@@ -141,7 +142,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
       val fileName: String = row.getAs("_hoodie_file_name")
       val recordLocation = recordIndexMap.get(recordKey)
       assertEquals(partitionPath, recordLocation.getPartitionPath)
-      assertTrue(fileName.startsWith(recordLocation.getFileId), fileName + " should start with " + recordLocation.getFileId)
+      assertEquals(FSUtils.getFileIdFromFileName(fileName), recordLocation.getFileId)
     }
 
     val deletedRows = deletedDf.collect()

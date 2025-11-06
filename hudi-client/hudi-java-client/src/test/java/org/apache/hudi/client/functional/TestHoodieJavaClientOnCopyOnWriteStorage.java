@@ -264,7 +264,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     HoodieWriteMergeHandle handle = null;
     try {
       handle = new HoodieWriteMergeHandle(config, instantTime, table, new HashMap<>(),
-          partitionAndBaseFilePaths.getLeft(), FSUtils.getFileId(baseFile.getFileName()), baseFile, new JavaTaskContextSupplier(),
+          partitionAndBaseFilePaths.getLeft(), FSUtils.getFileIdFromFileName(baseFile.getFileName()), baseFile, new JavaTaskContextSupplier(),
           config.populateMetaFields() ? Option.empty() :
               Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps())));
     } catch (HoodieCorruptedDataException e1) {
@@ -282,7 +282,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
       HoodieWriteConfig cfg2 = HoodieWriteConfig.newBuilder().withProps(config.getProps()).build();
       // does the handle need to be closed to clean up the writer it contains?
       handle = new HoodieWriteMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
-          partitionAndBaseFilePaths.getLeft(), FSUtils.getFileId(baseFile.getFileName()), baseFile, new JavaTaskContextSupplier(),
+          partitionAndBaseFilePaths.getLeft(), FSUtils.getFileIdFromFileName(baseFile.getFileName()), baseFile, new JavaTaskContextSupplier(),
           config.populateMetaFields() ? Option.empty() :
               Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps())));
       fail("The above line should have thrown an exception");

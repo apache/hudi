@@ -1314,7 +1314,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
         path -> path.contains(metaClient.getTableConfig().getLogFileFormat().getFileExtension());
     Stream<Pair<String, String>> stream1 = paths.stream().filter(roFilePredicate).map(fullPath -> {
       String fileName = Paths.get(fullPath).getFileName().toString();
-      return Pair.of(FSUtils.getFileId(fileName), FSUtils.getCommitTime(fileName));
+      return Pair.of(FSUtils.getFileIdFromFileName(fileName), FSUtils.getCommitTime(fileName));
     });
     Stream<Pair<String, String>> stream2 = paths.stream().filter(rtFilePredicate).map(path -> Pair.of(HadoopFSUtils.getFileIdFromLogPath(new Path(path)),
         FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(path))));

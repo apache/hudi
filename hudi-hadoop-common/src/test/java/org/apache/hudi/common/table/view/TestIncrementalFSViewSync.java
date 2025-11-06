@@ -380,7 +380,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       return Pair.of(file.substring(0, lastPartition), file.substring(lastPartition + 1));
     }).collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toList())));
     return PARTITIONS.stream()
-        .map(p -> Pair.of(p, FSUtils.getFileId(partitionToFileIdsList.get(p).get(0))))
+        .map(p -> Pair.of(p, FSUtils.getFileIdFromFileName(partitionToFileIdsList.get(p).get(0))))
         .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toList())));
   }
 

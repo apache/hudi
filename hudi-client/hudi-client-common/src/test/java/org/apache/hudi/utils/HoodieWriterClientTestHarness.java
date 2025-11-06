@@ -461,7 +461,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
       String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
       assertTrue(expectedKeys.contains(recordKey));
       String fileName = record.get(HoodieRecord.FILENAME_METADATA_FIELD).toString();
-      assertTrue(expectedFileIds.contains(FSUtils.getFileId(fileName)));
+      assertTrue(expectedFileIds.contains(FSUtils.getFileIdFromFileName(fileName)));
     }
   }
 

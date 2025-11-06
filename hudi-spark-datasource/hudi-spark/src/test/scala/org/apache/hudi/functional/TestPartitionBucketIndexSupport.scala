@@ -180,14 +180,14 @@ class TestPartitionBucketIndexSupport extends TestBucketIndexSupport {
       // split input files into different partitions
       val partitionPath1 = DEFAULT_PARTITION_PATH(0)
       val allFileSlices1: Seq[FileSlice] = allFileStatus.slice(0, 3).map(fileName => {
-        val slice = new FileSlice(partitionPath1, "00000000000000000", FSUtils.getFileId(fileName))
+        val slice = new FileSlice(partitionPath1, "00000000000000000", FSUtils.getFileIdFromFileName(fileName))
         slice.setBaseFile(new HoodieBaseFile(new StoragePathInfo(new StoragePath(fileName), 0L, false, 0, 0, 0)))
         slice
       }).toSeq
 
       val partitionPath2 = DEFAULT_PARTITION_PATH(1)
       val allFileSlices2: Seq[FileSlice] = allFileStatus.slice(3, 5).map(fileName => {
-        val slice = new FileSlice(partitionPath1, "00000000000000000", FSUtils.getFileId(fileName))
+        val slice = new FileSlice(partitionPath1, "00000000000000000", FSUtils.getFileIdFromFileName(fileName))
         slice.setBaseFile(new HoodieBaseFile(new StoragePathInfo(new StoragePath(fileName), 0L, false, 0, 0, 0)))
         slice
       }).toSeq

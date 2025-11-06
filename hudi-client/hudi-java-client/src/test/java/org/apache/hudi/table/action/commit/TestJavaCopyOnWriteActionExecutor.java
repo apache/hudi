@@ -179,7 +179,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     allFiles = getIncrementalFiles(partitionPath, firstCommitTime, -1);
     assertEquals(1, allFiles.length);
     // verify new incremental file group is same as the previous one
-    assertEquals(FSUtils.getFileId(filePath.getName()), FSUtils.getFileId(allFiles[0].getPath().getName()));
+    assertEquals(FSUtils.getFileIdFromFileName(filePath.getName()), FSUtils.getFileIdFromFileName(allFiles[0].getPath().getName()));
 
     // Check whether the record has been updated
     Path updatedFilePath = allFiles[0].getPath();

@@ -1348,7 +1348,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         .toJavaRDD()
         .mapToPair(row -> new Tuple2<>(row.getString(row.fieldIndex(RECORD_KEY_METADATA_FIELD)),
             Pair.of(row.getString(row.fieldIndex(PARTITION_PATH_METADATA_FIELD)),
-                FSUtils.getFileId(row.getString(row.fieldIndex(FILENAME_METADATA_FIELD))))))
+                FSUtils.getFileIdFromFileName(row.getString(row.fieldIndex(FILENAME_METADATA_FIELD))))))
         .cache();
   }
 

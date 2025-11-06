@@ -470,7 +470,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       HoodieWriteMergeHandle handle = null;
       try {
         handle = new HoodieWriteMergeHandle(config, instantTime, table, new HashMap<>(),
-            partitionPath, FSUtils.getFileId(baseFile.getFileName()), baseFile, new SparkTaskContextSupplier(),
+            partitionPath, FSUtils.getFileIdFromFileName(baseFile.getFileName()), baseFile, new SparkTaskContextSupplier(),
             config.populateMetaFields() ? Option.empty() :
                 Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(config.getProps())));
         WriteStatus writeStatus = new WriteStatus(false, 0.0);
@@ -491,7 +491,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         config.getProps().setProperty("hoodie.merge.data.validation.enabled", "true");
         HoodieWriteConfig cfg2 = HoodieWriteConfig.newBuilder().withProps(config.getProps()).build();
         handle = new HoodieWriteMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
-            partitionPath, FSUtils.getFileId(baseFile.getFileName()), baseFile, new SparkTaskContextSupplier(),
+            partitionPath, FSUtils.getFileIdFromFileName(baseFile.getFileName()), baseFile, new SparkTaskContextSupplier(),
             config.populateMetaFields() ? Option.empty() :
                 Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(config.getProps())));
         WriteStatus writeStatus = new WriteStatus(false, 0.0);
