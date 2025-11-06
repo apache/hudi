@@ -6,47 +6,56 @@ toc: true
 last_modified_at: 2022-12-27T15:59:57-04:00
 ---
 
-### Release 1.0.2
+## Release 1.0.2
+
 * Source Release : [Apache Hudi 1.0.2 Source Release](https://downloads.apache.org/hudi/1.0.2/hudi-1.0.2.src.tgz) ([asc](https://downloads.apache.org/hudi/1.0.2/hudi-1.0.2.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.0.2/hudi-1.0.2.src.tgz.sha512))
 * Release Note : ([Release Note for Apache Hudi 1.0.2](/releases/release-1.0.2))
-* Maven Artifacts :
-    * [hudi-spark3.5-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-spark3.5-bundle_2.12/1.0.2/hudi-spark3.5-bundle_2.12-1.0.2.jar)
-    * [hudi-utilities-slim-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-slim-bundle_2.12/1.0.2/hudi-utilities-slim-bundle_2.12-1.0.2.jar)
-    * [hudi-hive-sync-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-hive-sync-bundle/1.0.2/hudi-hive-sync-bundle-1.0.2.jar)
-    * [hudi-flink1.19-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-flink1.19-bundle/1.0.2/hudi-flink1.19-bundle-1.0.2.jar)
-    * [hudi-cli-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-cli-bundle_2.12/1.0.2/hudi-cli-bundle_2.12-1.0.2.jar)
+* Maven Artifacts:
 
-### Release 1.0.1
+  * [hudi-spark3.5-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-spark3.5-bundle_2.12/1.0.2/hudi-spark3.5-bundle_2.12-1.0.2.jar)
+  * [hudi-utilities-slim-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-slim-bundle_2.12/1.0.2/hudi-utilities-slim-bundle_2.12-1.0.2.jar)
+  * [hudi-hive-sync-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-hive-sync-bundle/1.0.2/hudi-hive-sync-bundle-1.0.2.jar)
+  * [hudi-flink1.19-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-flink1.19-bundle/1.0.2/hudi-flink1.19-bundle-1.0.2.jar)
+  * [hudi-cli-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-cli-bundle_2.12/1.0.2/hudi-cli-bundle_2.12-1.0.2.jar)
+
+## Release 1.0.1
+
 * Source Release : [Apache Hudi 1.0.1 Source Release](https://downloads.apache.org/hudi/1.0.1/hudi-1.0.1.src.tgz) ([asc](https://downloads.apache.org/hudi/1.0.1/hudi-1.0.1.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.0.1/hudi-1.0.1.src.tgz.sha512))
 * Release Note : ([Release Note for Apache Hudi 1.0.1](/releases/release-1.0.1))
 
-### Release 1.0.0
+## Release 1.0.0
+
 * Source Release : [Apache Hudi 1.0.0 Source Release](https://downloads.apache.org/hudi/1.0.0/hudi-1.0.0.src.tgz) ([asc](https://downloads.apache.org/hudi/1.0.0/hudi-1.0.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.0.0/hudi-1.0.0.src.tgz.sha512))
 * Release Note : ([Release Note for Apache Hudi 1.0.0](/releases/release-1.0.0))
 
-### Release 1.0.0-beta2
+## Release 1.0.0-beta2
+
 * Source Release : [Apache Hudi 1.0.0-beta2 Source Release](https://downloads.apache.org/hudi/1.0.0-beta2/hudi-1.0.0-beta2.src.tgz) ([asc](https://downloads.apache.org/hudi/1.0.0-beta2/hudi-1.0.0-beta2.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.0.0-beta2/hudi-1.0.0-beta2.src.tgz.sha512))
 * Release Note : ([Release Note for Apache Hudi 1.0.0-beta2](/releases/release-1.0.0-beta2))
 
-### Release 0.15.0
+## Release 0.15.0
+
 * Source Release : [Apache Hudi 0.15.0 Source Release](https://downloads.apache.org/hudi/0.15.0/hudi-0.15.0.src.tgz) ([asc](https://downloads.apache.org/hudi/0.15.0/hudi-0.15.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.15.0/hudi-0.15.0.src.tgz.sha512))
 * Release Note : ([Release Note for Apache Hudi 0.15.0](/releases/release-0.15.0))
 
-### Release 0.14.1
+## Release 0.14.1
+
 * Source Release : [Apache Hudi 0.14.1 Source Release](https://downloads.apache.org/hudi/0.14.1/hudi-0.14.1.src.tgz) ([asc](https://downloads.apache.org/hudi/0.14.1/hudi-0.14.1.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.14.1/hudi-0.14.1.src.tgz.sha512))
 * Release Note : ([Release Note for Apache Hudi 0.14.1](/releases/release-0.14.1))
 
-### Release 1.0.0-beta1
+## Release 1.0.0-beta1
+
 * Source Release : [Apache Hudi 1.0.0-beta1 Source Release](https://www.apache.org/dyn/closer.lua/hudi/1.0.0-beta1/hudi-1.0.0-beta1.src.tgz) ([asc](https://downloads.apache.org/hudi/1.0.0-beta1/hudi-1.0.0-beta1.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.0.0-beta1/hudi-1.0.0-beta1.src.tgz.sha512))
 * Release Note : ([Release Note for Apache Hudi 1.0.0-beta1](/releases/release-1.0.0-beta1))
 
-### Release 0.12.3
-[Long Term Support](/releases/release-0.12.3#long-term-support): this is the latest stable release
-* Source Release : [Apache Hudi 0.12.3 Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.12.3/hudi-0.12.3.src.tgz) ([asc](https://downloads.apache.org/hudi/0.12.3/hudi-0.12.3.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.12.3/hudi-0.12.3.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 0.12.3](/releases/release-0.12.3))
+## Release 0.14.0
 
-### Older releases
-As new Hudi releases come out for each development stream, previous ones will be archived, but they are still available at [here](https://archive.apache.org/dist/hudi/). 
+* Source Release : [Apache Hudi 0.14.0 Source Release](https://downloads.apache.org/hudi/0.14.0/hudi-0.14.0.src.tgz) ([asc](https://downloads.apache.org/hudi/0.14.0/hudi-0.14.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.14.0/hudi-0.14.0.src.tgz.sha512))
+* Release Note : ([Release Note for Apache Hudi 0.14.0](/releases/release-0.14.0))
+
+## EOL releases
+
+As new Hudi releases come out for each development stream, previous ones will be archived, but they are still available at [this link](https://archive.apache.org/dist/hudi/).
 
 ## Verify Release
 
@@ -57,21 +66,21 @@ The PGP signatures can be verified using PGP or GPG. First download the [KEYS](h
 .asc signature files for the relevant release packages. Make sure you get these files from the main distribution directory, rather than from
 a mirror. Then verify the signatures using:
 
-```
+```shell
 % pgpk -a KEYS
 % pgpv hudi-X.Y.Z.src.tgz.asc
 ```
 
 or
 
-```
+```shell
 % pgp -ka KEYS
 % pgp hudi-X.Y.Z.src.tgz.asc
 ```
 
 or
 
-```
+```shell
 % gpg --import KEYS
 % gpg --verify hudi-X.Y.Z.src.tgz.asc hudi-X.Y.Z.src.tgz
 ```

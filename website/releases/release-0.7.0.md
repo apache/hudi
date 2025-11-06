@@ -7,7 +7,7 @@ toc: true
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 0.7.0](https://github.com/apache/hudi/releases/tag/release-0.7.0) ([docs](/docs/0.7.0/quick-start-guide))
+## [Release 0.7.0](https://github.com/apache/hudi/releases/tag/release-0.7.0)
 
 ## Migration Guide for this release
 - If migrating from release older than 0.5.3, please also check the upgrade instructions for each subsequent release below.
@@ -64,7 +64,6 @@ Specifically, the `HoodieFlinkStreamer` allows for Hudi Copy-On-Write table to b
   derived/ETL pipelines similar to data [sensors](https://airflow.apache.org/docs/apache-airflow/stable/_api/airflow/sensors/index) in Apache Airflow.
 - **Insert Overwrite/Insert Overwrite Table**: We have added these two new write operation types, predominantly to help existing batch ETL jobs, which typically overwrite entire
   tables/partitions each run. These operations are much cheaper, than having to issue upserts, given they are bulk replacing the target table.
-  Check [here](/docs/0.7.0/quick-start-guide#insert-overwrite-table) for examples.
 - **Delete Partition**: For users of WriteClient/RDD level apis, we have added an API to delete an entire partition, again without issuing deletes at the record level.
 - The current default `OverwriteWithLatestAvroPayload` will overwrite the value in storage, even if for e.g the upsert was reissued for an older value of the key.
   Added a new `DefaultHoodieRecordPayload` and a new payload config `hoodie.payload.ordering.field` helps specify a field, that the incoming upsert record can be compared with
