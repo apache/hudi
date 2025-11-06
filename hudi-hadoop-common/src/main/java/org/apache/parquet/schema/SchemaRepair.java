@@ -21,9 +21,6 @@ package org.apache.parquet.schema;
 
 import org.apache.hudi.common.util.Option;
 
-import org.apache.parquet.hadoop.metadata.FileMetaData;
-import org.apache.parquet.hadoop.metadata.ParquetMetadata;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -161,35 +158,5 @@ public class SchemaRepair {
         && ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) tableLogicalTypeAnnotation).getUnit() == LogicalTypeAnnotation.TimeUnit.MILLIS
         && ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) fileLogicalTypeAnnotation).isAdjustedToUTC()
         && ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) tableLogicalTypeAnnotation).isAdjustedToUTC();
-  }
-
-  /**
-   * Repairs the Parquet footer schema if needed.
-   *
-   * @param original        The original Parquet metadata
-   * @param tableSchemaOpt  Optional table schema for logical type repair
-   * @return Repaired Parquet metadata with updated schema
-   */
-  public static ParquetMetadata repairFooterSchema(
-      ParquetMetadata original,
-      Option<org.apache.parquet.schema.MessageType> tableSchemaOpt) {
-
-    org.apache.parquet.schema.MessageType repairedSchema =
-        SchemaRepair.repairLogicalTypes(
-            original.getFileMetaData().getSchema(),
-            tableSchemaOpt
-        );
-
-    FileMetaData oldMeta = original.getFileMetaData();
-
-    FileMetaData newMeta = new FileMetaData(
-        repairedSchema,
-        oldMeta.getKeyValueMetaData(),
-        oldMeta.getCreatedBy(),
-        oldMeta.getEncryptionType(),
-        oldMeta.getFileDecryptor()
-    );
-
-    return new ParquetMetadata(newMeta, original.getBlocks());
   }
 }
