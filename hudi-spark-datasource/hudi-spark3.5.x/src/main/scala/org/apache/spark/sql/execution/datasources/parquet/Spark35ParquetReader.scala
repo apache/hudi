@@ -20,6 +20,7 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.internal.schema.InternalSchema
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.FileSplit
 import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}

@@ -20,10 +20,10 @@ package org.apache.spark.sql.hudi.command.payload
 import org.apache.hudi.AvroConversionUtils.{convertAvroSchemaToStructType, convertStructTypeToAvroSchema}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.hudi.avro.AvroSchemaUtils.{isNullable, getNonNullTypeFromUnion}
+import org.apache.hudi.avro.AvroSchemaUtils.{getNonNullTypeFromUnion, isNullable}
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.avro.HoodieAvroUtils.{bytesToAvro, createNewSchemaField}
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload, SerializableIndexedRecord}
+import org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, HoodieRecordUtils, Option => HOption, OrderingValues, StringUtils, ValidationUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig
