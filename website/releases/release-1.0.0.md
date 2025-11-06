@@ -8,7 +8,7 @@ toc: true
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## [Release 1.0.0](https://github.com/apache/hudi/releases/tag/release-1.0.0) ([docs](/docs/quick-start-guide))
+## [Release 1.0.0](https://github.com/apache/hudi/releases/tag/release-1.0.0)
 
 Apache Hudi 1.0.0 is a major milestone release of Apache Hudi. This release contains significant format changes and new exciting features 
 as we will see below.

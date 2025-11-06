@@ -39,7 +39,7 @@ import TabItem from '@theme/TabItem';
 - Added a new tool - InitialCheckPointProvider, to set checkpoints when migrating to DeltaStreamer after an initial load of the table is complete.
 - Delta Streamer tool now supports ingesting CSV data sources, chaining of multiple transformers to build more advanced ETL jobs.
 - Introducing a new `CustomKeyGenerator` key generator class, that provides flexible configurations to provide enable different types of key, partition path generation in  single class.
-  We also added support for more time units and date/time formats in `TimestampBasedKeyGenerator`. See [docs](https://hudi.apache.org/docs/writing_data#key-generation) for more.
+  We also added support for more time units and date/time formats in `TimestampBasedKeyGenerator`.
 
 ### Query side improvements:
 - Starting 0.6.0, snapshot queries are feasible on MOR tables using spark datasource. (experimental feature)
