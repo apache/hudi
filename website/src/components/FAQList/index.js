@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from '@docusaurus/Link';
-import styles from './styles.module.css';
+import styles from '../ContentList/styles.module.css';
 
 const faqSections = [
   {
@@ -49,15 +49,15 @@ const faqSections = [
 
 export default function FAQList() {
   return (
-    <div className={styles.faqListContainer}>
+    <div className={styles.container}>
       <h2>FAQ Sections</h2>
-      <div className={styles.faqGrid}>
+      <div className={styles.grid}>
         {faqSections.map((section) => (
-          <article key={section.id} className={styles.faqCard}>
-            <Link to={section.href} className={styles.faqLink} target="_blank" rel="noopener noreferrer">
-              <div className={styles.faqContent}>
-                <h3 className={styles.faqTitle}>{section.title}</h3>
-                <p className={styles.faqDescription}>{section.description}</p>
+          <article key={section.id} className={`${styles.card} ${styles.faqCard}`}>
+            <Link to={section.href} className={`${styles.link} ${styles.faqLink}`} target="_blank" rel="noopener noreferrer">
+              <div className={`${styles.content} ${styles.faqContent}`}>
+                <h3 className={styles.title}>{section.title}</h3>
+                <p className={`${styles.description} ${styles.faqDescription}`}>{section.description}</p>
                 <div className={styles.faqAction}>
                   <span className={styles.faqLinkText}>Read more →</span>
                 </div>

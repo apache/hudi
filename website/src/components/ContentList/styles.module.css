@@ -1,54 +1,56 @@
-.videoListContainer {
+/* Shared styles for BlogList, VideoList, and FAQList */
+
+.container {
   margin-top: 2rem;
 }
 
-.videoListContainer h2 {
+.container h2 {
   margin-bottom: 2rem;
   font-size: 2rem;
 }
 
-.videoGrid {
+.grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 2rem;
 }
 
-.videoCard {
+.card {
   border: 1px solid var(--ifm-color-emphasis-200);
   border-radius: 8px;
   overflow: hidden;
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.videoCard:hover {
+.card:hover {
   transform: translateY(-4px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.videoLink {
+.link {
   display: block;
   text-decoration: none;
   color: inherit;
 }
 
-.videoImageWrapper {
+.imageWrapper {
   width: 100%;
   height: 200px;
   overflow: hidden;
   background-color: var(--ifm-color-emphasis-100);
 }
 
-.videoImage {
+.image {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.videoContent {
+.content {
   padding: 1.5rem;
 }
 
-.videoMeta {
+.meta {
   display: flex;
   align-items: center;
   gap: 1rem;
@@ -57,32 +59,30 @@
   color: var(--ifm-color-emphasis-600);
 }
 
-.authorName {
+.date {
   font-size: 0.875rem;
 }
 
-.videoDate {
-  font-size: 0.875rem;
-}
-
-.videoTitle {
+.title {
   font-size: 1.25rem;
   font-weight: 600;
   margin: 0.5rem 0;
   color: var(--ifm-heading-color);
 }
 
-.videoDescription {
+.description {
   font-size: 0.9375rem;
   color: var(--ifm-color-emphasis-700);
   line-height: 1.5;
   margin-top: 0.5rem;
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
+/* Pagination styles */
 .pagination {
   display: flex;
   justify-content: center;
@@ -150,5 +150,50 @@
   margin-top: 1rem;
   color: var(--ifm-color-emphasis-600);
   font-size: 0.875rem;
+}
+
+/* Component-specific styles */
+
+/* Author name (used by BlogList and VideoList) */
+.authorName {
+  font-size: 0.875rem;
+}
+
+/* FAQ-specific styles */
+.faqCard {
+  background-color: var(--ifm-background-color);
+}
+
+.faqCard:hover {
+  border-color: var(--ifm-color-primary);
+}
+
+.faqLink {
+  height: 100%;
+}
+
+.faqContent {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.faqDescription {
+  margin: 0 0 1rem 0;
+  flex-grow: 1;
+}
+
+.faqAction {
+  margin-top: auto;
+}
+
+.faqLinkText {
+  font-size: 0.9375rem;
+  color: var(--ifm-color-primary);
+  font-weight: 500;
+}
+
+.faqCard:hover .faqLinkText {
+  text-decoration: underline;
 }
 

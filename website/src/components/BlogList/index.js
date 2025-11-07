@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import Link from '@docusaurus/Link';
 import { useBaseUrlUtils } from '@docusaurus/core/lib/client/exports/useBaseUrl';
 import AuthorName from '@site/src/components/AuthorName';
-import styles from './styles.module.css';
+import styles from '../ContentList/styles.module.css';
 
 const allBlogPosts = ((ctx) => {
   const blogpostNames = ctx.keys();
@@ -70,9 +70,9 @@ export default function BlogList() {
   };
 
   return (
-    <div className={styles.blogListContainer}>
+    <div className={styles.container}>
       <h2>All Blog Posts</h2>
-      <div className={styles.blogGrid}>
+      <div className={styles.grid}>
         {currentPosts.map((blog, index) => {
           const { frontMatter, assets, metadata } = blog;
           const { date, title, authors, permalink, description } = metadata || {};
@@ -90,27 +90,27 @@ export default function BlogList() {
           }) : '';
 
           return (
-            <article key={index} className={styles.blogCard}>
-              <Link to={permalink} className={styles.blogLink} target="_blank" rel="noopener noreferrer">
-                <div className={styles.blogImageWrapper}>
+            <article key={index} className={styles.card}>
+              <Link to={permalink} className={styles.link} target="_blank" rel="noopener noreferrer">
+                <div className={styles.imageWrapper}>
                   <img
                     src={withBaseUrl(image, { absolute: true })}
                     alt={title}
-                    className={styles.blogImage}
+                    className={styles.image}
                   />
                 </div>
-                <div className={styles.blogContent}>
-                  <div className={styles.blogMeta}>
+                <div className={styles.content}>
+                  <div className={styles.meta}>
                     <AuthorName
                       authors={authors}
                       className={styles.authorName}
                       withLink={false}
                     />
-                    <span className={styles.blogDate}>{formattedDate}</span>
+                    <span className={styles.date}>{formattedDate}</span>
                   </div>
-                  <h3 className={styles.blogTitle}>{title}</h3>
+                  <h3 className={styles.title}>{title}</h3>
                   {description && (
-                    <p className={styles.blogDescription}>{description}</p>
+                    <p className={styles.description}>{description}</p>
                   )}
                 </div>
               </Link>

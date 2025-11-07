@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import Link from '@docusaurus/Link';
 import { useBaseUrlUtils } from '@docusaurus/core/lib/client/exports/useBaseUrl';
 import AuthorName from '@site/src/components/AuthorName';
-import styles from './styles.module.css';
+import styles from '../ContentList/styles.module.css';
 
 const allVideos = ((ctx) => {
   const videoNames = ctx.keys();
@@ -70,9 +70,9 @@ export default function VideoList() {
   };
 
   return (
-    <div className={styles.videoListContainer}>
+    <div className={styles.container}>
       <h2>All Video Guides</h2>
-      <div className={styles.videoGrid}>
+      <div className={styles.grid}>
         {currentVideos.map((video, index) => {
           const { frontMatter, assets, metadata } = video;
           const { date, title, authors, permalink, description } = metadata || {};
@@ -97,17 +97,17 @@ export default function VideoList() {
             : { to: videoUrl, target: '_blank', rel: 'noopener noreferrer' };
 
           return (
-            <article key={index} className={styles.videoCard}>
-              <LinkComponent {...linkProps} className={styles.videoLink}>
-                <div className={styles.videoImageWrapper}>
+            <article key={index} className={styles.card}>
+              <LinkComponent {...linkProps} className={styles.link}>
+                <div className={styles.imageWrapper}>
                   <img
                     src={withBaseUrl(image, { absolute: true })}
                     alt={title}
-                    className={styles.videoImage}
+                    className={styles.image}
                   />
                 </div>
-                <div className={styles.videoContent}>
-                  <div className={styles.videoMeta}>
+                <div className={styles.content}>
+                  <div className={styles.meta}>
                     {authors && authors.length > 0 && (
                       <AuthorName
                         authors={authors}
@@ -115,11 +115,11 @@ export default function VideoList() {
                         withLink={false}
                       />
                     )}
-                    <span className={styles.videoDate}>{formattedDate}</span>
+                    <span className={styles.date}>{formattedDate}</span>
                   </div>
-                  <h3 className={styles.videoTitle}>{title}</h3>
+                  <h3 className={styles.title}>{title}</h3>
                   {description && (
-                    <p className={styles.videoDescription}>{description}</p>
+                    <p className={styles.description}>{description}</p>
                   )}
                 </div>
               </LinkComponent>
