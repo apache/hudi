@@ -328,12 +328,16 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * @param partitions The list of partitions
    */
   public static HoodieRecord<HoodieMetadataPayload> createPartitionListRecord(List<String> partitions, boolean isDeleted) {
+    return createPartitionListRecord(partitions, isDeleted, Option.empty());
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createPartitionListRecord(List<String> partitions, boolean isDeleted, Option<String> tableBasePathOpt) {
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
     partitions.forEach(partition -> fileInfo.put(getPartitionIdentifier(partition), new HoodieMetadataFileInfo(0L, isDeleted)));
 
     HoodieKey key = new HoodieKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_PARTITION_LIST,
-        fileInfo);
+        fileInfo, tableBasePathOpt);
     return new HoodieAvroRecord<>(key, payload);
   }
 

@@ -349,7 +349,9 @@ public class HoodieTableMetadataUtil {
     // Add record bearing added partitions list
     List<String> partitionsAdded = getPartitionsAdded(commitMetadata);
 
-    records.add(HoodieMetadataPayload.createPartitionListRecord(partitionsAdded));
+    records.add(enableBasePathForPartitions ?
+        HoodieMetadataPayload.createPartitionListRecord(partitionsAdded, false, Option.of(basePath)) :
+        HoodieMetadataPayload.createPartitionListRecord(partitionsAdded));
 
     // Update files listing records for each individual partition
     HoodieAccumulator newFileCount = HoodieAtomicLongAccumulator.create();

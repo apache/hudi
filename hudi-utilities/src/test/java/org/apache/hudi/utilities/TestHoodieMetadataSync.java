@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -32,7 +51,8 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
   static final Logger LOG = LoggerFactory.getLogger(TestHoodieMetadataSync.class);
   static final int NUM_RECORDS = 100;
   static final String COMMIT_TIME = "20200101000000";
-  static final String PARTITION_PATH = "2020";
+  static final String PARTITION_PATH_1 = "2020";
+  static final String PARTITION_PATH_2 = "2021";
   static final String TABLE_NAME = "testing";
 
   private static final HoodieTestDataGenerator DATA_GENERATOR = new HoodieTestDataGenerator(0L);
@@ -63,7 +83,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     HoodieWriteConfig cfg = getHoodieWriteConfig(sourcePath);
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(cfg)) {
       String commitTime = writeClient.startCommit();
-      HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH});
+      HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH_1});
       List<HoodieRecord> records = dataGen.generateInserts(commitTime, NUM_RECORDS);
       JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
       writeClient.bulkInsert(recordsRDD, commitTime);
@@ -81,7 +101,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     cfg = getHoodieWriteConfig(sourcePath2);
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(cfg)) {
       String commitTime = writeClient.startCommit();
-      HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH});
+      HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH_2});
       List<HoodieRecord> records = dataGen.generateInserts(commitTime, NUM_RECORDS);
       JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
       writeClient.bulkInsert(recordsRDD, commitTime);
@@ -110,6 +130,12 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
   @Test
   public void simpleTest() throws Exception {
+
+    spark().read().format("hudi").load(sourcePath + "/.hoodie/metadata/").registerTempTable("srcMetadata");
+
+    Dataset<Row> srcMdtDF = spark().sql("select key, type, filesystemMetadata  from srcMetadata where fileSystemMetadata is not null");
+
+    srcMdtDF.show(false);
     HoodieMetadataSync.Config cfg = new HoodieMetadataSync.Config();
     cfg.sourceBasePath = sourcePath;
     cfg.targetBasePath = targetPath;
@@ -128,6 +154,12 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     Dataset<Row> sDf1 = spark().sql("select * from sTable1").drop("city_to_state");
     sDf1.cache();
+
+    spark().read().format("hudi").load(targetPath + "/.hoodie/metadata/").registerTempTable("tTableMetadata");
+
+    Dataset<Row> mdtDF = spark().sql("select key, type, filesystemMetadata  from tTableMetadata where fileSystemMetadata is not null and type = 1");
+
+    mdtDF.show(false);
 
     Dataset<Row> tDf = spark().sql("select * from tTable1").drop("city_to_state");
 
@@ -149,10 +181,18 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     spark().read().format("hudi").load(sourcePath2).registerTempTable("sTable2");
 
+    spark().read().format("hudi").load(sourcePath2).registerTempTable("sTable2");
+
+
     spark().read().format("hudi").option("hoodie.metadata.enable","true")
         .option("hoodie.metadata.enable.base.path.for.partitions","true").load(cfg.targetBasePath).registerTempTable("tTable1");
 
+    spark().read().format("hudi").load(targetPath + "/.hoodie/metadata/").registerTempTable("tTableMetadata");
     Dataset<Row> sDf2 = spark().sql("select * from sTable2").drop("city_to_state");
+
+    mdtDF = spark().sql("select key, type, filesystemMetadata  from tTableMetadata where fileSystemMetadata is not null and type = 1");
+
+    mdtDF.show(false);
 
     Dataset<Row> tDf2 = spark().sql("select * from tTable1").drop("city_to_state");
 
