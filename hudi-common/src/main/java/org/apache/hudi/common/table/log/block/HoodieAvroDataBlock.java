@@ -191,8 +191,8 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       // writer schema could refer to table schema.
       // avoid this for MDT for sure.
       // and for tables having no logical ts column.
-      Schema repairedWriterSchema = enableLogicalTimestampFieldRepair ?
-          AvroSchemaRepair.repairLogicalTypes(writerSchema, readerSchema) : writerSchema;
+      Schema repairedWriterSchema = enableLogicalTimestampFieldRepair
+          ? AvroSchemaRepair.repairLogicalTypes(writerSchema, readerSchema) : writerSchema;
       if (recordNeedsRewriteForExtendedAvroTypePromotion(repairedWriterSchema, readerSchema)) {
         this.reader = new GenericDatumReader<>(repairedWriterSchema, repairedWriterSchema);
         this.promotedSchema = Option.of(readerSchema);
