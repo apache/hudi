@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -35,6 +36,7 @@ import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 
+import org.apache.avro.Schema;
 import com.beust.jcommander.JCommander;
 import com.codahale.metrics.Timer;
 import org.apache.hadoop.conf.Configuration;
@@ -399,9 +401,20 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   private Map<String, String> getTableProperties(MessageType schema) {
     Map<String, String> tableProperties = ConfigUtils.toMap(config.getString(HIVE_TABLE_PROPERTIES));
     if (config.getBoolean(HIVE_SYNC_AS_DATA_SOURCE_TABLE)) {
-      Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
-          config.getStringOrDefault(META_SYNC_SPARK_VERSION), config.getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD), schema);
-      tableProperties.putAll(sparkTableProperties);
+      try {
+        // Use config-aligned schema access for both MessageType and Avro Schema
+        boolean includeMetadataFields = !config.getBoolean(HIVE_SYNC_OMIT_METADATA_FIELDS);
+        Schema avroSchema = new TableSchemaResolver(syncClient.getMetaClient()).getTableAvroSchema(includeMetadataFields);
+        Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
+            config.getStringOrDefault(META_SYNC_SPARK_VERSION), config.getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD), schema, avroSchema);
+        tableProperties.putAll(sparkTableProperties);
+      } catch (Exception e) {
+        LOG.warn("Failed to get Avro schema for comment extraction, falling back to no comments", e);
+        // Fallback to old behavior with empty field list
+        Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
+            config.getStringOrDefault(META_SYNC_SPARK_VERSION), config.getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD), schema, syncClient.getStorageFieldSchemas());
+        tableProperties.putAll(sparkTableProperties);
+      }
     }
     return tableProperties;
   }

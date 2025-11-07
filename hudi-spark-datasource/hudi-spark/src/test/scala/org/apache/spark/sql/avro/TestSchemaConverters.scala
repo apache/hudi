@@ -29,7 +29,7 @@ class TestSchemaConverters {
   def testAvroUnionConversion(): Unit = {
     val originalAvroSchema = HoodieMetadataColumnStats.SCHEMA$
 
-    val SchemaType(convertedStructType, _) = SchemaConverters.toSqlType(originalAvroSchema)
+    val SchemaType(convertedStructType, _, _) = SchemaConverters.toSqlType(originalAvroSchema)
     val convertedAvroSchema = SchemaConverters.toAvroType(convertedStructType)
 
     // NOTE: Here we're validating that converting Avro -> Catalyst and Catalyst -> Avro are inverse
