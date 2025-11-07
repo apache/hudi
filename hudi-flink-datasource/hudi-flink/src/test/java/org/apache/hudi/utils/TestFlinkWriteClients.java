@@ -51,7 +51,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
@@ -105,20 +104,23 @@ public class TestFlinkWriteClients {
   }
 
   @ParameterizedTest
-  @EnumSource(MarkerType.class)
-  void testMarkerType(MarkerType markerType) throws Exception {
+  @ValueSource(strings = {"", "DIRECT", "TIMELINE_SERVER_BASED"})
+  void testMarkerType(String markerType) throws Exception {
     // create table
     StreamerUtil.initTableIfNotExists(conf);
     // This is expected to be used by the driver, the client can then send requests for files view.
     FlinkWriteClients.createWriteClient(conf);
 
+    // do not set mark type to test the default behavior
+    if (!markerType.isEmpty()) {
+      conf.setString(HoodieWriteConfig.MARKERS_TYPE.key(), MarkerType.valueOf(markerType).name());
+    }
     // This is expected to be used by writer client
-    conf.setString(HoodieWriteConfig.MARKERS_TYPE.key(), markerType.toString());
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, true);
     try (HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(HoodieFlinkEngineContext.DEFAULT, writeConfig)) {
       HoodieTable table = writeClient.getHoodieTable();
       String markerClass = WriteMarkersFactory.get(writeConfig.getMarkersType(), table, "001").getClass().getSimpleName();
-      if (markerType == MarkerType.DIRECT) {
+      if (markerType.isEmpty() || markerType.equals("DIRECT")) {
         assertEquals(DirectWriteMarkers.class.getSimpleName(), markerClass);
       } else {
         assertEquals(TimelineServerBasedWriteMarkers.class.getSimpleName(), markerClass);
