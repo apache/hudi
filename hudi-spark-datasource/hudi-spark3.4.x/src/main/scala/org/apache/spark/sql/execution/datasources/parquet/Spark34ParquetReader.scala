@@ -71,7 +71,7 @@ class Spark34ParquetReader(enableVectorizedReader: Boolean,
   capacity = capacity,
   returningBatch = returningBatch,
   enableRecordFilter = enableRecordFilter,
-  enableRepair = enableLogicalTimestampRepair,
+  enableLogicalTimestampRepair = enableLogicalTimestampRepair,
   timeZoneId = timeZoneId) {
 
   /**
