@@ -83,6 +83,7 @@ import software.amazon.awssdk.services.glue.model.TableInput;
 import software.amazon.awssdk.services.glue.model.TagResourceRequest;
 import software.amazon.awssdk.services.glue.model.UpdateTableRequest;
 import software.amazon.awssdk.services.sts.StsClient;
+import software.amazon.awssdk.services.sts.StsClientBuilder;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
 
@@ -115,6 +116,8 @@ import static org.apache.hudi.config.GlueCatalogSyncClientConfig.META_SYNC_PARTI
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.PARTITION_CHANGE_PARALLELISM;
 import static org.apache.hudi.config.HoodieAWSConfig.AWS_GLUE_ENDPOINT;
 import static org.apache.hudi.config.HoodieAWSConfig.AWS_GLUE_REGION;
+import static org.apache.hudi.config.HoodieAWSConfig.AWS_STS_ENDPOINT;
+import static org.apache.hudi.config.HoodieAWSConfig.AWS_STS_REGION;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_DATABASE_NAME;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_RESOURCE_TAGS;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_TABLE_NAME;
@@ -160,7 +163,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   private final String catalogId;
 
   public AWSGlueCatalogSyncClient(HiveSyncConfig config, HoodieTableMetaClient metaClient) {
-    this(buildAsyncClient(config), StsClient.create(), config, metaClient);
+    this(buildAsyncClient(config), buildStsClient(config), config, metaClient);
   }
 
   AWSGlueCatalogSyncClient(GlueAsyncClient awsGlue, StsClient stsClient, HiveSyncConfig config, HoodieTableMetaClient metaClient) {
@@ -186,6 +189,20 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       awsGlueBuilder = config.getString(AWS_GLUE_REGION) == null ? awsGlueBuilder :
           awsGlueBuilder.region(Region.of(config.getString(AWS_GLUE_REGION)));
       return awsGlueBuilder.build();
+    } catch (URISyntaxException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private static StsClient buildStsClient(HiveSyncConfig config) {
+    try {
+      StsClientBuilder stsClientBuilder = StsClient.builder()
+          .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(config.getProps()));
+      stsClientBuilder = config.getString(AWS_STS_ENDPOINT) == null ? stsClientBuilder :
+          stsClientBuilder.endpointOverride(new URI(config.getString(AWS_STS_ENDPOINT)));
+      stsClientBuilder = config.getString(AWS_STS_REGION) == null ? stsClientBuilder :
+          stsClientBuilder.region(Region.of(config.getString(AWS_STS_REGION)));
+      return stsClientBuilder.build();
     } catch (URISyntaxException e) {
       throw new RuntimeException(e);
     }
@@ -467,14 +484,17 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
   }
 
-  private void setComments(List<Column> columns, Map<String, Option<String>> commentsMap) {
-    columns.forEach(column -> {
+  private List<Column> setComments(List<Column> columns, Map<String, Option<String>> commentsMap) {
+    // AWS SDK v2 returns immutable lists, so we need to create a new list
+    return columns.stream().map(column -> {
       String comment = commentsMap.getOrDefault(column.name(), Option.empty()).orElse(null);
-      Column.builder().comment(comment).build();
-    });
+      // AWS SDK v2 uses immutable objects, so we need to create a new Column with the comment
+      return column.toBuilder().comment(comment).build();
+    }).collect(Collectors.toList());
   }
 
-  private String getTableDoc() {
+  // Made package-private for testing
+  String getTableDoc() {
     try {
       return tableSchemaResolver.getTableAvroSchema(true).getDoc();
     } catch (Exception e) {
@@ -501,12 +521,11 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
     Map<String, Option<String>> commentsMap = fromStorage.stream().collect(Collectors.toMap(FieldSchema::getName, FieldSchema::getComment));
 
-    StorageDescriptor storageDescriptor = table.storageDescriptor();
-    List<Column> columns = storageDescriptor.columns();
-    setComments(columns, commentsMap);
+    StorageDescriptor originalStorageDescriptor = table.storageDescriptor();
+    List<Column> columns = setComments(originalStorageDescriptor.columns(), commentsMap);
+    StorageDescriptor storageDescriptor = originalStorageDescriptor.toBuilder().columns(columns).build();
 
-    List<Column> partitionKeys = table.partitionKeys();
-    setComments(partitionKeys, commentsMap);
+    List<Column> partitionKeys = setComments(table.partitionKeys(), commentsMap);
 
     String tableDescription = getTableDoc();
 

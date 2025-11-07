@@ -54,8 +54,32 @@
         </dependency>
         <dependency>
             <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-common</artifactId>
+            <version>${project.version}</version>
+            <classifier>tests</classifier>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-hive-sync</artifactId>
             <version>${project.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>${hive.groupid}</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-hive-sync</artifactId>
+            <version>${project.version}</version>
+            <classifier>tests</classifier>
+            <scope>test</scope>
         </dependency>
 
         <!-- Hadoop -->
@@ -94,27 +118,11 @@
             <version>${dynamodb.lockclient.version}</version>
         </dependency>
 
-        <!-- Hive -->
-        <dependency>
-            <groupId>${hive.groupid}</groupId>
-            <artifactId>hive-service</artifactId>
-            <version>${hive.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-api</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-log4j12</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
         <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-avro</artifactId>
         </dependency>
+
 
         <!-- AWS SDK -->
         <dependency>
@@ -220,13 +228,48 @@
             <version>${aws.sdk.httpcore.version}</version>
         </dependency>
 
+        <!-- Test -->
         <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>sts</artifactId>
-            <version>${aws.sdk.version}</version>
+            <groupId>${hive.groupid}</groupId>
+            <artifactId>hive-service</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
-        <!-- Test -->
+        <dependency>
+            <groupId>${hive.groupid}</groupId>
+            <artifactId>hive-metastore</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>${hive.groupid}</groupId>
+            <artifactId>hive-exec</artifactId>
+            <classifier>${hive.exec.classifier}</classifier>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.pentaho</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
         <dependency>
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-tests-common</artifactId>
@@ -301,7 +344,6 @@
                                     <name>amazon/dynamodb-local:${dynamodb-local.version}</name>
                                     <alias>it-database</alias>
                                     <run>
-                                        <platform>linux/amd64</platform>
                                         <ports>
                                             <port>${dynamodb-local.port}:${dynamodb-local.port}</port>
                                         </ports>
@@ -314,10 +356,9 @@
                                     </run>
                                 </image>
                                 <image>
-                                    <name>apachehudi/moto:${moto.version}</name>
+                                    <name>motoserver/moto:${moto.version}</name>
                                     <alias>it-aws</alias>
                                     <run>
-                                        <platform>linux/amd64</platform>
                                         <ports>
                                             <port>${moto.port}:5000</port>
                                         </ports>
