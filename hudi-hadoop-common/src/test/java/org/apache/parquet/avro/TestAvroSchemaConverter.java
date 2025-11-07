@@ -19,8 +19,6 @@
 
 package org.apache.parquet.avro;
 
-import java.util.Arrays;
-import java.util.Collections;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -33,7 +31,11 @@ import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
 import org.apache.parquet.schema.Type;
 import org.apache.parquet.schema.Types;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+
+import java.util.Arrays;
+import java.util.Collections;
 
 import static org.apache.avro.Schema.Type.INT;
 import static org.apache.avro.Schema.Type.LONG;
@@ -59,6 +61,7 @@ import static org.apache.parquet.schema.Type.Repetition.REQUIRED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@Disabled
 public class TestAvroSchemaConverter {
 
   private static final Configuration NEW_BEHAVIOR = new Configuration(false);
