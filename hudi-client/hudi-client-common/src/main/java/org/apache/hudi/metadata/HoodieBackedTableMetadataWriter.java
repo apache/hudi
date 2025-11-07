@@ -110,6 +110,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -671,7 +672,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         dataWriteConfig.getProps());
 
     // Initialize the file groups - using the same estimation logic as that of record index
-    final int fileGroupCount = HoodieTableMetadataUtil.estimateFileGroupCount(RECORD_INDEX, records.count(),
+    final int fileGroupCount = HoodieTableMetadataUtil.estimateFileGroupCount(RECORD_INDEX, records::count,
         RECORD_INDEX_AVERAGE_RECORD_SIZE, dataWriteConfig.getRecordIndexMinFileGroupCount(),
         dataWriteConfig.getRecordIndexMaxFileGroupCount(), dataWriteConfig.getRecordIndexGrowthFactor(),
         dataWriteConfig.getRecordIndexMaxFileGroupSizeBytes());
@@ -737,16 +738,19 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   private void initializeFilegroupsAndCommitToRecordIndexPartition(String commitTimeForPartition,
                                                                    Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList, boolean isPartitionedRLI) throws IOException {
     createRecordIndexDefinition(dataMetaClient, Collections.singletonMap(HoodieRecordIndex.IS_PARTITIONED_OPTION, String.valueOf(isPartitionedRLI)));
+    HoodieData<HoodieRecord> recordIndexRecords;
     if (isPartitionedRLI) {
-      initializeFilegroupsAndCommitToPartitionedRecordIndexPartition(commitTimeForPartition, lazyLatestMergedPartitionFileSliceList);
+      recordIndexRecords = initializeFilegroupsAndCommitToPartitionedRecordIndexPartition(commitTimeForPartition, lazyLatestMergedPartitionFileSliceList);
     } else {
-      initializeFilegroupsAndCommit(RECORD_INDEX, RECORD_INDEX.getPartitionPath(),
-          initializeRecordIndexPartition(lazyLatestMergedPartitionFileSliceList.get(),
-              dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism()), commitTimeForPartition);
+      Pair<Integer, HoodieData<HoodieRecord>> fgCountAndRecordIndexRecords = initializeRecordIndexPartition(lazyLatestMergedPartitionFileSliceList.get(),
+          dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
+      recordIndexRecords = fgCountAndRecordIndexRecords.getRight();
+      initializeFilegroupsAndCommit(RECORD_INDEX, RECORD_INDEX.getPartitionPath(), fgCountAndRecordIndexRecords, commitTimeForPartition);
     }
+    recordIndexRecords.unpersist();
   }
 
-  private void initializeFilegroupsAndCommitToPartitionedRecordIndexPartition(String commitTimeForPartition,
+  private HoodieData<HoodieRecord> initializeFilegroupsAndCommitToPartitionedRecordIndexPartition(String commitTimeForPartition,
                                                                               Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException {
     Map<String, List<Pair<String, FileSlice>>> partitionFileSlicePairsMap = lazyLatestMergedPartitionFileSliceList.get().stream()
         .collect(Collectors.groupingBy(Pair::getKey));
@@ -782,6 +786,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     initMetadataReader();
     long totalInitTime = partitionInitTimer.endTimer();
     LOG.info("Initializing partitioned record index in metadata table took {} in ms", totalInitTime);
+    return records;
   }
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializeRecordIndexPartition(
@@ -795,17 +800,14 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         this.getClass().getSimpleName(),
         dataMetaClient,
         dataWriteConfig);
-    records.persist("MEMORY_AND_DISK_SER");
-    final long recordCount = records.count();
 
     // Initialize the file groups
-    final int fileGroupCount = estimateFileGroupCount(recordCount);
-
-    LOG.info("Initializing record index with {} mappings and {} file groups.", recordCount, fileGroupCount);
+    final int fileGroupCount = estimateFileGroupCount(records);
+    LOG.info("Initializing record index with {} file groups.", fileGroupCount);
     return Pair.of(fileGroupCount, records);
   }
 
-  private int estimateFileGroupCount(long recordCount) {
+  private int estimateFileGroupCount(HoodieData<HoodieRecord> records) {
     int minFileGroupCount;
     int maxFileGroupCount;
     if (dataWriteConfig.isRecordLevelIndexEnabled()) {
@@ -815,9 +817,15 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       minFileGroupCount = dataWriteConfig.getRecordIndexMinFileGroupCount();
       maxFileGroupCount = dataWriteConfig.getRecordIndexMaxFileGroupCount();
     }
+    Supplier<Long> recordCountSupplier = () -> {
+      records.persist("MEMORY_AND_DISK_SER");
+      long count = records.count();
+      LOG.info("Initializing record index with {} mappings", count);
+      return count;
+    };
     return HoodieTableMetadataUtil.estimateFileGroupCount(
         MetadataPartitionType.RECORD_INDEX,
-        recordCount,
+        recordCountSupplier,
         RECORD_INDEX_AVERAGE_RECORD_SIZE,
         minFileGroupCount,
         maxFileGroupCount,
