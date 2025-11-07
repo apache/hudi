@@ -95,8 +95,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     )
   }
 
-  private lazy val supportBatchTimestampRepair = HoodieSparkUtils.gteqSpark3_5 || !AvroSchemaRepair.hasTimestampMillisField(avroTableSchema)
-
+  private lazy val hasTimestampMillisFieldInTableSchema = AvroSchemaRepair.hasTimestampMillisField(avroTableSchema)
+  private lazy val supportBatchWithTableSchema = HoodieSparkUtils.gteqSpark3_5 || !hasTimestampMillisFieldInTableSchema
   override def shortName(): String = "HudiFileGroup"
 
   override def toString: String = "HoodieFileGroupReaderBasedFileFormat"
@@ -128,7 +128,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
    */
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
     val conf = sparkSession.sessionState.conf
-    val parquetBatchSupported = ParquetUtils.isBatchReadSupportedForSchema(conf, schema) && supportBatchTimestampRepair
+    val parquetBatchSupported = ParquetUtils.isBatchReadSupportedForSchema(conf, schema) && supportBatchWithTableSchema
     val orcBatchSupported = conf.orcVectorizedReaderEnabled &&
       schema.forall(s => OrcUtils.supportColumnarReads(
         s.dataType, sparkSession.sessionState.conf.orcVectorizedReaderNestedColumnEnabled))
@@ -196,7 +196,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     val augmentedStorageConf = new HadoopStorageConfiguration(hadoopConf).getInline
     setSchemaEvolutionConfigs(augmentedStorageConf)
-    augmentedStorageConf.set("logicalTimestampField.repair.enable", supportBatchTimestampRepair.toString)
+    augmentedStorageConf.set("logicalTimestampField.repair.enable", hasTimestampMillisFieldInTableSchema.toString)
     val (remainingPartitionSchemaArr, fixedPartitionIndexesArr) = partitionSchema.fields.toSeq.zipWithIndex.filter(p => !mandatoryFields.contains(p._1.name)).unzip
 
     // The schema of the partition cols we want to append the value instead of reading from the file
