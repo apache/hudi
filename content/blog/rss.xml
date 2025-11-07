@@ -4,10 +4,112 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Wed, 29 Oct 2025 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Fri, 07 Nov 2025 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>en</language>
+        <item>
+            <title><![CDATA[How FreeWheel Uses Apache Hudi to Power Its Data Lakehouse]]></title>
+            <link>https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse</link>
+            <guid>https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse</guid>
+            <pubDate>Fri, 07 Nov 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Talk title slide]]></description>
+            <content:encoded><![CDATA[<p><img decoding="async" loading="lazy" alt="Talk title slide" src="https://hudi.apache.org/assets/images/image1-352adf99bd976cab9ea093daab842339.png" width="1257" height="437" class="img_ev3q"></p>
+<p><em>This post summarizes a FreeWheel talk from the Apache Hudi Community Sync. Watch the recording on <a href="https://www.youtube.com/watch?v=hQNSf82o3Rk" target="_blank" rel="noopener noreferrer" class="">YouTube</a>.</em></p>
+<p><a href="https://www.freewheel.com/" target="_blank" rel="noopener noreferrer" class="">FreeWheel</a>, a division of Comcast, provides advanced video advertising solutions across TV and digital platforms. As the business scaled, FreeWheel faced growing challenges maintaining consistency, freshness, and operational efficiency in its data systems. To address these challenges, the team began transitioning from a legacy Lambda architecture to a modern, <a href="https://hudi.apache.org/" target="_blank" rel="noopener noreferrer" class="">Apache Hudi</a>-powered lakehouse approach.</p>
+<p>Their original stack, shown below, used multiple systems like <strong>Presto</strong>, <strong>ClickHouse</strong>, and <strong>Druid</strong> to serve analytical and real-time use cases. However, the architecture had some limitations:</p>
+<p><img decoding="async" loading="lazy" alt="Original multi-engine architecture" src="https://hudi.apache.org/assets/images/image2-b8e66c22453fcee2810fc23d8cb480d0.png" width="1999" height="848" class="img_ev3q"></p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="data-freshness-issues">Data freshness issues<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#data-freshness-issues" class="hash-link" aria-label="Direct link to Data freshness issues" title="Direct link to Data freshness issues" translate="no">​</a></h2>
+<ul>
+<li class="">Presto tables had a 3–4 hour delay, which was too slow for operational use cases.</li>
+<li class="">Only ClickHouse and Druid offered near‑real‑time access (~5 minutes) but added complexity.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="complex-ingestion">Complex ingestion<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#complex-ingestion" class="hash-link" aria-label="Direct link to Complex ingestion" title="Direct link to Complex ingestion" translate="no">​</a></h2>
+<ul>
+<li class="">Data came from logs, CDC streams, files, and databases.</li>
+<li class="">Each system had its own ingestion pipeline and refresh logic.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="query-performance-bottlenecks">Query performance bottlenecks<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#query-performance-bottlenecks" class="hash-link" aria-label="Direct link to Query performance bottlenecks" title="Direct link to Query performance bottlenecks" translate="no">​</a></h2>
+<ul>
+<li class="">With ~15 PB of data and 20M+ queries/day, scaling across three engines was costly and hard to operate.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="use-case-1-lambda-architecture-and-its-drawbacks">Use Case 1: Lambda Architecture and Its Drawbacks<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#use-case-1-lambda-architecture-and-its-drawbacks" class="hash-link" aria-label="Direct link to Use Case 1: Lambda Architecture and Its Drawbacks" title="Direct link to Use Case 1: Lambda Architecture and Its Drawbacks" translate="no">​</a></h2>
+<p><img decoding="async" loading="lazy" alt="Lambda architecture overview" src="https://hudi.apache.org/assets/images/image3-ecdbeac000b14fa4bf639c7e0daf8654.png" width="1999" height="857" class="img_ev3q"></p>
+<p>FreeWheel initially followed a traditional Lambda architecture, which separated the processing of batch and real‑time data. This approach created several problems: it required duplicate pipelines for batch and real‑time processing (leading to inefficient engineering workflows), and it struggled to scale ClickHouse for large aggregates.</p>
+<p>By consolidating on Hudi as the table format for both streaming and historical data, FreeWheel unified the storage layer and eliminated duplicate pipelines. Hudi’s <a href="https://hudi.apache.org/docs/write_operations/#upsert" target="_blank" rel="noopener noreferrer" class="">upserts</a> by key and <a href="https://hudi.apache.org/docs/table_types/#incremental-queries" target="_blank" rel="noopener noreferrer" class="">incremental processing</a> make it possible to serve near–real‑time analytics. The result is simpler operations, consistent logic, and a platform that scales with data volume and query complexity.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="use-case-2-real-time-inventory-management">Use Case 2: Real-Time Inventory Management<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#use-case-2-real-time-inventory-management" class="hash-link" aria-label="Direct link to Use Case 2: Real-Time Inventory Management" title="Direct link to Use Case 2: Real-Time Inventory Management" translate="no">​</a></h2>
+<p><img decoding="async" loading="lazy" alt="Real-time inventory with Hudi" src="https://hudi.apache.org/assets/images/image4-d88e573a6dba93c4a1edd9e87a09fa5f.png" width="1999" height="1621" class="img_ev3q"></p>
+<p>Historically, daily ad inventory updates were a significant challenge. This method led to low forecasting accuracy and frequent delivery-performance mismatches.</p>
+<p>By modernizing the platform with Hudi, FreeWheel updates inventory within minutes. Order changes are applied as upserts to Hudi tables and become queryable shortly thereafter, dramatically improving forecast accuracy and reducing delivery‑vs‑forecast mismatches.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="use-case-3-scalable-audience-data-processing">Use Case 3: Scalable Audience Data Processing<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#use-case-3-scalable-audience-data-processing" class="hash-link" aria-label="Direct link to Use Case 3: Scalable Audience Data Processing" title="Direct link to Use Case 3: Scalable Audience Data Processing" translate="no">​</a></h2>
+<p><img decoding="async" loading="lazy" alt="Audience data architecture with Hudi snapshot" src="https://hudi.apache.org/assets/images/image5-61c7ba9d9a0b31e28ce22ae67eb12d08.png" width="941" height="746" class="img_ev3q"></p>
+<p>FreeWheel uses Aerospike to ingest audience segments for its online services, which involves handling high‑frequency, real‑time data. However, this setup brought a few key challenges—chiefly, the need for analytical insights on top of real‑time data and the need to efficiently manage bulk loads alongside frequent updates.</p>
+<p>To address these challenges, FreeWheel introduced Hudi into the data pipeline. Hudi maintains a snapshot table for all audience data, enabling more flexible and efficient data management. It supports <a href="https://hudi.apache.org/docs/write_operations/#bulk_insert" target="_blank" rel="noopener noreferrer" class="">bulk inserts</a>, <a href="https://hudi.apache.org/docs/write_operations/#upsert" target="_blank" rel="noopener noreferrer" class="">upserts</a>, and change data capture (CDC), enabling smoother handling of updates and large‑scale data loads. Using CDC, large batches of audience updates are applied incrementally to the snapshot. With Hudi in place, the back‑end analytics system became much stronger, while the responsiveness of the online systems was preserved. This setup also improved the stability of the online targeting system, as heavy analytical workloads were moved off the key‑value store, reducing pressure on Aerospike and enhancing overall performance.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="hudi-in-practice-1-billionscale-updates-for-audiencesegment-ingestion">Hudi in practice 1: Billion‑scale updates for audience‑segment ingestion<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#hudi-in-practice-1-billionscale-updates-for-audiencesegment-ingestion" class="hash-link" aria-label="Direct link to Hudi in practice 1: Billion‑scale updates for audience‑segment ingestion" title="Direct link to Hudi in practice 1: Billion‑scale updates for audience‑segment ingestion" translate="no">​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="use-case-overview">Use case overview<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#use-case-overview" class="hash-link" aria-label="Direct link to Use case overview" title="Direct link to Use case overview" translate="no">​</a></h3>
+<p>This implementation showcases how a large‑scale platform ingests and updates audience‑segmentation data at the billion‑record scale using Hudi tables.
+The architecture efficiently handles high‑frequency updates across more than 63,000 partitions and a table over 600 TB, with performance optimizations at both the data and infrastructure levels.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="key-architecture-and-design-principles">Key architecture and design principles<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#key-architecture-and-design-principles" class="hash-link" aria-label="Direct link to Key architecture and design principles" title="Direct link to Key architecture and design principles" translate="no">​</a></h3>
+<p><img decoding="async" loading="lazy" alt="Audience ingestion architecture and scheduler" src="https://hudi.apache.org/assets/images/image6-c6d05709a20d20f096539322b86f933d.png" width="1333" height="1360" class="img_ev3q"></p>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="partitioning-and-orchestration"><strong>Partitioning and orchestration</strong><a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#partitioning-and-orchestration" class="hash-link" aria-label="Direct link to partitioning-and-orchestration" title="Direct link to partitioning-and-orchestration" translate="no">​</a></h4>
+<p>FreeWheel uses the audience‑segment ID as the <a href="https://hudi.apache.org/docs/key_generation" target="_blank" rel="noopener noreferrer" class="">partition key</a>. Each partition can be processed independently, allowing many Spark jobs to run in parallel. Each job upserts data to the Hudi lakehouse table.</p>
+<p>A central scheduler allocates work based on input size, priority, and write concurrency limits. This enables dynamic scaling across more than 63,000 partitions, where per-partition input sizes range from 1 million to 100 billion records.</p>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="decoupled-ingestion-pipeline"><strong>Decoupled ingestion pipeline</strong><a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#decoupled-ingestion-pipeline" class="hash-link" aria-label="Direct link to decoupled-ingestion-pipeline" title="Direct link to decoupled-ingestion-pipeline" translate="no">​</a></h4>
+<ul>
+<li class="">Scheduler: allocates resources based on input size and supports job priority, <a href="https://hudi.apache.org/docs/concurrency_control/" target="_blank" rel="noopener noreferrer" class="">multi-writer concurrency control</a>, and concurrency planning.</li>
+<li class="">Ingestion job: Spark jobs process data and write it to the Hudi segment table in the lakehouse.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="challenges-of-input-data-at-scale">Challenges of input data at scale<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#challenges-of-input-data-at-scale" class="hash-link" aria-label="Direct link to Challenges of input data at scale" title="Direct link to Challenges of input data at scale" translate="no">​</a></h3>
+<ul>
+<li class="">Table size: over 600 TB.</li>
+<li class="">Partition count: 63,000 audience‑segment partitions.</li>
+<li class="">Data skew: massive variation in partition sizes, ranging from 1 million to 100 billion records.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="metrics-and-performance-insights">Metrics and performance insights<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#metrics-and-performance-insights" class="hash-link" aria-label="Direct link to Metrics and performance insights" title="Direct link to Metrics and performance insights" translate="no">​</a></h3>
+<p><img decoding="async" loading="lazy" alt="Ingestion metrics and throughput" src="https://hudi.apache.org/assets/images/image7-a67a3aa2b20416cf15c3229553c626ce.png" width="1999" height="979" class="img_ev3q"></p>
+<ul>
+<li class="">Cost optimization<!-- -->
+<ul>
+<li class="">Unit cost on AWS: ~$0.10 per million records updated.</li>
+</ul>
+</li>
+<li class="">Throughput: the pipeline supports up to 12 million upserts per second.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="operational-optimizations"><strong>Operational optimizations</strong><a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#operational-optimizations" class="hash-link" aria-label="Direct link to operational-optimizations" title="Direct link to operational-optimizations" translate="no">​</a></h3>
+<ul>
+<li class="">Handle S3 throttling by increasing partition parallelism. Hash partition prefixes and coordinate with AWS to raise per‑bucket request caps and remove I/O bottlenecks.</li>
+<li class="">Balance SLA and cost with adaptive resource provisioning through the scheduler; choose resources based on input size to keep jobs stable while controlling spend.</li>
+<li class="">Deduplicate before commit: group by record key, order by event timestamp, and write only the latest value to reduce churn and speed up writes.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="hudi-in-practice-2-realtime-aggregated-ingestion-using-spark-streaming--clustering">Hudi in practice 2: Real‑time aggregated ingestion using Spark Streaming + clustering<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#hudi-in-practice-2-realtime-aggregated-ingestion-using-spark-streaming--clustering" class="hash-link" aria-label="Direct link to Hudi in practice 2: Real‑time aggregated ingestion using Spark Streaming + clustering" title="Direct link to Hudi in practice 2: Real‑time aggregated ingestion using Spark Streaming + clustering" translate="no">​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="pipeline-overview">Pipeline overview<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#pipeline-overview" class="hash-link" aria-label="Direct link to Pipeline overview" title="Direct link to Pipeline overview" translate="no">​</a></h3>
+<p>This implementation showcases an efficient pipeline where Spark Streaming ingests aggregated data into a Hudi lakehouse using the <a href="https://hudi.apache.org/docs/write_operations/#bulk_insert" target="_blank" rel="noopener noreferrer" class="">bulk_insert</a> operation, followed by <a href="https://hudi.apache.org/blog/2021/08/23/async-clustering/" target="_blank" rel="noopener noreferrer" class="">asynchronous clustering</a>.</p>
+<p><img decoding="async" loading="lazy" alt="Streaming ingestion and clustering flow" src="https://hudi.apache.org/assets/images/image8-20b16694604281c92df9a8a9079c22b5.png" width="1003" height="445" class="img_ev3q"></p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="data-ingestion-flow">Data ingestion flow<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#data-ingestion-flow" class="hash-link" aria-label="Direct link to Data ingestion flow" title="Direct link to Data ingestion flow" translate="no">​</a></h3>
+<ul>
+<li class="">Kafka: raw events are streamed into Kafka.</li>
+<li class="">Spark SQL on Streaming: consumes Kafka messages and performs near‑real‑time aggregations.</li>
+<li class="">bulk_insert into Hudi lakehouse: aggregated data is appended using <a href="https://hudi.apache.org/docs/write_operations/#bulk_insert" target="_blank" rel="noopener noreferrer" class="">bulk_insert</a>.</li>
+<li class="">Clustering plan generation: clustering plans are created asynchronously.</li>
+<li class="">HoodieClusteringJob: a cron job runs hourly to execute <a href="https://hudi.apache.org/docs/clustering/" target="_blank" rel="noopener noreferrer" class="">clustering</a> and consolidate small files.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="results-at-a-glance">Results at a glance<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#results-at-a-glance" class="hash-link" aria-label="Direct link to Results at a glance" title="Direct link to Results at a glance" translate="no">​</a></h3>
+<ul>
+<li class="">Massive file reduction: clustering reduced total file count by nearly 90%, minimizing small‑file pressure and improving metadata performance.</li>
+<li class="">Write throughput boost: increased by about 114% due to optimized file layout.</li>
+<li class="">Faster queries: Presto query performance improved significantly after clustering.</li>
+</ul>
+<p>However, Spark Streaming is a macro‑batch system, typically executing every one or two minutes. As a result, it does not trigger clustering jobs immediately but instead generates clustering plans for later execution. In production, clustering jobs are scheduled to run hourly and apply only to stable partitions, ensuring compaction and file optimization without impacting real‑time ingestion.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="conclusion">Conclusion<a href="https://hudi.apache.org/blog/2025/11/07/how-freewheel-uses-apache-hudi-to-power-its-data-lakehouse#conclusion" class="hash-link" aria-label="Direct link to Conclusion" title="Direct link to Conclusion" translate="no">​</a></h2>
+<p>FreeWheel’s journey with Hudi transformed its data architecture—offering unified access, real‑time freshness, and scalable operations. The team credits Hudi’s community and feature set as key to its success.</p>
+<blockquote>
+<p>“We’re lucky to choose Hudi as our Lakehouse. Thanks to the powerful Hudi community!” – Bing Jiang</p>
+</blockquote>]]></content:encoded>
+            <category>hudi</category>
+            <category>lakehouse</category>
+            <category>case-study</category>
+            <category>freewheel</category>
+        </item>
         <item>
             <title><![CDATA[Deep Dive Into Hudi’s Indexing Subsystem (Part 1 of 2)]]></title>
             <link>https://hudi.apache.org/blog/2025/10/29/deep-dive-into-hudis-indexing-subsystem-part-1-of-2</link>
@@ -1012,20 +1114,6 @@
             <category>Apache Hudi</category>
             <category>use-case</category>
             <category>det</category>
-        </item>
-        <item>
-            <title><![CDATA[ From Swamp to Stream: How Apache Hudi Transforms the Modern Data Lake]]></title>
-            <link>https://hudi.apache.org/blog/2025/04/06/from-swamp-to-stream-how-apache-hudi-transforms-the-modern-data-lake</link>
-            <guid>https://hudi.apache.org/blog/2025/04/06/from-swamp-to-stream-how-apache-hudi-transforms-the-modern-data-lake</guid>
-            <pubDate>Sun, 06 Apr 2025 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/aimonks/from-swamp-to-stream-how-apache-hudi-transforms-the-modern-data-lake-8a938f517ea1">here</a></span>]]></content:encoded>
-            <category>blog</category>
-            <category>Apache Hudi</category>
-            <category>real-time datalake</category>
-            <category>incremental processing</category>
-            <category>upserts</category>
-            <category>medium</category>
         </item>
     </channel>
 </rss>
