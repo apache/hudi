@@ -27,6 +27,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.internal.SQLConf;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -40,6 +41,7 @@ import java.util.Map;
 @Tag("functional")
 public class TestFiltersInFileGroupReader extends TestBootstrapReadBase {
 
+  @Disabled("issues/14222")
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testFiltersInFileFormat(boolean mergeUseRecordPositions) {
