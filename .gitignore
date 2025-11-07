@@ -8,6 +8,8 @@ _site
 .jekyll-cache
 .jekyll-metadata
 .idea/
+.vscode/
+.metals/
 *.iml
 .DS_Store
 node_modules/
