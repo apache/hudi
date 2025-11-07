@@ -245,6 +245,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
           fileSliceMapping.getSlice(fileGroupName) match {
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
               val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupBaseFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig)
+              readerContext.setEnableLogicalTimestampFieldRepair(storageConf.getBoolean("logicalTimestampField.repair.enable", true))
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))
               props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction))
