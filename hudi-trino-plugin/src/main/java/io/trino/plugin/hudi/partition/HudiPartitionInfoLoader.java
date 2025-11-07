@@ -14,6 +14,7 @@
 package io.trino.plugin.hudi.partition;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import io.airlift.log.Logger;
 import io.trino.plugin.hive.HivePartitionKey;
 import io.trino.plugin.hive.util.AsyncQueue;
 import io.trino.plugin.hive.util.ResumableTask;
@@ -32,6 +33,8 @@ import static com.google.common.util.concurrent.Futures.immediateVoidFuture;
 public class HudiPartitionInfoLoader
         implements ResumableTask
 {
+    private static final Logger log = Logger.get(HudiPartitionInfoLoader.class);
+
     private final HudiDirectoryLister hudiDirectoryLister;
     private final HudiSplitFactory hudiSplitFactory;
     private final AsyncQueue<ConnectorSplit> asyncQueue;
@@ -42,6 +45,20 @@ public class HudiPartitionInfoLoader
 
     private boolean isRunning;
 
+    /**
+     * Creates a new split loader.
+     *
+     * @param hudiDirectoryLister Service for listing files in a partition.
+     * @param commitTime The latest Hudi commit time for snapshot isolation.
+     * @param hudiSplitFactory Factory to generate {@link ConnectorSplit}s.
+     * @param asyncQueue The output queue to send generated splits to.
+     * @param partitionQueue The input queue of partitions to process.
+     * @param useIndex Whether to use the metadata index for file listing.
+     * @param splitIterators A deque, private to this worker, used to store
+     * partially processed split iterators. This allows the task to save
+     * its state when yielding (e.g., when the asyncQueue is full) and
+     * resume processing from the same point.
+     */
     public HudiPartitionInfoLoader(
             HudiDirectoryLister hudiDirectoryLister,
             String commitTime,
@@ -94,6 +111,7 @@ public class HudiPartitionInfoLoader
             ConnectorSplit split = splits.next();
             ListenableFuture<Void> future = asyncQueue.offer(split);
             if (!future.isDone()) {
+                log.debug("AsyncQueue is full, yielding split loader task");
                 splitIterators.addFirst(splits);
                 return future;
             }
