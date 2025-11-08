@@ -109,6 +109,10 @@ module.exports = {
         },
         redirects: [
           {
+            from: "/faq",
+            to: "/learn/faq",
+          },
+          {
             from: "/talks",
             to: "/learn/talks",
           },
