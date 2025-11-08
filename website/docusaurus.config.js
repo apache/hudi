@@ -91,6 +91,7 @@ module.exports = {
         id: "learn",
         path: "learn",
         routeBasePath: "learn",
+        sidebarPath: require.resolve("./sidebarsLearn.js"),
         showLastUpdateAuthor: false,
         showLastUpdateTime: false,
       },
@@ -107,6 +108,22 @@ module.exports = {
           }
         },
         redirects: [
+          {
+            from: "/faq",
+            to: "/learn/faq",
+          },
+          {
+            from: "/talks",
+            to: "/learn/talks",
+          },
+          {
+            from: "/tech-specs",
+            to: "/learn/tech-specs",
+          },
+          {
+            from: "/tech-specs-1point0",
+            to: "/learn/tech-specs-1point0",
+          },
           {
             from: [
               "/docs/contribute",
@@ -172,28 +189,28 @@ module.exports = {
               to: "/learn/tutorial-series",
             },
             {
-              label: "Talks",
-              to: "talks",
+              label: "Blogs",
+              to: "/learn/blog",
             },
             {
-              label: "Blog",
-              to: "/blog",
+              label: "Talks",
+              to: "/learn/talks",
             },
             {
               label: "Video Guides",
-              to: "videos",
+              to: "/learn/videos",
             },
             {
               label: "FAQ",
-              href: "/faq",
+              to: "/learn/faq",
             },
             {
               label: "Tech Specs",
-              href: "/tech-specs",
+              to: "/learn/tech-specs",
             },
             {
               label: "Tech Specs 1.0",
-              href: "/tech-specs-1point0",
+              to: "/learn/tech-specs-1point0",
             },
           ],
         },
@@ -336,19 +353,19 @@ module.exports = {
             },
             {
               label: "Blog",
-              to: "/blog",
+              to: "/learn/blog",
             },
             {
               label: "Talks",
-              to: "talks",
+              to: "/learn/talks",
             },
             {
               label: "Video Guides",
-              to: "videos",
+              to: "/learn/videos",
             },
             {
               label: "FAQ",
-              href: "/faq",
+              to: "/learn/faq",
             },
           ],
         },
