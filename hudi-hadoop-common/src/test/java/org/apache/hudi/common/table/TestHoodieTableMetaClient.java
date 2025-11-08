@@ -548,6 +548,13 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         "Index should be removed when all columns are timestamp_millis");
 
     // Test case 3: V2 column stats index - should not be filtered
+    // Use a lazy schema that tracks if it's been evaluated
+    boolean[] schemaEvaluated = {false};
+    Lazy<Option<Schema>> lazyMockSchema = Lazy.lazily(() -> {
+      schemaEvaluated[0] = true;
+      return Option.of(mock(Schema.class));
+    });
+
     HoodieIndexDefinition v2ColStatsDef = HoodieIndexDefinition.newBuilder()
         .withIndexName(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
         .withIndexType(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
@@ -566,6 +573,8 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .get(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
     assertEquals(2, v2Def.getSourceFields().size(), "V2 index should not be filtered");
     assertTrue(v2Def.getSourceFields().contains("ts_millis"), "V2 index should contain ts_millis");
+    // Assert that the lazy schema was not evaluated for non-column-stats index
+    assertFalse(schemaEvaluated[0], "Schema should not be evaluated for non-column-stats indexes");
 
     // Test case 4: Non-column-stats index - should not be filtered
     String expressionIndexName = MetadataPartitionType.EXPRESSION_INDEX.getPartitionPath() + "test_idx";
@@ -581,20 +590,11 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     indexDefs4.put(expressionIndexName, expressionIndexDef);
     HoodieIndexMetadata originalMetadata4 = new HoodieIndexMetadata(indexDefs4);
 
-    // Use a lazy schema that tracks if it's been evaluated
-    boolean[] schemaEvaluated = {false};
-    Lazy<Option<Schema>> lazyMockSchema = Lazy.lazily(() -> {
-      schemaEvaluated[0] = true;
-      return Option.of(mock(Schema.class));
-    });
-
     HoodieIndexMetadata result4 = HoodieTableMetaClient.disableV1ColumnStatsForTimestampMillisColumns(
         originalMetadata4, lazyMockSchema);
     HoodieIndexDefinition exprDef = result4.getIndexDefinitions().get(expressionIndexName);
     assertEquals(2, exprDef.getSourceFields().size());
     assertTrue(exprDef.getSourceFields().contains("ts_millis"));
-
-    // Assert that the lazy schema was not evaluated for non-column-stats index
     assertFalse(schemaEvaluated[0], "Schema should not be evaluated for non-column-stats indexes");
 
     // Test case 5: Empty timestamp_millis columns (schema with no timestamp_millis) - should not filter anything
