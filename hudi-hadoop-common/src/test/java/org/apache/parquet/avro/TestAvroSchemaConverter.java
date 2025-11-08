@@ -31,7 +31,6 @@ import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
 import org.apache.parquet.schema.Type;
 import org.apache.parquet.schema.Types;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -61,7 +60,6 @@ import static org.apache.parquet.schema.Type.Repetition.REQUIRED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@Disabled
 public class TestAvroSchemaConverter {
 
   private static final Configuration NEW_BEHAVIOR = new Configuration(false);
@@ -119,7 +117,7 @@ public class TestAvroSchemaConverter {
     HoodieAvroParquetSchemaConverter avroSchemaConverter = getAvroSchemaConverter(conf);
     MessageType schema = avroSchemaConverter.convert(avroSchema);
     MessageType expectedMT = MessageTypeParser.parseMessageType(schemaString);
-    assertEquals("converting " + schema + " to " + schemaString, expectedMT.toString(), schema.toString());
+    assertEquals(expectedMT.toString(), schema.toString());
   }
 
   private void testParquetToAvroConversion(Schema avroSchema, String schemaString) throws Exception {
@@ -130,7 +128,7 @@ public class TestAvroSchemaConverter {
       throws Exception {
     HoodieAvroParquetSchemaConverter avroSchemaConverter = getAvroSchemaConverter(conf);
     Schema schema = avroSchemaConverter.convert(MessageTypeParser.parseMessageType(schemaString));
-    assertEquals("converting " + schemaString + " to " + avroSchema, avroSchema.toString(), schema.toString());
+    assertEquals(avroSchema.toString(), schema.toString());
   }
 
   private void testRoundTripConversion(Schema avroSchema, String schemaString) throws Exception {
@@ -141,12 +139,9 @@ public class TestAvroSchemaConverter {
     HoodieAvroParquetSchemaConverter avroSchemaConverter = getAvroSchemaConverter(conf);
     MessageType schema = avroSchemaConverter.convert(avroSchema);
     MessageType expectedMT = MessageTypeParser.parseMessageType(schemaString);
-    assertEquals("converting " + schema + " to " + schemaString, expectedMT.toString(), schema.toString());
+    assertEquals(expectedMT.toString(), schema.toString());
     Schema convertedAvroSchema = avroSchemaConverter.convert(expectedMT);
-    assertEquals(
-        "converting " + expectedMT + " to " + avroSchema.toString(true),
-        avroSchema.toString(),
-        convertedAvroSchema.toString());
+    assertEquals(avroSchema.toString(), convertedAvroSchema.toString());
   }
 
   @Test()
