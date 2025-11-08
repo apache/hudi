@@ -31,9 +31,13 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
+
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
@@ -45,6 +49,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -302,19 +307,20 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .getDeclaredMethod("readIndexDefFromStorage",
             org.apache.hudi.storage.HoodieStorage.class,
             StoragePath.class,
-            HoodieTableConfig.class);
+            HoodieTableConfig.class,
+            Option.class);
     readIndexDefMethod.setAccessible(true);
 
     @SuppressWarnings("unchecked")
     Option<HoodieIndexMetadata> result = (Option<HoodieIndexMetadata>) readIndexDefMethod.invoke(
-        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig());
+        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig(), Option.empty());
     assertTrue(result.isEmpty(), "Should return empty when no index definition path is configured");
 
     // Empty index definition path - should return empty
     metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key(), "");
     @SuppressWarnings("unchecked")
     Option<HoodieIndexMetadata> result2 = (Option<HoodieIndexMetadata>) readIndexDefMethod.invoke(
-        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig());
+        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig(), Option.empty());
     assertTrue(result2.isEmpty(), "Should return empty when index definition path is empty string");
 
     // Valid path but file doesn't exist - should return empty HoodieIndexMetadata
@@ -322,7 +328,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key(), relativePath);
     @SuppressWarnings("unchecked")
     Option<HoodieIndexMetadata> result3 = (Option<HoodieIndexMetadata>) readIndexDefMethod.invoke(
-        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig());
+        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig(), Option.empty());
     assertTrue(result3.isPresent(), "Should return present Option when path is configured but file doesn't exist");
     assertTrue(result3.get().getIndexDefinitions().isEmpty(), "Should return empty HoodieIndexMetadata when file doesn't exist");
 
@@ -332,7 +338,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         Option.of(HoodieInstantWriter.convertByteArrayToWriter("{}".getBytes())));
     @SuppressWarnings("unchecked")
     Option<HoodieIndexMetadata> result4 = (Option<HoodieIndexMetadata>) readIndexDefMethod.invoke(
-        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig());
+        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig(), Option.empty());
     assertTrue(result4.isPresent(), "Should return present Option when file exists");
     assertTrue(result4.get().getIndexDefinitions().isEmpty(), "Should return empty HoodieIndexMetadata for empty file");
 
@@ -357,7 +363,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         Option.of(HoodieInstantWriter.convertByteArrayToWriter(validIndexMetadata.toJson().getBytes())));
     @SuppressWarnings("unchecked")
     Option<HoodieIndexMetadata> result5 = (Option<HoodieIndexMetadata>) readIndexDefMethod.invoke(
-        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig());
+        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig(), Option.empty());
     assertTrue(result5.isPresent(), "Should return present Option when valid file exists");
     assertFalse(result5.get().getIndexDefinitions().isEmpty(), "Should return populated HoodieIndexMetadata");
     assertEquals(1, result5.get().getIndexDefinitions().size(), "Should have one index definition");
@@ -369,7 +375,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         Option.of(HoodieInstantWriter.convertByteArrayToWriter("invalid json".getBytes())));
     assertThrows(HoodieIOException.class, () -> {
       try {
-        readIndexDefMethod.invoke(null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig());
+        readIndexDefMethod.invoke(null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig(), Option.empty());
       } catch (java.lang.reflect.InvocationTargetException e) {
         if (e.getCause() instanceof HoodieIOException) {
           throw (HoodieIOException) e.getCause();
@@ -377,5 +383,227 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         throw new RuntimeException(e);
       }
     }, "Should throw HoodieIOException for invalid JSON");
+  }
+
+  @Test
+  void testIsTimestampMillisField() {
+    // Test timestamp-millis
+    Schema timestampMillisSchema = Schema.create(Schema.Type.LONG);
+    LogicalTypes.timestampMillis().addToSchema(timestampMillisSchema);
+    assertTrue(HoodieTableMetaClient.isTimestampMillisField(timestampMillisSchema),
+        "Should return true for timestamp-millis");
+
+    // Test local-timestamp-millis
+    Schema localTimestampMillisSchema = Schema.create(Schema.Type.LONG);
+    LogicalTypes.localTimestampMillis().addToSchema(localTimestampMillisSchema);
+    assertTrue(HoodieTableMetaClient.isTimestampMillisField(localTimestampMillisSchema),
+        "Should return true for local-timestamp-millis");
+
+    // Test nullable timestamp-millis
+    Schema nullableTimestampMillisSchema = Schema.createUnion(
+        Schema.create(Schema.Type.NULL),
+        timestampMillisSchema);
+    assertTrue(HoodieTableMetaClient.isTimestampMillisField(nullableTimestampMillisSchema),
+        "Should return true for nullable timestamp-millis");
+
+    // Test timestamp-micros (should return false)
+    Schema timestampMicrosSchema = Schema.create(Schema.Type.LONG);
+    LogicalTypes.timestampMicros().addToSchema(timestampMicrosSchema);
+    assertFalse(HoodieTableMetaClient.isTimestampMillisField(timestampMicrosSchema),
+        "Should return false for timestamp-micros");
+
+    // Test regular long (should return false)
+    Schema longSchema = Schema.create(Schema.Type.LONG);
+    assertFalse(HoodieTableMetaClient.isTimestampMillisField(longSchema),
+        "Should return false for regular long");
+
+    // Test string (should return false)
+    Schema stringSchema = Schema.create(Schema.Type.STRING);
+    assertFalse(HoodieTableMetaClient.isTimestampMillisField(stringSchema),
+        "Should return false for string");
+  }
+
+  @Test
+  void testGetTimestampMillisColumns() {
+    // Test null schema
+    List<String> result1 = HoodieTableMetaClient.getTimestampMillisColumns(null);
+    assertTrue(result1.isEmpty(), "Should return empty list for null schema");
+
+    // Test schema with timestamp-millis field
+    Schema timestampMillisSchema = Schema.create(Schema.Type.LONG);
+    LogicalTypes.timestampMillis().addToSchema(timestampMillisSchema);
+    Schema.Field timestampMillisField =
+        new Schema.Field("ts_millis", timestampMillisSchema, null, null);
+    Schema recordSchema1 = Schema.createRecord("TestRecord", null, null, false);
+    recordSchema1.setFields(java.util.Arrays.asList(
+        new Schema.Field("id", Schema.create(Schema.Type.STRING), null, null),
+        timestampMillisField,
+        new Schema.Field("value", Schema.create(Schema.Type.INT), null, null)
+    ));
+    List<String> result2 = HoodieTableMetaClient.getTimestampMillisColumns(recordSchema1);
+    assertEquals(1, result2.size(), "Should return one timestamp_millis column");
+    assertTrue(result2.contains("ts_millis"), "Should contain ts_millis column");
+
+    // Test schema with local-timestamp-millis field
+    Schema localTimestampMillisSchema = Schema.create(Schema.Type.LONG);
+    LogicalTypes.localTimestampMillis().addToSchema(localTimestampMillisSchema);
+    Schema.Field localTimestampMillisField =
+        new Schema.Field("local_ts_millis", localTimestampMillisSchema, null, null);
+    Schema recordSchema2 = Schema.createRecord("TestRecord2", null, null, false);
+    recordSchema2.setFields(java.util.Arrays.asList(
+        new Schema.Field("id", Schema.create(Schema.Type.STRING), null, null),
+        localTimestampMillisField
+    ));
+    List<String> result3 = HoodieTableMetaClient.getTimestampMillisColumns(recordSchema2);
+    assertEquals(1, result3.size(), "Should return one local-timestamp-millis column");
+    assertTrue(result3.contains("local_ts_millis"), "Should contain local_ts_millis column");
+
+    // Test schema with nullable timestamp-millis
+    Schema nullableTimestampMillisSchema = Schema.createUnion(
+        Schema.create(Schema.Type.NULL),
+        timestampMillisSchema);
+    Schema.Field nullableTimestampMillisField = new Schema.Field("nullable_ts_millis",
+        nullableTimestampMillisSchema, null, null);
+    Schema recordSchema4 = Schema.createRecord("TestRecord4", null, null, false);
+    recordSchema4.setFields(java.util.Arrays.asList(
+        new Schema.Field("id", Schema.create(Schema.Type.STRING), null, null),
+        nullableTimestampMillisField
+    ));
+    List<String> result5 = HoodieTableMetaClient.getTimestampMillisColumns(recordSchema4);
+    assertEquals(1, result5.size(), "Should return one nullable timestamp_millis column");
+    assertTrue(result5.contains("nullable_ts_millis"), "Should contain nullable_ts_millis column");
+
+    // Test schema without timestamp-millis fields
+    Schema recordSchema5 = Schema.createRecord("TestRecord5", null, null, false);
+    recordSchema5.setFields(java.util.Arrays.asList(
+        new Schema.Field("id", Schema.create(Schema.Type.STRING), null, null),
+        new Schema.Field("value", Schema.create(Schema.Type.INT), null, null)
+    ));
+    List<String> result6 = HoodieTableMetaClient.getTimestampMillisColumns(recordSchema5);
+    assertTrue(result6.isEmpty(), "Should return empty list for schema without timestamp_millis fields");
+
+    // Test non-RECORD schema
+    Schema stringSchema = Schema.create(Schema.Type.STRING);
+    List<String> result7 = HoodieTableMetaClient.getTimestampMillisColumns(stringSchema);
+    assertTrue(result7.isEmpty(), "Should return empty list for non-RECORD schema");
+  }
+
+  @Test
+  void testDisableV1ColumnStatsForTimestampMillisColumns() {
+    // Test case 1: V1 column stats index with timestamp_millis column - should filter it out
+    List<String> timestampMillisColumns = new ArrayList<>();
+    timestampMillisColumns.add("ts_millis");
+    HoodieIndexDefinition v1ColStatsDef = HoodieIndexDefinition.newBuilder()
+        .withIndexName(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
+        .withIndexType(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
+        .withVersion(HoodieIndexVersion.V1)
+        .withSourceFields(java.util.Arrays.asList("ts_millis", "regular_col"))
+        .withIndexOptions(Collections.emptyMap())
+        .build();
+
+    Map<String, HoodieIndexDefinition> indexDefs = new HashMap<>();
+    indexDefs.put(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, v1ColStatsDef);
+    HoodieIndexMetadata originalMetadata = new HoodieIndexMetadata(indexDefs);
+
+    HoodieIndexMetadata result1 = HoodieTableMetaClient.disableV1ColumnStatsForTimestampMillisColumns(
+        originalMetadata, timestampMillisColumns);
+    HoodieIndexDefinition filteredDef = result1.getIndexDefinitions()
+        .get(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
+    assertNotNull(filteredDef, "Index should still exist");
+    assertEquals(1, filteredDef.getSourceFields().size());
+    assertTrue(filteredDef.getSourceFields().contains("regular_col"));
+    assertFalse(filteredDef.getSourceFields().contains("ts_millis"));
+
+    // Test case 2: V1 column stats index with only timestamp_millis columns - should remove index
+    HoodieIndexDefinition v1ColStatsDefOnlyTs = HoodieIndexDefinition.newBuilder()
+        .withIndexName(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
+        .withIndexType(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
+        .withVersion(HoodieIndexVersion.V1)
+        .withSourceFields(java.util.Arrays.asList("ts_millis"))
+        .withIndexOptions(Collections.emptyMap())
+        .build();
+
+    Map<String, HoodieIndexDefinition> indexDefs2 = new HashMap<>();
+    indexDefs2.put(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, v1ColStatsDefOnlyTs);
+    HoodieIndexMetadata originalMetadata2 = new HoodieIndexMetadata(indexDefs2);
+
+    HoodieIndexMetadata result2 = HoodieTableMetaClient.disableV1ColumnStatsForTimestampMillisColumns(
+        originalMetadata2, timestampMillisColumns);
+    assertFalse(result2.getIndexDefinitions().containsKey(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS),
+        "Index should be removed when all columns are timestamp_millis");
+
+    // Test case 3: V2 column stats index - should not be filtered
+    HoodieIndexDefinition v2ColStatsDef = HoodieIndexDefinition.newBuilder()
+        .withIndexName(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
+        .withIndexType(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)
+        .withVersion(HoodieIndexVersion.V2)
+        .withSourceFields(java.util.Arrays.asList("ts_millis", "regular_col"))
+        .withIndexOptions(Collections.emptyMap())
+        .build();
+
+    Map<String, HoodieIndexDefinition> indexDefs3 = new HashMap<>();
+    indexDefs3.put(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, v2ColStatsDef);
+    HoodieIndexMetadata originalMetadata3 = new HoodieIndexMetadata(indexDefs3);
+
+    HoodieIndexMetadata result3 = HoodieTableMetaClient.disableV1ColumnStatsForTimestampMillisColumns(
+        originalMetadata3, timestampMillisColumns);
+    HoodieIndexDefinition v2Def = result3.getIndexDefinitions()
+        .get(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
+    assertEquals(2, v2Def.getSourceFields().size(), "V2 index should not be filtered");
+    assertTrue(v2Def.getSourceFields().contains("ts_millis"), "V2 index should contain ts_millis");
+
+    // Test case 4: Non-column-stats index - should not be filtered
+    String expressionIndexName = MetadataPartitionType.EXPRESSION_INDEX.getPartitionPath() + "test_idx";
+    HoodieIndexDefinition expressionIndexDef = HoodieIndexDefinition.newBuilder()
+        .withIndexName(expressionIndexName)
+        .withIndexType("expression_index")
+        .withVersion(HoodieIndexVersion.V1)
+        .withSourceFields(java.util.Arrays.asList("ts_millis", "regular_col"))
+        .withIndexOptions(Collections.emptyMap())
+        .build();
+
+    Map<String, HoodieIndexDefinition> indexDefs4 = new HashMap<>();
+    indexDefs4.put(expressionIndexName, expressionIndexDef);
+    HoodieIndexMetadata originalMetadata4 = new HoodieIndexMetadata(indexDefs4);
+
+    HoodieIndexMetadata result4 = HoodieTableMetaClient.disableV1ColumnStatsForTimestampMillisColumns(
+        originalMetadata4, timestampMillisColumns);
+    HoodieIndexDefinition exprDef = result4.getIndexDefinitions().get(expressionIndexName);
+    assertEquals(2, exprDef.getSourceFields().size());
+    assertTrue(exprDef.getSourceFields().contains("ts_millis"));
+
+    // Test case 5: Empty timestamp_millis columns list - should not filter anything
+    List<String> emptyTimestampMillisColumns = new ArrayList<>();
+    HoodieIndexMetadata result5 = HoodieTableMetaClient.disableV1ColumnStatsForTimestampMillisColumns(
+        originalMetadata, emptyTimestampMillisColumns);
+    HoodieIndexDefinition unchangedDef = result5.getIndexDefinitions()
+        .get(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS);
+    assertEquals(2, unchangedDef.getSourceFields().size(),
+        "Should not filter when timestamp_millis list is empty");
+  }
+
+  @Test
+  void testGetLatestTableSchema() throws IOException {
+    final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "t9";
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName("table")
+        .initTable(this.metaClient.getStorageConf(), basePath);
+
+    // Test with table that has no commits - should fallback to table create schema
+    Option<Schema> result1 = metaClient.getLatestTableSchema(metaClient.getTableConfig());
+    // Should return empty or fallback to create schema
+    assertNotNull(result1, "Should return Option (may be empty)");
+
+    // Test with table that has schema in table config
+    Schema testSchema = Schema.createRecord("TestRecord", null, null, false);
+    testSchema.setFields(java.util.Arrays.asList(
+        new Schema.Field("id", Schema.create(Schema.Type.STRING), null, null),
+        new Schema.Field("value", Schema.create(Schema.Type.INT), null, null)
+    ));
+    metaClient.getTableConfig().setValue(HoodieTableConfig.CREATE_SCHEMA.key(), testSchema.toString());
+    Option<Schema> result2 = metaClient.getLatestTableSchema(metaClient.getTableConfig());
+    // Should return schema from table config as fallback
+    assertNotNull(result2, "Should return Option");
   }
 }

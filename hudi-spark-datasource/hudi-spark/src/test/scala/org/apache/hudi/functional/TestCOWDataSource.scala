@@ -1848,7 +1848,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       val tableBasePath = zipOutput.toString
 
       val df = spark.read.format("org.apache.hudi")
-        .option("hoodie.metadata.enable", "false")
+        .option("hoodie.metadata.enable", "true")
         .load(tableBasePath)
 
       val rows = df.collect()
@@ -1867,6 +1867,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
           assertEquals("2017-07-07T07:07:06.999999", row.get(18).toString)
         }
       }
+
       assertEquals(10, df.filter("ts_millis > timestamp('2020-01-01 00:00:00Z')").count())
       assertEquals(10, df.filter("ts_millis < timestamp('2020-01-01 00:00:00Z')").count())
       assertEquals(0, df.filter("ts_millis > timestamp('2020-01-01 00:00:00.001Z')").count())

@@ -1283,7 +1283,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       val tableBasePath = zipOutput.toString
 
       val df = spark.read.format("org.apache.hudi")
-        .option("hoodie.metadata.enable", "false")
+        .option("hoodie.metadata.enable", "true")
         .load(tableBasePath)
 
       val rows = df.collect()

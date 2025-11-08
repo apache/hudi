@@ -493,45 +493,50 @@ object ColumnStatsIndexSupport {
   val decConv = new DecimalConversion()
 
   def deserialize(value: Any, dataType: DataType): Any = {
-    dataType match {
-      // NOTE: Since we can't rely on Avro's "date", and "timestamp-micros" logical-types, we're
-      //       manually encoding corresponding values as int and long w/in the Column Stats Index and
-      //       here we have to decode those back into corresponding logical representation.
-      case TimestampType => DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
-      case DateType => DateTimeUtils.toJavaDate(value.asInstanceOf[Int])
-      // Standard types
-      case StringType => value
-      case BooleanType => value
-      // Numeric types
-      case FloatType => value
-      case DoubleType => value
-      case LongType => value
-      case IntegerType => value
-      // NOTE: All integral types of size less than Int are encoded as Ints in MT
-      case ShortType => value.asInstanceOf[Int].toShort
-      case ByteType => value.asInstanceOf[Int].toByte
+    // Handle TimestampNTZType separately since it does not exist in version lower than spark3.5
+    if (SparkAdapterSupport.sparkAdapter.isTimestampNTZType(dataType)) {
+      DateTimeUtils.microsToLocalDateTime(value.asInstanceOf[Long])
+    } else {
+      dataType match {
+        // NOTE: Since we can't rely on Avro's "date", and "timestamp-micros" logical-types, we're
+        //       manually encoding corresponding values as int and long w/in the Column Stats Index and
+        //       here we have to decode those back into corresponding logical representation.
+        case TimestampType => DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
+        case DateType => DateTimeUtils.toJavaDate(value.asInstanceOf[Int])
+        // Standard types
+        case StringType => value
+        case BooleanType => value
+        // Numeric types
+        case FloatType => value
+        case DoubleType => value
+        case LongType => value
+        case IntegerType => value
+        // NOTE: All integral types of size less than Int are encoded as Ints in MT
+        case ShortType => value.asInstanceOf[Int].toShort
+        case ByteType => value.asInstanceOf[Int].toByte
 
-      case dt: DecimalType =>
-        value match {
-          case buffer: ByteBuffer =>
-            val logicalType = DecimalWrapper.SCHEMA$.getField("value").schema().getLogicalType
-            decConv.fromBytes(buffer, null, logicalType).setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
-          case bd: BigDecimal =>
-            // Scala BigDecimal: convert to java.math.BigDecimal and enforce the scale
-            bd.bigDecimal.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
-          case bd: java.math.BigDecimal =>
-            bd.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
-          case other =>
-            throw new UnsupportedOperationException(s"Cannot deserialize value for DecimalType: unexpected type ${other.getClass.getName}")
-        }
-      case BinaryType =>
-        value match {
-          case b: ByteBuffer => toBytes(b)
-          case other => other
-        }
+        case dt: DecimalType =>
+          value match {
+            case buffer: ByteBuffer =>
+              val logicalType = DecimalWrapper.SCHEMA$.getField("value").schema().getLogicalType
+              decConv.fromBytes(buffer, null, logicalType).setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
+            case bd: BigDecimal =>
+              // Scala BigDecimal: convert to java.math.BigDecimal and enforce the scale
+              bd.bigDecimal.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
+            case bd: java.math.BigDecimal =>
+              bd.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
+            case other =>
+              throw new UnsupportedOperationException(s"Cannot deserialize value for DecimalType: unexpected type ${other.getClass.getName}")
+          }
+        case BinaryType =>
+          value match {
+            case b: ByteBuffer => toBytes(b)
+            case other => other
+          }
 
-      case _ =>
-        throw new UnsupportedOperationException(s"Data type for the statistic value is not recognized $dataType")
+        case _ =>
+          throw new UnsupportedOperationException(s"Data type for the statistic value is not recognized $dataType")
+      }
     }
   }
 }
