@@ -534,10 +534,6 @@ separated) and calls InputFormat.listStatus() only once with all those partition
 It supports [querying Hudi tables](https://docs.aws.amazon.com/athena/latest/ug/querying-hudi.html) using the Hive connector.
 Currently, it supports snapshot queries on COPY_ON_WRITE tables, and snapshot and read optimized queries on MERGE_ON_READ Hudi tables.
 
-:::note The most recent release of Athena that supports querying Hudi 0.14.0 tables has a bug that causes _ro query to return 0 records, and occasionally _rt the query to fail with class cast exception.
-The issue is tracked in [HUDI-7362](https://issues.apache.org/jira/browse/HUDI-7362) and is expected to be fixed in the next release.
-:::
-
 ## Presto
 
 [Presto](https://prestodb.io/) is a popular query engine for interactive query performance. Support for querying Hudi tables using PrestoDB is offered

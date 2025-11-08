@@ -170,5 +170,3 @@ Storing table metadata on lake storage, while scalable, is less efficient than R
 an efficient alternative for managing table metadata for a large number of tables. Currently, the timeline server, embedded in Hudi's writer processes, uses a local rocksDB store and [Javalin](https://javalin.io/) REST API to serve file listings, reducing cloud storage listings. 
 Since version 0.6.0, there's a trend towards standalone timeline servers, aimed at horizontal scaling and improved security. These developments are set to create a more efficient lake [metastore](https://issues.apache.org/jira/browse/HUDI-3345) 
 for future needs.
-
-
