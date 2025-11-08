@@ -169,7 +169,7 @@ HBase index are by nature a global index.
 
 #### Spark based configs
 
-For Spark DataSource, Spark SQL, DeltaStreamer and Structured Streaming following are the key configs that control
+For Spark DataSource, Spark SQL, Hudi Streamer and Structured Streaming following are the key configs that control
 indexing behavior. Please refer to [Advanced Configs](https://hudi.apache.org/docs/next/configurations#Common-Index-Configs-advanced-configs)
 for more details. All these, support the index types mentioned [above](#index-types-in-hudi).
 

@@ -40,14 +40,14 @@ There are a few options when choosing this approach.
 
 #### Using Hudi Streamer
 
-Use the [Hudi Streamer](hoodie_streaming_ingestion#hudi-streamer) tool. HoodieStreamer supports bootstrap with 
+Use the [Hudi Streamer](hoodie_streaming_ingestion#hudi-streamer) tool. Hudi Streamer supports bootstrap with 
 --run-bootstrap command line option. There are two types of bootstrap, METADATA_ONLY and FULL_RECORD. METADATA_ONLY will
 generate just skeleton base files with keys/footers, avoiding full cost of rewriting the dataset. FULL_RECORD will 
 perform a full copy/rewrite of the data as a Hudi table.  Additionally, once can choose selective partitions using regex
 patterns to apply one of the above bootstrap modes. 
 
 Here is an example for running FULL_RECORD bootstrap on all partitions that match the regex pattern `.*` and keeping 
-hive style partition with HoodieStreamer. This example configures 
+hive style partition with Hudi Streamer. This example configures 
 [hoodie.bootstrap.mode.selector](https://hudi.apache.org/docs/configurations#hoodiebootstrapmodeselector) to 
 `org.apache.hudi.client.bootstrap.selector.BootstrapRegexModeSelector`  which allows applying `FULL_RECORD` bootstrap 
 mode to selective partitions based on the regex pattern [hoodie.bootstrap.mode.selector.regex](https://hudi.apache.org/docs/configurations#hoodiebootstrapmodeselectorregex)

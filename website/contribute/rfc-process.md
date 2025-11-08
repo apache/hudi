@@ -15,7 +15,7 @@ Any of the following can be considered a major change:
  - Any new component, module or code that introduces a new concept into the project or alters the behavior of an existing one
  - Any large code refactor to address general code re-usability and structure. There is no strong definition for “Large” and whether or not the refactor requires an RFC can be discussed on the @dev mailing list.
  - Any change that impacts the underlying storage layout/format. e.g changes to the HoodieLogFormat, timeline layout version.
- - New indexing schemes, New deltastreamer sources, New platform services.
+ - New indexing schemes, New Hudi Streamer sources, New platform services.
  - Any change that impacts the public interfaces of the project.
 
 It can also be used to describe large direction shifts to the project (e.g. Flink support) or new green field ideas (e.g. Hudi for ML flows)

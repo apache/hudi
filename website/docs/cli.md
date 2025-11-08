@@ -657,7 +657,7 @@ upgrade table --toVersion <target_version>
 ```
 
 :::note
-Table upgrade is automatically handled by the Hudi write client in different deployment modes such as DeltaStreamer
+Table upgrade is automatically handled by the Hudi write client in different deployment modes such as Hudi Streamer
 after upgrading the Hudi library so that the user does not have to do manual upgrade.  Such automatic table upgrade
 is the **recommended** way in general, instead of using `upgrade` CLI command.
 

@@ -272,7 +272,7 @@ hoodie.cleaner.policy.failed.writes=LAZY
 
 ### Multi Writing via Hudi Streamer
 
-The `HoodieStreamer` utility (part of hudi-utilities-slim-bundle) provides ways to ingest from different sources such as DFS or Kafka, with the following capabilities.
+The Hudi Streamer (part of hudi-utilities-slim-bundle) provides ways to ingest from different sources such as DFS or Kafka, with the following capabilities.
 
 Using optimistic_concurrency_control via Hudi Streamer requires adding the above configs to the properties file that can be passed to the
 job. For example below, adding the configs to kafka-source.properties file and passing them to Hudi Streamer will enable optimistic concurrency.

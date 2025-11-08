@@ -70,7 +70,7 @@ Additionally, `HoodieReadClient` offers the following functionality using Hudi's
 ### Incremental query
 `HiveIncrementalPuller` allows incrementally extracting changes from large fact/dimension tables via HiveQL, combining the benefits of Hive (reliably process complex SQL queries) and
 incremental primitives (speed up querying tables incrementally instead of scanning fully). The tool uses Hive JDBC to run the hive query and saves its results in a temp table.
-that can later be upserted. Upsert utility (`HoodieStreamer`) has all the state it needs from the directory structure to know what should be the commit time on the target table.
+that can later be upserted. Upsert utility (Hudi Streamer) has all the state it needs from the directory structure to know what should be the commit time on the target table.
 e.g: `/app/incremental-hql/intermediate/{source_table_name}_temp/{last_commit_included}`.The Delta Hive table registered will be of the form `{tmpdb}.{source_table}_{last_commit_included}`.
 
 The following are the configuration options for HiveIncrementalPuller

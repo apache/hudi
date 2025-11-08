@@ -296,7 +296,7 @@ Committers are chosen by a majority vote of the Apache Hudi [PMC](https://www.ap
 - Embodies the ASF model code of [conduct](https://www.apache.org/foundation/policies/conduct)
 - Has made significant technical contributions such as submitting PRs, filing bugs, testing, benchmarking, authoring RFCs, providing feedback/code reviews (+ more).
 - Has helped the community over a few months by answering questions on support channels above and triaging issues.
-- Demonstrates clear code/design ownership of a component or code area (e.g., Delta Streamer, Hive/Presto Integration, etc.).
+- Demonstrates clear code/design ownership of a component or code area (e.g., Hudi Streamer, Hive/Presto Integration, etc.).
 - Brought thought leadership and new ideas into the project and evangelized them with the community via conference talks, blog posts.
 - Great citizenship in helping with all peripheral (but very critical) work like site maintenance, wiki cleanups, and so on.
 - Proven commitment to the project by way of upholding all agreed upon processes, conventions and principles of the community.

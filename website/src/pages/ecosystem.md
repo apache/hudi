@@ -17,7 +17,7 @@ In such cases, you can leverage another tool like Apache Spark or Apache Flink t
 | Hive              | [Read](https://hudi.apache.org/docs/next/query_engine_setup/#hive)                                                       |             |
 | DBT               | [Read + Write](https://hudi.apache.org/blog/2022/07/11/build-open-lakehouse-using-apache-hudi-and-dbt)                   |             |
 | Kafka Connect     | [Write](https://github.com/apache/hudi/tree/master/hudi-kafka-connect)                                                   |             |
-| Kafka             | [Write](https://hudi.apache.org/docs/hoodie_deltastreamer#kafka)                                                         |             |
+| Kafka             | [Write](https://hudi.apache.org/docs/hoodie_streaming_ingestion/#kafka)                                                         |             |
 | Pulsar            | [Write](https://hub.streamnative.io/connectors/lakehouse-sink/2.9.2/)                                                    |             |
 | Debezium          | [Write](https://hudi.apache.org/cn/blog/2022/01/14/change-data-capture-with-debezium-and-apache-hudi/)                   |             |
 | Kyuubi            | [Read + Write](https://kyuubi.readthedocs.io/en/v1.6.0-incubating-rc0/connector/flink/hudi.html)                         |             |

@@ -73,7 +73,7 @@ hoodie.metrics.datadog.metric.prefix=<your metrics prefix>
  * `hoodie.metrics.datadog.metric.prefix` will help segregate metrics by setting different prefixes for different jobs. Note that it will use `.` to delimit the prefix and the metric name. For example, if the prefix is set to `foo`, then `foo.` will be prepended to the metric name.
 
 #### Demo
-In this demo, we ran a `HoodieStreamer` job with `HoodieMetrics` turned on and other configurations set properly.
+In this demo, we ran a Hudi Streamer job with `HoodieMetrics` turned on and other configurations set properly.
 
 <figure>
     <img className="docimage" src={require("/assets/images/blog/2020-05-28-datadog-metrics-demo.png").default} alt="hudi_datadog_metrics.png"  />
@@ -85,7 +85,7 @@ In this demo, we ran a `HoodieStreamer` job with `HoodieMetrics` turned on and o
  * `<prefix>.<table name>.clean.duration`
  * `<prefix>.<table name>.index.lookup.duration`
 
- as well as `HoodieStreamer`-specific metrics
+ as well as Hudi-Streamer-specific metrics
 
  * `<prefix>.<table name>.deltastreamer.duration`
  * `<prefix>.<table name>.deltastreamer.hiveSyncDuration`

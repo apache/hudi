@@ -34,10 +34,10 @@ import TabItem from '@theme/TabItem';
 - Rollbacks no longer perform full table listings, by leveraging marker files. To enable, set `hoodie.rollback.using.markers=true`.
 - Added a new index `hoodie.index.type=SIMPLE` which can be faster than `BLOOM_INDEX` for cases where updates/deletes spread across a large portion of the table.
 - Hudi now supports `Azure Data Lake Storage V2` , `Alluxio` and `Tencent Cloud Object Storage` storages.
-- [HoodieMultiDeltaStreamer](https://hudi.apache.org/docs/writing_data#multitabledeltastreamer) adds support for ingesting multiple kafka streams in a single DeltaStreamer deployment, effectively reducing operational burden for using delta streamer
+- [HoodieMultiDeltaStreamer](https://hudi.apache.org/docs/writing_data#multitabledeltastreamer) adds support for ingesting multiple kafka streams in a single DeltaStreamer deployment, effectively reducing operational burden for using Hudi Streamer
   as your data lake ingestion tool (Experimental feature)
 - Added a new tool - InitialCheckPointProvider, to set checkpoints when migrating to DeltaStreamer after an initial load of the table is complete.
-- Delta Streamer tool now supports ingesting CSV data sources, chaining of multiple transformers to build more advanced ETL jobs.
+- Hudi Streamer tool now supports ingesting CSV data sources, chaining of multiple transformers to build more advanced ETL jobs.
 - Introducing a new `CustomKeyGenerator` key generator class, that provides flexible configurations to provide enable different types of key, partition path generation in  single class.
   We also added support for more time units and date/time formats in `TimestampBasedKeyGenerator`.
 

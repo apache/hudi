@@ -124,7 +124,7 @@ will be inferred and set automatically.
 
 ## Hive Sync Tool
 
-Writing data with [DataSource](writing_data) writer or [HoodieStreamer](hoodie_streaming_ingestion) supports syncing of the table's latest schema to Hive metastore, such that queries can pick up new columns and partitions.
+Writing data with [DataSource](writing_data) writer or [Hudi Streamer](hoodie_streaming_ingestion) supports syncing of the table's latest schema to Hive metastore, such that queries can pick up new columns and partitions.
 In case, it's preferable to run this from commandline or in an independent jvm, Hudi provides a `HiveSyncTool`, which can be invoked as below,
 once you have built the hudi-hive module. Following is how we sync the above Datasource Writer written table to Hive metastore.
 

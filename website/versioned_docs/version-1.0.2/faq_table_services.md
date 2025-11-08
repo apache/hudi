@@ -12,7 +12,7 @@ The Hudi cleaner process often runs right after a commit and deltacommit and goe
 
 Simplest way to run compaction on MOR table is to run the [compaction inline](configurations#hoodiecompactinline), at the cost of spending more time ingesting; This could be particularly useful, in common cases where you have small amount of late arriving data trickling into older partitions. In such a scenario, you may want to just aggressively compact the last N partitions while waiting for enough logs to accumulate for older partitions. The net effect is that you have converted most of the recent data, that is more likely to be queried to optimized columnar format.
 
-That said, for obvious reasons of not blocking ingesting for compaction, you may want to run it asynchronously as well. This can be done either via a separate [compaction job](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieCompactor.java) that is scheduled by your workflow scheduler/notebook independently. If you are using delta streamer, then you can run in [continuous mode](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/hudi-utilities/src/main/java/org/apache/hudi/utilities/deltastreamer/HoodieDeltaStreamer.java#L241) where the ingestion and compaction are both managed concurrently in a single spark run time.
+That said, for obvious reasons of not blocking ingesting for compaction, you may want to run it asynchronously as well. This can be done either via a separate [compaction job](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieCompactor.java) that is scheduled by your workflow scheduler/notebook independently. If you are using Hudi Streamer, then you can run in [continuous mode](https://github.com/apache/hudi/blob/f5f0ef6549fedf93863526a2110fe262a3460432/hudi-utilities/src/main/java/org/apache/hudi/utilities/streamer/HoodieStreamer.java#L356) where the ingestion and compaction are both managed concurrently in a single spark run time.
 
 ### What options do I have for asynchronous/offline compactions on MOR table?
 
@@ -23,7 +23,7 @@ There are a couple of options depending on how you write to Hudi. But first let 
 
 Depending on how you write to Hudi these are the possible options currently.
 
-*   DeltaStreamer:
+*   Hudi Streamer:
   *   In Continuous mode, asynchronous compaction is achieved by default. Here scheduling is done by the ingestion job inline and compaction execution is achieved asynchronously by a separate parallel thread.
   *   In non continuous mode, only inline compaction is possible.
   *   Please note in either mode, by passing --disable-compaction compaction is completely disabled
