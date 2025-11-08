@@ -18,8 +18,8 @@ module.exports = {
     },
     {
       type: 'doc',
-      id: 'blog',
-      label: 'Blog',
+      id: 'blogs',
+      label: 'Blogs',
     },
     {
       type: 'doc',
@@ -45,11 +45,6 @@ module.exports = {
       type: 'doc',
       id: 'tech-specs-1point0',
       label: 'Tech Specs 1.0',
-    },
-    {
-      type: 'link',
-      label: 'Technical Wiki',
-      href: 'https://cwiki.apache.org/confluence/display/HUDI',
     },
   ],
 };

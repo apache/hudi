@@ -109,6 +109,30 @@ module.exports = {
         },
         redirects: [
           {
+            from: "/blog",
+            to: "/learn/blogs",
+          },
+          {
+            from: "/talks",
+            to: "/learn/talks",
+          },
+          {
+            from: "/videos",
+            to: "/learn/videos",
+          },
+          {
+            from: "/faq",
+            to: "/learn/faq",
+          },
+          {
+            from: "/tech-specs",
+            to: "/learn/tech-specs",
+          },
+          {
+            from: "/tech-specs-1point0",
+            to: "/learn/tech-specs-1point0",
+          },
+          {
             from: [
               "/docs/contribute",
               "/docs/next/contribute",
@@ -174,7 +198,7 @@ module.exports = {
             },
             {
               label: "Blog",
-              to: "/learn/blog",
+              to: "/learn/blogs",
             },
             {
               label: "Talks",
@@ -195,10 +219,6 @@ module.exports = {
             {
               label: "Tech Specs 1.0",
               href: "/learn/tech-specs-1point0",
-            },
-            {
-              label: "Technical Wiki",
-              href: "https://cwiki.apache.org/confluence/display/HUDI",
             },
           ],
         },
