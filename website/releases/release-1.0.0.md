@@ -43,7 +43,7 @@ and [RFC-78](https://github.com/apache/hudi/blob/master/rfc/rfc-78/rfc-78.md#sup
 ### Format changes
 
 The main epic covering all the format changes is [HUDI-6242](https://issues.apache.org/jira/browse/HUDI-6242), which is also 
-covered in the [Hudi 1.0 tech specification](/tech-specs-1point0). The following are the main highlights with respect to format changes:
+covered in the [Hudi 1.0 tech specification](/learn/tech-specs-1point0). The following are the main highlights with respect to format changes:
 
 #### Timeline
 
@@ -61,7 +61,7 @@ covered in the [Hudi 1.0 tech specification](/tech-specs-1point0). The following
 #### Log File Format
 
 - In addition to the keys in the log file header, we also store record positions. Refer to the
-  latest [spec](/tech-specs-1point0#log-format) for more details. This allows us to do position-based merging (apart
+  latest [spec](/learn/tech-specs-1point0#log-format) for more details. This allows us to do position-based merging (apart
   from key-based merging) and skip pages based on positions.
 - Log file name will now have the deltacommit instant time instead of base commit instant time.
 - The new log file format also enables fast partial updates with low storage overhead.
@@ -123,7 +123,7 @@ To learn more about partial updates, refer to the [SQL DML](/docs/sql_dml#merge-
   format to another, e.g. from ORC to Parquet, without rewriting the whole table.
 - **Configuration:** Enable with `hoodie.table.multiple.base.file.formats.enable`.
 
-To learn more about the format changes, refer to the [Hudi 1.0 tech specification](/tech-specs-1point0).
+To learn more about the format changes, refer to the [Hudi 1.0 tech specification](/learn/tech-specs-1point0).
 
 ### API Changes
 

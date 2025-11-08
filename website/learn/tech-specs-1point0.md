@@ -6,7 +6,7 @@
 | [Table Version](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableVersion.java#L29) | 8               |
 
 :::note
-Please check the specification for versions prior to 1.0 [here](/tech-specs).
+Please check the specification for versions prior to 1.0 [here](/learn/tech-specs).
 :::
 
 Hudi brings database capabilities (tables, transactions, mutability, indexes, storage layouts) along with an incremental stream processing model (incremental merges, change streams, out-of-order data) 
@@ -154,7 +154,7 @@ Hudi storage format supports two table types offering different trade-offs betwe
 | **Table Type** | **Description** |
 | ---| --- |
 | Copy-on-Write (CoW) | Data is stored entirely in base files, optimized for read performance and ideal for slow changing datasets. Any updates, inserts, deletes accordingly produce new base files for each write operation. Change data is still stored as log files associated with the base files. |
-| Merge-on-Read (MoR) | Data is stored in a combination of base and log files, optimized to [Balancing Write and Query Performance](#balancing-write-and-read-performance) and ideal for frequently changing datasets |
+| Merge-on-Read (MoR) | Data is stored in a combination of base and log files, optimized to [Balancing Write and Read Performance](#balancing-write-and-read-performance) and ideal for frequently changing datasets |
 
 Readers need to then satisfy different query types on these tables.
 

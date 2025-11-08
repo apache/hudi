@@ -109,20 +109,8 @@ module.exports = {
         },
         redirects: [
           {
-            from: "/blog",
-            to: "/learn/blogs",
-          },
-          {
             from: "/talks",
             to: "/learn/talks",
-          },
-          {
-            from: "/videos",
-            to: "/learn/videos",
-          },
-          {
-            from: "/faq",
-            to: "/learn/faq",
           },
           {
             from: "/tech-specs",
@@ -197,8 +185,8 @@ module.exports = {
               to: "/learn/tutorial-series",
             },
             {
-              label: "Blog",
-              to: "/learn/blogs",
+              label: "Blogs",
+              to: "/learn/blog",
             },
             {
               label: "Talks",
@@ -214,11 +202,11 @@ module.exports = {
             },
             {
               label: "Tech Specs",
-              href: "/learn/tech-specs",
+              to: "/learn/tech-specs",
             },
             {
               label: "Tech Specs 1.0",
-              href: "/learn/tech-specs-1point0",
+              to: "/learn/tech-specs-1point0",
             },
           ],
         },

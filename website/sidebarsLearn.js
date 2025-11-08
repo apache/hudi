@@ -18,7 +18,7 @@ module.exports = {
     },
     {
       type: 'doc',
-      id: 'blogs',
+      id: 'blog',
       label: 'Blogs',
     },
     {
