@@ -19,15 +19,19 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
-import java.util.Properties;
 
 /**
  * Record merger for Hoodie avro record.
@@ -35,7 +39,9 @@ import java.util.Properties;
  * <p>It should only be used for base record from disk to merge with incoming record.
  */
 public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationModeAwareness {
-  public static final HoodieAvroRecordMerger INSTANCE = new HoodieAvroRecordMerger();
+  public static final String PAYLOAD_CLASS_PROP = "_hoodie.merger.payload.class";
+  protected String payloadClass;
+  protected String[] orderingFields;
 
   @Override
   public String getMergingStrategy() {
@@ -43,9 +49,62 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
   }
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    return combineAndGetUpdateValue(older, newer, oldSchema, newSchema, props)
-        .map(r -> Pair.of(new HoodieAvroIndexedRecord(r), r.getSchema()));
+  public <T> BufferedRecord<T> merge(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) throws IOException {
+    // special case for handling commit time ordering deletes
+    if (HoodieRecordMerger.isCommitTimeOrderingDelete(older, newer)) {
+      return newer;
+    }
+    init(props);
+    IndexedRecord previousAvroData = older.getRecord() == null ? null : recordContext.convertToAvroRecord(older.getRecord(), recordContext.getSchemaFromBufferRecord(older));
+    Schema newerSchema = recordContext.getSchemaFromBufferRecord(newer);
+    GenericRecord newerAvroRecord = newer.getRecord() == null ? null : recordContext.convertToAvroRecord(newer.getRecord(), recordContext.getSchemaFromBufferRecord(newer));
+    HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, newerAvroRecord, newer.getOrderingValue());
+
+    if (previousAvroData == null) {
+      // No data to merge with, simply return the newer one
+      return newer;
+    } else {
+      Option<IndexedRecord> updatedValue = payload.combineAndGetUpdateValue(previousAvroData, newerSchema, props);
+      if (updatedValue.isPresent()) {
+        IndexedRecord updatedRecord = updatedValue.get();
+        // If there is no change in the record or the merge results in SENTINEL record (returned by expression payload when condition is not matched), then return the older record
+        if (updatedRecord == previousAvroData || updatedRecord == HoodieRecord.SENTINEL) {
+          return older;
+        }
+        if (updatedRecord == newerAvroRecord) {
+          // simply return the newer record instead of creating a new record
+          return newer;
+        }
+        // Construct a new BufferedRecord with updated value
+        T resultRecord = recordContext.convertAvroRecord(updatedRecord);
+        return BufferedRecords.fromEngineRecord(resultRecord, updatedValue.map(IndexedRecord::getSchema).orElseGet(() -> newerSchema),
+            recordContext, orderingFields, newer.getRecordKey(), updatedValue.isEmpty());
+      } else {
+        // If the updated value is empty, it means the result is a DELETE operation
+        // If one of the inputs is a DELETE operation, simply return that
+        if (newer.isDelete()) {
+          return newer;
+        } else if (older.isDelete()) {
+          return older;
+        } else {
+          // Edge case when neither input is a deletion but the output is a deletion
+          return BufferedRecords.createDelete(newer.getRecordKey(), HoodieRecordMerger.maxOrderingValue(older, newer));
+        }
+      }
+    }
+  }
+
+  protected void init(TypedProperties props) {
+    if (payloadClass == null) {
+      payloadClass = Option.ofNullable(props.getString(PAYLOAD_CLASS_PROP, null)).orElseGet(() -> ConfigUtils.getPayloadClass(props));
+    }
+    if (orderingFields == null) {
+      orderingFields = ConfigUtils.getOrderingFields(props);
+      // if there are no ordering fields, use empty array
+      if (orderingFields == null) {
+        orderingFields = new String[0];
+      }
+    }
   }
 
   @Override
@@ -53,17 +112,8 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
     return HoodieRecordType.AVRO;
   }
 
-  private Option<IndexedRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema oldSchema, Schema newSchema, Properties props) throws IOException {
-    Option<IndexedRecord> previousAvroData = older.toIndexedRecord(oldSchema, props).map(HoodieAvroIndexedRecord::getData);
-    if (!previousAvroData.isPresent()) {
-      return Option.empty();
-    }
-
-    return ((HoodieAvroRecord) newer).getData().combineAndGetUpdateValue(previousAvroData.get(), newSchema, props);
-  }
-
   @Override
   public HoodieRecordMerger asPreCombiningMode() {
-    return HoodiePreCombineAvroRecordMerger.INSTANCE;
+    return new HoodiePreCombineAvroRecordMerger();
   }
 }

@@ -102,7 +102,6 @@ public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, 
     }
     HoodieLogBlockMetadataScanner scanner = new HoodieLogBlockMetadataScanner(metaClient, fileSlice.getLogFiles()
         .sorted(HoodieLogFile.getLogFileComparator())
-        .map(file -> file.getPath().toString())
         .collect(Collectors.toList()),
         writeConfig.getMaxDFSStreamBufferSize(),
         maxInstantTime,

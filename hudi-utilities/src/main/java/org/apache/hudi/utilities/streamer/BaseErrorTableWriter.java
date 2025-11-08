@@ -25,7 +25,7 @@ import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
@@ -78,7 +78,7 @@ public abstract class BaseErrorTableWriter<T extends ErrorEvent> implements Seri
    */
   @VisibleForTesting
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract Option<JavaRDD<HoodieAvroRecord>> getErrorEvents(String baseTableInstantTime, Option<String> commitedInstantTime);
+  public abstract Option<JavaRDD<HoodieAvroIndexedRecord>> getErrorEvents(String baseTableInstantTime, Option<String> commitedInstantTime);
 
   /**
    * This API is called to commit the error events (failed Hoodie Records) processed by the writer so far.
@@ -87,7 +87,9 @@ public abstract class BaseErrorTableWriter<T extends ErrorEvent> implements Seri
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract boolean upsertAndCommit(String baseTableInstantTime, Option<String> commitedInstantTime);
 
-  public abstract JavaRDD<WriteStatus> upsert(String errorTableInstantTime, String baseTableInstantTime, Option<String> commitedInstantTime);
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract JavaRDD<WriteStatus> upsert(String baseTableInstantTime, Option<String> commitedInstantTime);
 
-  public abstract boolean commit(String errorTableInstantTime, JavaRDD<WriteStatus> writeStatuses);
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract boolean commit(JavaRDD<WriteStatus> writeStatuses);
 }

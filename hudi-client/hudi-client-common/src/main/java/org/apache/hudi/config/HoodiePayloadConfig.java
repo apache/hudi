@@ -51,7 +51,7 @@ public class HoodiePayloadConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
-      .defaultValue(HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME)
+      .defaultValue(HoodieTableConfig.getDefaultPayloadClassName())
       .markAdvanced()
       .withDocumentation("This needs to be same as class used during insert/upserts. Just like writing, compaction also uses "
         + "the record payload class to merge records in the log against each other, merge again with the base file and "

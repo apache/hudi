@@ -19,7 +19,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.ColumnStatsIndexSupport.{composeColumnStatStructType, deserialize, tryUnpackValueWrapper}
+import org.apache.hudi.ColumnStatsIndexSupport.{composeColumnStatStructType, extractWrapperValueV1}
 import org.apache.hudi.ExpressionIndexSupport._
 import org.apache.hudi.HoodieCatalystUtils.{withPersistedData, withPersistedDataset}
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
@@ -27,20 +27,18 @@ import org.apache.hudi.RecordLevelIndexSupport.filterQueryWithRecordKey
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
-import org.apache.hudi.common.function.{SerializableFunction, SerializableFunctionUnchecked}
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.{collection, StringUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.hash.{ColumnIndexID, PartitionIndexID}
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.index.expression.HoodieExpressionIndex
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadataUtil, MetadataPartitionType}
-import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
+import org.apache.hudi.stats.{SparkValueMetadataUtils, ValueMetadata, ValueType}
+import org.apache.hudi.stats.ValueMetadata.getValueMetadata
 import org.apache.hudi.util.JFunction
 
-import org.apache.spark.sql.{Column, DataFrame, Row, SparkSession}
-import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, EqualTo, Expression, FromUnixTime, In, Literal, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
 import org.apache.spark.sql.catalyst.util.TimestampFormatter
@@ -59,7 +57,7 @@ class ExpressionIndexSupport(spark: SparkSession,
                              metadataConfig: HoodieMetadataConfig,
                              metaClient: HoodieTableMetaClient,
                              allowCaching: Boolean = false)
-  extends SparkBaseIndexSupport (spark, metadataConfig, metaClient) {
+  extends SparkBaseIndexSupport (spark, metadataConfig, metaClient) with SparkAdapterSupport {
 
   @transient private lazy val cachedExpressionIndexViews: ParHashMap[Seq[String], DataFrame] = ParHashMap()
 
@@ -122,7 +120,7 @@ class ExpressionIndexSupport(spark: SparkSession,
                 val indexSchema = transposedPartitionStatsDF.schema
                 val indexedCols : Seq[String] = indexDefinition.getSourceFields.asScala.toSeq
                 val indexFilter = Seq(expressionIndexQuery).map(translateIntoColumnStatsIndexFilterExpr(_, isExpressionIndex = true, indexedCols = indexedCols)).reduce(And)
-                Some(transposedPartitionStatsDF.where(new Column(indexFilter))
+                Some(transposedPartitionStatsDF.where(sparkAdapter.createColumnFromExpression(indexFilter))
                   .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
                   .collect()
                   .map(_.getString(0))
@@ -166,7 +164,7 @@ class ExpressionIndexSupport(spark: SparkSession,
             //       of the transposed table in memory, facilitating execution of the subsequently chained operations
             //       on it locally (on the driver; all such operations are actually going to be performed by Spark's
             //       Optimizer)
-            createDataFrameFromRows(spark, transposedRows.collectAsList().asScala.toSeq, indexSchema)
+            sparkAdapter.getUnsafeUtils.createDataFrameFromRows(spark, transposedRows.collectAsList().asScala.toSeq, indexSchema)
           } else {
             val rdd = HoodieJavaRDD.getJavaRDD(transposedRows)
             spark.createDataFrame(rdd, indexSchema)
@@ -245,6 +243,7 @@ class ExpressionIndexSupport(spark: SparkSession,
     // of the dataset, and therefore we rely on low-level RDD API to avoid incurring encoding/decoding
     // penalty of the [[Dataset]], since it's required to adhere to its schema at all times, while
     // RDDs are not;
+    val useJava8api = spark.sessionState.conf.datetimeJava8ApiEnabled
     val transposedRows: HoodieData[Row] = colStatsRecords
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       .filter(JFunction.toJavaSerializableFunction(r => sortedTargetColumnsSet.contains(r.getColumnName)))
@@ -263,8 +262,9 @@ class ExpressionIndexSupport(spark: SparkSession,
           val colName = r.getColumnName
           val colType = tableSchemaFieldMap(colName).dataType
 
-          val minValue = deserialize(tryUnpackValueWrapper(minValueWrapper), colType)
-          val maxValue = deserialize(tryUnpackValueWrapper(maxValueWrapper), colType)
+          val valueMetadata = getValueMetadata(r.getValueType)
+          val minValue = extractExpressionIndexValue(minValueWrapper, colType, valueMetadata, useJava8api)
+          val maxValue = extractExpressionIndexValue(maxValueWrapper, colType, valueMetadata, useJava8api)
 
           // Update min-/max-value structs w/ unwrapped values in-place
           r.setMinValue(minValue)
@@ -527,9 +527,9 @@ class ExpressionIndexSupport(spark: SparkSession,
         //       of the transposed table in memory, facilitating execution of the subsequently chained operations
         //       on it locally (on the driver; all such operations are actually going to be performed by Spark's
         //       Optimizer)
-        createDataFrameFromInternalRows(spark, catalystRows.collectAsList().asScala.toSeq, columnStatsRecordStructType)
+        sparkAdapter.getUnsafeUtils.createDataFrameFromInternalRows(spark, catalystRows.collectAsList().asScala.toSeq, columnStatsRecordStructType)
       } else {
-        createDataFrameFromRDD(spark, HoodieJavaRDD.getJavaRDD(catalystRows), columnStatsRecordStructType)
+        sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(spark, HoodieJavaRDD.getJavaRDD(catalystRows), columnStatsRecordStructType)
       }
     }
 
@@ -615,6 +615,18 @@ class ExpressionIndexSupport(spark: SparkSession,
 }
 
 object ExpressionIndexSupport {
+
+  def extractExpressionIndexValue(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata, useJava8api: Boolean): Any = {
+    valueMetadata.getValueType match {
+      case ValueType.V1 => extractWrapperValueV1(valueWrapper, dataType)
+      case _ => extractExpressionIndexValueV2(valueWrapper, valueMetadata, useJava8api)
+    }
+  }
+
+  private def extractExpressionIndexValueV2(valueWrapper: AnyRef, valueMetadata: ValueMetadata, useJava8api: Boolean): Any = {
+    SparkValueMetadataUtils.convertJavaTypeToSparkType(valueMetadata.unwrapValue(valueWrapper), useJava8api)
+  }
+
   val INDEX_NAME = "EXPRESSION"
   /**
    * Target Column Stats Index columns which internally are mapped onto fields of the corresponding

@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.HashMap;
@@ -43,6 +44,8 @@ import java.util.Set;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
@@ -51,6 +54,8 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
+import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
+import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.PAYLOAD_CLASSES_TO_HANDLE;
 
 /**
@@ -76,8 +81,12 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
                                                          SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    // Handle secondary index.
-    UpgradeDowngradeUtils.dropNonV1SecondaryIndexPartitions(
+    if (config.enableComplexKeygenValidation()
+        && isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig())) {
+      throw new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage("downgrade"));
+    }
+    // Handle index Changes
+    UpgradeDowngradeUtils.dropNonV1IndexPartitions(
         config, context, table, upgradeDowngradeHelper, "downgrading from table version nine to eight");
     // Update table properties.
     Set<ConfigProperty> propertiesToRemove = new HashSet<>();
@@ -93,9 +102,17 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
                                      HoodieTableConfig tableConfig) {
     // Update table properties.
     propertiesToRemove.add(PARTIAL_UPDATE_MODE);
-    // For specified payload classes, add strategy id and custom merge mode.
     String legacyPayloadClass = tableConfig.getLegacyPayloadClass();
-    if (!StringUtils.isNullOrEmpty(legacyPayloadClass) && (PAYLOAD_CLASSES_TO_HANDLE.contains(legacyPayloadClass))) {
+    // For tables with commit time or event time mode, add strategy id.
+    RecordMergeMode mergeMode = tableConfig.getRecordMergeMode();
+    if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {
+      propertiesToAdd.put(RECORD_MERGE_STRATEGY_ID, EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
+    } else if (mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING) {
+      propertiesToAdd.put(RECORD_MERGE_STRATEGY_ID, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
+    }
+    // For specified payload classes, add strategy id and custom merge mode.
+    if (!StringUtils.isNullOrEmpty(legacyPayloadClass)
+        && (PAYLOAD_CLASSES_TO_HANDLE.contains(legacyPayloadClass))) {
       propertiesToRemove.add(LEGACY_PAYLOAD_CLASS_NAME);
       propertiesToAdd.put(PAYLOAD_CLASS_NAME, legacyPayloadClass);
       if (!legacyPayloadClass.equals(OverwriteWithLatestAvroPayload.class.getName())
@@ -109,10 +126,18 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
             ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY).noDefaultValue());
         propertiesToRemove.add(
             ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER).noDefaultValue());
-      }
-      if (legacyPayloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
+      } else if (legacyPayloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
         propertiesToRemove.add(
             ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE).noDefaultValue());
+        propertiesToRemove.add(
+            ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY).noDefaultValue());
+        propertiesToRemove.add(
+            ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER).noDefaultValue());
+      } else if (legacyPayloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
+        propertiesToRemove.add(
+            ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY).noDefaultValue());
+        propertiesToRemove.add(
+            ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER).noDefaultValue());
       }
     }
   }

@@ -20,17 +20,16 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
-import org.apache.hudi.client.utils.SparkRowSerDe
+import org.apache.hudi.common.config.TimestampKeyGeneratorConfig
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator
+import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.ExceptionWrappingIterator
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.config.TimestampKeyGeneratorConfig
-import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator
-import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -39,7 +38,7 @@ import org.apache.spark.sql.catalyst.util.DateTimeUtils.getTimeZone
 import org.apache.spark.sql.execution.SQLConfInjectingRDD
 import org.apache.spark.sql.execution.datasources.SparkParsePartitionUtil
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.types.{DateType, StringType, StructField, StructType, TimestampType}
 import org.apache.spark.sql.{DataFrame, HoodieUnsafeUtils}
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -50,13 +49,16 @@ private[hudi] trait SparkVersionsSupport {
   def getSparkVersion: String
 
   def isSpark3: Boolean = getSparkVersion.startsWith("3.")
+  def isSpark4: Boolean = getSparkVersion.startsWith("4.")
   def isSpark3_3: Boolean = getSparkVersion.startsWith("3.3")
   def isSpark3_4: Boolean = getSparkVersion.startsWith("3.4")
   def isSpark3_5: Boolean = getSparkVersion.startsWith("3.5")
+  def isSpark4_0: Boolean = getSparkVersion.startsWith("4.0")
 
   def gteqSpark3_3_2: Boolean = getSparkVersion >= "3.3.2"
   def gteqSpark3_4: Boolean = getSparkVersion >= "3.4"
   def gteqSpark3_5: Boolean = getSparkVersion >= "3.5"
+  def gteqSpark4_0: Boolean = getSparkVersion >= "4.0"
 }
 
 object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport with Logging {
@@ -126,7 +128,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
 
   def maybeWrapDataFrameWithException(df: DataFrame, exceptionClass: String, msg: String, shouldWrap: Boolean): DataFrame = {
     if (shouldWrap) {
-      HoodieUnsafeUtils.createDataFrameFromRDD(df.sparkSession, injectSQLConf(df.queryExecution.toRdd.mapPartitions {
+      sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(df.sparkSession, injectSQLConf(df.queryExecution.toRdd.mapPartitions {
         rows => new ExceptionWrappingIterator[InternalRow](rows, exceptionClass, msg)
       }, SQLConf.get), df.schema)
     } else {
@@ -225,7 +227,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
   }
 
   def getCatalystRowSerDe(structType: StructType): SparkRowSerDe = {
-    sparkAdapter.createSparkRowSerDe(structType)
+    new SparkRowSerDe(sparkAdapter.getCatalystExpressionUtils.getEncoder(structType))
   }
 
   def parsePartitionColumnValues(partitionColumns: Array[String],
@@ -234,7 +236,6 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
                                    tableSchema: StructType,
                                    tableConfig: java.util.Map[String, String],
                                    timeZoneId: String,
-                                   sparkParsePartitionUtil: SparkParsePartitionUtil,
                                    shouldValidatePartitionColumns: Boolean): Array[Object] = {
     val keyGeneratorClass = KeyGeneratorType.getKeyGeneratorClassName(tableConfig)
     val timestampKeyGeneratorType = tableConfig.get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key())
@@ -249,7 +250,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       Array.fill(partitionColumns.length)(UTF8String.fromString(partitionPath))
     } else {
       doParsePartitionColumnValues(partitionColumns, partitionPath, tableBasePath, tableSchema, timeZoneId,
-        sparkParsePartitionUtil, shouldValidatePartitionColumns)
+        shouldValidatePartitionColumns)
     }
   }
 
@@ -258,7 +259,6 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
                                  basePath: StoragePath,
                                  schema: StructType,
                                  timeZoneId: String,
-                                 sparkParsePartitionUtil: SparkParsePartitionUtil,
                                  shouldValidatePartitionCols: Boolean): Array[Object] = {
     if (partitionColumns.length == 0) {
       // This is a non-partitioned table
@@ -277,12 +277,22 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
           } else {
             partitionPath
           }
-          Array(UTF8String.fromString(partitionValue))
+          val partitionSchema = buildPartitionSchemaForNestedFields(schema, partitionColumns)
+          val typedValue = if (partitionSchema.fields.nonEmpty) {
+            castStringToType(partitionValue, partitionSchema.fields.head.dataType)
+          } else {
+            UTF8String.fromString(partitionValue)
+          }
+          Array(typedValue.asInstanceOf[Object])
         } else {
           val prefix = s"${partitionColumns.head}="
           if (partitionPath.startsWith(prefix)) {
-            return splitHiveSlashPartitions(partitionFragments, partitionColumns.length).
-              map(p => UTF8String.fromString(p)).toArray
+            val partitionValues = splitHiveSlashPartitions(partitionFragments, partitionColumns.length)
+            val partitionSchema = buildPartitionSchemaForNestedFields(schema, partitionColumns)
+            val typedValues = partitionValues.zip(partitionSchema.fields).map { case (stringValue, field) =>
+              castStringToType(stringValue, field.dataType)
+            }
+            typedValues.map(_.asInstanceOf[Object])
           } else {
             // If the partition column size is not equal to the partition fragments size
             // and the partition column size > 1, we do not know how to map the partition
@@ -311,19 +321,18 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
         }.mkString(StoragePath.SEPARATOR)
 
         val pathWithPartitionName = new StoragePath(basePath, partitionWithName)
-        val partitionSchema = StructType(schema.fields.filter(f => partitionColumns.contains(f.name)))
+        val partitionSchema = buildPartitionSchemaForNestedFields(schema, partitionColumns)
         val partitionValues = parsePartitionPath(pathWithPartitionName, partitionSchema, timeZoneId,
-          sparkParsePartitionUtil, basePath, shouldValidatePartitionCols)
+          basePath, shouldValidatePartitionCols)
         partitionValues.map(_.asInstanceOf[Object]).toArray
       }
     }
   }
 
   private def parsePartitionPath(partitionPath: StoragePath, partitionSchema: StructType, timeZoneId: String,
-                                 sparkParsePartitionUtil: SparkParsePartitionUtil, basePath: StoragePath,
-                                 shouldValidatePartitionCols: Boolean): Seq[Any] = {
+                                 basePath: StoragePath, shouldValidatePartitionCols: Boolean): Seq[Any] = {
     val partitionDataTypes = partitionSchema.map(f => f.name -> f.dataType).toMap
-    sparkParsePartitionUtil.parsePartition(
+    SparkParsePartitionUtil.parsePartition(
       new Path(partitionPath.toUri),
       typeInference = false,
       Set(new Path(basePath.toUri)),
@@ -331,6 +340,71 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       getTimeZone(timeZoneId),
       validatePartitionValues = shouldValidatePartitionCols
     ).toSeq(partitionSchema)
+  }
+
+  private def buildPartitionSchemaForNestedFields(schema: StructType, partitionColumns: Array[String]): StructType = {
+    val partitionFields = partitionColumns.flatMap { partitionCol =>
+      extractNestedField(schema, partitionCol)
+    }
+    StructType(partitionFields)
+  }
+
+  private def extractNestedField(schema: StructType, fieldPath: String): Option[StructField] = {
+    val pathParts = fieldPath.split("\\.")
+
+    def traverseSchema(currentSchema: StructType, remainingPath: List[String], originalFieldName: String): Option[StructField] = {
+      remainingPath match {
+        case Nil => None
+        case head :: Nil =>
+          currentSchema.fields.find(_.name == head).map { field =>
+            StructField(originalFieldName, field.dataType, field.nullable, field.metadata)
+          }
+        case head :: tail =>
+          currentSchema.fields.find(_.name == head) match {
+            case Some(StructField(_, structType: StructType, _, _)) =>
+              traverseSchema(structType, tail, originalFieldName)
+            case _ => None
+          }
+      }
+    }
+    traverseSchema(schema, pathParts.toList, fieldPath)
+  }
+
+  private def castStringToType(value: String, dataType: org.apache.spark.sql.types.DataType): Any = {
+    import org.apache.spark.sql.types._
+
+    // handling cases where the value contains path separators or is complex
+    if (value.contains("/") || value.contains("=")) {
+      // For complex paths, falling back to string representation
+      logWarning(s"Cannot convert complex partition path '$value' to $dataType, keeping as string")
+      return UTF8String.fromString(value)
+    }
+
+    try {
+      dataType match {
+        case LongType => value.toLong
+        case IntegerType => value.toInt
+        case ShortType => value.toShort
+        case ByteType => value.toByte
+        case FloatType => value.toFloat
+        case DoubleType => value.toDouble
+        case BooleanType => value.toBoolean
+        case _: DecimalType => new java.math.BigDecimal(value)
+        case StringType => UTF8String.fromString(value)
+        case _: TimestampType =>
+          UTF8String.fromString(value)
+        case _: DateType =>
+          UTF8String.fromString(value)
+        case _ => UTF8String.fromString(value)
+      }
+    } catch {
+      case _: NumberFormatException =>
+        logWarning(s"Failed to convert '$value' to $dataType, keeping as string")
+        UTF8String.fromString(value)
+      case _: Exception =>
+        logWarning(s"Error converting '$value' to $dataType, keeping as string")
+        UTF8String.fromString(value)
+    }
   }
 
   def splitHiveSlashPartitions(partitionFragments: Array[String], nPartitions: Int): Array[String] = {

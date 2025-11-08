@@ -16,9 +16,10 @@ package io.trino.plugin.hudi;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.Futures;
-import io.airlift.concurrent.BoundedExecutor;
+import io.airlift.log.Logger;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
+import io.trino.filesystem.cache.CachingHostAddressProvider;
 import io.trino.metastore.Partition;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hive.HivePartitionKey;
@@ -42,6 +43,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.util.Lazy;
 
@@ -61,7 +63,6 @@ import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static io.airlift.concurrent.MoreFutures.toCompletableFuture;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_CANNOT_OPEN_SPLIT;
 import static io.trino.plugin.hudi.HudiSessionProperties.getMinimumAssignedSplitWeight;
-import static io.trino.plugin.hudi.HudiSessionProperties.getSplitGeneratorParallelism;
 import static io.trino.plugin.hudi.HudiSessionProperties.getStandardSplitWeightSize;
 import static io.trino.plugin.hudi.HudiSessionProperties.isHudiMetadataTableEnabled;
 import static io.trino.plugin.hudi.HudiSessionProperties.isSizeBasedSplitWeightsEnabled;
@@ -72,6 +73,8 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 public class HudiSplitSource
         implements ConnectorSplitSource
 {
+    private static final Logger log = Logger.get(HudiSplitSource.class);
+
     private static final ConnectorSplitBatch EMPTY_BATCH = new ConnectorSplitBatch(ImmutableList.of(), false);
     private final AsyncQueue<ConnectorSplit> queue;
     private final ScheduledFuture splitLoaderFuture;
@@ -89,26 +92,30 @@ public class HudiSplitSource
             int maxOutstandingSplits,
             Lazy<Map<String, Partition>> lazyPartitions,
             DynamicFilter dynamicFilter,
-            Duration dynamicFilteringWaitTimeoutMillis)
+            Duration dynamicFilteringWaitTimeoutMillis,
+            CachingHostAddressProvider cachingHostAddressProvider)
     {
         boolean enableMetadataTable = isHudiMetadataTableEnabled(session);
         Lazy<HoodieTableMetadata> lazyTableMetadata = Lazy.lazily(() -> {
+            HoodieTimer timer = HoodieTimer.start();
             HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
                     .enable(enableMetadataTable)
                     .build();
             HoodieTableMetaClient metaClient = tableHandle.getMetaClient();
             HoodieEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorage().getConf());
-            return HoodieTableMetadata.create(
+
+            HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(
                     engineContext,
                     tableHandle.getMetaClient().getStorage(), metadataConfig, metaClient.getBasePath().toString(), true);
+            log.info("Loaded table metadata for table: %s in %s ms", tableHandle.getSchemaTableName(), timer.endTimer());
+            return tableMetadata;
         });
 
         HudiDirectoryLister hudiDirectoryLister = new HudiSnapshotDirectoryLister(
                 session,
                 tableHandle,
                 enableMetadataTable,
-                lazyTableMetadata,
-                lazyPartitions);
+                lazyTableMetadata);
 
         this.queue = new ThrottledAsyncQueue<>(maxSplitsPerSecond, maxOutstandingSplits, executor);
         HudiBackgroundSplitLoader splitLoader = new HudiBackgroundSplitLoader(
@@ -116,11 +123,12 @@ public class HudiSplitSource
                 tableHandle,
                 hudiDirectoryLister,
                 queue,
-                new BoundedExecutor(executor, getSplitGeneratorParallelism(session)),
+                executor,
                 createSplitWeightProvider(session),
                 lazyPartitions,
                 enableMetadataTable,
                 lazyTableMetadata,
+                cachingHostAddressProvider,
                 throwable -> {
                     trinoException.compareAndSet(null, new TrinoException(HUDI_CANNOT_OPEN_SPLIT,
                             "Failed to generate splits for " + tableHandle.getSchemaTableName(), throwable));

@@ -19,7 +19,7 @@ package org.apache.hudi
 
 
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
@@ -489,6 +489,15 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
       .setPartitionFields(fooTableParams(DataSourceWriteOptions.PARTITIONPATH_FIELD.key))
       .setKeyGeneratorClassProp(fooTableParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key,
         DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.defaultValue()))
+    if (fooTableParams.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key)) {
+      tableMetaClientBuilder.setPayloadClassName(fooTableParams(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key))
+    }
+    if (fooTableParams.contains(HoodieWriteConfig.RECORD_MERGE_MODE.key)) {
+      tableMetaClientBuilder.setRecordMergeMode(RecordMergeMode.valueOf(fooTableParams(HoodieWriteConfig.RECORD_MERGE_MODE.key)))
+    }
+    if (fooTableParams.contains(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key)) {
+      tableMetaClientBuilder.setRecordMergeStrategyId(fooTableParams(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key))
+    }
     if (addBootstrapPath) {
       tableMetaClientBuilder
         .setBootstrapBasePath(fooTableParams(HoodieBootstrapConfig.BASE_PATH.key))

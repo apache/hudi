@@ -74,13 +74,13 @@ public class CompactionPlanSourceFunction extends AbstractRichFunctionAdapter im
     HoodieTimeline pendingCompactionTimeline = StreamerUtil.createMetaClient(conf).getActiveTimeline().filterPendingCompactionTimeline();
     for (Pair<String, HoodieCompactionPlan> pair : compactionPlans) {
       if (!pendingCompactionTimeline.containsInstant(pair.getLeft())) {
-        LOG.warn(pair.getLeft() + " not found in pending compaction instants.");
+        LOG.warn("{} not found in pending compaction instants.", pair.getLeft());
         continue;
       }
       HoodieCompactionPlan compactionPlan = pair.getRight();
       List<CompactionOperation> operations = compactionPlan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
-      LOG.info("CompactionPlanFunction compacting " + operations + " files");
+      LOG.info("CompactionPlanFunction compacting {} files", operations);
       for (CompactionOperation operation : operations) {
         sourceContext.collect(new CompactionPlanEvent(pair.getLeft(), operation));
       }

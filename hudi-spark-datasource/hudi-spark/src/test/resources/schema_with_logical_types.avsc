@@ -1,0 +1,193 @@
+/*
+  * Licensed to the Apache Software Foundation (ASF) under one
+  * or more contributor license agreements.  See the NOTICE file
+  * distributed with this work for additional information
+  * regarding copyright ownership.  The ASF licenses this file
+  * to you under the Apache License, Version 2.0 (the
+  * "License"); you may not use this file except in compliance
+  * with the License.  You may obtain a copy of the License at
+  *
+  *     http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
+{
+  "type": "record",
+  "name": "LogicalTypesSample",
+  "namespace": "test",
+  "fields": [
+    {
+      "name": "_row_key",
+      "type": "string"
+    },
+    {
+      "name": "partition_path",
+      "type": "string"
+    },
+    {
+      "name": "ts",
+      "type": ["null", "long"]
+    },
+    {
+      "name": "_hoodie_is_deleted",
+      "type": ["null", "boolean"]
+    },
+    {
+      "name": "double_field",
+      "type": "double",
+      "default": 0.0
+    },
+    {
+      "name": "float_field",
+      "type": "float",
+      "default": 0.0
+    },
+    {
+      "name": "int_field",
+      "type": "int",
+      "default": 0
+    },
+    {
+      "name": "long_field",
+      "type": "long",
+      "default": 0
+    },
+    {
+      "name": "string_field",
+      "type": {
+        "type": "string",
+        "avro.java.string": "String"
+      },
+      "default": ""
+    },
+    {
+      "name": "bytes_field",
+      "type": "bytes",
+      "default": ""
+    },
+    {
+      "name": "decimal_field",
+      "type": {
+        "type": "fixed",
+        "name": "decimal_field_testing",
+        "size": 5,
+        "logicalType": "decimal",
+        "precision": 10,
+        "scale": 6
+      },
+      "default": "\u0000"
+    },
+    {
+      "name": "nested_record",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "Nested",
+          "namespace": "test",
+          "fields": [
+            {
+              "name": "nested_int",
+              "type": "int",
+              "default": 0
+            },
+            {
+              "name": "nested_string",
+              "type": "string"
+            },
+            {
+              "name": "nested_timestamp_millis_field",
+              "type":
+              {
+                "type": "long",
+                "logicalType": "timestamp-millis"
+              }
+            }
+          ]
+        }
+      ],
+      "default": null
+    },
+    {
+      "name":"nullable_map_field",
+      "type":["null", {
+        "type":"map",
+        "values": "Nested"
+      }],
+      "default": null
+    },
+    {
+      "name": "array_field",
+      "type": {
+        "type": "array",
+        "items": "Nested"
+      },
+      "default": []
+    },
+    {
+      "name": "date_nullable_field",
+      "type": [
+        "null",
+        {
+          "type": "int",
+          "logicalType": "date"
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "timestamp_millis_field",
+      "type":
+        {
+          "type": "long",
+          "logicalType": "timestamp-millis"
+        }
+    },
+    {
+      "name": "timestamp_micros_nullable_field",
+      "type": [
+        "null",
+        {
+          "type": "long",
+          "logicalType": "timestamp-micros"
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "timestamp_local_millis_nullable_field",
+      "type": [
+        "null",
+        {
+          "type": "long",
+          "logicalType": "local-timestamp-millis"
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "timestamp_local_micros_field",
+      "type":
+        {
+          "type": "long",
+          "logicalType": "local-timestamp-micros"
+        }
+    },
+    {
+      "name": "enum_field",
+      "type": {
+        "type": "enum",
+        "name": "SampleEnum",
+        "symbols": [
+          "FIRST",
+          "SECOND"
+        ]
+      },
+      "default": "FIRST"
+    }
+  ]
+}

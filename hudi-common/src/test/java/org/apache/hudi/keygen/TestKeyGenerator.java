@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class TestKeyGenerator {
   private static Stream<Arguments> testKeyConstruction() {
     return Stream.of(
-        Arguments.of(new String[]{"key1"}, Collections.singletonList("value1"), "value1"),
+        Arguments.of(new String[] {"key1"}, Collections.singletonList("value1"), "key1:value1"),
         Arguments.of(new String[]{"key1", "key2"}, Arrays.asList("value1", "value2"), "key1:value1,key2:value2"),
         Arguments.of(new String[]{"key1", "key2"}, Arrays.asList("value1", ""), "key1:value1,key2:__empty__"),
         Arguments.of(new String[]{"key1", "key2"}, Arrays.asList(null, "value2"), "key1:__null__,key2:value2"));

@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -177,6 +178,11 @@ public class ExpressionPredicates {
      * @return A filter predicate of parquet file.
      */
     FilterPredicate filter();
+
+    /**
+     * List of columns that are referenced by this filter.
+     */
+    List<String> references();
   }
 
   /**
@@ -217,7 +223,9 @@ public class ExpressionPredicates {
       if (literalObject instanceof Serializable) {
         this.literal = (Serializable) literalObject;
       } else {
-        LOG.warn("Encountered a non-serializable literal. " + "Cannot push predicate with value literal [{}] into FileInputFormat. " + "This is a bug and should be reported.", valueLiteral);
+        LOG.warn("Encountered a non-serializable literal. "
+            + "Cannot push predicate with value literal [{}] into FileInputFormat. "
+            + "This is a bug and should be reported.", valueLiteral);
         this.literal = null;
       }
       return this;
@@ -227,6 +235,11 @@ public class ExpressionPredicates {
     public FilterPredicate filter() {
       Serializable convertedLiteral = ImplicitTypeConverter.convertImplicitly(literalType, literal);
       return toParquetPredicate(getFunctionDefinition(), literalType, columnName, convertedLiteral);
+    }
+
+    @Override
+    public List<String> references() {
+      return Collections.singletonList(columnName);
     }
 
     /**
@@ -437,7 +450,9 @@ public class ExpressionPredicates {
         if (literalObject instanceof Serializable) {
           return (Serializable) literalObject;
         } else {
-          LOG.warn("Encountered a non-serializable literal. " + "Cannot push predicate with value literal [{}] into FileInputFormat. " + "This is a bug and should be reported.", valueLiteral);
+          LOG.warn("Encountered a non-serializable literal. "
+              + "Cannot push predicate with value literal [{}] into FileInputFormat. "
+              + "This is a bug and should be reported.", valueLiteral);
           return null;
         }
       }).collect(Collectors.toList());
@@ -481,6 +496,11 @@ public class ExpressionPredicates {
     public FilterPredicate filter() {
       return null;
     }
+
+    @Override
+    public List<String> references() {
+      return Collections.emptyList();
+    }
   }
 
   /**
@@ -517,6 +537,11 @@ public class ExpressionPredicates {
         return null;
       }
       return not(filterPredicate);
+    }
+
+    @Override
+    public List<String> references() {
+      return predicate.references();
     }
 
     @Override
@@ -563,6 +588,11 @@ public class ExpressionPredicates {
     }
 
     @Override
+    public List<String> references() {
+      return Arrays.stream(predicates).map(Predicate::references).flatMap(List::stream).distinct().collect(Collectors.toList());
+    }
+
+    @Override
     public String toString() {
       return "AND(" + Arrays.toString(predicates) + ")";
     }
@@ -603,6 +633,11 @@ public class ExpressionPredicates {
         return null;
       }
       return or(filterPredicate0, filterPredicate1);
+    }
+
+    @Override
+    public List<String> references() {
+      return Arrays.stream(predicates).map(Predicate::references).flatMap(List::stream).distinct().collect(Collectors.toList());
     }
 
     @Override

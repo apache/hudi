@@ -42,6 +42,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
@@ -98,7 +99,8 @@ class TestStreamingKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecord
     // update for 4 is ignored due to lower ordering value.
     // record5 is deleted.
     // delete for 6 is ignored due to lower ordering value.
-    assertEquals(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update, testRecord4, testRecord6, testRecord7), actualRecords);
+    assertEquals(Arrays.asList(getSerializableIndexedRecord(testRecord1UpdateWithSameTime), getSerializableIndexedRecord(testRecord2Update),
+        getSerializableIndexedRecord(testRecord3Update), testRecord4, testRecord6, getSerializableIndexedRecord(testRecord7)), actualRecords);
     assertEquals(1, readStats.getNumInserts());
     assertEquals(1, readStats.getNumDeletes());
     assertEquals(3, readStats.getNumUpdates());
@@ -132,7 +134,8 @@ class TestStreamingKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecord
         testRecord5, testRecord6).iterator()));
 
     List<IndexedRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
-    assertEquals(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update, testRecord4EarlierUpdate, testRecord7), actualRecords);
+    assertEquals(convertGenRecordsToSerializableIndexedRecords(Stream.of(testRecord1UpdateWithSameTime, testRecord2Update,
+        testRecord3Update, testRecord4EarlierUpdate, testRecord7)), actualRecords);
     assertEquals(1, readStats.getNumInserts());
     assertEquals(2, readStats.getNumDeletes());
     assertEquals(4, readStats.getNumUpdates());

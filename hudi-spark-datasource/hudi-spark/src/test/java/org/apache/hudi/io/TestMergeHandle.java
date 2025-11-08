@@ -19,7 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.JoinedGenericRecord;
 import org.apache.hudi.client.SecondaryIndexStats;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -37,16 +37,17 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.SerializableIndexedRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -71,9 +72,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.Answers;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
+import org.mockito.MockedConstruction;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -83,7 +82,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -93,13 +91,13 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.AssertionsKt.assertNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mockConstruction;
 
 /**
  * Unit tests {@link HoodieMergeHandle}.
@@ -145,10 +143,11 @@ public class TestMergeHandle extends BaseTestHandle {
     int numDeletes = generateDeleteRecords(newRecords, dataGenerator, instantTime);
     if (!useFileGroupReader) {
       // legacy merge handle expects HoodieAvroPayload
+      DeleteContext deleteContext = new DeleteContext(CollectionUtils.emptyProps(), AVRO_SCHEMA).withReaderSchema(AVRO_SCHEMA);
       newRecords = newRecords.stream()
           .map(avroIndexedRecord -> {
             HoodieRecord hoodieRecord = new HoodieAvroRecord<>(avroIndexedRecord.getKey(), new DefaultHoodieRecordPayload(Option.of((GenericRecord) avroIndexedRecord.getData())),
-                avroIndexedRecord.getOperation(), avroIndexedRecord.isDelete(AVRO_SCHEMA, CollectionUtils.emptyProps()));
+                avroIndexedRecord.getOperation(), null, avroIndexedRecord.isDelete(deleteContext, CollectionUtils.emptyProps()));
             hoodieRecord.setIgnoreIndexUpdate(avroIndexedRecord.getIgnoreIndexUpdate());
             return hoodieRecord;
           })
@@ -238,30 +237,23 @@ public class TestMergeHandle extends BaseTestHandle {
     FileGroupReaderBasedMergeHandle fileGroupReaderBasedMergeHandle = new FileGroupReaderBasedMergeHandle(
         config, instantTime, table, updates.iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
         Option.empty());
-
+    List<WriteStatus> writeStatuses;
     String recordKeyForFailure = updates.get(5).getRecordKey();
-    try (MockedStatic<HoodieAvroUtils> mockedStatic = mockStatic(HoodieAvroUtils.class, Mockito.withSettings().defaultAnswer(Answers.CALLS_REAL_METHODS))) {
-      int position = AVRO_SCHEMA.getField("_row_key").pos();
-      mockedStatic.when(() -> HoodieAvroUtils.rewriteRecordWithNewSchema(any(), any())).thenAnswer(invocationOnMock -> {
-        IndexedRecord record = invocationOnMock.getArgument(0);
-        if (record.get(position).toString().equals(recordKeyForFailure)) {
-          throw new HoodieIOException("Simulated write failure for record key: " + recordKeyForFailure);
-        }
-        return HoodieAvroUtils.rewriteRecordWithNewSchema((IndexedRecord) invocationOnMock.getArgument(0), invocationOnMock.getArgument(1), Collections.emptyMap());
-      });
+
+    try (MockedConstruction<JoinedGenericRecord> mocked = mockConstruction(JoinedGenericRecord.class,
+        (mock, context) -> {
+          doThrow(new HoodieIOException("Simulated write failure for record key: " + recordKeyForFailure))
+              .when(mock).put(any(), any());
+      })) {
       fileGroupReaderBasedMergeHandle.doMerge();
     }
 
-    List<WriteStatus> writeStatuses = fileGroupReaderBasedMergeHandle.close();
+    writeStatuses = fileGroupReaderBasedMergeHandle.close();
     WriteStatus writeStatus = writeStatuses.get(0);
-    assertEquals(1, writeStatus.getErrors().size());
+    assertEquals(2, writeStatus.getErrors().size());
     // check that record and secondary index stats are non-empty
-    assertFalse(writeStatus.getWrittenRecordDelegates().isEmpty());
-    assertFalse(writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().flatMap(Collection::stream).count() == 0L);
-
-    writeStatus.getWrittenRecordDelegates().forEach(recordDelegate -> assertNotEquals(recordKeyForFailure, recordDelegate.getRecordKey()));
-    writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().flatMap(Collection::stream)
-        .forEach(secondaryIndexStats -> assertNotEquals(recordKeyForFailure, secondaryIndexStats.getRecordKey()));
+    assertTrue(writeStatus.getWrittenRecordDelegates().isEmpty());
+    assertTrue(writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().flatMap(Collection::stream).count() == 0L);
 
     AtomicBoolean cdcRecordsFound = new AtomicBoolean(false);
     String cdcFilePath = metaClient.getBasePath().toString() + "/" + writeStatus.getStat().getCdcStats().keySet().stream().findFirst().get();
@@ -501,25 +493,26 @@ public class TestMergeHandle extends BaseTestHandle {
     recordsToDelete.add(deleteRecordSameOrderingValue);
     recordsToDelete.add(deleteRecordLowerOrderingValue);
     recordsToDelete.add(deleteRecordHigherOrderingValue);
+    // Custom merger chooses record with lower ordering value
+    if (!mergeMode.equals("CUSTOM_MERGER") && !mergeMode.equals("CUSTOM")) {
+      validDeletes.put(deleteRecordSameOrderingValue.getRecordKey(), deleteRecordSameOrderingValue);
+      validDeletes.put(deleteRecordHigherOrderingValue.getRecordKey(), deleteRecordHigherOrderingValue);
+      expectedDeletes += 2;
+    }
 
-    // Known Gap HUDI-9715: Currently the ordering provided by the custom mergers does not apply deletes.
-    validDeletes.put(deleteRecordSameOrderingValue.getRecordKey(), deleteRecordSameOrderingValue);
-    validDeletes.put(deleteRecordHigherOrderingValue.getRecordKey(), deleteRecordHigherOrderingValue);
-    expectedDeletes += 2;
-
-    if (mergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING.name())) {
+    if (!mergeMode.equals(RecordMergeMode.EVENT_TIME_ORDERING.name())) {
       validDeletes.put(deleteRecordLowerOrderingValue.getRecordKey(), deleteRecordLowerOrderingValue);
       expectedDeletes += 1;
     }
 
     // Generate records to update
-    GenericRecord genericRecord1 = (GenericRecord) newRecords.get(0).getData();
-    GenericRecord genericRecord2 = (GenericRecord) newRecords.get(1).getData();
+    GenericRecord genericRecord1 = (GenericRecord) ((SerializableIndexedRecord) newRecords.get(0).getData()).getData();
+    GenericRecord genericRecord2 = (GenericRecord) ((SerializableIndexedRecord) newRecords.get(1).getData()).getData();
     genericRecord1.put(ORDERING_FIELD, 20L);
     genericRecord2.put(ORDERING_FIELD, 2L);
     recordsToUpdate.add(genericRecord1);
     recordsToUpdate.add(genericRecord2);
-    List<HoodieRecord> hoodieRecordsToUpdate = getHoodieRecords(payloadClass, recordsToUpdate, partitionPath);
+    List<HoodieRecord> hoodieRecordsToUpdate = getHoodieRecords(payloadClass, recordsToUpdate, partitionPath, false);
     if (!mergeMode.equals("CUSTOM_MERGER") && !mergeMode.equals("CUSTOM")) {
       // Custom merger chooses record with lower ordering value
       validUpdates.add(hoodieRecordsToUpdate.get(0));
@@ -564,7 +557,7 @@ public class TestMergeHandle extends BaseTestHandle {
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withEnableRecordIndex(true)
+            .withEnableGlobalRecordLevelIndex(true)
             .withStreamingWriteEnabled(true)
             .withSecondaryIndexEnabled(true)
             .withSecondaryIndexName("sec-rider")
@@ -577,28 +570,30 @@ public class TestMergeHandle extends BaseTestHandle {
   private List<HoodieRecord> overrideOrderingValue(List<HoodieRecord> hoodieRecords, HoodieWriteConfig config, String payloadClass, String partitionPath, long orderingValue) {
 
     List<GenericRecord> genericRecords = hoodieRecords.stream().map(insertRecord -> {
-      GenericRecord genericRecord = (GenericRecord) insertRecord.getData();
+      GenericRecord genericRecord = (GenericRecord) ((SerializableIndexedRecord) insertRecord.getData()).getData();
       genericRecord.put(ORDERING_FIELD, orderingValue);
       return genericRecord;
     }).collect(Collectors.toList());
 
-    return getHoodieRecords(payloadClass, genericRecords, partitionPath);
+    return getHoodieRecords(payloadClass, genericRecords, partitionPath, false);
   }
 
   private List<HoodieRecord> generateDeletes(List<HoodieRecord> hoodieRecords, HoodieWriteConfig config, String payloadClass, String partitionPath, long orderingValue) {
     List<GenericRecord> genericRecords = hoodieRecords.stream().map(deleteRecord -> {
-      GenericRecord genericRecord = (GenericRecord) deleteRecord.getData();
+      GenericRecord genericRecord = (GenericRecord) ((SerializableIndexedRecord) deleteRecord.getData()).getData();
       genericRecord.put(ORDERING_FIELD, orderingValue);
       genericRecord.put(HoodieRecord.HOODIE_IS_DELETED_FIELD, true);
       return genericRecord;
     }).collect(Collectors.toList());
-    return getHoodieRecords(payloadClass, genericRecords, partitionPath);
+    return getHoodieRecords(payloadClass, genericRecords, partitionPath, true);
   }
 
-  private List<HoodieRecord> getHoodieRecords(String payloadClass, List<GenericRecord> genericRecords, String partitionPath) {
+  private List<HoodieRecord> getHoodieRecords(String payloadClass, List<GenericRecord> genericRecords, String partitionPath,
+                                              boolean isDelete) {
     return genericRecords.stream().map(genericRecord -> {
       return (HoodieRecord) new HoodieAvroRecord<>(new HoodieKey(genericRecord.get("_row_key").toString(), partitionPath),
-          HoodieRecordUtils.loadPayload(payloadClass, genericRecord, (Comparable) genericRecord.get(ORDERING_FIELD)));
+          HoodieRecordUtils.loadPayload(payloadClass, genericRecord, (Comparable) genericRecord.get(ORDERING_FIELD)), null,
+          (Comparable) genericRecord.get(ORDERING_FIELD), isDelete);
     }).collect(Collectors.toList());
   }
 
@@ -671,76 +666,6 @@ public class TestMergeHandle extends BaseTestHandle {
 
     public Map<String, HoodieRecord> getValidDeletes() {
       return validDeletes;
-    }
-  }
-
-  public static class CustomMerger implements HoodieRecordMerger {
-    private static final String STRATEGY_ID = UUID.randomUUID().toString();
-
-    public static String getStrategyId() {
-      return STRATEGY_ID;
-    }
-
-    @Override
-    public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-      GenericRecord olderData = (GenericRecord) older.getData();
-      GenericRecord newerData = (GenericRecord) newer.getData();
-      Long olderTimestamp = (Long) olderData.get("timestamp");
-      Long newerTimestamp = (Long) newerData.get("timestamp");
-      if (olderTimestamp.equals(newerTimestamp)) {
-        // If the timestamps are the same, we do not update
-        return Option.of(Pair.of(older, oldSchema));
-      } else if (olderTimestamp < newerTimestamp) {
-        // Custom merger chooses record with lower ordering value
-        return Option.of(Pair.of(older, oldSchema));
-      } else {
-        // Custom merger chooses record with lower ordering value
-        return Option.of(Pair.of(newer, newSchema));
-      }
-    }
-
-    @Override
-    public HoodieRecord.HoodieRecordType getRecordType() {
-      return HoodieRecord.HoodieRecordType.AVRO;
-    }
-
-    @Override
-    public String getMergingStrategy() {
-      return STRATEGY_ID;
-    }
-  }
-
-  public static class CustomPayload implements HoodieRecordPayload<CustomPayload> {
-    private final GenericRecord record;
-
-    public CustomPayload(GenericRecord record, Comparable orderingValue) {
-      this.record = record;
-    }
-
-    @Override
-    public CustomPayload preCombine(CustomPayload other) {
-      return this; // No-op for this test
-    }
-
-    @Override
-    public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
-      Long olderTimestamp = (Long) ((GenericRecord) currentValue).get("timestamp");
-      Long newerTimestamp = (Long) record.get("timestamp");
-      if (olderTimestamp.equals(newerTimestamp)) {
-        // If the timestamps are the same, we do not update
-        return Option.of(currentValue);
-      } else if (olderTimestamp < newerTimestamp) {
-        // Custom merger chooses record with lower ordering value
-        return Option.of(currentValue);
-      } else {
-        // Custom merger chooses record with lower ordering value
-        return Option.of(record);
-      }
-    }
-
-    @Override
-    public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-      return Option.of(record);
     }
   }
 }

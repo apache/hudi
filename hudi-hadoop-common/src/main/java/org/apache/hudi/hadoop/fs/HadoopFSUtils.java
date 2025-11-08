@@ -398,7 +398,7 @@ public class HadoopFSUtils {
    */
   public static String getFileIdFromLogPath(Path path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
+    if (!matcher.matches()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
     return matcher.group(1);
@@ -409,7 +409,7 @@ public class HadoopFSUtils {
    */
   public static String getDeltaCommitTimeFromLogPath(Path path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
+    if (!matcher.matches()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
     return matcher.group(2);

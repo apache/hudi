@@ -460,7 +460,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       return fsView.getAllFileGroups(partitionPath).findAny().isPresent();
     } catch (Exception ex) {
       // if any exception throws, assume there are existing pending files
-      LOG.warn("Error while checking the pending files under partition: " + partitionPath + ", assumes the files exist", ex);
+      LOG.warn("Error while checking the pending files under partition: {}, we will assume that pending files exist", partitionPath, ex);
       return true;
     }
   }

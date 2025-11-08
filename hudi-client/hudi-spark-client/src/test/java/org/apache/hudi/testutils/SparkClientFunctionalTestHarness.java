@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.SerializableIndexedRecord;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -245,7 +246,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
    * testcase may invoke this specifically to clean up in case of repeated test runs.
    */
   @AfterAll
-  public static synchronized void resetSpark() {
+  public static synchronized void resetSpark() throws IOException {
     if (spark != null) {
       spark.close();
       spark = null;
@@ -425,7 +426,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
 
   protected Dataset<Row> toDataset(List<HoodieRecord> records, Schema schema) {
     List<GenericRecord> avroRecords = records.stream()
-        .map(r -> (GenericRecord) r.getData())
+        .map(r -> (GenericRecord) ((SerializableIndexedRecord) r.getData()).getData())
         .collect(Collectors.toList());
     JavaRDD<GenericRecord> jrdd = jsc.parallelize(avroRecords, 2);
     return AvroConversionUtils.createDataFrame(jrdd.rdd(), schema.toString(), spark);

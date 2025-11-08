@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -37,6 +38,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.source.IncrementalInputSplits;
@@ -1307,6 +1309,27 @@ public class TestInputFormat {
     assertFalse(splits2.isEmpty());
     List<RowData> result2 = readData(inputFormat, splits2.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     TestData.assertRowDataEquals(result2, TestData.dataSetInsert(1, 2));
+  }
+
+  @Test
+  void testIncReadWithNBCCAndSingleBucketNum() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    // file group id for the same bucket id among different partitions are same with NBCC mode
+    options.put(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
+    options.put(FlinkOptions.INDEX_TYPE.key(), HoodieIndex.IndexType.BUCKET.name());
+    options.put(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key(), "1");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    conf.set(FlinkOptions.READ_START_COMMIT, "000");
+    conf.set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL);
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> result = readData(inputFormat);
+    TestData.assertRowDataEquals(result, TestData.DATA_SET_INSERT);
   }
 
   @ParameterizedTest

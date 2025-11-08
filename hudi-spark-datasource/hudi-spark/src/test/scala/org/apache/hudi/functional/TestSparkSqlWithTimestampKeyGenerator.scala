@@ -18,6 +18,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.functional.TestSparkSqlWithTimestampKeyGenerator._
 
@@ -78,7 +79,8 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
             else // UNIX_TIMESTAMP, and SCALAR with SECONDS
               (dataBatchesWithLongOfSeconds, queryResultWithLongOfSeconds)
 
-            withSQLConf("hoodie.file.group.reader.enabled" -> s"$shouldUseFileGroupReader",
+            withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> "upsert",
+              "hoodie.file.group.reader.enabled" -> s"$shouldUseFileGroupReader",
               "hoodie.datasource.query.type" -> "snapshot") {
               // two partitions, one contains parquet file only, the second one contains parquet and log files for MOR, and two parquets for COW
               spark.sql(s"INSERT INTO $tableName VALUES ${dataBatches(0)}")

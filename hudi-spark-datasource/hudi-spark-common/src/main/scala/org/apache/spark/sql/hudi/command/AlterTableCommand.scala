@@ -188,7 +188,7 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     // ignore NonExist unset
     propKeys.foreach { k =>
       if (!table.properties.contains(k) && k != TableCatalog.PROP_COMMENT) {
-        logWarning(s"find non exist unset property: ${k} , ignore it")
+        logWarning(s"Cannot remove property [$k] because it is not currently set for the table.")
       }
     }
     val tableComment = if (propKeys.contains(TableCatalog.PROP_COMMENT)) None else table.comment
@@ -260,7 +260,7 @@ object AlterTableCommand extends Logging {
       table.identifier.table,
       HoodieWriterUtils.parametersWithWriteDefaults(
         HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(table.storage.properties ++ table.properties) ++
-        sparkSession.sqlContext.conf.getAllConfs ++ Map(
+        sparkSession.sessionState.conf.getAllConfs ++ Map(
         HoodieCleanConfig.AUTO_CLEAN.key -> "false",
         HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key -> HoodieFailedWritesCleaningPolicy.NEVER.name,
         HoodieArchivalConfig.AUTO_ARCHIVE.key -> "false"

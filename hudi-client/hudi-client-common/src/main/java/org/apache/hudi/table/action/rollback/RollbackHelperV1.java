@@ -160,7 +160,7 @@ public class RollbackHelperV1 extends RollbackHelper {
     try {
       logPaths = markerHandler.getAppendedLogPaths(context, config.getFinalizeWriteParallelism());
     } catch (FileNotFoundException fnf) {
-      LOG.warn("Rollback never failed and hence no marker dir was found. Safely moving on");
+      LOG.info("Rollback never failed and hence no marker dir was found. Safely moving on");
     } catch (IOException e) {
       throw new HoodieRollbackException("Failed to list log file markers for previous attempt of rollback ", e);
     }

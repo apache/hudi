@@ -33,11 +33,19 @@ public interface HoodieSeekingFileReader<T> extends HoodieFileReader<T> {
     throw new UnsupportedOperationException();
   }
 
+  default ClosableIterator<T> getEngineRecordsByKeysIterator(List<String> sortedKeys, Schema schema) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
   default ClosableIterator<HoodieRecord<T>> getRecordsByKeysIterator(List<String> sortedKeys) throws IOException {
     return getRecordsByKeysIterator(sortedKeys, getSchema());
   }
 
   default ClosableIterator<HoodieRecord<T>> getRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes, Schema schema) throws IOException {
+    throw new UnsupportedEncodingException();
+  }
+
+  default ClosableIterator<T> getEngineRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes, Schema schema) throws IOException {
     throw new UnsupportedEncodingException();
   }
 

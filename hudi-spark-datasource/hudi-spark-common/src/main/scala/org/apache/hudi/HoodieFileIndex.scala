@@ -473,7 +473,7 @@ case class HoodieFileIndex(spark: SparkSession,
   private def isIndexAvailable: Boolean = indicesSupport.exists(idx => idx.isIndexAvailable)
 
   private def validateConfig(): Unit = {
-    if (isDataSkippingEnabled && (!isMetadataTableEnabled || !isIndexAvailable)) {
+    if (isDataSkippingEnabled && (!isMetadataTableEnabled || !isIndexAvailable) && !metaClient.isMetadataTable) {
       logWarning("Data skipping requires Metadata Table and at least one of the indices to be enabled! "
         + s"(isMetadataTableEnabled = $isMetadataTableEnabled, isColumnStatsIndexEnabled = $isColumnStatsIndexEnabled"
         + s", isRecordIndexApplicable = $isRecordIndexEnabled, isExpressionIndexEnabled = $isExpressionIndexEnabled, " +
@@ -581,7 +581,7 @@ object HoodieFileIndex extends Logging {
           }
         } catch {
           case NonFatal(e) =>
-            logWarning("Fail to convert filters for TimestampBaseAvroKeyGenerator", e)
+            logWarning("Failed to convert filters for TimestampBaseAvroKeyGenerator", e)
             partitionFilters
         }
       }

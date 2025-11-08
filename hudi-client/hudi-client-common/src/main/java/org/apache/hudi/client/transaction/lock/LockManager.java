@@ -115,9 +115,8 @@ public class LockManager implements Serializable, AutoCloseable {
       if (ReflectionUtils.hasConstructor(writeConfig.getLockProviderClass(), metricsConstructorTypes)) {
         lockProvider = (LockProvider) ReflectionUtils.loadClass(writeConfig.getLockProviderClass(),
             metricsConstructorTypes, lockConfiguration, storageConf, metrics);
-        LOG.debug("Successfully loaded LockProvider with HoodieLockMetrics support");
       } else {
-        LOG.debug("LockProvider does not support HoodieLockMetrics constructor, falling back to standard constructor");
+        LOG.debug("LockProvider does not support HoodieLockMetrics param in constructor, falling back to standard constructor");
         // Fallback to original constructor without metrics
         lockProvider = (LockProvider) ReflectionUtils.loadClass(writeConfig.getLockProviderClass(),
                 new Class<?>[] {LockConfiguration.class, StorageConfiguration.class},

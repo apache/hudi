@@ -281,7 +281,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       LOG.info("Sync complete for {}", tableName);
     } catch (HoodieHiveSyncException ex) {
       if (shouldRecreateAndSyncTable()) {
-        LOG.warn("failed to sync the table {}, trying to recreate", tableName, ex);
+        LOG.warn("Failed to sync the table {}. Attempting trying to recreate", tableName, ex);
         recreateAndSyncHiveTable(tableName, useRealtimeInputFormat, readAsOptimized);
       } else {
         throw new HoodieHiveSyncException("failed to sync the table " + tableName, ex);
@@ -314,7 +314,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       }
     } else {
       if (!syncClient.databaseExists(databaseName)) {
-        LOG.error("Hive database does not exist " + databaseName);
+        LOG.error("Hive database does not exist {}", databaseName);
         throw new HoodieHiveSyncException("hive database does not exist " + databaseName);
       }
     }

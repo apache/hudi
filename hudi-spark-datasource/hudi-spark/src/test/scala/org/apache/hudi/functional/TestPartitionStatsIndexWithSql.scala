@@ -44,9 +44,9 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
 
   val sqlTempTable = "hudi_tbl"
 
-  @BeforeAll
-  def init(): Unit = {
+  override protected def beforeAll(): Unit = {
     initQueryIndexConf()
+    spark.sql("set hoodie.write.lock.provider = org.apache.hudi.client.transaction.lock.InProcessLockProvider")
   }
 
   test("Test drop partition stats index") {
@@ -540,7 +540,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
       checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value, ColumnStatsMetadata.isTightBound from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='price'")(
         Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 2000, true),
         Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 3000, true),
-        Seq(getPartitionStatsIndexKey("ts=30", "price"), 4003, 4003, true)
+        Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 4003, true)
       )
     }
   }
@@ -687,7 +687,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
   }
 
   private def getTableFileSystemView(metaClient: HoodieTableMetaClient): HoodieTableFileSystemView = {
-    val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexPartitionStats(true).build()
+    val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
     val metadataTable = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(spark.sparkContext),
       metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
     new HoodieTableFileSystemView(

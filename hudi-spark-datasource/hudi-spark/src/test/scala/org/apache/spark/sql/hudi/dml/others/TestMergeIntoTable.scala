@@ -1043,10 +1043,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         checkAnswer(s"select id, name, price, _ts from $targetTable")(
           Seq(1, "a1", 12, 1001)
         )
+        val secondCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, targetBasePath)
         // Test incremental query
         val hudiIncDF1 = spark.read.format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.START_COMMIT.key, firstCompletionTime)
+          .option(DataSourceReadOptions.START_COMMIT.key, "000")
           .option(DataSourceReadOptions.END_COMMIT.key, firstCompletionTime)
           .load(targetBasePath)
         hudiIncDF1.createOrReplaceTempView("inc1")
@@ -1067,11 +1068,10 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           Seq(1, "a1", 12, 1001),
           Seq(2, "a2", 10, 1001)
         )
-        val thirdCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, targetBasePath)
         // Test incremental query
         val hudiIncDF2 = spark.read.format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.START_COMMIT.key, thirdCompletionTime)
+          .option(DataSourceReadOptions.START_COMMIT.key, secondCompletionTime)
           .load(targetBasePath)
         hudiIncDF2.createOrReplaceTempView("inc2")
         checkAnswer(s"select id, name, price, _ts from inc2 order by id")(
@@ -1686,6 +1686,110 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           Seq(2, "a2", 20.0, 1002, "2024-01-14"),
           Seq(3, "a3", 30.0, 1003, "2024-01-14"))
       }
+    }
+  }
+
+  test("Test partition not at end") {
+    withSQLConf("hoodie.memory.merge.max.size" -> "1",
+      "hoodie.memory.compaction.max.size" -> "1",
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "1") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  partition string,
+             |  name string,
+             |  price double,
+             |  ts int
+             |) using hudi
+             | partitioned by (partition)
+             | location '${tmp.getCanonicalPath}'
+             | tblproperties (
+             |  primaryKey ='id',
+             |  preCombineField = 'ts'
+             | )
+       """.stripMargin)
+
+        spark.sql(
+          s"""
+             |insert into $tableName values
+             |(1, 'a1', 1, 100, 'p1'),
+             |(11, 'a1', 1, 100, 'p1'),
+             |(12, 'a1', 1, 100, 'p1'),
+             |(13, 'a1', 1, 100, 'p1'),
+             |(2, 'a2', 2, 200, 'p2'),
+             |(21, 'a2', 2, 200, 'p2'),
+             |(22, 'a2', 2, 200, 'p2'),
+             |(23, 'a2', 2, 200, 'p2')
+             |""".stripMargin
+        )
+
+        spark.sql(
+          s"""
+             | merge into $tableName
+             | using (
+             |  select 1 as id, 'p1' as partition, 'a1' as name, 10 as price, 1000 as ts
+             |  union
+             |  select 11 as id, 'p1' as partition, 'a1' as name, 10 as price, 1000 as ts
+             |  union
+             |  select 12 as id, 'p1' as partition, 'a1' as name, 10 as price, 1000 as ts
+             |  union
+             |  select 13 as id, 'p1' as partition, 'a1' as name, 10 as price, 1000 as ts
+             |  union
+             |  select 2 as id, 'p2' as partition, 'a2' as name, 20 as price, 1000 as ts
+             |  union
+             |  select 21 as id, 'p2' as partition, 'a2' as name, 20 as price, 1000 as ts
+             |  union
+             |  select 22 as id, 'p2' as partition, 'a2' as name, 20 as price, 1000 as ts
+             |  union
+             |  select 23 as id, 'p2' as partition, 'a2' as name, 20 as price, 1000 as ts
+             |  union
+             |  select 3 as id, 'p3' as partition, 'a3' as name, 30 as price, 1000 as ts
+             |  union
+             |  select 4 as id, 'p1' as partition, 'a4' as name, 40 as price, 1000 as ts
+             | ) s0
+             | on s0.id = $tableName.id and s0.partition = $tableName.partition
+             | when matched then update set *
+             | when not matched then insert *
+       """.stripMargin)
+      }
+    }
+  }
+
+  test("Test MergeInto with non existent target table") {
+    withTempDir { tmp =>
+      val sourceTable = generateTableName
+      spark.sql(
+        s"""
+           | create table $sourceTable (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts int
+           | ) using parquet
+           | location '${tmp.getCanonicalPath}/$sourceTable'
+         """.stripMargin)
+      spark.sql(s"insert into $sourceTable values(1, 'a1', 10, 1000)")
+      val nonExistentTable = "hudi_test_table"
+      val exception = intercept[org.apache.spark.sql.AnalysisException] {
+        spark.sql(
+          s"""
+             | MERGE INTO $nonExistentTable AS target
+             | USING $sourceTable AS source
+             | ON target.id = source.id
+             | WHEN MATCHED THEN UPDATE SET
+             |   name = source.name,
+             |   ts = source.ts
+             | WHEN NOT MATCHED THEN INSERT *
+         """.stripMargin)
+      }
+      assert(exception.getMessage.contains("TABLE_OR_VIEW_NOT_FOUND") ||
+             exception.getMessage.contains("Table or view not found"),
+        s"Expected TABLE_OR_VIEW_NOT_FOUND error but got: ${exception.getMessage}")
     }
   }
 }

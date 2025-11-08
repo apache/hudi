@@ -81,6 +81,15 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "in streaming manner rather than two disjoint writes. By default "
           + "streaming writes to metadata table is enabled for SPARK engine for incremental operations and disabled for all other cases.");
 
+  public static final ConfigProperty<Integer> STREAMING_WRITE_DATATABLE_WRITE_STATUSES_COALESCE_DIVISOR = ConfigProperty
+      .key(METADATA_PREFIX + ".streaming.write.datatable.write.statuses.coalesce.divisor")
+      .defaultValue(5000)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("When streaming writes to metadata table is enabled via hoodie.metadata.streaming.write.enabled, the data table write statuses are unioned "
+          + "with metadata table write statuses before triggering the entire write dag. The data table write statuses will be coalesce down to the number of write statuses "
+          + "divided by the specified divisor to avoid triggering thousands of no-op tasks for the data table writes which have their status cached.");
+
   public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = true;
 
   // Enable metrics for internal Metadata Table
@@ -265,15 +274,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("When there is a pending instant in data table, this config limits the allowed number of deltacommits in metadata table to "
           + "prevent the metadata table's timeline from growing unboundedly as compaction won't be triggered due to the pending data table instant.");
 
-  public static final ConfigProperty<Boolean> RECORD_INDEX_ENABLE_PROP = ConfigProperty
-      .key(METADATA_PREFIX + ".record.index.enable")
+  public static final ConfigProperty<Boolean> GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".global.record.level.index.enable")
       .defaultValue(false)
+      .withAlternatives(METADATA_PREFIX + ".record.index.enable")
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Create the HUDI Record Index within the Metadata Table");
 
-  public static final ConfigProperty<Boolean> PARTITIONED_RECORD_INDEX_ENABLE_PROP = ConfigProperty
-      .key(METADATA_PREFIX + ".partitioned.record.index.enable")
+  public static final ConfigProperty<Boolean> RECORD_LEVEL_INDEX_ENABLE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".record.level.index.enable")
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("1.1.0")
@@ -411,21 +421,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("1.0.1")
       .withDocumentation("Options for the expression index, e.g. \"expr='from_unixtime', format='yyyy-MM-dd'\"");
 
-  public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_PARTITION_STATS = ConfigProperty
-      .key(METADATA_PREFIX + ".index.partition.stats.enable")
-      // The defaultValue(false) here is the initial default, but it's overridden later based on
-      // column stats setting.
-      .defaultValue(false)
-      .sinceVersion("1.0.0")
-      .withDocumentation("Enable aggregating stats for each column at the storage partition level. "
-          + "Enabling this can improve query performance by leveraging partition and column stats "
-          + "for (partition) filtering. "
-          + "Important: The default value for this configuration is dynamically set based on the "
-          + "effective value of " + ENABLE_METADATA_INDEX_COLUMN_STATS.key() + ". If column stats "
-          + "index is enabled (default for Spark engine), partition stats indexing will also be "
-          + "enabled by default. Conversely, if column stats indexing is disabled (default for "
-          + "Flink and Java engines), partition stats indexing will also be disabled by default.");
-
   public static final ConfigProperty<Integer> METADATA_INDEX_PARTITION_STATS_FILE_GROUP_COUNT = ConfigProperty
       .key(METADATA_PREFIX + ".index.partition.stats.file.group.count")
       .defaultValue(1)
@@ -521,7 +516,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> METADATA_FILE_CACHE_MAX_SIZE_MB = ConfigProperty
       .key(METADATA_PREFIX + ".file.cache.max.size.mb")
-      .defaultValue(0)
+      .defaultValue(50)
       .markAdvanced()
       .sinceVersion("1.1.0")
       .withDocumentation("Max size in MB below which metadata file (HFile) will be downloaded "
@@ -609,6 +604,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(STREAMING_WRITE_ENABLED);
   }
 
+  public int getStreamingWritesCoalesceDivisorForDataTableWrites() {
+    return getInt(HoodieMetadataConfig.STREAMING_WRITE_DATATABLE_WRITE_STATUSES_COALESCE_DIVISOR);
+  }
+
   public boolean isBloomFilterIndexEnabled() {
     return getBooleanOrDefault(ENABLE_METADATA_INDEX_BLOOM_FILTER);
   }
@@ -617,12 +616,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS);
   }
 
-  public boolean isRecordIndexEnabled() {
-    return isEnabled() && getBooleanOrDefault(RECORD_INDEX_ENABLE_PROP);
+  public boolean isGlobalRecordLevelIndexEnabled() {
+    return isEnabled() && getBooleanOrDefault(GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP);
   }
 
-  public boolean isPartitionedRecordIndexEnabled() {
-    return isEnabled() && getBooleanOrDefault(PARTITIONED_RECORD_INDEX_ENABLE_PROP);
+  public boolean isRecordLevelIndexEnabled() {
+    return isEnabled() && getBooleanOrDefault(RECORD_LEVEL_INDEX_ENABLE_PROP);
   }
 
   public List<String> getColumnsEnabledForColumnStatsIndex() {
@@ -798,7 +797,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   }
 
   public boolean isPartitionStatsIndexEnabled() {
-    return getBooleanOrDefault(ENABLE_METADATA_INDEX_PARTITION_STATS);
+    return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS);
   }
 
   public int getPartitionStatsIndexFileGroupCount() {
@@ -810,8 +809,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   }
 
   public boolean isSecondaryIndexEnabled() {
-    // Secondary index is enabled only iff record index (primary key index) is also enabled
-    return isRecordIndexEnabled() && getBoolean(SECONDARY_INDEX_ENABLE_PROP) && !isDropMetadataIndex(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath());
+    // Secondary index is enabled only iff record index (primary key index) is also enabled and a secondary index column is specified.
+    return isGlobalRecordLevelIndexEnabled() && getBoolean(SECONDARY_INDEX_ENABLE_PROP) && StringUtils.nonEmpty(getSecondaryIndexColumn())
+        && !isDropMetadataIndex(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath());
   }
 
   public int getSecondaryIndexParallelism() {
@@ -1027,8 +1027,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withEnableRecordIndex(boolean enabled) {
-      metadataConfig.setValue(RECORD_INDEX_ENABLE_PROP, String.valueOf(enabled));
+    public Builder withEnableGlobalRecordLevelIndex(boolean enabled) {
+      metadataConfig.setValue(GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP, String.valueOf(enabled));
       return this;
     }
 
@@ -1100,11 +1100,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withMetadataIndexPartitionStats(boolean enable) {
-      metadataConfig.setValue(ENABLE_METADATA_INDEX_PARTITION_STATS, String.valueOf(enable));
-      return this;
-    }
-
     public Builder withMetadataIndexPartitionStatsFileGroupCount(int fileGroupCount) {
       metadataConfig.setValue(METADATA_INDEX_PARTITION_STATS_FILE_GROUP_COUNT, String.valueOf(fileGroupCount));
       return this;
@@ -1173,7 +1168,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     public HoodieMetadataConfig build() {
       metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
       metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_COLUMN_STATS, getDefaultColStatsEnable(engineType));
-      metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_PARTITION_STATS, metadataConfig.isColumnStatsIndexEnabled());
       metadataConfig.setDefaultValue(SECONDARY_INDEX_ENABLE_PROP, getDefaultSecondaryIndexEnable(engineType));
       metadataConfig.setDefaultValue(STREAMING_WRITE_ENABLED, getDefaultForStreamingWriteEnabled(engineType));
       // fix me: disable when schema on read is enabled.
@@ -1229,6 +1223,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       }
     }
   }
+
+  /**
+   * The config is now deprecated. Partition stats are configured using the column stats config itself.
+   */
+  @Deprecated
+  public static final String ENABLE_METADATA_INDEX_PARTITION_STATS =
+      METADATA_PREFIX + ".index.partition.stats.enable";
 
   /**
    * @deprecated Use {@link #ENABLE} and its methods.

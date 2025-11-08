@@ -20,6 +20,7 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.CollectionUtils;
 
 import org.apache.avro.Schema;
 
@@ -36,11 +37,11 @@ public interface HoodieFileWriter extends AutoCloseable {
   void close() throws IOException;
 
   default void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema) throws IOException {
-    writeWithMetadata(key, record, schema, new Properties());
+    writeWithMetadata(key, record, schema, CollectionUtils.emptyProps());
   }
 
   default void write(String recordKey, HoodieRecord record, Schema schema) throws IOException {
-    write(recordKey, record, schema, new Properties());
+    write(recordKey, record, schema, CollectionUtils.emptyProps());
   }
 
   /**

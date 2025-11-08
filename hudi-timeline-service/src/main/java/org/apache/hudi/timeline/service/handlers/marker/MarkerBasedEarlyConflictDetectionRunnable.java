@@ -113,9 +113,7 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
       if (!currentFileIDs.isEmpty()
           || (checkCommitConflict && MarkerUtils.hasCommitConflict(activeTimeline,
           currentInstantAllMarkers.stream().map(MarkerUtils::makerToPartitionAndFileID).collect(Collectors.toSet()), completedCommits))) {
-        LOG.warn("Conflict writing detected based on markers!\n"
-            + "Conflict markers: " + currentInstantAllMarkers + "\n"
-            + "Table markers: " + tableMarkers);
+        LOG.error("Conflict writing detected based on markers!\nConflict markers: {}\nTable markers: {}", currentInstantAllMarkers, tableMarkers);
         hasConflict.compareAndSet(false, true);
       }
       LOG.info("Finish batching marker-based conflict detection in {} ms", timer.endTimer());

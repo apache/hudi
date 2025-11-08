@@ -84,7 +84,7 @@ public class DataSourceUtils {
           return tablePath.get().toString();
         }
       } catch (HoodieException he) {
-        LOG.warn("Error trying to get table path from " + path.toString(), he);
+        LOG.warn("Error trying to get table path from {}", path.toString(), he);
       }
     }
 
@@ -176,7 +176,7 @@ public class DataSourceUtils {
             // For Spark SQL INSERT INTO and MERGE INTO, custom payload classes are used
             // to realize the SQL functionality, so the write config needs to be fetched first.
             .withPayloadClass(parameters.getOrDefault(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(),
-                parameters.getOrDefault(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME)))
+                parameters.getOrDefault(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), HoodieTableConfig.getDefaultPayloadClassName())))
             .withPayloadOrderingFields(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters))
             .build())
         // override above with Hoodie configs specified as options.
@@ -323,7 +323,20 @@ public class DataSourceUtils {
       if (totalErroredRecords > 0) {
         hasErrored.set(true);
         ValidationUtils.checkArgument(writeStatusesOpt.isPresent(), "RDD <WriteStatus> expected to be present when there are errors");
-        LOG.error("{} failed with errors", writeOperationType);
+        long errorCount = HoodieJavaRDD.getJavaRDD(writeStatusesOpt.get())
+            .filter(WriteStatus::hasErrors)
+            .count();
+
+        String errorSummary = String.format(
+            "%s operation failed with %d error(s).%n%n"
+                + "Total write statuses with errors: %d%n%n"
+                + "Check the driver logs for error stacktraces which provide more information on the failure.",
+            writeOperationType,
+            totalErroredRecords,
+            errorCount);
+
+        LOG.error(errorSummary);
+
         if (LOG.isTraceEnabled()) {
           LOG.trace("Printing out the top 100 errors");
 

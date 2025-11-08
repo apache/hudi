@@ -263,7 +263,7 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   @Override
   public HoodieTimeline findInstantsInRangeByCompletionTime(String startTs, String endTs) {
     return factory.createDefaultTimeline(
-        getInstantsAsStream().filter(s -> s.getCompletionTime() != null && InstantComparison.isInClosedRange(s.getCompletionTime(), startTs, endTs)),
+        getInstantsAsStream().filter(s -> s.getCompletionTime() != null && InstantComparison.isInRange(s.getCompletionTime(), startTs, endTs)),
         getInstantReader());
   }
 

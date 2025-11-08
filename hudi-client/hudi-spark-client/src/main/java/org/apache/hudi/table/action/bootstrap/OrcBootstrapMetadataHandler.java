@@ -19,8 +19,7 @@
 package org.apache.hudi.table.action.bootstrap;
 
 import org.apache.hudi.avro.model.HoodieFileStatus;
-import org.apache.hudi.client.bootstrap.BootstrapRecordPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -85,8 +84,7 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
             String recKey = keyGenerator.getKey(inp).getRecordKey();
             GenericRecord gr = new GenericData.Record(METADATA_BOOTSTRAP_RECORD_SCHEMA);
             gr.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recKey);
-            BootstrapRecordPayload payload = new BootstrapRecordPayload(gr);
-            HoodieRecord rec = new HoodieAvroRecord(new HoodieKey(recKey, partitionPath), payload);
+            HoodieRecord rec = new HoodieAvroIndexedRecord(new HoodieKey(recKey, partitionPath), gr);
             return rec;
           }, table.getPreExecuteRunnable());
       executor.execute();

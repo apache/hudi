@@ -130,7 +130,7 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
     cfg.setBootstrapOverwrite(bootstrapOverwrite)
 
     // add session bootstrap conf
-    TypedProperties.putAll(properties, spark.sqlContext.conf.getAllConfs.asJava)
+    TypedProperties.putAll(properties, spark.sessionState.conf.getAllConfs.asJava)
 
     // add conf from procedure, may overwrite session conf
     options match {

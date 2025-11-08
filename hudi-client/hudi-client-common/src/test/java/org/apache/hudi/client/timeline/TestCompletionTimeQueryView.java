@@ -29,11 +29,13 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -44,6 +46,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -77,7 +82,7 @@ public class TestCompletionTimeQueryView {
         HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareTimeline(tablePath, metaClient);
     try (CompletionTimeQueryView view =
-             metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
+             metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
       // query completion time from LSM timeline
       for (int i = 3; i < 7; i++) {
         assertThat(view.getCompletionTime(String.format("%08d", i)).orElse(""), is(String.format("%08d", i + 1000)));
@@ -108,7 +113,7 @@ public class TestCompletionTimeQueryView {
         HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareTimeline(tablePath, metaClient);
     try (CompletionTimeQueryView view =
-             metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
+             metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
       // query start time from LSM timeline
       assertThat(getInstantTimeSetFormattedString(view, 3 + 1000, 6 + 1000), is("00000003,00000004,00000005,00000006"));
       // query start time from active timeline
@@ -131,7 +136,7 @@ public class TestCompletionTimeQueryView {
         HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareTimeline(tablePath, metaClient);
     try (CompletionTimeQueryView view =
-             metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
+             metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
       // Fetch instant matching the completion time provided
       assertEquals(Collections.singletonList("00000009"), view.getInstantTimes(metaClient.getActiveTimeline(), Option.empty(), Option.of("00001009"), InstantRange.RangeType.CLOSED_CLOSED));
       // Fetch instant just before the completion time provided
@@ -142,22 +147,48 @@ public class TestCompletionTimeQueryView {
     }
   }
 
+  @Test
+  void testDefaultFirstFetchSize() throws Exception {
+    String tableName = "testTable";
+    String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(
+        HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
+    Instant now = Instant.now();
+    List<Pair<String, String>> instantRequestedAndCompletionTime = new ArrayList<>();
+    for (int i = 0; i < 10; i++) {
+      String instantTime = HoodieInstantTimeGenerator.getInstantFromTemporalAccessor(now.minus(40 - (i * 4), ChronoUnit.HOURS).atZone(ZoneId.systemDefault()));
+      String completionTime = HoodieInstantTimeGenerator.instantTimePlusMillis(instantTime, 1000);
+      instantRequestedAndCompletionTime.add(Pair.of(instantTime, completionTime));
+    }
+    prepareTimeline(tablePath, metaClient, instantRequestedAndCompletionTime, HoodieInstantTimeGenerator.getInstantFromTemporalAccessor(now.atZone(ZoneId.systemDefault())));
+    try (CompletionTimeQueryView view =
+             metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
+      // first completion time is from the active timeline
+      assertEquals(instantRequestedAndCompletionTime.get(8).getRight(), view.getCompletionTime(instantRequestedAndCompletionTime.get(8).getLeft()).get());
+      // cursor should be the earliest instant in the active timeline
+      assertEquals(instantRequestedAndCompletionTime.get(6).getLeft(), view.getCursorInstant());
+      // fetch completion time for the first archived instant should update the cursor instant to it.
+      assertEquals(instantRequestedAndCompletionTime.get(5).getRight(), view.getCompletionTime(instantRequestedAndCompletionTime.get(5).getLeft()).get());
+      assertEquals(instantRequestedAndCompletionTime.get(5).getLeft(), view.getCursorInstant());
+    }
+  }
+
   private String getInstantTimeSetFormattedString(CompletionTimeQueryView view, int completionTime1, int completionTime2) {
     return view.getInstantTimes(String.format("%08d", completionTime1), String.format("%08d", completionTime2),
             s -> String.format("%08d", Integer.parseInt(s) - 1000))
         .stream().sorted().collect(Collectors.joining(","));
   }
 
-  private void prepareTimeline(String tablePath, HoodieTableMetaClient metaClient) throws Exception {
+  private void prepareTimeline(String tablePath, HoodieTableMetaClient metaClient, List<Pair<String, String>> instantRequestedAndCompletionTime, String requestedInstantTime) throws Exception {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
         .withMarkersType("DIRECT")
         .build();
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     List<ActiveAction> activeActions = new ArrayList<>();
-    for (int i = 1; i < 11; i++) {
-      String instantTime = String.format("%08d", i);
-      String completionTime = String.format("%08d", i + 1000);
+    for (Pair<String, String> instantTimePair : instantRequestedAndCompletionTime) {
+      String instantTime = instantTimePair.getLeft();
+      String completionTime = instantTimePair.getRight();
       HoodieCommitMetadata metadata = testTable.createCommitMetadata(instantTime, WriteOperationType.INSERT, Arrays.asList("par1", "par2"), 10, false);
       testTable.addCommit(instantTime, Option.of(completionTime), Option.of(metadata));
       activeActions.add(
@@ -165,7 +196,7 @@ public class TestCompletionTimeQueryView {
               INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", instantTime, completionTime),
               convertMetadataToByteArray(metadata)));
     }
-    testTable.addRequestedCommit(String.format("%08d", 11));
+    testTable.addRequestedCommit(requestedInstantTime);
     List<HoodieInstant> instants = TIMELINE_FACTORY.createActiveTimeline(metaClient, false).getInstantsAsStream().sorted().collect(Collectors.toList());
     LSMTimelineWriter writer = LSMTimelineWriter.getInstance(writeConfig, getMockHoodieTable(metaClient));
     // archive [1,2], [3,4], [5,6] separately
@@ -179,6 +210,16 @@ public class TestCompletionTimeQueryView {
     ValidationUtils.checkState(
         metaClient.reloadActiveTimeline().filterCompletedInstants().countInstants() == 4,
         "should archive 6 instants with 4 as active");
+  }
+
+  private void prepareTimeline(String tablePath, HoodieTableMetaClient metaClient) throws Exception {
+    List<Pair<String, String>> instantRequestedAndCompletionTime = new ArrayList<>();
+    for (int i = 1; i < 11; i++) {
+      String instantTime = String.format("%08d", i);
+      String completionTime = String.format("%08d", i + 1000);
+      instantRequestedAndCompletionTime.add(Pair.of(instantTime, completionTime));
+    }
+    prepareTimeline(tablePath, metaClient, instantRequestedAndCompletionTime, String.format("%08d", 11));
   }
 
   @SuppressWarnings("rawtypes")

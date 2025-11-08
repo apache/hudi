@@ -47,7 +47,7 @@ class TestSparkParquetReaderFormat extends ParquetFileFormat with SparkAdapterSu
     //reader must be created outsize of the lambda. This happens on the driver
     val reader = sparkAdapter.createParquetFileReader(supportBatch(sparkSession,
       StructType(partitionSchema.fields ++ requiredSchema.fields)),
-      sparkSession.sqlContext.conf, options, hadoopConf)
+      sparkSession.sessionState.conf, options, hadoopConf)
     val broadcastedHadoopConf =
       sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
 

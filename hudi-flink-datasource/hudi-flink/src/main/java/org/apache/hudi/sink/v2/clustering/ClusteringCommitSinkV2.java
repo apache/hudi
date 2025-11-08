@@ -124,7 +124,7 @@ public class ClusteringCommitSinkV2 extends CleanFunctionV2<ClusteringCommitEven
     if (event.isFailed()
         || (event.getWriteStatuses() != null
         && event.getWriteStatuses().stream().anyMatch(writeStatus -> writeStatus.getTotalErrorRecords() > 0))) {
-      LOG.warn("Receive abnormal ClusteringCommitEvent of instant {}, task ID is {},"
+      LOG.warn("Received abnormal ClusteringCommitEvent of instant {}, task ID is {},"
               + " is failed: {}, error record count: {}",
           instant, event.getTaskID(), event.isFailed(), getNumErrorRecords(event));
     }

@@ -22,6 +22,7 @@ package org.apache.spark.sql.hudi.feature.index
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
@@ -46,7 +47,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
   var instantTime: AtomicInteger = new AtomicInteger(1)
   val metadataOpts: Map[String, String] = Map(
     HoodieMetadataConfig.ENABLE.key -> "true",
-    HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true"
+    HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true"
   )
   val commonOpts: Map[String, String] = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -61,6 +62,10 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
     HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
     DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.COMMIT_TIME_ORDERING.name()
   ) ++ metadataOpts
+
+  override protected def beforeAll(): Unit = {
+    spark.sql("set hoodie.write.lock.provider = org.apache.hudi.client.transaction.lock.InProcessLockProvider")
+  }
 
   test("Test Create/Show/Drop Secondary Index with External Table") {
     withRDDPersistenceValidation {
@@ -260,6 +265,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
           spark.sql("set hoodie.embed.timeline.server=false")
+          spark.sql("set hoodie.spark.sql.insert.into.operation=upsert")
           // Create table with version 8
           spark.sql(
             s"""
@@ -325,6 +331,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
             // Verify that secondary indexes are dropped after upgrade
             dropRecreateIdxAndValidate(tableName, basePath, 9, 2, dropRecreate = true, expected)
           }
+          spark.sessionState.conf.unsetConf("hoodie.spark.sql.insert.into.operation")
         }
       }
     }
@@ -506,7 +513,8 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           .mode(SaveMode.Append)
           .save(basePath))(
           "Can not perform operation " + WriteOperationType.fromValue(operationType) + " on secondary index")
-        // disable secondary index and retry
+        // drop secondary index and retry
+        spark.sql(s"drop index idx_rider on $tableName")
         df.write.format("hudi")
           .options(hudiOpts)
           .option(HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key, "false")
@@ -574,7 +582,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       // Perform Deletes on Records and Validate Secondary Index
       val deleteDf = spark.read.format("hudi").load(basePath).filter(s"_row_key in ('${updateKeys.mkString("','")}')")
       // Get fileId for the delete record
-      val deleteFileId = deleteDf.select("_hoodie_file_name").collect().head.getString(0)
+      val deleteFileId = FSUtils.getFileId(deleteDf.select("_hoodie_file_name").collect().head.getString(0))
       deleteDf.write.format("hudi")
         .options(hudiOpts)
         .option(OPERATION.key, DELETE_OPERATION_OPT_VAL)
