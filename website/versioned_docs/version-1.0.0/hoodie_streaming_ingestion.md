@@ -468,7 +468,7 @@ this class: https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/j
 
 ### Sources
 
-Hoodie Streamer can read data from a wide variety of sources. The following are a list of supported sources:
+Hudi Streamer can read data from a wide variety of sources. The following are a list of supported sources:
 
 #### Distributed File System (DFS)
 See the storage configurations page to see some examples of DFS applications Hudi can read from. The following are the 
@@ -592,7 +592,7 @@ Users can feel free to implement their own strategy as they see fit.
 
 ### Dynamic configuration updates
 
-When Hoodie Streamer is running in `continuous` mode, the properties can be refreshed/updated before each sync calls.
+When Hudi Streamer is running in `continuous` mode, the properties can be refreshed/updated before each sync calls.
 Interested users can implement `org.apache.hudi.utilities.deltastreamer.ConfigurationHotUpdateStrategy` to leverage this.
 
 ## MultiTableStreamer

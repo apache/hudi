@@ -64,6 +64,6 @@ sudo ln -sf hudi-timeline-server-bundle-0.7.0.jar hudi-timeline-server-bundle.ja
 sudo ln -sf hudi-utilities-bundle_2.12-0.7.0.jar hudi-utilities-bundle.jar
 ```
 
-**Using the overriden jar in Deltastreamer:**
+**Using the overriden jar in Hudi Streamer:**
 
-When invoking DeltaStreamer specify the above jar location as part of spark-submit command.
+When invoking Hudi Streamer specify the above jar location as part of spark-submit command.

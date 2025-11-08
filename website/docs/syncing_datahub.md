@@ -7,7 +7,7 @@ keywords: [hudi, datahub, sync]
 obeservability, federated governance, etc.
 
 Since Hudi 0.11.0, you can now sync to a DataHub instance by setting `DataHubSyncTool` as one of the sync tool classes
-for `HoodieStreamer`.
+for Hudi Streamer.
 
 The target Hudi table will be sync'ed to DataHub as a `Dataset`, which will be created with the following properties:
 
@@ -55,9 +55,9 @@ string (_eg_ `key1=val1,key2=val2`).
 
 ### Example
 
-The following shows an example configuration to run `HoodieStreamer` with `DataHubSyncTool`.
+The following shows an example configuration to run Hudi Streamer with `DataHubSyncTool`.
 
-In addition to `hudi-utilities-slim-bundle` that contains `HoodieStreamer`, you also add `hudi-datahub-sync-bundle` to
+In addition to `hudi-utilities-slim-bundle` that contains Hudi Streamer, you also add `hudi-datahub-sync-bundle` to
 the classpath.
 
 ```shell
@@ -67,7 +67,7 @@ spark-submit --master yarn \
 --class org.apache.hudi.utilities.streamer.HoodieStreamer \
 /opt/hudi-utilities-slim-bundle_2.12-1.0.1.jar \
 --target-table mytable \
-# ... other HoodieStreamer's configs
+# ... other Hudi Streamer's configs
 --enable-sync \
 --sync-tool-classes org.apache.hudi.sync.datahub.DataHubSyncTool \
 --hoodie-conf hoodie.meta.sync.datahub.emitter.server=http://url-to-datahub-instance:8080 \

@@ -1,13 +1,13 @@
 ---
 title: Using Spark
-keywords: [hudi, streamer, hoodiestreamer, spark_streaming]
+keywords: [hudi, streamer, spark_streaming]
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 ## Hudi Streamer
 
-The `HoodieStreamer` utility (part of `hudi-utilities-slim-bundle` and `hudi-utilities-bundle`) provides ways to ingest
+The Hudi Streamer (part of `hudi-utilities-slim-bundle` and `hudi-utilities-bundle`) provides ways to ingest
 from different sources such as DFS or Kafka, with the following capabilities.
 
 - Exactly once ingestion of new events from
@@ -36,7 +36,7 @@ package, but have been deprecated.
 <details>
 
 <summary>
-Expand this to see HoodieStreamer's "--help" output describing its capabilities in more details.
+Expand this to see Hudi Streamer's "--help" output describing its capabilities in more details.
 </summary>
 
 ```shell
@@ -156,7 +156,7 @@ Usage: <main class> [options]
       Default: org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
     --post-write-termination-strategy-class
       Post writer termination strategy class to gracefully shutdown
-      deltastreamer in continuous mode
+      Hudi Streamer in continuous mode
       Default: <empty string>
     --props
       path to properties file on localfs or dfs, with configurations for
@@ -307,7 +307,7 @@ Read more in depth about concurrency control in the [concurrency control concept
 
 ### Checkpointing
 
-`HoodieStreamer` uses checkpoints to keep track of what data has been read already so it can resume without needing to reprocess all data.
+Hudi Streamer uses checkpoints to keep track of what data has been read already so it can resume without needing to reprocess all data.
 When using a Kafka source, the checkpoint is the [Kafka Offset](https://cwiki.apache.org/confluence/display/KAFKA/Offset+Management) 
 When using a DFS source, the checkpoint is the 'last modified' timestamp of the latest file read.
 Checkpoints are saved in the .hoodie commit file as `streamer.checkpoint.key`.
@@ -320,7 +320,7 @@ For Kafka, this is the max # of events to read.
 
 ### Transformers
 
-`HoodieStreamer` supports custom transformation on records before writing to storage. This is done by supplying 
+Hudi Streamer supports custom transformation on records before writing to storage. This is done by supplying 
 implementation of `org.apache.hudi.utilities.transform.Transformer` via `--transformer-class` option.
 
 #### SQL Query Transformer
@@ -468,7 +468,7 @@ this class: https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/j
 
 ### Sources
 
-Hoodie Streamer can read data from a wide variety of sources. The following are a list of supported sources:
+Hudi Streamer can read data from a wide variety of sources. The following are a list of supported sources:
 
 #### Distributed File System (DFS)
 See the storage configurations page to see some examples of DFS applications Hudi can read from. The following are the 
@@ -485,10 +485,10 @@ other formats and then write data as Hudi format.)
 For DFS sources the following behaviors are expected:
 
 - For JSON DFS source, you always need to set a schema. If the target Hudi table follows the same schema as from the source file, you just need to set the source schema. If not, you need to set schemas for both source and target. 
-- `HoodieStreamer` reads the files under the source base path (`hoodie.streamer.source.dfs.root`) directly, and it won't use the partition paths under this base path as fields of the dataset. Detailed examples can be found [here](https://github.com/apache/hudi/issues/5485).
+- Hudi Streamer reads the files under the source base path (`hoodie.streamer.source.dfs.root`) directly, and it won't use the partition paths under this base path as fields of the dataset. Detailed examples can be found [here](https://github.com/apache/hudi/issues/5485).
 
 #### Kafka
-Hudi can read directly from Kafka clusters. See more details on `HoodieStreamer` to learn how to setup streaming 
+Hudi can read directly from Kafka clusters. See more details on Hudi Streamer to learn how to setup streaming 
 ingestion with exactly once semantics, checkpointing, and plugin transformations. The following formats are supported 
 when reading data from Kafka:
 
@@ -500,7 +500,7 @@ Check out [Kafka source config](https://hudi.apache.org/docs/configurations#Kafk
 
 #### Pulsar
 
-`HoodieStreamer` also supports ingesting from Apache Pulsar via `org.apache.hudi.utilities.sources.PulsarSource`.
+Hudi Streamer also supports ingesting from Apache Pulsar via `org.apache.hudi.utilities.sources.PulsarSource`.
 Check out [Pulsar source config](https://hudi.apache.org/docs/configurations#Pulsar-Source-Configs) for more details.
 
 #### Cloud storage event sources
@@ -519,7 +519,7 @@ Similar to S3 event source, Google Cloud Storage (GCS) event source is also supp
 3. Find the queue URL and Region to set these configurations:
    1. hoodie.streamer.s3.source.queue.url=https://sqs.us-west-2.amazonaws.com/queue/url
    2. hoodie.streamer.s3.source.queue.region=us-west-2 
-4. Start the `S3EventsSource` and `S3EventsHoodieIncrSource` using the `HoodieStreamer` utility as shown in sample commands below:
+4. Start the `S3EventsSource` and `S3EventsHoodieIncrSource` using the Hudi Streamer utility as shown in sample commands below:
 
 Insert code sample from this blog: https://hudi.apache.org/blog/2021/08/23/s3-events-source/#configuration-and-setup
 
@@ -557,7 +557,7 @@ table. SQL file path should be configured using this hoodie config:
 
 ### Error Table
 
-`HoodieStreamer` supports segregating error records into a separate table called "Error table" alongside with the 
+Hudi Streamer supports segregating error records into a separate table called "Error table" alongside with the 
 target data table. This allows easy integration with dead-letter queues (DLQ). Error Table is supported with 
 user-provided subclass of `org.apache.hudi.utilities.streamer.BaseErrorTableWriter` supplied via
 config `hoodie.errortable.write.class`. Check out more in `org.apache.hudi.config.HoodieErrorTableConfig`.
@@ -570,7 +570,7 @@ Here is the interface for the termination strategy.
 
 ```java
 /**
- * Post write termination strategy for deltastreamer in continuous mode.
+ * Post write termination strategy for Hudi Streamer in continuous mode.
  */
 public interface PostWriteTerminationStrategy {
 
@@ -585,19 +585,19 @@ public interface PostWriteTerminationStrategy {
 ```
 
 Also, this might help in bootstrapping a new table. Instead of doing one bulk load or bulk_insert leveraging a large
-cluster for a large input of data, one could start `HoodieStreamer` on the `continuous` mode and add a shutdown strategy
+cluster for a large input of data, one could start Hudi Streamer on the `continuous` mode and add a shutdown strategy
 to terminate, once all data has been bootstrapped. This way, each batch could be smaller and may not need a large
-cluster to bootstrap data. There is a concrete implementation provided out-of-the-box: [NoNewDataTerminationStrategy](https://github.com/apache/hudi/blob/0d0a4152cfd362185066519ae926ac4513c7a152/hudi-utilities/src/main/java/org/apache/hudi/utilities/deltastreamer/NoNewDataTerminationStrategy.java).
+cluster to bootstrap data. There is a concrete implementation provided out-of-the-box: `org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy`.
 Users can feel free to implement their own strategy as they see fit.
 
 ### Dynamic configuration updates
 
-When Hoodie Streamer is running in `continuous` mode, the properties can be refreshed/updated before each sync calls.
-Interested users can implement `org.apache.hudi.utilities.deltastreamer.ConfigurationHotUpdateStrategy` to leverage this.
+When Hudi Streamer is running in `continuous` mode, the properties can be refreshed/updated before each sync calls.
+Interested users can implement `org.apache.hudi.utilities.streamer.ConfigurationHotUpdateStrategy` to leverage this.
 
 ## MultiTableStreamer
 
-`HoodieMultiTableStreamer`, an extension of `HoodieStreamer`, facilitates the simultaneous ingestion of multiple tables into Hudi datasets. At present, it supports the sequential ingestion of tables and accommodates both COPY_ON_WRITE and MERGE_ON_READ storage types. The command line parameters for `HoodieMultiTableStreamer` largely mirror those of `HoodieStreamer`, with the notable difference being the necessity to supply table-specific configurations in separate files in a dedicated config folder. New command line options have been introduced to support this functionality:
+`HoodieMultiTableStreamer`, an extension of Hudi Streamer, facilitates the simultaneous ingestion of multiple tables into Hudi datasets. At present, it supports the sequential ingestion of tables and accommodates both COPY_ON_WRITE and MERGE_ON_READ storage types. The command line parameters for `HoodieMultiTableStreamer` largely mirror those of Hudi Streamer, with the notable difference being the necessity to supply table-specific configurations in separate files in a dedicated config folder. New command line options have been introduced to support this functionality:
 
 ```java
   * --config-folder
@@ -619,7 +619,7 @@ hoodie.streamer.ingestion.<database>.<table>.configFile
 
 Sample config files for table wise overridden properties can be found
 under `hudi-utilities/src/test/resources/streamer-config`. The command to run `HoodieMultiTableStreamer` is also similar
-to how you run `HoodieStreamer`.
+to how you run Hudi Streamer.
 
 ```java
 [hoodie]$ spark-submit \

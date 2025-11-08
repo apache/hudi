@@ -6,7 +6,7 @@ keywords: [hudi, writing, reading]
 
 ### What are some ways to write a Hudi table?
 
-Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](write_operations/) against a Hudi table. If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](hoodie_streaming_ingestion#hudi-streamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](writing_data#spark-datasource-api) to write into Hudi.
+Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](write_operations/) against a Hudi table. If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [Hudi Streamer](hoodie_streaming_ingestion#hudi-streamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](writing_data#spark-datasource-api) to write into Hudi.
 
 ### How is a Hudi writer job deployed?
 
@@ -78,11 +78,11 @@ No. Hudi removes all the copies of a record key when deletes are issued. Here is
 
 When issuing an `upsert` operation on a table and the batch of records provided contains multiple entries for a given key, then all of them are reduced into a single final value by repeatedly calling payload class's [preCombine()](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/hudi-common/src/main/java/org/apache/hudi/common/model/HoodieRecordPayload.java#L40) method . By default, we pick the record with the greatest value (determined by calling .compareTo()) giving latest-write-wins style semantics. [This FAQ entry](faq_writing_tables#can-i-implement-my-own-logic-for-how-input-records-are-merged-with-record-on-storage) shows the interface for HoodieRecordPayload if you are interested.
 
-For an insert or bulk_insert operation, no such pre-combining is performed. Thus, if your input contains duplicates, the table would also contain duplicates. If you don't want duplicate records either issue an **upsert** or consider specifying option to de-duplicate input in either datasource using [`hoodie.datasource.write.insert.drop.duplicates`](configurations#hoodiedatasourcewriteinsertdropduplicates) & [`hoodie.combine.before.insert`](configurations/#hoodiecombinebeforeinsert) or in deltastreamer using [`--filter-dupes`](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/hudi-utilities/src/main/java/org/apache/hudi/utilities/deltastreamer/HoodieDeltaStreamer.java#L229).
+For an insert or bulk_insert operation, no such pre-combining is performed. Thus, if your input contains duplicates, the table would also contain duplicates. If you don't want duplicate records either issue an **upsert** or consider specifying option to de-duplicate input in either datasource using [`hoodie.datasource.write.insert.drop.duplicates`](configurations#hoodiedatasourcewriteinsertdropduplicates) & [`hoodie.combine.before.insert`](configurations/#hoodiecombinebeforeinsert) or in Hudi Streamer using [`--filter-dupes`](https://github.com/apache/hudi/blob/f5f0ef6549fedf93863526a2110fe262a3460432/hudi-utilities/src/main/java/org/apache/hudi/utilities/streamer/HoodieStreamer.java#L329).
 
 ### How can I pass hudi configurations to my spark writer job?
 
-Hudi configuration options covering the datasource and low level Hudi write client (which both deltastreamer & datasource internally call) are [here](configurations/). Invoking _--help_ on any tool such as DeltaStreamer would print all the usage options. A lot of the options that control upsert, file sizing behavior are defined at the write client level and below is how we pass them to different options available for writing data.
+Hudi configuration options covering the datasource and low level Hudi write client (which both Hudi Streamer & datasource internally call) are [here](configurations/). Invoking _--help_ on any tool such as Hudi Streamer would print all the usage options. A lot of the options that control upsert, file sizing behavior are defined at the write client level and below is how we pass them to different options available for writing data.
 
 *   For Spark DataSource, you can use the "options" API of DataFrameWriter to pass in these configs.
 
@@ -94,7 +94,7 @@ inputDF.write().format("org.apache.hudi")
 ```
 
 *   When using `HoodieWriteClient` directly, you can simply construct HoodieWriteConfig object with the configs in the link you mentioned.
-*   When using HoodieDeltaStreamer tool to ingest, you can set the configs in properties file and pass the file as the cmdline argument "_--props_"
+*   When using Hudi Streamer to ingest, you can set the configs in properties file and pass the file as the cmdline argument "_--props_"
 
 ### How to create Hive style partition folder structure?
 
@@ -160,7 +160,7 @@ b) [**Clustering**](/blog/2021/01/27/hudi-clustering-intro) : This is a feature 
 
 _Please note that Hudi always creates immutable files on disk. To be able to do auto-sizing or clustering, Hudi will always create a newer version of the smaller file, resulting in 2 versions of the same file. The cleaner service will later kick in and delte the older version small file and keep the latest one._
 
-### How do I use DeltaStreamer or Spark DataSource API to write to a Non-partitioned Hudi table ?
+### How do I use Hudi Streamer or Spark DataSource API to write to a Non-partitioned Hudi table ?
 
 Hudi supports writing to non-partitioned tables. For writing to a non-partitioned Hudi table and performing hive table syncing, you need to set the below configurations in the properties passed:
 
@@ -187,7 +187,7 @@ Hudi employs [optimistic concurrency control](concurrency_control) between write
 
 ### Can single-writer inserts have duplicates?
 
-By default, Hudi turns off key based de-duplication for INSERT/BULK_INSERT operations and thus the table could contain duplicates. If users believe, they have duplicates in inserts, they can either issue UPSERT or consider specifying the option to de-duplicate input in either datasource using [`hoodie.datasource.write.insert.drop.duplicates`](configurations#hoodiedatasourcewriteinsertdropduplicates) & [`hoodie.combine.before.insert`](configurations/#hoodiecombinebeforeinsert) or in deltastreamer using [`--filter-dupes`](https://github.com/apache/hudi/blob/d3edac4612bde2fa9deca9536801dbc48961fb95/hudi-utilities/src/main/java/org/apache/hudi/utilities/deltastreamer/HoodieDeltaStreamer.java#L229).
+By default, Hudi turns off key based de-duplication for INSERT/BULK_INSERT operations and thus the table could contain duplicates. If users believe, they have duplicates in inserts, they can either issue UPSERT or consider specifying the option to de-duplicate input in either datasource using [`hoodie.datasource.write.insert.drop.duplicates`](configurations#hoodiedatasourcewriteinsertdropduplicates) & [`hoodie.combine.before.insert`](configurations/#hoodiecombinebeforeinsert) or in Hudi Streamer using [`--filter-dupes`](https://github.com/apache/hudi/blob/f5f0ef6549fedf93863526a2110fe262a3460432/hudi-utilities/src/main/java/org/apache/hudi/utilities/streamer/HoodieStreamer.java#L329).
 
 ### Can concurrent inserts cause duplicates?
 

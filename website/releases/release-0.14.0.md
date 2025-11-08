@@ -94,13 +94,13 @@ In case users do not override this configuration, compaction may be triggered fo
 5 delta commits (the default value for 
 [`hoodie.compact.inline.max.delta.commits`](https://hudi.apache.org/docs/configurations#hoodiecompactinlinemaxdeltacommits)).
 
+#### `HoodieDeltaStreamer` renamed to `HoodieStreamer` (Hudi Streamer)
 
-#### HoodieDeltaStreamer renamed to HoodieStreamer
 Starting from version 0.14.0, we have renamed [HoodieDeltaStreamer](https://github.com/apache/hudi/blob/84a80e21b5f0cdc1f4a33957293272431b221aa9/hudi-utilities/src/main/java/org/apache/hudi/utilities/deltastreamer/HoodieDeltaStreamer.java)
-to [HoodieStreamer](https://github.com/apache/hudi/blob/84a80e21b5f0cdc1f4a33957293272431b221aa9/hudi-utilities/src/main/java/org/apache/hudi/utilities/streamer/HoodieStreamer.java). 
+to [`HoodieStreamer`](https://github.com/apache/hudi/blob/84a80e21b5f0cdc1f4a33957293272431b221aa9/hudi-utilities/src/main/java/org/apache/hudi/utilities/streamer/HoodieStreamer.java). 
 We have ensured backward compatibility so that existing user jobs remain unaffected. However, in upcoming 
 releases, support for Deltastreamer might be discontinued. Hence, we strongly advise users to transition to using 
-HoodieStreamer instead.
+`HoodieStreamer` instead.
 
 
 #### MERGE INTO JOIN condition 
@@ -156,7 +156,7 @@ cannot be altered for existing ones.
 
 
 This functionality is available in all spark writers with certain limitations. For append only type of use cases, Inserts and 
-bulk_inserts are allowed with all four writers - Spark Datasource, Spark SQL, Spark Streaming, Hoodie Streamer. Updates and 
+bulk_inserts are allowed with all four writers - Spark Datasource, Spark SQL, Spark Streaming, Hudi Streamer. Updates and 
 Deletes are supported only using spark-sql `MERGE INTO` , `UPDATE` and `DELETE` statements. With Spark Datasource, `UPDATE` 
 and `DELETE` are supported only when the source dataframe contains Hudi's meta fields. Please check out our 
 [quick start guide](https://hudi.apache.org/docs/quick-start-guide) for code snippets on Hudi table CRUD operations where 
@@ -271,15 +271,15 @@ and `INSERT OVERWRITE PARTITION`. To enable bulk insert, set config
 to value `bulk_insert`. Bulk insert has better write performance compared to insert operation. Row writer support is 
 also added for Simple bucket index.
 
-### Hoodie Streamer enhancements
+### Hudi Streamer enhancements
 
 #### Dynamic configuration updates
-When Hoodie Streamer is run in continuous mode, the properties can be refreshed/updated before each sync calls. 
-Interested users can implement `org.apache.hudi.utilities.deltastreamer.ConfigurationHotUpdateStrategy` to leverage this.
+When Hudi Streamer is run in continuous mode, the properties can be refreshed/updated before each sync calls. 
+Interested users can implement `org.apache.hudi.utilities.streamer.ConfigurationHotUpdateStrategy` to leverage this.
 
-#### SQL File based source for HoodieStreamer
+#### SQL File based source for Hudi Streamer
 A new source - [SqlFileBasedSource](https://github.com/apache/hudi/blob/30146d61f5544f06e2100234b9bf9c5e4bc2a97f/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/SqlFileBasedSource.java), 
-has been added to HoodieStreamer designed to facilitate one-time backfill scenarios.
+has been added to Hudi Streamer designed to facilitate one-time backfill scenarios.
 
 ### Flink Enhancements
 Below are the Flink Engine based enhancements in the 0.14.0 release.

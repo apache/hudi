@@ -312,7 +312,7 @@ then will apply a post processor to change the schema before it is used. You can
 this class: https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/schema/SchemaPostProcessor.java
 
 ## Sources
-Hoodie Streamer can read data from a wide variety of sources. The following are a list of supported sources:
+Hudi Streamer can read data from a wide variety of sources. The following are a list of supported sources:
 
 ### Distributed File System (DFS)
 See the storage configurations page to see some examples of DFS applications Hudi can read from. The following are the 

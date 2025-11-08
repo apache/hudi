@@ -99,8 +99,8 @@ If immediate read performance of a new commit is important for you, or you want 
 you may want synchronous inline compaction, which means that as a commit is written it is also compacted by the same job.
 
 For this deployment mode, please use `hoodie.compact.inline = true` for Spark Datasource and Spark SQL writers. For
-HoodieStreamer sync once mode inline compaction can be achieved by passing the flag `--disable-compaction` (Meaning to
-disable async compaction). Further in HoodieStreamer when both 
+Hudi Streamer sync once mode inline compaction can be achieved by passing the flag `--disable-compaction` (Meaning to
+disable async compaction). Further in Hudi Streamer when both 
 ingestion and compaction is running in the same spark context, you can use resource allocation configuration
 in Hudi Streamer CLI such as (`--delta-sync-scheduling-weight`,
 `--compact-scheduling-weight`, `--delta-sync-scheduling-minshare`, and `--compact-scheduling-minshare`)
@@ -112,7 +112,7 @@ to control executor allocation between ingestion and compaction.
 There are a couple of ways here to trigger compaction .
 
 #### Async execution within the same process
-In streaming ingestion write models like HoodieStreamer 
+In streaming ingestion write models like Hudi Streamer 
 continuous mode, Flink and Spark Streaming, async compaction is enabled by default and runs alongside without blocking 
 regular ingestion. 
 

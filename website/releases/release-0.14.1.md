@@ -23,7 +23,7 @@ import TabItem from '@theme/TabItem';
 
 0.14.1 release is mainly intended for bug fixes and stability. The fixes span across many components, including
 
-* DeltaStreamer
+* Hudi Streamer
 * Spark SQL
 * Spark datasource writer
 * Table services

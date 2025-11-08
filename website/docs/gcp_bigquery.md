@@ -29,7 +29,7 @@ Copy-on-Write Hudi table.
 
 ## Configurations
 
-Hudi uses `org.apache.hudi.gcp.bigquery.BigQuerySyncTool` to sync tables. It works with `HoodieStreamer` via
+Hudi uses `org.apache.hudi.gcp.bigquery.BigQuerySyncTool` to sync tables. It works with Hudi Streamer via
 setting sync tool class. A few BigQuery-specific configurations are required.
 
 | Config                                       | Notes                                                                                                           |
@@ -60,7 +60,7 @@ hoodie.partition.metafile.use.base.format       = 'true'
 
 ## Example
 
-Below shows an example for running `BigQuerySyncTool` with `HoodieStreamer`.
+Below shows an example for running `BigQuerySyncTool` with Hudi Streamer.
 
 ```shell
 spark-submit --master yarn \
