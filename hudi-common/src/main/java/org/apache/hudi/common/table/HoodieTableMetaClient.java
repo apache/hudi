@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.HoodieTableFormat;
 import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.config.ConfigProperty;
@@ -64,7 +65,6 @@ import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -76,6 +76,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
@@ -221,8 +222,8 @@ public class HoodieTableMetaClient implements Serializable {
     this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
     // Get the latest schema using TableSchemaResolver.
     // Initializing indexMetadataOpt here because certain class members are used.
-    Option<Schema> schemaOpt = getLatestTableSchema(this.tableConfig);
-    this.indexMetadataOpt = readIndexDefFromStorage(this.storage, this.basePath, this.tableConfig, schemaOpt);
+    Lazy<Option<Schema>> lazySchemaOpt = Lazy.lazily(() -> getLatestTableSchema(this.tableConfig));
+    this.indexMetadataOpt = readIndexDefFromStorage(this.storage, this.basePath, this.tableConfig, lazySchemaOpt);
     LOG.debug("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ") from " + basePath);
     if (loadActiveTimelineOnLoad) {
       LOG.info("Loading Active commit timeline for " + basePath);
@@ -352,7 +353,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   private static Option<HoodieIndexMetadata> readIndexDefFromStorage(
-      HoodieStorage storage, StoragePath basePath, HoodieTableConfig tableConfig, Option<Schema> schemaOpt) {
+      HoodieStorage storage, StoragePath basePath, HoodieTableConfig tableConfig, Lazy<Option<Schema>> lazySchemaOpt) {
     Option<String> indexDefinitionPathOpt = tableConfig.getRelativeIndexDefinitionPath();
     if (indexDefinitionPathOpt.isEmpty() || StringUtils.isNullOrEmpty(indexDefinitionPathOpt.get())) {
       return Option.empty();
@@ -361,20 +362,8 @@ public class HoodieTableMetaClient implements Serializable {
     try {
       Option<byte[]> bytesOpt = FileIOUtils.readDataFromPath(storage, indexDefinitionPath, true);
       if (bytesOpt.isPresent()) {
-        HoodieIndexMetadata originalIndexMetadata = HoodieIndexMetadata.fromJson(new String(bytesOpt.get()));
-        if (schemaOpt.isPresent()) {
-          List<String> timestampMillisColumns = getTimestampMillisColumns(schemaOpt.get());
-          if (timestampMillisColumns.isEmpty()) {
-            return Option.of(originalIndexMetadata);
-          } else {
-            HoodieIndexMetadata modifiedIndexMetadata = disableV1ColumnStatsForTimestampMillisColumns(
-                originalIndexMetadata, timestampMillisColumns);
-            return Option.of(modifiedIndexMetadata);
-          }
-        } else {
-          // If schema is not available, return original metadata without filtering
-          return Option.of(originalIndexMetadata);
-        }
+        return Option.of(disableV1ColumnStatsForTimestampMillisColumns(
+            HoodieIndexMetadata.fromJson(new String(bytesOpt.get())), lazySchemaOpt));
       } else {
         return Option.of(new HoodieIndexMetadata());
       }
@@ -402,21 +391,24 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   static HoodieIndexMetadata disableV1ColumnStatsForTimestampMillisColumns(HoodieIndexMetadata originalMetadata,
-                                                                           List<String> timestampMillisColumns) {
+                                                                           Lazy<Option<Schema>> lazySchemaOpt) {
+    Lazy<List<String>> timestampMillisColumns = Lazy.lazily(() -> getTimestampMillisColumns(lazySchemaOpt.get()));
     Map<String, HoodieIndexDefinition> indexDefinitions = originalMetadata.getIndexDefinitions();
     Map<String, HoodieIndexDefinition> filteredIndexDefinitions = new HashMap<>();
 
     for (Map.Entry<String, HoodieIndexDefinition> entry : indexDefinitions.entrySet()) {
       String indexName = entry.getKey();
       HoodieIndexDefinition indexDef = entry.getValue();
-      // Only check V1 column stats index.
+      // Only check V1 column stats and partition stats index.
       if (indexDef.getVersion() == HoodieIndexVersion.V1
-          && HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS.equals(indexName)) {
+          && (HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS.equals(indexName)
+          || HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS.equals(indexName))
+          && lazySchemaOpt.get().isPresent() && !timestampMillisColumns.get().isEmpty()) {
         // Filter out timestamp_millis columns from sourceFields
         List<String> sourceFields = indexDef.getSourceFields();
         if (sourceFields != null && !sourceFields.isEmpty()) {
           List<String> filteredSourceFields = sourceFields.stream()
-              .filter(field -> !timestampMillisColumns.contains(field))
+              .filter(field -> !timestampMillisColumns.get().contains(field))
               .collect(Collectors.toList());
           // If all columns were filtered out, skip this index
           if (filteredSourceFields.isEmpty()) {
@@ -445,12 +437,12 @@ public class HoodieTableMetaClient implements Serializable {
    * @param schema The Avro schema to extract timestamp_millis columns from
    * @return List of column names that are of type timestamp_millis
    */
-  static List<String> getTimestampMillisColumns(Schema schema) {
+  static List<String> getTimestampMillisColumns(Option<Schema> schema) {
     List<String> timestampMillisColumns = new ArrayList<>();
-    if (schema == null) {
+    if (schema == null || schema.isEmpty()) {
       return timestampMillisColumns;
     }
-    Schema nonNullableSchema = AvroSchemaUtils.getNonNullTypeFromUnion(schema);
+    Schema nonNullableSchema = AvroSchemaUtils.getNonNullTypeFromUnion(schema.get());
     if (nonNullableSchema.getType() != Schema.Type.RECORD) {
       return timestampMillisColumns;
     }
