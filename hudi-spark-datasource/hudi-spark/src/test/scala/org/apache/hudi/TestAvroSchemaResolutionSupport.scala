@@ -873,7 +873,13 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     upsertData(df2, tempRecordPath, isCow)
 
     // after implicit type change, read the table with vectorized read enabled
-    assertThrows(classOf[SparkException]){
+    if (HoodieSparkUtils.gteqSpark3_4) {
+      assertThrows(classOf[SparkException]) {
+        withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
+          readTable(tempRecordPath, useFileGroupReader)
+        }
+      }
+    } else {
       withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
         readTable(tempRecordPath, useFileGroupReader)
       }
