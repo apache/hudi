@@ -37,7 +37,8 @@ import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, Hoodie
 import org.apache.hudi.exception.{HoodieException, HoodieWriteConflictException}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
-import org.apache.hudi.util.{JFunction, JavaConversions}
+import org.apache.hudi.util.{JavaConversions, JFunction}
+
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BitwiseOr, EqualNullSafe, EqualTo, Expression, GreaterThanOrEqual, IsNotNull, IsNull, LessThanOrEqual, Literal, Not, Or}
@@ -50,6 +51,7 @@ import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
 
 import java.util.concurrent.Executors
 import java.util.stream.Stream
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.{Await, ExecutionContext, Future}

@@ -683,7 +683,13 @@ public class HoodieTableMetadataUtil {
     }
   }
 
-  public static List<String> getIndexableColumns(HoodieIndexDefinition indexDefinition, Schema tableSchema) {
+  /**
+   * Fetch list of columns that can be considered for col stats pruning. The impl accounts for timestamp logical type fixes for V1 index definition.
+   * @param indexDefinition instance of {@link HoodieIndexDefinition}.
+   * @param tableSchema latest table schema of interest.
+   * @return list of valid indexed columns that can be considered for pruning.
+   */
+  public static List<String> getValidIndexedColumns(HoodieIndexDefinition indexDefinition, Schema tableSchema) {
     if (indexDefinition.getVersion() != HoodieIndexVersion.V1) {
       return indexDefinition.getSourceFields();
     }
@@ -711,24 +717,6 @@ public class HoodieTableMetadataUtil {
           || logicalType instanceof LogicalTypes.LocalTimestampMillis;
     }
     return false;
-  }
-
-  /**
-   * Gets the latest table schema using TableSchemaResolver.
-   *
-   * @param metaClient The table meta client
-   * @return Option containing the latest table schema, or empty if schema cannot be resolved
-   */
-  public static Option<Schema> getLatestTableSchema(HoodieTableMetaClient metaClient) {
-    try {
-      TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-      // Get schema without metadata fields for column type checking
-      return Option.of(schemaResolver.getTableAvroSchema(true));
-    } catch (Exception e) {
-      LOG.warn("Failed to resolve latest table schema, falling back to table create schema", e);
-      // Fallback to table create schema if schema resolution fails
-      return metaClient.getTableConfig().getTableCreateSchema();
-    }
   }
 
   /**

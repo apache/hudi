@@ -102,7 +102,8 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
   }
 
   protected def getCandidateFiles(indexDf: DataFrame, queryFilters: Seq[Expression], fileNamesFromPrunedPartitions: Set[String],
-                                  filterIndexColumnsFn: HoodieIndexDefinition => Seq[String], isExpressionIndex: Boolean = false, indexDefinitionOpt: Option[HoodieIndexDefinition] = Option.empty): Set[String] = {
+                                  getValidIndexedColumnsFunc: HoodieIndexDefinition => Seq[String], isExpressionIndex: Boolean = false,
+                                  indexDefinitionOpt: Option[HoodieIndexDefinition] = Option.empty): Set[String] = {
     val indexDefinition : HoodieIndexDefinition = if (indexDefinitionOpt.isDefined) {
       indexDefinitionOpt.get
     } else {
@@ -110,8 +111,8 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
         .getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS)
     }
 
-    val filteredIndexCols = filterIndexColumnsFn.apply(indexDefinition)
-    val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, isExpressionIndex, filteredIndexCols)).reduce(And)
+    val validIndexedColumns = getValidIndexedColumnsFunc.apply(indexDefinition)
+    val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, isExpressionIndex, validIndexedColumns)).reduce(And)
     if (indexFilter.equals(TrueLiteral)) {
       // if there are any non indexed cols or we can't translate source expr, we have to read all files and may not benefit from col stats lookup.
        fileNamesFromPrunedPartitions
