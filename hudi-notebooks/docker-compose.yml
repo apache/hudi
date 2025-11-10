@@ -91,7 +91,7 @@ services:
       - hudi-datalake
 
   trino:
-    image: apachehudi/trino:477
+    image: apachehudi/trino:latest
     container_name: trino
     depends_on:
       - hive-metastore
