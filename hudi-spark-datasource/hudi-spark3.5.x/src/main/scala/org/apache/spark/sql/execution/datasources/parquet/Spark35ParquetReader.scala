@@ -20,6 +20,7 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.FileSplit
@@ -275,7 +276,7 @@ object Spark35ParquetReader extends SparkParquetReaderBuilder {
     )
     hadoopConf.setBoolean(SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED.key, sqlConf.parquetInferTimestampNTZEnabled)
 
-    val enableLogicalTimestampRepair = hadoopConf.getBoolean("logicalTimestampField.repair.enable", true)
+    val enableLogicalTimestampRepair = hadoopConf.getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true)
     val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
       options.getOrElse(FileFormat.OPTION_RETURNING_BATCH,
         throw new IllegalArgumentException(

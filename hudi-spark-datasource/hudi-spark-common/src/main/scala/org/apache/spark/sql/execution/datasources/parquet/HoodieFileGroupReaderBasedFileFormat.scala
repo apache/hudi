@@ -33,6 +33,7 @@ import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.exception.HoodieNotSupportedException
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.IOUtils
+import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
@@ -196,7 +197,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     val augmentedStorageConf = new HadoopStorageConfiguration(hadoopConf).getInline
     setSchemaEvolutionConfigs(augmentedStorageConf)
-    augmentedStorageConf.set("logicalTimestampField.repair.enable", hasTimestampMillisFieldInTableSchema.toString)
+    augmentedStorageConf.set(ENABLE_LOGICAL_TIMESTAMP_REPAIR, hasTimestampMillisFieldInTableSchema.toString)
     val (remainingPartitionSchemaArr, fixedPartitionIndexesArr) = partitionSchema.fields.toSeq.zipWithIndex.filter(p => !mandatoryFields.contains(p._1.name)).unzip
 
     // The schema of the partition cols we want to append the value instead of reading from the file
@@ -245,7 +246,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
           fileSliceMapping.getSlice(fileGroupName) match {
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
               val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupBaseFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig)
-              readerContext.setEnableLogicalTimestampFieldRepair(storageConf.getBoolean("logicalTimestampField.repair.enable", true))
+              readerContext.setEnableLogicalTimestampFieldRepair(storageConf.getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true))
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))
               props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction))

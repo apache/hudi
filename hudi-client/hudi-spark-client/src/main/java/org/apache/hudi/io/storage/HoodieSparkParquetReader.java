@@ -66,6 +66,7 @@ import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSc
 
 public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
+  public static final String ENABLE_LOGICAL_TIMESTAMP_REPAIR = "spark.hudi.logicalTimestampField.repair.enable";
   private final StoragePath path;
   private final HoodieStorage storage;
   private final FileFormatUtils parquetUtils;
@@ -123,7 +124,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     Schema nonNullSchema = AvroSchemaUtils.getNonNullTypeFromUnion(requestedSchema);
     StructType structSchema = HoodieInternalRowUtils.getCachedSchema(nonNullSchema);
     Option<MessageType> messageSchema = Option.of(getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(nonNullSchema));
-    boolean enableTimestampFieldRepair = storage.getConf().getBoolean("logicalTimestampField.repair.enable", true);
+    boolean enableTimestampFieldRepair = storage.getConf().getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true);
     StructType dataStructType = convertToStruct(enableTimestampFieldRepair ? SchemaRepair.repairLogicalTypes(getFileSchema(), messageSchema) : getFileSchema());
     SparkBasicSchemaEvolution evolution = new SparkBasicSchemaEvolution(dataStructType, structSchema, SQLConf.get().sessionLocalTimeZone());
     String readSchemaJson = evolution.getRequestSchema().json();

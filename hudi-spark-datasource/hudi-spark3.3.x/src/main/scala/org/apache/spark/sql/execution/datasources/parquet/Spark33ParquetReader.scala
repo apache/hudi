@@ -21,6 +21,7 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -266,7 +267,7 @@ object Spark33ParquetReader extends SparkParquetReaderBuilder {
       sqlConf.getConfString("spark.sql.legacy.parquet.nanosAsLong", "false").toBoolean
     )
 
-    val enableLogicalTimestampRepair = hadoopConf.getBoolean("logicalTimestampField.repair.enable", true)
+    val enableLogicalTimestampRepair = hadoopConf.getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true)
     // Should always be set by FileSourceScanExec while creating this.
     // Check conf before checking the option, to allow working around an issue by changing conf.
     val returningBatch = vectorized && sqlConf.parquetVectorizedReaderEnabled &&
