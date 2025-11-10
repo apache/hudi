@@ -1,0 +1,4 @@
+ARG TRINO_VERSION=${TRINO_VERSION:-477}
+
+FROM trinodb/trino:${TRINO_VERSION}
+COPY conf/trino /etc/trino

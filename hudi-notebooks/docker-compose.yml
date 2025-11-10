@@ -90,6 +90,17 @@ services:
     networks:
       - hudi-datalake
 
+  trino:
+    image: apachehudi/trino:477
+    container_name: trino
+    depends_on:
+      - hive-metastore
+      - minio
+    ports:
+      - "8085:8080"   # Trino Web UI
+    networks:
+      - hudi-datalake
+
 networks:
   hudi-datalake:
     name: hudi-datalake
