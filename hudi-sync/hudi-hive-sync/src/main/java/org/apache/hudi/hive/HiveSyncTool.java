@@ -402,18 +402,13 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     Map<String, String> tableProperties = ConfigUtils.toMap(config.getString(HIVE_TABLE_PROPERTIES));
     if (config.getBoolean(HIVE_SYNC_AS_DATA_SOURCE_TABLE)) {
       try {
-        // Use config-aligned schema access for both MessageType and Avro Schema
-        boolean includeMetadataFields = !config.getBoolean(HIVE_SYNC_OMIT_METADATA_FIELDS);
-        Schema avroSchema = new TableSchemaResolver(syncClient.getMetaClient()).getTableAvroSchema(includeMetadataFields);
+        // Always include metadata fields for Hive sync
+        Schema avroSchema = new TableSchemaResolver(syncClient.getMetaClient()).getTableAvroSchema(true);
         Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
-            config.getStringOrDefault(META_SYNC_SPARK_VERSION), config.getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD), schema, avroSchema);
+            config.getStringOrDefault(META_SYNC_SPARK_VERSION), config.getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD), avroSchema);
         tableProperties.putAll(sparkTableProperties);
       } catch (Exception e) {
-        LOG.warn("Failed to get Avro schema for comment extraction, falling back to no comments", e);
-        // Fallback to old behavior with empty field list
-        Map<String, String> sparkTableProperties = SparkDataSourceTableUtils.getSparkTableProperties(config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
-            config.getStringOrDefault(META_SYNC_SPARK_VERSION), config.getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD), schema, syncClient.getStorageFieldSchemas());
-        tableProperties.putAll(sparkTableProperties);
+        throw new HoodieException("Failed to get Avro schema for Hive sync", e);
       }
     }
     return tableProperties;

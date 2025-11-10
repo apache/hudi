@@ -191,10 +191,10 @@ public class TestHoodieHiveCatalog {
         + "{\"name\":\"uuid\",\"type\":\"integer\",\"nullable\":false,\"metadata\":{}},"
         + "{\"name\":\"name\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},"
         + "{\"name\":\"age\",\"type\":\"integer\",\"nullable\":true,\"metadata\":{}},"
-        + "{\"name\":\"infos\",\"type\":{\"type\":\"array\", \"elementType\":\"string\",\"containsNull\":true},\"nullable\":true,\"metadata\":{}},"
+        + "{\"name\":\"infos\",\"type\":{\"type\":\"array\",\"elementType\":\"string\",\"containsNull\":true},\"nullable\":true,\"metadata\":{}},"
+        + "{\"name\":\"par1\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},"
         + "{\"name\":\"ts_3\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}},"
-        + "{\"name\":\"ts_6\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}},"
-        + "{\"name\":\"par1\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}]}";
+        + "{\"name\":\"ts_6\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}}]}";
     assertEquals(expectedAvroSchemaStr, avroSchemaStr);
 
     // validate array field nullable

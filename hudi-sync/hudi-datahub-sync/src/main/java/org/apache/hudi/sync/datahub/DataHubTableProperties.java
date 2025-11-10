@@ -24,7 +24,9 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
+import org.apache.avro.Schema;
 import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,13 +86,19 @@ public class DataHubTableProperties {
   }
 
   private static void addSparkRelatedProperties(Map<String, String> properties, DataHubSyncConfig config, HoodieTableMetadata tableMetadata) {
-    Map<String, String> sparkProperties = SparkDataSourceTableUtils.getSparkTableProperties(
-        config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
-        config.getStringOrDefault(META_SYNC_SPARK_VERSION),
-        config.getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD),
-        tableMetadata.getSchema()
-    );
-    properties.putAll(sparkProperties);
+    try {
+      // Always include metadata fields for DataHub sync (following hive-sync pattern)
+      Schema avroSchema = new TableSchemaResolver(tableMetadata.getMetaClient()).getTableAvroSchema(true);
+      Map<String, String> sparkProperties = SparkDataSourceTableUtils.getSparkTableProperties(
+          config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
+          config.getStringOrDefault(META_SYNC_SPARK_VERSION),
+          config.getIntOrDefault(HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD),
+          avroSchema
+      );
+      properties.putAll(sparkProperties);
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to get Avro schema for DataHub sync", e);
+    }
     properties.putAll(getSerdeProperties(config, false));
   }
 
@@ -129,6 +137,10 @@ public class DataHubTableProperties {
 
     public MessageType getSchema() {
       return schema;
+    }
+
+    public HoodieTableMetaClient getMetaClient() {
+      return metaClient;
     }
   }
 }

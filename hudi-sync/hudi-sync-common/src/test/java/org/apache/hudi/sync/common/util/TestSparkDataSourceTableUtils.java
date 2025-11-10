@@ -18,41 +18,29 @@
 
 package org.apache.hudi.sync.common.util;
 
-import org.apache.hudi.sync.common.model.FieldSchema;
-import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.PrimitiveType;
-import org.apache.parquet.schema.Type;
-import org.apache.parquet.schema.Types;
+import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static org.apache.parquet.schema.OriginalType.UTF8;
-import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
-import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT32;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestSparkDataSourceTableUtils {
 
   @Test
   public void testGetSparkTablePropertiesWithComments() {
-    // Create a test Parquet schema
-    MessageType schema = new MessageType("test_schema",
-        new PrimitiveType(Type.Repetition.REQUIRED, INT32, "id"),
-        new PrimitiveType(Type.Repetition.OPTIONAL, BINARY, "name", UTF8),
-        new PrimitiveType(Type.Repetition.REQUIRED, BINARY, "partition_col", UTF8)
-    );
-
-    // Create field schema list with comments
-    List<FieldSchema> fieldSchemas = Arrays.asList(
-        new FieldSchema("id", "int", "Unique identifier"),
-        new FieldSchema("name", "string", "Person's full name"),
-        new FieldSchema("partition_col", "string", "Partition column for data organization")
-    );
+    // Create Avro schema with comments
+    String avroSchemaJson = "{\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"name\": \"test_schema\",\n"
+        + "  \"fields\": [\n"
+        + "    {\"name\": \"id\", \"type\": \"int\", \"doc\": \"Unique identifier\"},\n"
+        + "    {\"name\": \"name\", \"type\": [\"null\", \"string\"], \"doc\": \"Person's full name\"},\n"
+        + "    {\"name\": \"partition_col\", \"type\": \"string\", \"doc\": \"Partition column for data organization\"}\n"
+        + "  ]\n"
+        + "}";
+    Schema avroSchema = new Schema.Parser().parse(avroSchemaJson);
 
     List<String> partitionNames = Arrays.asList("partition_col");
     String sparkVersion = "3.3.0";
@@ -60,7 +48,7 @@ public class TestSparkDataSourceTableUtils {
 
     // Get Spark table properties with comments
     Map<String, String> properties = SparkDataSourceTableUtils.getSparkTableProperties(
-        partitionNames, sparkVersion, schemaLengthThreshold, schema, fieldSchemas);
+        partitionNames, sparkVersion, schemaLengthThreshold, avroSchema);
 
     // Verify that properties contain the expected Spark DataSource settings
     assertTrue(properties.containsKey("spark.sql.sources.provider"),
@@ -89,19 +77,24 @@ public class TestSparkDataSourceTableUtils {
 
   @Test
   public void testGetSparkTablePropertiesWithoutComments() {
-    // Create a test Parquet schema
-    MessageType schema = new MessageType("test_schema",
-        new PrimitiveType(Type.Repetition.REQUIRED, INT32, "id"),
-        new PrimitiveType(Type.Repetition.OPTIONAL, BINARY, "name", UTF8)
-    );
+    // Create equivalent Avro schema without comments (matching the original MessageType)
+    String avroSchemaJson = "{\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"name\": \"test_schema\",\n"
+        + "  \"fields\": [\n"
+        + "    {\"name\": \"id\", \"type\": \"int\"},\n"
+        + "    {\"name\": \"name\", \"type\": [\"null\", \"string\"]}\n"
+        + "  ]\n"
+        + "}";
+    Schema avroSchema = new Schema.Parser().parse(avroSchemaJson);
 
     List<String> partitionNames = Arrays.asList();
     String sparkVersion = "3.3.0";
     int schemaLengthThreshold = 4000;
 
-    // Get Spark table properties without comments (existing behavior)
+    // Get Spark table properties with Avro schema but test the behavior without comments
     Map<String, String> properties = SparkDataSourceTableUtils.getSparkTableProperties(
-        partitionNames, sparkVersion, schemaLengthThreshold, schema, Collections.emptyList());
+        partitionNames, sparkVersion, schemaLengthThreshold, avroSchema);
 
     // Verify that properties are generated correctly
     assertTrue(properties.containsKey("spark.sql.sources.provider"),
