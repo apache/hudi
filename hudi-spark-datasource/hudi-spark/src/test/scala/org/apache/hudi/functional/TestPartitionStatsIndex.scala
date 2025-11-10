@@ -19,7 +19,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, PartitionStatsIndexSupport}
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, PartitionStatsIndexSupport}
 import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.avro.model.HoodieCleanMetadata
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -37,8 +37,7 @@ import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, Hoodie
 import org.apache.hudi.exception.{HoodieException, HoodieWriteConflictException}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
-import org.apache.hudi.util.{JavaConversions, JFunction}
-
+import org.apache.hudi.util.{JFunction, JavaConversions}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BitwiseOr, EqualNullSafe, EqualTo, Expression, GreaterThanOrEqual, IsNotNull, IsNull, LessThanOrEqual, Literal, Not, Or}
@@ -51,7 +50,6 @@ import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
 
 import java.util.concurrent.Executors
 import java.util.stream.Stream
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -462,7 +460,10 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       validate = false)
     val latestDf = spark.read.format("hudi").options(hudiOpts).load(basePath)
     val partitionStatsIndex = new PartitionStatsIndexSupport(
-      spark, latestDf.schema, HoodieMetadataConfig.newBuilder()
+      spark,
+      latestDf.schema,
+      AvroConversionUtils.convertStructTypeToAvroSchema(latestDf.schema, "recprd", ""),
+      HoodieMetadataConfig.newBuilder()
         .enable(true)
         .build(),
       metaClient)
@@ -472,8 +473,11 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       .collectAsList()
     assertTrue(partitionStats.size() > 0)
     // Assert column stats after restore.
+    val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(latestDf.schema, "record", "")
     val columnStatsIndex = new ColumnStatsIndexSupport(
-      spark, latestDf.schema, HoodieMetadataConfig.newBuilder()
+      spark, latestDf.schema,
+      avroSchema,
+      HoodieMetadataConfig.newBuilder()
         .enable(true)
         .build(),
       metaClient)

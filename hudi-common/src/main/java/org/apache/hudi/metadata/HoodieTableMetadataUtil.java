@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.ConvertingGenericData;
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
@@ -679,6 +680,54 @@ public class HoodieTableMetadataUtil {
       }
     } else {
       throw new HoodieMetadataException("Expression index metadata not found");
+    }
+  }
+
+  public static List<String> getIndexableColumns(HoodieIndexDefinition indexDefinition, Schema tableSchema) {
+    if (indexDefinition.getVersion() != HoodieIndexVersion.V1) {
+      return indexDefinition.getSourceFields();
+    }
+
+    return indexDefinition.getSourceFields().stream()
+        .filter(indexCol -> {
+          Pair<String, Schema.Field> fieldSchemaPair = HoodieAvroUtils.getSchemaForField(tableSchema, indexCol);
+          Schema.Field fieldSchema = fieldSchemaPair.getRight();
+          return fieldSchema != null && !isTimestampMillisField(fieldSchema.schema());
+        })
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * Checks if a schema field is of type timestamp_millis (timestamp-millis or local-timestamp-millis).
+   *
+   * @param fieldSchema The schema of the field to check
+   * @return true if the field is of type timestamp_millis, false otherwise
+   */
+  static boolean isTimestampMillisField(Schema fieldSchema) {
+    Schema nonNullableSchema = AvroSchemaUtils.getNonNullTypeFromUnion(fieldSchema);
+    if (nonNullableSchema.getType() == Schema.Type.LONG) {
+      LogicalType logicalType = nonNullableSchema.getLogicalType();
+      return logicalType instanceof LogicalTypes.TimestampMillis
+          || logicalType instanceof LogicalTypes.LocalTimestampMillis;
+    }
+    return false;
+  }
+
+  /**
+   * Gets the latest table schema using TableSchemaResolver.
+   *
+   * @param metaClient The table meta client
+   * @return Option containing the latest table schema, or empty if schema cannot be resolved
+   */
+  public static Option<Schema> getLatestTableSchema(HoodieTableMetaClient metaClient) {
+    try {
+      TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
+      // Get schema without metadata fields for column type checking
+      return Option.of(schemaResolver.getTableAvroSchema(true));
+    } catch (Exception e) {
+      LOG.warn("Failed to resolve latest table schema, falling back to table create schema", e);
+      // Fallback to table create schema if schema resolution fails
+      return metaClient.getTableConfig().getTableCreateSchema();
     }
   }
 
