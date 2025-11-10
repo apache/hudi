@@ -39,6 +39,7 @@ import org.apache.hudi.metadata.HoodieIndexVersion
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
+
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -56,6 +57,7 @@ import java.math.{BigDecimal => JBigDecimal}
 import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.stream.Collectors
+
 import scala.collection.JavaConverters._
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 

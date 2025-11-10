@@ -19,7 +19,6 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieFileIndex.collectReferencedColumns
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
@@ -29,8 +28,10 @@ import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadataUtil}
-import org.apache.hudi.metadata.HoodieTableMetadataUtil.{PARTITION_NAME_COLUMN_STATS, getIndexableColumns, getLatestTableSchema}
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.{getValidIndexedColumns, PARTITION_NAME_COLUMN_STATS}
 import org.apache.hudi.util.{JFunction, Lazy}
+
+import org.apache.avro.Schema
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, Expression, FromUnixTime, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
@@ -93,7 +94,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
         val indexDefinition = metaClient.getIndexMetadata.get()
           .getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS)
 
-        getIndexableColumns(indexDefinition, avroSchema).asScala.toSeq
+        getValidIndexedColumns(indexDefinition, avroSchema).asScala.toSeq
       }
       // Filter out queries involving null and value count checks
       val filteredQueryFilters: Seq[Expression] = filterExpressionsExcludingNullAndValue(nonSqlFilters, filteredIndexedCols)

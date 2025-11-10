@@ -31,10 +31,12 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieIndexVersion, HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
-import org.apache.hudi.metadata.HoodieTableMetadataUtil.{PARTITION_NAME_COLUMN_STATS, getIndexableColumns, getLatestTableSchema}
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.getValidIndexedColumns
 import org.apache.hudi.stats.{SparkValueMetadataUtils, ValueMetadata, ValueType}
 import org.apache.hudi.stats.ValueMetadata.getValueMetadata
 import org.apache.hudi.util.JFunction
+
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
@@ -47,6 +49,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.storage.StorageLevel
 
 import java.nio.ByteBuffer
+
 import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
 import scala.collection.mutable.ListBuffer
@@ -91,11 +94,11 @@ class ColumnStatsIndexSupport(spark: SparkSession,
       // NOTE: If partition pruning doesn't prune any files, then there's no need to apply file filters
       //       when loading the Column Statistics Index
       val prunedFileNamesOpt = if (shouldPushDownFilesFilter) Some(prunedFileNames) else None
-      val filterIndexColumnsFn: HoodieIndexDefinition => Seq[String] = { indexDefinition =>
-        getIndexableColumns(indexDefinition, avroSchema).asScala.toSeq
+      val getValidIndexedColumnsFunc: HoodieIndexDefinition => Seq[String] = { indexDefinition =>
+        getValidIndexedColumns(indexDefinition, avroSchema).asScala.toSeq
       }
       loadTransposed(queryReferencedColumns, readInMemory, Some(prunedPartitions), prunedFileNamesOpt) { transposedColStatsDF =>
-        Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames, filterIndexColumnsFn))
+        Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames, getValidIndexedColumnsFunc))
       }
     } else {
       Option.empty
