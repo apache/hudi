@@ -17,6 +17,7 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema
 import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
@@ -35,12 +36,11 @@ import org.apache.hudi.internal.schema.utils.Conversions
 import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.util.JFunction
-
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.{expressions, InternalRow}
+import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BasePredicate, BoundReference, EmptyRow, EqualTo, Expression, InterpretedPredicate, Literal}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
@@ -49,10 +49,8 @@ import org.apache.spark.sql.types.{ByteType, DateType, IntegerType, LongType, Sh
 import org.slf4j.LoggerFactory
 
 import javax.annotation.concurrent.NotThreadSafe
-
 import java.lang.reflect.{Array => JArray}
 import java.util.Collections
-
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 import scala.util.{Success, Try}
@@ -101,15 +99,19 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * Get the schema of the table.
    */
   lazy val schema: StructType = if (shouldFastBootstrap) {
-      StructType(rawSchema.fields.filterNot(f => HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name)))
+      StructType(rawStructSchema.fields.filterNot(f => HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name)))
     } else {
-      rawSchema
+      rawStructSchema
     }
 
-  private lazy val rawSchema: StructType = schemaSpec.getOrElse({
-      val schemaUtil = new TableSchemaResolver(metaClient)
-      AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
-    })
+  lazy val rawAvroSchema: Schema = {
+    val schemaUtil = new TableSchemaResolver(metaClient)
+    schemaUtil.getTableAvroSchema
+  }
+
+  private lazy val rawStructSchema: StructType = schemaSpec.getOrElse {
+    AvroConversionUtils.convertAvroSchemaToStructType(rawAvroSchema)
+  }
 
   protected lazy val shouldFastBootstrap = configProperties.getBoolean(DATA_QUERIES_ONLY.key, false)
 

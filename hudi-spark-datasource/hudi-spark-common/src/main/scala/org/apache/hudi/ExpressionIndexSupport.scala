@@ -29,15 +29,15 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.util.{collection, StringUtils}
+import org.apache.hudi.common.util.{StringUtils, collection}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.index.expression.HoodieExpressionIndex
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.getIndexableColumns
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.stats.{SparkValueMetadataUtils, ValueMetadata, ValueType}
 import org.apache.hudi.stats.ValueMetadata.getValueMetadata
 import org.apache.hudi.util.JFunction
-
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, EqualTo, Expression, FromUnixTime, In, Literal, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
@@ -81,8 +81,12 @@ class ExpressionIndexSupport(spark: SparkSession,
         val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
         val (prunedPartitions, prunedFileNames) = getPrunedPartitionsAndFileNames(fileIndex, prunedPartitionsAndFileSlices)
         val expressionIndexRecords = loadExpressionIndexRecords(indexPartition, prunedPartitions, readInMemory)
+        val filterIndexColumnsFn: HoodieIndexDefinition => Seq[String] = { indexDefinition =>
+          indexDefinition.getSourceFields.asScala.toSeq
+        }
         loadTransposed(queryReferencedColumns, readInMemory, expressionIndexRecords, expressionIndexQuery) {
-          transposedColStatsDF =>Some(getCandidateFiles(transposedColStatsDF, Seq(expressionIndexQuery), prunedFileNames, isExpressionIndex = true, Option.apply(indexDefinition)))
+          transposedColStatsDF =>Some(getCandidateFiles(transposedColStatsDF, Seq(expressionIndexQuery), prunedFileNames, filterIndexColumnsFn,
+            isExpressionIndex = true, Option.apply(indexDefinition)))
         }
       } else if (indexDefinition.getIndexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS)) {
         val prunedPartitionAndFileNames = getPrunedPartitionsAndFileNamesMap(prunedPartitionsAndFileSlices, includeLogFiles = true)

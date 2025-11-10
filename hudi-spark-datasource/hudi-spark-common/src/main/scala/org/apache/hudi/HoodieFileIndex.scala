@@ -122,7 +122,7 @@ case class HoodieFileIndex(spark: SparkSession,
     new SecondaryIndexSupport(spark, metadataConfig, metaClient),
     new ExpressionIndexSupport(spark, schema, metadataConfig, metaClient),
     new BloomFiltersIndexSupport(spark, metadataConfig, metaClient),
-    new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
+    new ColumnStatsIndexSupport(spark, schema, rawAvroSchema, metadataConfig, metaClient)
   )
 
   private val enableHoodieExtension = spark.sessionState.conf.getConfString("spark.sql.extensions", "")
@@ -316,7 +316,7 @@ case class HoodieFileIndex(spark: SparkSession,
       } else if (isPartitionedTable && isDataSkippingEnabled) {
         // For partitioned table and no partition filters, if data skipping is enabled,
         // try using the PARTITION_STATS index to prune the partitions
-        val prunedPartitionPaths = new PartitionStatsIndexSupport(spark, schema, metadataConfig, metaClient)
+        val prunedPartitionPaths = new PartitionStatsIndexSupport(spark, schema, rawAvroSchema, metadataConfig, metaClient)
           .prunePartitions(this, dataFilters)
         if (prunedPartitionPaths.nonEmpty) {
           try {

@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport, SparkDatasetMixin}
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport, SparkDatasetMixin}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -34,13 +34,12 @@ import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, Hoodie
 import org.apache.hudi.exception.{HoodieException, HoodieUpgradeDowngradeException}
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.constant.KeyGeneratorType
-import org.apache.hudi.metadata.HoodieTableMetadataUtil.{metadataPartitionExists, PARTITION_NAME_SECONDARY_INDEX_PREFIX}
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.{PARTITION_NAME_SECONDARY_INDEX_PREFIX, metadataPartitionExists}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.table.upgrade.TestUpgradeDowngrade.getFixtureName
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
-
 import org.apache.commons.io.FileUtils
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
@@ -58,7 +57,6 @@ import java.nio.file.{Files, Paths}
 import java.sql.Timestamp
 import java.util.function.Consumer
 import java.util.stream.Collectors
-
 import scala.collection.JavaConverters._
 
 /**
@@ -1097,7 +1095,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     if (recordType == HoodieRecordType.SPARK) {
       metaClient = HoodieTableMetaClient.reload(metaClient)
       val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).build()
-      val columnStatsIndex = new ColumnStatsIndexSupport(spark, inputDF1.schema, metadataConfig, metaClient)
+      val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(inputDF1.schema, "record", "")
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, inputDF1.schema, avroSchema, metadataConfig, metaClient)
       columnStatsIndex.loadTransposed(Seq("fare","city_to_state", "rider"), shouldReadInMemory = true) { emptyTransposedColStatsDF =>
         assertTrue(!emptyTransposedColStatsDF.columns.contains("fare"))
         assertTrue(!emptyTransposedColStatsDF.columns.contains("city_to_state"))
@@ -1532,7 +1531,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   }
 
   // TODO(yihua): investigate test failure
-  @Disabled
   @ParameterizedTest
   @CsvSource(value = Array("true,6", "true,8", "false,6", "false,8"))
 //  @ValueSource(booleans = Array(true, false))

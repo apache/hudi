@@ -895,6 +895,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val partitionStatsIndex = new PartitionStatsIndexSupport(
       spark,
       inputDf.schema,
+      AvroConversionUtils.convertStructTypeToAvroSchema(inputDf.schema, "record", ""),
       HoodieMetadataConfig.newBuilder().enable(true).build(),
       metaClient)
     val partitionStats = partitionStatsIndex.loadColumnStatsIndexRecords(List("partition", "ts"), shouldReadInMemory = true).collectAsList()
