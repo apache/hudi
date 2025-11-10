@@ -20,7 +20,7 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, isSchemaEvolutionEnabledOnRead}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.common.config.{ConfigProperty, HoodieReaderConfig}
+import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
@@ -205,7 +205,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath || isBootstrap
   }
 
-  private lazy val shouldUseRecordPosition: Boolean = checkIfAConfigurationEnabled(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS)
+  private lazy val shouldUseRecordPosition: Boolean = checkIfPositionalMergingEnabled()
 
   private lazy val queryTimestamp: Option[String] =
     specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.requestedTime))
@@ -214,10 +214,14 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   // NOTE: We're including compaction here since it's not considering a "commit" operation
     metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
 
-  private def checkIfAConfigurationEnabled(config: ConfigProperty[java.lang.Boolean],
-                                           defaultValueOption: Option[String] = Option.empty): Boolean = {
-    optParams.getOrElse(config.key(),
-      sqlContext.getConf(config.key(), defaultValueOption.getOrElse(String.valueOf(config.defaultValue())))).toBoolean
+  private def checkIfPositionalMergingEnabled(): Boolean = {
+    if (!HoodieSparkUtils.gteqSpark3_5) {
+      false
+    } else {
+      val configKey = HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key
+      optParams.getOrElse(configKey,
+        sqlContext.getConf(configKey, HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.defaultValue.toString)).toBoolean
+    }
   }
 
   protected lazy val fileStatusCache: FileStatusCache = FileStatusCache.getOrCreate(sparkSession)
