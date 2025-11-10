@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -55,6 +56,7 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.avro.JsonProperties.NULL_VALUE;
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNested;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNewSchemaFromFieldsWithReference;
 import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
@@ -89,6 +91,9 @@ public class FileGroupReaderSchemaHandler<T> {
   protected final TypedProperties properties;
   private final DeleteContext deleteContext;
   private final HoodieTableMetaClient metaClient;
+  private final boolean shouldAddCompletionTime;
+  private final Map<String, String> commitTimeToCompletionTimeMap;
+  private final Schema requestedSchemaWithCompletionTime;
 
   public FileGroupReaderSchemaHandler(HoodieReaderContext<T> readerContext,
                                       Schema tableSchema,
@@ -102,11 +107,25 @@ public class FileGroupReaderSchemaHandler<T> {
     this.requestedSchema = AvroSchemaCache.intern(requestedSchema);
     this.hoodieTableConfig = metaClient.getTableConfig();
     this.deleteContext = new DeleteContext(properties, tableSchema);
+    this.metaClient = metaClient;
+
+    boolean hasInstantRange = readerContext.getInstantRange().isPresent();
+    boolean shouldAddCompletionTimeField = !metaClient.isMetadataTable()
+        && metaClient.getTableConfig() != null && metaClient.getTableConfig().getTableVersion() != null
+        && metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.SIX)
+        && hasInstantRange;
+
+    this.shouldAddCompletionTime = shouldAddCompletionTimeField;
+    this.requestedSchemaWithCompletionTime = shouldAddCompletionTimeField
+        ? addCompletionTimeField(this.requestedSchema)
+        : this.requestedSchema;
+    this.commitTimeToCompletionTimeMap = this.shouldAddCompletionTime
+        ? buildCompletionTimeMapping(metaClient)
+        : Collections.emptyMap();
     this.requiredSchema = AvroSchemaCache.intern(prepareRequiredSchema(this.deleteContext));
     this.schemaForUpdates = requiredSchema;
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
     this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
-    this.metaClient = metaClient;
   }
 
   public Schema getTableSchema() {
@@ -141,10 +160,61 @@ public class FileGroupReaderSchemaHandler<T> {
   }
 
   public Option<UnaryOperator<T>> getOutputConverter() {
-    if (!AvroSchemaUtils.areSchemasProjectionEquivalent(requiredSchema, requestedSchema)) {
-      return Option.of(readerContext.getRecordContext().projectRecord(requiredSchema, requestedSchema));
+    Schema targetSchema = shouldAddCompletionTime ? requestedSchemaWithCompletionTime : requestedSchema;
+    UnaryOperator<T> projectionConverter = null;
+    UnaryOperator<T> completionTimeConverter = null;
+    boolean schemasEquivalent = AvroSchemaUtils.areSchemasProjectionEquivalent(requiredSchema, targetSchema);
+    if (!schemasEquivalent) {
+      projectionConverter = readerContext.getRecordContext().projectRecord(requiredSchema, targetSchema);
+    }
+    if (shouldAddCompletionTime) {
+      completionTimeConverter = getCompletionTimeTransformer();
+    }
+    if (projectionConverter != null && completionTimeConverter != null) {
+      final UnaryOperator<T> finalProjectionConverter = projectionConverter;
+      final UnaryOperator<T> finalCompletionTimeConverter = completionTimeConverter;
+      UnaryOperator<T> composed = t -> finalCompletionTimeConverter.apply(finalProjectionConverter.apply(t));
+      return Option.of(composed);
+    } else if (projectionConverter != null) {
+      return Option.of(projectionConverter);
+    } else if (completionTimeConverter != null) {
+      return Option.of(completionTimeConverter);
     }
     return Option.empty();
+  }
+
+  private UnaryOperator<T> getCompletionTimeTransformer() {
+    return record -> {
+      try {
+        Object commitTimeObj = readerContext.getRecordContext().getValue(
+            record,
+            requestedSchemaWithCompletionTime,
+            HoodieRecord.COMMIT_TIME_METADATA_FIELD
+        );
+        if (commitTimeObj == null) {
+          return record;
+        }
+        String commitTime = commitTimeObj.toString();
+        String completionTime = commitTimeToCompletionTimeMap.getOrDefault(commitTime, commitTime);
+        Schema.Field completionTimeField = requestedSchemaWithCompletionTime.getField(HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD);
+        if (completionTimeField == null) {
+          return record;
+        }
+        int completionTimePos = completionTimeField.pos();
+        Object[] fieldValues = new Object[requestedSchemaWithCompletionTime.getFields().size()];
+        for (int i = 0; i < fieldValues.length; i++) {
+          if (i == completionTimePos) {
+            fieldValues[i] = completionTime;
+          } else {
+            Schema.Field field = requestedSchemaWithCompletionTime.getFields().get(i);
+            fieldValues[i] = readerContext.getRecordContext().getValue(record, requestedSchemaWithCompletionTime, field.name());
+          }
+        }
+        return readerContext.getRecordContext().constructEngineRecord(requestedSchemaWithCompletionTime, fieldValues);
+      } catch (Exception e) {
+        return record;
+      }
+    };
   }
 
   public DeleteContext getDeleteContext() {
@@ -188,12 +258,24 @@ public class FileGroupReaderSchemaHandler<T> {
     boolean hasInstantRange = readerContext.getInstantRange().isPresent();
     //might need to change this if other queries than mor have mandatory fields
     if (!readerContext.getHasLogFiles()) {
+      List<Schema.Field> addedFields = new ArrayList<>();
       if (hasInstantRange && !findNestedField(requestedSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD).isPresent()) {
-        List<Schema.Field> addedFields = new ArrayList<>();
         addedFields.add(getField(this.tableSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD));
-        return appendFieldsToSchemaDedupNested(requestedSchema, addedFields);
       }
-      return requestedSchema;
+      if (shouldAddCompletionTime && !findNestedField(requestedSchemaWithCompletionTime, HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD).isPresent()) {
+        Schema unionSchema = Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING));
+        Schema.Field completionTimeField = new Schema.Field(
+            HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD,
+            unionSchema,
+            "Completion time of the commit",
+            NULL_VALUE
+        );
+        addedFields.add(completionTimeField);
+      }
+      if (!addedFields.isEmpty()) {
+        return appendFieldsToSchemaDedupNested(requestedSchemaWithCompletionTime, addedFields);
+      }
+      return requestedSchemaWithCompletionTime;
     }
 
     if (hoodieTableConfig.getRecordMergeMode() == RecordMergeMode.CUSTOM) {
@@ -206,16 +288,30 @@ public class FileGroupReaderSchemaHandler<T> {
     for (String field : getMandatoryFieldsForMerging(
         hoodieTableConfig, this.properties, this.tableSchema, readerContext.getRecordMerger(),
         deleteContext.hasBuiltInDeleteField(), deleteContext.getCustomDeleteMarkerKeyValue(), hasInstantRange)) {
-      if (!findNestedField(requestedSchema, field).isPresent()) {
+      if (!findNestedField(requestedSchemaWithCompletionTime, field).isPresent()) {
         addedFields.add(getField(this.tableSchema, field));
       }
     }
 
-    if (addedFields.isEmpty()) {
-      return requestedSchema;
+    if (hasInstantRange && !findNestedField(requestedSchemaWithCompletionTime, HoodieRecord.COMMIT_TIME_METADATA_FIELD).isPresent()) {
+      addedFields.add(getField(this.tableSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+    }
+    if (shouldAddCompletionTime && !findNestedField(requestedSchemaWithCompletionTime, HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD).isPresent()) {
+      Schema unionSchema = Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING));
+      Schema.Field completionTimeField = new Schema.Field(
+          HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD,
+          unionSchema,
+          "Completion time of the commit",
+          NULL_VALUE
+      );
+      addedFields.add(completionTimeField);
     }
 
-    return appendFieldsToSchemaDedupNested(requestedSchema, addedFields);
+    if (addedFields.isEmpty()) {
+      return requestedSchemaWithCompletionTime;
+    }
+
+    return appendFieldsToSchemaDedupNested(requestedSchemaWithCompletionTime, addedFields);
   }
 
   private static String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg,
@@ -323,5 +419,27 @@ public class FileGroupReaderSchemaHandler<T> {
       throw new IllegalArgumentException("Field: " + fieldName + " does not exist in the table schema");
     }
     return foundFieldOpt.get();
+  }
+
+  private Map<String, String> buildCompletionTimeMapping(HoodieTableMetaClient metaClient) {
+    return metaClient.getCommitsTimeline().filterCompletedInstants().getInstants().stream()
+        .collect(Collectors.toMap(
+            HoodieInstant::requestedTime,
+            instant -> instant.getCompletionTime() != null ? instant.getCompletionTime() : instant.requestedTime()
+        ));
+  }
+
+  private Schema addCompletionTimeField(Schema schema) {
+    if (findNestedField(schema, HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD).isPresent()) {
+      return schema;
+    }
+    Schema unionSchema = Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING));
+    Schema.Field completionTimeField = new Schema.Field(
+        HoodieRecord.COMMIT_COMPLETION_TIME_METADATA_FIELD,
+        unionSchema,
+        "Completion time of the commit",
+        NULL_VALUE
+    );
+    return appendFieldsToSchemaDedupNested(schema, Collections.singletonList(completionTimeField));
   }
 }

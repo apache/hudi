@@ -27,9 +27,11 @@ import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, Pair => HPair}
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
@@ -59,8 +61,9 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
                                               filters: Seq[Filter],
                                               requiredFilters: Seq[Filter],
                                               storageConfiguration: StorageConfiguration[_],
-                                              tableConfig: HoodieTableConfig)
-  extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig, SparkFileFormatInternalRecordContext.apply(tableConfig)) {
+                                              tableConfig: HoodieTableConfig,
+                                              instantRangeOpt: Option[InstantRange] = Option.empty())
+  extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig, instantRangeOpt, SparkFileFormatInternalRecordContext.apply(tableConfig)) {
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
   private lazy val recordKeyFields = Option(tableConfig.getRecordKeyFields.orElse(null)).map(_.map(_.toLowerCase).toSet).getOrElse(Set.empty)
   private lazy val bootstrapSafeFilters: Seq[Filter] = filters.filter(filterIsSafeForBootstrap) ++ requiredFilters
