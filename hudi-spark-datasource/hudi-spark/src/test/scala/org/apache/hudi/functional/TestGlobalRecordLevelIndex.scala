@@ -74,8 +74,8 @@ class TestGlobalRecordLevelIndex extends RecordLevelIndexTestBase {
   def testRLIInitializationForMorGlobalIndex(): Unit = {
     val tableType = HoodieTableType.MERGE_ON_READ
     val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name()) +
-      (HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key -> "1") +
-      (HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key -> "1") +
+      (HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key -> "1") +
+      (HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key -> "1") +
       (HoodieIndexConfig.INDEX_TYPE.key -> HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name()) +
       (HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE.key -> "true") -
       HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key
@@ -116,8 +116,8 @@ class TestGlobalRecordLevelIndex extends RecordLevelIndexTestBase {
     deletedDf2.cache()
 
     val hudiOpts2 = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name()) +
-      (HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key -> "1") +
-      (HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key -> "1") +
+      (HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key -> "1") +
+      (HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key -> "1") +
       (HoodieIndexConfig.INDEX_TYPE.key -> HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name()) +
       (HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE.key -> "true") +
       (HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true")
