@@ -41,16 +41,18 @@ class MultipleColumnarFileFormatReader(parquetReader: SparkColumnarFileReader, o
    * @param internalSchemaOpt option of internal schema for schema.on.read
    * @param filters           filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
    * @param storageConf       the hadoop conf
+   * @param tableSchemaOpt    option of table schema for timestamp precision conversion fix.
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
-  override def read(file: PartitionedFile, requiredSchema: StructType, partitionSchema: StructType, internalSchemaOpt: util.Option[InternalSchema], filters: Seq[Filter], storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
+  override def read(file: PartitionedFile, requiredSchema: StructType, partitionSchema: StructType, internalSchemaOpt: util.Option[InternalSchema], filters: Seq[Filter],
+                    storageConf: StorageConfiguration[Configuration], tableSchemaOpt: util.Option[org.apache.parquet.schema.MessageType]): Iterator[InternalRow] = {
     val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
     val fileFormat = HoodieFileFormat.fromFileExtension(filePath.getFileExtension)
     fileFormat match {
       case HoodieFileFormat.PARQUET =>
-        parquetReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
+        parquetReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf, tableSchemaOpt)
       case HoodieFileFormat.ORC =>
-        orcReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
+        orcReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf, tableSchemaOpt)
       case _ =>
         throw new IllegalArgumentException(s"Unsupported file format for file: $filePath")
     }
