@@ -19,6 +19,7 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -126,7 +127,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
                                                                             Reporter reporter) throws IOException {
     try {
       if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {
-        return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(), split, job, reporter);
+        return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(Option.empty(), Option.empty()), split, job, reporter);
       } else {
         return super.getRecordReader(split, job, reporter);
       }

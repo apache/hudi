@@ -18,14 +18,19 @@
 
 package org.apache.parquet.avro;
 
+import org.apache.hudi.common.util.Option;
+
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
+import org.apache.parquet.schema.SchemaRepair;
 import org.apache.parquet.schema.Type;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -36,11 +41,15 @@ import java.util.Map;
  */
 public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
 
-  public HoodieAvroReadSupport(GenericData model) {
+  private Option<MessageType> tableSchema;
+
+  public HoodieAvroReadSupport(GenericData model, Option<MessageType> tableSchema) {
     super(model);
+    this.tableSchema = tableSchema;
   }
 
   public HoodieAvroReadSupport() {
+    tableSchema = Option.empty();
   }
 
   @Override
@@ -48,7 +57,7 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
     boolean legacyMode = checkLegacyMode(fileSchema.getFields());
     adjustConfToReadWithFileProduceMode(legacyMode, configuration);
     ReadContext readContext = super.init(configuration, keyValueMetaData, fileSchema);
-    MessageType requestedSchema = readContext.getRequestedSchema();
+    MessageType requestedSchema = SchemaRepair.repairLogicalTypes(readContext.getRequestedSchema(), tableSchema);
     // support non-legacy map. Convert non-legacy map to legacy map
     // Because there is no AvroWriteSupport.WRITE_OLD_MAP_STRUCTURE
     // according to AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE
