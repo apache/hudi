@@ -110,8 +110,8 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     val basePath = getBasePath(tableName, tablePath)
     val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build
     val metaClient = createMetaClient(jsc, basePath)
-    val structSchema = getStructSchema(metaClient)
     val avroSchema = getAvroSchema(metaClient)
+    val structSchema = getStructSchema(avroSchema)
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, structSchema, avroSchema, metadataConfig, metaClient)
     val fsView = buildFileSystemView(basePath)
     val engineCtx = new HoodieSparkEngineContext(jsc)
@@ -148,8 +148,8 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     new TableSchemaResolver(metaClient).getTableAvroSchema
   }
 
-  def getStructSchema(metaClient: HoodieTableMetaClient): StructType = {
-    AvroConversionUtils.convertAvroSchemaToStructType(getAvroSchema(metaClient))
+  def getStructSchema(avroSchema: Schema): StructType = {
+    AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
   }
 
 
