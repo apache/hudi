@@ -41,7 +41,7 @@ declare -a ALL_VERSION_OPTS=(
 # hudi-spark4-common
 # hudi-spark4.0.x_2.13
 # hudi-spark4.0-bundle_2.13
-"-Djava17 -Djava.version=17 -Dscala-2.13 -Dspark4.0 -pl hudi-spark-datasource/hudi-spark4-common,hudi-spark-datasource/hudi-spark4.0.x,packaging/hudi-spark-bundle -am"
+"-T 1C -Djava17 -Djava.version=17 -Dscala-2.13 -Dspark4.0 -pl hudi-spark-datasource/hudi-spark4-common,hudi-spark-datasource/hudi-spark4.0.x,packaging/hudi-spark-bundle -am"
 )
 printf -v joined "'%s'\n" "${ALL_VERSION_OPTS[@]}"
 
