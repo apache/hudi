@@ -1847,9 +1847,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       HoodieTestUtils.extractZipToDirectory("/" + tableName + ".zip", zipOutput, getClass)
       val tableBasePath = zipOutput.toString
 
-      val df = spark.read.format("org.apache.hudi")
-        .option("hoodie.metadata.enable", "true")
-        .load(tableBasePath)
+      val df = spark.read.format("hudi").load(tableBasePath)
 
       val rows = df.collect()
       assertEquals(20, rows.length)

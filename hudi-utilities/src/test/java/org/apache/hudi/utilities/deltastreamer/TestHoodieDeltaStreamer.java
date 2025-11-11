@@ -1059,10 +1059,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       String prevTimezone = sparkSession.conf().get("spark.sql.session.timeZone");
       try {
         sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
-        Dataset<Row> df = sparkSession.read()
-            .format("org.apache.hudi")
-            .option("hoodie.metadata.enable", "false")
-            .load(tableBasePath);
+        Dataset<Row> df = sparkSession.read().format("hudi").load(tableBasePath);
 
         assertDataframe(df, 15, 15);
 
@@ -1175,10 +1172,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "false");
         }
         sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
-        Dataset<Row> df = sparkSession.read()
-            .format("org.apache.hudi")
-            .option("hoodie.metadata.enable", "false")
-            .load(tableBasePath);
+        Dataset<Row> df = sparkSession.read().format("hudi").load(tableBasePath);
 
         assertDataframe(df, 12, 14);
 
