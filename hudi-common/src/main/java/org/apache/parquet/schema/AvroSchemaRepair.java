@@ -21,6 +21,7 @@ package org.apache.parquet.schema;
 
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.avro.HoodieAvroUtils;
 
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
@@ -168,17 +169,12 @@ public class AvroSchemaRepair {
     for (int i = 0; i < firstChangedIndex; i++) {
       Schema.Field field = fields.get(i);
       // Must create new Field since they cannot be reused
-      repairedFields.add(new Schema.Field(
-          field.name(),
-          field.schema(),
-          field.doc(),
-          field.defaultVal()
-      ));
+      repairedFields.add(HoodieAvroUtils.createNewSchemaField(field));
     }
 
     // Add the first changed field (using cached repaired schema)
     Schema.Field firstChangedField = fields.get(firstChangedIndex);
-    repairedFields.add(new Schema.Field(
+    repairedFields.add(HoodieAvroUtils.createNewSchemaField(
         firstChangedField.name(),
         firstRepairedSchema,
         firstChangedField.doc(),
@@ -198,7 +194,7 @@ public class AvroSchemaRepair {
       }
 
       // Must create new Field since they cannot be reused
-      repairedFields.add(new Schema.Field(
+      repairedFields.add(HoodieAvroUtils.createNewSchemaField(
           requestedField.name(),
           repairedSchema,
           requestedField.doc(),
