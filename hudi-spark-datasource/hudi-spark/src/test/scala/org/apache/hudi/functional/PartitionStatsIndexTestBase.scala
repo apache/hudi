@@ -19,6 +19,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.PartitionStatsIndexSupport
 import org.apache.hudi.TestHoodieSparkUtils.dropMetaFields
@@ -112,6 +113,7 @@ class PartitionStatsIndexTestBase extends HoodieStatsIndexTestBase {
     val partitionStatsIndex = new PartitionStatsIndexSupport(
       spark,
       inputDf.schema,
+      AvroConversionUtils.convertStructTypeToAvroSchema(inputDf.schema, "record", ""),
       HoodieMetadataConfig.newBuilder().enable(true).build(),
       metaClient)
     val partitionStats = partitionStatsIndex.loadColumnStatsIndexRecords(List("partition", "trip_type"), shouldReadInMemory = true).collectAsList()

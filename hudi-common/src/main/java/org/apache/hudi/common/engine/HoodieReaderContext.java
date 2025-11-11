@@ -96,6 +96,7 @@ public abstract class HoodieReaderContext<T> {
   // the default iterator mode is engine-specific record mode
   private IteratorMode iteratorMode = IteratorMode.ENGINE_RECORD;
   protected final HoodieConfig hoodieReaderConfig;
+  private boolean enableLogicalTimestampFieldRepair = true;
 
   protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig,
@@ -145,6 +146,10 @@ public abstract class HoodieReaderContext<T> {
     return tablePath;
   }
 
+  public void setEnableLogicalTimestampFieldRepair(boolean enableLogicalTimestampFieldRepair) {
+    this.enableLogicalTimestampFieldRepair = enableLogicalTimestampFieldRepair;
+  }
+
   public void setTablePath(String tablePath) {
     this.tablePath = tablePath;
   }
@@ -186,6 +191,10 @@ public abstract class HoodieReaderContext<T> {
   // Getter and Setter for needsBootstrapMerge
   public boolean getNeedsBootstrapMerge() {
     return needsBootstrapMerge;
+  }
+
+  public boolean enableLogicalTimestampFieldRepair() {
+    return enableLogicalTimestampFieldRepair;
   }
 
   public void setNeedsBootstrapMerge(boolean needsBootstrapMerge) {
