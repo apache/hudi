@@ -31,10 +31,9 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieIndexVersion;
-import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieInstantWriter;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.util.Lazy;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
@@ -303,20 +302,19 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .getDeclaredMethod("readIndexDefFromStorage",
             org.apache.hudi.storage.HoodieStorage.class,
             StoragePath.class,
-            HoodieTableConfig.class,
-            Lazy.class);
+            HoodieTableConfig.class);
     readIndexDefMethod.setAccessible(true);
 
     @SuppressWarnings("unchecked")
     Option<HoodieIndexMetadata> result = (Option<HoodieIndexMetadata>) readIndexDefMethod.invoke(
-        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig(), Lazy.lazily(Option::empty));
+        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig());
     assertTrue(result.isEmpty(), "Should return empty when no index definition path is configured");
 
     // Empty index definition path - should return empty
     metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key(), "");
     @SuppressWarnings("unchecked")
     Option<HoodieIndexMetadata> result2 = (Option<HoodieIndexMetadata>) readIndexDefMethod.invoke(
-        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig(), Lazy.lazily(Option::empty));
+        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig());
     assertTrue(result2.isEmpty(), "Should return empty when index definition path is empty string");
 
     // Valid path but file doesn't exist - should return empty HoodieIndexMetadata
@@ -324,7 +322,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key(), relativePath);
     @SuppressWarnings("unchecked")
     Option<HoodieIndexMetadata> result3 = (Option<HoodieIndexMetadata>) readIndexDefMethod.invoke(
-        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig(), Lazy.lazily(Option::empty));
+        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig());
     assertTrue(result3.isPresent(), "Should return present Option when path is configured but file doesn't exist");
     assertTrue(result3.get().getIndexDefinitions().isEmpty(), "Should return empty HoodieIndexMetadata when file doesn't exist");
 
@@ -334,7 +332,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         Option.of(HoodieInstantWriter.convertByteArrayToWriter("{}".getBytes())));
     @SuppressWarnings("unchecked")
     Option<HoodieIndexMetadata> result4 = (Option<HoodieIndexMetadata>) readIndexDefMethod.invoke(
-        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig(), Lazy.lazily(Option::empty));
+        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig());
     assertTrue(result4.isPresent(), "Should return present Option when file exists");
     assertTrue(result4.get().getIndexDefinitions().isEmpty(), "Should return empty HoodieIndexMetadata for empty file");
 
@@ -359,7 +357,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         Option.of(HoodieInstantWriter.convertByteArrayToWriter(validIndexMetadata.toJson().getBytes())));
     @SuppressWarnings("unchecked")
     Option<HoodieIndexMetadata> result5 = (Option<HoodieIndexMetadata>) readIndexDefMethod.invoke(
-        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig(), Lazy.lazily(Option::empty));
+        null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig());
     assertTrue(result5.isPresent(), "Should return present Option when valid file exists");
     assertFalse(result5.get().getIndexDefinitions().isEmpty(), "Should return populated HoodieIndexMetadata");
     assertEquals(1, result5.get().getIndexDefinitions().size(), "Should have one index definition");
@@ -371,7 +369,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         Option.of(HoodieInstantWriter.convertByteArrayToWriter("invalid json".getBytes())));
     assertThrows(HoodieIOException.class, () -> {
       try {
-        readIndexDefMethod.invoke(null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig(), Lazy.lazily(Option::empty));
+        readIndexDefMethod.invoke(null, metaClient.getStorage(), metaClient.getBasePath(), metaClient.getTableConfig());
       } catch (java.lang.reflect.InvocationTargetException e) {
         if (e.getCause() instanceof HoodieIOException) {
           throw (HoodieIOException) e.getCause();
