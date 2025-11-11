@@ -35,6 +35,7 @@ import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, Hoo
 import org.apache.hudi.util.JFunction
 
 import org.apache.avro.Conversions.DecimalConversion
+import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
@@ -54,6 +55,7 @@ import scala.collection.parallel.mutable.ParHashMap
 
 class ColumnStatsIndexSupport(spark: SparkSession,
                               tableSchema: StructType,
+                              avroSchema: Schema,
                               @transient metadataConfig: HoodieMetadataConfig,
                               @transient metaClient: HoodieTableMetaClient,
                               allowCaching: Boolean = false) {

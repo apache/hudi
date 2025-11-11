@@ -41,6 +41,7 @@ import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
+import org.apache.parquet.schema.AvroSchemaRepair;
 
 import javax.annotation.Nonnull;
 
@@ -143,7 +144,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     checkState(this.readerSchema != null, "Reader's schema has to be non-null");
     checkArgument(type != HoodieRecordType.SPARK, "Not support read avro to spark record");
     // TODO AvroSparkReader need
-    RecordIterator iterator = RecordIterator.getInstance(this, content);
+    RecordIterator iterator = RecordIterator.getInstance(this, content, true);
     return new CloseableMappingIterator<>(iterator, data -> (HoodieRecord<T>) new HoodieAvroIndexedRecord(data));
   }
 
@@ -156,7 +157,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     private int totalRecords = 0;
     private int readRecords = 0;
 
-    private RecordIterator(Schema readerSchema, Schema writerSchema, byte[] content) throws IOException {
+    private RecordIterator(Schema readerSchema, Schema writerSchema, byte[] content, boolean enableLogicalTimestampFieldRepair) throws IOException {
       this.content = content;
 
       this.dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(this.content)));
@@ -167,16 +168,21 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         this.totalRecords = this.dis.readInt();
       }
 
-      if (recordNeedsRewriteForExtendedAvroTypePromotion(writerSchema, readerSchema)) {
-        this.reader = new GenericDatumReader<>(writerSchema, writerSchema);
+      // writer schema could refer to table schema.
+      // avoid this for MDT for sure.
+      // and for tables having no logical ts column.
+      Schema repairedWriterSchema = enableLogicalTimestampFieldRepair
+          ? AvroSchemaRepair.repairLogicalTypes(writerSchema, readerSchema) : writerSchema;
+      if (recordNeedsRewriteForExtendedAvroTypePromotion(repairedWriterSchema, readerSchema)) {
+        this.reader = new GenericDatumReader<>(repairedWriterSchema, repairedWriterSchema);
         this.promotedSchema = Option.of(readerSchema);
       } else {
-        this.reader = new GenericDatumReader<>(writerSchema, readerSchema);
+        this.reader = new GenericDatumReader<>(repairedWriterSchema, readerSchema);
       }
     }
 
-    public static RecordIterator getInstance(HoodieAvroDataBlock dataBlock, byte[] content) throws IOException {
-      return new RecordIterator(dataBlock.readerSchema, dataBlock.getSchemaFromHeader(), content);
+    public static RecordIterator getInstance(HoodieAvroDataBlock dataBlock, byte[] content, boolean enableLogicalTimestampFieldRepair) throws IOException {
+      return new RecordIterator(dataBlock.readerSchema, dataBlock.getSchemaFromHeader(), content, enableLogicalTimestampFieldRepair);
     }
 
     @Override

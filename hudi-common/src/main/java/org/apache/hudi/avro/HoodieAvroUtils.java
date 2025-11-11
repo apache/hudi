@@ -109,6 +109,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveUnionSchema;
 import static org.apache.hudi.common.util.DateTimeUtils.instantToMicros;
 import static org.apache.hudi.common.util.DateTimeUtils.microsToInstant;
+import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryUpcastDecimal;
@@ -383,7 +384,7 @@ public class HoodieAvroUtils {
         .stream()
         .map(field -> {
           if (Objects.equals(field.name(), fieldName)) {
-            return new Schema.Field(field.name(), AvroSchemaUtils.resolveNullableSchema(field.schema()), field.doc(), fieldDefaultValue);
+            return createNewSchemaField(field.name(), AvroSchemaUtils.getNonNullTypeFromUnion(field.schema()), field.doc(), fieldDefaultValue);
           } else {
             return new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal());
           }
@@ -717,7 +718,7 @@ public class HoodieAvroUtils {
       Object val = valueNode.get(part);
 
       if (i == parts.length - 1) {
-        return resolveNullableSchema(valueNode.getSchema().getField(part).schema());
+        return getNonNullTypeFromUnion(valueNode.getSchema().getField(part).schema());
       } else {
         if (!(val instanceof GenericRecord)) {
           throw new HoodieException("Cannot find a record at part value :" + part);
@@ -741,10 +742,16 @@ public class HoodieAvroUtils {
     int i = 0;
     for (; i < parts.length; i++) {
       String part = parts[i];
-      Schema schema = writeSchema.getField(part).schema();
+      try {
+        // Resolve nullable/union schema to the actual schema
+        currentSchema = getNonNullTypeFromUnion(currentSchema.getField(part).schema());
 
-      if (i == parts.length - 1) {
-        return resolveNullableSchema(schema);
+        if (i == parts.length - 1) {
+          // Return the schema for the final part
+          return getNonNullTypeFromUnion(currentSchema);
+        }
+      } catch (Exception e) {
+        throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
       }
     }
     throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
@@ -782,7 +789,7 @@ public class HoodieAvroUtils {
       return null;
     }
 
-    return convertValueForAvroLogicalTypes(resolveNullableSchema(fieldSchema), fieldValue, consistentLogicalTimestampEnabled);
+    return convertValueForAvroLogicalTypes(getNonNullTypeFromUnion(fieldSchema), fieldValue, consistentLogicalTimestampEnabled);
   }
 
   /**
@@ -1049,7 +1056,9 @@ public class HoodieAvroUtils {
           return oldValue;
         case LONG:
           if (oldSchema.getLogicalType() != newSchema.getLogicalType()) {
-            if (oldSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
+            if (oldSchema.getLogicalType() == null || newSchema.getLogicalType() == null) {
+              return oldValue;
+            } else if (oldSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
               if (newSchema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
                 return DateTimeUtils.millisToMicros((Long) oldValue);
               }

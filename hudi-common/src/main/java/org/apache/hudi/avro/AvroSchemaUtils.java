@@ -212,13 +212,13 @@ public class AvroSchemaUtils {
     }
     String[] parts = fieldName.split("\\.");
     for (String part : parts) {
-      Schema.Field foundField = resolveNullableSchema(schema).getField(part);
+      Schema.Field foundField = getNonNullTypeFromUnion(schema).getField(part);
       if (foundField == null) {
         throw new HoodieAvroSchemaException(fieldName + " not a field in " + schema);
       }
       schema = foundField.schema();
     }
-    return Option.of(resolveNullableSchema(schema));
+    return Option.of(getNonNullTypeFromUnion(schema));
   }
 
   public static Option<Schema.Type> findNestedFieldType(Schema schema, String fieldName) {
@@ -258,7 +258,7 @@ public class AvroSchemaUtils {
     List<Schema> innerTypes = schema.getTypes();
     if (innerTypes.size() == 2 && isNullable(schema)) {
       // this is a basic nullable field so handle it more efficiently
-      return resolveNullableSchema(schema);
+      return getNonNullTypeFromUnion(schema);
     }
 
     Schema nonNullType =
@@ -292,7 +292,7 @@ public class AvroSchemaUtils {
    * Resolves typical Avro's nullable schema definition: {@code Union(Schema.Type.NULL, <NonNullType>)},
    * decomposing union and returning the target non-null type
    */
-  public static Schema resolveNullableSchema(Schema schema) {
+  public static Schema getNonNullTypeFromUnion(Schema schema) {
     if (schema.getType() != Schema.Type.UNION) {
       return schema;
     }
