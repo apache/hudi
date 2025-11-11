@@ -2676,20 +2676,20 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieMetadataConfig.ENABLE_LOG_COMPACTION_ON_METADATA_TABLE);
   }
 
-  public int getRecordIndexMinFileGroupCount() {
-    return metadataConfig.getRecordIndexMinFileGroupCount();
+  public int getGlobalRecordLevelIndexMinFileGroupCount() {
+    return metadataConfig.getGlobalRecordLevelIndexMinFileGroupCount();
   }
 
-  public int getRecordIndexMaxFileGroupCount() {
-    return metadataConfig.getRecordIndexMaxFileGroupCount();
+  public int getGlobalRecordLevelIndexMaxFileGroupCount() {
+    return metadataConfig.getGlobalRecordLevelIndexMaxFileGroupCount();
   }
 
-  public int getPartitionedRecordIndexMinFileGroupCount() {
-    return metadataConfig.getPartitionedRecordIndexMinFileGroupCount();
+  public int getRecordLevelIndexMinFileGroupCount() {
+    return metadataConfig.getRecordLevelIndexMinFileGroupCount();
   }
 
-  public int getPartitionedRecordIndexMaxFileGroupCount() {
-    return metadataConfig.getPartitionedRecordIndexMaxFileGroupCount();
+  public int getRecordLevelIndexMaxFileGroupCount() {
+    return metadataConfig.getRecordLevelIndexMaxFileGroupCount();
   }
 
   public float getRecordIndexGrowthFactor() {
