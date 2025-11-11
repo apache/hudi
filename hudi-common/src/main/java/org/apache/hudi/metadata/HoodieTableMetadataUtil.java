@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.ConvertingGenericData;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
@@ -109,7 +110,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.toList;
-import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.convertValueForSpecificDataTypes;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
@@ -218,11 +219,9 @@ public class HoodieTableMetadataUtil {
       // with the values from this record
       targetFields.forEach(field -> {
         ColumnStats colStats = allColumnStats.computeIfAbsent(field.name(), ignored -> new ColumnStats());
-
         GenericRecord genericRecord = (GenericRecord) record;
-
         final Object fieldVal = convertValueForSpecificDataTypes(field.schema(), genericRecord.get(field.name()), false);
-        final Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(genericRecord.getSchema(), field.name());
+        final Schema fieldSchema = getNonNullTypeFromUnion(getNestedFieldSchemaFromWriteSchema(genericRecord.getSchema(), field.name()));
 
         colStats.valueCount++;
 
@@ -1252,7 +1251,7 @@ public class HoodieTableMetadataUtil {
     switch (schema.getType()) {
       case UNION:
         // TODO we need to handle unions in general case as well
-        return coerceToComparable(resolveNullableSchema(schema), val);
+        return coerceToComparable(getNonNullTypeFromUnion(schema), val);
 
       case FIXED:
       case BYTES:

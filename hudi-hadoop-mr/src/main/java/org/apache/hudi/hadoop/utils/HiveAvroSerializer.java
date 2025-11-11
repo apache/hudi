@@ -18,7 +18,10 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.JsonProperties;
@@ -32,6 +35,8 @@ import org.apache.avro.util.Utf8;
 import org.apache.hadoop.hive.common.type.HiveChar;
 import org.apache.hadoop.hive.common.type.HiveDecimal;
 import org.apache.hadoop.hive.common.type.HiveVarchar;
+import org.apache.hadoop.hive.ql.io.parquet.serde.ArrayWritableObjectInspector;
+import org.apache.hadoop.hive.serde2.avro.AvroSerdeException;
 import org.apache.hadoop.hive.serde2.avro.AvroSerdeUtils;
 import org.apache.hadoop.hive.serde2.avro.InstanceCache;
 import org.apache.hadoop.hive.serde2.objectinspector.ListObjectInspector;
@@ -47,6 +52,7 @@ import org.apache.hadoop.hive.serde2.typeinfo.ListTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.MapTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.StructTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
+import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
 import org.apache.hadoop.hive.serde2.typeinfo.UnionTypeInfo;
 import org.apache.hadoop.io.ArrayWritable;
 
@@ -61,7 +67,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveUnionSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.isMetadataField;
 
@@ -76,7 +82,7 @@ public class HiveAvroSerializer {
 
   private static final Logger LOG = LoggerFactory.getLogger(HiveAvroSerializer.class);
 
-  public HiveAvroSerializer(ObjectInspector objectInspector, List<String> columnNames, List<TypeInfo> columnTypes) {
+  public HiveAvroSerializer(ArrayWritableObjectInspector objectInspector, List<String> columnNames, List<TypeInfo> columnTypes) {
     this.columnNames = columnNames;
     this.columnTypes = columnTypes;
     this.objectInspector = objectInspector;
@@ -197,9 +203,8 @@ public class HiveAvroSerializer {
       return null;
     }
 
-    if (isNullableType(schema)) {
-      schema = getOtherTypeFromNullableType(schema);
-    }
+    schema = getNonNullTypeFromUnion(schema);
+
     /* Because we use Hive's 'string' type when Avro calls for enum, we have to expressly check for enum-ness */
     if (Schema.Type.ENUM.equals(schema.getType())) {
       assert fieldOI instanceof PrimitiveObjectInspector;
@@ -340,7 +345,7 @@ public class HiveAvroSerializer {
     ObjectInspector listElementObjectInspector = fieldOI.getListElementObjectInspector();
     // NOTE: We have to resolve nullable schema, since Avro permits array elements
     //       to be null
-    Schema arrayNestedType = resolveNullableSchema(schema.getElementType());
+    Schema arrayNestedType = getNonNullTypeFromUnion(schema.getElementType());
     Schema elementType;
     if (listElementObjectInspector.getCategory() == ObjectInspector.Category.PRIMITIVE) {
       elementType = arrayNestedType;

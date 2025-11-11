@@ -895,5 +895,4 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
       }
     }
   }
-
 }

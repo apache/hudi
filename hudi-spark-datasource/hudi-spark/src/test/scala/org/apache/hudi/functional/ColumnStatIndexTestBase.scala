@@ -26,8 +26,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
-
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.types._
@@ -55,6 +54,8 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .add("c6", DateType)
       .add("c7", BinaryType)
       .add("c8", ByteType)
+
+  val sourceTableAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(sourceTableSchema, "reocrd", "")
 
   @BeforeEach
   override def setUp() {
