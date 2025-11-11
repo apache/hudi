@@ -181,6 +181,8 @@ public class TestHoodieTableMetadataUtil {
     HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
         .withVersion(HoodieIndexVersion.V1)
         .withSourceFields(inputCols)
+        .withIndexName(PARTITION_NAME_COLUMN_STATS)
+        .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .build();
     List<String> result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema);
     assertEquals(Arrays.asList("name", "age"), result);
@@ -190,6 +192,8 @@ public class TestHoodieTableMetadataUtil {
     indexDefinition = HoodieIndexDefinition.newBuilder()
         .withVersion(HoodieIndexVersion.V2)
         .withSourceFields(inputCols)
+        .withIndexName(PARTITION_NAME_COLUMN_STATS)
+        .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .build();
     result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema);
     assertEquals(Arrays.asList("name", "created_at", "age"), result);
@@ -198,6 +202,8 @@ public class TestHoodieTableMetadataUtil {
     inputCols = Arrays.asList("name", "age");
     indexDefinition = HoodieIndexDefinition.newBuilder()
         .withVersion(HoodieIndexVersion.V1)
+        .withIndexName(PARTITION_NAME_COLUMN_STATS)
+        .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .withSourceFields(inputCols)
         .build();
     result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema);
@@ -207,6 +213,8 @@ public class TestHoodieTableMetadataUtil {
     indexDefinition = HoodieIndexDefinition.newBuilder()
         .withVersion(HoodieIndexVersion.V1)
         .withSourceFields(Collections.emptyList())
+        .withIndexName(PARTITION_NAME_COLUMN_STATS)
+        .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .build();
     result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema);
     assertTrue(result.isEmpty(), "Expected empty output for empty input");
@@ -244,6 +252,8 @@ public class TestHoodieTableMetadataUtil {
 
     HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
         .withVersion(HoodieIndexVersion.V1)
+        .withIndexName(PARTITION_NAME_COLUMN_STATS)
+        .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .withSourceFields(inputCols)
         .build();
     List<String> result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, nestedSchema);
