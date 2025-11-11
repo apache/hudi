@@ -689,8 +689,11 @@ public class HoodieTableMetadataUtil {
    * @param tableSchema latest table schema of interest.
    * @return list of valid indexed columns that can be considered for pruning.
    */
-  public static List<String> getValidIndexedColumns(HoodieIndexDefinition indexDefinition, Schema tableSchema) {
-    if (indexDefinition.getVersion() != HoodieIndexVersion.V1) {
+  public static List<String> getValidIndexedColumns(HoodieIndexDefinition indexDefinition,
+                                                    Schema tableSchema,
+                                                    HoodieTableConfig tableConfig) {
+    if (indexDefinition.getVersion() != HoodieIndexVersion.V1
+        && tableConfig.getTableInitialVersion().greaterThanOrEquals(HoodieTableVersion.NINE)) {
       return indexDefinition.getSourceFields();
     }
 
