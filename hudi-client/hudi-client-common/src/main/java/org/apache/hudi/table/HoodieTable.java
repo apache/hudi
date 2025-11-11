@@ -108,6 +108,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.LAZY;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
@@ -887,6 +888,70 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       throw e;
     } catch (Exception e) {
       throw new SchemaCompatibilityException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
+    }
+  }
+
+  /**
+   * Validates that columns with secondary indexes are not evolved in an incompatible way.
+   *
+   * @param tableSchema the current table schema
+   * @param writerSchema the new writer schema
+   * @param indexMetadata the index metadata containing all index definitions
+   * @throws SchemaCompatibilityException if a secondary index column has incompatible evolution
+   */
+  static void validateSecondaryIndexSchemaEvolution(
+      Schema tableSchema,
+      Schema writerSchema,
+      HoodieIndexMetadata indexMetadata) throws SchemaCompatibilityException {
+    
+    // Filter for secondary index definitions
+    List<HoodieIndexDefinition> secondaryIndexDefs = indexMetadata.getIndexDefinitions().values().stream()
+        .filter(indexDef -> MetadataPartitionType.fromPartitionPath(indexDef.getIndexName()).equals(MetadataPartitionType.SECONDARY_INDEX))
+        .collect(Collectors.toList());
+    
+    if (secondaryIndexDefs.isEmpty()) {
+      return;
+    }
+    
+    // Create a map from source field to index name for efficient lookup
+    Map<String, String> columnToIndexName = new HashMap<>();
+    for (HoodieIndexDefinition indexDef : secondaryIndexDefs) {
+      String indexName = indexDef.getIndexName();
+      for (String sourceField : indexDef.getSourceFields()) {
+        // Note: If a column is part of multiple indexes, this will use the last one
+        // This is fine since we just need any index name for error reporting
+        columnToIndexName.put(sourceField, indexName);
+      }
+    }
+    
+    // Check each indexed column for schema evolution
+    for (Map.Entry<String, String> entry : columnToIndexName.entrySet()) {
+      String columnName = entry.getKey();
+      String indexName = entry.getValue();
+      
+      Schema.Field tableField = tableSchema.getField(columnName);
+      
+      if (tableField == null) {
+        // This shouldn't happen as indexed columns should exist in table schema
+        LOG.warn("Secondary index '{}' references non-existent column: {}", indexName, columnName);
+        continue;
+      }
+      
+      // Use AvroSchemaCompatibility's field lookup logic to handle aliases
+      Schema.Field writerField = AvroSchemaCompatibility.lookupWriterField(writerSchema, tableField);
+      
+      if (writerField != null && !tableField.schema().equals(writerField.schema())) {
+        // Check if this is just making the field nullable/non-nullable, which is safe from SI perspective
+        if (getNonNullTypeFromUnion(tableField.schema()).equals(getNonNullTypeFromUnion(writerField.schema()))) {
+          continue;
+        }
+        
+        String errorMessage = String.format(
+            "Column '%s' has secondary index '%s' and cannot evolve from schema '%s' to '%s'. "
+            + "Please drop the secondary index before changing the column type.",
+            columnName, indexName, tableField.schema(), writerField.schema());
+        throw new SchemaCompatibilityException(errorMessage);
+      }
     }
   }
 

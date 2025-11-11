@@ -17,6 +17,8 @@
 
 package org.apache.hudi.functional
 
+
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkRecordMerger, HoodieSparkUtils, SparkDatasetMixin}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -24,20 +26,18 @@ import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPU
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, HoodieRecordPayload, HoodieTableType, OverwriteWithLatestAvroPayload}
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.index.HoodieIndex.IndexType
-import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkRecordMerger, SparkDatasetMixin}
-
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
@@ -49,8 +49,11 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import org.slf4j.LoggerFactory
 
+import java.net.URI
+import java.nio.file.Paths
+import java.sql.Timestamp
 import java.util.function.Consumer
-
+import java.util.stream.Collectors
 import scala.collection.JavaConverters._
 
 /**
@@ -927,6 +930,21 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .load()
 
     assertEquals(expectedCount1, hudiReadPathDF.count())
+
+    if (recordType == HoodieRecordType.SPARK) {
+      metaClient = HoodieTableMetaClient.reload(metaClient)
+      val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).build()
+      val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(inputDF1.schema, "record", "")
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, inputDF1.schema, avroSchema, metadataConfig, metaClient)
+      columnStatsIndex.loadTransposed(Seq("fare","city_to_state", "rider"), shouldReadInMemory = true) { emptyTransposedColStatsDF =>
+        assertTrue(!emptyTransposedColStatsDF.columns.contains("fare"))
+        assertTrue(!emptyTransposedColStatsDF.columns.contains("city_to_state"))
+        // rider is a simple string field, so it should have a min/max value as well as nullCount
+        assertTrue(emptyTransposedColStatsDF.filter("rider_minValue IS NOT NULL").count() > 0)
+        assertTrue(emptyTransposedColStatsDF.filter("rider_maxValue IS NOT NULL").count() > 0)
+        assertTrue(emptyTransposedColStatsDF.filter("rider_nullCount IS NOT NULL").count() > 0)
+      }
+    }
   }
 
   @ParameterizedTest
@@ -1083,7 +1101,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testHoodieIsDeletedMOR(recordType: HoodieRecordType): Unit =  {
+  def testHoodieIsDeletedMOR(recordType: HoodieRecordType): Unit = {
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     val numRecords = 100
@@ -1123,6 +1141,75 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath + "/*/*/*/*")
     assertEquals(numRecords - numRecordsToDelete, snapshotDF2.count())
+  }
+
+  @CsvSource(Array("avro, 6", "parquet, 6"))
+  def testLogicalTypesReadRepair(logBlockFormat: String, tableVersion: Int): Unit = {
+    val logBlockString = if (logBlockFormat == "avro") {
+      ""
+    } else {
+      "_parquet_log"
+    }
+    val prevTimezone = spark.conf.get("spark.sql.session.timeZone")
+    val propertyValue: String = System.getProperty("spark.testing")
+    try {
+      if (HoodieSparkUtils.isSpark3_3) {
+        System.setProperty("spark.testing", "true")
+      }
+      spark.conf.set("spark.sql.session.timeZone", "UTC")
+      val tableName = "trips_logical_types_json_mor_read_v" + tableVersion + logBlockString
+      val dataPath = "file://" + basePath + "/" + tableName
+      val zipOutput = Paths.get(new URI(dataPath))
+      HoodieTestUtils.extractZipToDirectory("/" + tableName + ".zip", zipOutput, getClass)
+      val tableBasePath = zipOutput.toString
+
+      val df = spark.read.format("hudi").load(tableBasePath)
+
+      val rows = df.collect()
+      assertEquals(20, rows.length)
+      for (row <- rows) {
+        val hash = row.get(6).asInstanceOf[String].hashCode()
+        if ((hash & 1)== 0) {
+          assertEquals("2020-01-01T00:00:00.001Z", row.get(15).asInstanceOf[Timestamp].toInstant.toString)
+          assertEquals("2020-06-01T12:00:00.000001Z", row.get(16).asInstanceOf[Timestamp].toInstant.toString)
+          assertEquals("2015-05-20T12:34:56.001", row.get(17).toString)
+          assertEquals("2017-07-07T07:07:07.000001", row.get(18).toString)
+        } else {
+          assertEquals("2019-12-31T23:59:59.999Z", row.get(15).asInstanceOf[Timestamp].toInstant.toString)
+          assertEquals("2020-06-01T11:59:59.999999Z", row.get(16).asInstanceOf[Timestamp].toInstant.toString)
+          assertEquals("2015-05-20T12:34:55.999", row.get(17).toString)
+          assertEquals("2017-07-07T07:07:06.999999", row.get(18).toString)
+        }
+      }
+      assertEquals(10, df.filter("ts_millis > timestamp('2020-01-01 00:00:00Z')").count())
+      assertEquals(10, df.filter("ts_millis < timestamp('2020-01-01 00:00:00Z')").count())
+      assertEquals(0, df.filter("ts_millis > timestamp('2020-01-01 00:00:00.001Z')").count())
+      assertEquals(0, df.filter("ts_millis < timestamp('2019-12-31 23:59:59.999Z')").count())
+
+      assertEquals(10, df.filter("ts_micros > timestamp('2020-06-01 12:00:00Z')").count())
+      assertEquals(10, df.filter("ts_micros < timestamp('2020-06-01 12:00:00Z')").count())
+      assertEquals(0, df.filter("ts_micros > timestamp('2020-06-01 12:00:00.000001Z')").count())
+      assertEquals(0, df.filter("ts_micros < timestamp('2020-06-01 11:59:59.999999Z')").count())
+
+      assertEquals(10, df.filter("local_ts_millis > CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)").count())
+      assertEquals(10, df.filter("local_ts_millis < CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)").count())
+      assertEquals(0, df.filter("local_ts_millis > CAST('2015-05-20 12:34:56.001' AS TIMESTAMP_NTZ)").count())
+      assertEquals(0, df.filter("local_ts_millis < CAST('2015-05-20 12:34:55.999' AS TIMESTAMP_NTZ)").count())
+
+      assertEquals(10, df.filter("local_ts_micros > CAST('2017-07-07 07:07:07' AS TIMESTAMP_NTZ)").count())
+      assertEquals(10, df.filter("local_ts_micros < CAST('2017-07-07 07:07:07' AS TIMESTAMP_NTZ)").count())
+      assertEquals(0, df.filter("local_ts_micros > CAST('2017-07-07 07:07:07.000001' AS TIMESTAMP_NTZ)").count())
+      assertEquals(0, df.filter("local_ts_micros < CAST('2017-07-07 07:07:06.999999' AS TIMESTAMP_NTZ)").count())
+    } finally {
+      spark.conf.set("spark.sql.session.timeZone", prevTimezone)
+      if (HoodieSparkUtils.isSpark3_3) {
+        if (propertyValue == null) {
+          System.clearProperty("spark.testing")
+        } else {
+          System.setProperty("spark.testing", propertyValue)
+        }
+      }
+    }
   }
 
   /**
@@ -1325,6 +1412,67 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertEquals(
       1000L,
       roDf.where(col(recordKeyField) === 0).select(dataField).collect()(0).getLong(0))
+  }
+
+  @ParameterizedTest
+  @CsvSource(value = Array("true,6", "false,6"))
+  def testSnapshotQueryAfterInflightDeltaCommit(enableFileIndex: Boolean, tableVersion: Int): Unit = {
+    val (tableName, tablePath) = ("hoodie_mor_snapshot_read_test_table", s"${basePath}_mor_test_table")
+    val orderingFields = "col3"
+    val recordKeyField = "key"
+    val dataField = "age"
+
+    val options = Map[String, String](
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
+      DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
+      HoodieTableConfig.PRECOMBINE_FIELD.key -> orderingFields,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeyField,
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      HoodieWriteConfig.TBL_NAME.key -> tableName,
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1")
+    val pathForQuery = getPathForROQuery(tablePath, !enableFileIndex, 0)
+
+    var (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, options, enableFileIndex)
+    writeOpts = writeOpts ++ Map(
+      HoodieTableConfig.VERSION.key() -> tableVersion.toString)
+
+    val firstDf = spark.range(0, 10).toDF(recordKeyField)
+      .withColumn(orderingFields, expr(recordKeyField))
+      .withColumn(dataField, expr(recordKeyField + " + 1000"))
+    firstDf.write.format("hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Overwrite)
+      .save(tablePath)
+
+    val secondDf = spark.range(0, 10).toDF(recordKeyField)
+      .withColumn(orderingFields, expr(recordKeyField))
+      .withColumn(dataField, expr(recordKeyField + " + 2000"))
+    secondDf.write.format("hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Append).save(tablePath)
+
+    // Snapshot query on MOR
+    val snapshotDf = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .load(pathForQuery)
+
+    // Delete last completed instant
+    metaClient = createMetaClient(spark, tablePath)
+    val files = storage.listDirectEntries(new StoragePath(s"$tablePath/.hoodie")).stream()
+      .filter(f => f.getPath.getName.contains(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+        && !f.getPath.getName.contains("inflight")
+        && !f.getPath.getName.contains("requested"))
+      .collect(Collectors.toList[StoragePathInfo]).asScala
+    assertEquals(1, files.size)
+    storage.deleteFile(files.head.getPath)
+
+    // verify snapshot query returns data written using firstDf
+    assertEquals(10, snapshotDf.count())
+    assertEquals(
+      1000L,
+      snapshotDf.where(col(recordKeyField) === 0).select(dataField).collect()(0).getLong(0))
   }
 
   @ParameterizedTest
