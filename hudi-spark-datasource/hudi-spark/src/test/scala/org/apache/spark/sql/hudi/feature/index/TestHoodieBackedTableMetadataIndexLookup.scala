@@ -70,8 +70,8 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
        |  hoodie.metadata.record.index.enable = 'true',
        |  hoodie.metadata.index.column.stats.enable = 'true',
        |  hoodie.metadata.index.secondary.enable = 'true',
-       |  hoodie.metadata.record.index.min.filegroup.count = '${getNumFileIndexGroup}',
-       |  hoodie.metadata.record.index.max.filegroup.count = '${getNumFileIndexGroup}',
+       |  hoodie.metadata.global.record.level.index.min.filegroup.count = '${getNumFileIndexGroup}',
+       |  hoodie.metadata.global.record.level.index.max.filegroup.count = '${getNumFileIndexGroup}',
        |  hoodie.write.table.version = '${getTableVersion}',
        |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'
        | )
@@ -207,8 +207,8 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
 
     // Create secondary indexes on name and price columns
     spark.sql(s"set hoodie.write.table.version = ${getTableVersion}")
-    spark.sql(s"set hoodie.metadata.record.index.min.filegroup.count = ${getNumFileIndexGroup}")
-    spark.sql(s"set hoodie.metadata.record.index.max.filegroup.count = ${getNumFileIndexGroup}")
+    spark.sql(s"set hoodie.metadata.global.record.level.index.min.filegroup.count = ${getNumFileIndexGroup}")
+    spark.sql(s"set hoodie.metadata.global.record.level.index.max.filegroup.count = ${getNumFileIndexGroup}")
     spark.sql(s"create index idx_name on $tableName (name)")
     spark.sql(s"create index idx_price on $tableName (price)")
 
