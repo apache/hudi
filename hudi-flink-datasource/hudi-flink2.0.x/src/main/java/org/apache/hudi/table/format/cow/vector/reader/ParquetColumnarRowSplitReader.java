@@ -57,8 +57,6 @@ import static org.apache.hudi.table.format.cow.ParquetSplitReaderUtil.createColu
 import static org.apache.hudi.table.format.cow.ParquetSplitReaderUtil.createWritableColumnVector;
 import static org.apache.parquet.filter2.compat.FilterCompat.get;
 import static org.apache.parquet.filter2.compat.RowGroupFilter.filterRowGroups;
-import static org.apache.parquet.format.converter.ParquetMetadataConverter.range;
-import static org.apache.parquet.hadoop.ParquetFileReader.readFooter;
 
 /**
  * This reader is used to read a {@link VectorizedColumnBatch} from input split.
@@ -124,14 +122,12 @@ public class ParquetColumnarRowSplitReader implements Closeable {
       ColumnBatchGenerator generator,
       int batchSize,
       Path path,
-      long splitStart,
-      long splitLength,
+      ParquetMetadata footer,
       FilterPredicate filterPredicate,
       UnboundRecordFilter recordFilter) throws IOException {
     this.utcTimestamp = utcTimestamp;
     this.batchSize = batchSize;
     // then we need to apply the predicate push down filter
-    ParquetMetadata footer = readFooter(conf, path, range(splitStart, splitStart + splitLength));
     MessageType fileSchema = footer.getFileMetaData().getSchema();
     FilterCompat.Filter filter = get(filterPredicate, recordFilter);
     List<BlockMetaData> blocks = filterRowGroups(filter, footer.getBlocks(), fileSchema);

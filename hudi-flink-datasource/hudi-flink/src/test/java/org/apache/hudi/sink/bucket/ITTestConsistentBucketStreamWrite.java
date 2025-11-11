@@ -165,9 +165,9 @@ public class ITTestConsistentBucketStreamWrite extends TestLogger {
     OptionsInference.setupSinkTasks(conf, execEnv.getParallelism());
     // bulk_insert mode
     if (OptionsResolver.isBulkInsertOperation(conf)) {
-      Pipelines.bulkInsert(conf, rowType, dataStream);
+      Pipelines.bulkInsert(conf, rowType, rowType, dataStream);
     } else {
-      DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
+      DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, rowType, dataStream);
       DataStream<RowData> pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
       execEnv.addOperator(pipeline.getTransformation());
     }

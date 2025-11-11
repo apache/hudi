@@ -220,4 +220,15 @@ public class DataTypeUtils {
 
     return new RowType(false, mergedFields);
   }
+
+  /**
+   * Return a new RowType with each field set as nullable.
+   */
+  public static RowType asNullable(RowType rowType) {
+    List<RowType.RowField> nullableFields = rowType.getFields().stream()
+        .map(f -> new RowType.RowField(f.getName(), f.getType().isNullable() ? f.getType() : f.getType().copy(true)))
+        .collect(Collectors.toList());
+
+    return new RowType(nullableFields);
+  }
 }

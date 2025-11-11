@@ -34,4 +34,14 @@ public interface RowProjection extends Serializable {
    * @return projected rowData
    */
   RowData project(RowData rowData);
+
+  /**
+   * Instance of RowProjection that return the record itself.
+   */
+  RowProjection IDENTITY = new RowProjection() {
+    @Override
+    public RowData project(RowData rowData) {
+      return rowData;
+    }
+  };
 }

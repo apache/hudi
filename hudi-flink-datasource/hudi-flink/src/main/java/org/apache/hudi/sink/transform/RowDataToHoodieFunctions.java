@@ -35,11 +35,12 @@ public abstract class RowDataToHoodieFunctions {
   /**
    * Creates a {@link RowDataToHoodieFunction} instance based on the given configuration.
    */
-  public static RowDataToHoodieFunction<RowData, HoodieFlinkInternalRow> create(RowType rowType, Configuration conf) {
+  public static RowDataToHoodieFunction<RowData, HoodieFlinkInternalRow> create(
+      RowType recordRowType, RowType writerRowType, Configuration conf) {
     if (conf.get(FlinkOptions.WRITE_RATE_LIMIT) > 0) {
-      return new RowDataToHoodieFunctionWithRateLimit<>(rowType, conf);
+      return new RowDataToHoodieFunctionWithRateLimit<>(recordRowType, writerRowType, conf);
     } else {
-      return new RowDataToHoodieFunction<>(rowType, conf);
+      return new RowDataToHoodieFunction<>(recordRowType, writerRowType, conf);
     }
   }
 }

@@ -22,6 +22,8 @@ import org.apache.hudi.adapter.AbstractRichFunctionAdapter;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
+import org.apache.hudi.util.RowProjection;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.configuration.Configuration;
@@ -33,10 +35,13 @@ import org.apache.flink.table.types.logical.RowType;
  */
 public class RowDataToHoodieFunction<I extends RowData, O extends HoodieFlinkInternalRow>
     extends AbstractRichFunctionAdapter implements MapFunction<I, O> {
-  RowDataKeyGen keyGen;
 
-  public RowDataToHoodieFunction(RowType rowType, Configuration config) {
-    this.keyGen = RowDataKeyGen.instance(config, rowType);
+  private final RowDataKeyGen keyGen;
+  private final RowProjection recordTransform;
+
+  public RowDataToHoodieFunction(RowType recordRowType, RowType writerRowType, Configuration config) {
+    this.keyGen = RowDataKeyGen.instance(config, writerRowType);
+    this.recordTransform = StreamerUtil.createRecordTransform(recordRowType, writerRowType);
   }
 
   @Override
@@ -46,10 +51,11 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieFlinkInt
 
   @Override
   public O map(I row) throws Exception {
+    RowData writeRow = recordTransform.project(row);
     return (O) new HoodieFlinkInternalRow(
-        keyGen.getRecordKey(row),
-        keyGen.getPartitionPath(row),
-        HoodieOperation.fromValue(row.getRowKind().toByteValue()).getName(),
-        row);
+        keyGen.getRecordKey(writeRow),
+        keyGen.getPartitionPath(writeRow),
+        HoodieOperation.fromValue(writeRow.getRowKind().toByteValue()).getName(),
+        writeRow);
   }
 }

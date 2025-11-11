@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
@@ -32,6 +33,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import org.apache.avro.Schema;
+import org.apache.parquet.schema.AvroSchemaRepair;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -40,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED;
@@ -147,11 +150,22 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     Schema writerSchema =
         new Schema.Parser().parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
-    return readerContext.getFileRecordIterator(
-        inlineLogFilePath, 0, blockContentLoc.getBlockSize(),
-        writerSchema,
-        readerSchema,
-        inlineStorage);
+    Schema repairedWriterSchema = readerContext.enableLogicalTimestampFieldRepair()
+        ? AvroSchemaRepair.repairLogicalTypes(writerSchema, readerSchema) : writerSchema;
+    if (recordNeedsRewriteForExtendedAvroTypePromotion(repairedWriterSchema, readerSchema)) {
+      ClosableIterator<T> itr = readerContext.getFileRecordIterator(
+          inlineLogFilePath, 0, blockContentLoc.getBlockSize(),
+          repairedWriterSchema,
+          repairedWriterSchema,
+          inlineStorage);
+      return new CloseableMappingIterator<>(itr, readerContext.getRecordContext().projectRecord(repairedWriterSchema, readerSchema));
+    } else {
+      return readerContext.getFileRecordIterator(
+          inlineLogFilePath, 0, blockContentLoc.getBlockSize(),
+          repairedWriterSchema,
+          readerSchema,
+          inlineStorage);
+    }
   }
 
   @Override

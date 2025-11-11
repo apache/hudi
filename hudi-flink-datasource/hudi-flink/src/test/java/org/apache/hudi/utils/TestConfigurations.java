@@ -56,6 +56,14 @@ public class TestConfigurations {
           DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
       .notNull();
 
+  public static final DataType ROW_DATA_TYPE_PK_NON_NULL = DataTypes.ROW(
+          DataTypes.FIELD("uuid", DataTypes.VARCHAR(20).notNull()),// record key
+          DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
+          DataTypes.FIELD("age", DataTypes.INT()),
+          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
+          DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
+      .notNull();
+
   public static final RowType ROW_TYPE = (RowType) ROW_DATA_TYPE.getLogicalType();
 
   public static final DataType ROW_DATA_TYPE_DECIMAL_ORDERING = DataTypes.ROW(
