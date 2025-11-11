@@ -1011,7 +1011,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @ParameterizedTest
   @CsvSource(value = {"SIX,AVRO,CLUSTER", "EIGHT,AVRO,CLUSTER", "CURRENT,AVRO,NONE", "CURRENT,AVRO,CLUSTER", "CURRENT,SPARK,NONE", "CURRENT,SPARK,CLUSTER"})
-  public void testCOWLogicalRepair(String tableVersion, String recordType, String operation) throws Exception {
+  void testCOWLogicalRepair(String tableVersion, String recordType, String operation) throws Exception {
     TestMercifulJsonToRowConverterBase.timestampNTZCompatibility(() -> {
       String dirName = "trips_logical_types_json_cow_write";
       String dataPath = basePath + "/" + dirName;
@@ -1036,7 +1036,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       properties.setProperty("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator");
       properties.setProperty("hoodie.cleaner.policy", "KEEP_LATEST_COMMITS");
       properties.setProperty("hoodie.compact.inline", "false");
-      properties.setProperty("hoodie.metadtata.enable", "false");
+      properties.setProperty("hoodie.metatata.enable", "true");
       properties.setProperty("hoodie.parquet.small.file.limit", "-1");
       properties.setProperty("hoodie.cleaner.commits.retained", "10");
       properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);
@@ -1095,7 +1095,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       "CURRENT,AVRO,NONE,AVRO", "CURRENT,AVRO,CLUSTER,AVRO", "CURRENT,AVRO,COMPACT,AVRO",
       "CURRENT,AVRO,NONE,PARQUET", "CURRENT,AVRO,CLUSTER,PARQUET", "CURRENT,AVRO,COMPACT,PARQUET",
       "CURRENT,SPARK,NONE,PARQUET", "CURRENT,SPARK,CLUSTER,PARQUET", "CURRENT,SPARK,COMPACT,PARQUET"})
-  public void testMORLogicalRepair(String tableVersion, String recordType, String operation, String logBlockType) throws Exception {
+  void testMORLogicalRepair(String tableVersion, String recordType, String operation, String logBlockType) throws Exception {
     TestMercifulJsonToRowConverterBase.timestampNTZCompatibility(() -> {
       String tableSuffix;
       String logFormatValue;
@@ -1138,7 +1138,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       properties.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
       properties.setProperty("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator");
       properties.setProperty("hoodie.cleaner.policy", "KEEP_LATEST_COMMITS");
-      properties.setProperty("hoodie.metadtata.enable", "false");
+      properties.setProperty("hoodie.metatata.enable", "true");
       properties.setProperty("hoodie.parquet.small.file.limit", "-1");
       properties.setProperty("hoodie.cleaner.commits.retained", "10");
       properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersionString);

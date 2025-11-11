@@ -21,7 +21,9 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.LogicalTypes;
@@ -45,10 +47,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class TestHoodieTableMetadataUtil {
+class TestHoodieTableMetadataUtil {
 
   @Test
-  public void testGetRecordKeyToFileGroupIndexFunction() {
+  void testGetRecordKeyToFileGroupIndexFunction() {
     int numFileGroups = 10;
     String recordKey = "recordKey$";
     String secondaryKey = "secondaryKey$";
@@ -184,7 +186,9 @@ public class TestHoodieTableMetadataUtil {
         .withIndexName(PARTITION_NAME_COLUMN_STATS)
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .build();
-    List<String> result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getTableInitialVersion()).thenReturn(HoodieTableVersion.NINE);
+    List<String> result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema, tableConfig);
     assertEquals(Arrays.asList("name", "age"), result);
     assertFalse(result.contains("created_at"), "Timestamp-millis field should be excluded");
 
@@ -195,10 +199,16 @@ public class TestHoodieTableMetadataUtil {
         .withIndexName(PARTITION_NAME_COLUMN_STATS)
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .build();
-    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema);
+    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema, tableConfig);
     assertEquals(Arrays.asList("name", "created_at", "age"), result);
 
-    // Case 2: Non-timestamp columns should remain unchanged
+    // Case 3: Verify timestamp-millis field is excluded for initial table version < 9.
+    HoodieTableConfig newTableConfig = mock(HoodieTableConfig.class);
+    when(newTableConfig.getTableInitialVersion()).thenReturn(HoodieTableVersion.SIX);
+    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema, newTableConfig);
+    assertEquals(Arrays.asList("name", "age"), result);
+
+    // Case 4: Non-timestamp columns should remain unchanged
     inputCols = Arrays.asList("name", "age");
     indexDefinition = HoodieIndexDefinition.newBuilder()
         .withVersion(HoodieIndexVersion.V1)
@@ -206,17 +216,17 @@ public class TestHoodieTableMetadataUtil {
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .withSourceFields(inputCols)
         .build();
-    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema);
+    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema, tableConfig);
     assertEquals(inputCols, result, "Non-timestamp columns should remain unchanged");
 
-    // Case 3: Empty input should return empty output
+    // Case 5: Empty input should return empty output
     indexDefinition = HoodieIndexDefinition.newBuilder()
         .withVersion(HoodieIndexVersion.V1)
         .withSourceFields(Collections.emptyList())
         .withIndexName(PARTITION_NAME_COLUMN_STATS)
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .build();
-    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema);
+    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema, tableConfig);
     assertTrue(result.isEmpty(), "Expected empty output for empty input");
   }
 
@@ -256,7 +266,9 @@ public class TestHoodieTableMetadataUtil {
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .withSourceFields(inputCols)
         .build();
-    List<String> result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, nestedSchema);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getTableInitialVersion()).thenReturn(HoodieTableVersion.NINE);
+    List<String> result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, nestedSchema, tableConfig);
 
     // should filter out only the timestamp millis field
     assertEquals(

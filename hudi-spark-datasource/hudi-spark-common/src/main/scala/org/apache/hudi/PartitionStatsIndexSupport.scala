@@ -94,7 +94,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
         val indexDefinition = metaClient.getIndexMetadata.get()
           .getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS)
 
-        getValidIndexedColumns(indexDefinition, avroSchema).asScala.toSeq
+        getValidIndexedColumns(indexDefinition, avroSchema, metaClient.getTableConfig).asScala.toSeq
       }
       // Filter out queries involving null and value count checks
       val filteredQueryFilters: Seq[Expression] = filterExpressionsExcludingNullAndValue(nonSqlFilters, filteredIndexedCols)
