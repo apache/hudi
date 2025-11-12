@@ -21,6 +21,9 @@ package org.apache.hudi.sync.common.util;
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AvroToSparkJsonTest {
@@ -69,9 +72,6 @@ public class AvroToSparkJsonTest {
     assertTrue(!sparkSchemaJson.contains("struct<array:")
                && !sparkSchemaJson.contains("struct<key_value:"),
                "Arrays and maps should not be wrapped in structs");
-
-    System.out.println("Generated Spark Schema JSON:");
-    System.out.println(sparkSchemaJson);
   }
 
   @Test
@@ -291,5 +291,55 @@ public class AvroToSparkJsonTest {
     assertTrue(sparkSchemaJson.contains("\"type\":\"map\""));
     assertTrue(sparkSchemaJson.contains("\"type\":\"array\""));
     assertTrue(sparkSchemaJson.contains("\"comment\":\"Map of tag groups\""));
+  }
+
+  @Test
+  public void testFieldReordering() {
+    // Create Avro schema with mixed data and partition fields
+    String avroSchemaJson = "{\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"name\": \"TestRecord\",\n"
+        + "  \"fields\": [\n"
+        + "    {\"name\": \"id\", \"type\": \"int\", \"doc\": \"Unique identifier\"},\n"
+        + "    {\"name\": \"partition_col\", \"type\": \"string\", \"doc\": \"Partition column\"},\n"
+        + "    {\"name\": \"name\", \"type\": [\"null\", \"string\"], \"default\": null, \"doc\": \"Person's name\"},\n"
+        + "    {\"name\": \"age\", \"type\": \"int\"},\n"
+        + "    {\"name\": \"year\", \"type\": \"int\", \"doc\": \"Year partition\"}\n"
+        + "  ]\n"
+        + "}";
+
+    Schema avroSchema = new Schema.Parser().parse(avroSchemaJson);
+    List<String> partitionFields = Arrays.asList("partition_col", "year");
+
+    // Test without reordering (original order)
+    String originalSchemaJson = AvroToSparkJson.convertToSparkSchemaJson(avroSchema);
+
+    // Test with reordering (data fields first, partition fields last)
+    String reorderedSchemaJson = AvroToSparkJson.convertToSparkSchemaJson(avroSchema, partitionFields);
+
+    // Parse JSON to verify field order
+    assertTrue(originalSchemaJson.contains("\"name\":\"id\""));
+    assertTrue(originalSchemaJson.contains("\"name\":\"partition_col\""));
+    assertTrue(reorderedSchemaJson.contains("\"name\":\"id\""));
+    assertTrue(reorderedSchemaJson.contains("\"name\":\"partition_col\""));
+
+    // Verify that reordered schema has data fields (id, name, age) before partition fields (partition_col, year)
+    int idIndex = reorderedSchemaJson.indexOf("\"name\":\"id\"");
+    int nameIndex = reorderedSchemaJson.indexOf("\"name\":\"name\"");
+    int ageIndex = reorderedSchemaJson.indexOf("\"name\":\"age\"");
+    int partitionColIndex = reorderedSchemaJson.indexOf("\"name\":\"partition_col\"");
+    int yearIndex = reorderedSchemaJson.indexOf("\"name\":\"year\"");
+
+    // Data fields should come before partition fields
+    assertTrue(idIndex < partitionColIndex, "id field should come before partition_col");
+    assertTrue(nameIndex < partitionColIndex, "name field should come before partition_col");
+    assertTrue(ageIndex < partitionColIndex, "age field should come before partition_col");
+    assertTrue(ageIndex < yearIndex, "age field should come before year partition field");
+
+    // Verify comments are preserved in reordered schema
+    assertTrue(reorderedSchemaJson.contains("\"comment\":\"Unique identifier\""));
+    assertTrue(reorderedSchemaJson.contains("\"comment\":\"Partition column\""));
+    assertTrue(reorderedSchemaJson.contains("\"comment\":\"Person's name\""));
+    assertTrue(reorderedSchemaJson.contains("\"comment\":\"Year partition\""));
   }
 }

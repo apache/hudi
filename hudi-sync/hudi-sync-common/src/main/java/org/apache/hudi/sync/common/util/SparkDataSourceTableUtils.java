@@ -44,8 +44,8 @@ public class SparkDataSourceTableUtils {
       sparkProperties.put("spark.sql.create.version", sparkVersion);
     }
 
-    // Convert schema using AvroToSparkJson for better type handling and comment support
-    String schemaString = AvroToSparkJson.convertToSparkSchemaJson(avroSchema);
+    // Convert schema using AvroToSparkJson with field reordering for Spark DataSource compatibility
+    String schemaString = AvroToSparkJson.convertToSparkSchemaJson(avroSchema, partitionNames);
     int numSchemaPart = (schemaString.length() + schemaLengthThreshold - 1) / schemaLengthThreshold;
     sparkProperties.put("spark.sql.sources.schema.numParts", String.valueOf(numSchemaPart));
     // Add each part of schema string to sparkProperties

@@ -21,7 +21,9 @@ package org.apache.hudi.sync.common.util;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -48,6 +50,30 @@ public class AvroToSparkJson {
     }
 
     SparkDataType sparkType = convertAvroType(avroSchema);
+    return sparkType.toJson();
+  }
+
+  /**
+   * Convert an Avro schema to Spark SQL schema JSON format with field reordering.
+   * Reorders fields to match Spark DataSource table convention: data columns first, partition columns last.
+   *
+   * @param avroSchema The Avro schema to convert
+   * @param partitionFieldNames List of partition field names to be moved to the end
+   * @return JSON string representing the Spark schema with reordered fields
+   */
+  public static String convertToSparkSchemaJson(Schema avroSchema, List<String> partitionFieldNames) {
+    if (avroSchema.getType() != Schema.Type.RECORD) {
+      throw new IllegalArgumentException("Top-level schema must be a RECORD type, got: " + avroSchema.getType());
+    }
+
+    if (partitionFieldNames == null || partitionFieldNames.isEmpty()) {
+      // No reordering needed, use the standard method
+      return convertToSparkSchemaJson(avroSchema);
+    }
+
+    // Create reordered schema
+    Schema reorderedSchema = reorderSchemaFields(avroSchema, partitionFieldNames);
+    SparkDataType sparkType = convertAvroType(reorderedSchema);
     return sparkType.toJson();
   }
 
@@ -265,5 +291,77 @@ public class AvroToSparkJson {
              + ",\"nullable\":" + nullable
              + ",\"metadata\":" + metadata.toString() + "}";
     }
+  }
+
+  /**
+   * Reorder Avro schema fields to match Spark DataSource table convention.
+   * Data columns first, partition columns last.
+   *
+   * @param originalSchema The original Avro schema
+   * @param partitionFieldNames List of partition field names
+   * @return New Avro schema with reordered fields
+   */
+  private static Schema reorderSchemaFields(Schema originalSchema, List<String> partitionFieldNames) {
+    if (originalSchema.getType() != Schema.Type.RECORD) {
+      return originalSchema;
+    }
+
+    List<Schema.Field> originalFields = originalSchema.getFields();
+    List<Schema.Field> dataFields = new ArrayList<>();
+    List<Schema.Field> partitionFields = new ArrayList<>();
+
+    // Separate data fields and partition fields
+    for (Schema.Field field : originalFields) {
+      if (partitionFieldNames.contains(field.name())) {
+        partitionFields.add(field);
+      } else {
+        dataFields.add(field);
+      }
+    }
+
+    // Create reordered field list: data fields first, partition fields last
+    List<Schema.Field> reorderedFields = new ArrayList<>();
+
+    // Add data fields first (with cloned field objects to avoid issues)
+    for (Schema.Field field : dataFields) {
+      Schema.Field clonedField = new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal());
+      // Copy field properties if they exist
+      if (field.getObjectProps() != null) {
+        for (Map.Entry<String, Object> prop : field.getObjectProps().entrySet()) {
+          clonedField.addProp(prop.getKey(), prop.getValue());
+        }
+      }
+      reorderedFields.add(clonedField);
+    }
+
+    // Add partition fields last (with cloned field objects)
+    for (Schema.Field field : partitionFields) {
+      Schema.Field clonedField = new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal());
+      // Copy field properties if they exist
+      if (field.getObjectProps() != null) {
+        for (Map.Entry<String, Object> prop : field.getObjectProps().entrySet()) {
+          clonedField.addProp(prop.getKey(), prop.getValue());
+        }
+      }
+      reorderedFields.add(clonedField);
+    }
+
+    // Create new schema with reordered fields
+    Schema reorderedSchema = Schema.createRecord(
+        originalSchema.getName(),
+        originalSchema.getDoc(),
+        originalSchema.getNamespace(),
+        originalSchema.isError(),
+        reorderedFields
+    );
+
+    // Copy schema-level properties if they exist
+    if (originalSchema.getObjectProps() != null) {
+      for (Map.Entry<String, Object> prop : originalSchema.getObjectProps().entrySet()) {
+        reorderedSchema.addProp(prop.getKey(), prop.getValue());
+      }
+    }
+
+    return reorderedSchema;
   }
 }

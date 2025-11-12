@@ -66,13 +66,6 @@ public class TestSparkDataSourceTableUtils {
                "Should contain comment for name field");
     assertTrue(schemaPart.contains("\"comment\":\"Partition column for data organization\""),
                "Should contain comment for partition column");
-
-    System.out.println("Generated Spark table properties with comments:");
-    properties.forEach((key, value) -> {
-      if (key.startsWith("spark.sql.sources.schema.part")) {
-        System.out.println(key + " = " + value);
-      }
-    });
   }
 
   @Test
@@ -108,12 +101,5 @@ public class TestSparkDataSourceTableUtils {
                "Should not contain any comment fields when no comments provided");
     assertTrue(schemaPart.contains("\"metadata\":{}"),
                "Should contain empty metadata when no comments provided");
-
-    System.out.println("Generated Spark table properties without comments:");
-    properties.forEach((key, value) -> {
-      if (key.startsWith("spark.sql.sources.schema.part")) {
-        System.out.println(key + " = " + value);
-      }
-    });
   }
 }
