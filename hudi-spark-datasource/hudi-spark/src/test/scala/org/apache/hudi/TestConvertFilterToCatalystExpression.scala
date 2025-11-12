@@ -34,7 +34,7 @@ class TestConvertFilterToCatalystExpression {
     fields.append(StructField("name", StringType, nullable = true))
     fields.append(StructField("price", DoubleType, nullable = true))
     fields.append(StructField("ts", IntegerType, nullable = false))
-    StructType(fields)
+    StructType(fields.toSeq)
   }
 
   private def convertToCatalystExpression(filters: Array[Filter],
@@ -80,7 +80,7 @@ class TestConvertFilterToCatalystExpression {
   private def checkConvertFilter(filter: Filter, expectExpression: String): Unit = {
     // [SPARK-25769][SPARK-34636][SPARK-34626][SQL] sql method in UnresolvedAttribute,
     // AttributeReference and Alias don't quote qualified names properly
-    val removeQuotesIfNeed = if (expectExpression != null && HoodieSparkUtils.gteqSpark3_2) {
+    val removeQuotesIfNeed = if (expectExpression != null) {
       expectExpression.replace("`", "")
     } else {
       expectExpression
@@ -97,7 +97,7 @@ class TestConvertFilterToCatalystExpression {
   private def checkConvertFilters(filters: Array[Filter], expectExpression: String): Unit = {
     // [SPARK-25769][SPARK-34636][SPARK-34626][SQL] sql method in UnresolvedAttribute,
     // AttributeReference and Alias don't quote qualified names properly
-    val removeQuotesIfNeed = if (expectExpression != null && HoodieSparkUtils.gteqSpark3_2) {
+    val removeQuotesIfNeed = if (expectExpression != null) {
       expectExpression.replace("`", "")
     } else {
       expectExpression

@@ -18,13 +18,9 @@
 
 package org.apache.hudi.sink.partitioner;
 
-import org.apache.hudi.client.FlinkTaskContextSupplier;
+import org.apache.hudi.adapter.KeyedProcessFunctionAdapter;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.common.model.BaseAvroPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -32,22 +28,24 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
-import org.apache.hudi.sink.bootstrap.IndexRecord;
-import org.apache.hudi.sink.utils.PayloadCreation;
+import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.table.action.commit.BucketInfo;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.FlinkTaskContextSupplier;
+import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.utils.RuntimeContextUtils;
+import org.apache.hudi.utils.StateTtlConfigUtils;
 
 import org.apache.flink.api.common.state.CheckpointListener;
-import org.apache.flink.api.common.state.StateTtlConfig;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
-import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
-import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.types.RowKind;
 import org.apache.flink.util.Collector;
 
 import java.util.Objects;
@@ -67,8 +65,8 @@ import java.util.Objects;
  *
  * @see BucketAssigner
  */
-public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
-    extends KeyedProcessFunction<K, I, O>
+public class BucketAssignFunction
+    extends KeyedProcessFunctionAdapter<String, HoodieFlinkInternalRow, HoodieFlinkInternalRow>
     implements CheckpointedFunction, CheckpointListener {
 
   /**
@@ -94,11 +92,6 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   private final boolean isChangingRecords;
 
   /**
-   * Used to create DELETE payload.
-   */
-  private PayloadCreation payloadCreation;
-
-  /**
    * If the index is global, update the index for the old partition path
    * if same key record with different partition path came in.
    */
@@ -107,32 +100,28 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   public BucketAssignFunction(Configuration conf) {
     this.conf = conf;
     this.isChangingRecords = WriteOperationType.isChangingRecords(
-        WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)));
-    this.globalIndex = conf.getBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED)
-        && !conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
+        WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION)));
+    this.globalIndex = conf.get(FlinkOptions.INDEX_GLOBAL_ENABLED)
+        && !conf.get(FlinkOptions.CHANGELOG_ENABLED);
   }
 
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    HoodieWriteConfig writeConfig = StreamerUtil.getHoodieClientConfig(this.conf, true);
+    // not load fs view storage config for incremental job graph, since embedded timeline server
+    // is started in write coordinator which is started after bucket assigner operator finished
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, !OptionsResolver.isIncrementalJobGraph(conf));
     HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
-        new SerializableConfiguration(HadoopConfigurations.getHadoopConf(this.conf)),
+        HadoopFSUtils.getStorageConfWithCopy(HadoopConfigurations.getHadoopConf(this.conf)),
         new FlinkTaskContextSupplier(getRuntimeContext()));
     this.bucketAssigner = BucketAssigners.create(
-        getRuntimeContext().getIndexOfThisSubtask(),
-        getRuntimeContext().getMaxNumberOfParallelSubtasks(),
-        getRuntimeContext().getNumberOfParallelSubtasks(),
-        ignoreSmallFiles(),
-        HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)),
+        RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext()),
+        RuntimeContextUtils.getMaxNumberOfParallelSubtasks(getRuntimeContext()),
+        RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext()),
+        OptionsResolver.isInsertOverwrite(conf),
+        HoodieTableType.valueOf(conf.get(FlinkOptions.TABLE_TYPE)),
         context,
         writeConfig);
-    this.payloadCreation = PayloadCreation.instance(this.conf);
-  }
-
-  private boolean ignoreSmallFiles() {
-    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
-    return WriteOperationType.isOverwrite(operationType);
   }
 
   @Override
@@ -146,65 +135,68 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
         new ValueStateDescriptor<>(
             "indexState",
             TypeInformation.of(HoodieRecordGlobalLocation.class));
-    double ttl = conf.getDouble(FlinkOptions.INDEX_STATE_TTL) * 24 * 60 * 60 * 1000;
+    double ttl = conf.get(FlinkOptions.INDEX_STATE_TTL) * 24 * 60 * 60 * 1000;
     if (ttl > 0) {
-      indexStateDesc.enableTimeToLive(StateTtlConfig.newBuilder(Time.milliseconds((long) ttl)).build());
+      indexStateDesc.enableTimeToLive(StateTtlConfigUtils.createTtlConfig((long) ttl));
     }
     indexState = context.getKeyedStateStore().getState(indexStateDesc);
   }
 
   @Override
-  public void processElement(I value, Context ctx, Collector<O> out) throws Exception {
-    if (value instanceof IndexRecord) {
-      IndexRecord<?> indexRecord = (IndexRecord<?>) value;
-      this.indexState.update((HoodieRecordGlobalLocation) indexRecord.getCurrentLocation());
+  public void processElement(HoodieFlinkInternalRow value, Context ctx, Collector<HoodieFlinkInternalRow> out) throws Exception {
+    if (value.isIndexRecord()) {
+      this.indexState.update(
+          new HoodieRecordGlobalLocation(value.getPartitionPath(), value.getInstantTime(), value.getFileId()));
     } else {
-      processRecord((HoodieRecord<?>) value, out);
+      processRecord(value, out);
     }
   }
 
-  @SuppressWarnings("unchecked")
-  private void processRecord(HoodieRecord<?> record, Collector<O> out) throws Exception {
+  private void processRecord(HoodieFlinkInternalRow record, Collector<HoodieFlinkInternalRow> out) throws Exception {
     // 1. put the record into the BucketAssigner;
     // 2. look up the state for location, if the record has a location, just send it out;
     // 3. if it is an INSERT, decide the location using the BucketAssigner then send it out.
-    final HoodieKey hoodieKey = record.getKey();
-    final String recordKey = hoodieKey.getRecordKey();
-    final String partitionPath = hoodieKey.getPartitionPath();
+    final String partitionPath = record.getPartitionPath();
     final HoodieRecordLocation location;
-
-    // Only changing records need looking up the index for the location,
-    // append only records are always recognized as INSERT.
-    HoodieRecordGlobalLocation oldLoc = indexState.value();
-    if (isChangingRecords && oldLoc != null) {
-      // Set up the instant time as "U" to mark the bucket as an update bucket.
-      if (!Objects.equals(oldLoc.getPartitionPath(), partitionPath)) {
-        if (globalIndex) {
-          // if partition path changes, emit a delete record for old partition path,
-          // then update the index state using location with new partition path.
-          HoodieRecord<?> deleteRecord = new HoodieAvroRecord<>(new HoodieKey(recordKey, oldLoc.getPartitionPath()),
-              payloadCreation.createDeletePayload((BaseAvroPayload) record.getData()));
-          deleteRecord.setCurrentLocation(oldLoc.toLocal("U"));
-          deleteRecord.seal();
-          out.collect((O) deleteRecord);
+    if (isChangingRecords) {
+      // Only changing records need looking up the index for the location,
+      // append only records are always recognized as INSERT.
+      // Structured as Tuple(partition, fileId, instantTime).
+      HoodieRecordGlobalLocation oldLoc = indexState.value();
+      if (oldLoc != null) {
+        // Set up the instant time as "U" to mark the bucket as an update bucket.
+        String partitionFromState = oldLoc.getPartitionPath();
+        String fileIdFromState = oldLoc.getFileId();
+        if (!Objects.equals(partitionFromState, partitionPath)) {
+          if (globalIndex) {
+            // if partition path changes, emit a delete record for old partition path,
+            // then update the index state using location with new partition path.
+            RowData row = record.getRowData();
+            row.setRowKind(RowKind.DELETE);
+            HoodieFlinkInternalRow deleteRecord =
+                new HoodieFlinkInternalRow(record.getRecordKey(), partitionFromState, fileIdFromState, "U", "D", false, row);
+            out.collect(deleteRecord);
+          }
+          location = getNewRecordLocation(partitionPath);
+        } else {
+          location = oldLoc.toLocal("U");
+          this.bucketAssigner.addUpdate(partitionPath, location.getFileId());
         }
-        location = getNewRecordLocation(partitionPath);
       } else {
-        location = oldLoc.toLocal("U");
-        this.bucketAssigner.addUpdate(partitionPath, location.getFileId());
+        location = getNewRecordLocation(partitionPath);
       }
+      // always refresh the index
+      this.indexState.update(HoodieRecordGlobalLocation.fromLocal(partitionPath, location));
     } else {
       location = getNewRecordLocation(partitionPath);
     }
-    // always refresh the index
-    if (isChangingRecords) {
-      updateIndexState(partitionPath, location);
-    }
-    record.setCurrentLocation(location);
-    out.collect((O) record);
+    record.setFileId(location.getFileId());
+    record.setInstantTime(location.getInstantTime());
+
+    out.collect(record);
   }
 
-  private HoodieRecordLocation getNewRecordLocation(String partitionPath) {
+  protected HoodieRecordLocation getNewRecordLocation(String partitionPath) {
     final BucketInfo bucketInfo = this.bucketAssigner.addInsert(partitionPath);
     final HoodieRecordLocation location;
     switch (bucketInfo.getBucketType()) {
@@ -221,12 +213,6 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
         throw new AssertionError();
     }
     return location;
-  }
-
-  private void updateIndexState(
-      String partitionPath,
-      HoodieRecordLocation localLoc) throws Exception {
-    this.indexState.update(HoodieRecordGlobalLocation.fromLocal(partitionPath, localLoc));
   }
 
   @Override

@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
@@ -36,10 +35,10 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -59,7 +58,7 @@ import scala.Tuple2;
 /**
  * Provides an RDD based API for accessing/filtering Hoodie tables, based on keys.
  */
-public class SparkRDDReadClient<T extends HoodieRecordPayload<T>> implements Serializable {
+public class SparkRDDReadClient<T> implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
@@ -68,10 +67,10 @@ public class SparkRDDReadClient<T extends HoodieRecordPayload<T>> implements Ser
    * base path pointing to the table. Until, then just always assume a BloomIndex
    */
   private final transient HoodieIndex<?, ?> index;
-  private HoodieTable hoodieTable;
+  private final HoodieTable hoodieTable;
   private transient Option<SQLContext> sqlContextOpt;
   private final transient HoodieSparkEngineContext context;
-  private final transient Configuration hadoopConf;
+  private final transient StorageConfiguration<?> storageConf;
 
   /**
    * @param basePath path to Hoodie table
@@ -111,11 +110,8 @@ public class SparkRDDReadClient<T extends HoodieRecordPayload<T>> implements Ser
    */
   public SparkRDDReadClient(HoodieSparkEngineContext context, HoodieWriteConfig clientConfig) {
     this.context = context;
-    this.hadoopConf = context.getHadoopConf().get();
-    final String basePath = clientConfig.getBasePath();
-    // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
-    this.hoodieTable = HoodieSparkTable.create(clientConfig, context, metaClient);
+    this.storageConf = context.getStorageConf();
+    this.hoodieTable = HoodieSparkTable.create(clientConfig, context);
     this.index = SparkHoodieIndexFactory.createIndex(clientConfig);
     this.sqlContextOpt = Option.empty();
   }
@@ -224,11 +220,11 @@ public class SparkRDDReadClient<T extends HoodieRecordPayload<T>> implements Ser
    * @return
    */
   public List<Pair<String, HoodieCompactionPlan>> getPendingCompactions() {
-    HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(hoodieTable.getMetaClient().getBasePath()).setLoadActiveTimelineOnLoad(true).build();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf.newInstance()).setBasePath(hoodieTable.getMetaClient().getBasePath()).setLoadActiveTimelineOnLoad(true).build();
     return CompactionUtils.getAllPendingCompactionPlans(metaClient).stream()
         .map(
-            instantWorkloadPair -> Pair.of(instantWorkloadPair.getKey().getTimestamp(), instantWorkloadPair.getValue()))
+            instantWorkloadPair -> Pair.of(instantWorkloadPair.getKey().requestedTime(), instantWorkloadPair.getValue()))
         .collect(Collectors.toList());
   }
 }

@@ -16,5 +16,5 @@
 # limitations under the License.
 
 
-org.apache.hudi.DefaultSource
-org.apache.spark.sql.execution.datasources.parquet.HoodieParquetFileFormat
+org.apache.hudi.BaseDefaultSource
+org.apache.spark.sql.execution.datasources.parquet.LegacyHoodieParquetFileFormat

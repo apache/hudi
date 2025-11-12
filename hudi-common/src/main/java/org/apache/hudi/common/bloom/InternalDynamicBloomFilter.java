@@ -18,16 +18,13 @@
 
 package org.apache.hudi.common.bloom;
 
-import org.apache.hadoop.util.bloom.BloomFilter;
-import org.apache.hadoop.util.bloom.Key;
-
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
 /**
  * Hoodie's internal dynamic Bloom Filter. This is largely based of {@link org.apache.hadoop.util.bloom.DynamicBloomFilter}
- * with bounds on maximum number of entries. Once the max entries is reached, false positive gaurantees are not
+ * with bounds on maximum number of entries. Once the max entries is reached, false positive guarantees are not
  * honored.
  */
 class InternalDynamicBloomFilter extends InternalFilter {
@@ -48,7 +45,7 @@ class InternalDynamicBloomFilter extends InternalFilter {
   /**
    * The matrix of Bloom filter.
    */
-  private org.apache.hadoop.util.bloom.BloomFilter[] matrix;
+  private InternalBloomFilter[] matrix;
 
   /**
    * Zero-args constructor for the serialization.
@@ -63,7 +60,7 @@ class InternalDynamicBloomFilter extends InternalFilter {
    *
    * @param vectorSize The number of bits in the vector.
    * @param nbHash     The number of hash function to consider.
-   * @param hashType   type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
+   * @param hashType   type of the hashing function (see {@link org.apache.hudi.common.util.hash.Hash}).
    * @param nr         The threshold for the maximum number of keys to record in a dynamic Bloom filter row.
    */
   public InternalDynamicBloomFilter(int vectorSize, int nbHash, int hashType, int nr, int maxNr) {
@@ -73,8 +70,8 @@ class InternalDynamicBloomFilter extends InternalFilter {
     this.currentNbRecord = 0;
     this.maxNr = maxNr;
 
-    matrix = new org.apache.hadoop.util.bloom.BloomFilter[1];
-    matrix[0] = new org.apache.hadoop.util.bloom.BloomFilter(this.vectorSize, this.nbHash, this.hashType);
+    matrix = new InternalBloomFilter[1];
+    matrix[0] = new InternalBloomFilter(this.vectorSize, this.nbHash, this.hashType);
   }
 
   @Override
@@ -83,7 +80,7 @@ class InternalDynamicBloomFilter extends InternalFilter {
       throw new NullPointerException("Key can not be null");
     }
 
-    org.apache.hadoop.util.bloom.BloomFilter bf = getActiveStandardBF();
+    InternalBloomFilter bf = getActiveStandardBF();
 
     if (bf == null) {
       addRow();
@@ -121,7 +118,7 @@ class InternalDynamicBloomFilter extends InternalFilter {
       return true;
     }
 
-    for (BloomFilter bloomFilter : matrix) {
+    for (InternalBloomFilter bloomFilter : matrix) {
       if (bloomFilter.membershipTest(key)) {
         return true;
       }
@@ -132,7 +129,7 @@ class InternalDynamicBloomFilter extends InternalFilter {
 
   @Override
   public void not() {
-    for (BloomFilter bloomFilter : matrix) {
+    for (InternalBloomFilter bloomFilter : matrix) {
       bloomFilter.not();
     }
   }
@@ -177,7 +174,7 @@ class InternalDynamicBloomFilter extends InternalFilter {
   public String toString() {
     StringBuilder res = new StringBuilder();
 
-    for (BloomFilter bloomFilter : matrix) {
+    for (InternalBloomFilter bloomFilter : matrix) {
       res.append(bloomFilter);
       res.append(Character.LINE_SEPARATOR);
     }
@@ -192,7 +189,7 @@ class InternalDynamicBloomFilter extends InternalFilter {
     out.writeInt(nr);
     out.writeInt(currentNbRecord);
     out.writeInt(matrix.length);
-    for (BloomFilter bloomFilter : matrix) {
+    for (InternalBloomFilter bloomFilter : matrix) {
       bloomFilter.write(out);
     }
   }
@@ -203,9 +200,9 @@ class InternalDynamicBloomFilter extends InternalFilter {
     nr = in.readInt();
     currentNbRecord = in.readInt();
     int len = in.readInt();
-    matrix = new org.apache.hadoop.util.bloom.BloomFilter[len];
+    matrix = new InternalBloomFilter[len];
     for (int i = 0; i < matrix.length; i++) {
-      matrix[i] = new org.apache.hadoop.util.bloom.BloomFilter();
+      matrix[i] = new InternalBloomFilter();
       matrix[i].readFields(in);
     }
   }
@@ -213,20 +210,36 @@ class InternalDynamicBloomFilter extends InternalFilter {
   /**
    * Adds a new row to <i>this</i> dynamic Bloom filter.
    */
-  private void addRow() {
-    BloomFilter[] tmp = new BloomFilter[matrix.length + 1];
+  protected void addRow() {
+    InternalBloomFilter[] tmp = new InternalBloomFilter[matrix.length + 1];
     System.arraycopy(matrix, 0, tmp, 0, matrix.length);
-    tmp[tmp.length - 1] = new BloomFilter(vectorSize, nbHash, hashType);
+    tmp[tmp.length - 1] = new InternalBloomFilter(vectorSize, nbHash, hashType);
+    matrix = tmp;
+  }
+
+  protected void addRows(int size) {
+    if (size <= 0) {
+      return;
+    } else if (size == 1) {
+      addRow();
+      return;
+    }
+
+    InternalBloomFilter[] tmp = new InternalBloomFilter[matrix.length + size];
+    System.arraycopy(matrix, 0, tmp, 0, matrix.length);
+    for (int i = matrix.length; i < tmp.length; i++) {
+      tmp[i] = new InternalBloomFilter(vectorSize, nbHash, hashType);
+    }
     matrix = tmp;
   }
 
   /**
    * Returns the active standard Bloom filter in <i>this</i> dynamic Bloom filter.
    *
-   * @return BloomFilter The active standard Bloom filter.
+   * @return SingleBloomFilter The active standard Bloom filter.
    * <code>Null</code> otherwise.
    */
-  private BloomFilter getActiveStandardBF() {
+  private InternalBloomFilter getActiveStandardBF() {
     if (reachedMax) {
       return matrix[curMatrixIndex++ % matrix.length];
     }
@@ -238,5 +251,9 @@ class InternalDynamicBloomFilter extends InternalFilter {
       return matrix[0];
     }
     return matrix[matrix.length - 1];
+  }
+
+  public int getMatrixLength() {
+    return this.matrix.length;
   }
 }

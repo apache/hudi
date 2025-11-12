@@ -18,10 +18,12 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hudi.common.util.Option;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -43,13 +45,14 @@ import java.util.Properties;
 public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
 
   public static final String OP_FIELD = "Op";
+  public static final String DELETE_OPERATION_VALUE = "D";
 
   public AWSDmsAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
   }
 
   public AWSDmsAvroPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, 0); // natural order
+    this(record.isPresent() ? record.get() : null, OrderingValues.getDefault()); // natural order
   }
 
   /**
@@ -61,10 +64,24 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
     boolean delete = false;
     if (insertValue instanceof GenericRecord) {
       GenericRecord record = (GenericRecord) insertValue;
-      delete = record.get(OP_FIELD) != null && record.get(OP_FIELD).toString().equalsIgnoreCase("D");
+      delete = isDMSDeleteRecord(record);
     }
 
     return delete ? Option.empty() : Option.of(insertValue);
+  }
+
+  @Override
+  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue) {
+    if (oldValue.isEmptyRecord()) {
+      // use natural order for delete record
+      return this;
+    }
+    if (oldValue.orderingVal.compareTo(orderingVal) > 0) {
+      // pick the payload with greatest ordering value
+      return oldValue;
+    } else {
+      return this;
+    }
   }
 
   @Override
@@ -92,5 +109,14 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
       return Option.empty();
     }
     return handleDeleteOperation(insertValue.get());
+  }
+
+  @Override
+  protected boolean isDeleteRecord(GenericRecord record) {
+    return isDMSDeleteRecord(record) || super.isDeleteRecord(record);
+  }
+
+  private static boolean isDMSDeleteRecord(GenericRecord record) {
+    return record.get(OP_FIELD) != null && record.get(OP_FIELD).toString().equalsIgnoreCase(DELETE_OPERATION_VALUE);
   }
 }

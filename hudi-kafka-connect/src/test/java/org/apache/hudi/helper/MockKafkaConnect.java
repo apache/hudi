@@ -29,6 +29,8 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+
 /**
  * Helper class that emulates the Kafka Connect f/w and additionally
  * implements {@link SinkTaskContext} for testing purposes.
@@ -137,9 +139,9 @@ public class MockKafkaConnect implements SinkTaskContext {
     return new SinkRecord(testPartition.topic(),
         testPartition.partition(),
         Schema.OPTIONAL_BYTES_SCHEMA,
-        ("key-" + currentKafkaOffset).getBytes(),
+        getUTF8Bytes("key-" + currentKafkaOffset),
         Schema.OPTIONAL_BYTES_SCHEMA,
-        "value".getBytes(), currentKafkaOffset++);
+        getUTF8Bytes("value"), currentKafkaOffset++);
   }
 
   private void resetOffset(long newOffset) {

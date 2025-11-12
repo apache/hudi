@@ -18,13 +18,18 @@
 
 package org.apache.hudi.utils;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.ViewStorageProperties;
 
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -39,21 +44,32 @@ public class TestViewStorageProperties {
   @TempDir
   File tempFile;
 
-  @Test
-  void testReadWriteProperties() throws IOException {
+  @ParameterizedTest
+  @ValueSource(strings = {"", "1"})
+  void testReadWriteProperties(String uniqueId) throws IOException {
     String basePath = tempFile.getAbsolutePath();
     FileSystemViewStorageConfig config = FileSystemViewStorageConfig.newBuilder()
         .withStorageType(FileSystemViewStorageType.SPILLABLE_DISK)
         .withRemoteServerHost("host1")
         .withRemoteServerPort(1234).build();
     Configuration flinkConfig = new Configuration();
+    flinkConfig.set(FlinkOptions.WRITE_CLIENT_ID, uniqueId);
     ViewStorageProperties.createProperties(basePath, config, flinkConfig);
     ViewStorageProperties.createProperties(basePath, config, flinkConfig);
     ViewStorageProperties.createProperties(basePath, config, flinkConfig);
 
-    FileSystemViewStorageConfig readConfig = ViewStorageProperties.loadFromProperties(basePath, new Configuration());
+    FileSystemViewStorageConfig readConfig = ViewStorageProperties.loadFromProperties(basePath, flinkConfig);
     assertThat(readConfig.getStorageType(), is(FileSystemViewStorageType.SPILLABLE_DISK));
     assertThat(readConfig.getRemoteViewServerHost(), is("host1"));
     assertThat(readConfig.getRemoteViewServerPort(), is(1234));
+  }
+
+  @Test
+  void testDumpRemoteViewStorageConfig() throws IOException {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    try (HoodieFlinkWriteClient<?> writeClient = FlinkWriteClients.createWriteClient(conf)) {
+      FileSystemViewStorageConfig storageConfig = ViewStorageProperties.loadFromProperties(conf.get(FlinkOptions.PATH), new Configuration());
+      assertThat(storageConfig.getStorageType(), is(FileSystemViewStorageType.REMOTE_FIRST));
+    }
   }
 }

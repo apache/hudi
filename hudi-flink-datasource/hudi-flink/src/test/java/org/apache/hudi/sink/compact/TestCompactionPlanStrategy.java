@@ -18,9 +18,9 @@
 
 package org.apache.hudi.sink.compact;
 
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
 import org.apache.hudi.sink.compact.strategy.CompactionPlanStrategies;
 import org.apache.hudi.sink.compact.strategy.CompactionPlanStrategy;
 
@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -40,12 +41,12 @@ public class TestCompactionPlanStrategy {
   private HoodieTimeline emptyTimeline;
   private HoodieTimeline allCompleteTimeline;
 
-  private static final HoodieInstant INSTANT_001 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "001");
-  private static final HoodieInstant INSTANT_002 = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "002");
-  private static final HoodieInstant INSTANT_003 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "003");
-  private static final HoodieInstant INSTANT_004 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "004");
-  private static final HoodieInstant INSTANT_005 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMPACTION_ACTION, "005");
-  private static final HoodieInstant INSTANT_006 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "006");
+  private static final HoodieInstant INSTANT_001 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "001");
+  private static final HoodieInstant INSTANT_002 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "002");
+  private static final HoodieInstant INSTANT_003 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "003");
+  private static final HoodieInstant INSTANT_004 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "004");
+  private static final HoodieInstant INSTANT_005 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMPACTION_ACTION, "005");
+  private static final HoodieInstant INSTANT_006 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "006");
 
   @BeforeEach
   public void beforeEach() {
@@ -139,10 +140,10 @@ public class TestCompactionPlanStrategy {
   private void assertHoodieInstantEquals(HoodieInstant expected, HoodieInstant actual) {
     assertEquals(expected.getState(), actual.getState());
     assertEquals(expected.getAction(), actual.getAction());
-    assertEquals(expected.getTimestamp(), actual.getTimestamp());
+    assertEquals(expected.requestedTime(), actual.requestedTime());
   }
 
-  private static final class MockHoodieActiveTimeline extends HoodieActiveTimeline {
+  private static final class MockHoodieActiveTimeline extends ActiveTimelineV2 {
     public MockHoodieActiveTimeline(HoodieInstant... instants) {
       super();
       setInstants(Arrays.asList(instants));

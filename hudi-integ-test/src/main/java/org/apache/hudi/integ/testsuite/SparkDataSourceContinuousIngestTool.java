@@ -21,18 +21,19 @@ package org.apache.hudi.integ.testsuite;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.HoodieRepairTool;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -40,10 +41,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-
 /**
  * Sample command
  *
+ * TODO: [HUDI-8294]
  * ./bin/spark-submit --packages org.apache.spark:spark-avro_2.11:2.4.4 --driver-memory 4g   --executor-memory 4g \
  * --conf spark.serializer=org.apache.spark.serializer.KryoSerializer   --conf spark.sql.catalogImplementation=hive \
  * --class org.apache.hudi.integ.testsuite.SparkDSContinuousIngestTool \
@@ -60,14 +61,14 @@ import java.util.Map;
  * hoodie.datasource.write.recordkey.field=VendorID
  * hoodie.datasource.write.partitionpath.field=date_col
  * hoodie.datasource.write.operation=upsert
- * hoodie.datasource.write.precombine.field=tpep_pickup_datetime
+ * hoodie.table.ordering.fields=tpep_pickup_datetime
  * hoodie.metadata.enable=false
  * hoodie.table.name=hudi_tbl
  */
 
 public class SparkDataSourceContinuousIngestTool {
 
-  private static final Logger LOG = LogManager.getLogger(SparkDataSourceContinuousIngestTool.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkDataSourceContinuousIngestTool.class);
 
   private final Config cfg;
   // Properties with source, hoodie client, key generator etc.
@@ -77,7 +78,7 @@ public class SparkDataSourceContinuousIngestTool {
 
   public SparkDataSourceContinuousIngestTool(JavaSparkContext jsc, Config cfg) {
     if (cfg.propsFilePath != null) {
-      cfg.propsFilePath = FSUtils.addSchemeIfLocalPath(cfg.propsFilePath).toString();
+      cfg.propsFilePath = HadoopFSUtils.addSchemeIfLocalPath(cfg.propsFilePath).toString();
     }
     this.context = new HoodieSparkEngineContext(jsc);
     this.sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
@@ -107,7 +108,8 @@ public class SparkDataSourceContinuousIngestTool {
   public void run() {
     try {
       SparkDataSourceContinuousIngest sparkDataSourceContinuousIngest =
-          new SparkDataSourceContinuousIngest(sparkSession, context.getHadoopConf().get(), new Path(cfg.sourcePath), cfg.sparkFormat,
+          new SparkDataSourceContinuousIngest(
+              sparkSession, context.getStorageConf().unwrapAs(Configuration.class), new Path(cfg.sourcePath), cfg.sparkFormat,
               new Path(cfg.checkpointFilePath), new Path(cfg.basePath), getPropsAsMap(props),
               cfg.minSyncIntervalSeconds);
       sparkDataSourceContinuousIngest.startIngestion();

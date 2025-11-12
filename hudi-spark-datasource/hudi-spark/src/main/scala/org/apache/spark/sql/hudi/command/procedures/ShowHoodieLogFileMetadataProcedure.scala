@@ -17,28 +17,31 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieLogFile
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.log.HoodieLogFormat
-import org.apache.hudi.common.table.log.block.HoodieLogBlock.{HeaderMetadataType, HoodieLogBlockType}
 import org.apache.hudi.common.table.log.block.{HoodieCorruptBlock, HoodieDataBlock}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.parquet.avro.AvroSchemaConverter
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.{FooterMetadataType, HeaderMetadataType, HoodieLogBlockType}
+import org.apache.hudi.storage.StoragePath
+
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
-import java.util.Objects
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters.{asScalaBufferConverter, asScalaIteratorConverter, mapAsScalaMapConverter}
 
 class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBuilder {
   override def parameters: Array[ProcedureParameter] = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "log_file_path_pattern", DataTypes.StringType, None),
-    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 10)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.required(2, "log_file_path_pattern", DataTypes.StringType),
+    ProcedureParameter.optional(3, "limit", DataTypes.IntegerType, 10),
+    ProcedureParameter.optional(4, "filter", DataTypes.StringType, "")
   )
 
   override def outputType: StructType = StructType(Array[StructField](
@@ -50,24 +53,27 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
   ))
 
   override def call(args: ProcedureArgs): Seq[Row] = {
-    checkArgs(parameters, args)
     val table = getArgValueOrDefault(args, parameters(0))
-    val logFilePathPattern: String = getArgValueOrDefault(args, parameters(1)).get.asInstanceOf[String]
-    val limit: Int = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[Int]
-    val basePath = getBasePath(table)
-    val fs = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build.getFs
-    val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(logFilePathPattern)).iterator().asScala
+    val path = getArgValueOrDefault(args, parameters(1))
+    val basePath = getBasePath(table, path)
+    checkArgs(parameters, args)
+    val logFilePathPattern: String = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[String]
+    val limit: Int = getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[Int]
+    val filter = getArgValueOrDefault(args, parameters(4)).get.asInstanceOf[String]
+
+    validateFilter(filter, outputType)
+    val storage = createMetaClient(jsc, basePath).getStorage
+    val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(logFilePathPattern)).iterator().asScala
       .map(_.getPath.toString).toList
     val commitCountAndMetadata =
-      new java.util.HashMap[String, java.util.List[(HoodieLogBlockType, (java.util.Map[HeaderMetadataType, String], java.util.Map[HeaderMetadataType, String]), Int)]]()
+      new java.util.HashMap[String, java.util.List[(HoodieLogBlockType, (java.util.Map[HeaderMetadataType, String], java.util.Map[FooterMetadataType, String]), Int)]]()
     var numCorruptBlocks = 0
     var dummyInstantTimeCount = 0
     logFilePaths.foreach {
       logFilePath => {
-        val statuses = fs.listStatus(new Path(logFilePath))
-        val schema = new AvroSchemaConverter()
-          .convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePath))))
-        val reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(statuses(0).getPath), schema)
+        val statuses = storage.listDirectEntries(new StoragePath(logFilePath))
+        val schema = TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePath))
+        val reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(statuses.get(0).getPath), schema)
 
         // read the avro blocks
         while (reader.hasNext) {
@@ -93,7 +99,7 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
             }
             block match {
               case dataBlock: HoodieDataBlock =>
-                val recordItr = dataBlock.getRecordIterator
+                val recordItr = dataBlock.getRecordIterator(HoodieRecordType.AVRO)
                 recordItr.asScala.foreach(_ => recordCount.incrementAndGet())
                 recordItr.close()
             }
@@ -102,7 +108,7 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
             val list = commitCountAndMetadata.get(instantTime)
             list.add((block.getBlockType, (block.getLogBlockHeader, block.getLogBlockFooter), recordCount.get()))
           } else {
-            val list = new java.util.ArrayList[(HoodieLogBlockType, (java.util.Map[HeaderMetadataType, String], java.util.Map[HeaderMetadataType, String]), Int)]
+            val list = new java.util.ArrayList[(HoodieLogBlockType, (java.util.Map[HeaderMetadataType, String], java.util.Map[FooterMetadataType, String]), Int)]
             list.add(block.getBlockType, (block.getLogBlockHeader, block.getLogBlockFooter), recordCount.get())
             commitCountAndMetadata.put(instantTime, list)
           }
@@ -125,7 +131,8 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
             ))
         }
     }
-    rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+    val results = rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+    applyFilter(results, filter, outputType)
   }
 
   override def build: Procedure = new ShowHoodieLogFileMetadataProcedure

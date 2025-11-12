@@ -19,18 +19,17 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.13.0-SNAPSHOT</version>
+        <version>1.2.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>hudi-kafka-connect</artifactId>
     <description>Kafka Connect Sink Connector for Hudi</description>
-    <version>0.13.0-SNAPSHOT</version>
+    <version>1.2.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
-        <connect.api.version>2.5.0</connect.api.version>
     </properties>
 
     <build>
@@ -73,9 +72,6 @@
             <resource>
                 <directory>src/main/resources</directory>
             </resource>
-            <resource>
-                <directory>src/test/resources</directory>
-            </resource>
         </resources>
     </build>
 
@@ -84,13 +80,13 @@
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>connect-api</artifactId>
-            <version>${connect.api.version}</version>
+            <version>${kafka.connect.api.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>connect-json</artifactId>
-            <version>${connect.api.version}</version>
+            <version>${kafka.connect.api.version}</version>
             <scope>provided</scope>
         </dependency>
 
@@ -130,6 +126,13 @@
             <artifactId>hudi-flink</artifactId>
             <version>${project.version}</version>
         </dependency>
+
+        <!-- Kryo -->
+        <dependency>
+            <groupId>com.esotericsoftware</groupId>
+            <artifactId>kryo-shaded</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-core</artifactId>
@@ -153,7 +156,7 @@
             <artifactId>protobuf-java</artifactId>
             <version>${proto.version}</version>
         </dependency>
-        
+
         <!-- Fasterxml -->
         <dependency>
             <groupId>com.fasterxml.jackson.module</groupId>
@@ -191,7 +194,6 @@
             <version>${hive.version}</version>
         </dependency>
 
-
         <!-- Hudi - Test -->
         <dependency>
             <groupId>org.apache.hudi</groupId>
@@ -207,54 +209,14 @@
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
-
-        <!-- Tests Misc -->
         <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-api</artifactId>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-hadoop-common</artifactId>
+            <version>${project.version}</version>
+            <classifier>tests</classifier>
+            <type>test-jar</type>
             <scope>test</scope>
         </dependency>
 
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-engine</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.junit.vintage</groupId>
-            <artifactId>junit-vintage-engine</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-params</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-junit-jupiter</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.junit.platform</groupId>
-            <artifactId>junit-platform-runner</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.junit.platform</groupId>
-            <artifactId>junit-platform-suite-api</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.junit.platform</groupId>
-            <artifactId>junit-platform-commons</artifactId>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 </project>

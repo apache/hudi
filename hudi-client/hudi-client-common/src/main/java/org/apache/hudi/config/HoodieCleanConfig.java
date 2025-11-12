@@ -29,113 +29,177 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 
 import javax.annotation.concurrent.Immutable;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Properties;
-import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.model.HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS;
+import static org.apache.hudi.common.model.HoodieCleaningPolicy.KEEP_LATEST_COMMITS;
+import static org.apache.hudi.common.model.HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS;
 
 /**
  * Clean related config.
  */
 @Immutable
 @ConfigClassProperty(name = "Clean Configs",
-        groupName = ConfigGroups.Names.WRITE_CLIENT,
-        description = "Cleaning (reclamation of older/unused file groups/slices).")
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Cleaning (reclamation of older/unused file groups/slices).")
 public class HoodieCleanConfig extends HoodieConfig {
+
+  private static final String CLEANER_COMMITS_RETAINED_KEY = "hoodie.clean.commits.retained";
+  private static final String CLEANER_COMMITS_RETAINED_ALTERNATIVE_KEY = "hoodie.cleaner.commits.retained";
+  private static final String CLEANER_HOURS_RETAINED_KEY = "hoodie.clean.hours.retained";
+  private static final String CLEANER_HOURS_RETAINED_ALTERNATIVE_KEY = "hoodie.cleaner.hours.retained";
+  private static final String CLEANER_FILE_VERSIONS_RETAINED_KEY = "hoodie.clean.fileversions.retained";
+  private static final String CLEANER_FILE_VERSIONS_RETAINED_ALTERNATIVE_KEY = "hoodie.cleaner.fileversions.retained";
 
   public static final ConfigProperty<String> AUTO_CLEAN = ConfigProperty
       .key("hoodie.clean.automatic")
       .defaultValue("true")
-      .withDocumentation("When enabled, the cleaner table service is invoked immediately after each commit,"
-          + " to delete older file slices. It's recommended to enable this, to ensure metadata and data storage"
-          + " growth is bounded.");
+      .markAdvanced()
+      .withDocumentation("When enabled, the cleaner table service is invoked immediately after each commit, "
+          + "to delete older file slices. It's recommended to enable this, to ensure metadata and data storage "
+          + "growth is bounded.");
 
   public static final ConfigProperty<String> ASYNC_CLEAN = ConfigProperty
-      .key("hoodie.clean.async")
+      .key("hoodie.clean.async.enabled")
       .defaultValue("false")
+      .withAlternatives("hoodie.clean.async")
       .withDocumentation("Only applies when " + AUTO_CLEAN.key() + " is turned on. "
           + "When turned on runs cleaner async with writing, which can speed up overall write performance.");
 
-  public static final ConfigProperty<String> CLEANER_COMMITS_RETAINED = ConfigProperty
-      .key("hoodie.cleaner.commits.retained")
-      .defaultValue("10")
-      .withDocumentation("Number of commits to retain, without cleaning. This will be retained for num_of_commits * time_between_commits "
-          + "(scheduled). This also directly translates into how much data retention the table supports for incremental queries.");
-
-  public static final ConfigProperty<String> CLEANER_HOURS_RETAINED = ConfigProperty.key("hoodie.cleaner.hours.retained")
-      .defaultValue("24")
-      .withDocumentation("Number of hours for which commits need to be retained. This config provides a more flexible option as"
-          + "compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group,"
-          + " corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.");
-
+  // The cleaner policy config definition has to be before the following configs for inference:
+  // CLEANER_COMMITS_RETAINED, CLEANER_HOURS_RETAINED, CLEANER_FILE_VERSIONS_RETAINED
+  @Deprecated
   public static final ConfigProperty<String> CLEANER_POLICY = ConfigProperty
-      .key("hoodie.cleaner.policy")
-      .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
-      .withDocumentation("Cleaning policy to be used. The cleaner service deletes older file slices files to re-claim space."
-          + " By default, cleaner spares the file slices written by the last N commits, determined by  " + CLEANER_COMMITS_RETAINED.key()
-          + " Long running query plans may often refer to older file slices and will break if those are cleaned, before the query has had"
-          + "   a chance to run. So, it is good to make sure that the data is retained for more than the maximum query execution time");
+      .key("hoodie.clean.policy")
+      .defaultValue(KEEP_LATEST_COMMITS.name())
+      .withAlternatives("hoodie.cleaner.policy")
+      .withDocumentation(HoodieCleaningPolicy.class)
+      .markAdvanced()
+      .withInferFunction(cfg -> {
+        boolean isCommitsRetainedConfigured = cfg.contains(CLEANER_COMMITS_RETAINED_KEY) || cfg.contains(CLEANER_COMMITS_RETAINED_ALTERNATIVE_KEY);
+        boolean isHoursRetainedConfigured = cfg.contains(CLEANER_HOURS_RETAINED_KEY) || cfg.contains(CLEANER_HOURS_RETAINED_ALTERNATIVE_KEY);
+        boolean isFileVersionsRetainedConfigured = cfg.contains(CLEANER_FILE_VERSIONS_RETAINED_KEY) || cfg.contains(CLEANER_FILE_VERSIONS_RETAINED_ALTERNATIVE_KEY);
+
+        // If the cleaner policy is not configured, the cleaner policy is inferred only when one
+        // of the following configs are explicitly configured by the user:
+        // "hoodie.clean.commits.retained" (inferred as KEEP_LATEST_COMMITS)
+        // "hoodie.clean.hours.retained" (inferred as KEEP_LATEST_BY_HOURS)
+        // "hoodie.clean.fileversions.retained" (inferred as KEEP_LATEST_FILE_VERSIONS)
+        if (isCommitsRetainedConfigured && !isHoursRetainedConfigured && !isFileVersionsRetainedConfigured) {
+          return Option.of(KEEP_LATEST_COMMITS.name());
+        }
+        if (!isCommitsRetainedConfigured && isHoursRetainedConfigured && !isFileVersionsRetainedConfigured) {
+          return Option.of(KEEP_LATEST_BY_HOURS.name());
+        }
+        if (!isCommitsRetainedConfigured && !isHoursRetainedConfigured && isFileVersionsRetainedConfigured) {
+          return Option.of(KEEP_LATEST_FILE_VERSIONS.name());
+        }
+        return Option.empty();
+      });
+
+  public static final ConfigProperty<String> CLEANER_COMMITS_RETAINED = ConfigProperty
+      .key(CLEANER_COMMITS_RETAINED_KEY)
+      .defaultValue("10")
+      .withAlternatives(CLEANER_COMMITS_RETAINED_ALTERNATIVE_KEY)
+      .withDocumentation("When " + KEEP_LATEST_COMMITS.name() + " cleaning policy is used, the number of commits to retain, without cleaning. "
+          + "This will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much "
+          + "data retention the table supports for incremental queries.");
+
+  public static final ConfigProperty<String> CLEANER_HOURS_RETAINED = ConfigProperty
+      .key(CLEANER_HOURS_RETAINED_KEY)
+      .defaultValue("24")
+      .markAdvanced()
+      .withAlternatives(CLEANER_HOURS_RETAINED_ALTERNATIVE_KEY)
+      .withDocumentation("When " + KEEP_LATEST_BY_HOURS.name() + " cleaning policy is used, the number of hours for which commits need to be retained. "
+          + "This config provides a more flexible option as compared to number of commits retained for cleaning service. Setting this property ensures "
+          + "all the files, but the latest in a file group, corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.");
+
+  public static final ConfigProperty<String> CLEANER_FILE_VERSIONS_RETAINED = ConfigProperty
+      .key(CLEANER_FILE_VERSIONS_RETAINED_KEY)
+      .defaultValue("3")
+      .markAdvanced()
+      .withAlternatives(CLEANER_FILE_VERSIONS_RETAINED_ALTERNATIVE_KEY)
+      .withDocumentation("When " + KEEP_LATEST_FILE_VERSIONS.name() + " cleaning policy is used, "
+          + "the minimum number of file slices to retain in each file group, during cleaning.");
 
   public static final ConfigProperty<String> CLEAN_TRIGGER_STRATEGY = ConfigProperty
       .key("hoodie.clean.trigger.strategy")
       .defaultValue(CleaningTriggerStrategy.NUM_COMMITS.name())
-      .withDocumentation("Controls how cleaning is scheduled. Valid options: "
-          + Arrays.stream(CleaningTriggerStrategy.values()).map(Enum::name).collect(Collectors.joining(",")));
+      .markAdvanced()
+      .withDocumentation(CleaningTriggerStrategy.class);
 
   public static final ConfigProperty<String> CLEAN_MAX_COMMITS = ConfigProperty
-      .key("hoodie.clean.max.commits")
+      .key("hoodie.clean.trigger.max.commits")
       .defaultValue("1")
+      .withAlternatives("hoodie.clean.max.commits")
+      .markAdvanced()
       .withDocumentation("Number of commits after the last clean operation, before scheduling of a new clean is attempted.");
 
-  public static final ConfigProperty<String> CLEANER_FILE_VERSIONS_RETAINED = ConfigProperty
-      .key("hoodie.cleaner.fileversions.retained")
-      .defaultValue("3")
-      .withDocumentation("When " + HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name() + " cleaning policy is used, "
-          + " the minimum number of file slices to retain in each file group, during cleaning.");
-
   public static final ConfigProperty<String> CLEANER_INCREMENTAL_MODE_ENABLE = ConfigProperty
-      .key("hoodie.cleaner.incremental.mode")
+      .key("hoodie.clean.incremental.enabled")
       .defaultValue("true")
+      .withAlternatives("hoodie.cleaner.incremental.mode")
+      .markAdvanced()
       .withDocumentation("When enabled, the plans for each cleaner service run is computed incrementally off the events "
-          + " in the timeline, since the last cleaner run. This is much more efficient than obtaining listings for the full"
-          + " table for each planning (even with a metadata table).");
+          + "in the timeline, since the last cleaner run. This is much more efficient than obtaining listings for the full "
+          + "table for each planning (even with a metadata table).");
 
   public static final ConfigProperty<String> FAILED_WRITES_CLEANER_POLICY = ConfigProperty
-      .key("hoodie.cleaner.policy.failed.writes")
+      .key("hoodie.clean.failed.writes.policy")
       .defaultValue(HoodieFailedWritesCleaningPolicy.EAGER.name())
+      .withAlternatives("hoodie.cleaner.policy.failed.writes")
       .withInferFunction(cfg -> {
         Option<String> writeConcurrencyModeOpt = Option.ofNullable(cfg.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE));
         if (!writeConcurrencyModeOpt.isPresent()
-            || !writeConcurrencyModeOpt.get().equals(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name())) {
+            || !WriteConcurrencyMode.supportsMultiWriter(writeConcurrencyModeOpt.get())) {
           return Option.empty();
         }
         return Option.of(HoodieFailedWritesCleaningPolicy.LAZY.name());
       })
-      .withDocumentation("Cleaning policy for failed writes to be used. Hudi will delete any files written by "
-          + "failed writes to re-claim space. Choose to perform this rollback of failed writes eagerly before "
-          + "every writer starts (only supported for single writer) or lazily by the cleaner (required for multi-writers)");
+      .markAdvanced()
+      .withDocumentation(HoodieFailedWritesCleaningPolicy.class);
 
   public static final ConfigProperty<String> CLEANER_PARALLELISM_VALUE = ConfigProperty
-      .key("hoodie.cleaner.parallelism")
+      .key("hoodie.clean.parallelism")
       .defaultValue("200")
-      .withDocumentation("Parallelism for the cleaning operation. Increase this if cleaning becomes slow.");
+      .withAlternatives("hoodie.cleaner.parallelism")
+      .markAdvanced()
+      .withDocumentation("This config controls the behavior of both the cleaning plan and "
+          + "cleaning execution. Deriving the cleaning plan is parallelized at the table "
+          + "partition level, i.e., each table partition is processed by one Spark task to figure "
+          + "out the files to clean. The cleaner picks the configured parallelism if the number "
+          + "of table partitions is larger than this configured value. The parallelism is "
+          + "assigned to the number of table partitions if it is smaller than the configured value. "
+          + "The clean execution, i.e., the file deletion, is parallelized at file level, which "
+          + "is the unit of Spark task distribution. Similarly, the actual parallelism cannot "
+          + "exceed the configured value if the number of files is larger. If cleaning plan or "
+          + "execution is slow due to limited parallelism, you can increase this to tune the "
+          + "performance..");
 
+  @Deprecated
   public static final ConfigProperty<Boolean> ALLOW_MULTIPLE_CLEANS = ConfigProperty
-      .key("hoodie.clean.allow.multiple")
-      .defaultValue(true)
+      .key("hoodie.clean.multiple.enabled")
+      .defaultValue(false)
+      .withAlternatives("hoodie.clean.allow.multiple")
+      .markAdvanced()
       .sinceVersion("0.11.0")
+      .deprecatedAfter("0.15.0")
       .withDocumentation("Allows scheduling/executing multiple cleans by enabling this config. If users prefer to strictly ensure clean requests should be mutually exclusive, "
           + ".i.e. a 2nd clean will not be scheduled if another clean is not yet completed to avoid repeat cleaning of same files, they might want to disable this config.");
 
   public static final ConfigProperty<String> CLEANER_BOOTSTRAP_BASE_FILE_ENABLE = ConfigProperty
-      .key("hoodie.cleaner.delete.bootstrap.base.file")
+      .key("hoodie.clean.delete.bootstrap.base.file")
       .defaultValue("false")
+      .withAlternatives("hoodie.cleaner.delete.bootstrap.base.file")
+      .markAdvanced()
       .withDocumentation("When set to true, cleaner also deletes the bootstrap base file when it's skeleton base file is "
-          + " cleaned. Turn this to true, if you want to ensure the bootstrap dataset storage is reclaimed over time, as the"
-          + " table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap "
-          + " base files are also physically deleted, to comply with data privacy enforcement processes.");
+          + "cleaned. Turn this to true, if you want to ensure the bootstrap dataset storage is reclaimed over time, as the "
+          + "table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap "
+          + "base files are also physically deleted, to comply with data privacy enforcement processes.");
 
 
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */

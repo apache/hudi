@@ -23,7 +23,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -35,7 +34,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-public class SparkInsertOverwriteTableCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class SparkInsertOverwriteTableCommitActionExecutor<T>
     extends SparkInsertOverwriteCommitActionExecutor<T> {
 
   public SparkInsertOverwriteTableCommitActionExecutor(HoodieEngineContext context,
@@ -46,7 +45,7 @@ public class SparkInsertOverwriteTableCommitActionExecutor<T extends HoodieRecor
 
   @Override
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
-    List<String> partitionPaths = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
+    List<String> partitionPaths = FSUtils.getAllPartitionPaths(context, table.getMetaClient(), config.getMetadataConfig());
     if (partitionPaths == null || partitionPaths.isEmpty()) {
       return Collections.emptyMap();
     }

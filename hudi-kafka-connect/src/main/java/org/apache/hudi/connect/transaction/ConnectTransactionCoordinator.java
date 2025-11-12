@@ -29,8 +29,8 @@ import org.apache.hudi.connect.writers.KafkaConnectTransactionServices;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -56,7 +56,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
 
   public static final int COORDINATOR_KAFKA_PARTITION = 0;
 
-  private static final Logger LOG = LogManager.getLogger(ConnectTransactionCoordinator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ConnectTransactionCoordinator.class);
   private static final String BOOTSTRAP_SERVERS_CFG = "bootstrap.servers";
   private static final String KAFKA_OFFSET_KEY = "kafka.commit.offsets";
   private static final String KAFKA_OFFSET_DELIMITER = ",";
@@ -166,8 +166,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     if (message.getType().equals(ControlMessage.EventType.WRITE_STATUS)) {
       type = CoordinatorEvent.CoordinatorEventType.WRITE_STATUS;
     } else {
-      LOG.warn(String.format("The Coordinator should not be receiving messages of type %s",
-          message.getType().name()));
+      LOG.warn("Illegal message type [{}] processee by coordinator", message.getType().name());
       return;
     }
 
@@ -266,7 +265,8 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     try {
       kafkaControlClient.publishMessage(buildControlMessage(ControlMessage.EventType.END_COMMIT));
     } catch (Exception exception) {
-      LOG.warn(String.format("Could not send END_COMMIT message for partition %s and commitTime %s", partition, currentCommitTime), exception);
+      LOG.warn("Could not send END_COMMIT message for partition {} and commitTime {}",
+          partition, currentCommitTime, exception);
     }
     currentConsumedKafkaOffsets.clear();
     currentState = State.ENDED_COMMIT;
@@ -323,7 +323,8 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
 
         // Submit the next start commit, that will rollback the current commit.
         currentState = State.FAILED_COMMIT;
-        LOG.warn("Current commit " + currentCommitTime + " failed, so starting a new commit after recovery delay");
+        LOG.warn("Current commit {} failed. Starting a new commit after recovery delay of {} {}",
+            currentCommitTime, RESTART_COMMIT_DELAY_MS, TimeUnit.MILLISECONDS.name());
         submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.START_COMMIT,
                 partition.topic(),
                 StringUtils.EMPTY_STRING),
@@ -338,7 +339,8 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     // If we are still stuck in ENDED_STATE
     if (currentState.equals(State.ENDED_COMMIT)) {
       currentState = State.WRITE_STATUS_TIMEDOUT;
-      LOG.warn("Current commit " + currentCommitTime + " failed after a write status timeout, so starting a new commit after recovery delay");
+      LOG.warn("Current commit {} failed after a write status timeout. Starting a new commit after recovery delay of {} {}",
+          currentCommitTime, RESTART_COMMIT_DELAY_MS, TimeUnit.MILLISECONDS.name());
       // Submit the next start commit
       submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.START_COMMIT,
               partition.topic(),
@@ -351,7 +353,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     try {
       kafkaControlClient.publishMessage(buildControlMessage(ControlMessage.EventType.ACK_COMMIT));
     } catch (Exception exception) {
-      LOG.warn(String.format("Could not send ACK_COMMIT message for partition %s and commitTime %s", partition, currentCommitTime), exception);
+      LOG.warn("Could not send ACK_COMMIT message for partition {} and commitTime {}", partition, currentCommitTime, exception);
     }
     currentState = State.ACKED_COMMIT;
 

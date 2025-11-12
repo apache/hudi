@@ -20,24 +20,20 @@
 This repo contains the code that integrate Hudi with Spark. The repo is split into the following modules
 
 `hudi-spark`
-`hudi-spark2`
-`hudi-spark3.1.x`
-`hudi-spark3.2.x`
 `hudi-spark3.3.x`
-`hudi-spark2-common`
+`hudi-spark3.4.x`
+`hudi-spark3.5.x`
+`hudi-spark4.0.x`
 `hudi-spark3-common`
 `hudi-spark-common`
 
-* hudi-spark is the module that contains the code that both spark2 & spark3 version would share, also contains the antlr4 
-file that supports spark sql on spark 2.x version.
-* hudi-spark2 is the module that contains the code that compatible with spark 2.x versions.
-* hudi-spark3.1.x is the module that contains the code that compatible with spark3.1.x and spark3.0.x version.
-* hudi-spark3.2.x is the module that contains the code that compatible with spark 3.2.x versions.
-* hudi-spark3.3.x is the module that contains the code that compatible with spark 3.3.x+ versions. 
-* hudi-spark2-common is the module that contains the code that would be reused between spark2.x versions, right now the module
-has no class since hudi only supports spark 2.4.4 version, and it acts as the placeholder when packaging hudi-spark-bundle module. 
+* hudi-spark is the module that contains the code that spark3 version would share.
+* hudi-spark3.3.x is the module that contains the code that compatible with spark3.3.x versions.
+* hudi-spark3.4.x is the module that contains the code that compatible with spark 3.4.x versions.
+* hudi-spark3.5.x is the module that contains the code that compatible with spark 3.5.x versions.
+* hudi-spark4.0.x is the module that contains the code that compatible with spark 4.0.x versions.
 * hudi-spark3-common is the module that contains the code that would be reused between spark3.x versions.
-* hudi-spark-common is the module that contains the code that would be reused between spark2.x and spark3.x versions.
+* hudi-spark-common is the module that contains the code that would be reused between spark3.x and spark4.x versions.
 
 ## Description of Time Travel
 * `HoodieSpark3_2ExtendedSqlAstBuilder` have comments in the spark3.2's code fork from `org.apache.spark.sql.catalyst.parser.AstBuilder`, and additional `withTimeTravel` method.

@@ -21,18 +21,17 @@ package org.apache.hudi.connect.writers;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieCleanConfig;
-import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.connect.KafkaConnectFileIdPrefixProvider;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -40,11 +39,12 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.schema.SchemaProvider;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 
@@ -54,7 +54,7 @@ import java.util.Collections;
  */
 public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteStatus> {
 
-  private static final Logger LOG = LogManager.getLogger(KafkaConnectWriterProvider.class);
+  private static final Logger LOG = LoggerFactory.getLogger(KafkaConnectWriterProvider.class);
 
   private final KafkaConnectConfigs connectConfigs;
   private final HoodieEngineContext context;
@@ -67,15 +67,16 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
       KafkaConnectConfigs connectConfigs,
       TopicPartition partition) throws HoodieException {
     this.connectConfigs = connectConfigs;
-    Configuration hadoopConf = KafkaConnectUtils.getDefaultHadoopConf(connectConfigs);
+    StorageConfiguration<Configuration> storageConf =
+        KafkaConnectUtils.getDefaultStorageConf(connectConfigs);
 
     try {
-      this.schemaProvider = StringUtils.isNullOrEmpty(connectConfigs.getSchemaProviderClass()) ? null
-          : (SchemaProvider) ReflectionUtils.loadClass(connectConfigs.getSchemaProviderClass(),
-          new TypedProperties(connectConfigs.getProps()));
+      this.schemaProvider = StringUtils.isNullOrEmpty(connectConfigs.getSchemaProviderClass()) ? null :
+          (SchemaProvider) ReflectionUtils.loadClass(
+              connectConfigs.getSchemaProviderClass(), connectConfigs.getProps());
 
       this.keyGenerator = HoodieAvroKeyGeneratorFactory.createKeyGenerator(
-          new TypedProperties(connectConfigs.getProps()));
+          connectConfigs.getProps());
 
       // This is the writeConfig for the writers for the individual Transaction Coordinators
       writeConfig = HoodieWriteConfig.newBuilder()
@@ -86,16 +87,16 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
               KafkaConnectFileIdPrefixProvider.KAFKA_CONNECT_PARTITION_ID,
               String.valueOf(partition)))
           .withSchema(schemaProvider.getSourceSchema().toString())
-          .withAutoCommit(false)
           .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
           // participants should not trigger table services, and leave it to the coordinator
           .withArchivalConfig(HoodieArchivalConfig.newBuilder().withAutoArchive(false).build())
           .withCleanConfig(HoodieCleanConfig.newBuilder().withAutoClean(false).build())
           .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build())
           .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClustering(false).build())
+          .withWritesFileIdEncoding(1)
           .build();
 
-      context = new HoodieJavaEngineContext(hadoopConf);
+      context = new HoodieJavaEngineContext(storageConf);
 
       hudiJavaClient = new HoodieJavaWriteClient<>(context, writeConfig);
     } catch (Throwable e) {

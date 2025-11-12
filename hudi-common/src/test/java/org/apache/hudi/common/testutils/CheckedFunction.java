@@ -19,6 +19,12 @@
 
 package org.apache.hudi.common.testutils;
 
+/**
+ * Checked function for testing.
+ *
+ * @param <T> Passed-in value type.
+ * @param <R> Return value type.
+ */
 @FunctionalInterface
 public interface CheckedFunction<T, R> {
   R apply(T t) throws Exception;

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -29,16 +28,15 @@ import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.DirectWriteMarkers;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -52,25 +50,25 @@ import static org.apache.hudi.common.util.MarkerUtils.MARKERS_FILENAME_PREFIX;
 public class TwoToOneDowngradeHandler implements DowngradeHandler {
 
   @Override
-  public Map<ConfigProperty, String> downgrade(
+  public UpgradeDowngrade.TableConfigChangeSet downgrade(
       HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
       SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
 
     // re-create marker files if any partial timeline server based markers are found
-    HoodieTimeline inflightTimeline = metaClient.getCommitsTimeline().filterPendingExcludingMajorAndMinorCompaction();
+    HoodieTimeline inflightTimeline = metaClient.getCommitsTimeline().filterPendingExcludingCompactionAndLogCompaction();
     List<HoodieInstant> commits = inflightTimeline.getReverseOrderedInstants().collect(Collectors.toList());
     for (HoodieInstant inflightInstant : commits) {
       // Converts the markers in new format to old format of direct markers
       try {
         convertToDirectMarkers(
-            inflightInstant.getTimestamp(), table, context, config.getMarkersDeleteParallelism());
+            inflightInstant.requestedTime(), table, context, config.getMarkersDeleteParallelism());
       } catch (IOException e) {
         throw new HoodieException("Converting marker files to DIRECT style failed during downgrade", e);
       }
     }
-    return Collections.EMPTY_MAP;
+    return new UpgradeDowngrade.TableConfigChangeSet();
   }
 
   /**
@@ -92,44 +90,44 @@ public class TwoToOneDowngradeHandler implements DowngradeHandler {
                                       HoodieEngineContext context,
                                       int parallelism) throws IOException {
     String markerDir = table.getMetaClient().getMarkerFolderPath(commitInstantTime);
-    FileSystem fileSystem = FSUtils.getFs(markerDir, context.getHadoopConf().newCopy());
-    Option<MarkerType> markerTypeOption = MarkerUtils.readMarkerType(fileSystem, markerDir);
+    HoodieStorage storage = HoodieStorageUtils.getStorage(markerDir, context.getStorageConf().newInstance());
+    Option<MarkerType> markerTypeOption = MarkerUtils.readMarkerType(storage, markerDir);
     if (markerTypeOption.isPresent()) {
       switch (markerTypeOption.get()) {
         case TIMELINE_SERVER_BASED:
           // Reads all markers written by the timeline server
           Map<String, Set<String>> markersMap =
               MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(
-                  markerDir, fileSystem, context, parallelism);
+                  markerDir, storage, context, parallelism);
           DirectWriteMarkers directWriteMarkers = new DirectWriteMarkers(table, commitInstantTime);
           // Recreates the markers in the direct format
           markersMap.values().stream().flatMap(Collection::stream)
               .forEach(directWriteMarkers::create);
           // Deletes marker type file
-          MarkerUtils.deleteMarkerTypeFile(fileSystem, markerDir);
+          MarkerUtils.deleteMarkerTypeFile(storage, markerDir);
           // Deletes timeline server based markers
-          deleteTimelineBasedMarkerFiles(context, markerDir, fileSystem, parallelism);
+          deleteTimelineBasedMarkerFiles(context, markerDir, storage, parallelism);
           break;
         default:
           throw new HoodieException("The marker type \"" + markerTypeOption.get().name()
               + "\" is not supported for rollback.");
       }
     } else {
-      if (fileSystem.exists(new Path(markerDir))) {
+      if (storage.exists(new StoragePath(markerDir))) {
         // In case of partial failures during downgrade, there is a chance that marker type file was deleted,
         // but timeline server based marker files are left.  So deletes them if any
-        deleteTimelineBasedMarkerFiles(context, markerDir, fileSystem, parallelism);
+        deleteTimelineBasedMarkerFiles(context, markerDir, storage, parallelism);
       }
     }
   }
 
   private void deleteTimelineBasedMarkerFiles(HoodieEngineContext context, String markerDir,
-                                              FileSystem fileSystem, int parallelism) throws IOException {
+                                              HoodieStorage storage, int parallelism) throws IOException {
     // Deletes timeline based marker files if any.
-    Predicate<FileStatus> prefixFilter = fileStatus ->
+    Predicate<StoragePathInfo> prefixFilter = fileStatus ->
         fileStatus.getPath().getName().startsWith(MARKERS_FILENAME_PREFIX);
-    FSUtils.parallelizeSubPathProcess(context, fileSystem, new Path(markerDir), parallelism,
-            prefixFilter, pairOfSubPathAndConf ->
-                    FSUtils.deleteSubPath(pairOfSubPathAndConf.getKey(), pairOfSubPathAndConf.getValue(), false));
+    FSUtils.parallelizeSubPathProcess(context, storage, new StoragePath(markerDir), parallelism,
+        prefixFilter, pairOfSubPathAndConf ->
+            FSUtils.deleteSubPath(pairOfSubPathAndConf.getKey(), pairOfSubPathAndConf.getValue(), false));
   }
 }

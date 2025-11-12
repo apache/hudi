@@ -20,12 +20,12 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.13.0-SNAPSHOT</version>
+        <version>1.2.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>hudi-flink-datasource</artifactId>
-    <version>0.13.0-SNAPSHOT</version>
+    <version>1.2.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <properties>
@@ -33,9 +33,6 @@
     </properties>
 
     <modules>
-        <module>hudi-flink1.13.x</module>
-        <module>hudi-flink1.14.x</module>
-        <module>hudi-flink1.15.x</module>
         <module>hudi-flink</module>
     </modules>
 

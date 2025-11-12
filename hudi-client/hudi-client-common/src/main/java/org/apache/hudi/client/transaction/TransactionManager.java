@@ -18,13 +18,14 @@
 
 package org.apache.hudi.client.transaction;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.client.transaction.lock.LockManager;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.storage.HoodieStorage;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 
@@ -32,54 +33,59 @@ import java.io.Serializable;
  * This class allows clients to start and end transactions. Anything done between a start and end transaction is
  * guaranteed to be atomic.
  */
-public class TransactionManager implements Serializable {
+public class TransactionManager implements Serializable, AutoCloseable {
 
-  private static final Logger LOG = LogManager.getLogger(TransactionManager.class);
-  private final LockManager lockManager;
-  private final boolean isOptimisticConcurrencyControlEnabled;
-  private Option<HoodieInstant> currentTxnOwnerInstant = Option.empty();
-  private Option<HoodieInstant> lastCompletedTxnOwnerInstant = Option.empty();
+  protected static final Logger LOG = LoggerFactory.getLogger(TransactionManager.class);
+  protected final LockManager lockManager;
+  protected final boolean isLockRequired;
+  protected Option<HoodieInstant> changeActionInstant = Option.empty();
+  private Option<HoodieInstant> lastCompletedActionInstant = Option.empty();
 
-  public TransactionManager(HoodieWriteConfig config, FileSystem fs) {
-    this.lockManager = new LockManager(config, fs);
-    this.isOptimisticConcurrencyControlEnabled = config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
+  public TransactionManager(HoodieWriteConfig config, HoodieStorage storage) {
+    this(new LockManager(config, storage), config.isLockRequired());
   }
 
-  public void beginTransaction(Option<HoodieInstant> newTxnOwnerInstant,
-                               Option<HoodieInstant> lastCompletedTxnOwnerInstant) {
-    if (isOptimisticConcurrencyControlEnabled) {
-      LOG.info("Transaction starting for " + newTxnOwnerInstant
-          + " with latest completed transaction instant " + lastCompletedTxnOwnerInstant);
+  protected TransactionManager(LockManager lockManager, boolean isLockRequired) {
+    this.lockManager = lockManager;
+    this.isLockRequired = isLockRequired;
+  }
+
+  public void beginStateChange(Option<HoodieInstant> changeActionInstant,
+                               Option<HoodieInstant> lastCompletedActionInstant) {
+    if (isLockRequired) {
+      LOG.info("State change starting for {} with latest completed action instant {}",
+          changeActionInstant, lastCompletedActionInstant);
       lockManager.lock();
-      reset(currentTxnOwnerInstant, newTxnOwnerInstant, lastCompletedTxnOwnerInstant);
-      LOG.info("Transaction started for " + newTxnOwnerInstant
-          + " with latest completed transaction instant " + lastCompletedTxnOwnerInstant);
+      reset(this.changeActionInstant, changeActionInstant, lastCompletedActionInstant);
+      LOG.info("State change started for {} with latest completed action instant {}",
+          changeActionInstant, lastCompletedActionInstant);
     }
   }
 
-  public void endTransaction(Option<HoodieInstant> currentTxnOwnerInstant) {
-    if (isOptimisticConcurrencyControlEnabled) {
-      LOG.info("Transaction ending with transaction owner " + currentTxnOwnerInstant);
-      if (reset(currentTxnOwnerInstant, Option.empty(), Option.empty())) {
+  public void endStateChange(Option<HoodieInstant> changeActionInstant) {
+    if (isLockRequired) {
+      LOG.info("State change ending for action instant {}", changeActionInstant);
+      if (reset(changeActionInstant, Option.empty(), Option.empty())) {
         lockManager.unlock();
-        LOG.info("Transaction ended with transaction owner " + currentTxnOwnerInstant);
+        LOG.info("State change ended for action instant {}", changeActionInstant);
       }
     }
   }
 
-  private synchronized boolean reset(Option<HoodieInstant> callerInstant,
-                                  Option<HoodieInstant> newTxnOwnerInstant,
-                                  Option<HoodieInstant> lastCompletedTxnOwnerInstant) {
-    if (!this.currentTxnOwnerInstant.isPresent() || this.currentTxnOwnerInstant.get().equals(callerInstant.get())) {
-      this.currentTxnOwnerInstant = newTxnOwnerInstant;
-      this.lastCompletedTxnOwnerInstant = lastCompletedTxnOwnerInstant;
+  protected synchronized boolean reset(Option<HoodieInstant> callerInstant,
+                                       Option<HoodieInstant> changeActionInstant,
+                                       Option<HoodieInstant> lastCompletedActionInstant) {
+    if (!this.changeActionInstant.isPresent() || this.changeActionInstant.get().equals(callerInstant.get())) {
+      this.changeActionInstant = changeActionInstant;
+      this.lastCompletedActionInstant = lastCompletedActionInstant;
       return true;
     }
     return false;
   }
 
+  @Override
   public void close() {
-    if (isOptimisticConcurrencyControlEnabled) {
+    if (isLockRequired) {
       lockManager.close();
       LOG.info("Transaction manager closed");
     }
@@ -90,14 +96,14 @@ public class TransactionManager implements Serializable {
   }
 
   public Option<HoodieInstant> getLastCompletedTransactionOwner() {
-    return lastCompletedTxnOwnerInstant;
+    return lastCompletedActionInstant;
   }
 
   public Option<HoodieInstant> getCurrentTransactionOwner() {
-    return currentTxnOwnerInstant;
+    return changeActionInstant;
   }
 
-  public boolean isOptimisticConcurrencyControlEnabled() {
-    return isOptimisticConcurrencyControlEnabled;
+  public boolean isLockRequired() {
+    return isLockRequired;
   }
 }

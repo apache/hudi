@@ -18,12 +18,26 @@
 
 package org.apache.hudi.sink.compact;
 
-import org.apache.hudi.config.HoodieMemoryConfig;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.sink.compact.strategy.CompactionPlanStrategy;
+import org.apache.hudi.storage.StoragePath;
 
 import com.beust.jcommander.Parameter;
 import org.apache.flink.configuration.Configuration;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import static org.apache.hudi.util.StreamerUtil.buildProperties;
+import static org.apache.hudi.util.StreamerUtil.readConfig;
 
 /**
  * Configurations for Hoodie Flink compaction.
@@ -53,55 +67,69 @@ public class FlinkCompactionConfig extends Configuration {
           + "'time_elapsed': trigger compaction when time elapsed > N seconds since last compaction;\n"
           + "'num_and_time': trigger compaction when both NUM_COMMITS and TIME_ELAPSED are satisfied;\n"
           + "'num_or_time': trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied.\n"
-          + "Default is 'num_commits'",
-      required = false)
+          + "Default is 'num_commits'")
   public String compactionTriggerStrategy = NUM_COMMITS;
 
-  @Parameter(names = {"--compaction-delta-commits"}, description = "Max delta commits needed to trigger compaction, default 5 commits", required = false)
+  @Parameter(names = {"--disable-file-group-reader"}, description = "Whether to disable file group reader based compaction, false by default")
+  public Boolean fileGroupReaderDisabled = false;
+
+  @Parameter(names = {"--compaction-delta-commits"}, description = "Max delta commits needed to trigger compaction, default 1 commit")
   public Integer compactionDeltaCommits = 1;
 
-  @Parameter(names = {"--compaction-delta-seconds"}, description = "Max delta seconds time needed to trigger compaction, default 1 hour", required = false)
+  @Parameter(names = {"--compaction-delta-seconds"}, description = "Max delta seconds time needed to trigger compaction, default 1 hour")
   public Integer compactionDeltaSeconds = 3600;
 
-  @Parameter(names = {"--clean-async-enabled"}, description = "Whether to cleanup the old commits immediately on new commits, enabled by default", required = false)
+  @Parameter(names = {"--clean-async-enabled"}, description = "Whether to cleanup the old commits immediately on new commits, enabled by default")
   public Boolean cleanAsyncEnable = false;
+
+  @Parameter(names = {"--clean-policy"},
+      description = "Clean policy to manage the Hudi table. Available option: KEEP_LATEST_COMMITS, KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_BY_HOURS."
+          + "Default is KEEP_LATEST_COMMITS.")
+  public String cleanPolicy = HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name();
 
   @Parameter(names = {"--clean-retain-commits"},
       description = "Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
-          + "This also directly translates into how much you can incrementally pull on this table, default 10",
-      required = false)
+          + "This also directly translates into how much you can incrementally pull on this table, default 10")
   public Integer cleanRetainCommits = 10;
 
+  @Parameter(names = {"--clean-retain-hours"},
+      description = "Number of hours for which commits need to be retained. This config provides a more flexible option as"
+          + "compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group,"
+          + " corresponding to commits with commit times older than the configured number of hours to be retained are cleaned. default 24")
+  public Integer cleanRetainHours = 24;
+
+  @Parameter(names = {"--clean-retain-file-versions"},
+      description = "Number of file versions to retain. Each file group will be retained for this number of version. default 5")
+  public Integer cleanRetainFileVersions = 5;
+
   @Parameter(names = {"--archive-min-commits"},
-      description = "Min number of commits to keep before archiving older commits into a sequential log, default 20.",
-      required = false)
+      description = "Min number of commits to keep before archiving older commits into a sequential log, default 20.")
   public Integer archiveMinCommits = 20;
 
   @Parameter(names = {"--archive-max-commits"},
-      description = "Max number of commits to keep before archiving older commits into a sequential log, default 30.",
-      required = false)
+      description = "Max number of commits to keep before archiving older commits into a sequential log, default 30.")
   public Integer archiveMaxCommits = 30;
 
-  @Parameter(names = {"--compaction-max-memory"}, description = "Max memory in MB for compaction spillable map, default 100MB.", required = false)
+  @Parameter(names = {"--compaction-max-memory"}, description = "Max memory in MB for compaction spillable map, default 100MB.")
   public Integer compactionMaxMemory = 100;
 
-  @Parameter(names = {"--compaction-target-io"}, description = "Target IO per compaction (both read and write) for batching compaction, default 512000M.", required = false)
+  @Parameter(names = {"--compaction-target-io"}, description = "Target IO per compaction (both read and write) for batching compaction, default 512000M.")
   public Long compactionTargetIo = 512000L;
 
-  @Parameter(names = {"--compaction-tasks"}, description = "Parallelism of tasks that do actual compaction, default is -1", required = false)
+  @Parameter(names = {"--compaction-tasks"}, description = "Parallelism of tasks that do actual compaction, default is -1")
   public Integer compactionTasks = -1;
 
   @Parameter(names = {"--schedule", "-sc"}, description = "Not recommended. Schedule the compaction plan in this job.\n"
       + "There is a risk of losing data when scheduling compaction outside the writer job.\n"
       + "Scheduling compaction in the writer job and only let this job do the compaction execution is recommended.\n"
-      + "Default is false", required = false)
+      + "Default is false")
   public Boolean schedule = false;
 
   public static final String SEQ_FIFO = "FIFO";
   public static final String SEQ_LIFO = "LIFO";
   @Parameter(names = {"--seq"}, description = "Compaction plan execution sequence, two options are supported:\n"
-      + "1). FIFO: execute the oldest plan first;\n"
-      + "2). LIFO: execute the latest plan first, by default LIFO", required = false)
+      + "1). FIFO: execute the oldest plan first, by default FIFO;\n"
+      + "2). LIFO: execute the latest plan first")
   public String compactionSeq = SEQ_FIFO;
 
   @Parameter(names = {"--service"}, description = "Flink Compaction runs in service mode, disable by default")
@@ -126,8 +154,23 @@ public class FlinkCompactionConfig extends Configuration {
       + "It's only effective for 'instants' plan selection strategy.")
   public String compactionPlanInstant;
 
-  @Parameter(names = {"--spillable_map_path"}, description = "Default file path prefix for spillable map.", required = false)
-  public String spillableMapPath = HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.defaultValue();
+  @Parameter(names = {"--spillable_map_path"}, description = "Default file path prefix for spillable map.")
+  public String spillableMapPath = FileIOUtils.getDefaultSpillableMapBasePath();
+
+  @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
+      + "(using the CLI parameter \"--props\") can also be passed through command line using this parameter.")
+  public List<String> configs = new ArrayList<>();
+
+  @Parameter(names = {"--props"}, description = "Path to properties file on localfs or dfs, with configurations for "
+      + "hoodie and hadoop etc.")
+  public String propsFilePath = "";
+
+  public static TypedProperties getProps(FlinkCompactionConfig cfg) {
+    return cfg.propsFilePath.isEmpty() ? buildProperties(cfg.configs) : readConfig(
+        HadoopConfigurations.getHadoopConf(cfg),
+        new StoragePath(cfg.propsFilePath),
+        cfg.configs).getProps();
+  }
 
   /**
    * Transforms a {@code HoodieFlinkCompaction.config} into {@code Configuration}.
@@ -136,24 +179,32 @@ public class FlinkCompactionConfig extends Configuration {
    * (set by `--hoodie-conf` option).
    */
   public static org.apache.flink.configuration.Configuration toFlinkConfig(FlinkCompactionConfig config) {
-    org.apache.flink.configuration.Configuration conf = new Configuration();
+    Map<String, String> propsMap = new HashMap<String, String>((Map) getProps(config));
+    org.apache.flink.configuration.Configuration conf = fromMap(propsMap);
 
-    conf.setString(FlinkOptions.PATH, config.path);
-    conf.setString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY, config.compactionTriggerStrategy);
-    conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, config.archiveMaxCommits);
-    conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, config.archiveMinCommits);
-    conf.setInteger(FlinkOptions.CLEAN_RETAIN_COMMITS, config.cleanRetainCommits);
-    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, config.compactionDeltaCommits);
-    conf.setInteger(FlinkOptions.COMPACTION_DELTA_SECONDS, config.compactionDeltaSeconds);
-    conf.setInteger(FlinkOptions.COMPACTION_MAX_MEMORY, config.compactionMaxMemory);
-    conf.setLong(FlinkOptions.COMPACTION_TARGET_IO, config.compactionTargetIo);
-    conf.setInteger(FlinkOptions.COMPACTION_TASKS, config.compactionTasks);
-    conf.setBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnable);
+    conf.set(FlinkOptions.PATH, config.path);
+    conf.set(FlinkOptions.COMPACTION_TRIGGER_STRATEGY, config.compactionTriggerStrategy);
+    conf.set(FlinkOptions.ARCHIVE_MAX_COMMITS, config.archiveMaxCommits);
+    conf.set(FlinkOptions.ARCHIVE_MIN_COMMITS, config.archiveMinCommits);
+    conf.set(FlinkOptions.CLEAN_POLICY, config.cleanPolicy);
+    conf.set(FlinkOptions.CLEAN_RETAIN_COMMITS, config.cleanRetainCommits);
+    conf.set(FlinkOptions.CLEAN_RETAIN_HOURS, config.cleanRetainHours);
+    conf.set(FlinkOptions.CLEAN_RETAIN_FILE_VERSIONS, config.cleanRetainFileVersions);
+    conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, config.compactionDeltaCommits);
+    conf.set(FlinkOptions.COMPACTION_DELTA_SECONDS, config.compactionDeltaSeconds);
+    conf.set(FlinkOptions.COMPACTION_MAX_MEMORY, config.compactionMaxMemory);
+    // used as compaction memory by file group reader based compaction
+    conf.set(FlinkOptions.WRITE_MERGE_MAX_MEMORY, config.compactionMaxMemory);
+    conf.set(FlinkOptions.COMPACTION_TARGET_IO, config.compactionTargetIo);
+    conf.set(FlinkOptions.COMPACTION_TASKS, config.compactionTasks);
+    conf.set(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnable);
     // use synchronous compaction always
-    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
-    conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, config.schedule);
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, config.schedule);
     // Map memory
     conf.setString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), config.spillableMapPath);
+    // set file group reader
+    conf.setString(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), !config.fileGroupReaderDisabled + "");
 
     return conf;
   }

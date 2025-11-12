@@ -29,7 +29,7 @@ import java.util.Map;
  * Utilities for fetching hadoop configurations.
  */
 public class HadoopConfigurations {
-  private static final String HADOOP_PREFIX = "hadoop.";
+  public static final String HADOOP_PREFIX = "hadoop.";
   private static final String PARQUET_PREFIX = "parquet.";
 
   /**
@@ -45,12 +45,16 @@ public class HadoopConfigurations {
   }
 
   /**
-   * Creates a new hadoop configuration that is initialized with the given flink configuration.
+   * Creates a new hadoop configuration that is initialized with the given flink configuration
+   * along with some configurations necessary to construct file readers/writers.
    */
   public static org.apache.hadoop.conf.Configuration getHadoopConf(Configuration conf) {
     org.apache.hadoop.conf.Configuration hadoopConf = FlinkClientUtil.getHadoopConf();
-    Map<String, String> options = FlinkOptions.getPropertiesWithPrefix(conf.toMap(), HADOOP_PREFIX);
-    options.forEach(hadoopConf::set);
+    Map<String, String> hadoopOptions = FlinkOptions.getPropertiesWithPrefix(conf.toMap(), HADOOP_PREFIX);
+    hadoopOptions.forEach(hadoopConf::set);
+    // kind of hacky: flink specific IO options.
+    Map<String, String> ioOptions = OptionsResolver.getIOOptions(conf);
+    ioOptions.forEach(hadoopConf::set);
     return hadoopConf;
   }
 
@@ -58,7 +62,7 @@ public class HadoopConfigurations {
    * Creates a Hive configuration with configured dir path or empty if no Hive conf dir is set.
    */
   public static org.apache.hadoop.conf.Configuration getHiveConf(Configuration conf) {
-    String explicitDir = conf.getString(FlinkOptions.HIVE_SYNC_CONF_DIR, System.getenv("HIVE_CONF_DIR"));
+    String explicitDir = conf.getString(FlinkOptions.HIVE_SYNC_CONF_DIR.key(), System.getenv("HIVE_CONF_DIR"));
     org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
     if (explicitDir != null) {
       hadoopConf.addResource(new Path(explicitDir, "hive-site.xml"));

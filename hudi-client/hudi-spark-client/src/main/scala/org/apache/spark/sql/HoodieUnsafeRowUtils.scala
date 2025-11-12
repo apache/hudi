@@ -93,29 +93,40 @@ object HoodieUnsafeRowUtils {
    *
    * This method produces nested-field path, that is subsequently used by [[getNestedInternalRowValue]], [[getNestedRowValue]]
    */
-  def composeNestedFieldPath(schema: StructType, nestedFieldRef: String): NestedFieldPath = {
+  def composeNestedFieldPath(schema: StructType, nestedFieldRef: String): Option[NestedFieldPath]= {
     val fieldRefParts = nestedFieldRef.split('.')
     val ordSeq = ArrayBuffer[(Int, StructField)]()
     var curSchema = schema
     var idx = 0
     while (idx < fieldRefParts.length) {
       val fieldRefPart = fieldRefParts(idx)
-      val ord = curSchema.fieldIndex(fieldRefPart)
-      val field = curSchema(ord)
-      // Append current field's (ordinal, data-type)
-      ordSeq.append((ord, field))
-      // Update current schema, unless terminal field-ref part
-      if (idx < fieldRefParts.length - 1) {
-        curSchema = field.dataType match {
-          case st: StructType => st
-          case dt@_ =>
-            throw new IllegalArgumentException(s"Invalid nested field reference ${fieldRefParts.drop(idx).mkString(".")} into $dt")
-        }
+      curSchema.getFieldIndex(fieldRefPart) match {
+        case Some(ord) =>
+          val field = curSchema(ord)
+          // Append current field's (ordinal, data-type)
+          ordSeq.append((ord, field))
+          // Update current schema, unless terminal field-ref part
+          if (idx < fieldRefParts.length - 1) {
+            curSchema = field.dataType match {
+              case st: StructType => st
+              case _ =>
+                // In case we've stumbled upon something other than the [[StructType]] means that
+                // provided nested field reference is invalid. In that case we simply return null
+                // scalastyle:off return
+                return None
+                // scalastyle:on return
+            }
+          }
+
+        // In case, field is not found we return null
+        // scalastyle:off return
+        case None => return None
+        // scalastyle:on return
       }
       idx += 1
     }
 
-    NestedFieldPath(ordSeq.toArray)
+    Some(NestedFieldPath(ordSeq.toArray))
   }
 
   case class NestedFieldPath(parts: Array[(Int, StructField)])

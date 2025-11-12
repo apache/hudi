@@ -37,7 +37,7 @@ class TestStatsProcedure extends HoodieSparkProcedureTestBase {
            | location '$tablePath'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -58,7 +58,7 @@ class TestStatsProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
-  test("Test Call stats_file_sizes Procedure") {
+  test("Test Call stats_file_sizes Procedure for partitioned tables") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -67,30 +67,109 @@ class TestStatsProcedure extends HoodieSparkProcedureTestBase {
         s"""
            |create table $tableName (
            |  id int,
-           |  name string,
            |  price double,
+           |  name string,
            |  ts long
            |) using hudi
-           | partitioned by (ts)
+           | partitioned by (name, ts)
            | location '$tablePath'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
-      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
-      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+      spark.sql(s"insert into $tableName select 1, 10, 'a1', 1000")
+      spark.sql(s"insert into $tableName select 2, 20, 'a2', 1500")
 
       // Check required fields
       checkExceptionContain(s"""call stats_file_sizes(limit => 10)""")(
         s"Argument: table is required")
 
-      // collect result for table
-      val result = spark.sql(
+      // collect result for partitioned table without specifying partition_path (resolve dual layer partitioning)
+      // will show an extra row with commit_time == ALL
+      val noPartitionRegexResult = spark.sql(
+        s"""call stats_file_sizes(table => '$tableName')""".stripMargin).collect()
+      assertResult(3) {
+        noPartitionRegexResult.length
+      }
+
+      // collect result for partitioned table with partition_path regex
+      val validPartitionRegexResult = spark.sql(
+        s"""call stats_file_sizes(table => '$tableName', partition_path => 'a1/*')""".stripMargin).collect()
+      assertResult(1) {
+        validPartitionRegexResult.length
+      }
+
+      // collect result for partitioned table with partition_path regex that has a leading '/' character
+      val leadingDirectoryDelimiterResult = spark.sql(
+        s"""call stats_file_sizes(table => '$tableName', partition_path => '/a1/*')""".stripMargin).collect()
+      assertResult(1) {
+        leadingDirectoryDelimiterResult.length
+      }
+
+      // collect result for partitioned table with invalid partition_path regex
+      checkExceptionContain(s"""call stats_file_sizes(table => '$tableName', partition_path => '/*')""".stripMargin)(
+        "Provided partition_path file depth of 1 does not match table's maximum partition depth of 2"
+      )
+    }
+  }
+
+  test("Test Call stats_file_sizes Procedure for un-partitioned tables") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  price double,
+           |  name string,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts'
+           | )
+       """.stripMargin)
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 10, 'a1', 1000")
+      spark.sql(s"insert into $tableName select 2, 20, 'a2', 1500")
+
+      // Check required fields
+      checkExceptionContain(s"""call stats_file_sizes(limit => 10)""")(
+        s"Argument: table is required")
+
+      // collect result for  un-partitioned table without specifying partition_path regex
+      // will show an extra row with commit_time == ALL
+      val noPartitionRegexResult = spark.sql(
+        s"""call stats_file_sizes(table => '$tableName')""".stripMargin).collect()
+      assertResult(3) {
+        noPartitionRegexResult.length
+      }
+
+      // collect result for un-partitioned table by specifying partition_path regex
+      val partitionRegexResult = spark.sql(
+        s"""call stats_file_sizes(table => '$tableName', partition_path => '*')""".stripMargin).collect()
+      assertResult(3) {
+        partitionRegexResult.length
+      }
+
+      // collect result for un-partitioned table by specifying partition_path regex
+      val leadingDirectoryDelimiterResult = spark.sql(
         s"""call stats_file_sizes(table => '$tableName', partition_path => '/*')""".stripMargin).collect()
       assertResult(3) {
-        result.length
+        leadingDirectoryDelimiterResult.length
+      }
+
+      // collect result for un-partitioned table by specifying WRONG partition_path regex
+      // globRegex is ignored for un-partitioned tables
+      val wrongPartitionRegexResult = spark.sql(
+        s"""call stats_file_sizes(table => '$tableName', partition_path => '/*')""".stripMargin).collect()
+      assertResult(3) {
+        wrongPartitionRegexResult.length
       }
     }
   }

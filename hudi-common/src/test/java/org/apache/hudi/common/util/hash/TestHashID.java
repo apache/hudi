@@ -21,19 +21,39 @@ package org.apache.hudi.common.util.hash;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import javax.xml.bind.DatatypeConverter;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
+
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 
+import static java.util.Arrays.asList;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests {@link HashID}.
+ */
 public class TestHashID {
+
+  public static List<Arguments> hashIdSizes() {
+    return asList(
+        Arguments.of(HashID.Size.BITS_32),
+        Arguments.of(HashID.Size.BITS_64),
+        Arguments.of(HashID.Size.BITS_128)
+    );
+  }
 
   /**
    * Test HashID of all sizes for ByteArray type input message.
@@ -49,7 +69,7 @@ public class TestHashID {
           .limit((32 + (i * 4)))
           .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
           .toString();
-      final byte[] originalData = message.getBytes(StandardCharsets.UTF_8);
+      final byte[] originalData = getUTF8Bytes(message);
       final byte[] hashBytes = HashID.hash(originalData, size);
       assertEquals(hashBytes.length, size.byteSize());
     }
@@ -120,8 +140,26 @@ public class TestHashID {
       for (Map.Entry<String, String> sizeEntry : allSizeEntries.getValue().entrySet()) {
         final byte[] actualHashBytes = HashID.hash(sizeEntry.getKey(), allSizeEntries.getKey());
         final byte[] expectedHashBytes = DatatypeConverter.parseHexBinary(sizeEntry.getValue());
-        assertTrue(Arrays.equals(expectedHashBytes, actualHashBytes));
+        assertArrayEquals(expectedHashBytes, actualHashBytes);
       }
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("hashIdSizes")
+  void testGenerateXXHashMagicNumber(HashID.Size size) throws IOException, URISyntaxException {
+    // We need to make sure we always generate the same hash value for the same input. This test
+    // guards against unexpected change of hash value due to accidents like library version upgrade.
+    // Load inputs and expected hash values from files.
+    List<String> inputs = Files.readAllLines(Paths.get(Objects.requireNonNull(
+        getClass().getClassLoader().getResource("hash/magic_input.txt")).toURI()));
+    List<String> expectedHash = Files.readAllLines(Paths.get(Objects.requireNonNull(
+        getClass().getClassLoader().getResource(String.format("hash/xxhash_%s_for_magic_input.txt", size.name()))).toURI()));
+
+    for (int i = 0; i < expectedHash.size(); ++i) {
+      String hash = HashID.generateXXHashAsString(inputs.get(i), size);
+      // Magic number test to guard against accidental upgrade that changes the hash value
+      assertEquals(expectedHash.get(i), hash);
     }
   }
 }

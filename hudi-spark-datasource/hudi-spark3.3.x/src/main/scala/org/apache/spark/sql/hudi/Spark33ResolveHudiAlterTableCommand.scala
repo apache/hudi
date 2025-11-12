@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.common.config.HoodieCommonConfig
 import org.apache.hudi.internal.schema.action.TableChange.ColumnChangeID
+
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.ResolvedTable
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -33,7 +33,7 @@ import org.apache.spark.sql.hudi.command.{AlterTableCommand => HudiAlterTableCom
 class Spark33ResolveHudiAlterTableCommand(sparkSession: SparkSession) extends Rule[LogicalPlan] {
 
   def apply(plan: LogicalPlan): LogicalPlan = {
-    if (schemaEvolutionEnabled) {
+    if (ProvidesHoodieConfig.isSchemaEvolutionEnabled(sparkSession)) {
       plan.resolveOperatorsUp {
         case set@SetTableProperties(ResolvedHoodieV2TablePlan(t), _) if set.resolved =>
           HudiAlterTableCommand(t.v1Table, set.changes, ColumnChangeID.PROPERTY_CHANGE)
@@ -54,10 +54,6 @@ class Spark33ResolveHudiAlterTableCommand(sparkSession: SparkSession) extends Ru
       plan
     }
   }
-
-  private def schemaEvolutionEnabled: Boolean =
-    sparkSession.sessionState.conf.getConfString(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key,
-      HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue.toString).toBoolean
 
   object ResolvedHoodieV2TablePlan {
     def unapply(plan: LogicalPlan): Option[HoodieInternalV2Table] = {

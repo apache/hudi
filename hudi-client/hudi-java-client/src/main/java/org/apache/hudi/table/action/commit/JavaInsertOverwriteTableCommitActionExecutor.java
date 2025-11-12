@@ -22,7 +22,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -34,7 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class JavaInsertOverwriteTableCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class JavaInsertOverwriteTableCommitActionExecutor<T>
     extends JavaInsertOverwriteCommitActionExecutor<T> {
 
   public JavaInsertOverwriteTableCommitActionExecutor(HoodieEngineContext context,
@@ -51,8 +50,7 @@ public class JavaInsertOverwriteTableCommitActionExecutor<T extends HoodieRecord
   @Override
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<List<WriteStatus>> writeResult) {
     Map<String, List<String>> partitionToExistingFileIds = new HashMap<>();
-    List<String> partitionPaths = FSUtils.getAllPartitionPaths(context,
-        table.getMetaClient().getBasePath(), config.isMetadataTableEnabled(), config.shouldAssumeDatePartitioning());
+    List<String> partitionPaths = FSUtils.getAllPartitionPaths(context, table.getMetaClient(), config.isMetadataTableEnabled());
 
     if (partitionPaths != null && partitionPaths.size() > 0) {
       partitionToExistingFileIds = context.mapToPair(partitionPaths,

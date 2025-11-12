@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.cluster.strategy;
 
-import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -27,12 +26,12 @@ import org.apache.hudi.table.HoodieTable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -43,10 +42,12 @@ public class TestPartitionAwareClusteringPlanStrategy {
   HoodieTable table;
   @Mock
   HoodieEngineContext context;
+  
   HoodieWriteConfig hoodieWriteConfig;
 
   @BeforeEach
   public void setUp() {
+    MockitoAnnotations.openMocks(this);
     Properties props = new Properties();
     props.setProperty("hoodie.clustering.plan.strategy.partition.regex.pattern", "2021072.*");
     this.hoodieWriteConfig = HoodieWriteConfig
@@ -71,7 +72,7 @@ public class TestPartitionAwareClusteringPlanStrategy {
     fakeTimeBasedPartitionsPath.add("20210719");
     fakeTimeBasedPartitionsPath.add("20210721");
 
-    List list = strategyTestRegexPattern.getMatchedPartitions(hoodieWriteConfig, fakeTimeBasedPartitionsPath);
+    List list = strategyTestRegexPattern.getRegexPatternMatchedPartitions(hoodieWriteConfig, fakeTimeBasedPartitionsPath);
     assertEquals(2, list.size());
     assertTrue(list.contains("20210721"));
     assertTrue(list.contains("20210723"));
@@ -84,13 +85,9 @@ public class TestPartitionAwareClusteringPlanStrategy {
     }
 
     @Override
-    protected Stream<HoodieClusteringGroup> buildClusteringGroupsForPartition(String partitionPath, List list) {
-      return null;
-    }
-
-    @Override
     protected Map<String, String> getStrategyParams() {
       return null;
     }
   }
+
 }

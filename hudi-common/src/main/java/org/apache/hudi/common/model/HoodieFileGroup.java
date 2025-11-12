@@ -18,22 +18,26 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 
 import java.io.Serializable;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
 /**
- * A set of data/base files + set of log files, that make up an unit for all operations.
+ * A set of data/base files + set of log files, that make up a unit for all operations.
  */
 public class HoodieFileGroup implements Serializable {
 
@@ -101,12 +105,37 @@ public class HoodieFileGroup implements Serializable {
 
   /**
    * Add a new log file into the group.
+   *
+   * <p>CAUTION: the log file must be added in sequence of the delta commit time.
    */
-  public void addLogFile(HoodieLogFile logFile) {
-    if (!fileSlices.containsKey(logFile.getBaseCommitTime())) {
-      fileSlices.put(logFile.getBaseCommitTime(), new FileSlice(fileGroupId, logFile.getBaseCommitTime()));
+  public void addLogFile(CompletionTimeQueryView completionTimeQueryView, HoodieLogFile logFile) {
+    String baseInstantTime = getBaseInstantTime(completionTimeQueryView, logFile);
+    if (!fileSlices.containsKey(baseInstantTime)) {
+      fileSlices.put(baseInstantTime, new FileSlice(fileGroupId, baseInstantTime));
     }
-    fileSlices.get(logFile.getBaseCommitTime()).addLogFile(logFile);
+    fileSlices.get(baseInstantTime).addLogFile(logFile);
+  }
+
+  @VisibleForTesting
+  public String getBaseInstantTime(CompletionTimeQueryView completionTimeQueryView, HoodieLogFile logFile) {
+    if (fileSlices.isEmpty()) {
+      // no base file in the file group, use the log file delta commit time.
+      return logFile.getDeltaCommitTime();
+    }
+    Option<String> completionTimeOpt = completionTimeQueryView.getCompletionTime(fileSlices.firstKey(), logFile.getDeltaCommitTime());
+    if (completionTimeOpt.isPresent()) {
+      for (String commitTime : fileSlices.keySet()) {
+        // find the largest commit time that is smaller than the log delta commit completion time
+        if (compareTimestamps(completionTimeOpt.get(), GREATER_THAN_OR_EQUALS, commitTime)) {
+          return commitTime;
+        }
+      }
+      // no base file that starts earlier than the log delta commit completion time,
+      // use the log file delta commit time.
+      return logFile.getDeltaCommitTime();
+    }
+    // the log file is still pending, it always belongs to the latest file slice.
+    return fileSlices.firstKey();
   }
 
   public String getPartitionPath() {
@@ -122,7 +151,7 @@ public class HoodieFileGroup implements Serializable {
    * some log files, that are based off a commit or delta commit.
    */
   private boolean isFileSliceCommitted(FileSlice slice) {
-    if (!compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, lastInstant.get().getTimestamp())) {
+    if (!compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, lastInstant.get().requestedTime())) {
       return false;
     }
 
@@ -154,7 +183,7 @@ public class HoodieFileGroup implements Serializable {
   }
 
   public Stream<FileSlice> getAllFileSlicesBeforeOn(String maxInstantTime) {
-    return fileSlices.values().stream().filter(slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, maxInstantTime));
+    return getAllFileSlices().filter(slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, maxInstantTime));
   }
 
   /**
@@ -207,12 +236,10 @@ public class HoodieFileGroup implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("HoodieFileGroup {");
-    sb.append("id=").append(fileGroupId);
-    sb.append(", fileSlices='").append(fileSlices).append('\'');
-    sb.append(", lastInstant='").append(lastInstant).append('\'');
-    sb.append('}');
-    return sb.toString();
+    return "HoodieFileGroup {" + "id=" + fileGroupId
+        + ", fileSlices='" + fileSlices + '\''
+        + ", lastInstant='" + lastInstant + '\''
+        + '}';
   }
 
   public void addFileSlice(FileSlice slice) {
@@ -225,5 +252,24 @@ public class HoodieFileGroup implements Serializable {
 
   public HoodieTimeline getTimeline() {
     return timeline;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    HoodieFileGroup fileGroup = (HoodieFileGroup) o;
+    return Objects.equals(fileGroupId, fileGroup.fileGroupId)
+        && Objects.equals(fileSlices, fileGroup.fileSlices)
+        && Objects.equals(lastInstant, fileGroup.lastInstant);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(fileGroupId, fileSlices, lastInstant);
   }
 }

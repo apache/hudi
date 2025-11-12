@@ -24,8 +24,6 @@ import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY;
-
 /**
  * This is write-support utility base-class taking up handling of
  *
@@ -42,6 +40,9 @@ public abstract class HoodieBloomFilterWriteSupport<T extends Comparable<T>> {
   public static final String HOODIE_MAX_RECORD_KEY_FOOTER = "hoodie_max_record_key";
   public static final String HOODIE_BLOOM_FILTER_TYPE_CODE = "hoodie_bloom_filter_type_code";
 
+  public static final String HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "org.apache.hudi.bloomfilter";
+  public static final String OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "com.uber.hoodie.bloomfilter";
+
   private final BloomFilter bloomFilter;
 
   private T minRecordKey;
@@ -54,13 +55,17 @@ public abstract class HoodieBloomFilterWriteSupport<T extends Comparable<T>> {
   public void addKey(T recordKey) {
     bloomFilter.add(getUTF8Bytes(recordKey));
 
-    if (minRecordKey == null || minRecordKey.compareTo(recordKey) > 0) {
+    if (minRecordKey == null || compareRecordKey(minRecordKey, recordKey) > 0) {
       minRecordKey = dereference(recordKey);
     }
 
-    if (maxRecordKey == null || maxRecordKey.compareTo(recordKey) < 0) {
+    if (maxRecordKey == null || compareRecordKey(maxRecordKey, recordKey) < 0) {
       maxRecordKey = dereference(recordKey);
     }
+  }
+
+  protected int compareRecordKey(T a, T b) {
+    return a.compareTo(b);
   }
 
   public Map<String, String> finalizeMetadata() {

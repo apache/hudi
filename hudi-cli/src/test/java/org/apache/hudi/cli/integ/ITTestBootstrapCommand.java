@@ -18,15 +18,15 @@
 
 package org.apache.hudi.cli.integ;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.commands.TableCommand;
 import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.functional.TestBootstrap;
+import org.apache.hudi.storage.StoragePath;
+
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,8 +64,8 @@ public class ITTestBootstrapCommand extends HoodieCLIIntegrationTestBase {
   public void init() {
     String srcName = "source";
     tableName = "test-table";
-    sourcePath = basePath + Path.SEPARATOR + srcName;
-    tablePath = basePath + Path.SEPARATOR + tableName;
+    sourcePath = basePath + StoragePath.SEPARATOR + srcName;
+    tablePath = basePath + StoragePath.SEPARATOR + tableName;
 
     // generate test data
     partitions = Arrays.asList("2018", "2019", "2020");
@@ -73,7 +73,7 @@ public class ITTestBootstrapCommand extends HoodieCLIIntegrationTestBase {
     for (int i = 0; i < partitions.size(); i++) {
       Dataset<Row> df = TestBootstrap.generateTestRawTripDataset(timestamp,
           i * NUM_OF_RECORDS, i * NUM_OF_RECORDS + NUM_OF_RECORDS, null, jsc, sqlContext);
-      df.write().parquet(sourcePath + Path.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i));
+      df.write().parquet(sourcePath + StoragePath.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i));
     }
   }
 
@@ -90,7 +90,8 @@ public class ITTestBootstrapCommand extends HoodieCLIIntegrationTestBase {
     assertTrue(ShellEvaluationResultUtil.isSuccess(resultForBootstrapRun));
 
     // Connect & check Hudi table exist
-    new TableCommand().connect(tablePath, TimelineLayoutVersion.VERSION_1, false, 2000, 300000, 7);
+    new TableCommand().connect(tablePath, false, 2000, 300000, 7,
+        "WAIT_TO_ADJUST_SKEW", 200L, false);
     metaClient = HoodieCLI.getTableMetaClient();
     assertEquals(1, metaClient.getActiveTimeline().getCommitsTimeline().countInstants(), "Should have 1 commit.");
 

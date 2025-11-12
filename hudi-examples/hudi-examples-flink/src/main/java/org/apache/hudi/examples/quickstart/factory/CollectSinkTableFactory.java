@@ -18,6 +18,10 @@
 
 package org.apache.hudi.examples.quickstart.factory;
 
+import org.apache.hudi.adapter.RichSinkFunctionAdapter;
+import org.apache.hudi.adapter.SinkFunctionProviderAdapter;
+import org.apache.hudi.utils.RuntimeContextUtils;
+
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.java.typeutils.RowTypeInfo;
@@ -25,11 +29,9 @@ import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
-import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
-import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
-import org.apache.flink.table.connector.sink.SinkFunctionProvider;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.factories.DynamicTableSinkFactory;
 import org.apache.flink.table.factories.FactoryUtil;
@@ -62,7 +64,7 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
     FactoryUtil.TableFactoryHelper helper = FactoryUtil.createTableFactoryHelper(this, context);
     helper.validate();
 
-    TableSchema schema = context.getCatalogTable().getSchema();
+    ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     RESULT.clear();
     return new CollectTableSink(schema, context.getObjectIdentifier().getObjectName());
   }
@@ -91,11 +93,11 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
    */
   private static class CollectTableSink implements DynamicTableSink {
 
-    private final TableSchema schema;
+    private final ResolvedSchema schema;
     private final String tableName;
 
     private CollectTableSink(
-        TableSchema schema,
+        ResolvedSchema schema,
         String tableName) {
       this.schema = schema;
       this.tableName = tableName;
@@ -115,7 +117,7 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
       final DataType rowType = schema.toPhysicalRowDataType();
       final RowTypeInfo rowTypeInfo = (RowTypeInfo) TypeConversions.fromDataTypeToLegacyInfo(rowType);
       DataStructureConverter converter = context.createDataStructureConverter(schema.toPhysicalRowDataType());
-      return SinkFunctionProvider.of(new CollectSinkFunction(converter, rowTypeInfo));
+      return (SinkFunctionProviderAdapter) () -> new CollectSinkFunction(converter, rowTypeInfo);
     }
 
     @Override
@@ -129,7 +131,7 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
     }
   }
 
-  static class CollectSinkFunction extends RichSinkFunction<RowData> implements CheckpointedFunction {
+  static class CollectSinkFunction extends RichSinkFunctionAdapter<RowData> implements CheckpointedFunction {
 
     private static final long serialVersionUID = 1L;
     private final DynamicTableSink.DataStructureConverter converter;
@@ -163,7 +165,7 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
           localResult.add(value);
         }
       }
-      this.taskID = getRuntimeContext().getIndexOfThisSubtask();
+      this.taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
       synchronized (CollectSinkTableFactory.class) {
         RESULT.put(taskID, localResult);
       }

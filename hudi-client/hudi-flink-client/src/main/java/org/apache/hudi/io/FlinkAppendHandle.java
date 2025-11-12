@@ -21,13 +21,13 @@ package org.apache.hudi.io;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,13 +44,14 @@ import java.util.List;
  * <p>The back-up writer may rollover on condition(for e.g, the filesystem does not support append
  * or the file size hits the configured threshold).
  */
-public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
+public class FlinkAppendHandle<T, I, K, O>
     extends HoodieAppendHandle<T, I, K, O> implements MiniBatchHandle {
 
   private static final Logger LOG = LoggerFactory.getLogger(FlinkAppendHandle.class);
 
   private boolean isClosed = false;
   private final WriteMarkers writeMarkers;
+  private final BucketType bucketType;
 
   public FlinkAppendHandle(
       HoodieWriteConfig config,
@@ -58,10 +59,17 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
       HoodieTable<T, I, K, O> hoodieTable,
       String partitionPath,
       String fileId,
+      BucketType bucketType,
       Iterator<HoodieRecord<T>> recordItr,
       TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier);
     this.writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
+    this.bucketType = bucketType;
+  }
+
+  @Override
+  protected void flushToDiskIfRequired(HoodieRecord record, boolean appendDeleteBlocks) {
+    // do not flush for one batch of records
   }
 
   @Override
@@ -89,8 +97,7 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
     // do not use the HoodieRecord operation because hoodie writer has its own
     // INSERT/MERGE bucket for 'UPSERT' semantics. For e.g, a hoodie record with fresh new key
     // and operation HoodieCdcOperation.DELETE would be put into either an INSERT bucket or UPDATE bucket.
-    return hoodieRecord.getCurrentLocation() != null
-        && hoodieRecord.getCurrentLocation().getInstantTime().equals("U");
+    return bucketType == BucketType.UPDATE;
   }
 
   @Override
@@ -112,12 +119,12 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
     } catch (Throwable throwable) {
       // The intermediate log file can still append based on the incremental MERGE semantics,
       // there is no need to delete the file.
-      LOG.warn("Error while trying to dispose the APPEND handle", throwable);
+      LOG.warn("Failed to close the APPEND handle", throwable);
     }
   }
 
   @Override
-  public Path getWritePath() {
+  public StoragePath getWritePath() {
     return writer.getLogFile().getPath();
   }
 }

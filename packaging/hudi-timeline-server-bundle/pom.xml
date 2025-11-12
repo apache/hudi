@@ -21,7 +21,7 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.13.0-SNAPSHOT</version>
+        <version>1.2.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -55,11 +55,15 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>io.javalin</groupId>
             <artifactId>javalin</artifactId>
-            <version>2.8.0</version>
+            <version>${javalin.version}</version>
         </dependency>
 
         <dependency>
@@ -70,6 +74,13 @@
         <dependency>
             <groupId>org.rocksdb</groupId>
             <artifactId>rocksdbjni</artifactId>
+        </dependency>
+
+        <!-- Override the provided scope defined in hudi-common -->
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+            <scope>compile</scope>
         </dependency>
 
         <!-- Hadoop -->
@@ -144,7 +155,6 @@
                             <exclude>META-INF/*.RSA</exclude>
                             <exclude>META-INF/services/javax.*</exclude>
                             <exclude>**/*.proto</exclude>
-                            <exclude>hbase-webapps/**</exclude>
                         </excludes>
                     </filter>
                 </filters>
@@ -154,6 +164,7 @@
                          Include hudi-timeline-server with javalin dependencies. 
                          hadoop deps are to be provided at runtime. see run_server.sh 
                       -->
+                      <include>org.apache.hudi:hudi-hadoop-common</include>
                       <include>org.apache.hudi:hudi-common</include>
                       <include>org.apache.hudi:hudi-timeline-service</include>
                       <include>org.mortbay.jetty:jetty</include>
@@ -183,22 +194,11 @@
                       <include>com.fasterxml.jackson.core:jackson-annotations</include>
                       <include>com.fasterxml.jackson.core:jackson-core</include>
                       <include>com.fasterxml.jackson.core:jackson-databind</include>
-                      <include>org.apache.hbase:hbase-common</include>
-                      <include>org.apache.hbase:hbase-client</include>
-                      <include>org.apache.hbase:hbase-hadoop-compat</include>
-                      <include>org.apache.hbase:hbase-hadoop2-compat</include>
-                      <include>org.apache.hbase:hbase-metrics</include>
-                      <include>org.apache.hbase:hbase-metrics-api</include>
-                      <include>org.apache.hbase:hbase-protocol</include>
-                      <include>org.apache.hbase:hbase-protocol-shaded</include>
-                      <include>org.apache.hbase:hbase-server</include>
-                      <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
-                      <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
-                      <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
-                      <include>org.apache.htrace:htrace-core4</include>
+                      <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
                       <include>commons-io:commons-io</include>
                       <include>log4j:log4j</include>
                       <include>org.openjdk.jol:jol-core</include>
+                      <include>org.apache.avro:avro</include>
                   </includes>
                 </artifactSet>
                 <relocations combine.children="append">
@@ -207,91 +207,16 @@
                         <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
                     </relocation>
                     <relocation>
-                        <pattern>org.apache.hadoop.hbase.</pattern>
-                        <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
-                        <excludes>
-                            <exclude>org.apache.hadoop.hbase.KeyValue$KeyComparator</exclude>
-                        </excludes>
-                    </relocation>
-                    <relocation>
-                        <pattern>org.apache.hbase.</pattern>
-                        <shadedPattern>org.apache.hudi.org.apache.hbase.</shadedPattern>
-                    </relocation>
-                    <relocation>
-                        <pattern>org.apache.htrace.</pattern>
-                        <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
-                    </relocation>
-                    <relocation>
                         <pattern>org.openjdk.jol.</pattern>
                         <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
                     </relocation>
-                    <!-- The classes below in org.apache.hadoop.metrics2 package come from
-                hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
-                instead of shading all classes under org.apache.hadoop.metrics2 including ones
-                from hadoop. -->
                     <relocation>
-                        <pattern>org.apache.hadoop.metrics2.MetricHistogram</pattern>
-                        <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricHistogram
-                        </shadedPattern>
+                        <pattern>com.fasterxml.jackson.</pattern>
+                        <shadedPattern>org.apache.hudi.com.fasterxml.jackson.</shadedPattern>
                     </relocation>
                     <relocation>
-                        <pattern>org.apache.hadoop.metrics2.MetricsExecutor</pattern>
-                        <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricsExecutor
-                        </shadedPattern>
-                    </relocation>
-                    <relocation>
-                        <pattern>org.apache.hadoop.metrics2.impl.JmxCacheBuster</pattern>
-                        <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.impl.JmxCacheBuster</shadedPattern>
-                    </relocation>
-                    <relocation>
-                        <pattern>org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper</pattern>
-                        <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper
-                        </shadedPattern>
-                    </relocation>
-                    <relocation>
-                        <pattern>org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry</pattern>
-                        <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry
-                        </shadedPattern>
-                    </relocation>
-                    <relocation>
-                        <pattern>org.apache.hadoop.metrics2.lib.MetricsExecutorImpl</pattern>
-                        <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MetricsExecutorImpl
-                        </shadedPattern>
-                    </relocation>
-                    <relocation>
-                        <pattern>org.apache.hadoop.metrics2.lib.MutableFastCounter</pattern>
-                        <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableFastCounter
-                        </shadedPattern>
-                    </relocation>
-                    <relocation>
-                        <pattern>org.apache.hadoop.metrics2.lib.MutableHistogram</pattern>
-                        <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableHistogram
-                        </shadedPattern>
-                    </relocation>
-                    <relocation>
-                        <pattern>org.apache.hadoop.metrics2.lib.MutableRangeHistogram</pattern>
-                        <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableRangeHistogram
-                        </shadedPattern>
-                    </relocation>
-                    <relocation>
-                        <pattern>org.apache.hadoop.metrics2.lib.MutableSizeHistogram</pattern>
-                        <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableSizeHistogram
-                        </shadedPattern>
-                    </relocation>
-                    <relocation>
-                        <pattern>org.apache.hadoop.metrics2.lib.MutableTimeHistogram</pattern>
-                        <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableTimeHistogram
-                        </shadedPattern>
-                    </relocation>
-                    <relocation>
-                        <pattern>org.apache.hadoop.metrics2.util.MetricQuantile</pattern>
-                        <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricQuantile
-                        </shadedPattern>
-                    </relocation>
-                    <relocation>
-                        <pattern>org.apache.hadoop.metrics2.util.MetricSampleQuantiles</pattern>
-                        <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricSampleQuantiles
-                        </shadedPattern>
+                        <pattern>org.apache.avro.</pattern>
+                        <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
                     </relocation>
                 </relocations>
             </configuration>

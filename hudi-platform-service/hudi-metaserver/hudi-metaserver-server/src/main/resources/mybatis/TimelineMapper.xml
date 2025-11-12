@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="TimelineMapper">
+
+    <!-- tbl_timestamp related -->
+    <insert id="insertTimestamp" parameterType="java.util.HashMap">
+        INSERT IGNORE INTO tbl_timestamp
+        VALUES (#{tableId}, #{newTimestamp})
+    </insert>
+
+    <update id="updateTimestamp" parameterType="java.util.HashMap">
+        UPDATE tbl_timestamp
+        SET ts = #{newTimestamp}
+        WHERE
+            tbl_id = #{tableId}
+          AND ts = #{oldTimestamp}
+    </update>
+
+    <select id="selectTimestampByTableId" parameterType="java.lang.Long" resultType="java.lang.String">
+        SELECT
+            ts
+        FROM
+            tbl_timestamp
+        WHERE
+            tbl_id = #{tableId}
+    </select>
+
+    <delete id="deleteTimestamp" parameterType="java.util.HashMap">
+        DELETE
+        FROM
+            tbl_timestamp
+        WHERE
+            tbl_id = #{tableId}
+    </delete>
+
+    <!-- instant related -->
+    <insert id="insertInstant" parameterType="java.util.HashMap" useGeneratedKeys="true" keyProperty="instant_id">
+        INSERT INTO instant (tbl_id, action, ts, state, duration, start_ts)
+        VALUES (#{instant.tableId}, #{instant.action}, #{instant.ts}, #{instant.state}, #{duration}, ${startTs})
+    </insert>
+
+    <update id="updateInstant" parameterType="java.util.HashMap">
+        UPDATE instant
+        SET state = #{newInstant.state}, action = #{newInstant.action}
+        <if test="duration != null">
+            , duration = #{duration}
+        </if>
+        <if test="startTs != null">
+            , start_ts = #{startTs}
+        </if>
+        WHERE
+        tbl_id = #{oldInstant.tableId}
+        AND action = #{oldInstant.action}
+        AND ts = #{oldInstant.ts}
+        AND state = #{oldInstant.state}
+    </update>
+
+    <delete id="deleteInstant" parameterType="java.util.HashMap">
+        DELETE
+        FROM
+            instant
+        WHERE
+            tbl_id = #{tableId}
+          AND ts = #{ts}
+    </delete>
+
+    <select id="selectInstantsByStates" parameterType="java.util.HashMap" resultType="InstantBean">
+        SELECT
+            ts, action, state
+        FROM
+            instant
+        WHERE
+            tbl_id = #{tableId}
+          AND state IN
+          <foreach collection="states" item="state" open="(" close=")" separator=",">
+              #{state}
+          </foreach>
+        ORDER BY ts DESC
+        <if test ="limit > 0">
+            LIMIT #{limit}
+        </if>
+    </select>
+
+    <select id="selectInstantId" parameterType="InstantBean" resultType="java.lang.Long">
+        SELECT
+            instant_id
+        FROM
+            instant
+        WHERE
+            tbl_id = #{tableId}
+          AND action = #{action}
+          AND ts = #{ts}
+          AND state = #{state}
+    </select>
+
+    <!-- instant meta related -->
+    <resultMap id="instantMetadataMap" type="java.util.Map">
+        <result column="data" property="data" jdbcType="BLOB"  typeHandler="org.apache.ibatis.type.BlobTypeHandler" />
+    </resultMap>
+    <insert id="insertInstantMetadata" parameterType="java.util.HashMap" useGeneratedKeys="true" keyProperty="commit_id">
+        INSERT IGNORE INTO instant_meta_data (tbl_id, ts, action, state, data)
+        VALUES (#{instant.tableId}, #{instant.ts}, #{instant.action}, #{instant.state}, #{metadata, typeHandler=org.apache.ibatis.type.BlobTypeHandler})
+    </insert>
+
+    <delete id="deleteInstantAllMetadata" parameterType="java.util.HashMap">
+        DELETE
+        FROM
+            instant_meta_data
+        WHERE
+            tbl_id = #{tableId}
+          AND ts = #{ts}
+    </delete>
+
+    <delete id="deleteInstantMetadata" parameterType="InstantBean">
+        DELETE
+        FROM
+            instant_meta_data
+        WHERE
+            tbl_id = #{tableId}
+          AND ts = #{ts}
+          AND state = #{state}
+    </delete>
+
+    <select id="selectInstantMetadata" parameterType="InstantBean" resultMap="instantMetadataMap">
+        SELECT
+            data
+        FROM
+            instant_meta_data
+        WHERE
+            tbl_id = #{tableId}
+          AND action = #{action}
+          AND ts = #{ts}
+          AND state = #{state}
+    </select>
+
+</mapper>

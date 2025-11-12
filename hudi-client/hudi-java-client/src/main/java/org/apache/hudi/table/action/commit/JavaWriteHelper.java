@@ -19,13 +19,14 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.table.read.BufferedRecordMerger;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
@@ -37,10 +38,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-public class JavaWriteHelper<T extends HoodieRecordPayload,R> extends BaseWriteHelper<T, List<HoodieRecord<T>>,
+public class JavaWriteHelper<T,R> extends BaseWriteHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>, R> {
 
   private JavaWriteHelper() {
+    super(ignored -> -1);
   }
 
   private static class WriteHelperHolder {
@@ -57,8 +59,14 @@ public class JavaWriteHelper<T extends HoodieRecordPayload,R> extends BaseWriteH
   }
 
   @Override
-  public List<HoodieRecord<T>> deduplicateRecords(
-      List<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr) {
+  public List<HoodieRecord<T>> deduplicateRecords(List<HoodieRecord<T>> records,
+                                                  HoodieIndex<?, ?> index,
+                                                  int parallelism,
+                                                  String schemaStr,
+                                                  TypedProperties props,
+                                                  BufferedRecordMerger<T> recordMerger,
+                                                  HoodieReaderContext<T> readerContext,
+                                                  String[] orderingFieldNames) {
     boolean isIndexingGlobal = index.isGlobal();
     Map<Object, List<Pair<Object, HoodieRecord<T>>>> keyedRecords = records.stream().map(record -> {
       HoodieKey hoodieKey = record.getKey();
@@ -68,13 +76,9 @@ public class JavaWriteHelper<T extends HoodieRecordPayload,R> extends BaseWriteH
     }).collect(Collectors.groupingBy(Pair::getLeft));
 
     final Schema schema = new Schema.Parser().parse(schemaStr);
-    return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((rec1, rec2) -> {
-      @SuppressWarnings("unchecked")
-      T reducedData = (T) rec1.getData().preCombine(rec2.getData(), schema, CollectionUtils.emptyProps());
-      // we cannot allow the user to change the key or partitionPath, since that will affect
-      // everything
-      // so pick it from one of the records.
-      return new HoodieAvroRecord<T>(rec1.getKey(), reducedData);
-    }).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList());
+    DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, schema);
+    return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((previous, next) ->
+        reduceRecords(props, recordMerger, orderingFieldNames, previous, next, schema, readerContext.getRecordContext(), deleteContext)
+    ).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList());
   }
 }

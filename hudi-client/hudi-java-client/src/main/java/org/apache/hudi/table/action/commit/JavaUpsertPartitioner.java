@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -37,8 +36,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -52,9 +51,9 @@ import java.util.stream.Collectors;
 /**
  * Packs incoming records to be upserted, into buckets.
  */
-public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements Partitioner  {
+public class JavaUpsertPartitioner<T> implements Partitioner  {
 
-  private static final Logger LOG = LogManager.getLogger(JavaUpsertPartitioner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(JavaUpsertPartitioner.class);
 
   /**
    * List of all small files to be corrected.
@@ -67,19 +66,19 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
   /**
    * Stat for the input and output workload. Describe the workload before and after being assigned buckets.
    */
-  private WorkloadProfile workloadProfile;
+  private final WorkloadProfile workloadProfile;
   /**
    * Helps decide which bucket an incoming update should go to.
    */
-  private HashMap<String, Integer> updateLocationToBucket;
+  private final HashMap<String, Integer> updateLocationToBucket;
   /**
    * Helps us pack inserts into 1 or more buckets depending on number of incoming records.
    */
-  private HashMap<String, List<InsertBucketCumulativeWeightPair>> partitionPathToInsertBucketInfos;
+  private final HashMap<String, List<InsertBucketCumulativeWeightPair>> partitionPathToInsertBucketInfos;
   /**
    * Remembers what type each bucket is for later.
    */
-  private HashMap<Integer, BucketInfo> bucketInfoMap;
+  private final HashMap<Integer, BucketInfo> bucketInfoMap;
 
   protected final HoodieTable table;
 
@@ -133,7 +132,7 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
     // for new inserts, compute buckets depending on how many records we have for each partition
     Set<String> partitionPaths = profile.getPartitionPaths();
     long averageRecordSize =
-        averageBytesPerRecord(table.getMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants(),
+        averageBytesPerRecord(table.getMetaClient().getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants(),
             config);
     LOG.info("AvgRecordSize => " + averageRecordSize);
 
@@ -250,13 +249,12 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
     if (!commitTimeline.empty()) { // if we have some commits
       HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
       List<HoodieBaseFile> allFiles = table.getBaseFileOnlyView()
-          .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).collect(Collectors.toList());
+          .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.requestedTime()).collect(Collectors.toList());
 
       for (HoodieBaseFile file : allFiles) {
         if (file.getFileSize() < config.getParquetSmallFileLimit()) {
-          String filename = file.getFileName();
           SmallFile sf = new SmallFile();
-          sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
+          sf.location = new HoodieRecordLocation(file.getCommitTime(), file.getFileId());
           sf.sizeBytes = file.getFileSize();
           smallFileLocations.add(sf);
         }
@@ -322,8 +320,7 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
         Iterator<HoodieInstant> instants = commitTimeline.getReverseOrderedInstants().iterator();
         while (instants.hasNext()) {
           HoodieInstant instant = instants.next();
-          HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-              .fromBytes(commitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+          HoodieCommitMetadata commitMetadata = commitTimeline.readCommitMetadata(instant);
           long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
           long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
           if (totalBytesWritten > fileSizeThreshold && totalRecordsWritten > 0) {
@@ -337,5 +334,10 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
       LOG.error("Error trying to compute average bytes/record ", t);
     }
     return avgSize;
+  }
+
+  public List<String> getSmallFileIds() {
+    return smallFiles.stream().map(smallFile -> smallFile.location.getFileId())
+        .collect(Collectors.toList());
   }
 }

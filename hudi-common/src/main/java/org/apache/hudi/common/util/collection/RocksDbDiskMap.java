@@ -18,21 +18,24 @@
 
 package org.apache.hudi.common.util.collection;
 
+import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.AbstractMap;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.Spliterators;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -40,7 +43,7 @@ import java.util.stream.StreamSupport;
  * This class provides a disk spillable only map implementation.
  * All of the data is stored using the RocksDB implementation.
  */
-public final class RocksDbDiskMap<T extends Serializable, R extends Serializable> extends DiskMap<T, R> {
+public final class RocksDbDiskMap<T extends Serializable, R> extends DiskMap<T, R> {
   // ColumnFamily allows partitioning data within RockDB, which allows
   // independent configuration and faster deletes across partitions
   // https://github.com/facebook/rocksdb/wiki/Column-Families
@@ -48,14 +51,16 @@ public final class RocksDbDiskMap<T extends Serializable, R extends Serializable
   //
   private static final String ROCKSDB_COL_FAMILY = "rocksdb-diskmap";
 
-  private static final Logger LOG = LogManager.getLogger(RocksDbDiskMap.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RocksDbDiskMap.class);
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Set<T> keySet;
+  private final CustomSerializer<R> valueSerializer;
   private RocksDBDAO rocksDb;
 
-  public RocksDbDiskMap(String rocksDbStoragePath) throws IOException {
+  public RocksDbDiskMap(String rocksDbStoragePath, CustomSerializer<R> valueSerializer) throws IOException {
     super(rocksDbStoragePath, ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
     this.keySet = new HashSet<>();
+    this.valueSerializer = valueSerializer;
   }
 
   @Override
@@ -138,7 +143,15 @@ public final class RocksDbDiskMap<T extends Serializable, R extends Serializable
    */
   @Override
   public Iterator<R> iterator() {
-    return getRocksDb().iterator(ROCKSDB_COL_FAMILY);
+    return new MappingIterator<Pair<T, R>, R>(getRocksDb().iterator(ROCKSDB_COL_FAMILY), Pair::getValue);
+  }
+
+  /**
+   * Custom iterator to iterate over values written to disk with a key filter.
+   */
+  @Override
+  public Iterator<R> iterator(Predicate<T> filter) {
+    return new MappingIterator<Pair<T, R>, R>(new FilterIterator<>(getRocksDb().iterator(ROCKSDB_COL_FAMILY), pair -> filter.test(pair.getKey())), Pair::getValue);
   }
 
   @Override
@@ -165,7 +178,9 @@ public final class RocksDbDiskMap<T extends Serializable, R extends Serializable
     if (null == rocksDb) {
       synchronized (this) {
         if (null == rocksDb) {
-          rocksDb = new RocksDBDAO(ROCKSDB_COL_FAMILY, diskMapPath);
+          Map<String, CustomSerializer<?>> serializerMap = new HashMap<>(4);
+          serializerMap.put(ROCKSDB_COL_FAMILY, valueSerializer);
+          rocksDb = new RocksDBDAO(ROCKSDB_COL_FAMILY, diskMapPath, serializerMap);
           rocksDb.addColumnFamily(ROCKSDB_COL_FAMILY);
         }
       }

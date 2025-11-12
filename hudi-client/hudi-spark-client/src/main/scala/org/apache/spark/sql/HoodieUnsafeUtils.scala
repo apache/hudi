@@ -18,31 +18,46 @@
 
 package org.apache.spark.sql
 
-import org.apache.hudi.HoodieUnsafeRDD
+import org.apache.hudi.{HoodieUnsafeRDD}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.physical.{Partitioning}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.util.MutablePair
 
 /**
  * Suite of utilities helping in handling instances of [[HoodieUnsafeRDD]]
  */
-object HoodieUnsafeUtils {
+trait HoodieUnsafeUtils {
+
+  /**
+   * Fetches expected output [[Partitioning]] of the provided [[DataFrame]]
+   *
+   * NOTE: Invoking [[QueryExecution#executedPlan]] wouldn't actually execute the query (ie start pumping the data)
+   *       but instead will just execute Spark resolution, optimization and actual execution planning stages
+   *       returning instance of [[SparkPlan]] ready for execution
+   */
+  def getNumPartitions(df: DataFrame): Int
+
+  /**
+   * Creates [[DataFrame]] from provided [[plan]]
+   *
+   * @param spark spark's session
+   * @param plan given plan to wrap into [[DataFrame]]
+   */
+  def createDataFrameFrom(spark: SparkSession, plan: LogicalPlan): DataFrame
 
   /**
    * Creates [[DataFrame]] from the in-memory [[Seq]] of [[Row]]s with provided [[schema]]
    *
    * NOTE: [[DataFrame]] is based on [[LocalRelation]], entailing that most computations with it
-   *       will be executed by Spark locally
+   * will be executed by Spark locally
    *
-   * @param spark spark's session
-   * @param rows collection of rows to base [[DataFrame]] on
+   * @param spark  spark's session
+   * @param rows   collection of rows to base [[DataFrame]] on
    * @param schema target [[DataFrame]]'s schema
-   * @return
    */
-  def createDataFrameFromRows(spark: SparkSession, rows: Seq[Row], schema: StructType): DataFrame =
-    Dataset.ofRows(spark, LocalRelation.fromExternalRows(schema.toAttributes, rows))
+  def createDataFrameFromRows(spark: SparkSession, rows: Seq[Row], schema: StructType): DataFrame
 
   /**
    * Creates [[DataFrame]] from the in-memory [[Seq]] of [[InternalRow]]s with provided [[schema]]
@@ -53,11 +68,8 @@ object HoodieUnsafeUtils {
    * @param spark spark's session
    * @param rows collection of rows to base [[DataFrame]] on
    * @param schema target [[DataFrame]]'s schema
-   * @return
    */
-  def createDataFrameFromInternalRows(spark: SparkSession, rows: Seq[InternalRow], schema: StructType): DataFrame =
-    Dataset.ofRows(spark, LocalRelation(schema.toAttributes, rows))
-
+  def createDataFrameFromInternalRows(spark: SparkSession, rows: Seq[InternalRow], schema: StructType): DataFrame
 
   /**
    * Creates [[DataFrame]] from the [[RDD]] of [[Row]]s with provided [[schema]]
@@ -65,23 +77,12 @@ object HoodieUnsafeUtils {
    * @param spark spark's session
    * @param rdd RDD w/ [[Row]]s to base [[DataFrame]] on
    * @param schema target [[DataFrame]]'s schema
-   * @return
    */
-  def createDataFrameFromRDD(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType): DataFrame =
-    spark.internalCreateDataFrame(rdd, schema)
+  def createDataFrameFromRDD(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType): DataFrame
 
   /**
    * Canonical implementation of the [[RDD#collect]] for [[HoodieUnsafeRDD]], returning a properly
    * copied [[Array]] of [[InternalRow]]s
    */
-  def collect(rdd: HoodieUnsafeRDD): Array[InternalRow] = {
-    rdd.mapPartitionsInternal { iter =>
-      // NOTE: We're leveraging [[MutablePair]] here to avoid unnecessary allocations, since
-      //       a) iteration is performed lazily and b) iteration is single-threaded (w/in partition)
-      val pair = new MutablePair[InternalRow, Null]()
-      iter.map(row => pair.update(row.copy(), null))
-    }
-      .map(p => p._1)
-      .collect()
-  }
+  def collect(rdd: HoodieUnsafeRDD): Array[InternalRow]
 }

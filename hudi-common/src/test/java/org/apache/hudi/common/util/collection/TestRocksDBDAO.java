@@ -77,14 +77,12 @@ public class TestRocksDBDAO {
     final List<Payload<String>> payloads = new ArrayList<>();
     IntStream.range(0, 100).forEach(index -> {
       String prefix = prefixes.get(index % 4);
-      String key = prefix + UUID.randomUUID().toString();
+      String key = prefix + UUID.randomUUID();
       String family = colFamilies.get(index % 2);
-      String val = "VALUE_" + UUID.randomUUID().toString();
+      String val = "VALUE_" + UUID.randomUUID();
       payloads.add(new Payload(prefix, key, val, family));
     });
 
-    colFamilies.forEach(family -> dbManager.dropColumnFamily(family));
-    colFamilies.forEach(family -> dbManager.addColumnFamily(family));
     colFamilies.forEach(family -> dbManager.dropColumnFamily(family));
     colFamilies.forEach(family -> dbManager.addColumnFamily(family));
 
@@ -128,11 +126,13 @@ public class TestRocksDBDAO {
     });
 
     colFamilies.forEach(family -> {
+      long countBeforeDeletion = dbManager.prefixSearch(family, prefix1).count();
       dbManager.prefixDelete(family, prefix1);
-
-      int got = dbManager.prefixSearch(family, prefix1).collect(Collectors.toList()).size();
-      assertEquals(countsMap.get(family).get(prefix1) == null ? 0 : 1, got,
-          "Expected prefix delete to leave at least one item for family: " + family);
+      if (countBeforeDeletion > 0) {
+        long countAfterDeletion = dbManager.prefixSearch(family, prefix1).count();
+        assertEquals(0, countAfterDeletion,
+                "Expected prefixDelete to remove all items for family: " + family);
+      }
     });
 
     payloads.stream().filter(p -> !p.getPrefix().equalsIgnoreCase(prefix1)).forEach(payload -> {
@@ -238,6 +238,9 @@ public class TestRocksDBDAO {
     assertFalse(new File(rocksDBBasePath).exists());
   }
 
+  /**
+   * Payload key object.
+   */
   public static class PayloadKey implements Serializable {
     private String key;
 

@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullException;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullSQLException;
 
@@ -33,8 +34,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.stringtemplate.v4.ST;
 
 import java.io.File;
@@ -62,7 +63,7 @@ import java.util.stream.Collectors;
  */
 public class HiveIncrementalPuller {
 
-  private static final Logger LOG = LogManager.getLogger(HiveIncrementalPuller.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveIncrementalPuller.class);
 
   public static class Config implements Serializable {
 
@@ -280,12 +281,13 @@ public class HiveIncrementalPuller {
     if (!fs.exists(new Path(targetDataPath)) || !fs.exists(new Path(targetDataPath + "/.hoodie"))) {
       return "0";
     }
-    HoodieTableMetaClient metadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(targetDataPath).build();
+    HoodieTableMetaClient metadata = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf())).setBasePath(targetDataPath).build();
 
     Option<HoodieInstant> lastCommit =
         metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
     if (lastCommit.isPresent()) {
-      return lastCommit.get().getTimestamp();
+      return lastCommit.get().requestedTime();
     }
     return "0";
   }
@@ -313,25 +315,24 @@ public class HiveIncrementalPuller {
   }
 
   private String getLastCommitTimePulled(FileSystem fs, String sourceTableLocation) {
-    HoodieTableMetaClient metadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(sourceTableLocation).build();
+    HoodieTableMetaClient metadata = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf()))
+        .setBasePath(sourceTableLocation).build();
     List<String> commitsToSync = metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
-        .findInstantsAfter(config.fromCommitTime, config.maxCommits).getInstants().map(HoodieInstant::getTimestamp)
+        .findInstantsAfter(config.fromCommitTime, config.maxCommits).getInstantsAsStream().map(HoodieInstant::requestedTime)
         .collect(Collectors.toList());
     if (commitsToSync.isEmpty()) {
-      LOG.warn(
-          "Nothing to sync. All commits in "
-              + config.sourceTable + " are " + metadata.getActiveTimeline().getCommitsTimeline()
-                  .filterCompletedInstants().getInstants().collect(Collectors.toList())
-              + " and from commit time is " + config.fromCommitTime);
+      LOG.info("Nothing to sync. All commits in {} are {} and from commit time is {}", config.sourceTable, metadata.getActiveTimeline().getCommitsTimeline()
+          .filterCompletedInstants().getInstants(), config.fromCommitTime);
       return null;
     }
-    LOG.info("Syncing commits " + commitsToSync);
+    LOG.info("Syncing commits {}", commitsToSync);
     return commitsToSync.get(commitsToSync.size() - 1);
   }
 
   private Connection getConnection() throws SQLException {
     if (connection == null) {
-      LOG.info("Getting Hive Connection to " + config.hiveJDBCUrl);
+      LOG.info("Getting Hive Connection to {}", config.hiveJDBCUrl);
       this.connection = DriverManager.getConnection(config.hiveJDBCUrl, config.hiveUsername, config.hivePassword);
 
     }

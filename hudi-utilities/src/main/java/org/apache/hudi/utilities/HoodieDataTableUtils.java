@@ -21,11 +21,9 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.StoragePath;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -35,14 +33,17 @@ public class HoodieDataTableUtils {
    * @return All hoodie files of the table from the file system.
    * @throws IOException upon errors.
    */
-  static List<Path> getBaseAndLogFilePathsFromFileSystem(HoodieTableMetadata tableMetadata, String basePath) throws IOException {
+  static List<StoragePath> getBaseAndLogFilePathsFromFileSystem(
+      HoodieTableMetadata tableMetadata,
+      String basePath) throws IOException {
     List<String> allPartitionPaths = tableMetadata.getAllPartitionPaths()
         .stream().map(partitionPath ->
-            FSUtils.getPartitionPath(basePath, partitionPath).toString())
+            FSUtils.constructAbsolutePath(basePath, partitionPath).toString())
         .collect(Collectors.toList());
     return tableMetadata.getAllFilesInPartitions(allPartitionPaths).values().stream()
         .map(fileStatuses ->
-            Arrays.stream(fileStatuses).map(fileStatus -> fileStatus.getPath()).collect(Collectors.toList()))
+            fileStatuses.stream().map(fileStatus -> fileStatus.getPath())
+                .collect(Collectors.toList()))
         .flatMap(list -> list.stream())
         .collect(Collectors.toList());
   }

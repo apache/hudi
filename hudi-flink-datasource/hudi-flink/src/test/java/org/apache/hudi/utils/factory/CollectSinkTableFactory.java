@@ -18,30 +18,35 @@
 
 package org.apache.hudi.utils.factory;
 
+import org.apache.hudi.adapter.RichSinkFunctionAdapter;
+import org.apache.hudi.adapter.SinkFunctionAdapter;
+import org.apache.hudi.adapter.SinkFunctionProviderAdapter;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.util.ChangelogModes;
+import org.apache.hudi.utils.RuntimeContextUtils;
+
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.java.typeutils.RowTypeInfo;
 import org.apache.flink.configuration.ConfigOption;
+import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
-import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
-import org.apache.flink.streaming.api.functions.sink.SinkFunction;
-import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
-import org.apache.flink.table.connector.sink.SinkFunctionProvider;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.factories.DynamicTableSinkFactory;
 import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.utils.TypeConversions;
 import org.apache.flink.types.Row;
-import org.apache.flink.types.RowKind;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -50,7 +55,7 @@ import java.util.Set;
  * Factory for CollectTableSink.
  *
  * <p>Note: The CollectTableSink collects all the data of a table into a global collection {@code RESULT},
- * so the tests should executed in single thread and the table name should be the same.
+ * so the tests should execute in single thread and the table name should be the same.
  */
 public class CollectSinkTableFactory implements DynamicTableSinkFactory {
   public static final String FACTORY_ID = "collect";
@@ -58,14 +63,19 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
   // global results to collect and query
   public static final Map<Integer, List<Row>> RESULT = new HashMap<>();
 
+  // options
+  private static final ConfigOption<Integer> SINK_EXPECTED_ROW_NUM =
+      ConfigOptions.key("sink-expected-row-num").intType().defaultValue(-1);
+
   @Override
   public DynamicTableSink createDynamicTableSink(Context context) {
     FactoryUtil.TableFactoryHelper helper = FactoryUtil.createTableFactoryHelper(this, context);
     helper.validate();
 
-    TableSchema schema = context.getCatalogTable().getSchema();
+    ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
+    int expectRowNum = helper.getOptions().get(SINK_EXPECTED_ROW_NUM);
     RESULT.clear();
-    return new CollectTableSink(schema, context.getObjectIdentifier().getObjectName());
+    return new CollectTableSink(schema, context.getObjectIdentifier().getObjectName(), expectRowNum);
   }
 
   @Override
@@ -80,7 +90,7 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
 
   @Override
   public Set<ConfigOption<?>> optionalOptions() {
-    return Collections.emptySet();
+    return new HashSet<>(Collections.singletonList(SINK_EXPECTED_ROW_NUM));
   }
 
   // --------------------------------------------------------------------------------------------
@@ -92,36 +102,39 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
    */
   private static class CollectTableSink implements DynamicTableSink {
 
-    private final TableSchema schema;
+    private final ResolvedSchema schema;
     private final String tableName;
+    private final int expectedRowNum;
 
     private CollectTableSink(
-        TableSchema schema,
-        String tableName) {
+        ResolvedSchema schema,
+        String tableName,
+        int expectedRowNum) {
       this.schema = schema;
       this.tableName = tableName;
+      this.expectedRowNum = expectedRowNum;
     }
 
     @Override
     public ChangelogMode getChangelogMode(ChangelogMode requestedMode) {
-      return ChangelogMode.newBuilder()
-          .addContainedKind(RowKind.INSERT)
-          .addContainedKind(RowKind.DELETE)
-          .addContainedKind(RowKind.UPDATE_AFTER)
-          .build();
+      return ChangelogModes.FULL;
     }
 
     @Override
     public SinkRuntimeProvider getSinkRuntimeProvider(Context context) {
       final DataType rowType = schema.toPhysicalRowDataType();
       final RowTypeInfo rowTypeInfo = (RowTypeInfo) TypeConversions.fromDataTypeToLegacyInfo(rowType);
-      DataStructureConverter converter = context.createDataStructureConverter(schema.toPhysicalRowDataType());
-      return SinkFunctionProvider.of(new CollectSinkFunction(converter, rowTypeInfo));
+      DataStructureConverter converter = context.createDataStructureConverter(rowType);
+      if (expectedRowNum != -1) {
+        return (SinkFunctionProviderAdapter) () -> new CollectSinkFunctionWithExpectedNum(converter, rowTypeInfo, expectedRowNum);
+      } else {
+        return (SinkFunctionProviderAdapter) () -> new CollectSinkFunction(converter, rowTypeInfo);
+      }
     }
 
     @Override
     public DynamicTableSink copy() {
-      return new CollectTableSink(schema, tableName);
+      return new CollectTableSink(schema, tableName, expectedRowNum);
     }
 
     @Override
@@ -130,7 +143,7 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
     }
   }
 
-  static class CollectSinkFunction extends RichSinkFunction<RowData> implements CheckpointedFunction {
+  static class CollectSinkFunction extends RichSinkFunctionAdapter<RowData> implements CheckpointedFunction {
 
     private static final long serialVersionUID = 1L;
     private final DynamicTableSink.DataStructureConverter converter;
@@ -147,7 +160,7 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
     }
 
     @Override
-    public void invoke(RowData value, SinkFunction.Context context) {
+    public void invoke(RowData value, SinkFunctionAdapter.Context context) {
       Row row = (Row) converter.toExternal(value);
       assert row != null;
       row.setKind(value.getRowKind());
@@ -164,7 +177,7 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
           localResult.add(value);
         }
       }
-      this.taskID = getRuntimeContext().getIndexOfThisSubtask();
+      this.taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
       synchronized (CollectSinkTableFactory.class) {
         RESULT.put(taskID, localResult);
       }
@@ -173,7 +186,42 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
     @Override
     public void snapshotState(FunctionSnapshotContext context) throws Exception {
       resultState.clear();
-      resultState.addAll(RESULT.get(taskID));
+      List<Row> rows = RESULT.get(taskID);
+      if (rows != null) {
+        resultState.addAll(RESULT.get(taskID));
+      }
+    }
+  }
+
+  static class CollectSinkFunctionWithExpectedNum extends CollectSinkFunction {
+    private final int expectRowNum;
+
+    protected CollectSinkFunctionWithExpectedNum(
+        DynamicTableSink.DataStructureConverter converter,
+        RowTypeInfo rowTypeInfo,
+        int expectRowNum) {
+      super(converter, rowTypeInfo);
+      ValidationUtils.checkArgument(expectRowNum > 0, "Expected row number should be positive.");
+      this.expectRowNum = expectRowNum;
+    }
+
+    @Override
+    public void invoke(RowData value, Context context) {
+      super.invoke(value, context);
+      if (RESULT.values().stream().mapToInt(List::size).sum() >= expectRowNum) {
+        throw new SuccessException();
+      }
+    }
+  }
+
+  /**
+   * Exception that is thrown to terminate a program and indicate success.
+   */
+  public static class SuccessException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
+    public SuccessException() {
+      super("Forced exception to terminate a successful sink.");
     }
   }
 }

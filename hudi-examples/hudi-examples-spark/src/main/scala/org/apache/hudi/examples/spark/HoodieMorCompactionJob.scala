@@ -19,15 +19,17 @@
 
 package org.apache.hudi.examples.spark
 
-import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
+import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.{HoodieAvroPayload, HoodieRecordPayload, HoodieTableType}
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.examples.common.{HoodieExampleDataGenerator, HoodieExampleSparkUtils}
+
 import org.apache.spark.sql.SaveMode.{Append, Overwrite}
 import org.apache.spark.sql.SparkSession
 
@@ -70,7 +72,8 @@ object HoodieMorCompactionJob {
     val client = new SparkRDDWriteClient[HoodieRecordPayload[Nothing]](new HoodieSparkEngineContext(spark.sparkContext), cfg)
     try {
       val instant = client.scheduleCompaction(Option.empty())
-      client.compact(instant.get())
+      val result = client.compact(instant.get())
+      client.commitCompaction(instant.get(), result, org.apache.hudi.common.util.Option.empty())
       client.clean()
     } catch {
       case e: Exception => System.err.println(s"Compaction failed due to", e)
@@ -83,11 +86,11 @@ object HoodieMorCompactionJob {
   def insertData(spark: SparkSession, tablePath: String, tableName: String,
                  dataGen: HoodieExampleDataGenerator[HoodieAvroPayload], tableType: String): Unit = {
     val commitTime: String = System.currentTimeMillis().toString
-    val inserts = dataGen.convertToStringList(dataGen.generateInserts(commitTime, 20))
-    val df = spark.read.json(spark.sparkContext.parallelize(inserts.asScala, 1))
-    df.write.format("org.apache.hudi").
+    val inserts = dataGen.convertToStringList(dataGen.generateInserts(commitTime, 20)).asScala.toSeq
+    val df = spark.read.json(spark.sparkContext.parallelize(inserts, 1))
+    df.write.format("hudi").
       options(getQuickstartWriteConfigs).
-      option(PRECOMBINE_FIELD.key, "ts").
+      option(HoodieTableConfig.ORDERING_FIELDS.key, "ts").
       option(RECORDKEY_FIELD.key, "uuid").
       option(PARTITIONPATH_FIELD.key, "partitionpath").
       option(TBL_NAME.key, tableName).
@@ -99,11 +102,11 @@ object HoodieMorCompactionJob {
   def updateData(spark: SparkSession, tablePath: String, tableName: String,
                  dataGen: HoodieExampleDataGenerator[HoodieAvroPayload], tableType: String): Unit = {
     val commitTime: String = System.currentTimeMillis().toString
-    val updates = dataGen.convertToStringList(dataGen.generateUpdates(commitTime, 10))
-    val df = spark.read.json(spark.sparkContext.parallelize(updates.asScala, 1))
-    df.write.format("org.apache.hudi").
+    val updates = dataGen.convertToStringList(dataGen.generateUpdates(commitTime, 10)).asScala.toSeq
+    val df = spark.read.json(spark.sparkContext.parallelize(updates, 1))
+    df.write.format("hudi").
       options(getQuickstartWriteConfigs).
-      option(PRECOMBINE_FIELD.key, "ts").
+      option(HoodieTableConfig.ORDERING_FIELDS.key, "ts").
       option(RECORDKEY_FIELD.key, "uuid").
       option(PARTITIONPATH_FIELD.key, "partitionpath").
       option(TBL_NAME.key, tableName).

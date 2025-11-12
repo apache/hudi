@@ -24,11 +24,11 @@ import java.util.Map;
 
 public class ColumnNameXLator {
 
-  private static Map<String, String> xformMap = new HashMap<>();
+  private static final Map<String, String> X_FORM_MAP = new HashMap<>();
 
   public static String translateNestedColumn(String colName) {
     Map.Entry<String,String> entry;
-    for (Iterator<Map.Entry<String, String>> ic = xformMap.entrySet().iterator(); ic.hasNext(); colName =
+    for (Iterator<Map.Entry<String, String>> ic = X_FORM_MAP.entrySet().iterator(); ic.hasNext(); colName =
         colName.replaceAll(entry.getKey(), entry.getValue())) {
       entry = ic.next();
     }
@@ -45,6 +45,6 @@ public class ColumnNameXLator {
   }
 
   static {
-    xformMap.put("\\$", "_dollar_");
+    X_FORM_MAP.put("\\$", "_dollar_");
   }
 }

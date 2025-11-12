@@ -19,18 +19,32 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+
+import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.PARTITION_SORT;
 
 /**
  * A built-in partitioner that does local sorting for each spark partitions after coalesce for bulk insert operation, corresponding to the {@code BulkInsertSortMode.PARTITION_SORT} mode.
  */
 public class PartitionSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
+  private final boolean shouldPopulateMetaFields;
+
+  public PartitionSortPartitionerWithRows(HoodieWriteConfig config) {
+    this.shouldPopulateMetaFields = config.populateMetaFields();
+  }
+
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
+    if (!shouldPopulateMetaFields) {
+      throw new HoodieException(PARTITION_SORT.name() + " mode requires meta-fields to be enabled");
+    }
+
     return rows.coalesce(outputSparkPartitions).sortWithinPartitions(HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 

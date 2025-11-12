@@ -18,30 +18,31 @@
 
 package org.apache.hudi.execution;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
-import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
+import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.ExplicitWriteHandleFactory;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.ExecutorFactory;
 
 import org.apache.avro.Schema;
 
 import java.util.Iterator;
 import java.util.List;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * Flink lazy iterable that supports explicit write handler.
  *
  * @param <T> type of the payload
  */
-public class FlinkLazyInsertIterable<T extends HoodieRecordPayload> extends HoodieLazyInsertIterable<T> {
+public class FlinkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
 
   public FlinkLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
                                  boolean areRecordsSorted,
@@ -57,21 +58,20 @@ public class FlinkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
   @Override
   protected List<WriteStatus> computeNext() {
     // Executor service used for launching writer thread.
-    BoundedInMemoryExecutor<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> bufferedIteratorExecutor =
-        null;
+    HoodieExecutor<List<WriteStatus>> executor = null;
     try {
-      final Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
-      bufferedIteratorExecutor = new BoundedInMemoryExecutor<>(hoodieConfig.getWriteBufferLimitBytes(), new IteratorBasedQueueProducer<>(inputItr),
-          Option.of(getExplicitInsertHandler()), getTransformFunction(schema, hoodieConfig));
-      final List<WriteStatus> result = bufferedIteratorExecutor.execute();
-      assert result != null && !result.isEmpty() && !bufferedIteratorExecutor.isRemaining();
+      Schema schema = AvroSchemaCache.intern(new Schema.Parser().parse(hoodieConfig.getSchema()));
+      executor = ExecutorFactory.create(hoodieConfig, inputItr, getExplicitInsertHandler(),
+          getTransformer(schema, hoodieConfig));
+      final List<WriteStatus> result = executor.execute();
+      checkState(result != null && !result.isEmpty());
       return result;
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
-      if (null != bufferedIteratorExecutor) {
-        bufferedIteratorExecutor.shutdownNow();
-        bufferedIteratorExecutor.awaitTermination();
+      if (executor != null) {
+        executor.shutdownNow();
+        executor.awaitTermination();
       }
     }
   }

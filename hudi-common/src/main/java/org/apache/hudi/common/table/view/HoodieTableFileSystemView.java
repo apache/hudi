@@ -18,9 +18,9 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.BootstrapBaseFileMapping;
 import org.apache.hudi.common.model.CompactionOperation;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -29,10 +29,12 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.StoragePathInfo;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -52,8 +54,10 @@ import java.util.stream.Stream;
  */
 public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystemView {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieTableFileSystemView.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieTableFileSystemView.class);
 
+  //TODO: [HUDI-6249] change the maps below to implement ConcurrentMap
+  
   // mapping from partition paths to file groups contained within them
   protected Map<String, List<HoodieFileGroup>> partitionToFileGroupsMap;
 
@@ -63,7 +67,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fgIdToPendingCompaction;
 
   /**
-   * PartitionPath + File-Id to pending compaction instant time.
+   * PartitionPath + File-Id to pending logcompaction instant time.
    */
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fgIdToPendingLogCompaction;
 
@@ -87,23 +91,34 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
    */
   private boolean closed = false;
 
-  HoodieTableFileSystemView(boolean enableIncrementalTimelineSync) {
-    super(enableIncrementalTimelineSync);
+  HoodieTableFileSystemView(HoodieTableMetadata tableMetadata, boolean enableIncrementalTimelineSync) {
+    super(tableMetadata, enableIncrementalTimelineSync);
   }
 
   /**
    * Create a file system view, as of the given timeline.
    */
-  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
-    this(metaClient, visibleActiveTimeline, false);
+  public HoodieTableFileSystemView(HoodieTableMetadata tableMetadata, HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
+    this(tableMetadata, metaClient, visibleActiveTimeline, false);
+  }
+
+  public static HoodieTableFileSystemView fileListingBasedFileSystemView(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
+    return fileListingBasedFileSystemView(engineContext, metaClient, visibleActiveTimeline, false);
+  }
+
+  public static HoodieTableFileSystemView fileListingBasedFileSystemView(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+                                                                         boolean enableIncrementalSync) {
+    HoodieTableMetadata tableMetadata = new FileSystemBackedTableMetadata(engineContext, metaClient.getTableConfig(), metaClient.getStorage(),
+        metaClient.getBasePath().toString());
+    return new HoodieTableFileSystemView(tableMetadata, metaClient, visibleActiveTimeline, enableIncrementalSync);
   }
 
   /**
    * Create a file system view, as of the given timeline.
    */
-  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+  public HoodieTableFileSystemView(HoodieTableMetadata tableMetadata, HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
       boolean enableIncrementalTimelineSync) {
-    super(enableIncrementalTimelineSync);
+    super(tableMetadata, enableIncrementalTimelineSync);
     init(metaClient, visibleActiveTimeline);
   }
 
@@ -113,10 +128,13 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     super.init(metaClient, visibleActiveTimeline);
   }
 
+  /**
+   * Visible for testing
+   */
   public void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
-      FileStatus[] fileStatuses) {
+                   List<StoragePathInfo> pathInfoList) {
     init(metaClient, visibleActiveTimeline);
-    addFilesToView(fileStatuses);
+    addFilesToView(pathInfoList);
   }
 
   @Override
@@ -145,36 +163,34 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> createFileIdToPendingCompactionMap(
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fileIdToPendingCompaction) {
-    return fileIdToPendingCompaction;
+    return new ConcurrentHashMap<>(fileIdToPendingCompaction);
   }
 
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> createFileIdToPendingLogCompactionMap(
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fileIdToPendingLogCompaction) {
-    return fileIdToPendingLogCompaction;
+    return new ConcurrentHashMap<>(fileIdToPendingLogCompaction);
   }
 
   protected Map<HoodieFileGroupId, BootstrapBaseFileMapping> createFileIdToBootstrapBaseFileMap(
       Map<HoodieFileGroupId, BootstrapBaseFileMapping> fileGroupIdBootstrapBaseFileMap) {
-    return fileGroupIdBootstrapBaseFileMap;
+    return new ConcurrentHashMap<>(fileGroupIdBootstrapBaseFileMap);
   }
 
   protected Map<HoodieFileGroupId, HoodieInstant> createFileIdToReplaceInstantMap(final Map<HoodieFileGroupId, HoodieInstant> replacedFileGroups) {
-    Map<HoodieFileGroupId, HoodieInstant> replacedFileGroupsMap = new ConcurrentHashMap<>(replacedFileGroups);
-    return replacedFileGroupsMap;
+    return new ConcurrentHashMap<>(replacedFileGroups);
   }
 
   protected Map<HoodieFileGroupId, HoodieInstant> createFileIdToPendingClusteringMap(final Map<HoodieFileGroupId, HoodieInstant> fileGroupsInClustering) {
-    Map<HoodieFileGroupId, HoodieInstant> fgInpendingClustering = new ConcurrentHashMap<>(fileGroupsInClustering);
-    return fgInpendingClustering;
+    return new ConcurrentHashMap<>(fileGroupsInClustering);
   }
 
   /**
    * Create a file system view, as of the given timeline, with the provided file statuses.
    */
   public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
-      FileStatus[] fileStatuses) {
-    this(metaClient, visibleActiveTimeline);
-    addFilesToView(fileStatuses);
+                                   List<StoragePathInfo> pathInfoList) {
+    this(new NoOpTableMetadata(), metaClient, visibleActiveTimeline);
+    addFilesToView(pathInfoList);
   }
 
   /**
@@ -305,8 +321,12 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
    */
   @Override
   Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partition) {
-    final List<HoodieFileGroup> fileGroups = new ArrayList<>(partitionToFileGroupsMap.get(partition));
-    return fileGroups.stream();
+    List<HoodieFileGroup> fileGroups = partitionToFileGroupsMap.get(partition);
+    if (fileGroups == null || fileGroups.isEmpty()) {
+      LOG.warn("Partition: {} is not available in store", partition);
+      return Stream.empty();
+    }
+    return new ArrayList<>(partitionToFileGroupsMap.get(partition)).stream();
   }
 
   public Stream<HoodieFileGroup> getAllFileGroups() {
@@ -383,7 +403,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   @Override
   protected void storePartitionView(String partitionPath, List<HoodieFileGroup> fileGroups) {
-    LOG.debug("Adding file-groups for partition :" + partitionPath + ", #FileGroups=" + fileGroups.size());
+    LOG.debug("Adding file-groups for partition :{}, #FileGroups={}", partitionPath, fileGroups.size());
     List<HoodieFileGroup> newList = new ArrayList<>(fileGroups);
     partitionToFileGroupsMap.put(partitionPath, newList);
   }
@@ -405,7 +425,12 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   @Override
   protected void removeReplacedFileIdsAtInstants(Set<String> instants) {
-    fgIdToReplaceInstants.entrySet().removeIf(entry -> instants.contains(entry.getValue().getTimestamp()));
+    fgIdToReplaceInstants.entrySet().removeIf(entry -> instants.contains(entry.getValue().requestedTime()));
+  }
+
+  @Override
+  protected boolean hasReplacedFilesInPartition(String partitionPath) {
+    return fgIdToReplaceInstants.keySet().stream().anyMatch(fg -> fg.getPartitionPath().equals(partitionPath));
   }
 
   @Override
@@ -413,28 +438,16 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     return Option.ofNullable(fgIdToReplaceInstants.get(fileGroupId));
   }
 
-  /**
-   * Get the latest file slices for a given partition including the inflight ones.
-   *
-   * @param partitionPath
-   * @return Stream of latest {@link FileSlice} in the partition path.
-   */
-  public Stream<FileSlice> fetchLatestFileSlicesIncludingInflight(String partitionPath) {
-    return fetchAllStoredFileGroups(partitionPath)
-        .map(HoodieFileGroup::getLatestFileSlicesIncludingInflight)
-        .filter(Option::isPresent)
-        .map(Option::get);
-  }
-
   @Override
   public void close() {
     super.close();
     this.fgIdToPendingCompaction = null;
+    this.fgIdToPendingLogCompaction = null;
     this.partitionToFileGroupsMap = null;
     this.fgIdToBootstrapBaseFile = null;
     this.fgIdToReplaceInstants = null;
     this.fgIdToPendingClustering = null;
-    closed = true;
+    this.closed = true;
   }
 
   @Override

@@ -18,17 +18,21 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.avro.util.Utf8;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.avro.util.Utf8;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -68,7 +72,9 @@ public class TestSerializationUtils {
   @Test
   public void testClassFullyQualifiedNameSerialization() throws IOException {
     DeleteRecord deleteRecord = DeleteRecord.create(new HoodieKey("key", "partition"));
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(new DeleteRecord[]{deleteRecord}, Collections.emptyMap());
+    List<Pair<DeleteRecord, Long>> deleteRecordList = new ArrayList<>();
+    deleteRecordList.add(Pair.of(deleteRecord, -1L));
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, Collections.emptyMap());
 
     byte[] firstBytes = SerializationUtils.serialize(deleteBlock);
     byte[] secondBytes = SerializationUtils.serialize(deleteBlock);
@@ -92,6 +98,9 @@ public class TestSerializationUtils {
     }
   }
 
+  /**
+   * A class for non-serializable.
+   */
   private static class NonSerializableClass {
     private String id;
     private String name;

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.io.storage.row.parquet;
 
+import org.apache.hudi.common.util.ValidationUtils;
+
 import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.DecimalDataUtils;
 import org.apache.flink.table.data.MapData;
@@ -124,17 +126,19 @@ public class ParquetRowDataWriter {
         return new DoubleWriter();
       case TIMESTAMP_WITHOUT_TIME_ZONE:
         TimestampType timestampType = (TimestampType) t;
-        if (timestampType.getPrecision() == 3) {
-          return new Timestamp64Writer();
+        final int tsPrecision = timestampType.getPrecision();
+        if (tsPrecision == 3 || tsPrecision == 6) {
+          return new Timestamp64Writer(tsPrecision);
         } else {
-          return new Timestamp96Writer(timestampType.getPrecision());
+          return new Timestamp96Writer(tsPrecision);
         }
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
         LocalZonedTimestampType localZonedTimestampType = (LocalZonedTimestampType) t;
-        if (localZonedTimestampType.getPrecision() == 3) {
-          return new Timestamp64Writer();
+        final int tsLtzPrecision = localZonedTimestampType.getPrecision();
+        if (tsLtzPrecision == 3 || tsLtzPrecision == 6) {
+          return new Timestamp64Writer(tsLtzPrecision);
         } else {
-          return new Timestamp96Writer(localZonedTimestampType.getPrecision());
+          return new Timestamp96Writer(tsLtzPrecision);
         }
       case ARRAY:
         ArrayType arrayType = (ArrayType) t;
@@ -284,33 +288,64 @@ public class ParquetRowDataWriter {
   }
 
   /**
-   * Timestamp of INT96 bytes, julianDay(4) + nanosOfDay(8). See
+   * TIMESTAMP_MILLIS and TIMESTAMP_MICROS is the deprecated ConvertedType of TIMESTAMP with the MILLIS and MICROS
+   * precision respectively. See
    * https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#timestamp
-   * TIMESTAMP_MILLIS and TIMESTAMP_MICROS are the deprecated ConvertedType.
    */
   private class Timestamp64Writer implements FieldWriter {
-    private Timestamp64Writer() {
+    private final int precision;
+    private Timestamp64Writer(int precision) {
+      ValidationUtils.checkArgument(precision == 3 || precision == 6,
+          "Timestamp64Writer is only able to support precisions of {3, 6}");
+      this.precision = precision;
     }
 
     @Override
     public void write(RowData row, int ordinal) {
-      recordConsumer.addLong(timestampToInt64(row.getTimestamp(ordinal, 3)));
+      TimestampData timestampData = row.getTimestamp(ordinal, precision);
+      recordConsumer.addLong(timestampToInt64(timestampData, precision));
     }
 
     @Override
     public void write(ArrayData array, int ordinal) {
-      recordConsumer.addLong(timestampToInt64(array.getTimestamp(ordinal, 3)));
+      TimestampData timestampData = array.getTimestamp(ordinal, precision);
+      recordConsumer.addLong(timestampToInt64(timestampData, precision));
     }
   }
 
-  private long timestampToInt64(TimestampData timestampData) {
-    return utcTimestamp ? timestampData.getMillisecond() : timestampData.toTimestamp().getTime();
+  /**
+   * Converts a {@code TimestampData} to its corresponding int64 value. This function only accepts TimestampData of
+   * precision 3 or 6. Special attention will need to be given to a TimestampData of precision = 6.
+   * <p>
+   * For example representing `1970-01-01T00:00:03.100001` of precision 6 will have:
+   * <ul>
+   *   <li>millisecond = 3100</li>
+   *   <li>nanoOfMillisecond = 1000</li>
+   * </ul>
+   * As such, the int64 value will be:
+   * <p>
+   * millisecond * 1000 + nanoOfMillisecond / 1000
+   *
+   * @param timestampData TimestampData to be converted to int64 format
+   * @param precision the precision of the TimestampData
+   * @return int64 value of the TimestampData
+   */
+  private long timestampToInt64(TimestampData timestampData, int precision) {
+    if (precision == 3) {
+      return utcTimestamp ? timestampData.getMillisecond() : timestampData.toTimestamp().getTime();
+    } else {
+      // using an else clause here as precision has been validated to be {3, 6} in the constructor
+      // convert timestampData to microseconds format
+      return utcTimestamp ? timestampData.getMillisecond() * 1000 + timestampData.getNanoOfMillisecond() / 1000 :
+          timestampData.toTimestamp().getTime() * 1000;
+    }
   }
 
   /**
    * Timestamp of INT96 bytes, julianDay(4) + nanosOfDay(8). See
    * https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#timestamp
-   * TIMESTAMP_MILLIS and TIMESTAMP_MICROS are the deprecated ConvertedType.
+   * <p>
+   * TODO: Leaving this here as there might be a requirement to support TIMESTAMP(9) in the future
    */
   private class Timestamp96Writer implements FieldWriter {
 
@@ -471,6 +506,14 @@ public class ParquetRowDataWriter {
     private void doWrite(ArrayData arrayData) {
       recordConsumer.startGroup();
       if (arrayData.size() > 0) {
+        // align with Spark And Avro regarding the standard mode array type, see:
+        // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#lists
+        //
+        // <list-repetition> group <name> (LIST) {
+        //   repeated group list {
+        //     <element-repetition> <element-type> element;
+        //   }
+        // }
         final String repeatedGroup = "list";
         final String elementField = "element";
         recordConsumer.startField(repeatedGroup, 0);

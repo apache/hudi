@@ -23,13 +23,6 @@ coverage:
   precision: 2
   round: down
   range: "50...100"
-  status:
-    project: # settings affecting project coverage
-      enabled: no
-
-    # do not run coverage on patch nor changes
-    patch: no
-    changes: no
 
 # Ignoring Paths
 # --------------
@@ -54,7 +47,13 @@ ignore:
   - "hudi-hadoop-mr/src/main/java/com/uber/hoodie/hadoop/HoodieInputFormat.java"
   - "hudi-hadoop-mr/src/main/java/com/uber/hoodie/hadoop/realtime/HoodieRealtimeInputFormat.java"
 
-comment: false
+comment:
+  layout: "diff, flags, files"
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true
+  hide_project_coverage: false
 
 flags:
   hudicli:

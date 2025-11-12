@@ -28,8 +28,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
@@ -49,10 +49,13 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -91,12 +94,12 @@ public class TestHoodieHFileInputFormat {
   public void testPendingCompactionWithActiveCommits() throws IOException {
     // setup 4 sample instants in timeline
     List<HoodieInstant> instants = new ArrayList<>();
-    HoodieInstant t1 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "1");
-    HoodieInstant t2 = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "2");
-    HoodieInstant t3 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "3");
-    HoodieInstant t4 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "4");
-    HoodieInstant t5 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "5");
-    HoodieInstant t6 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "6");
+    HoodieInstant t1 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieInstant t2 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "2");
+    HoodieInstant t3 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "3");
+    HoodieInstant t4 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "4");
+    HoodieInstant t5 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "5");
+    HoodieInstant t6 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "6");
 
     instants.add(t1);
     instants.add(t2);
@@ -105,7 +108,7 @@ public class TestHoodieHFileInputFormat {
     instants.add(t5);
     instants.add(t6);
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.toString(), HoodieFileFormat.HFILE);
-    HoodieActiveTimeline timeline = new HoodieActiveTimeline(metaClient);
+    HoodieActiveTimeline timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient);
     timeline.setInstants(instants);
 
     // Verify getCommitsTimelineBeforePendingCompaction does not return instants after first compaction instant
@@ -120,7 +123,7 @@ public class TestHoodieHFileInputFormat {
 
     // remove compaction instant and setup timeline again
     instants.remove(t3);
-    timeline = new HoodieActiveTimeline(metaClient);
+    timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient);
     timeline.setInstants(instants);
     filteredTimeline = inputFormat.filterInstantsTimeline(timeline);
 
@@ -134,7 +137,7 @@ public class TestHoodieHFileInputFormat {
 
     // remove remaining compaction instant and setup timeline again
     instants.remove(t5);
-    timeline = new HoodieActiveTimeline(metaClient);
+    timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient);
     timeline.setInstants(instants);
     filteredTimeline = inputFormat.filterInstantsTimeline(timeline);
 
@@ -166,8 +169,8 @@ public class TestHoodieHFileInputFormat {
   public void testInputFormatLoadWithEmptyTable() throws IOException {
     // initial hoodie table
     String bathPathStr = "/tmp/test_empty_table";
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), bathPathStr, HoodieTableType.COPY_ON_WRITE,
-            baseFileFormat);
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), bathPathStr, HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, bathPathStr);
 
@@ -248,8 +251,8 @@ public class TestHoodieHFileInputFormat {
 
     InputFormatTestUtil.setupIncremental(jobConf, "100", 1);
 
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(),
-            HoodieTableType.COPY_ON_WRITE, baseFileFormat);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(),
+        HoodieTableType.COPY_ON_WRITE, baseFileFormat);
     assertEquals(null, metaClient.getTableConfig().getDatabaseName(),
         "When hoodie.database.name is not set, it should default to null");
 
@@ -263,8 +266,8 @@ public class TestHoodieHFileInputFormat {
     assertEquals(0, files.length,
         "We should exclude commit 100 when returning incremental pull with start commit time as 100");
 
-    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
-            baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
+    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
     assertEquals(HoodieTestUtils.HOODIE_DATABASE, metaClient.getTableConfig().getDatabaseName(),
         String.format("The hoodie.database.name should be %s ", HoodieTestUtils.HOODIE_DATABASE));
 
@@ -285,8 +288,8 @@ public class TestHoodieHFileInputFormat {
 
     InputFormatTestUtil.setupIncremental(jobConf, "100", 1, HoodieTestUtils.HOODIE_DATABASE, true);
 
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(),
-            HoodieTableType.COPY_ON_WRITE, baseFileFormat);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(),
+        HoodieTableType.COPY_ON_WRITE, baseFileFormat);
     assertEquals(null, metaClient.getTableConfig().getDatabaseName(),
         "When hoodie.database.name is not set, it should default to null");
 
@@ -294,17 +297,17 @@ public class TestHoodieHFileInputFormat {
     assertEquals(10, files.length,
         "When hoodie.database.name is null, then the incremental query will not take effect");
 
-    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
-            baseFileFormat, "");
-    assertEquals("", metaClient.getTableConfig().getDatabaseName(),
-        "The hoodie.database.name should be empty");
+    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat, "");
+    assertEquals(null, metaClient.getTableConfig().getDatabaseName(),
+        "The hoodie.database.name will be null if set to empty");
 
     files = inputFormat.listStatus(jobConf);
     assertEquals(10, files.length,
         "When hoodie.database.name is empty, then the incremental query will not take effect");
 
-    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
-            baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
+    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
     assertEquals(HoodieTestUtils.HOODIE_DATABASE, metaClient.getTableConfig().getDatabaseName(),
         String.format("The hoodie.database.name should be %s ", HoodieTestUtils.HOODIE_DATABASE));
 
@@ -339,27 +342,25 @@ public class TestHoodieHFileInputFormat {
     List<HoodieWriteStat> writeStats = HoodieTestUtils.generateFakeHoodieWriteStat(1);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     writeStats.forEach(stat -> commitMetadata.addWriteStat(partitionPath, stat));
-    File file = basePath.resolve(".hoodie").resolve(commitNumber + ".commit").toFile();
+    File file = basePath.resolve(".hoodie/timeline")
+        .resolve(commitNumber + "_" + InProcessTimeGenerator.createNewInstantTime() + ".commit").toFile();
     file.createNewFile();
-    FileOutputStream fileOutputStream = new FileOutputStream(file);
-    fileOutputStream.write(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
-    fileOutputStream.flush();
-    fileOutputStream.close();
+    try (FileOutputStream fileOutputStream = new FileOutputStream(file)) {
+      COMMIT_METADATA_SER_DE.getInstantWriter(commitMetadata).get().writeToStream(fileOutputStream);
+      fileOutputStream.flush();
+    }
   }
 
   private File createCompactionFile(java.nio.file.Path basePath, String commitTime)
       throws IOException {
-    File file = basePath.resolve(".hoodie")
-        .resolve(HoodieTimeline.makeRequestedCompactionFileName(commitTime)).toFile();
+    File file = basePath.resolve(".hoodie/timeline")
+        .resolve(INSTANT_FILE_NAME_GENERATOR.makeRequestedCompactionFileName(commitTime)).toFile();
     assertTrue(file.createNewFile());
-    FileOutputStream os = new FileOutputStream(file);
-    try {
+    try (FileOutputStream os = new FileOutputStream(file)) {
       HoodieCompactionPlan compactionPlan = HoodieCompactionPlan.newBuilder().setVersion(2).build();
       // Write empty commit metadata
-      os.write(TimelineMetadataUtils.serializeCompactionPlan(compactionPlan).get());
+      COMMIT_METADATA_SER_DE.getInstantWriter(compactionPlan).get().writeToStream(os);
       return file;
-    } finally {
-      os.close();
     }
   }
 
@@ -516,6 +517,7 @@ public class TestHoodieHFileInputFormat {
         }
         totalCount++;
       }
+      recordReader.close();
     }
     assertEquals(expectedNumberOfRecordsInCommit, actualCount, msg);
     assertEquals(totalExpected, totalCount, msg);

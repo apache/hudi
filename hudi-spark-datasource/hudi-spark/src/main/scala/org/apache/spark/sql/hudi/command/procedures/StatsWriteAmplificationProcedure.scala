@@ -17,18 +17,19 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.common.model.HoodieCommitMetadata
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.TimelineLayout
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.text.DecimalFormat
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
 class StatsWriteAmplificationProcedure extends BaseProcedure with ProcedureBuilder {
   override def parameters: Array[ProcedureParameter] = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10)
   )
 
@@ -44,22 +45,23 @@ class StatsWriteAmplificationProcedure extends BaseProcedure with ProcedureBuild
     val table = getArgValueOrDefault(args, parameters(0))
     val limit: Int = getArgValueOrDefault(args, parameters(1)).get.asInstanceOf[Int]
     val basePath = getBasePath(table)
-    val client = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val client = createMetaClient(jsc, basePath)
     val activeTimeline = client.getActiveTimeline
-    val timeline = activeTimeline.getCommitTimeline.filterCompletedInstants()
+    val timeline = activeTimeline.getCommitAndReplaceTimeline.filterCompletedInstants()
 
     val rows = new java.util.ArrayList[Row]
     val df = new DecimalFormat("#.00")
     var totalRecordsUpserted = 0L
     var totalRecordsWritten = 0L
+    val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
     timeline.getInstants.iterator.asScala.foreach(
       instantTime => {
         var waf = "0"
-        val commit = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(instantTime).get(), classOf[HoodieCommitMetadata])
+        val commit = activeTimeline.readCommitMetadata(instantTime)
         if (commit.fetchTotalUpdateRecordsWritten() > 0) {
           waf = df.format(commit.fetchTotalRecordsWritten().toFloat / commit.fetchTotalUpdateRecordsWritten())
         }
-        rows.add(Row(instantTime.getTimestamp, commit.fetchTotalUpdateRecordsWritten, commit.fetchTotalRecordsWritten, waf))
+        rows.add(Row(instantTime.requestedTime, commit.fetchTotalUpdateRecordsWritten, commit.fetchTotalRecordsWritten, waf))
         totalRecordsUpserted = totalRecordsUpserted + commit.fetchTotalUpdateRecordsWritten()
         totalRecordsWritten = totalRecordsWritten + commit.fetchTotalRecordsWritten()
       }

@@ -22,7 +22,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -45,10 +44,11 @@ import java.util.List;
  * @param <T>
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends BaseBulkInsertHelper<T, HoodieData<HoodieRecord<T>>,
+public class SparkBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, HoodieData<HoodieRecord<T>>,
     HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
 
   private SparkBulkInsertHelper() {
+    super(HoodieData::getNumPartitions);
   }
 
   private static class BulkInsertHelperHolder {
@@ -69,18 +69,20 @@ public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends Bas
                                                                  final Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     HoodieWriteMetadata result = new HoodieWriteMetadata();
 
-    //transition bulk_insert state to inflight
-    table.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED,
+    // Transition bulk_insert state to inflight
+    table.getActiveTimeline().transitionRequestedToInflight(table.getInstantGenerator().createNewInstant(HoodieInstant.State.REQUESTED,
             executor.getCommitActionType(), instantTime), Option.empty(),
         config.shouldAllowMultiWriteOnSameInstant());
 
-    BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.orElse(BulkInsertInternalPartitionerFactory.get(table, config));
+    BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.orElseGet(() -> BulkInsertInternalPartitionerFactory.get(table, config));
 
-    // write new files
-    HoodieData<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, false,
-        config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false));
-    //update index
-    ((BaseSparkCommitActionExecutor) executor).updateIndexAndCommitIfNeeded(writeStatuses, result);
+    // Write new files
+    HoodieData<WriteStatus> writeStatuses =
+        bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, false,
+            config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false));
+
+    // Update index
+    ((BaseSparkCommitActionExecutor) executor).updateIndexAndMaybeRunPreCommitValidations(writeStatuses, result);
     return result;
   }
 
@@ -106,19 +108,22 @@ public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends Bas
                                             boolean performDedupe,
                                             BulkInsertPartitioner partitioner,
                                             boolean useWriterSchema,
-                                            int parallelism,
+                                            int configuredParallelism,
                                             WriteHandleFactory writeHandleFactory) {
 
     // De-dupe/merge if needed
     HoodieData<HoodieRecord<T>> dedupedRecords = inputRecords;
 
+    int targetParallelism = deduceShuffleParallelism(inputRecords, configuredParallelism);
+
     if (performDedupe) {
-      dedupedRecords = (HoodieData<HoodieRecord<T>>) HoodieWriteHelper.newInstance().combineOnCondition(config.shouldCombineBeforeInsert(), inputRecords,
-          parallelism, table);
+      dedupedRecords = (HoodieData<HoodieRecord<T>>) HoodieWriteHelper.newInstance()
+          .combineOnCondition(config.shouldCombineBeforeInsert(), inputRecords, targetParallelism, table);
     }
 
     // only JavaRDD is supported for Spark partitioner, but it is not enforced by BulkInsertPartitioner API. To improve this, TODO HUDI-3463
-    final HoodieData<HoodieRecord<T>> repartitionedRecords = HoodieJavaRDD.of((JavaRDD<HoodieRecord<T>>) partitioner.repartitionRecords(HoodieJavaRDD.getJavaRDD(dedupedRecords), parallelism));
+    final HoodieData<HoodieRecord<T>> repartitionedRecords =
+        HoodieJavaRDD.of((JavaRDD<HoodieRecord<T>>) partitioner.repartitionRecords(HoodieJavaRDD.getJavaRDD(dedupedRecords), targetParallelism));
 
     JavaRDD<WriteStatus> writeStatusRDD = HoodieJavaRDD.getJavaRDD(repartitionedRecords)
         .mapPartitionsWithIndex(new BulkInsertMapFunction<>(instantTime,

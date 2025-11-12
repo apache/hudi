@@ -19,65 +19,46 @@
 package org.apache.hudi.index.bucket;
 
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.keygen.KeyGenUtils;
 
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class BucketIdentifier implements Serializable {
-  // Compatible with the spark bucket name
-  private static final Pattern BUCKET_NAME = Pattern.compile(".*_(\\d+)(?:\\..*)?$");
+  // Ensure the same records keys from different writers are desired to be distributed into the same bucket
+  private static final String CONSTANT_FILE_ID_SUFFIX = "-0000-0000-0000-000000000000";
 
-  public static int getBucketId(HoodieRecord record, String indexKeyFields, int numBuckets) {
-    return getBucketId(record.getKey(), indexKeyFields, numBuckets);
-  }
-
-  public static int getBucketId(HoodieKey hoodieKey, String indexKeyFields, int numBuckets) {
-    return (getHashKeys(hoodieKey, indexKeyFields).hashCode() & Integer.MAX_VALUE) % numBuckets;
-  }
-
-  public static int getBucketId(HoodieKey hoodieKey, List<String> indexKeyFields, int numBuckets) {
-    return (getHashKeys(hoodieKey.getRecordKey(), indexKeyFields).hashCode() & Integer.MAX_VALUE) % numBuckets;
+  public static int getBucketId(String recordKey, List<String> indexKeyFields, int numBuckets) {
+    return getBucketId(getHashKeys(recordKey, indexKeyFields), numBuckets);
   }
 
   public static int getBucketId(String recordKey, String indexKeyFields, int numBuckets) {
     return getBucketId(getHashKeys(recordKey, indexKeyFields), numBuckets);
   }
 
-  public  static int getBucketId(List<String> hashKeyFields, int numBuckets) {
+  public static int getBucketId(List<String> hashKeyFields, int numBuckets) {
     return (hashKeyFields.hashCode() & Integer.MAX_VALUE) % numBuckets;
   }
 
-  public static List<String> getHashKeys(HoodieKey hoodieKey, String indexKeyFields) {
-    return getHashKeys(hoodieKey.getRecordKey(), indexKeyFields);
-  }
-
   protected static List<String> getHashKeys(String recordKey, String indexKeyFields) {
-    return !recordKey.contains(":") ? Collections.singletonList(recordKey) :
-        getHashKeysUsingIndexFields(recordKey, Arrays.asList(indexKeyFields.split(",")));
+    return getHashKeysUsingIndexFields(recordKey, Arrays.asList(indexKeyFields.split(",")));
   }
 
   protected static List<String> getHashKeys(String recordKey, List<String> indexKeyFields) {
-    return !recordKey.contains(":") ? Collections.singletonList(recordKey) :
-        getHashKeysUsingIndexFields(recordKey, indexKeyFields);
+    return getHashKeysUsingIndexFields(recordKey, indexKeyFields);
   }
 
   private static List<String> getHashKeysUsingIndexFields(String recordKey, List<String> indexKeyFields) {
-    Map<String, String> recordKeyPairs = Arrays.stream(recordKey.split(","))
-        .map(p -> p.split(":"))
-        .collect(Collectors.toMap(p -> p[0], p -> p[1]));
-    return indexKeyFields.stream()
-        .map(recordKeyPairs::get).collect(Collectors.toList());
+    return Arrays.asList(KeyGenUtils.extractRecordKeysByFields(recordKey, indexKeyFields));
   }
 
   public static String partitionBucketIdStr(String partition, int bucketId) {
-    return String.format("%s_%s", partition, bucketIdStr(bucketId));
+    // format: {partition}_{bucket_id}, bucket id should be 8 digits long, padded with leading zeros
+    StringBuilder sb = new StringBuilder()
+        .append(partition)
+        .append('_');
+    return appendWithPadZero(bucketId, 8, sb).toString();
   }
 
   public static int bucketIdFromFileId(String fileId) {
@@ -85,22 +66,40 @@ public class BucketIdentifier implements Serializable {
   }
 
   public static String bucketIdStr(int n) {
-    return String.format("%08d", n);
+    // bucket str should be 8 digits long, padded with leading zeros, format like: "00000001" for bucket 1
+    return appendWithPadZero(n, 8, new StringBuilder()).toString();
+  }
+
+  private static StringBuilder appendWithPadZero(int num, int targetLength, StringBuilder sb) {
+    String numStr = Integer.toString(num);
+    int zerosNeeded = targetLength - numStr.length();
+    for (int i = 0; i < zerosNeeded; i++) {
+      sb.append('0');
+    }
+    sb.append(numStr);
+    return sb;
+  }
+
+  public static String newBucketFileIdPrefix(int bucketId, boolean fixed) {
+    return fixed ? bucketIdStr(bucketId) + CONSTANT_FILE_ID_SUFFIX : newBucketFileIdPrefix(bucketId);
   }
 
   public static String newBucketFileIdPrefix(int bucketId) {
     return newBucketFileIdPrefix(bucketIdStr(bucketId));
   }
 
-  public static String newBucketFileIdPrefix(String bucketId) {
-    return FSUtils.createNewFileIdPfx().replaceFirst(".{8}", bucketId);
+  public static String newBucketFileIdPrefix(String bucketIdStr) {
+    return FSUtils.createNewFileIdPfx().replaceFirst(".{8}", bucketIdStr);
   }
 
-  public static boolean isBucketFileName(String name) {
-    return BUCKET_NAME.matcher(name).matches();
+  public static String newBucketFileIdForNBCC(int bucketId) {
+    return newBucketFileIdForNBCC(bucketIdStr(bucketId));
   }
 
-  public static int mod(int x, int y) {
-    return x % y;
+  /**
+   * Generate a new file id for NBCC mode, file id is fixed for each bucket with format: "{bucket_id}-0000-0000-0000-000000000000-0"
+   */
+  public static String newBucketFileIdForNBCC(String bucketIdStr) {
+    return FSUtils.createNewFileId(bucketIdStr + CONSTANT_FILE_ID_SUFFIX, 0);
   }
 }

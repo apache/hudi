@@ -19,7 +19,8 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -30,6 +31,8 @@ import java.util.List;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.PARTITION_SORT;
+
 /**
  * A built-in partitioner that does local sorting for each RDD partition
  * after coalesce for bulk insert operation, corresponding to the
@@ -37,24 +40,31 @@ import scala.Tuple2;
  *
  * @param <T> HoodieRecordPayload type
  */
-public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
+public class RDDPartitionSortPartitioner<T>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+
+  private final boolean shouldPopulateMetaFields;
+
+  public RDDPartitionSortPartitioner(HoodieWriteConfig config) {
+    this.shouldPopulateMetaFields = config.populateMetaFields();
+  }
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
+    if (!shouldPopulateMetaFields) {
+      throw new HoodieException(PARTITION_SORT.name() + " mode requires meta-fields to be enabled");
+    }
+
     return records.coalesce(outputSparkPartitions)
         .mapToPair(record ->
             new Tuple2<>(
-                new StringBuilder()
-                    .append(record.getPartitionPath())
-                    .append("+")
-                    .append(record.getRecordKey())
-                    .toString(), record))
+                record.getPartitionPath() + "+"
+                    + record.getRecordKey(), record))
         .mapPartitions(partition -> {
           // Sort locally in partition
           List<Tuple2<String, HoodieRecord<T>>> recordList = new ArrayList<>();
-          for (; partition.hasNext(); ) {
+          while (partition.hasNext()) {
             recordList.add(partition.next());
           }
           Collections.sort(recordList, (o1, o2) -> o1._1.compareTo(o2._1));

@@ -18,10 +18,12 @@
 
 package org.apache.hudi.exception;
 
+import org.apache.hudi.internal.schema.HoodieSchemaException;
+
 /**
  * An exception thrown when schema has compatibility problems.
  */
-public class SchemaCompatibilityException extends HoodieException {
+public class SchemaCompatibilityException extends HoodieSchemaException {
 
   public SchemaCompatibilityException(String message) {
     super(message);

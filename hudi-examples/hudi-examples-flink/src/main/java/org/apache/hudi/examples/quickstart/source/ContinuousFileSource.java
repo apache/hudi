@@ -19,15 +19,14 @@
 package org.apache.hudi.examples.quickstart.source;
 
 import org.apache.hudi.adapter.DataStreamScanProviderAdapter;
+import org.apache.hudi.adapter.SourceFunctionAdapter;
+import org.apache.hudi.util.JsonDeserializationFunction;
 
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
-import org.apache.flink.formats.common.TimestampFormat;
-import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.source.DynamicTableSource;
@@ -37,7 +36,6 @@ import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
@@ -49,7 +47,7 @@ import static org.apache.hudi.examples.quickstart.factory.ContinuousFileSourceFa
  * A continuous file source that can trigger checkpoints continuously.
  *
  * <p>It loads the data in the specified file and split the data into number of checkpoints batches.
- * Say, if you want 4 checkpoints and there are 8 records in the file, the emit strategy is:
+ * Say, if you want 4 checkpoints and there are 8 records in the file, the emission strategy is:
  *
  * <pre>
  *   | 2 records | 2 records | 2 records | 2 records |
@@ -57,6 +55,8 @@ import static org.apache.hudi.examples.quickstart.factory.ContinuousFileSourceFa
  * </pre>
  *
  * <p>If all the data are flushed out, it waits for the next checkpoint to finish and tear down the source.
+ *
+ * <p>NOTE: this class is represented twice: in test utils and in quickstart. Don't forget to update both files.
  */
 public class ContinuousFileSource implements ScanTableSource {
 
@@ -85,18 +85,10 @@ public class ContinuousFileSource implements ScanTableSource {
       @Override
       public DataStream<RowData> produceDataStream(StreamExecutionEnvironment execEnv) {
         final RowType rowType = (RowType) tableSchema.toSourceRowDataType().getLogicalType();
-        JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
-            rowType,
-            InternalTypeInfo.of(rowType),
-            false,
-            true,
-            TimestampFormat.ISO_8601);
-
-        return execEnv.addSource(new BoundedSourceFunction(path, conf.getInteger(CHECKPOINTS)))
+        return execEnv.addSource(new BoundedSourceFunction(path, conf.get(CHECKPOINTS)))
             .name("continuous_file_source")
             .setParallelism(1)
-            .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)),
-                InternalTypeInfo.of(rowType));
+            .map(JsonDeserializationFunction.getInstance(rowType), InternalTypeInfo.of(rowType));
       }
     };
   }
@@ -119,7 +111,7 @@ public class ContinuousFileSource implements ScanTableSource {
   /**
    * Source function that partition the data into given number checkpoints batches.
    */
-  public static class BoundedSourceFunction implements SourceFunction<String>, CheckpointListener {
+  public static class BoundedSourceFunction implements SourceFunctionAdapter<String>, CheckpointListener {
     private final Path path;
     private List<String> dataBuffer;
 

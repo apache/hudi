@@ -18,16 +18,25 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.avro.GenericAvroSerializer;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieLogFile;
+
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.util.Utf8;
 import org.objenesis.strategy.StdInstantiatorStrategy;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.TreeSet;
 
 /**
  * {@link SerializationUtils} class internally uses {@link Kryo} serializer for serializing / deserializing objects.
@@ -90,9 +99,9 @@ public class SerializationUtils {
     byte[] serialize(Object obj) {
       kryo.reset();
       baos.reset();
-      Output output = new Output(baos);
-      this.kryo.writeClassAndObject(output, obj);
-      output.close();
+      try (Output output = new Output(baos)) {
+        this.kryo.writeClassAndObject(output, obj);
+      }
       return baos.toByteArray();
     }
 
@@ -105,7 +114,7 @@ public class SerializationUtils {
    * This class has a no-arg constructor, suitable for use with reflection instantiation. For Details checkout
    * com.twitter.chill.KryoBase.
    */
-  private static class KryoInstantiator implements Serializable {
+  public static class KryoInstantiator implements Serializable {
 
     public Kryo newKryo() {
       Kryo kryo = new Kryo();
@@ -117,8 +126,19 @@ public class SerializationUtils {
       // for hadoop
       kryo.setClassLoader(Thread.currentThread().getContextClassLoader());
 
+      // Register Hudi's classes
+      new HoodieCommonKryoRegistrar().registerClasses(kryo);
+
       // Register serializers
       kryo.register(Utf8.class, new AvroUtf8Serializer());
+      kryo.register(GenericData.Fixed.class, new GenericAvroSerializer<>());
+      kryo.register(IndexedRecord.class, new GenericAvroSerializer<>());
+      kryo.register(GenericData.Record.class, new GenericAvroSerializer<>());
+      kryo.register(HoodieFileGroupId.class);
+      kryo.register(FileSlice.class);
+      kryo.register(HoodieBaseFile.class);
+      kryo.register(HoodieLogFile.class);
+      kryo.register(TreeSet.class);
 
       return kryo;
     }
@@ -129,7 +149,7 @@ public class SerializationUtils {
    * NOTE: This {@link Serializer} could deserialize instance of {@link Utf8} serialized
    *       by implicitly generated Kryo serializer (based on {@link com.esotericsoftware.kryo.serializers.FieldSerializer}
    */
-  private static class AvroUtf8Serializer extends Serializer<Utf8> {
+  public static class AvroUtf8Serializer extends Serializer<Utf8> {
 
     @SuppressWarnings("unchecked")
     @Override

@@ -18,18 +18,19 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.HoodieConversionUtils;
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.util.Lazy;
+import org.apache.hudi.utilities.config.PulsarSourceConfig;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
 import org.apache.pulsar.client.api.Consumer;
 import org.apache.pulsar.client.api.MessageId;
 import org.apache.pulsar.client.api.PulsarClient;
@@ -44,6 +45,8 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.pulsar.JsonUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -52,14 +55,22 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.ThreadUtils.collectActiveThreads;
+import static org.apache.hudi.utilities.config.PulsarSourceConfig.PULSAR_SOURCE_ADMIN_ENDPOINT_URL;
+import static org.apache.hudi.utilities.config.PulsarSourceConfig.PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD;
+import static org.apache.hudi.utilities.config.PulsarSourceConfig.PULSAR_SOURCE_OFFSET_AUTO_RESET_STRATEGY;
+import static org.apache.hudi.utilities.config.PulsarSourceConfig.PULSAR_SOURCE_SERVICE_ENDPOINT_URL;
+import static org.apache.hudi.utilities.config.PulsarSourceConfig.PULSAR_SOURCE_TOPIC_NAME;
 
 /**
  * Source fetching data from Pulsar topics
  */
 public class PulsarSource extends RowSource implements Closeable {
 
-  private static final Logger LOG = LogManager.getLogger(PulsarSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(PulsarSource.class);
 
   private static final Duration GRACEFUL_SHUTDOWN_TIMEOUT = Duration.ofSeconds(20);
 
@@ -88,25 +99,23 @@ public class PulsarSource extends RowSource implements Closeable {
                       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
 
-    DataSourceUtils.checkRequiredProperties(props,
-        Arrays.asList(
-            Config.PULSAR_SOURCE_TOPIC_NAME.key(),
-            Config.PULSAR_SOURCE_SERVICE_ENDPOINT_URL.key()));
+    checkRequiredConfigProperties(props,
+        Arrays.asList(PULSAR_SOURCE_TOPIC_NAME, PULSAR_SOURCE_SERVICE_ENDPOINT_URL));
 
     // Converting to a descriptor allows us to canonicalize the topic's name properly
-    this.topicName = TopicName.get(props.getString(Config.PULSAR_SOURCE_TOPIC_NAME.key())).toString();
+    this.topicName = TopicName.get(getStringWithAltKeys(props, PULSAR_SOURCE_TOPIC_NAME)).toString();
 
     // TODO validate endpoints provided in the appropriate format
-    this.serviceEndpointURL = props.getString(Config.PULSAR_SOURCE_SERVICE_ENDPOINT_URL.key());
-    this.adminEndpointURL = props.getString(Config.PULSAR_SOURCE_ADMIN_ENDPOINT_URL.key());
+    this.serviceEndpointURL = getStringWithAltKeys(props, PULSAR_SOURCE_SERVICE_ENDPOINT_URL);
+    this.adminEndpointURL = getStringWithAltKeys(props, PULSAR_SOURCE_ADMIN_ENDPOINT_URL);
 
     this.pulsarClient = Lazy.lazily(this::initPulsarClient);
     this.pulsarConsumer = Lazy.lazily(this::subscribeToTopic);
   }
 
   @Override
-  protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCheckpointStr, long sourceLimit) {
-    Pair<MessageId, MessageId> startingEndingOffsetsPair = computeOffsets(lastCheckpointStr, sourceLimit);
+  protected Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+    Pair<MessageId, MessageId> startingEndingOffsetsPair = computeOffsets(lastCheckpoint, sourceLimit);
 
     MessageId startingOffset = startingEndingOffsetsPair.getLeft();
     MessageId endingOffset = startingEndingOffsetsPair.getRight();
@@ -123,7 +132,7 @@ public class PulsarSource extends RowSource implements Closeable {
         .option("endingOffsets", endingOffsetStr)
         .load();
 
-    return Pair.of(Option.of(transform(sourceRows)), endingOffsetStr);
+    return Pair.of(Option.of(transform(sourceRows)), new StreamerCheckpointV2(endingOffsetStr));
   }
 
   @Override
@@ -136,8 +145,8 @@ public class PulsarSource extends RowSource implements Closeable {
     return rows.drop(PULSAR_META_FIELDS);
   }
 
-  private Pair<MessageId, MessageId> computeOffsets(Option<String> lastCheckpointStrOpt, long sourceLimit) {
-    MessageId startingOffset = decodeStartingOffset(lastCheckpointStrOpt);
+  private Pair<MessageId, MessageId> computeOffsets(Option<Checkpoint> lastCheckpointOpt, long sourceLimit) {
+    MessageId startingOffset = decodeStartingOffset(lastCheckpointOpt);
     MessageId endingOffset = fetchLatestOffset();
 
     if (endingOffset.compareTo(startingOffset) < 0) {
@@ -152,13 +161,13 @@ public class PulsarSource extends RowSource implements Closeable {
     return Pair.of(startingOffset, endingOffset);
   }
 
-  private MessageId decodeStartingOffset(Option<String> lastCheckpointStrOpt) {
-    return lastCheckpointStrOpt
-        .map(lastCheckpoint -> JsonUtils.topicOffsets(lastCheckpoint).apply(topicName))
+  private MessageId decodeStartingOffset(Option<Checkpoint> lastCheckpointOpt) {
+    return lastCheckpointOpt
+        .map(lastCheckpoint -> JsonUtils.topicOffsets(lastCheckpoint.getCheckpointKey()).apply(topicName))
         .orElseGet(() -> {
-          Config.OffsetAutoResetStrategy autoResetStrategy = Config.OffsetAutoResetStrategy.valueOf(
-              props.getString(Config.PULSAR_SOURCE_OFFSET_AUTO_RESET_STRATEGY.key(),
-                  Config.PULSAR_SOURCE_OFFSET_AUTO_RESET_STRATEGY.defaultValue().name()));
+          PulsarSourceConfig.OffsetAutoResetStrategy autoResetStrategy = PulsarSourceConfig.OffsetAutoResetStrategy.valueOf(
+              getStringWithAltKeys(props, PULSAR_SOURCE_OFFSET_AUTO_RESET_STRATEGY,
+                  PULSAR_SOURCE_OFFSET_AUTO_RESET_STRATEGY.defaultValue().name()));
 
           switch (autoResetStrategy) {
             case LATEST:
@@ -178,7 +187,7 @@ public class PulsarSource extends RowSource implements Closeable {
       pulsarConsumer.get().acknowledgeCumulative(latestConsumedOffset);
     } catch (PulsarClientException e) {
       LOG.error(String.format("Failed to ack messageId (%s) for topic '%s'", latestConsumedOffset, topicName), e);
-      throw new HoodieIOException("Failed to ack message for topic", e);
+      throw new HoodieReadFromSourceException("Failed to ack message for topic", e);
     }
   }
 
@@ -187,7 +196,7 @@ public class PulsarSource extends RowSource implements Closeable {
       return pulsarConsumer.get().getLastMessageId();
     } catch (PulsarClientException e) {
       LOG.error(String.format("Failed to fetch latest messageId for topic '%s'", topicName), e);
-      throw new HoodieIOException("Failed to fetch latest messageId for topic", e);
+      throw new HoodieReadFromSourceException("Failed to fetch latest messageId for topic", e);
     }
   }
 
@@ -229,8 +238,7 @@ public class PulsarSource extends RowSource implements Closeable {
     if (sourceLimit < Long.MAX_VALUE) {
       return sourceLimit;
     } else {
-      return props.getLong(Config.PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD_PROP.key(),
-          Config.PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD_PROP.defaultValue());
+      return getLongWithAltKeys(props, PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD);
     }
   }
 
@@ -261,37 +269,5 @@ public class PulsarSource extends RowSource implements Closeable {
     collectActiveThreads().stream().sequential()
         .filter(t -> t.getName().startsWith("pulsar-client-io"))
         .forEach(Thread::interrupt);
-  }
-
-  public static class Config {
-    private static final ConfigProperty<String> PULSAR_SOURCE_TOPIC_NAME = ConfigProperty
-        .key("hoodie.deltastreamer.source.pulsar.topic")
-        .noDefaultValue()
-        .withDocumentation("Name of the target Pulsar topic to source data from");
-
-    private static final ConfigProperty<String> PULSAR_SOURCE_SERVICE_ENDPOINT_URL = ConfigProperty
-        .key("hoodie.deltastreamer.source.pulsar.endpoint.service.url")
-        .defaultValue("pulsar://localhost:6650")
-        .withDocumentation("URL of the target Pulsar endpoint (of the form 'pulsar://host:port'");
-
-    private static final ConfigProperty<String> PULSAR_SOURCE_ADMIN_ENDPOINT_URL = ConfigProperty
-        .key("hoodie.deltastreamer.source.pulsar.endpoint.admin.url")
-        .defaultValue("http://localhost:8080")
-        .withDocumentation("URL of the target Pulsar endpoint (of the form 'pulsar://host:port'");
-
-    public enum OffsetAutoResetStrategy {
-      LATEST, EARLIEST, FAIL
-    }
-
-    private static final ConfigProperty<OffsetAutoResetStrategy> PULSAR_SOURCE_OFFSET_AUTO_RESET_STRATEGY = ConfigProperty
-        .key("hoodie.deltastreamer.source.pulsar.offset.autoResetStrategy")
-        .defaultValue(OffsetAutoResetStrategy.LATEST)
-        .withDocumentation("Policy determining how offsets shall be automatically reset in case there's "
-            + "no checkpoint information present");
-
-    public static final ConfigProperty<Long> PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD_PROP = ConfigProperty
-        .key("hoodie.deltastreamer.source.pulsar.maxRecords")
-        .defaultValue(5_000_000L)
-        .withDocumentation("Max number of records obtained in a single each batch");
   }
 }

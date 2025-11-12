@@ -48,6 +48,18 @@ dag_content:
       max_wait_time_for_deltastreamer_catch_up_ms: 600000
     type: ValidateDatasetNode
     deps: first_delete
+  first_presto_query:
+    config:
+      execute_itr_count: 6
+      presto_props:
+        prop1: "SET SESSION hive.parquet_use_column_names = true"
+      presto_queries:
+        query1: "select count(*) from testdb.table1"
+        result1: 6000
+        query2: "select count(*) from testdb.table1 group by _row_key having count(*) > 1"
+        result2: 0
+    type: PrestoQueryNode
+    deps: second_validate
   last_validate:
     config:
       execute_itr_count: 6

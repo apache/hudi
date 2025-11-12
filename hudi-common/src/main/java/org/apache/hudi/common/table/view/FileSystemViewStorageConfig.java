@@ -43,6 +43,7 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
   public static final ConfigProperty<FileSystemViewStorageType> VIEW_TYPE = ConfigProperty
       .key("hoodie.filesystem.view.type")
       .defaultValue(FileSystemViewStorageType.MEMORY)
+      .markAdvanced()
       .withDocumentation("File system view provides APIs for viewing the files on the underlying lake storage, "
           + " as file groups and file slices. This config controls how such a view is held. Options include "
           + Arrays.stream(FileSystemViewStorageType.values()).map(Enum::name).collect(Collectors.joining(","))
@@ -51,104 +52,124 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
   public static final ConfigProperty<String> INCREMENTAL_TIMELINE_SYNC_ENABLE = ConfigProperty
       .key("hoodie.filesystem.view.incr.timeline.sync.enable")
       .defaultValue("false")
+      .markAdvanced()
       .withDocumentation("Controls whether or not, the file system view is incrementally updated as "
           + "new actions are performed on the timeline.");
 
   public static final ConfigProperty<FileSystemViewStorageType> SECONDARY_VIEW_TYPE = ConfigProperty
       .key("hoodie.filesystem.view.secondary.type")
       .defaultValue(FileSystemViewStorageType.MEMORY)
+      .markAdvanced()
       .withDocumentation("Specifies the secondary form of storage for file system view, if the primary (e.g timeline server) "
           + " is unavailable.");
 
   public static final ConfigProperty<String> REMOTE_HOST_NAME = ConfigProperty
       .key("hoodie.filesystem.view.remote.host")
       .defaultValue("localhost")
+      .markAdvanced()
       .withDocumentation("We expect this to be rarely hand configured.");
 
   public static final ConfigProperty<Integer> REMOTE_PORT_NUM = ConfigProperty
       .key("hoodie.filesystem.view.remote.port")
       .defaultValue(26754)
+      .markAdvanced()
       .withDocumentation("Port to serve file system view queries, when remote. We expect this to be rarely hand configured.");
 
   public static final ConfigProperty<String> SPILLABLE_DIR = ConfigProperty
       .key("hoodie.filesystem.view.spillable.dir")
       .defaultValue("/tmp/")
+      .markAdvanced()
       .withDocumentation("Path on local storage to use, when file system view is held in a spillable map.");
 
   public static final ConfigProperty<Long> SPILLABLE_MEMORY = ConfigProperty
       .key("hoodie.filesystem.view.spillable.mem")
       .defaultValue(100 * 1024 * 1024L) // 100 MB
+      .markAdvanced()
       .withDocumentation("Amount of memory to be used in bytes for holding file system view, before spilling to disk.");
 
   public static final ConfigProperty<Double> SPILLABLE_COMPACTION_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.compaction.mem.fraction")
-      .defaultValue(0.8)
+      .defaultValue(0.1)
+      .markAdvanced()
       .withDocumentation("Fraction of the file system view memory, to be used for holding compaction related metadata.");
 
   public static final ConfigProperty<Double> SPILLABLE_LOG_COMPACTION_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.log.compaction.mem.fraction")
-      .defaultValue(0.8)
+      .defaultValue(0.02)
+      .markAdvanced()
+      .sinceVersion("0.13.0")
       .withDocumentation("Fraction of the file system view memory, to be used for holding log compaction related metadata.");
 
   public static final ConfigProperty<Double> BOOTSTRAP_BASE_FILE_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.bootstrap.base.file.mem.fraction")
       .defaultValue(0.05)
+      .markAdvanced()
       .withDocumentation("Fraction of the file system view memory, to be used for holding mapping to bootstrap base files.");
 
   public static final ConfigProperty<Double> SPILLABLE_REPLACED_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.replaced.mem.fraction")
-      .defaultValue(0.01)
+      .defaultValue(0.05)
+      .markAdvanced()
       .withDocumentation("Fraction of the file system view memory, to be used for holding replace commit related metadata.");
 
   public static final ConfigProperty<Double> SPILLABLE_CLUSTERING_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.clustering.mem.fraction")
-      .defaultValue(0.01)
+      .defaultValue(0.02)
+      .markAdvanced()
       .withDocumentation("Fraction of the file system view memory, to be used for holding clustering related metadata.");
 
   public static final ConfigProperty<String> ROCKSDB_BASE_PATH = ConfigProperty
       .key("hoodie.filesystem.view.rocksdb.base.path")
       .defaultValue("/tmp/hoodie_timeline_rocksdb")
+      .markAdvanced()
       .withDocumentation("Path on local storage to use, when storing file system view in embedded kv store/rocksdb.");
 
   public static final ConfigProperty<Integer> REMOTE_TIMEOUT_SECS = ConfigProperty
       .key("hoodie.filesystem.view.remote.timeout.secs")
       .defaultValue(5 * 60) // 5 min
+      .markAdvanced()
       .withDocumentation("Timeout in seconds, to wait for API requests against a remote file system view. e.g timeline server.");
 
   public static final ConfigProperty<String> REMOTE_RETRY_ENABLE = ConfigProperty
-          .key("hoodie.filesystem.view.remote.retry.enable")
-          .defaultValue("false")
-          .sinceVersion("0.12.1")
-          .withDocumentation("Whether to enable API request retry for remote file system view.");
+      .key("hoodie.filesystem.view.remote.retry.enable")
+      .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("0.12.1")
+      .withDocumentation("Whether to enable API request retry for remote file system view.");
 
   public static final ConfigProperty<Integer> REMOTE_MAX_RETRY_NUMBERS = ConfigProperty
       .key("hoodie.filesystem.view.remote.retry.max_numbers")
       .defaultValue(3) // 3 times
+      .markAdvanced()
       .sinceVersion("0.12.1")
       .withDocumentation("Maximum number of retry for API requests against a remote file system view. e.g timeline server.");
 
   public static final ConfigProperty<Long> REMOTE_INITIAL_RETRY_INTERVAL_MS = ConfigProperty
       .key("hoodie.filesystem.view.remote.retry.initial_interval_ms")
       .defaultValue(100L)
+      .markAdvanced()
       .sinceVersion("0.12.1")
       .withDocumentation("Amount of time (in ms) to wait, before retry to do operations on storage.");
 
   public static final ConfigProperty<Long> REMOTE_MAX_RETRY_INTERVAL_MS = ConfigProperty
       .key("hoodie.filesystem.view.remote.retry.max_interval_ms")
       .defaultValue(2000L)
+      .markAdvanced()
       .sinceVersion("0.12.1")
       .withDocumentation("Maximum amount of time (in ms), to wait for next retry.");
 
   public static final ConfigProperty<String> RETRY_EXCEPTIONS = ConfigProperty
-          .key("hoodie.filesystem.view.remote.retry.exceptions")
-          .defaultValue("")
-          .sinceVersion("0.12.1")
-          .withDocumentation("The class name of the Exception that needs to be re-tryed, separated by commas. "
-                  + "Default is empty which means retry all the IOException and RuntimeException from Remote Request.");
+      .key("hoodie.filesystem.view.remote.retry.exceptions")
+      .defaultValue("")
+      .markAdvanced()
+      .sinceVersion("0.12.1")
+      .withDocumentation("The class name of the Exception that needs to be retried, separated by commas. "
+          + "Default is empty which means retry all the IOException and RuntimeException from Remote Request.");
 
   public static final ConfigProperty<String> REMOTE_BACKUP_VIEW_ENABLE = ConfigProperty
       .key("hoodie.filesystem.remote.backup.view.enable")
       .defaultValue("true") // Need to be disabled only for tests.
+      .markAdvanced()
       .withDocumentation("Config to control whether backup needs to be configured if clients were not able to reach"
           + " timeline service.");
 
@@ -202,7 +223,8 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
   public long getMaxMemoryForFileGroupMap() {
     long totalMemory = getLong(SPILLABLE_MEMORY);
-    return totalMemory - getMaxMemoryForPendingCompaction() - getMaxMemoryForBootstrapBaseFile();
+    return totalMemory - getMaxMemoryForPendingCompaction() - getMaxMemoryForBootstrapBaseFile() - getMaxMemoryForPendingLogCompaction()
+        - getMaxMemoryForPendingClusteringFileGroups() - getMaxMemoryForReplacedFileGroups();
   }
 
   public long getMaxMemoryForPendingCompaction() {

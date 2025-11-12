@@ -18,8 +18,7 @@
 
 package org.apache.hudi.integ.testsuite;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.integ.testsuite.configuration.DFSDeltaConfig;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig;
 import org.apache.hudi.integ.testsuite.generator.FlexibleSchemaRecordGenerationIterator;
@@ -65,12 +64,12 @@ public class TestDFSHoodieTestSuiteWriterAdapter extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(false, false);
+    UtilitiesTestBase.initTestServices(true, false, false);
   }
 
   @AfterAll
-  public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
+  public static void cleanupClass() throws IOException {
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @BeforeEach
@@ -131,15 +130,15 @@ public class TestDFSHoodieTestSuiteWriterAdapter extends UtilitiesTestBase {
   // TODO(HUDI-3668): Fix this test
   public void testDFSWorkloadSinkWithMultipleFilesFunctional() throws IOException {
     DeltaConfig dfsSinkConfig = new DFSDeltaConfig(DeltaOutputMode.DFS, DeltaInputType.AVRO,
-        new SerializableConfiguration(jsc.hadoopConfiguration()), dfsBasePath, dfsBasePath,
+        HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), basePath, basePath,
         schemaProvider.getSourceSchema().toString(), 10240L, jsc.defaultParallelism(), false, false);
     DeltaWriterAdapter<GenericRecord> dfsDeltaWriterAdapter = DeltaWriterFactory
         .getDeltaWriterAdapter(dfsSinkConfig, 1);
     FlexibleSchemaRecordGenerationIterator itr = new FlexibleSchemaRecordGenerationIterator(1000,
         schemaProvider.getSourceSchema().toString());
     dfsDeltaWriterAdapter.write(itr);
-    FileSystem fs = FSUtils.getFs(dfsBasePath, jsc.hadoopConfiguration());
-    FileStatus[] fileStatuses = fs.listStatus(new Path(dfsBasePath));
+    FileSystem fs = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration());
+    FileStatus[] fileStatuses = fs.listStatus(new Path(basePath));
     // Since maxFileSize was 10240L and we produced 1K records each close to 1K size, we should produce more than
     // 1 file
     assertTrue(fileStatuses.length > 0);

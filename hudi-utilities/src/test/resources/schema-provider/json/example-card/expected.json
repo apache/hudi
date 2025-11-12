@@ -1,0 +1,162 @@
+{
+  "type" : "record",
+  "name" : "example",
+  "doc" : "A representation of a person, company, organization, or place",
+  "namespace" : "example.com",
+  "fields" : [ {
+    "name" : "fn",
+    "doc" : "Formatted Name",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "familyName",
+    "doc" : "",
+    "type" : "string"
+  }, {
+    "name" : "givenName",
+    "doc" : "",
+    "type" : "string"
+  }, {
+    "name" : "additionalName",
+    "doc" : "",
+    "type" : {
+      "type" : "array",
+      "items" : {
+        "name" : "additionalName_child",
+        "doc" : "",
+        "type" : "string"
+      }
+    }
+  }, {
+    "name" : "honorificPrefix",
+    "doc" : "",
+    "type" : {
+      "type" : "array",
+      "items" : {
+        "name" : "honorificPrefix_child",
+        "doc" : "",
+        "type" : "string"
+      }
+    }
+  }, {
+    "name" : "honorificSuffix",
+    "doc" : "",
+    "type" : {
+      "type" : "array",
+      "items" : {
+        "name" : "honorificSuffix_child",
+        "doc" : "",
+        "type" : "string"
+      }
+    }
+  }, {
+    "name" : "nickname",
+    "doc" : "",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "url",
+    "doc" : "",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "email",
+    "doc" : "",
+    "type" : {
+      "type" : "record",
+      "name" : "email",
+      "fields" : [ {
+        "name" : "type",
+        "doc" : "",
+        "default" : null,
+        "type" : [ "null", "string" ]
+      }, {
+        "name" : "value",
+        "doc" : "",
+        "default" : null,
+        "type" : [ "null", "string" ]
+      } ]
+    }
+  }, {
+    "name" : "tel",
+    "doc" : "",
+    "type" : {
+      "type" : "record",
+      "name" : "tel",
+      "fields" : [ {
+        "name" : "type",
+        "doc" : "",
+        "default" : null,
+        "type" : [ "null", "string" ]
+      }, {
+        "name" : "value",
+        "doc" : "",
+        "default" : null,
+        "type" : [ "null", "string" ]
+      } ]
+    }
+  }, {
+    "name" : "adr",
+    "doc" : "",
+    "default" : null,
+    "type" : "null"
+  }, {
+    "name" : "geo",
+    "doc" : "",
+    "default" : null,
+    "type" : "null"
+  }, {
+    "name" : "tz",
+    "doc" : "",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "photo",
+    "doc" : "",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "logo",
+    "doc" : "",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "sound",
+    "doc" : "",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "bday",
+    "doc" : "",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "title",
+    "doc" : "",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "role",
+    "doc" : "",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "org",
+    "doc" : "",
+    "type" : {
+      "type" : "record",
+      "name" : "org",
+      "fields" : [ {
+        "name" : "organizationName",
+        "doc" : "",
+        "default" : null,
+        "type" : [ "null", "string" ]
+      }, {
+        "name" : "organizationUnit",
+        "doc" : "",
+        "default" : null,
+        "type" : [ "null", "string" ]
+      } ]
+    }
+  } ]
+}

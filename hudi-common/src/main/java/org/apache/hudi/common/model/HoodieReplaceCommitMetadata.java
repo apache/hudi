@@ -18,14 +18,12 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.util.JsonUtils;
-
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.common.util.JsonUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -33,13 +31,20 @@ import java.util.Map;
 
 /**
  * All the metadata that gets stored along with a commit.
+ * ******** IMPORTANT ********
+ * For any newly added/removed data fields, make sure we have the same definition in
+ * src/main/avro/HoodieReplaceCommitMetadata.avsc file!!!!!
+ *
+ * For any newly added subclass, make sure we add corresponding handler in
+ * org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2#deserialize method.
+ * ***************************
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
-  private static final Logger LOG = LogManager.getLogger(HoodieReplaceCommitMetadata.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieReplaceCommitMetadata.class);
   protected Map<String, List<String>> partitionToReplaceFileIds;
 
-  // for ser/deser
+  // for serde
   public HoodieReplaceCommitMetadata() {
     this(false);
   }
@@ -58,10 +63,6 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
       partitionToReplaceFileIds.put(partitionPath, new ArrayList<>());
     }
     partitionToReplaceFileIds.get(partitionPath).add(fileId);
-  }
-
-  public List<String> getReplaceFileIds(String partitionPath) {
-    return partitionToReplaceFileIds.get(partitionPath);
   }
 
   public Map<String, List<String>> getPartitionToReplaceFileIds() {
@@ -83,7 +84,7 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
 
   public static <T> T fromJsonString(String jsonStr, Class<T> clazz) throws Exception {
     if (jsonStr == null || jsonStr.isEmpty()) {
-      // For empty commit file (no data or somethings bad happen).
+      // For empty commit file
       return clazz.newInstance();
     }
     return JsonUtils.getObjectMapper().readValue(jsonStr, clazz);
@@ -99,12 +100,10 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
     }
 
     HoodieReplaceCommitMetadata that = (HoodieReplaceCommitMetadata) o;
-
     if (!partitionToWriteStats.equals(that.partitionToWriteStats)) {
       return false;
     }
     return compacted.equals(that.compacted);
-
   }
 
   @Override
@@ -112,14 +111,6 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
     int result = partitionToWriteStats.hashCode();
     result = 31 * result + compacted.hashCode();
     return result;
-  }
-
-  public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
-    try {
-      return fromJsonString(new String(bytes, StandardCharsets.UTF_8), clazz);
-    } catch (Exception e) {
-      throw new IOException("unable to read commit metadata", e);
-    }
   }
 
   @Override

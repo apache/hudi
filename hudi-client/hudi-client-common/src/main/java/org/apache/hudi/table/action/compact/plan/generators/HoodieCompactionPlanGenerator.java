@@ -22,13 +22,17 @@ import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
+import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -37,23 +41,33 @@ import static java.util.stream.Collectors.toList;
 public class HoodieCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, O>
     extends BaseHoodieCompactionPlanGenerator<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieCompactionPlanGenerator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCompactionPlanGenerator.class);
 
-  public HoodieCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
-    super(table, engineContext, writeConfig);
+  private final CompactionStrategy compactionStrategy;
+
+  public HoodieCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig,
+                                       BaseTableServicePlanActionExecutor executor) {
+    super(table, engineContext, writeConfig, executor);
+    this.compactionStrategy = writeConfig.getCompactionStrategy();
+    LOG.info("Compaction Strategy used is: " + compactionStrategy.toString());
   }
 
   @Override
-  protected HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations) {
+  protected HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations, Pair<List<String>, List<String>> partitionPair) {
     // Filter the compactions with the passed in filter. This lets us choose most effective
     // compactions only
-    return writeConfig.getCompactionStrategy().generateCompactionPlan(writeConfig, operations,
-        CompactionUtils.getAllPendingCompactionPlans(metaClient).stream().map(Pair::getValue).collect(toList()));
+    return compactionStrategy.generateCompactionPlan(writeConfig, operations,
+        CompactionUtils.getAllPendingCompactionPlans(metaClient).stream().map(Pair::getValue).collect(toList()), getStrategyParams(), partitionPair);
   }
 
   @Override
-  protected List<String> filterPartitionPathsByStrategy(HoodieWriteConfig writeConfig, List<String> partitionPaths) {
-    return writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitionPaths);
+  protected List<String> getPartitions() {
+    return executor.getPartitions(compactionStrategy, TableServiceType.COMPACT);
+  }
+
+  @Override
+  protected Pair<List<String>, List<String>> filterPartitionPathsByStrategy(List<String> partitionPaths) {
+    return compactionStrategy.filterPartitionPaths(writeConfig, partitionPaths);
   }
 
   @Override

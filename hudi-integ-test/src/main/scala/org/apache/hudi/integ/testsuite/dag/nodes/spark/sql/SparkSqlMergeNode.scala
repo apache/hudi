@@ -19,10 +19,11 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes.spark.sql
 
-import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext
 import org.apache.hudi.integ.testsuite.utils.SparkSqlUtils
+
+import org.apache.avro.generic.GenericRecord
 import org.apache.spark.rdd.RDD
 
 /**

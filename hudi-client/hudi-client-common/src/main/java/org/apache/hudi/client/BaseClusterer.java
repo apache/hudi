@@ -19,16 +19,13 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-
 import java.io.IOException;
 import java.io.Serializable;
 
 /**
  * Client will run one round of clustering.
  */
-public abstract class BaseClusterer<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public abstract class BaseClusterer<T, I, K, O> implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
@@ -40,10 +37,10 @@ public abstract class BaseClusterer<T extends HoodieRecordPayload, I, K, O> impl
 
   /**
    * Run clustering for the instant.
-   * @param instant
+   * @param instantTime
    * @throws IOException
    */
-  public abstract void cluster(HoodieInstant instant) throws IOException;
+  public abstract void cluster(String instantTime) throws IOException;
 
   /**
    * Update the write client used by async clustering.

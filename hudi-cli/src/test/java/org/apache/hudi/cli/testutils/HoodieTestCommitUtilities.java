@@ -19,12 +19,13 @@
 package org.apache.hudi.cli.testutils;
 
 import org.apache.hudi.avro.model.HoodieWriteStat;
-import org.apache.hudi.client.utils.MetadataConversionUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToAvro;
 
 /**
  * Utility methods to commit instant for test.
@@ -34,16 +35,14 @@ public class HoodieTestCommitUtilities {
   /**
    * Converter HoodieCommitMetadata to avro format and ordered by partition.
    */
-  public static org.apache.hudi.avro.model.HoodieCommitMetadata convertAndOrderCommitMetadata(
-      HoodieCommitMetadata hoodieCommitMetadata) {
-    return orderCommitMetadata(MetadataConversionUtils.convertCommitMetadata(hoodieCommitMetadata));
+  public static org.apache.hudi.avro.model.HoodieCommitMetadata convertAndOrderCommitMetadata(HoodieCommitMetadata hoodieCommitMetadata) {
+    return orderCommitMetadata(convertCommitMetadataToAvro(hoodieCommitMetadata));
   }
 
   /**
    * Ordered by partition asc.
    */
-  public static org.apache.hudi.avro.model.HoodieCommitMetadata orderCommitMetadata(
-      org.apache.hudi.avro.model.HoodieCommitMetadata hoodieCommitMetadata) {
+  public static org.apache.hudi.avro.model.HoodieCommitMetadata orderCommitMetadata(org.apache.hudi.avro.model.HoodieCommitMetadata hoodieCommitMetadata) {
     Map<String, List<HoodieWriteStat>> result = new LinkedHashMap<>();
     hoodieCommitMetadata.getPartitionToWriteStats().entrySet().stream()
         .sorted(Map.Entry.comparingByKey())

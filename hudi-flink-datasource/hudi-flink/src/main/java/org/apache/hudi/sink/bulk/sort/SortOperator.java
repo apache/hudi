@@ -18,11 +18,18 @@
 
 package org.apache.hudi.sink.bulk.sort;
 
+import org.apache.hudi.adapter.Utils;
+
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.Gauge;
 import org.apache.flink.runtime.memory.MemoryManager;
+import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
+import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
+import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.runtime.generated.GeneratedNormalizedKeyComputer;
@@ -51,14 +58,18 @@ public class SortOperator extends TableStreamOperator<RowData>
   private GeneratedNormalizedKeyComputer gComputer;
   private GeneratedRecordComparator gComparator;
 
+  private final Configuration conf;
+
   private transient BinaryExternalSorter sorter;
   private transient StreamRecordCollector<RowData> collector;
   private transient BinaryRowDataSerializer binarySerializer;
 
   public SortOperator(
-      GeneratedNormalizedKeyComputer gComputer, GeneratedRecordComparator gComparator) {
+      GeneratedNormalizedKeyComputer gComputer, GeneratedRecordComparator gComparator,
+      Configuration conf) {
     this.gComputer = gComputer;
     this.gComparator = gComparator;
+    this.conf = conf;
   }
 
   @Override
@@ -80,7 +91,7 @@ public class SortOperator extends TableStreamOperator<RowData>
 
     MemoryManager memManager = getContainingTask().getEnvironment().getMemoryManager();
     this.sorter =
-        new BinaryExternalSorter(
+        Utils.getBinaryExternalSorter(
             this.getContainingTask(),
             memManager,
             computeMemorySize(),
@@ -89,15 +100,33 @@ public class SortOperator extends TableStreamOperator<RowData>
             binarySerializer,
             computer,
             comparator,
-            getContainingTask().getJobConfiguration());
+            conf);
     this.sorter.startThreads();
 
     collector = new StreamRecordCollector<>(output);
 
-    // register the the metrics.
+    // register the metrics.
     getMetricGroup().gauge("memoryUsedSizeInBytes", (Gauge<Long>) sorter::getUsedMemoryInBytes);
     getMetricGroup().gauge("numSpillFiles", (Gauge<Long>) sorter::getNumSpillFiles);
     getMetricGroup().gauge("spillInBytes", (Gauge<Long>) sorter::getSpillInBytes);
+  }
+
+  /**
+   * The modifier of this method is updated to `protected` sink Flink 2.0, here we overwrite the method
+   * with `public` modifier to make it compatible considering usage in hudi-flink module.
+   */
+  @Override
+  public void setup(StreamTask<?, ?> containingTask, StreamConfig config, Output<StreamRecord<RowData>> output) {
+    super.setup(containingTask, config, output);
+  }
+
+  /**
+   * The modifier of this method is updated to `protected` sink Flink 2.0, here we overwrite the method
+   * with `public` modifier to make it compatible considering usage in hudi-flink module.
+   */
+  @Override
+  public void setProcessingTimeService(ProcessingTimeService processingTimeService) {
+    super.setProcessingTimeService(processingTimeService);
   }
 
   @Override

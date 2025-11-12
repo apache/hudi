@@ -23,9 +23,10 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.util.DataTypeUtils;
 
 import org.apache.flink.table.api.DataTypes;
-import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
@@ -42,6 +43,7 @@ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.apache.hadoop.hive.serde2.typeinfo.VarcharTypeInfo;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -67,8 +69,8 @@ public class HiveSchemaUtils {
     allCols.addAll(hiveTable.getPartitionKeys());
 
     String pkConstraintName = hiveTable.getParameters().get(TableOptionProperties.PK_CONSTRAINT_NAME);
-    String pkColumnStr = hiveTable.getParameters().getOrDefault(FlinkOptions.RECORD_KEY_FIELD.key(), FlinkOptions.RECORD_KEY_FIELD.defaultValue());
-    List<String> pkColumns = StringUtils.split(pkColumnStr, ",");
+    String pkColumnStr = hiveTable.getParameters().get(FlinkOptions.RECORD_KEY_FIELD.key());
+    List<String> pkColumns = pkColumnStr == null ? new ArrayList<>() : StringUtils.split(pkColumnStr, ",");
 
     String[] colNames = new String[allCols.size()];
     DataType[] colTypes = new DataType[allCols.size()];
@@ -87,7 +89,7 @@ public class HiveSchemaUtils {
     org.apache.flink.table.api.Schema.Builder builder = org.apache.flink.table.api.Schema.newBuilder().fromFields(colNames, colTypes);
     if (!StringUtils.isNullOrEmpty(pkConstraintName)) {
       builder.primaryKeyNamed(pkConstraintName, pkColumns);
-    } else {
+    } else if (!pkColumns.isEmpty()) {
       builder.primaryKey(pkColumns);
     }
 
@@ -178,9 +180,14 @@ public class HiveSchemaUtils {
   /**
    * Create Hive field schemas from Flink table schema including the hoodie metadata fields.
    */
-  public static List<FieldSchema> toHiveFieldSchema(TableSchema schema) {
+  public static List<FieldSchema> toHiveFieldSchema(Schema schema, boolean withOperationField) {
     List<FieldSchema> columns = new ArrayList<>();
-    for (String metaField : HoodieRecord.HOODIE_META_COLUMNS) {
+    Collection<String> metaFields = new ArrayList<>(HoodieRecord.HOODIE_META_COLUMNS);
+    if (withOperationField) {
+      metaFields.add(HoodieRecord.OPERATION_METADATA_FIELD);
+    }
+
+    for (String metaField : metaFields) {
       columns.add(new FieldSchema(metaField, "string", null));
     }
     columns.addAll(createHiveColumns(schema));
@@ -190,22 +197,18 @@ public class HiveSchemaUtils {
   /**
    * Create Hive columns from Flink table schema.
    */
-  private static List<FieldSchema> createHiveColumns(TableSchema schema) {
-    final DataType dataType = schema.toPersistedRowDataType();
-    final RowType rowType = (RowType) dataType.getLogicalType();
-    final String[] fieldNames = rowType.getFieldNames().toArray(new String[0]);
-    final DataType[] fieldTypes = dataType.getChildren().toArray(new DataType[0]);
+  private static List<FieldSchema> createHiveColumns(Schema schema) {
+    RowType rowType = DataTypeUtils.toRowType(schema);
 
-    List<FieldSchema> columns = new ArrayList<>(fieldNames.length);
+    List<FieldSchema> columns = new ArrayList<>(rowType.getFieldCount());
 
-    for (int i = 0; i < fieldNames.length; i++) {
+    for (RowType.RowField field: rowType.getFields()) {
       columns.add(
           new FieldSchema(
-              fieldNames[i],
-              toHiveTypeInfo(fieldTypes[i]).getTypeName(),
+              field.getName(),
+              toHiveTypeInfo(field.getType()).getTypeName(),
               null));
     }
-
     return columns;
   }
 
@@ -215,13 +218,12 @@ public class HiveSchemaUtils {
    * conversion will fail for those types if the precision is not supported by Hive and
    * checkPrecision is true.
    *
-   * @param dataType a Flink DataType
+   * @param dataType a Flink LogicalType
    * @return the corresponding Hive data type
    */
-  public static TypeInfo toHiveTypeInfo(DataType dataType) {
+  public static TypeInfo toHiveTypeInfo(LogicalType dataType) {
     checkNotNull(dataType, "type cannot be null");
-    LogicalType logicalType = dataType.getLogicalType();
-    return logicalType.accept(new TypeInfoLogicalTypeVisitor(dataType));
+    return dataType.accept(new TypeInfoLogicalTypeVisitor(dataType));
   }
 
   /**

@@ -21,13 +21,14 @@ package org.apache.hudi.utils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 import org.apache.hudi.utils.factory.ContinuousFileSourceFactory;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
-import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
@@ -57,8 +58,23 @@ public class TestConfigurations {
 
   public static final RowType ROW_TYPE = (RowType) ROW_DATA_TYPE.getLogicalType();
 
+  public static final DataType ROW_DATA_TYPE_DECIMAL_ORDERING = DataTypes.ROW(
+          DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
+          DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
+          DataTypes.FIELD("age", DataTypes.INT()),
+          DataTypes.FIELD("ts", DataTypes.DECIMAL(10, 0)), // precombine field
+          DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
+      .notNull();
+
+  public static final RowType ROW_TYPE_DECIMAL_ORDERING =
+      (RowType) ROW_DATA_TYPE_DECIMAL_ORDERING.getLogicalType();
+
   public static final ResolvedSchema TABLE_SCHEMA = SchemaBuilder.instance()
       .fields(ROW_TYPE.getFieldNames(), ROW_DATA_TYPE.getChildren())
+      .build();
+
+  public static final ResolvedSchema TABLE_SCHEMA_DECIMAL_ORDERING = SchemaBuilder.instance()
+      .fields(ROW_TYPE_DECIMAL_ORDERING.getFieldNames(), ROW_DATA_TYPE_DECIMAL_ORDERING.getChildren())
       .build();
 
   private static final List<String> FIELDS = ROW_TYPE.getFields().stream()
@@ -83,6 +99,90 @@ public class TestConfigurations {
       .notNull();
 
   public static final RowType ROW_TYPE_DATE = (RowType) ROW_DATA_TYPE_DATE.getLogicalType();
+
+  public static final DataType ROW_DATA_TYPE_EVOLUTION_BEFORE = DataTypes.ROW(
+          DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),
+          DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
+          DataTypes.FIELD("gender", DataTypes.CHAR(1)), // removed field
+          DataTypes.FIELD("age", DataTypes.INT()),
+          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(6)),
+          DataTypes.FIELD("f_struct", DataTypes.ROW(
+              DataTypes.FIELD("f0", DataTypes.INT()),
+              DataTypes.FIELD("f1", DataTypes.STRING()),
+              DataTypes.FIELD("drop_add", DataTypes.STRING()),
+              DataTypes.FIELD("change_type", DataTypes.INT()))),
+          DataTypes.FIELD("f_map", DataTypes.MAP(DataTypes.STRING(), DataTypes.INT())),
+          DataTypes.FIELD("f_array", DataTypes.ARRAY(DataTypes.INT())),
+          DataTypes.FIELD("f_row_map", DataTypes.MAP(DataTypes.STRING(), DataTypes.ROW(
+              DataTypes.FIELD("f0", DataTypes.INT()),
+              DataTypes.FIELD("f1", DataTypes.STRING()),
+              DataTypes.FIELD("drop_add", DataTypes.STRING()),
+              DataTypes.FIELD("change_type", DataTypes.INT())))),
+          DataTypes.FIELD("f_row_array", DataTypes.ARRAY(DataTypes.ROW(
+              DataTypes.FIELD("f0", DataTypes.INT()),
+              DataTypes.FIELD("f1", DataTypes.STRING()),
+              DataTypes.FIELD("drop_add", DataTypes.STRING()),
+              DataTypes.FIELD("change_type", DataTypes.INT())))),
+          DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
+      .notNull();
+
+  public static final RowType ROW_TYPE_EVOLUTION_BEFORE = (RowType) ROW_DATA_TYPE_EVOLUTION_BEFORE.getLogicalType();
+  // f0 int, f2 int, f1 string, renamed_change_type bigint, f3 string, drop_add string
+  public static final DataType ROW_DATA_TYPE_EVOLUTION_AFTER = DataTypes.ROW(
+          DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),
+          DataTypes.FIELD("age", DataTypes.VARCHAR(10)), // changed type, reordered
+          DataTypes.FIELD("first_name", DataTypes.VARCHAR(10)), // renamed
+          DataTypes.FIELD("last_name", DataTypes.VARCHAR(10)), // new field
+          DataTypes.FIELD("salary", DataTypes.DOUBLE()), // new field
+          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(6)),
+          DataTypes.FIELD("f_struct", DataTypes.ROW(
+              DataTypes.FIELD("f2", DataTypes.INT()), // new field added in the middle of struct
+              DataTypes.FIELD("f1", DataTypes.STRING()),
+              DataTypes.FIELD("renamed_change_type", DataTypes.BIGINT()),
+              DataTypes.FIELD("f3", DataTypes.STRING()),
+              DataTypes.FIELD("drop_add", DataTypes.STRING()),
+              DataTypes.FIELD("f0", DataTypes.DECIMAL(20, 0)))),
+          DataTypes.FIELD("f_map", DataTypes.MAP(DataTypes.STRING(), DataTypes.DOUBLE())),
+          DataTypes.FIELD("f_array", DataTypes.ARRAY(DataTypes.DOUBLE())),
+          DataTypes.FIELD("f_row_map", DataTypes.MAP(DataTypes.STRING(), DataTypes.ROW(
+              DataTypes.FIELD("f2", DataTypes.INT()), // new field added in the middle of struct
+              DataTypes.FIELD("f1", DataTypes.STRING()),
+              DataTypes.FIELD("renamed_change_type", DataTypes.BIGINT()),
+              DataTypes.FIELD("f3", DataTypes.STRING()),
+              DataTypes.FIELD("drop_add", DataTypes.STRING()),
+              DataTypes.FIELD("f0", DataTypes.DECIMAL(20, 0))))),
+          DataTypes.FIELD("f_row_array", DataTypes.ARRAY(DataTypes.ROW(
+              DataTypes.FIELD("f0", DataTypes.INT()),
+              DataTypes.FIELD("f1", DataTypes.STRING()),
+              DataTypes.FIELD("drop_add", DataTypes.STRING()),
+              DataTypes.FIELD("change_type", DataTypes.INT())))),
+          DataTypes.FIELD("new_row_col", DataTypes.ROW(
+              DataTypes.FIELD("f0", DataTypes.BIGINT()),
+              DataTypes.FIELD("f1", DataTypes.STRING()))),
+          DataTypes.FIELD("new_array_col", DataTypes.ARRAY(DataTypes.STRING())),
+          DataTypes.FIELD("new_map_col", DataTypes.MAP(DataTypes.STRING(), DataTypes.STRING())),
+          DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
+      .notNull();
+
+  public static final DataType ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE = DataTypes.ROW(
+          DataTypes.FIELD("f_timestamp", DataTypes.TIMESTAMP(3)),
+          DataTypes.FIELD("f_date", DataTypes.DATE()),
+          DataTypes.FIELD("f_decimal", DataTypes.DECIMAL(3, 2)))
+      .notNull();
+
+  public static final RowType ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE = (RowType) ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE.getLogicalType();
+
+  public static final RowType ROW_TYPE_EVOLUTION_AFTER = (RowType) ROW_DATA_TYPE_EVOLUTION_AFTER.getLogicalType();
+
+  public static final DataType ROW_DATA_TYPE_BIGINT = DataTypes.ROW(
+          DataTypes.FIELD("uuid", DataTypes.BIGINT()),
+          DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
+          DataTypes.FIELD("age", DataTypes.INT()),
+          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)),
+          DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
+      .notNull();
+
+  public static final RowType ROW_TYPE_BIGINT = (RowType) ROW_DATA_TYPE_BIGINT.getLogicalType();
 
   public static String getCreateHoodieTableDDL(String tableName, Map<String, String> options) {
     return getCreateHoodieTableDDL(tableName, options, true, "partition");
@@ -160,6 +260,11 @@ public class TestConfigurations {
   }
 
   public static String getCollectSinkDDL(String tableName) {
+    // set expectedRowNum as -1 to disable forced exception to terminate a successful sink
+    return getCollectSinkDDLWithExpectedNum(tableName, -1);
+  }
+
+  public static String getCollectSinkDDLWithExpectedNum(String tableName, int expectedRowNum) {
     return "create table " + tableName + "(\n"
         + "  uuid varchar(20),\n"
         + "  name varchar(10),\n"
@@ -167,27 +272,33 @@ public class TestConfigurations {
         + "  ts timestamp(3),\n"
         + "  `partition` varchar(20)\n"
         + ") with (\n"
-        + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "'"
+        + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "',\n"
+        + "  'sink-expected-row-num' = '" + expectedRowNum + "'"
         + ")";
   }
 
-  public static String getCollectSinkDDL(String tableName, TableSchema tableSchema) {
+  public static String getCollectSinkDDL(String tableName, Schema schema) {
+    return getCollectSinkDDLWithExpectedNum(tableName, schema, -1);
+  }
+
+  public static String getCollectSinkDDLWithExpectedNum(String tableName, Schema schema, int expectRowNum) {
     final StringBuilder builder = new StringBuilder("create table " + tableName + "(\n");
-    String[] fieldNames = tableSchema.getFieldNames();
-    DataType[] fieldTypes = tableSchema.getFieldDataTypes();
-    for (int i = 0; i < fieldNames.length; i++) {
+    RowType rowType = DataTypeUtils.toRowType(schema);
+    List<RowType.RowField> fields = rowType.getFields();
+    for (int i = 0; i < rowType.getFieldCount(); i++) {
       builder.append("  `")
-          .append(fieldNames[i])
+          .append(fields.get(i).getName())
           .append("` ")
-          .append(fieldTypes[i].toString());
-      if (i != fieldNames.length - 1) {
+          .append(fields.get(i).getType().toString());
+      if (i != fields.size() - 1) {
         builder.append(",");
       }
       builder.append("\n");
     }
     final String withProps = ""
         + ") with (\n"
-        + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "'\n"
+        + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "',\n"
+        + "  'sink-expected-row-num' = '" + expectRowNum + "'"
         + ")";
     builder.append(withProps);
     return builder.toString();
@@ -211,23 +322,25 @@ public class TestConfigurations {
 
   public static final RowDataSerializer SERIALIZER = new RowDataSerializer(ROW_TYPE);
 
+  public static final RowDataSerializer SERIALIZER_DECIMAL_ORDERING = new RowDataSerializer(ROW_TYPE_DECIMAL_ORDERING);
+
   public static Configuration getDefaultConf(String tablePath) {
     Configuration conf = new Configuration();
-    conf.setString(FlinkOptions.PATH, tablePath);
-    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
+    conf.set(FlinkOptions.PATH, tablePath);
+    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
         Objects.requireNonNull(Thread.currentThread()
             .getContextClassLoader().getResource("test_read_schema.avsc")).toString());
-    conf.setString(FlinkOptions.TABLE_NAME, "TestHoodieTable");
-    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    conf.set(FlinkOptions.TABLE_NAME, "TestHoodieTable");
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
     return conf;
   }
 
   public static Configuration getDefaultConf(String tablePath, DataType dataType) {
     Configuration conf = new Configuration();
-    conf.setString(FlinkOptions.PATH, tablePath);
-    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, AvroSchemaConverter.convertToSchema(dataType.getLogicalType()).toString());
-    conf.setString(FlinkOptions.TABLE_NAME, "TestHoodieTable");
-    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    conf.set(FlinkOptions.PATH, tablePath);
+    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, AvroSchemaConverter.convertToSchema(dataType.getLogicalType()).toString());
+    conf.set(FlinkOptions.TABLE_NAME, "TestHoodieTable");
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
     return conf;
   }
 
@@ -315,6 +428,10 @@ public class TestConfigurations {
       }
       return TestConfigurations.getCreateHoodieTableDDL(this.tableName, this.fields, options,
           this.withPartition, this.pkField, this.partitionField);
+    }
+
+    public Map<String, String> getOptions() {
+      return this.options;
     }
   }
 

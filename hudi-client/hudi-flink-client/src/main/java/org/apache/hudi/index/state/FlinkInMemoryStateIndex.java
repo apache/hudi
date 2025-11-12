@@ -28,8 +28,8 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -38,7 +38,7 @@ import java.util.List;
  */
 public class FlinkInMemoryStateIndex extends HoodieIndex<List<HoodieRecord>, List<WriteStatus>> {
 
-  private static final Logger LOG = LogManager.getLogger(FlinkInMemoryStateIndex.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkInMemoryStateIndex.class);
 
   public FlinkInMemoryStateIndex(HoodieFlinkEngineContext context, HoodieWriteConfig config) {
     super(config);

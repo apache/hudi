@@ -18,60 +18,57 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.SortUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.HoodieUTF8StringFactory;
 
 import java.util.Arrays;
 
+import static org.apache.hudi.config.HoodieWriteConfig.BULKINSERT_SUFFIX_RECORD_KEY_SORT_COLUMNS;
+
 /**
- * A partitioner that does sorting based on specified column values for each RDD partition.
+ * A partitioner that globally sorts a {@link JavaRDD<HoodieRecord>} based on partition path column and custom columns.
  *
- * @param <T> HoodieRecordPayload type
+ * @see GlobalSortPartitioner
+ * @see BulkInsertSortMode#GLOBAL_SORT
  */
-public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
+public class RDDCustomColumnsSortPartitioner<T>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   private final String[] sortColumnNames;
   private final SerializableSchema serializableSchema;
   private final boolean consistentLogicalTimestampEnabled;
+  private final boolean suffixRecordKey;
+  private final HoodieUTF8StringFactory utf8StringFactory =
+      SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory();
 
   public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config) {
     this.serializableSchema = new SerializableSchema(new Schema.Parser().parse(config.getSchema()));
     this.sortColumnNames = getSortColumnName(config);
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
+    this.suffixRecordKey = config.getBoolean(BULKINSERT_SUFFIX_RECORD_KEY_SORT_COLUMNS);
   }
 
-  public RDDCustomColumnsSortPartitioner(String[] columnNames, Schema schema, boolean consistentLogicalTimestampEnabled) {
+  public RDDCustomColumnsSortPartitioner(String[] columnNames, Schema schema, HoodieWriteConfig config) {
     this.sortColumnNames = columnNames;
     this.serializableSchema = new SerializableSchema(schema);
-    this.consistentLogicalTimestampEnabled = consistentLogicalTimestampEnabled;
+    this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
+    this.suffixRecordKey = config.getBoolean(BULKINSERT_SUFFIX_RECORD_KEY_SORT_COLUMNS);
   }
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
-    final String[] sortColumns = this.sortColumnNames;
-    final SerializableSchema schema = this.serializableSchema;
-    final boolean consistentLogicalTimestampEnabled = this.consistentLogicalTimestampEnabled;
-    return records.sortBy(
-        record -> {
-          Object recordValue = HoodieAvroUtils.getRecordColumnValues(record, sortColumns, schema, consistentLogicalTimestampEnabled);
-          // null values are replaced with empty string for null_first order
-          if (recordValue == null) {
-            return StringUtils.EMPTY_STRING;
-          } else {
-            return StringUtils.objToString(recordValue);
-          }
-        },
-        true, outputSparkPartitions);
+    return records
+        .sortBy(record -> SortUtils.getComparableSortColumns(record, sortColumnNames, serializableSchema.get(), suffixRecordKey, consistentLogicalTimestampEnabled,
+            utf8StringFactory::wrapArrayOfObjects), true, outputSparkPartitions);
   }
 
   @Override

@@ -23,8 +23,11 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.FlatLists;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.BulkInsertPartitioner;
-import org.apache.hudi.testutils.HoodieJavaClientTestBase;
+import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
 import org.apache.avro.Schema;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -40,7 +43,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestJavaBulkInsertInternalPartitioner extends HoodieJavaClientTestBase {
+public class TestJavaBulkInsertInternalPartitioner extends HoodieJavaClientTestHarness {
   private static final Comparator<HoodieRecord> KEY_COMPARATOR =
       Comparator.comparing(o -> (o.getPartitionPath() + "+" + o.getRecordKey()));
 
@@ -63,14 +66,18 @@ public class TestJavaBulkInsertInternalPartitioner extends HoodieJavaClientTestB
         getCustomColumnComparator(HoodieTestDataGenerator.AVRO_SCHEMA, sortColumns);
 
     List<HoodieRecord> records = generateTestRecordsForBulkInsert(1000);
+    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath("basePath").build();
+    cfg.setValue(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME, "partition_path");
+    cfg.setValue(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED, "false");
     testBulkInsertInternalPartitioner(
-        new JavaCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, false),
+        new JavaCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, cfg),
         records, true, generatePartitionNumRecords(records), Option.of(columnComparator));
   }
 
   private Comparator<HoodieRecord> getCustomColumnComparator(Schema schema, String[] sortColumns) {
-    return Comparator.comparing(
-        record -> HoodieAvroUtils.getRecordColumnValues(record, sortColumns, schema, false).toString());
+    return Comparator.comparing(record ->
+        FlatLists.ofComparableArray(
+            HoodieAvroUtils.getRecordColumnValues(record, sortColumns, schema, false)));
   }
 
   private void verifyRecordAscendingOrder(List<HoodieRecord> records,

@@ -18,99 +18,38 @@
 
 package org.apache.hudi.sink.transform;
 
-import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.adapter.AbstractRichFunctionAdapter;
+import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.keygen.KeyGenerator;
-import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
-import org.apache.hudi.sink.utils.PayloadCreation;
-import org.apache.hudi.util.RowDataToAvroConverters;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.sink.bulk.RowDataKeyGen;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.flink.api.common.functions.RichMapFunction;
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 
-import java.io.IOException;
-
-import static org.apache.hudi.util.StreamerUtil.flinkConf2TypedProperties;
-
 /**
- * Function that transforms RowData to HoodieRecord.
+ * Function that converts Flink {@link RowData} into {@link HoodieFlinkInternalRow}.
  */
-public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord>
-    extends RichMapFunction<I, O> {
-  /**
-   * Row type of the input.
-   */
-  private final RowType rowType;
-
-  /**
-   * Avro schema of the input.
-   */
-  private transient Schema avroSchema;
-
-  /**
-   * RowData to Avro record converter.
-   */
-  private transient RowDataToAvroConverters.RowDataToAvroConverter converter;
-
-  /**
-   * HoodieKey generator.
-   */
-  private transient KeyGenerator keyGenerator;
-
-  /**
-   * Utilities to create hoodie pay load instance.
-   */
-  private transient PayloadCreation payloadCreation;
-
-  /**
-   * Config options.
-   */
-  private final Configuration config;
+public class RowDataToHoodieFunction<I extends RowData, O extends HoodieFlinkInternalRow>
+    extends AbstractRichFunctionAdapter implements MapFunction<I, O> {
+  RowDataKeyGen keyGen;
 
   public RowDataToHoodieFunction(RowType rowType, Configuration config) {
-    this.rowType = rowType;
-    this.config = config;
+    this.keyGen = RowDataKeyGen.instance(config, rowType);
   }
 
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    this.avroSchema = StreamerUtil.getSourceSchema(this.config);
-    this.converter = RowDataToAvroConverters.createConverter(this.rowType);
-    this.keyGenerator =
-        HoodieAvroKeyGeneratorFactory
-            .createKeyGenerator(flinkConf2TypedProperties(this.config));
-    this.payloadCreation = PayloadCreation.instance(config);
   }
 
-  @SuppressWarnings("unchecked")
   @Override
-  public O map(I i) throws Exception {
-    return (O) toHoodieRecord(i);
-  }
-
-  /**
-   * Converts the give record to a {@link HoodieRecord}.
-   *
-   * @param record The input record
-   * @return HoodieRecord based on the configuration
-   * @throws IOException if error occurs
-   */
-  @SuppressWarnings("rawtypes")
-  private HoodieRecord toHoodieRecord(I record) throws Exception {
-    GenericRecord gr = (GenericRecord) this.converter.convert(this.avroSchema, record);
-    final HoodieKey hoodieKey = keyGenerator.getKey(gr);
-
-    HoodieRecordPayload payload = payloadCreation.createPayload(gr);
-    HoodieOperation operation = HoodieOperation.fromValue(record.getRowKind().toByteValue());
-    return new HoodieAvroRecord<>(hoodieKey, payload, operation);
+  public O map(I row) throws Exception {
+    return (O) new HoodieFlinkInternalRow(
+        keyGen.getRecordKey(row),
+        keyGen.getPartitionPath(row),
+        HoodieOperation.fromValue(row.getRowKind().toByteValue()).getName(),
+        row);
   }
 }

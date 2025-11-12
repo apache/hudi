@@ -18,37 +18,26 @@
 
 package org.apache.hudi.execution;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
+import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.ExecutorFactory;
 
 import org.apache.avro.Schema;
 
 import java.util.Iterator;
 import java.util.List;
 
-public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends HoodieLazyInsertIterable<T> {
+public class SparkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
 
-  private boolean useWriterSchema;
-
-  public SparkLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
-                                 boolean areRecordsSorted,
-                                 HoodieWriteConfig config,
-                                 String instantTime,
-                                 HoodieTable hoodieTable,
-                                 String idPrefix,
-                                 TaskContextSupplier taskContextSupplier,
-                                 boolean useWriterSchema) {
-    super(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier);
-    this.useWriterSchema = useWriterSchema;
-  }
+  private final boolean useWriterSchema;
 
   public SparkLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
                                  boolean areRecordsSorted,
@@ -77,18 +66,19 @@ public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
   @Override
   protected List<WriteStatus> computeNext() {
     // Executor service used for launching writer thread.
-    BoundedInMemoryExecutor<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> bufferedIteratorExecutor =
-        null;
+    HoodieExecutor<List<WriteStatus>> bufferedIteratorExecutor = null;
     try {
-      Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
+      // config.getSchema is not canonicalized, while config.getWriteSchema is canonicalized. So, we have to use the canonicalized schema to read the existing data.
+      Schema schema = new Schema.Parser().parse(hoodieConfig.getWriteSchema());
       if (useWriterSchema) {
         schema = HoodieAvroUtils.addMetadataFields(schema);
       }
-      bufferedIteratorExecutor =
-          new BoundedInMemoryExecutor<>(hoodieConfig.getWriteBufferLimitBytes(), inputItr, getInsertHandler(),
-              getTransformFunction(schema, hoodieConfig), hoodieTable.getPreExecuteRunnable());
+      schema = AvroSchemaCache.intern(schema);
+
+      bufferedIteratorExecutor = ExecutorFactory.create(hoodieConfig, inputItr, getInsertHandler(),
+          getTransformer(schema, hoodieConfig), hoodieTable.getPreExecuteRunnable());
+
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();
-      assert result != null && !result.isEmpty() && !bufferedIteratorExecutor.isRemaining();
       return result;
     } catch (Exception e) {
       throw new HoodieException(e);

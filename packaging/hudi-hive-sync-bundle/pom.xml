@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.13.0-SNAPSHOT</version>
+    <version>1.2.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -66,29 +66,33 @@
               </transformers>
               <artifactSet>
                 <includes combine.children="append">
+                  <include>org.apache.hudi:hudi-hadoop-common</include>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hive-sync</include>
-
+                  <include>com.fasterxml.jackson.core:jackson-annotations</include>
+                  <include>com.fasterxml.jackson.core:jackson-core</include>
+                  <include>com.fasterxml.jackson.core:jackson-databind</include>
+                  <!-- Bundle Jackson JSR310 library since it is not present in spark 2.x. For spark 3.x this will
+                       bundle the same JSR310 version that is included in spark runtime -->
+                  <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
                   <include>com.beust:jcommander</include>
                   <include>org.apache.avro:avro</include>
-                  <include>org.apache.hbase:hbase-common</include>
-                  <include>org.apache.hbase:hbase-client</include>
-                  <include>org.apache.hbase:hbase-hadoop-compat</include>
-                  <include>org.apache.hbase:hbase-hadoop2-compat</include>
-                  <include>org.apache.hbase:hbase-metrics</include>
-                  <include>org.apache.hbase:hbase-metrics-api</include>
-                  <include>org.apache.hbase:hbase-protocol</include>
-                  <include>org.apache.hbase:hbase-protocol-shaded</include>
-                  <include>org.apache.hbase:hbase-server</include>
-                  <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
-                  <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
-                  <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
-                  <include>org.apache.htrace:htrace-core4</include>
                   <include>org.apache.parquet:parquet-avro</include>
+                  <include>org.apache.parquet:parquet-column</include>
+                  <include>org.apache.parquet:parquet-common</include>
+                  <include>org.apache.parquet:parquet-encoding</include>
+                  <include>org.apache.parquet:parquet-format-structures</include>
+                  <include>org.apache.parquet:parquet-hadoop</include>
+                  <include>org.apache.parquet:parquet-jackson</include>
                   <include>commons-io:commons-io</include>
                   <include>org.openjdk.jol:jol-core</include>
+                  <!-- Kryo -->
+                  <include>com.esotericsoftware:kryo-shaded</include>
+                  <include>com.esotericsoftware:minlog</include>
+                  <include>org.objenesis:objenesis</include>
+                  <include>com.github.ben-manes.caffeine:caffeine</include>
                 </includes>
               </artifactSet>
               <relocations combine.children="append">
@@ -97,91 +101,25 @@
                   <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.hadoop.hbase.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
-                  <excludes>
-                    <exclude>org.apache.hadoop.hbase.KeyValue$KeyComparator</exclude>
-                  </excludes>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hbase.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hbase.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.htrace.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>org.openjdk.jol.</pattern>
                   <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
                 </relocation>
-                <!-- The classes below in org.apache.hadoop.metrics2 package come from
-                hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
-                instead of shading all classes under org.apache.hadoop.metrics2 including ones
-                from hadoop. -->
+                <!-- Kryo -->
                 <relocation>
-                  <pattern>org.apache.hadoop.metrics2.MetricHistogram</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricHistogram
-                  </shadedPattern>
+                  <pattern>com.esotericsoftware.kryo.</pattern>
+                  <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.hadoop.metrics2.MetricsExecutor</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricsExecutor
-                  </shadedPattern>
+                  <pattern>com.esotericsoftware.reflectasm.</pattern>
+                  <shadedPattern>org.apache.hudi.com.esotericsoftware.reflectasm.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.hadoop.metrics2.impl.JmxCacheBuster</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.impl.JmxCacheBuster</shadedPattern>
+                  <pattern>com.esotericsoftware.minlog.</pattern>
+                  <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.MetricsExecutorImpl</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MetricsExecutorImpl
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.MutableFastCounter</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableFastCounter
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.MutableHistogram</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableHistogram
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.MutableRangeHistogram</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableRangeHistogram
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.MutableSizeHistogram</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableSizeHistogram
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.MutableTimeHistogram</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableTimeHistogram
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.util.MetricQuantile</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricQuantile
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.util.MetricSampleQuantiles</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricSampleQuantiles
-                  </shadedPattern>
+                  <pattern>org.objenesis.</pattern>
+                  <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
@@ -193,8 +131,9 @@
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
+                    <exclude>META-INF/versions/21/**</exclude>
+                    <exclude>META-INF/versions/22/**</exclude>
                     <exclude>**/*.proto</exclude>
-                    <exclude>hbase-webapps/**</exclude>
                   </excludes>
                 </filter>
               </filters>
@@ -207,9 +146,6 @@
     <resources>
       <resource>
         <directory>src/main/resources</directory>
-      </resource>
-      <resource>
-        <directory>src/test/resources</directory>
       </resource>
     </resources>
   </build>
@@ -247,6 +183,14 @@
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
       <version>${avro.version}</version>
+      <scope>compile</scope>
+    </dependency>
+
+    <!-- Kryo -->
+    <dependency>
+      <groupId>com.esotericsoftware</groupId>
+      <artifactId>kryo-shaded</artifactId>
+      <version>${kryo.shaded.version}</version>
       <scope>compile</scope>
     </dependency>
 

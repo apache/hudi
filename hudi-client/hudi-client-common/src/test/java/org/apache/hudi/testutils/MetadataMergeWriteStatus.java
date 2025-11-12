@@ -40,6 +40,11 @@ public class MetadataMergeWriteStatus extends WriteStatus {
     super(trackSuccessRecords, failureFraction);
   }
 
+  public MetadataMergeWriteStatus(Boolean trackSuccessRecords, Double failureFraction,
+                                  Boolean isMetadataTable) {
+    super(trackSuccessRecords, failureFraction, isMetadataTable);
+  }
+
   public static Map<String, String> mergeMetadataForWriteStatuses(List<WriteStatus> writeStatuses) {
     Map<String, String> allWriteStatusMergedMetadataMap = new HashMap<>();
     for (WriteStatus writeStatus : writeStatuses) {
@@ -55,12 +60,12 @@ public class MetadataMergeWriteStatus extends WriteStatus {
       if (!mergeToMap.containsKey(key)) {
         mergeToMap.put(key, "0");
       }
-      mergeToMap.put(key, addStrsAsInt(entry.getValue(), mergeToMap.get(key)));
+      mergeToMap.put(key, addStrsAsLong(entry.getValue(), mergeToMap.get(key)));
     }
   }
 
-  private static String addStrsAsInt(String a, String b) {
-    return String.valueOf(Integer.parseInt(a) + Integer.parseInt(b));
+  private static String addStrsAsLong(String a, String b) {
+    return String.valueOf(Long.parseLong(a) + Long.parseLong(b));
   }
 
   @Override

@@ -54,4 +54,10 @@ public interface BloomFilter {
    * @return the bloom index type code.
    **/
   BloomFilterTypeCode getBloomFilterTypeCode();
+
+  /**
+   * Performs a logical OR operations with other BloomFilter.
+   * @param other
+   */
+  void or(BloomFilter other);
 }

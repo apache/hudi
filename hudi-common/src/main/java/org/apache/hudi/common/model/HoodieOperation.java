@@ -110,6 +110,13 @@ public enum HoodieOperation {
   }
 
   /**
+   * Returns whether the operation is UPDATE_BEFORE.
+   */
+  public static boolean isUpdateBefore(String operation) {
+    return isUpdateBefore(fromName(operation));
+  }
+
+  /**
    * Returns whether the operation is UPDATE_AFTER.
    */
   public static boolean isUpdateAfter(HoodieOperation operation) {
@@ -121,5 +128,9 @@ public enum HoodieOperation {
    */
   public static boolean isDelete(HoodieOperation operation) {
     return operation == DELETE;
+  }
+
+  public static boolean isDeleteRecord(String name) {
+    return isDelete(fromName(name));
   }
 }

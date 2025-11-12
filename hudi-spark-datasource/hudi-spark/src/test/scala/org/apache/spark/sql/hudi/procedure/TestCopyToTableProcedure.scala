@@ -17,6 +17,9 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.testutils.DataSourceTestUtils
+
 import org.apache.spark.sql.Row
 
 import java.util
@@ -38,7 +41,7 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 
@@ -59,6 +62,52 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test Call copy_to_table Procedure with columns") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts'
+           | )
+       """.stripMargin)
+
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+      spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
+      spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
+
+      val copyTableName = generateTableName
+      // Check required fields
+      checkExceptionContain(s"call copy_to_table(table=>'$tableName')")(s"Argument: new_table is required")
+
+      val row = spark.sql(s"""call copy_to_table(table=>'$tableName',new_table=>'$copyTableName')""").collectAsList()
+      assert(row.size() == 1 && row.get(0).get(0) == 0)
+      val copyTableCount = spark.sql(s"""select count(1) from $copyTableName""").collectAsList()
+      assert(copyTableCount.size() == 1 && copyTableCount.get(0).get(0) == 4)
+
+      val patitialTable = generateTableName
+      spark.sql(s"""call copy_to_table(table=>'$tableName',new_table=>'$patitialTable',columns=>'id,name')""").collectAsList()
+      checkAnswer(s"select * from $patitialTable")(
+        Seq(1, "a1"),
+        Seq(2, "a2"),
+        Seq(3, "a3"),
+        Seq(4, "a4")
+      )
+
+    }
+  }
+
   test("Test Call copy_to_table Procedure with snapshot") {
     withTempDir { tmp =>
       val tableName = generateTableName
@@ -74,7 +123,7 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 
@@ -121,6 +170,7 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
   test("Test Call copy_to_table Procedure with incremental") {
     withTempDir { tmp =>
       val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath + tableName
       // create table
       spark.sql(
         s"""
@@ -130,10 +180,10 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
            |  price double,
            |  ts long
            |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '$tablePath'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 
@@ -141,12 +191,12 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
 
-      // mark beginTime
-      val beginTime = spark.sql(s"select max(_hoodie_commit_time) from $tableName").collectAsList().get(0).get(0)
+      // mark startCompletionTime
+      val fs = HadoopFSUtils.getFs(tablePath, spark.sessionState.newHadoopConf())
+      val startCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, tablePath)
       spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
       spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
-      val endTime = spark.sql(s"select max(_hoodie_commit_time) from $tableName").collectAsList().get(0).get(0)
-
+      val endCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, tablePath)
 
       val copyTableName = generateTableName
       // Check required fields
@@ -156,8 +206,8 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
       val copyCmd = spark.sql(s"call copy_to_table" + s"(table=>'$tableName'" +
         s",new_table=>'$copyTableName'" +
         s",query_type=>'incremental'" +
-        s",begin_instance_time=>'$beginTime'" +
-        s",end_instance_time=>'$endTime')").collectAsList()
+        s",begin_instance_time=>'$startCompletionTime'" +
+        s",end_instance_time=>'$endCompletionTime')").collectAsList()
       assert(copyCmd.size() == 1 && copyCmd.get(0).get(0) == 0)
 
       val df = spark.sql(s"select * from $copyTableName")
@@ -183,7 +233,7 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
            | options (
            |  type='mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  hoodie.compact.inline.max.delta.commits='5',
            |  hoodie.compact.inline='true'
            |
@@ -233,7 +283,7 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 
@@ -283,7 +333,7 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 

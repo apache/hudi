@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieWriteHandle;
@@ -33,20 +32,23 @@ import java.util.List;
 /**
  * Flink insert prepped commit action executor.
  */
-public class FlinkInsertPreppedCommitActionExecutor<T extends HoodieRecordPayload<T>> extends BaseFlinkCommitActionExecutor<T> {
+public class FlinkInsertPreppedCommitActionExecutor<T> extends BaseFlinkCommitActionExecutor<T> {
 
   private final List<HoodieRecord<T>> preppedRecords;
 
   public FlinkInsertPreppedCommitActionExecutor(HoodieEngineContext context,
                                                 HoodieWriteHandle<?, ?, ?, ?> writeHandle,
-                                                HoodieWriteConfig config, HoodieTable table,
-                                                String instantTime, List<HoodieRecord<T>> preppedRecords) {
-    super(context, writeHandle, config, table, instantTime, WriteOperationType.INSERT_PREPPED);
+                                                BucketInfo bucketInfo,
+                                                HoodieWriteConfig config,
+                                                HoodieTable table,
+                                                String instantTime,
+                                                List<HoodieRecord<T>> preppedRecords) {
+    super(context, writeHandle, bucketInfo, config, table, instantTime, WriteOperationType.INSERT_PREPPED);
     this.preppedRecords = preppedRecords;
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
-    return super.execute(preppedRecords);
+    return super.execute(preppedRecords.iterator());
   }
 }

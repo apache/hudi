@@ -26,10 +26,9 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.table.timeline.InstantComparator;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -48,6 +47,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.cli.utils.CommitUtil.getTimeDaysAgo;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.getCommitMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.getTimeline;
 
 /**
@@ -56,31 +58,28 @@ import static org.apache.hudi.common.table.timeline.TimelineUtils.getTimeline;
 @ShellComponent
 public class CommitsCommand {
 
-  private String printCommits(HoodieDefaultTimeline timeline,
+  private String printCommits(HoodieTimeline timeline,
                               final Integer limit,
                               final String sortByField,
                               final boolean descending,
                               final boolean headerOnly,
                               final String tempTableName) throws IOException {
     final List<Comparable[]> rows = new ArrayList<>();
+    InstantComparator instantComparator = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantComparator();
 
     final List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()
-        .getInstants().sorted(HoodieInstant.COMPARATOR.reversed()).collect(Collectors.toList());
+        .getInstantsAsStream().sorted(instantComparator.requestedTimeOrderedComparator().reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
-      if (timeline.getInstantDetails(commit).isPresent()) {
-        final HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-            timeline.getInstantDetails(commit).get(),
-            HoodieCommitMetadata.class);
-        rows.add(new Comparable[] {commit.getTimestamp(),
-            commitMetadata.fetchTotalBytesWritten(),
-            commitMetadata.fetchTotalFilesInsert(),
-            commitMetadata.fetchTotalFilesUpdated(),
-            commitMetadata.fetchTotalPartitionsWritten(),
-            commitMetadata.fetchTotalRecordsWritten(),
-            commitMetadata.fetchTotalUpdateRecordsWritten(),
-            commitMetadata.fetchTotalWriteErrors()});
-      }
+      final HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(commit);
+      rows.add(new Comparable[] {commit.requestedTime(),
+          commitMetadata.fetchTotalBytesWritten(),
+          commitMetadata.fetchTotalFilesInsert(),
+          commitMetadata.fetchTotalFilesUpdated(),
+          commitMetadata.fetchTotalPartitionsWritten(),
+          commitMetadata.fetchTotalRecordsWritten(),
+          commitMetadata.fetchTotalUpdateRecordsWritten(),
+          commitMetadata.fetchTotalWriteErrors()});
     }
 
     final Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
@@ -94,36 +93,33 @@ public class CommitsCommand {
         limit, headerOnly, rows, tempTableName);
   }
 
-  private String printCommitsWithMetadata(HoodieDefaultTimeline timeline,
+  private String printCommitsWithMetadata(HoodieTimeline timeline,
                                           final Integer limit, final String sortByField,
                                           final boolean descending,
                                           final boolean headerOnly,
                                           final String tempTableName,
                                           final String partition) throws IOException {
     final List<Comparable[]> rows = new ArrayList<>();
+    InstantComparator instantComparator = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantComparator();
 
     final List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()
-        .getInstants().sorted(HoodieInstant.COMPARATOR.reversed()).collect(Collectors.toList());
+        .getInstantsAsStream().sorted(instantComparator.requestedTimeOrderedComparator().reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
-      if (timeline.getInstantDetails(commit).isPresent()) {
-        final HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-            timeline.getInstantDetails(commit).get(),
-            HoodieCommitMetadata.class);
+      final HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(commit);
 
-        for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :
-            commitMetadata.getPartitionToWriteStats().entrySet()) {
-          for (HoodieWriteStat hoodieWriteStat : partitionWriteStat.getValue()) {
-            if (StringUtils.isNullOrEmpty(partition) || partition.equals(hoodieWriteStat.getPartitionPath())) {
-              rows.add(new Comparable[] {commit.getAction(), commit.getTimestamp(), hoodieWriteStat.getPartitionPath(),
-                  hoodieWriteStat.getFileId(), hoodieWriteStat.getPrevCommit(), hoodieWriteStat.getNumWrites(),
-                  hoodieWriteStat.getNumInserts(), hoodieWriteStat.getNumDeletes(),
-                  hoodieWriteStat.getNumUpdateWrites(), hoodieWriteStat.getTotalWriteErrors(),
-                  hoodieWriteStat.getTotalLogBlocks(), hoodieWriteStat.getTotalCorruptLogBlock(),
-                  hoodieWriteStat.getTotalRollbackBlocks(), hoodieWriteStat.getTotalLogRecords(),
-                  hoodieWriteStat.getTotalUpdatedRecordsCompacted(), hoodieWriteStat.getTotalWriteBytes()
-              });
-            }
+      for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :
+          commitMetadata.getPartitionToWriteStats().entrySet()) {
+        for (HoodieWriteStat hoodieWriteStat : partitionWriteStat.getValue()) {
+          if (StringUtils.isNullOrEmpty(partition) || partition.equals(hoodieWriteStat.getPartitionPath())) {
+            rows.add(new Comparable[] {commit.getAction(), commit.requestedTime(), hoodieWriteStat.getPartitionPath(),
+                hoodieWriteStat.getFileId(), hoodieWriteStat.getPrevCommit(), hoodieWriteStat.getNumWrites(),
+                hoodieWriteStat.getNumInserts(), hoodieWriteStat.getNumDeletes(),
+                hoodieWriteStat.getNumUpdateWrites(), hoodieWriteStat.getTotalWriteErrors(),
+                hoodieWriteStat.getTotalLogBlocks(), hoodieWriteStat.getTotalCorruptLogBlock(),
+                hoodieWriteStat.getTotalRollbackBlocks(), hoodieWriteStat.getTotalLogRecords(),
+                hoodieWriteStat.getTotalUpdatedRecordsCompacted(), hoodieWriteStat.getTotalWriteBytes()
+            });
           }
         }
       }
@@ -155,7 +151,7 @@ public class CommitsCommand {
               defaultValue = "false") final boolean includeArchivedTimeline)
       throws IOException {
 
-    HoodieDefaultTimeline timeline = getTimeline(HoodieCLI.getTableMetaClient(), includeArchivedTimeline);
+    HoodieTimeline timeline = getTimeline(HoodieCLI.getTableMetaClient(), includeArchivedTimeline);
     if (includeExtraMetadata) {
       return printCommitsWithMetadata(timeline, limit, sortByField, descending, headerOnly, exportTableName, partition);
     } else {
@@ -188,7 +184,7 @@ public class CommitsCommand {
     HoodieArchivedTimeline archivedTimeline = HoodieCLI.getTableMetaClient().getArchivedTimeline();
     try {
       archivedTimeline.loadInstantDetailsInMemory(startTs, endTs);
-      HoodieDefaultTimeline timelineRange = archivedTimeline.findInstantsInRange(startTs, endTs);
+      HoodieTimeline timelineRange = archivedTimeline.findInstantsInRange(startTs, endTs);
       if (includeExtraMetadata) {
         return printCommitsWithMetadata(timelineRange, limit, sortByField, descending, headerOnly, exportTableName, partition);
       } else {
@@ -210,11 +206,11 @@ public class CommitsCommand {
       @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
           defaultValue = "false") final boolean headerOnly,
-      @ShellOption(value = {"includeArchivedTimeline"}, help = "Include archived commits as well",
+      @ShellOption(value = {"--includeArchivedTimeline"}, help = "Include archived commits as well",
               defaultValue = "false") final boolean includeArchivedTimeline)
       throws Exception {
 
-    HoodieDefaultTimeline defaultTimeline = getTimeline(HoodieCLI.getTableMetaClient(), includeArchivedTimeline);
+    HoodieTimeline defaultTimeline = getTimeline(HoodieCLI.getTableMetaClient(), includeArchivedTimeline);
     HoodieTimeline timeline = defaultTimeline.getCommitsTimeline().filterCompletedInstants();
 
     Option<HoodieInstant> hoodieInstantOption = getCommitForInstant(timeline, instantTime);
@@ -278,11 +274,11 @@ public class CommitsCommand {
       @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
           defaultValue = "false") final boolean headerOnly,
-      @ShellOption(value = {"includeArchivedTimeline"}, help = "Include archived commits as well",
+      @ShellOption(value = {"--includeArchivedTimeline"}, help = "Include archived commits as well",
               defaultValue = "false") final boolean includeArchivedTimeline)
       throws Exception {
 
-    HoodieDefaultTimeline defaultTimeline = getTimeline(HoodieCLI.getTableMetaClient(), includeArchivedTimeline);
+    HoodieTimeline defaultTimeline = getTimeline(HoodieCLI.getTableMetaClient(), includeArchivedTimeline);
     HoodieTimeline timeline = defaultTimeline.getCommitsTimeline().filterCompletedInstants();
 
     Option<HoodieInstant> hoodieInstantOption = getCommitForInstant(timeline, instantTime);
@@ -324,11 +320,11 @@ public class CommitsCommand {
       @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
           defaultValue = "false") final boolean headerOnly,
-      @ShellOption(value = {"includeArchivedTimeline"}, help = "Include archived commits as well",
+      @ShellOption(value = {"--includeArchivedTimeline"}, help = "Include archived commits as well",
               defaultValue = "false") final boolean includeArchivedTimeline)
       throws Exception {
 
-    HoodieDefaultTimeline defaultTimeline = getTimeline(HoodieCLI.getTableMetaClient(), includeArchivedTimeline);
+    HoodieTimeline defaultTimeline = getTimeline(HoodieCLI.getTableMetaClient(), includeArchivedTimeline);
     HoodieTimeline timeline = defaultTimeline.getCommitsTimeline().filterCompletedInstants();
 
     Option<HoodieInstant> hoodieInstantOption = getCommitForInstant(timeline, instantTime);
@@ -368,24 +364,25 @@ public class CommitsCommand {
   public String compareCommits(@ShellOption(value = {"--path"}, help = "Path of the table to compare to") final String path) {
 
     HoodieTableMetaClient source = HoodieCLI.getTableMetaClient();
-    HoodieTableMetaClient target = HoodieTableMetaClient.builder().setConf(HoodieCLI.conf).setBasePath(path).build();
+    HoodieTableMetaClient target = HoodieTableMetaClient.builder()
+        .setConf(HoodieCLI.conf.newInstance()).setBasePath(path).build();
     HoodieTimeline targetTimeline = target.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     HoodieTimeline sourceTimeline = source.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     String targetLatestCommit =
-        targetTimeline.getInstants().iterator().hasNext() ? targetTimeline.lastInstant().get().getTimestamp() : "0";
+        targetTimeline.getInstantsAsStream().iterator().hasNext() ? targetTimeline.lastInstant().get().requestedTime() : "0";
     String sourceLatestCommit =
-        sourceTimeline.getInstants().iterator().hasNext() ? sourceTimeline.lastInstant().get().getTimestamp() : "0";
+        sourceTimeline.getInstantsAsStream().iterator().hasNext() ? sourceTimeline.lastInstant().get().requestedTime() : "0";
 
     if (sourceLatestCommit != null
-        && HoodieTimeline.compareTimestamps(targetLatestCommit, HoodieTimeline.GREATER_THAN, sourceLatestCommit)) {
+        && compareTimestamps(targetLatestCommit, GREATER_THAN, sourceLatestCommit)) {
       // source is behind the target
       List<String> commitsToCatchup = targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE)
-          .getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+          .getInstantsAsStream().map(HoodieInstant::requestedTime).collect(Collectors.toList());
       return "Source " + source.getTableConfig().getTableName() + " is behind by " + commitsToCatchup.size()
           + " commits. Commits to catch up - " + commitsToCatchup;
     } else {
       List<String> commitsToCatchup = sourceTimeline.findInstantsAfter(targetLatestCommit, Integer.MAX_VALUE)
-          .getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+          .getInstantsAsStream().map(HoodieInstant::requestedTime).collect(Collectors.toList());
       return "Source " + source.getTableConfig().getTableName() + " is ahead by " + commitsToCatchup.size()
           + " commits. Commits to catch up - " + commitsToCatchup;
     }
@@ -393,7 +390,8 @@ public class CommitsCommand {
 
   @ShellMethod(key = "commits sync", value = "Sync commits with another Hoodie table")
   public String syncCommits(@ShellOption(value = {"--path"}, help = "Path of the table to sync to") final String path) {
-    HoodieCLI.syncTableMetadata = HoodieTableMetaClient.builder().setConf(HoodieCLI.conf).setBasePath(path).build();
+    HoodieCLI.syncTableMetadata = HoodieTableMetaClient.builder()
+        .setConf(HoodieCLI.conf.newInstance()).setBasePath(path).build();
     HoodieCLI.state = HoodieCLI.CLIState.SYNC;
     return "Load sync state between " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " and "
         + HoodieCLI.syncTableMetadata.getTableConfig().getTableName();
@@ -404,16 +402,16 @@ public class CommitsCommand {
   * */
   private Option<HoodieInstant> getCommitForInstant(HoodieTimeline timeline, String instantTime) {
     List<HoodieInstant> instants = Arrays.asList(
-        new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime),
-        new HoodieInstant(false, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime),
-        new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime));
+        HoodieCLI.getTableMetaClient().createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instantTime),
+        HoodieCLI.getTableMetaClient().createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime),
+        HoodieCLI.getTableMetaClient().createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime));
 
     return Option.fromJavaOptional(instants.stream().filter(timeline::containsInstant).findAny());
   }
 
   private Option<HoodieCommitMetadata> getHoodieCommitMetadata(HoodieTimeline timeline, Option<HoodieInstant> hoodieInstant) throws IOException {
     if (hoodieInstant.isPresent()) {
-      return Option.of(TimelineUtils.getCommitMetadata(hoodieInstant.get(), timeline));
+      return Option.of(getCommitMetadata(hoodieInstant.get(), timeline));
     }
     return Option.empty();
   }

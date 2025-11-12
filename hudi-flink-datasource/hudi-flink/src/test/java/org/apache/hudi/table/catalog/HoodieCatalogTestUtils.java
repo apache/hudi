@@ -18,6 +18,9 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
+
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -48,7 +51,8 @@ public class HoodieCatalogTestUtils {
 
   public static HoodieHiveCatalog createHiveCatalog(String name, boolean external) {
     Configuration options = new Configuration();
-    options.setBoolean(CatalogOptions.TABLE_EXTERNAL, external);
+    options.setString("hadoop.dfs.client.block.write.replace-datanode-on-failure.enable", "true");
+    options.set(CatalogOptions.TABLE_EXTERNAL, external);
     return new HoodieHiveCatalog(
         name,
         options,
@@ -73,5 +77,9 @@ public class HoodieCatalogTestUtils {
     } catch (IOException e) {
       throw new CatalogException("Failed to create test HiveConf to HiveCatalog.", e);
     }
+  }
+
+  public static StorageConfiguration<?> createStorageConf() {
+    return new HadoopStorageConfiguration(createHiveConf());
   }
 }

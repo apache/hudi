@@ -19,6 +19,9 @@
 
 package org.apache.hudi.exception;
 
+/**
+ * Exception for Hudi secondary index.
+ */
 public class HoodieSecondaryIndexException extends HoodieException {
   public HoodieSecondaryIndexException(String message) {
     super(message);

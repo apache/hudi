@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.CompactionUtils
 
@@ -37,8 +36,8 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
    * SHOW COMPACTION  ON path = STRING (LIMIT limit = INTEGER_VALUE)?
    */
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.optional(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.optional(1, "path", DataTypes.StringType, None),
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
     ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 20)
   )
 
@@ -60,21 +59,21 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
     val limit = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Int]
 
     val basePath: String = getBasePath(tableName, tablePath)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
 
     assert(metaClient.getTableType == HoodieTableType.MERGE_ON_READ,
       s"Cannot show compaction on a Non Merge On Read table.")
     val compactionInstants = metaClient.getActiveTimeline.getInstants.iterator().asScala
-      .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION)
+      .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION || p.getAction == HoodieTimeline.COMMIT_ACTION)
       .toSeq
-      .sortBy(f => f.getTimestamp)
+      .sortBy(f => f.requestedTime)
       .reverse
       .take(limit)
 
     compactionInstants.map(instant =>
-      (instant, CompactionUtils.getCompactionPlan(metaClient, instant.getTimestamp))
+      (instant, CompactionUtils.getCompactionPlan(metaClient, instant.requestedTime))
     ).map { case (instant, plan) =>
-      Row(instant.getTimestamp, plan.getOperations.size(), instant.getState.name())
+      Row(instant.requestedTime, plan.getOperations.size(), instant.getState.name())
     }
   }
 

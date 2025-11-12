@@ -20,21 +20,24 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.SerializableSchema;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.table.read.BufferedRecordMerger;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
-public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWriteHelper<T, HoodieData<HoodieRecord<T>>,
+public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<HoodieRecord<T>>,
     HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
 
   private HoodieWriteHelper() {
+    super(HoodieData::deduceNumPartitions);
   }
 
   private static class WriteHelperHolder {
@@ -52,25 +55,28 @@ public class HoodieWriteHelper<T extends HoodieRecordPayload, R> extends BaseWri
   }
 
   @Override
-  public HoodieData<HoodieRecord<T>> deduplicateRecords(
-      HoodieData<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr) {
+  public HoodieData<HoodieRecord<T>> deduplicateRecords(HoodieData<HoodieRecord<T>> records,
+                                                        HoodieIndex<?, ?> index,
+                                                        int parallelism,
+                                                        String schemaStr,
+                                                        TypedProperties props,
+                                                        BufferedRecordMerger<T> recordMerger,
+                                                        HoodieReaderContext<T> readerContext,
+                                                        String[] orderingFieldNames) {
     boolean isIndexingGlobal = index.isGlobal();
     final SerializableSchema schema = new SerializableSchema(schemaStr);
-    // Auto-tunes the parallelism for reduce transformation based on the number of data partitions
-    // in engine-specific representation
-    int reduceParallelism = Math.max(1, Math.min(records.getNumPartitions(), parallelism));
+    RecordContext<T> recordContext = readerContext.getRecordContext();
+    DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, schema.get());
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
       // If index used is global, then records are expected to differ in their partitionPath
       Object key = isIndexingGlobal ? hoodieKey.getRecordKey() : hoodieKey;
-      return Pair.of(key, record);
-    }).reduceByKey((rec1, rec2) -> {
-      @SuppressWarnings("unchecked")
-      T reducedData = (T) rec2.getData().preCombine(rec1.getData(), schema.get(), CollectionUtils.emptyProps());
-      HoodieKey reducedKey = rec1.getData().equals(reducedData) ? rec1.getKey() : rec2.getKey();
-
-      return new HoodieAvroRecord<>(reducedKey, reducedData);
-    }, reduceParallelism).map(Pair::getRight);
+      // NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
+      //       Here we have to make a copy of the incoming record, since it might be holding
+      //       an instance of [[InternalRow]] pointing into shared, mutable buffer
+      return Pair.of(key, record.copy());
+    }).reduceByKey(
+        (previous, next) -> reduceRecords(props, recordMerger, orderingFieldNames, previous, next, schema.get(), recordContext, deleteContext),
+        parallelism).map(Pair::getRight);
   }
-
 }

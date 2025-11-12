@@ -90,11 +90,9 @@ public class BloomIndexFileInfo implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("BloomIndexFileInfo {");
-    sb.append(" fileId=").append(fileId);
-    sb.append(" minRecordKey=").append(minRecordKey);
-    sb.append(" maxRecordKey=").append(maxRecordKey);
-    sb.append('}');
-    return sb.toString();
+    return "BloomIndexFileInfo {" + " fileId=" + fileId
+        + " minRecordKey=" + minRecordKey
+        + " maxRecordKey=" + maxRecordKey
+        + '}';
   }
 }

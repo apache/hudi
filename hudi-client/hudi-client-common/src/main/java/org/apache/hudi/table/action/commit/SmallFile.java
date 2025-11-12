@@ -18,8 +18,9 @@
 
 package org.apache.hudi.table.action.commit;
 
-import java.io.Serializable;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+
+import java.io.Serializable;
 
 /**
  * Helper class for a small file's location and its actual size on disk.
@@ -31,10 +32,8 @@ public class SmallFile implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("SmallFile {");
-    sb.append("location=").append(location).append(", ");
-    sb.append("sizeBytes=").append(sizeBytes);
-    sb.append('}');
-    return sb.toString();
+    return "SmallFile {" + "location=" + location + ", "
+        + "sizeBytes=" + sizeBytes
+        + '}';
   }
 }

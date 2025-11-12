@@ -20,6 +20,7 @@ package org.apache.hudi.internal.schema;
 
 import org.apache.hudi.internal.schema.visitor.InternalSchemaVisitor;
 import org.apache.hudi.internal.schema.visitor.NameToIDVisitor;
+import org.apache.hudi.internal.schema.visitor.NameToPositionVisitor;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -42,7 +43,6 @@ public class InternalSchemaBuilder implements Serializable {
 
   private InternalSchemaBuilder() {
   }
-
 
   /**
    * Build a mapping from id to full field name for a internal Type.
@@ -68,11 +68,15 @@ public class InternalSchemaBuilder implements Serializable {
     return visit(type, new NameToIDVisitor());
   }
 
+  Map<String, Integer> buildNameToPosition(Type type) {
+    return visit(type, new NameToPositionVisitor());
+  }
+
   /**
    * Use to traverse all types in internalSchema with visitor.
    *
    * @param schema hoodie internal schema
-   * @return vistor expected result.
+   * @return visitor expected result.
    */
   public <T> T visit(InternalSchema schema, InternalSchemaVisitor<T> visitor) {
     return visitor.schema(schema, visit(schema.getRecord(), visitor));
@@ -166,7 +170,6 @@ public class InternalSchemaBuilder implements Serializable {
         }
         return;
       default:
-        return;
     }
   }
 

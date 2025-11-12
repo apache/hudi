@@ -26,7 +26,6 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -34,14 +33,14 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -58,6 +57,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -77,7 +77,7 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
 
   @BeforeEach
   public void init() throws Exception {
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
 
     String tableName = tableName();
     String tablePath = tablePath(tableName);
@@ -88,23 +88,24 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
 
-    Configuration conf = HoodieCLI.conf;
+    StorageConfiguration<?> conf = HoodieCLI.conf;
 
     metaClient = HoodieCLI.getTableMetaClient();
     String fileId1 = UUID.randomUUID().toString();
     String fileId2 = UUID.randomUUID().toString();
-    FileSystem fs = FSUtils.getFs(basePath(), hadoopConf());
-    HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, tablePath);
+    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath(), storageConf());
+    HoodieTestDataGenerator.writePartitionMetadataDeprecated(storage,
+        HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, tablePath);
 
     // Create four commits
     for (int i = 100; i < 104; i++) {
       String timestamp = String.valueOf(i);
       // Requested Compaction
       HoodieTestCommitMetadataGenerator.createCompactionAuxiliaryMetadata(tablePath,
-          new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp), conf);
+          INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp), conf);
       // Inflight Compaction
       HoodieTestCommitMetadataGenerator.createCompactionAuxiliaryMetadata(tablePath,
-          new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp), conf);
+          INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp), conf);
 
       Map<String, String> extraCommitMetadata =
           Collections.singletonMap(HoodieCommitMetadata.SCHEMA_KEY, HoodieTestTable.PHONY_TABLE_SCHEMA);
@@ -127,13 +128,13 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
 
     // First, run clean
     SparkMain.clean(jsc(), HoodieCLI.basePath, propsFilePath.getPath(), new ArrayList<>());
-    assertEquals(1, metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().count(),
+    assertEquals(1, metaClient.getActiveTimeline().reload().getCleanerTimeline().countInstants(),
         "Loaded 1 clean and the count should match");
 
     Object result = shell.evaluate(() -> "cleans show");
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
-    HoodieInstant clean = metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().findFirst().orElse(null);
+    HoodieInstant clean = metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstantsAsStream().findFirst().orElse(null);
     assertNotNull(clean);
 
     TableHeader header =
@@ -143,9 +144,9 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
             .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_TIME_TAKEN);
     List<Comparable[]> rows = new ArrayList<>();
 
-    // EarliestCommandRetained should be 102, since hoodie.cleaner.commits.retained=2
+    // EarliestCommandRetained should be 102, since hoodie.clean.commits.retained=2
     // Total Time Taken need read from metadata
-    rows.add(new Comparable[] {clean.getTimestamp(), "102", "2", getLatestCleanTimeTakenInMillis().toString()});
+    rows.add(new Comparable[] {clean.requestedTime(), "102", "2", getLatestCleanTimeTakenInMillis().toString()});
 
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
     expected = removeNonWordAndStripSpace(expected);
@@ -163,12 +164,12 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
 
     // First, run clean with two partition
     SparkMain.clean(jsc(), HoodieCLI.basePath, propsFilePath.toString(), new ArrayList<>());
-    assertEquals(1, metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().count(),
+    assertEquals(1, metaClient.getActiveTimeline().reload().getCleanerTimeline().countInstants(),
         "Loaded 1 clean and the count should match");
 
-    HoodieInstant clean = metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().findFirst().get();
+    HoodieInstant clean = metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstantsAsStream().findFirst().get();
 
-    Object result = shell.evaluate(() -> "clean showpartitions --clean " + clean.getTimestamp());
+    Object result = shell.evaluate(() -> "clean showpartitions --clean " + clean.requestedTime());
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION_PATH)
@@ -199,8 +200,7 @@ public class TestCleansCommand extends CLIFunctionalTestHarness {
     HoodieTimeline timeline = activeTimeline.getCleanerTimeline().filterCompletedInstants();
     HoodieInstant clean = timeline.getReverseOrderedInstants().findFirst().orElse(null);
     if (clean != null) {
-      HoodieCleanMetadata cleanMetadata =
-          TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(clean).get());
+      HoodieCleanMetadata cleanMetadata = timeline.readCleanMetadata(clean);
       return cleanMetadata.getTimeTakenInMillis();
     }
     return -1L;

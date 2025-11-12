@@ -18,16 +18,19 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.Collections;
+
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
@@ -37,23 +40,21 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
   private final SimpleAvroKeyGenerator simpleAvroKeyGenerator;
 
   public SimpleKeyGenerator(TypedProperties props) {
-    this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()),
+    this(props, Option.ofNullable(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null)),
         props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
   }
 
   SimpleKeyGenerator(TypedProperties props, String partitionPathField) {
-    this(props, null, partitionPathField);
+    this(props, Option.empty(), partitionPathField);
   }
 
-  SimpleKeyGenerator(TypedProperties props, String recordKeyField, String partitionPathField) {
+  SimpleKeyGenerator(TypedProperties props, Option<String> recordKeyField, String partitionPathField) {
     super(props);
     // Make sure key-generator is configured properly
-    ValidationUtils.checkArgument(recordKeyField == null || !recordKeyField.isEmpty(),
-        "Record key field has to be non-empty!");
-    ValidationUtils.checkArgument(partitionPathField == null || !partitionPathField.isEmpty(),
-        "Partition path field has to be non-empty!");
+    validateRecordKey(recordKeyField);
+    validatePartitionPath(partitionPathField);
 
-    this.recordKeyFields = recordKeyField == null ? Collections.emptyList() : Collections.singletonList(recordKeyField);
+    this.recordKeyFields = !recordKeyField.isPresent() ? Collections.emptyList() : Collections.singletonList(recordKeyField.get());
     this.partitionPathFields = partitionPathField == null ? Collections.emptyList() : Collections.singletonList(partitionPathField);
     this.simpleAvroKeyGenerator = new SimpleAvroKeyGenerator(props, recordKeyField, partitionPathField);
   }
@@ -108,5 +109,19 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
   public UTF8String getPartitionPath(InternalRow row, StructType schema) {
     tryInitRowAccessor(schema);
     return combinePartitionPathUnsafe(rowAccessor.getRecordPartitionPathValues(row));
+  }
+
+  private static void validatePartitionPath(String partitionPathField) {
+    checkArgument(partitionPathField == null || !partitionPathField.isEmpty(),
+        "Partition-path field has to be non-empty!");
+    checkArgument(partitionPathField == null || !partitionPathField.contains(FIELDS_SEP),
+        String.format("Single partition-path field is expected; provided (%s)", partitionPathField));
+  }
+
+  private void validateRecordKey(Option<String> recordKeyField) {
+    checkArgument(!recordKeyField.isPresent() || !recordKeyField.get().isEmpty(),
+        "Record key field has to be non-empty!");
+    checkArgument(!recordKeyField.isPresent() || !recordKeyField.get().contains(FIELDS_SEP),
+        String.format("Single record-key field is expected; provided (%s)", recordKeyField));
   }
 }

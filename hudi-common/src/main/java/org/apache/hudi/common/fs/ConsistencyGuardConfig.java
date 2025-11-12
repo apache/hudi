@@ -40,6 +40,7 @@ public class ConsistencyGuardConfig extends HoodieConfig {
   public static final ConfigProperty<String> ENABLE = ConfigProperty
       .key("hoodie.consistency.check.enabled")
       .defaultValue("false")
+      .markAdvanced()
       .sinceVersion("0.5.0")
       .deprecatedAfter("0.7.0")
       .withDocumentation("Enabled to handle S3 eventual consistency issue. This property is no longer required "
@@ -48,6 +49,7 @@ public class ConsistencyGuardConfig extends HoodieConfig {
   public static final ConfigProperty<Long> INITIAL_CHECK_INTERVAL_MS = ConfigProperty
       .key("hoodie.consistency.check.initial_interval_ms")
       .defaultValue(400L)
+      .markAdvanced()
       .sinceVersion("0.5.0")
       .deprecatedAfter("0.7.0")
       .withDocumentation("Amount of time (in ms) to wait, before checking for consistency after an operation on storage.");
@@ -55,6 +57,7 @@ public class ConsistencyGuardConfig extends HoodieConfig {
   public static final ConfigProperty<Long> MAX_CHECK_INTERVAL_MS = ConfigProperty
       .key("hoodie.consistency.check.max_interval_ms")
       .defaultValue(20000L)
+      .markAdvanced()
       .sinceVersion("0.5.0")
       .deprecatedAfter("0.7.0")
       .withDocumentation("Maximum amount of time (in ms), to wait for consistency checking.");
@@ -63,6 +66,7 @@ public class ConsistencyGuardConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> MAX_CHECKS = ConfigProperty
       .key("hoodie.consistency.check.max_checks")
       .defaultValue(6)
+      .markAdvanced()
       .sinceVersion("0.5.0")
       .deprecatedAfter("0.7.0")
       .withDocumentation("Maximum number of consistency checks to perform, with exponential backoff.");
@@ -71,6 +75,7 @@ public class ConsistencyGuardConfig extends HoodieConfig {
   public static final ConfigProperty<Long> OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS = ConfigProperty
       .key("hoodie.optimistic.consistency.guard.sleep_time_ms")
       .defaultValue(500L)
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Amount of time (in ms), to wait after which we assume storage is consistent.");
 
@@ -78,6 +83,7 @@ public class ConsistencyGuardConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> OPTIMISTIC_CONSISTENCY_GUARD_ENABLE = ConfigProperty
       .key("_hoodie.optimistic.consistency.guard.enable")
       .defaultValue(false)
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Enable consistency guard, which optimistically assumes consistency is achieved after a certain time period.");
 
@@ -137,8 +143,8 @@ public class ConsistencyGuardConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withInitialConsistencyCheckIntervalMs(int initialIntevalMs) {
-      consistencyGuardConfig.setValue(INITIAL_CHECK_INTERVAL_MS, String.valueOf(initialIntevalMs));
+    public Builder withInitialConsistencyCheckIntervalMs(int initialIntervalMs) {
+      consistencyGuardConfig.setValue(INITIAL_CHECK_INTERVAL_MS, String.valueOf(initialIntervalMs));
       return this;
     }
 
@@ -187,7 +193,7 @@ public class ConsistencyGuardConfig extends HoodieConfig {
    * @deprecated use {@link #INITIAL_CHECK_INTERVAL_MS} and its methods.
    */
   @Deprecated
-  private static long DEFAULT_INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = INITIAL_CHECK_INTERVAL_MS.defaultValue();
+  private static final long DEFAULT_INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = INITIAL_CHECK_INTERVAL_MS.defaultValue();
   /**
    * @deprecated use {@link #MAX_CHECK_INTERVAL_MS} and its methods.
    */
@@ -197,7 +203,7 @@ public class ConsistencyGuardConfig extends HoodieConfig {
    * @deprecated use {@link #MAX_CHECK_INTERVAL_MS} and its methods.
    */
   @Deprecated
-  private static long DEFAULT_MAX_CONSISTENCY_CHECK_INTERVAL_MS = MAX_CHECK_INTERVAL_MS.defaultValue();
+  private static final long DEFAULT_MAX_CONSISTENCY_CHECK_INTERVAL_MS = MAX_CHECK_INTERVAL_MS.defaultValue();
   /**
    * @deprecated use {@link #MAX_CHECKS} and its methods.
    */
@@ -207,7 +213,7 @@ public class ConsistencyGuardConfig extends HoodieConfig {
    * @deprecated use {@link #MAX_CHECKS} and its methods.
    */
   @Deprecated
-  private static int DEFAULT_MAX_CONSISTENCY_CHECKS = MAX_CHECKS.defaultValue();
+  private static final int DEFAULT_MAX_CONSISTENCY_CHECKS = MAX_CHECKS.defaultValue();
   /**
    * @deprecated use {@link #OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS} and its methods.
    */
@@ -217,7 +223,7 @@ public class ConsistencyGuardConfig extends HoodieConfig {
    * @deprecated use {@link #OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS} and its methods.
    */
   @Deprecated
-  private static long DEFAULT_OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS_PROP = OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS.defaultValue();
+  private static final long DEFAULT_OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS_PROP = OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS.defaultValue();
   /**
    * @deprecated use {@link #OPTIMISTIC_CONSISTENCY_GUARD_ENABLE} and its methods.
    */
@@ -227,5 +233,5 @@ public class ConsistencyGuardConfig extends HoodieConfig {
    * @deprecated use {@link #OPTIMISTIC_CONSISTENCY_GUARD_ENABLE} and its methods.
    */
   @Deprecated
-  private static boolean DEFAULT_ENABLE_OPTIMISTIC_CONSISTENCY_GUARD = OPTIMISTIC_CONSISTENCY_GUARD_ENABLE.defaultValue();
+  private static final boolean DEFAULT_ENABLE_OPTIMISTIC_CONSISTENCY_GUARD = OPTIMISTIC_CONSISTENCY_GUARD_ENABLE.defaultValue();
 }

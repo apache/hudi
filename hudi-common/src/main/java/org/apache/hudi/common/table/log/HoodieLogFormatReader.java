@@ -21,15 +21,14 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -38,56 +37,41 @@ import java.util.List;
 public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   private final List<HoodieLogFile> logFiles;
-  // Readers for previously scanned log-files that are still open
-  private final List<HoodieLogFileReader> prevReadersInOpenState;
   private HoodieLogFileReader currentReader;
-  private final FileSystem fs;
+  private final HoodieStorage storage;
   private final Schema readerSchema;
-  private InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
-  private final boolean readBlocksLazily;
-  private final boolean reverseLogReader;
+  private final InternalSchema internalSchema;
   private final String recordKeyField;
   private final boolean enableInlineReading;
-  private int bufferSize;
+  private final int bufferSize;
 
-  private static final Logger LOG = LogManager.getLogger(HoodieLogFormatReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieLogFormatReader.class);
 
-  HoodieLogFormatReader(FileSystem fs, List<HoodieLogFile> logFiles, Schema readerSchema, boolean readBlocksLazily,
+  HoodieLogFormatReader(HoodieStorage storage, List<HoodieLogFile> logFiles, Schema readerSchema,
                         boolean reverseLogReader, int bufferSize, boolean enableRecordLookups,
                         String recordKeyField, InternalSchema internalSchema) throws IOException {
     this.logFiles = logFiles;
-    this.fs = fs;
+    this.storage = storage;
     this.readerSchema = readerSchema;
-    this.readBlocksLazily = readBlocksLazily;
-    this.reverseLogReader = reverseLogReader;
     this.bufferSize = bufferSize;
-    this.prevReadersInOpenState = new ArrayList<>();
     this.recordKeyField = recordKeyField;
     this.enableInlineReading = enableRecordLookups;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
-    if (logFiles.size() > 0) {
+    if (!logFiles.isEmpty()) {
       HoodieLogFile nextLogFile = logFiles.remove(0);
-      this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false,
+      this.currentReader = new HoodieLogFileReader(storage, nextLogFile, readerSchema, bufferSize, false,
           enableRecordLookups, recordKeyField, internalSchema);
     }
   }
 
-  @Override
   /**
-   * Note : In lazy mode, clients must ensure close() should be called only after processing all log-blocks as the
-   * underlying inputstream will be closed. TODO: We can introduce invalidate() API at HoodieLogBlock and this object
-   * can call invalidate on all returned log-blocks so that we check this scenario specifically in HoodieLogBlock
+   * Closes any resources held
    */
+  @Override
   public void close() throws IOException {
-
-    for (HoodieLogFileReader reader : prevReadersInOpenState) {
-      reader.close();
-    }
-
-    prevReadersInOpenState.clear();
-
     if (currentReader != null) {
       currentReader.close();
+      currentReader = null;
     }
   }
 
@@ -98,21 +82,16 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
       return false;
     } else if (currentReader.hasNext()) {
       return true;
-    } else if (logFiles.size() > 0) {
+    } else if (!logFiles.isEmpty()) {
       try {
         HoodieLogFile nextLogFile = logFiles.remove(0);
-        // First close previous reader only if readBlockLazily is true
-        if (!readBlocksLazily) {
-          this.currentReader.close();
-        } else {
-          this.prevReadersInOpenState.add(currentReader);
-        }
-        this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false,
+        this.currentReader.close();
+        this.currentReader = new HoodieLogFileReader(storage, nextLogFile, readerSchema, bufferSize, false,
             enableInlineReading, recordKeyField, internalSchema);
       } catch (IOException io) {
         throw new HoodieIOException("unable to initialize read with log file ", io);
       }
-      LOG.info("Moving to the next reader for logfile " + currentReader.getLogFile());
+      LOG.debug("Moving to the next reader for logfile {}", currentReader.getLogFile());
       return hasNext();
     }
     return false;
@@ -129,7 +108,8 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   }
 
   @Override
-  public void remove() {}
+  public void remove() {
+  }
 
   @Override
   public boolean hasPrev() {
@@ -140,5 +120,4 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   public HoodieLogBlock prev() throws IOException {
     return this.currentReader.prev();
   }
-
 }

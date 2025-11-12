@@ -21,7 +21,8 @@ package org.apache.hudi
 import org.apache.hudi.common.config.TypedProperties
 
 import java.{util => ju}
-import scala.collection.JavaConverters
+
+import scala.collection.JavaConverters._
 
 object HoodieConversionUtils {
 
@@ -30,9 +31,7 @@ object HoodieConversionUtils {
    * a mutable one)
    */
   def mapAsScalaImmutableMap[K, V](map: ju.Map[K, V]): Map[K, V] = {
-    // NOTE: We have to use deprecated [[JavaConversions]] to stay compatible w/ Scala 2.11
-    import scala.collection.JavaConversions.mapAsScalaMap
-    map.toMap
+    map.asScala.toMap
   }
 
   def toJavaOption[T](opt: Option[T]): org.apache.hudi.common.util.Option[T] =
@@ -47,4 +46,9 @@ object HoodieConversionUtils {
     props
   }
 
+  def fromProperties(props: TypedProperties): Map[String, String] = {
+    props.asScala.map {
+      case (k, v) => (k.toString, v.toString)
+    }.toMap
+  }
 }

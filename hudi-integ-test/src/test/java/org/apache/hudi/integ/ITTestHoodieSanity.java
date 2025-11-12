@@ -19,13 +19,17 @@
 package org.apache.hudi.integ;
 
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import java.util.Arrays;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -33,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Smoke tests to run as part of verification.
  */
+@Disabled("HUDI-8274")
 public class ITTestHoodieSanity extends ITTestBase {
 
   private static final String HDFS_BASE_URL =  "hdfs://namenode";
@@ -50,7 +55,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * console.
    */
   public void testRunHoodieJavaAppOnSinglePartitionKeyCOWTable() throws Exception {
-    String hiveTableName = "docker_hoodie_single_partition_key_cow_test_" + HoodieActiveTimeline.createNewInstantTime();
+    String hiveTableName = "docker_hoodie_single_partition_key_cow_test_" + InProcessTimeGenerator.createNewInstantTime();
     testRunHoodieJavaApp(hiveTableName, HoodieTableType.COPY_ON_WRITE.name(),
         PartitionType.SINGLE_KEY_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.COPY_ON_WRITE.name());
@@ -64,7 +69,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * in hive console.
    */
   public void testRunHoodieJavaAppOnMultiPartitionKeysCOWTable() throws Exception {
-    String hiveTableName = "docker_hoodie_multi_partition_key_cow_test_" + HoodieActiveTimeline.createNewInstantTime();
+    String hiveTableName = "docker_hoodie_multi_partition_key_cow_test_" + InProcessTimeGenerator.createNewInstantTime();
     testRunHoodieJavaApp(HOODIE_JAVA_APP, hiveTableName, HoodieTableType.COPY_ON_WRITE.name(),
         PartitionType.MULTI_KEYS_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.COPY_ON_WRITE.name());
@@ -77,7 +82,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * console.
    */
   public void testRunHoodieJavaAppOnNonPartitionedCOWTable() throws Exception {
-    String hiveTableName = "docker_hoodie_non_partition_key_cow_test_" + HoodieActiveTimeline.createNewInstantTime();
+    String hiveTableName = "docker_hoodie_non_partition_key_cow_test_" + InProcessTimeGenerator.createNewInstantTime();
     testRunHoodieJavaApp(hiveTableName, HoodieTableType.COPY_ON_WRITE.name(), PartitionType.NON_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.COPY_ON_WRITE.name());
   }
@@ -88,8 +93,9 @@ public class ITTestHoodieSanity extends ITTestBase {
    * and performs upserts on it. Hive integration and upsert functionality is checked by running a count query in hive
    * console.
    */
+  @Disabled
   public void testRunHoodieJavaAppOnSinglePartitionKeyMORTable() throws Exception {
-    String hiveTableName = "docker_hoodie_single_partition_key_mor_test_" + HoodieActiveTimeline.createNewInstantTime();
+    String hiveTableName = "docker_hoodie_single_partition_key_mor_test_" + InProcessTimeGenerator.createNewInstantTime();
     testRunHoodieJavaApp(hiveTableName, HoodieTableType.MERGE_ON_READ.name(),
         PartitionType.SINGLE_KEY_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.MERGE_ON_READ.name());
@@ -102,8 +108,9 @@ public class ITTestHoodieSanity extends ITTestBase {
    * data-set and performs upserts on it. Hive integration and upsert functionality is checked by running a count query
    * in hive console.
    */
+  @Disabled
   public void testRunHoodieJavaAppOnMultiPartitionKeysMORTable(String command) throws Exception {
-    String hiveTableName = "docker_hoodie_multi_partition_key_mor_test_" + HoodieActiveTimeline.createNewInstantTime();
+    String hiveTableName = "docker_hoodie_multi_partition_key_mor_test_" + InProcessTimeGenerator.createNewInstantTime();
     testRunHoodieJavaApp(command, hiveTableName, HoodieTableType.MERGE_ON_READ.name(),
         PartitionType.MULTI_KEYS_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.MERGE_ON_READ.name());
@@ -116,7 +123,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * console.
    */
   public void testRunHoodieJavaAppOnNonPartitionedMORTable() throws Exception {
-    String hiveTableName = "docker_hoodie_non_partition_key_mor_test_" + HoodieActiveTimeline.createNewInstantTime();
+    String hiveTableName = "docker_hoodie_non_partition_key_mor_test_" + InProcessTimeGenerator.createNewInstantTime();
     testRunHoodieJavaApp(hiveTableName, HoodieTableType.MERGE_ON_READ.name(), PartitionType.NON_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.MERGE_ON_READ.name());
   }
@@ -185,13 +192,24 @@ public class ITTestHoodieSanity extends ITTestBase {
 
     // Ensure row count is 80 (without duplicates) (100 - 20 deleted)
     stdOutErr = executeHiveCommand("select count(1) from " + snapshotTableName);
-    assertEquals(80, Integer.parseInt(stdOutErr.getLeft().substring(stdOutErr.getLeft().lastIndexOf("\n")).trim()),
+    assertEquals(80, Integer.parseInt(lastLine(stdOutErr.getLeft()).trim()),
         "Expecting 80 rows to be present in the snapshot table");
 
     if (roTableName.isPresent()) {
       stdOutErr = executeHiveCommand("select count(1) from " + roTableName.get());
-      assertEquals(80, Integer.parseInt(stdOutErr.getLeft().substring(stdOutErr.getLeft().lastIndexOf("\n")).trim()),
+      assertEquals(80, Integer.parseInt(lastLine(stdOutErr.getLeft()).trim()),
           "Expecting 80 rows to be present in the snapshot table");
+
+      if (partitionType != PartitionType.NON_PARTITIONED) {
+        // Verify queries with partition field predicates, some partitions may be empty, so we query all the partitions.
+        String[] partitions = getPartitions(roTableName.get());
+        assertTrue(partitions.length > 0);
+        String partitionClause = partitionType == PartitionType.SINGLE_KEY_PARTITIONED
+            ? Arrays.stream(partitions).map(String::trim).collect(Collectors.joining(" or "))
+            : Arrays.stream(partitions).map(par -> String.join(" and ", par.trim().split("/"))).collect(Collectors.joining(" or "));
+        stdOutErr = executeHiveCommand("select * from " + roTableName.get() + " where " + partitionClause);
+        assertTrue(stdOutErr.getLeft().split("\n").length > 0, "Expecting at least one row to be present, but got " + stdOutErr);
+      }
     }
 
     // Make the HDFS dataset non-hoodie and run the same query; Checks for interoperability with non-hoodie tables
@@ -204,8 +222,19 @@ public class ITTestHoodieSanity extends ITTestBase {
     } else {
       stdOutErr = executeHiveCommand("select count(1) from " + snapshotTableName);
     }
-    assertEquals(280, Integer.parseInt(stdOutErr.getLeft().trim()),
+
+    assertEquals(280, Integer.parseInt(lastLine(stdOutErr.getLeft()).trim()),
         "Expecting 280 rows to be present in the new table");
+  }
+
+  private String[] getPartitions(String tableName) throws Exception {
+    Pair<String, String> stdOutErr = executeHiveCommand("show partitions " + tableName);
+    return stdOutErr.getLeft().split("\n");
+  }
+
+  private static String lastLine(String output) {
+    String[] lines = output.split("\n");
+    return lines[lines.length - 1];
   }
 
   public void testRunHoodieJavaApp(String hiveTableName, String tableType, PartitionType partitionType)

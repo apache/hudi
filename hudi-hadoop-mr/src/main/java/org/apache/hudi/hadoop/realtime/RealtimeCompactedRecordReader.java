@@ -18,25 +18,39 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.avro.AvroRecordContext;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.table.read.DeleteContext;
+import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.storage.HoodieStorageUtils;
+
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.config.HoodieCommonConfig;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
-import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -44,17 +58,20 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
-class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
+public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     implements RecordReader<NullWritable, ArrayWritable> {
 
-  private static final Logger LOG = LogManager.getLogger(AbstractRealtimeRecordReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractRealtimeRecordReader.class);
 
   protected final RecordReader<NullWritable, ArrayWritable> parquetReader;
-  private final Map<String, HoodieRecord<? extends HoodieRecordPayload>> deltaRecordMap;
+  private final Map<String, HoodieRecord> deltaRecordMap;
 
+  private final HoodieRecordMerger merger = new HoodieAvroRecordMerger();
   private final Set<String> deltaRecordKeys;
   private final HoodieMergedLogRecordScanner mergedLogRecordScanner;
   private final int recordKeyIndex;
+  private final String[] orderingFields;
+  private final DeleteContext deleteContext;
   private Iterator<String> deltaItr;
 
   public RealtimeCompactedRecordReader(RealtimeSplit split, JobConf job,
@@ -67,6 +84,8 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     this.recordKeyIndex = split.getVirtualKeyInfo()
         .map(HoodieVirtualKeyInfo::getRecordKeyFieldIndex)
         .orElse(HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS);
+    this.orderingFields = ConfigUtils.getOrderingFields(payloadProps);
+    this.deleteContext = new DeleteContext(payloadProps, getLogScannerReaderSchema()).withReaderSchema(getLogScannerReaderSchema());
   }
 
   /**
@@ -78,28 +97,32 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     // but can return records for completed commits > the commit we are trying to read (if using
     // readCommit() API)
     return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(FSUtils.getFs(split.getPath().toString(), jobConf))
+        .withStorage(HoodieStorageUtils.getStorage(
+            split.getPath().toString(), HadoopFSUtils.getStorageConf(jobConf)))
         .withBasePath(split.getBasePath())
         .withLogFilePaths(split.getDeltaLogPaths())
-        .withReaderSchema(usesCustomPayload ? getWriterSchema() : getReaderSchema())
+        .withReaderSchema(getLogScannerReaderSchema())
         .withLatestInstantTime(split.getMaxCommitTime())
         .withMaxMemorySizeInBytes(HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes(jobConf))
-        .withReadBlocksLazily(Boolean.parseBoolean(jobConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)))
         .withReverseReader(false)
-        .withBufferSize(jobConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
-        .withSpillableMapBasePath(jobConf.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP, HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
+        .withBufferSize(jobConf.getInt(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(),
+            HoodieMemoryConfig.DEFAULT_MR_MAX_DFS_STREAM_BUFFER_SIZE))
+        .withSpillableMapBasePath(jobConf.get(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(),
+            FileIOUtils.getDefaultSpillableMapBasePath()))
         .withDiskMapType(jobConf.getEnum(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue()))
         .withBitCaskDiskMapCompressionEnabled(jobConf.getBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
             HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
-        .withUseScanV2(jobConf.getBoolean(HoodieRealtimeConfig.USE_LOG_RECORD_READER_SCAN_V2, false))
+        .withOptimizedLogBlocksScan(jobConf.getBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
+            Boolean.parseBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue())))
+        .withInternalSchema(schemaEvolutionContext.internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
         .build();
   }
 
-  private Option<GenericRecord> buildGenericRecordwithCustomPayload(HoodieRecord record) throws IOException {
+  private Option<HoodieAvroIndexedRecord> buildGenericRecordwithCustomPayload(HoodieRecord record) throws IOException {
     if (usesCustomPayload) {
-      return ((HoodieAvroRecord) record).getData().getInsertValue(getWriterSchema(), payloadProps);
+      return record.toIndexedRecord(getWriterSchema(), payloadProps);
     } else {
-      return ((HoodieAvroRecord) record).getData().getInsertValue(getReaderSchema(), payloadProps);
+      return record.toIndexedRecord(getReaderSchema(), payloadProps);
     }
   }
 
@@ -113,9 +136,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         if (deltaRecordMap.containsKey(key)) {
           // mark the key as handled
           this.deltaRecordKeys.remove(key);
-          // TODO(NA): Invoke preCombine here by converting arrayWritable to Avro. This is required since the
-          // deltaRecord may not be a full record and needs values of columns from the parquet
-          Option<GenericRecord> rec = buildGenericRecordwithCustomPayload(deltaRecordMap.get(key));
+          Option<HoodieAvroIndexedRecord> rec = supportPayload ? mergeRecord(deltaRecordMap.get(key), arrayWritable) : buildGenericRecordwithCustomPayload(deltaRecordMap.get(key));
           // If the record is not present, this is a delete record using an empty payload so skip this base record
           // and move to the next record
           if (!rec.isPresent()) {
@@ -132,7 +153,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     }
     while (this.deltaItr.hasNext()) {
       final String key = this.deltaItr.next();
-      Option<GenericRecord> rec = buildGenericRecordwithCustomPayload(deltaRecordMap.get(key));
+      Option<HoodieAvroIndexedRecord> rec = buildGenericRecordwithCustomPayload(deltaRecordMap.get(key));
       if (rec.isPresent()) {
         setUpWritable(rec, arrayWritable, key);
         return true;
@@ -141,17 +162,17 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     return false;
   }
 
-  private void setUpWritable(Option<GenericRecord> rec, ArrayWritable arrayWritable, String key) {
-    GenericRecord recordToReturn = rec.get();
+  private void setUpWritable(Option<HoodieAvroIndexedRecord> rec, ArrayWritable arrayWritable, String key) {
+    GenericRecord recordToReturn = (GenericRecord) rec.get().getData();
     if (usesCustomPayload) {
       // If using a custom payload, return only the projection fields. The readerSchema is a schema derived from
       // the writerSchema with only the projection fields
-      recordToReturn = HoodieAvroUtils.rewriteRecord(rec.get(), getReaderSchema());
+      recordToReturn = HoodieAvroUtils.rewriteRecord((GenericRecord) rec.get().getData(), getReaderSchema());
     }
     // we assume, a later safe record in the log, is newer than what we have in the map &
     // replace it. Since we want to return an arrayWritable which is the same length as the elements in the latest
     // schema, we use writerSchema to create the arrayWritable from the latest generic record
-    ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(recordToReturn, getHiveSchema());
+    ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(recordToReturn, getHiveSchema(), isSupportTimestamp());
     Writable[] replaceValue = aWritable.get();
     if (LOG.isDebugEnabled()) {
       LOG.debug(String.format("key %s, base values: %s, log values: %s", key, HoodieRealtimeRecordReaderUtils.arrayWritableToString(arrayWritable),
@@ -172,6 +193,30 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
           + " ,Log-record :" + HoodieRealtimeRecordReaderUtils.arrayWritableToString(aWritable) + " ,Error :" + re.getMessage();
       throw new RuntimeException(errMsg, re);
     }
+  }
+
+  private Option<HoodieAvroIndexedRecord> mergeRecord(HoodieRecord<?> newRecord, ArrayWritable writableFromParquet) throws IOException {
+    GenericRecord oldRecord = convertArrayWritableToHoodieRecord(writableFromParquet);
+    // presto will not append partition columns to jobConf.get(serdeConstants.LIST_COLUMNS), but hive will do it. This will lead following results
+    // eg: current table: col1: int, col2: int, par: string, and column par is partition columns.
+    // for hive engine, the hiveSchema will be: col1,col2,par, and the writerSchema will be col1,col2,par
+    // for presto engine, the hiveSchema will be: col1,col2, but the writerSchema will be col1,col2,par
+    // so to be compatible with hive and presto, we should rewrite oldRecord before we call combineAndGetUpdateValue,
+    // once presto on hudi have its own mor reader, we can remove the rewrite logical.
+    GenericRecord genericRecord = HiveAvroSerializer.rewriteRecordIgnoreResultCheck(oldRecord, getLogScannerReaderSchema());
+    RecordContext<IndexedRecord> recordContext = AvroRecordContext.getFieldAccessorInstance();
+    BufferedRecord record = BufferedRecords.fromEngineRecord(genericRecord, genericRecord.getSchema(), recordContext, orderingFields, newRecord.getRecordKey(), false);
+    BufferedRecord newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, getLogScannerReaderSchema(), recordContext, payloadProps, orderingFields, deleteContext);
+    BufferedRecord mergeResult = merger.merge(record, newBufferedRecord, recordContext, payloadProps);
+    if (mergeResult.isDelete()) {
+      return Option.empty();
+    }
+    return Option.of((HoodieAvroIndexedRecord) recordContext.constructFinalHoodieRecord(mergeResult));
+  }
+
+  private GenericRecord convertArrayWritableToHoodieRecord(ArrayWritable arrayWritable) {
+    GenericRecord record = serializer.serialize(arrayWritable, getHiveSchema());
+    return record;
   }
 
   @Override

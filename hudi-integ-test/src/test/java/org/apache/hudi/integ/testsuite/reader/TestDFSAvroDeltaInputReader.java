@@ -26,8 +26,9 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.fs.FSUtils;
+
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.integ.testsuite.utils.TestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.junit.jupiter.api.AfterAll;
@@ -43,12 +44,12 @@ public class TestDFSAvroDeltaInputReader extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(false, false);
+    UtilitiesTestBase.initTestServices(true, false, false);
   }
 
   @AfterAll
-  public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
+  public static void cleanupClass() throws IOException {
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @BeforeEach
@@ -59,12 +60,12 @@ public class TestDFSAvroDeltaInputReader extends UtilitiesTestBase {
   @Test
   @Disabled
   public void testDFSSinkReader() throws IOException {
-    FileSystem fs = FSUtils.getFs(dfsBasePath, new Configuration());
+    FileSystem fs = HadoopFSUtils.getFs(basePath, new Configuration());
     // Create 10 avro files with 10 records each
-    TestUtils.createAvroFiles(jsc, sparkSession, dfsBasePath, 10, 10);
-    FileStatus[] statuses = fs.globStatus(new Path(dfsBasePath + "/*/*.avro"));
+    TestUtils.createAvroFiles(jsc, sparkSession, basePath, 10, 10);
+    FileStatus[] statuses = fs.globStatus(new Path(basePath + "/*/*.avro"));
     DFSAvroDeltaInputReader reader =
-        new DFSAvroDeltaInputReader(sparkSession, TestUtils.getSchema().toString(), dfsBasePath, Option.empty(),
+        new DFSAvroDeltaInputReader(sparkSession, TestUtils.getSchema().toString(), basePath, Option.empty(),
             Option.empty());
     assertEquals(reader.analyzeSingleFile(statuses[0].getPath().toString()), 5);
     assertEquals(reader.read(100).count(), 100);

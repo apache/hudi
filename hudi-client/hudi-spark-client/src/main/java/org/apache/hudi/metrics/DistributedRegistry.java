@@ -18,21 +18,22 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.metrics.Registry;
+
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.util.AccumulatorV2;
+
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
-import org.apache.hudi.common.metrics.Registry;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.util.AccumulatorV2;
 
 /**
  * Lightweight Metrics Registry to track Hudi events.
  */
 public class DistributedRegistry extends AccumulatorV2<Map<String, Long>, Map<String, Long>>
     implements Registry, Serializable {
-  private String name;
+  private final String name;
   ConcurrentHashMap<String, Long> counters = new ConcurrentHashMap<>();
 
   public DistributedRegistry(String name) {
@@ -52,12 +53,12 @@ public class DistributedRegistry extends AccumulatorV2<Map<String, Long>, Map<St
 
   @Override
   public void increment(String name) {
-    counters.merge(name,  1L, (oldValue, newValue) -> oldValue + newValue);
+    counters.merge(name,  1L, Long::sum);
   }
 
   @Override
   public void add(String name, long value) {
-    counters.merge(name,  value, (oldValue, newValue) -> oldValue + newValue);
+    counters.merge(name,  value, Long::sum);
   }
 
   @Override
@@ -80,13 +81,13 @@ public class DistributedRegistry extends AccumulatorV2<Map<String, Long>, Map<St
 
   @Override
   public void add(Map<String, Long> arg) {
-    arg.forEach((key, value) -> add(key, value));
+    arg.forEach(this::add);
   }
 
   @Override
   public AccumulatorV2<Map<String, Long>, Map<String, Long>> copy() {
     DistributedRegistry registry = new DistributedRegistry(name);
-    counters.forEach((key, value) -> registry.add(key, value));
+    counters.forEach(registry::add);
     return registry;
   }
 
@@ -97,7 +98,7 @@ public class DistributedRegistry extends AccumulatorV2<Map<String, Long>, Map<St
 
   @Override
   public void merge(AccumulatorV2<Map<String, Long>, Map<String, Long>> acc) {
-    acc.value().forEach((key, value) -> add(key, value));
+    acc.value().forEach(this::add);
   }
 
   @Override

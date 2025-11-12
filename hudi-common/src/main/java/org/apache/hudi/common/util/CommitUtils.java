@@ -24,26 +24,33 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Helper class to generate commit metadata.
  */
 public class CommitUtils {
 
-  private static final Logger LOG = LogManager.getLogger(CommitUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CommitUtils.class);
   private static final String NULL_SCHEMA_STR = Schema.create(Schema.Type.NULL).toString();
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   /**
    * Gets the commit action type for given write operation and table type.
@@ -52,7 +59,7 @@ public class CommitUtils {
    */
   public static String getCommitActionType(WriteOperationType operation, HoodieTableType tableType) {
     if (operation == WriteOperationType.INSERT_OVERWRITE || operation == WriteOperationType.INSERT_OVERWRITE_TABLE
-        || operation == WriteOperationType.DELETE_PARTITION) {
+        || operation == WriteOperationType.DELETE_PARTITION || operation == WriteOperationType.BUCKET_RESCALE) {
       return HoodieTimeline.REPLACE_COMMIT_ACTION;
     } else {
       return getCommitActionType(tableType);
@@ -99,7 +106,7 @@ public class CommitUtils {
                                                              String commitActionType,
                                                              WriteOperationType operationType) {
     final HoodieCommitMetadata commitMetadata;
-    if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(commitActionType)) {
+    if (ClusteringUtils.isClusteringOrReplaceCommitAction(commitActionType)) {
       HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
       replaceMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
       commitMetadata = replaceMetadata;
@@ -117,52 +124,97 @@ public class CommitUtils {
     return commitMetadata;
   }
 
-  public static HashMap<String, String> getFileIdWithoutSuffixAndRelativePathsFromSpecificRecord(Map<String, List<org.apache.hudi.avro.model.HoodieWriteStat>>
-                                                                                       partitionToWriteStats) {
-    HashMap<String, String> fileIdToPath = new HashMap<>();
+  public static Option<HoodieCommitMetadata> buildMetadataFromInstant(HoodieTimeline timeline, HoodieInstant instant) {
+    try {
+      HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(instant);
+
+      return Option.of(commitMetadata);
+    } catch (IOException e) {
+      LOG.info("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
+    }
+
+    return Option.empty();
+  }
+
+  public static Set<Pair<String, String>> getPartitionAndFileIdWithoutSuffixFromSpecificRecord(Map<String, List<org.apache.hudi.avro.model.HoodieWriteStat>>
+                                                                                                     partitionToWriteStats) {
+    Set<Pair<String, String>> partitionToFileId = new HashSet<>();
     // list all partitions paths
     for (Map.Entry<String, List<org.apache.hudi.avro.model.HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
       for (org.apache.hudi.avro.model.HoodieWriteStat stat : entry.getValue()) {
-        fileIdToPath.put(stat.getFileId(), stat.getPath());
+        partitionToFileId.add(Pair.of(entry.getKey(), stat.getFileId()));
       }
     }
-    return fileIdToPath;
+    return partitionToFileId;
   }
 
-  public static HashMap<String, String> getFileIdWithoutSuffixAndRelativePaths(Map<String, List<HoodieWriteStat>>
-      partitionToWriteStats) {
-    HashMap<String, String> fileIdToPath = new HashMap<>();
+  public static Set<Pair<String, String>> getPartitionAndFileIdWithoutSuffix(Map<String, List<HoodieWriteStat>> partitionToWriteStats) {
+    Set<Pair<String, String>> partitionTofileId = new HashSet<>();
     // list all partitions paths
     for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
       for (HoodieWriteStat stat : entry.getValue()) {
-        fileIdToPath.put(stat.getFileId(), stat.getPath());
+        partitionTofileId.add(Pair.of(entry.getKey(), stat.getFileId()));
       }
     }
-    return fileIdToPath;
+    return partitionTofileId;
+  }
+
+  public static Set<Pair<String, String>> flattenPartitionToReplaceFileIds(Map<String, List<String>> partitionToReplaceFileIds) {
+    return partitionToReplaceFileIds.entrySet().stream()
+        .flatMap(partitionFileIds -> partitionFileIds.getValue().stream().map(replaceFileId -> Pair.of(partitionFileIds.getKey(), replaceFileId)))
+        .collect(Collectors.toSet());
   }
 
   /**
    * Process previous commits metadata in the timeline to determine the checkpoint given a checkpoint key.
    * NOTE: This is very similar in intent to DeltaSync#getLatestCommitMetadataWithValidCheckpointInfo except that
-   *       different deployment models (deltastreamer or spark structured streaming) could have different checkpoint keys.
+   * different deployment models (deltastreamer or spark structured streaming) could have different checkpoint keys.
    *
-   * @param timeline completed commits in active timeline.
+   * @param timeline      completed commits in active timeline.
    * @param checkpointKey the checkpoint key in the extra metadata of the commit.
+   * @param keyToLookup   key of interest for which checkpoint is looked up for.
    * @return An optional commit metadata with latest checkpoint.
    */
-  public static Option<HoodieCommitMetadata> getLatestCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline, String checkpointKey) {
-    return (Option<HoodieCommitMetadata>) timeline.getReverseOrderedInstants().map(instant -> {
-      try {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-        if (StringUtils.nonEmpty(commitMetadata.getMetadata(checkpointKey))) {
-          return Option.of(commitMetadata);
-        } else {
-          return Option.empty();
-        }
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
+  public static Option<String> getValidCheckpointForCurrentWriter(HoodieTimeline timeline, String checkpointKey,
+                                                                  String keyToLookup) {
+    return (Option<String>) timeline.getWriteTimeline().filterCompletedInstants().getReverseOrderedInstants()
+        .map(instant -> {
+          try {
+            HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(instant);
+            // process commits only with checkpoint entries
+            String checkpointValue = commitMetadata.getMetadata(checkpointKey);
+            if (StringUtils.nonEmpty(checkpointValue)) {
+              // return if checkpoint for "keyForLookup" exists.
+              return readCheckpointValue(checkpointValue, keyToLookup);
+            } else {
+              return Option.empty();
+            }
+          } catch (IOException e) {
+            throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
+          }
+        }).filter(Option::isPresent).findFirst().orElse(Option.empty());
+  }
+
+  public static Option<String> readCheckpointValue(String value, String id) {
+    try {
+      Map<String, String> checkpointMap = OBJECT_MAPPER.readValue(value, Map.class);
+      if (!checkpointMap.containsKey(id)) {
+        return Option.empty();
       }
-    }).filter(Option::isPresent).findFirst().orElse(Option.empty());
+      String checkpointVal = checkpointMap.get(id);
+      return Option.of(checkpointVal);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to parse checkpoint as map", e);
+    }
+  }
+
+  public static String getCheckpointValueAsString(String identifier, String batchId) {
+    try {
+      Map<String, String> checkpointMap = new HashMap<>();
+      checkpointMap.put(identifier, batchId);
+      return OBJECT_MAPPER.writeValueAsString(checkpointMap);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to parse checkpoint as map", e);
+    }
   }
 }

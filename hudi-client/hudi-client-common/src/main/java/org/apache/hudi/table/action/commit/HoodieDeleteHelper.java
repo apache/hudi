@@ -24,9 +24,12 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
@@ -45,9 +48,11 @@ import java.util.HashMap;
  * @param <T>
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class HoodieDeleteHelper<T extends HoodieRecordPayload, R> extends
+public class HoodieDeleteHelper<T, R> extends
     BaseDeleteHelper<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
+
   private HoodieDeleteHelper() {
+    super(HoodieData::deduceNumPartitions);
   }
 
   private static class DeleteHelperHolder {
@@ -76,17 +81,19 @@ public class HoodieDeleteHelper<T extends HoodieRecordPayload, R> extends
                                                               HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
                                                               BaseCommitActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> deleteExecutor) {
     try {
-      HoodieData<HoodieKey> dedupedKeys = keys;
-      final int parallelism = config.getDeleteShuffleParallelism();
+      HoodieTimer sourceReadAndIndexTimer = HoodieTimer.start();
+      int targetParallelism =
+          deduceShuffleParallelism((HoodieData) keys, config.getDeleteShuffleParallelism());
+
+      HoodieData<HoodieKey> dedupedKeys;
       if (config.shouldCombineBeforeDelete()) {
-        // De-dupe/merge if needed
-        dedupedKeys = deduplicateKeys(keys, table, parallelism);
-      } else if (!keys.isEmpty()) {
-        dedupedKeys = keys.repartition(parallelism);
+        dedupedKeys = deduplicateKeys(keys, table, targetParallelism);
+      } else {
+        dedupedKeys = keys.repartition(targetParallelism);
       }
 
-      HoodieData<HoodieRecord<T>> dedupedRecords =
-          dedupedKeys.map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload()));
+      HoodieData dedupedRecords = createDeleteRecords(config, dedupedKeys);
+
       Instant beginTag = Instant.now();
       // perform index loop up to get existing location of records
       HoodieData<HoodieRecord<T>> taggedRecords = table.getIndex().tagLocation(dedupedRecords, context, table);
@@ -96,14 +103,14 @@ public class HoodieDeleteHelper<T extends HoodieRecordPayload, R> extends
       HoodieData<HoodieRecord<T>> taggedValidRecords = taggedRecords.filter(HoodieRecord::isCurrentLocationKnown);
       HoodieWriteMetadata<HoodieData<WriteStatus>> result;
       if (!taggedValidRecords.isEmpty()) {
-        result = deleteExecutor.execute(taggedValidRecords);
+        result = deleteExecutor.execute(taggedValidRecords, Option.of(sourceReadAndIndexTimer));
         result.setIndexLookupDuration(tagLocationDuration);
       } else {
         // if entire set of keys are non existent
         deleteExecutor.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
         result = new HoodieWriteMetadata<>();
         result.setWriteStatuses(context.emptyHoodieData());
-        deleteExecutor.commitOnAutoCommit(result);
+        deleteExecutor.runPrecommitValidators(result);
       }
       return result;
     } catch (Throwable e) {
@@ -111,6 +118,24 @@ public class HoodieDeleteHelper<T extends HoodieRecordPayload, R> extends
         throw (HoodieUpsertException) e;
       }
       throw new HoodieUpsertException("Failed to delete for commit time " + instantTime, e);
+    }
+  }
+
+  public static HoodieData createDeleteRecords(HoodieWriteConfig config, HoodieData<HoodieKey> keys) {
+    HoodieRecordType recordType = config.getRecordMerger().getRecordType();
+    if (recordType == HoodieRecordType.AVRO) {
+      return keys.map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload()));
+    } else {
+      return keys.map(key -> new HoodieEmptyRecord<>(key, recordType));
+    }
+  }
+
+  public static <T> HoodieRecord<T> createDeleteRecord(HoodieWriteConfig config, HoodieKey key) {
+    HoodieRecordType recordType = config.getRecordMerger().getRecordType();
+    if (recordType == HoodieRecordType.AVRO) {
+      return new HoodieAvroRecord(key, new EmptyHoodieRecordPayload());
+    } else {
+      return new HoodieEmptyRecord<>(key, recordType);
     }
   }
 

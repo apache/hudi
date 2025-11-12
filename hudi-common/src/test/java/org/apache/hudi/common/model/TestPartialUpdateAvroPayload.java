@@ -18,12 +18,13 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.util.Option;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-
-import org.apache.hudi.common.util.Option;
-
+import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -35,7 +36,7 @@ import java.util.Properties;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests {@link TestPartialUpdateAvroPayload}.
@@ -55,7 +56,7 @@ public class TestPartialUpdateAvroPayload {
       + "    {\"name\": \"id\", \"type\": [\"null\", \"string\"]},\n"
       + "    {\"name\": \"partition\", \"type\": [\"null\", \"string\"]},\n"
       + "    {\"name\": \"ts\", \"type\": [\"null\", \"long\"]},\n"
-      + "    {\"name\": \"_hoodie_is_deleted\", \"type\": [\"null\", \"boolean\"], \"default\":false},\n"
+      + "    {\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false},\n"
       + "    {\"name\": \"city\", \"type\": [\"null\", \"string\"]},\n"
       + "    {\"name\": \"child\", \"type\": [\"null\", {\"type\": \"array\", \"items\": \"string\"}]}\n"
       + "  ]\n"
@@ -106,8 +107,8 @@ public class TestPartialUpdateAvroPayload {
     // Test preCombine: since payload2's ordering val is larger, so payload2 will overwrite payload1 with its non-default field's value
     PartialUpdateAvroPayload payload1 = new PartialUpdateAvroPayload(record1, 0L);
     PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(record2, 1L);
-    assertArrayEquals(payload1.preCombine(payload2, schema, properties).recordBytes, new PartialUpdateAvroPayload(record4, 1L).recordBytes);
-    assertArrayEquals(payload2.preCombine(payload1, schema, properties).recordBytes, new PartialUpdateAvroPayload(record4, 1L).recordBytes);
+    assertArrayEquals(payload1.preCombine(payload2, schema, properties).getRecordBytes(), new PartialUpdateAvroPayload(record4, 1L).getRecordBytes());
+    assertArrayEquals(payload2.preCombine(payload1, schema, properties).getRecordBytes(), new PartialUpdateAvroPayload(record4, 1L).getRecordBytes());
 
     assertEquals(record1, payload1.getInsertValue(schema).get());
     assertEquals(record2, payload2.getInsertValue(schema).get());
@@ -124,8 +125,8 @@ public class TestPartialUpdateAvroPayload {
     record1.put("ts", 2L);
     payload1 = new PartialUpdateAvroPayload(record1, 2L);
     payload2 = new PartialUpdateAvroPayload(record2, 1L);
-    assertArrayEquals(payload1.preCombine(payload2, schema, properties).recordBytes, new PartialUpdateAvroPayload(record3, 2L).recordBytes);
-    assertArrayEquals(payload2.preCombine(payload1, schema, properties).recordBytes, new PartialUpdateAvroPayload(record3, 2L).recordBytes);
+    assertArrayEquals(payload1.preCombine(payload2, schema, properties).getRecordBytes(), new PartialUpdateAvroPayload(record3, 2L).getRecordBytes());
+    assertArrayEquals(payload2.preCombine(payload1, schema, properties).getRecordBytes(), new PartialUpdateAvroPayload(record3, 2L).getRecordBytes());
   }
 
   @Test
@@ -149,24 +150,38 @@ public class TestPartialUpdateAvroPayload {
     GenericRecord record2 = new GenericData.Record(schema);
     record2.put("id", "1");
     record2.put("partition", "partition0");
-    record2.put("ts", 0L);
-    record2.put("_hoodie_is_deleted", true);
+    record2.put("ts", 2L);
+    record2.put("_hoodie_is_deleted", false);
     record2.put("city", "NY0");
     record2.put("child", Collections.emptyList());
 
     PartialUpdateAvroPayload payload1 = new PartialUpdateAvroPayload(record1, 0L);
-    PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(delRecord1, 1L);
+    PartialUpdateAvroPayload delPayload = new PartialUpdateAvroPayload(delRecord1, 1L);
+    PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(record2, 2L);
 
-    assertArrayEquals(payload1.preCombine(payload2).recordBytes, payload2.recordBytes);
-    assertArrayEquals(payload2.preCombine(payload1).recordBytes, payload2.recordBytes);
+    PartialUpdateAvroPayload mergedPayload = payload1.preCombine(delPayload, schema, new Properties());
+    assertTrue(HoodieAvroUtils.bytesToAvro(mergedPayload.getRecordBytes(), schema).get("_hoodie_is_deleted").equals(true));
+    assertArrayEquals(mergedPayload.getRecordBytes(), delPayload.getRecordBytes());
+
+    mergedPayload = delPayload.preCombine(payload1, schema, new Properties());
+    assertTrue(HoodieAvroUtils.bytesToAvro(mergedPayload.getRecordBytes(), schema).get("_hoodie_is_deleted").equals(true));
+    assertArrayEquals(mergedPayload.getRecordBytes(), delPayload.getRecordBytes());
+
+    mergedPayload = payload2.preCombine(delPayload, schema, new Properties());
+    assertTrue(HoodieAvroUtils.bytesToAvro(mergedPayload.getRecordBytes(), schema).get("_hoodie_is_deleted").equals(false));
+    assertArrayEquals(mergedPayload.getRecordBytes(), payload2.getRecordBytes());
+
+    mergedPayload = delPayload.preCombine(payload2, schema, new Properties());
+    assertTrue(HoodieAvroUtils.bytesToAvro(mergedPayload.getRecordBytes(), schema).get("_hoodie_is_deleted").equals(false));
+    assertArrayEquals(mergedPayload.getRecordBytes(), payload2.getRecordBytes());
 
     assertEquals(record1, payload1.getInsertValue(schema).get());
-    assertFalse(payload2.getInsertValue(schema).isPresent());
+    assertFalse(delPayload.getInsertValue(schema).isPresent());
 
     Properties properties = new Properties();
     properties.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, "ts");
     assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema, properties), Option.empty());
-    assertFalse(payload2.combineAndGetUpdateValue(record1, schema, properties).isPresent());
+    assertFalse(delPayload.combineAndGetUpdateValue(record1, schema, properties).isPresent());
   }
 
   @Test
@@ -206,5 +221,88 @@ public class TestPartialUpdateAvroPayload {
     GenericRecord mergedRecord2 = (GenericRecord) payload2.preCombine(payload1, schema, properties).getInsertValue(schema, properties).get();
     assertEquals(mergedRecord2.get("_hoodie_commit_time").toString(), record2.get("_hoodie_commit_time").toString());
     assertEquals(mergedRecord2.get("_hoodie_commit_seqno").toString(), record2.get("_hoodie_commit_seqno").toString());
+  }
+
+  /**
+   * This test is to highlight the gotcha, where there are differences in result of the two queries on the same input data below:
+   * <pre>
+   *   Query A (No precombine):
+   *
+   *   INSERT INTO t1 VALUES (1, 'partition1', 1, false, NY0, ['A']);
+   *   INSERT INTO t1 VALUES (1, 'partition1', 0, false, NY1, ['A']);
+   *   INSERT INTO t1 VALUES (1, 'partition1', 2, false, NULL, ['A']);
+   *
+   *   Final output of Query A:
+   *   (1, 'partition1', 2, false, NY0, ['A'])
+   *
+   *   Query B (preCombine invoked)
+   *   INSERT INTO t1 VALUES (1, 'partition1', 1, false, NULL, ['A']);
+   *   INSERT INTO t1 VALUES (1, 'partition1', 0, false, NY1, ['A']), (1, 'partition1', 2, false, NULL, ['A']);
+   *
+   *   Final output of Query B:
+   *   (1, 'partition1', 2, false, NY1, ['A'])
+   * </pre>
+   *
+   *
+   * @throws IOException
+   */
+  @Test
+  public void testPartialUpdateGotchas() throws IOException {
+    Properties properties = new Properties();
+    properties.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, "ts");
+
+    GenericRecord record1 = new GenericData.Record(schema);
+    record1.put("id", "1");
+    record1.put("partition", "partition1");
+    record1.put("ts", 1L);
+    record1.put("_hoodie_is_deleted", false);
+    record1.put("city", "NY0");
+    record1.put("child", Arrays.asList("A"));
+
+    GenericRecord record2 = new GenericData.Record(schema);
+    record2.put("id", "1");
+    record2.put("partition", "partition1");
+    record2.put("ts", 0L);
+    record2.put("_hoodie_is_deleted", false);
+    record2.put("city", "NY1");
+    record2.put("child", Arrays.asList("B"));
+
+    GenericRecord record3 = new GenericData.Record(schema);
+    record3.put("id", "1");
+    record3.put("partition", "partition1");
+    record3.put("ts", 2L);
+    record3.put("_hoodie_is_deleted", false);
+    record3.put("city", null);
+    record3.put("child", Arrays.asList("A"));
+
+    // define expected outputs
+    GenericRecord pureCombineOutput = new GenericData.Record(schema);
+    pureCombineOutput.put("id", "1");
+    pureCombineOutput.put("partition", "partition1");
+    pureCombineOutput.put("ts", 2L);
+    pureCombineOutput.put("_hoodie_is_deleted", false);
+    pureCombineOutput.put("city", "NY0");
+    pureCombineOutput.put("child", Arrays.asList("A"));
+
+    GenericRecord outputWithPreCombineUsed = new GenericData.Record(schema);
+    outputWithPreCombineUsed.put("id", "1");
+    outputWithPreCombineUsed.put("partition", "partition1");
+    outputWithPreCombineUsed.put("ts", 2L);
+    outputWithPreCombineUsed.put("_hoodie_is_deleted", false);
+    outputWithPreCombineUsed.put("city", "NY1");
+    outputWithPreCombineUsed.put("child", Arrays.asList("A"));
+
+    PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(record2, 0L);
+    PartialUpdateAvroPayload payload3 = new PartialUpdateAvroPayload(record3, 2L);
+
+    // query A (no preCombine)
+    IndexedRecord firstCombineOutput = payload2.combineAndGetUpdateValue(record1, schema, properties).get();
+    IndexedRecord secondCombineOutput = payload3.combineAndGetUpdateValue(firstCombineOutput, schema, properties).get();
+    assertEquals(pureCombineOutput, secondCombineOutput);
+
+    // query B (preCombine invoked)
+    PartialUpdateAvroPayload payloadAfterPreCombine = payload3.preCombine(payload2, schema, properties);
+    IndexedRecord finalOutputWithPreCombine = payloadAfterPreCombine.combineAndGetUpdateValue(record1, schema, properties).get();
+    assertEquals(outputWithPreCombineUsed, finalOutputWithPreCombine);
   }
 }

@@ -1,0 +1,42 @@
+{
+  "title": "json schema with complex union types",
+  "type": "object",
+  "properties": {
+    "field1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "property1": {
+              "type": "string"
+            },
+            "property2": {
+              "type": "number"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "field2": {
+      "allOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "property3": {
+              "type": "integer"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

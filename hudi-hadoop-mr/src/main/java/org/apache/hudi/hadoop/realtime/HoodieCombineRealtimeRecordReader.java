@@ -19,8 +19,10 @@
 package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.hadoop.HoodieFileGroupReaderBasedRecordReader;
 import org.apache.hudi.hadoop.hive.HoodieCombineRealtimeFileSplit;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.IOContextMap;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -28,33 +30,45 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.lib.CombineFileSplit;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
+
+import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.shouldUseFilegroupReader;
 
 /**
  * Allows to read multiple realtime file splits grouped together by CombineInputFormat.
  */
 public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 
-  private static final transient Logger LOG = LogManager.getLogger(HoodieCombineRealtimeRecordReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCombineRealtimeRecordReader.class);
   // RecordReaders for each split
-  List<HoodieRealtimeRecordReader> recordReaders = new LinkedList<>();
+  private final List<RecordReader> recordReaders = new LinkedList<>();
   // Points to the currently iterating record reader
-  HoodieRealtimeRecordReader currentRecordReader;
+  private RecordReader currentRecordReader;
+
+  private final boolean useFileGroupReader;
 
   public HoodieCombineRealtimeRecordReader(JobConf jobConf, CombineFileSplit split,
       List<RecordReader> readers) {
     try {
+      useFileGroupReader = shouldUseFilegroupReader(jobConf, split);
       ValidationUtils.checkArgument(((HoodieCombineRealtimeFileSplit) split).getRealtimeFileSplits().size() == readers
           .size(), "Num Splits does not match number of unique RecordReaders!");
       for (InputSplit rtSplit : ((HoodieCombineRealtimeFileSplit) split).getRealtimeFileSplits()) {
-        LOG.info("Creating new RealtimeRecordReader for split");
-        recordReaders.add(
-            new HoodieRealtimeRecordReader((HoodieRealtimeFileSplit) rtSplit, jobConf, readers.remove(0)));
+        if (useFileGroupReader) {
+          LOG.info("Creating new HoodieFileGroupReaderRecordReader for split");
+          RecordReader reader = readers.remove(0);
+          ValidationUtils.checkArgument(reader instanceof HoodieFileGroupReaderBasedRecordReader, reader.toString() + "not instance of HoodieFileGroupReaderRecordReader ");
+          recordReaders.add(reader);
+        } else {
+          LOG.info("Creating new RealtimeRecordReader for split");
+          recordReaders.add(
+              new HoodieRealtimeRecordReader((HoodieRealtimeFileSplit) rtSplit, jobConf, readers.remove(0)));
+        }
       }
       currentRecordReader = recordReaders.remove(0);
     } catch (Exception e) {
@@ -69,9 +83,20 @@ public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWrita
     } else if (recordReaders.size() > 0) {
       this.currentRecordReader.close();
       this.currentRecordReader = recordReaders.remove(0);
-      AbstractRealtimeRecordReader reader = (AbstractRealtimeRecordReader)currentRecordReader.getReader();
+      RecordReader reader;
+      JobConf jobConf;
+      Path path;
+      if (useFileGroupReader) {
+        reader = currentRecordReader;
+        jobConf = ((HoodieFileGroupReaderBasedRecordReader) reader).getJobConf();
+        path = ((HoodieFileGroupReaderBasedRecordReader) reader).getSplit().getPath();
+      } else {
+        reader = ((HoodieRealtimeRecordReader)currentRecordReader).getReader();
+        jobConf = ((AbstractRealtimeRecordReader) reader).getJobConf();
+        path = ((AbstractRealtimeRecordReader) reader).getSplit().getPath();
+      }
       // when switch reader, ioctx should be updated
-      IOContextMap.get(reader.getJobConf()).setInputPath(reader.getSplit().getPath());
+      IOContextMap.get(jobConf).setInputPath(path);
       return next(key, value);
     } else {
       return false;
@@ -80,12 +105,20 @@ public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWrita
 
   @Override
   public NullWritable createKey() {
-    return this.currentRecordReader.createKey();
+    if (useFileGroupReader) {
+      return ((HoodieFileGroupReaderBasedRecordReader) this.currentRecordReader).createKey();
+    } else {
+      return ((HoodieRealtimeRecordReader) this.currentRecordReader).createKey();
+    }
   }
 
   @Override
   public ArrayWritable createValue() {
-    return this.currentRecordReader.createValue();
+    if (useFileGroupReader) {
+      return ((HoodieFileGroupReaderBasedRecordReader) this.currentRecordReader).createValue();
+    } else {
+      return ((HoodieRealtimeRecordReader) this.currentRecordReader).createValue();
+    }
   }
 
   @Override

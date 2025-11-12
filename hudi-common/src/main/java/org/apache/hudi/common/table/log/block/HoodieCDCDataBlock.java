@@ -18,16 +18,16 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-
-import org.apache.hadoop.fs.FSDataInputStream;
-
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.SeekableDataInputStream;
+
+import org.apache.avro.Schema;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * Change log supplemental log data block.
@@ -35,18 +35,18 @@ import java.util.Map;
 public class HoodieCDCDataBlock extends HoodieAvroDataBlock {
 
   public HoodieCDCDataBlock(
-      FSDataInputStream inputStream,
+      Supplier<SeekableDataInputStream> inputStreamSupplier,
       Option<byte[]> content,
       boolean readBlockLazily,
       HoodieLogBlockContentLocation logBlockContentLocation,
       Schema readerSchema,
       Map<HeaderMetadataType, String> header,
       String keyField) {
-    super(inputStream, content, readBlockLazily, logBlockContentLocation,
-        Option.of(readerSchema), header, new HashMap<>(), keyField, null);
+    super(inputStreamSupplier, content, readBlockLazily, logBlockContentLocation,
+        Option.of(readerSchema), header, new HashMap<>(), keyField);
   }
 
-  public HoodieCDCDataBlock(List<IndexedRecord> records,
+  public HoodieCDCDataBlock(List<HoodieRecord> records,
                             Map<HeaderMetadataType, String> header,
                             String keyField) {
     super(records, header, keyField);

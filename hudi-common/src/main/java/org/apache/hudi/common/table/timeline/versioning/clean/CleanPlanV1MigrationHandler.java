@@ -18,19 +18,22 @@
 
 package org.apache.hudi.common.table.timeline.versioning.clean;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.AbstractMigratorBase;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.Path;
-
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Migration handler for clean plan in version 1.
+ */
 public class CleanPlanV1MigrationHandler extends AbstractMigratorBase<HoodieCleanerPlan> {
 
   public static final Integer VERSION = 1;
@@ -47,19 +50,19 @@ public class CleanPlanV1MigrationHandler extends AbstractMigratorBase<HoodieClea
   @Override
   public HoodieCleanerPlan upgradeFrom(HoodieCleanerPlan plan) {
     throw new IllegalArgumentException(
-      "This is the lowest version. Plan cannot be any lower version");
+        "This is the lowest version. Plan cannot be any lower version");
   }
 
   @Override
   public HoodieCleanerPlan downgradeFrom(HoodieCleanerPlan plan) {
     if (metaClient.getTableConfig().getBootstrapBasePath().isPresent()) {
       throw new IllegalArgumentException(
-        "This version do not support METADATA_ONLY bootstrapped tables. Failed to downgrade.");
+          "This version do not support METADATA_ONLY bootstrapped tables. Failed to downgrade.");
     }
     Map<String, List<String>> filesPerPartition = plan.getFilePathsToBeDeletedPerPartition().entrySet().stream()
-        .map(e -> Pair.of(e.getKey(), e.getValue().stream().map(v -> new Path(v.getFilePath()).getName())
-          .collect(Collectors.toList()))).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+        .map(e -> Pair.of(e.getKey(), e.getValue().stream().map(v -> new StoragePath(v.getFilePath()).getName())
+            .collect(Collectors.toList()))).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     return new HoodieCleanerPlan(plan.getEarliestInstantToRetain(), plan.getLastCompletedCommitTimestamp(),
-        plan.getPolicy(), filesPerPartition, VERSION, new HashMap<>(), new ArrayList<>());
+        plan.getPolicy(), filesPerPartition, VERSION, new HashMap<>(), new ArrayList<>(), Collections.EMPTY_MAP);
   }
 }

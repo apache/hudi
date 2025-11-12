@@ -29,12 +29,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
-
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PathFilter;
+import org.apache.hudi.storage.StoragePath;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -44,6 +41,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -55,19 +53,19 @@ public final class RepairUtils {
   /**
    * Tags the instant time of each base or log file from the input file paths.
    *
-   * @param basePath          Base path of the table.
-   * @param allPaths          A {@link List} of file paths to tag.
+   * @param basePath Base path of the table.
+   * @param allPaths A {@link List} of file paths to tag.
    * @return A {@link Map} of instant time in {@link String} to a {@link List} of relative file paths.
    */
   public static Map<String, List<String>> tagInstantsOfBaseAndLogFiles(
-      String basePath, List<Path> allPaths) {
+      String basePath, List<StoragePath> allPaths) {
     // Instant time -> Set of base and log file paths
     Map<String, List<String>> instantToFilesMap = new HashMap<>();
     allPaths.forEach(path -> {
       String instantTime = FSUtils.getCommitTime(path.getName());
       instantToFilesMap.computeIfAbsent(instantTime, k -> new ArrayList<>());
       instantToFilesMap.get(instantTime).add(
-          FSUtils.getRelativePartitionPath(new Path(basePath), path));
+          FSUtils.getRelativePartitionPath(new StoragePath(basePath), path));
     });
     return instantToFilesMap;
   }
@@ -86,23 +84,23 @@ public final class RepairUtils {
       HoodieTimeline timeline, HoodieInstant instant) throws IOException {
     if (!instant.isCompleted()) {
       throw new HoodieException("Cannot get base and log file paths from "
-          + "instant not completed: " + instant.getTimestamp());
+          + "instant not completed: " + instant.requestedTime());
     }
 
     switch (instant.getAction()) {
       case COMMIT_ACTION:
-      case DELTA_COMMIT_ACTION:
-        final HoodieCommitMetadata commitMetadata =
-            HoodieCommitMetadata.fromBytes(
-                timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+      case DELTA_COMMIT_ACTION: {
+        final HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(instant);
         return Option.of(commitMetadata.getPartitionToWriteStats().values().stream().flatMap(List::stream)
             .map(HoodieWriteStat::getPath).collect(Collectors.toSet()));
+      }
       case REPLACE_COMMIT_ACTION:
+      case CLUSTERING_ACTION: {
         final HoodieReplaceCommitMetadata replaceCommitMetadata =
-            HoodieReplaceCommitMetadata.fromBytes(
-                timeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+            timeline.readReplaceCommitMetadata(instant);
         return Option.of(replaceCommitMetadata.getPartitionToWriteStats().values().stream().flatMap(List::stream)
             .map(HoodieWriteStat::getPath).collect(Collectors.toSet()));
+      }
       default:
         return Option.empty();
     }
@@ -121,8 +119,8 @@ public final class RepairUtils {
       String instantToRepair, List<String> baseAndLogFilesFromFs,
       HoodieActiveTimeline activeTimeline, HoodieArchivedTimeline archivedTimeline) {
     // Skips the instant if it is requested or inflight in active timeline
-    if (activeTimeline.filter(instant -> instant.getTimestamp().equals(instantToRepair)
-        && !instant.isCompleted()).getInstants().findAny().isPresent()) {
+    if (!activeTimeline.filter(instant -> instant.requestedTime().equals(instantToRepair)
+        && !instant.isCompleted()).empty()) {
       return Collections.emptyList();
     }
 
@@ -130,7 +128,7 @@ public final class RepairUtils {
       boolean doesInstantExist = false;
       Option<Set<String>> filesFromTimeline = Option.empty();
       Option<HoodieInstant> instantOption = activeTimeline.filterCompletedInstants().filter(
-          instant -> instant.getTimestamp().equals(instantToRepair)).firstInstant();
+          instant -> instant.requestedTime().equals(instantToRepair)).firstInstant();
       if (instantOption.isPresent()) {
         // Completed instant in active timeline
         doesInstantExist = true;
@@ -138,7 +136,7 @@ public final class RepairUtils {
             activeTimeline, instantOption.get());
       } else {
         instantOption = archivedTimeline.filterCompletedInstants().filter(
-            instant -> instant.getTimestamp().equals(instantToRepair)).firstInstant();
+            instant -> instant.requestedTime().equals(instantToRepair)).firstInstant();
         if (instantOption.isPresent()) {
           // Completed instant in archived timeline
           doesInstantExist = true;
@@ -165,11 +163,5 @@ public final class RepairUtils {
       // In case of failure, does not remove any files for the instant
       return Collections.emptyList();
     }
-  }
-
-  /**
-   * Serializable path filter class for Spark job.
-   */
-  public interface SerializablePathFilter extends PathFilter, Serializable {
   }
 }

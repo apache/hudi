@@ -18,20 +18,20 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.table.timeline.InstantComparison
+import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
+
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class CommitsCompareProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "path", DataTypes.StringType, None)
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "path", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -50,20 +50,20 @@ class CommitsCompareProcedure() extends BaseProcedure with ProcedureBuilder {
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
-    val source = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    val target = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(path).build
+    val source = createMetaClient(jsc, basePath)
+    val target = createMetaClient(jsc, path)
     val sourceTimeline = source.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
     val targetTimeline = target.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
     val targetLatestCommit =
-      if (targetTimeline.getInstants.iterator.hasNext) targetTimeline.lastInstant.get.getTimestamp else "0"
+      if (targetTimeline.getInstants.iterator().hasNext) targetTimeline.lastInstant.get.requestedTime else "0"
     val sourceLatestCommit =
-      if (sourceTimeline.getInstants.iterator.hasNext) sourceTimeline.lastInstant.get.getTimestamp else "0"
+      if (sourceTimeline.getInstants.iterator().hasNext) sourceTimeline.lastInstant.get.requestedTime else "0"
 
-    if (sourceLatestCommit != null && HoodieTimeline.compareTimestamps(targetLatestCommit, HoodieTimeline.GREATER_THAN, sourceLatestCommit)) { // source is behind the target
-      val commitsToCatchup = targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE).getInstants.iterator().asScala.map(instant => instant.getTimestamp).toList.asJava
+    if (sourceLatestCommit != null && compareTimestamps(targetLatestCommit, InstantComparison.GREATER_THAN, sourceLatestCommit)) { // source is behind the target
+      val commitsToCatchup = targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE).getInstants.iterator().asScala.map(instant => instant.requestedTime).toList.asJava
       Seq(Row("Source " + source.getTableConfig.getTableName + " is behind by " + commitsToCatchup.size + " commits. Commits to catch up - " + commitsToCatchup))
     } else {
-      val commitsToCatchup = sourceTimeline.findInstantsAfter(targetLatestCommit, Integer.MAX_VALUE).getInstants.iterator().asScala.map(instant => instant.getTimestamp).toList.asJava
+      val commitsToCatchup = sourceTimeline.findInstantsAfter(targetLatestCommit, Integer.MAX_VALUE).getInstants.iterator().asScala.map(instant => instant.requestedTime).toList.asJava
       Seq(Row("Source " + source.getTableConfig.getTableName + " is ahead by " + commitsToCatchup.size + " commits. Commits to catch up - " + commitsToCatchup))
     }
   }

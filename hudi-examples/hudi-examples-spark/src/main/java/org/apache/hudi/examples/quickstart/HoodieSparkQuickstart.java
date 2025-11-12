@@ -21,12 +21,11 @@ package org.apache.hudi.examples.quickstart;
 import org.apache.hudi.QuickstartUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.examples.common.HoodieExampleDataGenerator;
 import org.apache.hudi.examples.common.HoodieExampleSparkUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
-import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.sql.Dataset;
@@ -53,9 +52,8 @@ public final class HoodieSparkQuickstart {
     String tableName = args[1];
 
     SparkSession spark = HoodieExampleSparkUtils.defaultSparkSession("Hudi Spark basic example");
-    SparkConf sparkConf = HoodieExampleSparkUtils.defaultSparkConf("hoodie-client-example");
 
-    try (JavaSparkContext jsc = new JavaSparkContext(sparkConf)) {
+    try (JavaSparkContext jsc = new JavaSparkContext(spark.sparkContext())) {
       runQuickstart(jsc, spark, tableName, tablePath);
     }
   }
@@ -115,9 +113,9 @@ public final class HoodieSparkQuickstart {
     List<String> inserts = dataGen.convertToStringList(dataGen.generateInserts(commitTime, 20));
     Dataset<Row> df = spark.read().json(jsc.parallelize(inserts, 1));
 
-    df.write().format("org.apache.hudi")
+    df.write().format("hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
-        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
+        .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
         .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
         .option(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partitionpath")
         .option(TBL_NAME.key(), tableName)
@@ -135,10 +133,10 @@ public final class HoodieSparkQuickstart {
     List<String> inserts = dataGen.convertToStringList(dataGen.generateInsertsOnPartition(commitTime, 20, HoodieExampleDataGenerator.DEFAULT_THIRD_PARTITION_PATH));
     Dataset<Row> df = spark.read().json(jsc.parallelize(inserts, 1));
 
-    df.write().format("org.apache.hudi")
+    df.write().format("hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
         .option("hoodie.datasource.write.operation", WriteOperationType.INSERT_OVERWRITE.name())
-        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
+        .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
         .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
         .option(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partitionpath")
         .option(TBL_NAME.key(), tableName)
@@ -152,10 +150,7 @@ public final class HoodieSparkQuickstart {
    */
   public static void queryData(SparkSession spark, JavaSparkContext jsc, String tablePath, String tableName,
                                HoodieExampleDataGenerator<HoodieAvroPayload> dataGen) {
-    Dataset<Row> roViewDF = spark
-        .read()
-        .format("org.apache.hudi")
-        .load(tablePath + "/*/*/*/*");
+    Dataset<Row> roViewDF = spark.read().format("hudi").load(tablePath);
 
     roViewDF.createOrReplaceTempView("hudi_ro_table");
 
@@ -186,9 +181,9 @@ public final class HoodieSparkQuickstart {
     String commitTime = Long.toString(System.currentTimeMillis());
     List<String> updates = dataGen.convertToStringList(dataGen.generateUniqueUpdates(commitTime));
     Dataset<Row> df = spark.read().json(jsc.parallelize(updates, 1));
-    df.write().format("org.apache.hudi")
+    df.write().format("hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
-        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
+        .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
         .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
         .option(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partitionpath")
         .option(TBL_NAME.key(), tableName)
@@ -198,19 +193,19 @@ public final class HoodieSparkQuickstart {
   }
 
   /**
-   * Deleta data based in data information.
+   * Delete data based in data information.
    */
   public static Dataset<Row> delete(SparkSession spark, String tablePath, String tableName) {
 
-    Dataset<Row> roViewDF = spark.read().format("org.apache.hudi").load(tablePath + "/*/*/*/*");
+    Dataset<Row> roViewDF = spark.read().format("hudi").load(tablePath);
     roViewDF.createOrReplaceTempView("hudi_ro_table");
     Dataset<Row> toBeDeletedDf = spark.sql("SELECT begin_lat, begin_lon, driver, end_lat, end_lon, fare, partitionpath, rider, ts, uuid FROM hudi_ro_table limit 2");
     Dataset<Row> df = toBeDeletedDf.select("uuid", "partitionpath", "ts");
 
-    df.write().format("org.apache.hudi")
+    df.write().format("hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
-        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
-        .option(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "uuid")
+        .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
+        .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
         .option(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partitionpath")
         .option(TBL_NAME.key(), tableName)
         .option("hoodie.datasource.write.operation", WriteOperationType.DELETE.value())
@@ -224,9 +219,9 @@ public final class HoodieSparkQuickstart {
    */
   public static void deleteByPartition(SparkSession spark, String tablePath, String tableName) {
     Dataset<Row> df = spark.emptyDataFrame();
-    df.write().format("org.apache.hudi")
+    df.write().format("hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
-        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
+        .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
         .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
         .option(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partitionpath")
         .option(TBL_NAME.key(), tableName)
@@ -253,7 +248,7 @@ public final class HoodieSparkQuickstart {
     // incrementally query data
     Dataset<Row> incViewDF = spark
         .read()
-        .format("org.apache.hudi")
+        .format("hudi")
         .option("hoodie.datasource.query.type", "incremental")
         .option("hoodie.datasource.read.begin.instanttime", beginTime)
         .load(tablePath);
@@ -278,7 +273,7 @@ public final class HoodieSparkQuickstart {
     String endTime = commits.get(commits.size() - 1); // commit time we are interested in
 
     //incrementally query data
-    Dataset<Row> incViewDF = spark.read().format("org.apache.hudi")
+    Dataset<Row> incViewDF = spark.read().format("hudi")
         .option("hoodie.datasource.query.type", "incremental")
         .option("hoodie.datasource.read.begin.instanttime", beginTime)
         .option("hoodie.datasource.read.end.instanttime", endTime)

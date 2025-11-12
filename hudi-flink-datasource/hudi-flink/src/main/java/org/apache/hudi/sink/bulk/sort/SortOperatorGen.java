@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.bulk.sort;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.data.RowData;
@@ -33,18 +34,19 @@ import java.util.Arrays;
 public class SortOperatorGen {
   private final int[] sortIndices;
   private final RowType rowType;
-  private final TableConfig tableConfig = new TableConfig();
+  private final TableConfig tableConfig = TableConfig.getDefault();
 
   public SortOperatorGen(RowType rowType, String[] sortFields) {
     this.sortIndices = Arrays.stream(sortFields).mapToInt(rowType::getFieldIndex).toArray();
     this.rowType = rowType;
   }
 
-  public OneInputStreamOperator<RowData, RowData> createSortOperator() {
+  public OneInputStreamOperator<RowData, RowData> createSortOperator(Configuration conf) {
     SortCodeGenerator codeGen = createSortCodeGenerator();
     return new SortOperator(
         codeGen.generateNormalizedKeyComputer("SortComputer"),
-        codeGen.generateRecordComparator("SortComparator"));
+        codeGen.generateRecordComparator("SortComparator"),
+        conf);
   }
 
   public SortCodeGenerator createSortCodeGenerator() {
@@ -52,6 +54,6 @@ public class SortOperatorGen {
     for (int sortIndex : sortIndices) {
       builder.addField(sortIndex, true, true);
     }
-    return new SortCodeGenerator(tableConfig, rowType, builder.build());
+    return new SortCodeGenerator(tableConfig, Thread.currentThread().getContextClassLoader(), rowType, builder.build());
   }
 }

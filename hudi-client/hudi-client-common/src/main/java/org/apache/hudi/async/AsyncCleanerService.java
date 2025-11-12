@@ -20,13 +20,12 @@
 package org.apache.hudi.async;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -37,7 +36,7 @@ import java.util.concurrent.Executors;
  */
 public class AsyncCleanerService extends HoodieAsyncTableService {
 
-  private static final Logger LOG = LogManager.getLogger(AsyncCleanerService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AsyncCleanerService.class);
 
   private final BaseHoodieWriteClient writeClient;
   private final transient ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -49,10 +48,8 @@ public class AsyncCleanerService extends HoodieAsyncTableService {
 
   @Override
   protected Pair<CompletableFuture, ExecutorService> startService() {
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    LOG.info(String.format("Starting async clean service with instant time %s...", instantTime));
     return Pair.of(CompletableFuture.supplyAsync(() -> {
-      writeClient.clean(instantTime);
+      writeClient.clean();
       return true;
     }, executor), executor);
   }

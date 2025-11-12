@@ -17,29 +17,32 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.avro.generic.GenericRecord
-import org.apache.avro.specific.SpecificData
-import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieLogFile
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineMetadataUtils}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
+import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StoragePath}
+
+import org.apache.avro.generic.GenericRecord
+import org.apache.avro.specific.SpecificData
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.io.File
 import java.util
 import java.util.Collections
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 import scala.util.control.Breaks.break
 
@@ -49,8 +52,8 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
   val defaultActions = "clean,commit,deltacommit,rollback,savepoint,restore"
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "local_folder", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "local_folder", DataTypes.StringType),
     ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, -1),
     ProcedureParameter.optional(3, "actions", DataTypes.StringType, defaultActions),
     ProcedureParameter.optional(4, "desc", DataTypes.BooleanType, false)
@@ -75,7 +78,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
     val archivePath = new Path(basePath + "/.hoodie/.commits_.archive*")
     val actionSet: util.Set[String] = Set(actions.split(","): _*).asJava
     val numExports = if (limit == -1) Integer.MAX_VALUE else limit
@@ -91,7 +94,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
       .toList.asJava
 
     // Archived instants are in the commit archive files
-    val statuses: Array[FileStatus] = FSUtils.getFs(basePath, jsc.hadoopConfiguration()).globStatus(archivePath)
+    val statuses: Array[FileStatus] = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration()).globStatus(archivePath)
     val archivedStatuses = List(statuses: _*)
       .sortWith((f1, f2) => (f1.getModificationTime - f2.getModificationTime).toInt > 0).asJava
 
@@ -112,60 +115,58 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
 
   @throws[Exception]
   private def copyArchivedInstants(basePath: String, statuses: util.List[FileStatus], actionSet: util.Set[String], limit: Int, localFolder: String) = {
-    import scala.collection.JavaConversions._
     var copyCount = 0
-    val fileSystem = FSUtils.getFs(basePath, jsc.hadoopConfiguration())
-    for (fs <- statuses) {
+    val storage = HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()))
+    for (fs <- statuses.asScala) {
       // read the archived file
-      val reader = HoodieLogFormat.newReader(fileSystem, new HoodieLogFile(fs.getPath), HoodieArchivedMetaEntry.getClassSchema)
+      val reader = HoodieLogFormat.newReader(
+        storage, new HoodieLogFile(convertToStoragePath(fs.getPath)), HoodieArchivedMetaEntry.getClassSchema)
       // read the avro blocks
       while ( {
         reader.hasNext && copyCount < limit
       }) {
         val blk = reader.next.asInstanceOf[HoodieAvroDataBlock]
-        try {
-          val recordItr = blk.getRecordIterator
-          try while ( {
-            recordItr.hasNext
-          }) {
-            val ir = recordItr.next
-            // Archived instants are saved as arvo encoded HoodieArchivedMetaEntry records. We need to get the
-            // metadata record from the entry and convert it to json.
-            val archiveEntryRecord = SpecificData.get.deepCopy(HoodieArchivedMetaEntry.SCHEMA$, ir).asInstanceOf[HoodieArchivedMetaEntry]
-            val action = archiveEntryRecord.get("actionType").toString
-            if (!actionSet.contains(action)) break() //todo: continue is not supported
-            val metadata: GenericRecord = action match {
-              case HoodieTimeline.CLEAN_ACTION =>
-                archiveEntryRecord.getHoodieCleanMetadata
+        val recordItr = blk.getRecordIterator(HoodieRecordType.AVRO)
+        try while ( {
+          recordItr.hasNext
+        }) {
+          val ir = recordItr.next
+          // Archived instants are saved as arvo encoded HoodieArchivedMetaEntry records. We need to get the
+          // metadata record from the entry and convert it to json.
+          val archiveEntryRecord = SpecificData.get.deepCopy(HoodieArchivedMetaEntry.SCHEMA$, ir).asInstanceOf[HoodieArchivedMetaEntry]
+          val action = archiveEntryRecord.get("actionType").toString
+          if (!actionSet.contains(action)) break() //todo: continue is not supported
+          val metadata: GenericRecord = action match {
+            case HoodieTimeline.CLEAN_ACTION =>
+              archiveEntryRecord.getHoodieCleanMetadata
 
-              case HoodieTimeline.COMMIT_ACTION =>
-                archiveEntryRecord.getHoodieCommitMetadata
+            case HoodieTimeline.COMMIT_ACTION =>
+              archiveEntryRecord.getHoodieCommitMetadata
 
-              case HoodieTimeline.DELTA_COMMIT_ACTION =>
-                archiveEntryRecord.getHoodieCommitMetadata
+            case HoodieTimeline.DELTA_COMMIT_ACTION =>
+              archiveEntryRecord.getHoodieCommitMetadata
 
-              case HoodieTimeline.ROLLBACK_ACTION =>
-                archiveEntryRecord.getHoodieRollbackMetadata
+            case HoodieTimeline.ROLLBACK_ACTION =>
+              archiveEntryRecord.getHoodieRollbackMetadata
 
-              case HoodieTimeline.SAVEPOINT_ACTION =>
-                archiveEntryRecord.getHoodieSavePointMetadata
+            case HoodieTimeline.SAVEPOINT_ACTION =>
+              archiveEntryRecord.getHoodieSavePointMetadata
 
-              case HoodieTimeline.COMPACTION_ACTION =>
-                archiveEntryRecord.getHoodieCompactionMetadata
+            case HoodieTimeline.COMPACTION_ACTION =>
+              archiveEntryRecord.getHoodieCompactionMetadata
 
-              case _ => logInfo("Unknown type of action " + action)
-                null
-            }
-            val instantTime = archiveEntryRecord.get("commitTime").toString
-            val outPath = localFolder + Path.SEPARATOR + instantTime + "." + action
-            if (metadata != null) writeToFile(fileSystem, outPath, HoodieAvroUtils.avroToJson(metadata, true))
-            if ( {
-              copyCount += 1;
-              copyCount
-            } == limit) break //todo: break is not supported
+            case _ => logInfo("Unknown type of action " + action)
+              null
           }
-          finally if (recordItr != null) recordItr.close()
+          val instantTime = archiveEntryRecord.get("commitTime").toString
+          val outPath = localFolder + StoragePath.SEPARATOR + instantTime + "." + action
+          if (metadata != null) writeToFile(storage, outPath, HoodieAvroUtils.avroToJson(metadata, true))
+          if ( {
+            copyCount += 1;
+            copyCount
+          } == limit) break //todo: break is not supported
         }
+        finally if (recordItr != null) recordItr.close()
       }
       reader.close()
     }
@@ -174,16 +175,16 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
 
   @throws[Exception]
   private def copyNonArchivedInstants(metaClient: HoodieTableMetaClient, instants: util.List[HoodieInstant], limit: Int, localFolder: String): Int = {
-    import scala.collection.JavaConversions._
     var copyCount = 0
-    if (instants.nonEmpty) {
+    if (!instants.isEmpty) {
       val timeline = metaClient.getActiveTimeline
-      val fileSystem = FSUtils.getFs(metaClient.getBasePath, jsc.hadoopConfiguration())
-      for (instant <- instants) {
-        val localPath = localFolder + Path.SEPARATOR + instant.getFileName
+      val storage = HoodieStorageUtils.getStorage(metaClient.getBasePath, HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()))
+      val instantFileNameGenerator = metaClient.getTimelineLayout.getInstantFileNameGenerator
+      for (instant <- instants.asScala) {
+        val localPath = localFolder + StoragePath.SEPARATOR + instantFileNameGenerator.getFileName(instant)
         val data: Array[Byte] = instant.getAction match {
           case HoodieTimeline.CLEAN_ACTION =>
-            val metadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(instant).get)
+            val metadata = timeline.readCleanMetadata(instant)
             HoodieAvroUtils.avroToJson(metadata, true)
 
           case HoodieTimeline.DELTA_COMMIT_ACTION =>
@@ -199,18 +200,18 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
             timeline.getInstantDetails(instant).get
 
           case HoodieTimeline.ROLLBACK_ACTION =>
-            val metadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(timeline.getInstantDetails(instant).get)
+            val metadata = timeline.readRollbackMetadata(instant)
             HoodieAvroUtils.avroToJson(metadata, true)
 
           case HoodieTimeline.SAVEPOINT_ACTION =>
-            val metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(timeline.getInstantDetails(instant).get)
+            val metadata = timeline.readSavepointMetadata(instant)
             HoodieAvroUtils.avroToJson(metadata, true)
 
           case _ => null
 
         }
         if (data != null) {
-          writeToFile(fileSystem, localPath, data)
+          writeToFile(storage, localPath, data)
           copyCount = copyCount + 1
         }
       }
@@ -219,8 +220,8 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
   }
 
   @throws[Exception]
-  private def writeToFile(fs: FileSystem, path: String, data: Array[Byte]): Unit = {
-    val out = fs.create(new Path(path))
+  private def writeToFile(storage: HoodieStorage, path: String, data: Array[Byte]): Unit = {
+    val out = storage.create(new StoragePath(path))
     out.write(data)
     out.flush()
     out.close()
@@ -236,5 +237,3 @@ object ExportInstantsProcedure {
     override def get() = new ExportInstantsProcedure()
   }
 }
-
-

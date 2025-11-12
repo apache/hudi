@@ -29,10 +29,13 @@ public class MarkerOperation implements Serializable {
 
   public static final String MARKER_DIR_PATH_PARAM = "markerdirpath";
   public static final String MARKER_NAME_PARAM = "markername";
+  public static final String MARKER_BASEPATH_PARAM = "basepath";
 
   // GET requests
   public static final String ALL_MARKERS_URL = String.format("%s/%s", BASE_URL, "all");
   public static final String CREATE_AND_MERGE_MARKERS_URL = String.format("%s/%s", BASE_URL, "create-and-merge");
+  // The operation is used for version 6 tables
+  public static final String APPEND_MARKERS_URL = String.format("%s/%s", BASE_URL, "append");
   public static final String MARKERS_DIR_EXISTS_URL = String.format("%s/%s", BASE_URL, "dir/exists");
 
   // POST requests

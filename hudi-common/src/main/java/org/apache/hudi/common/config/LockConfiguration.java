@@ -35,6 +35,7 @@ public class LockConfiguration implements Serializable {
   public static final String LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY = LOCK_PREFIX + "max_wait_time_ms_between_retry";
 
   public static final String LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY = LOCK_PREFIX + "client.wait_time_ms_between_retry";
+  public static final String DEFAULT_LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS = String.valueOf(5000L);
 
   public static final String LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY = LOCK_PREFIX + "num_retries";
   public static final String DEFAULT_LOCK_ACQUIRE_NUM_RETRIES = String.valueOf(15);
@@ -42,6 +43,10 @@ public class LockConfiguration implements Serializable {
   public static final String LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY = LOCK_PREFIX + "client.num_retries";
 
   public static final String LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY = LOCK_PREFIX + "wait_time_ms";
+  public static final int DEFAULT_LOCK_ACQUIRE_WAIT_TIMEOUT_MS = 60 * 1000;
+
+  public static final String LOCK_HEARTBEAT_INTERVAL_MS_KEY = LOCK_PREFIX + "heartbeat_interval_ms";
+  public static final int DEFAULT_LOCK_HEARTBEAT_INTERVAL_MS = 60 * 1000;
 
   // configs for file system based locks. NOTE: This only works for DFS with atomic create/delete operation
   public static final String FILESYSTEM_BASED_LOCK_PROPERTY_PREFIX = LOCK_PREFIX + "filesystem.";
@@ -87,8 +92,6 @@ public class LockConfiguration implements Serializable {
   /** @deprecated Use {@link #LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY} */
   @Deprecated
   public static final String LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP = LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
-  @Deprecated
-  public static final String DEFAULT_LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS = String.valueOf(10000L);
   /** @deprecated Use {@link #LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY} */
   @Deprecated
   public static final String LOCK_ACQUIRE_NUM_RETRIES_PROP = LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY;
@@ -100,8 +103,6 @@ public class LockConfiguration implements Serializable {
   /** @deprecated Use {@link #LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY} */
   @Deprecated
   public static final String LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP = LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY;
-  @Deprecated
-  public static final int DEFAULT_ACQUIRE_LOCK_WAIT_TIMEOUT_MS = 60 * 1000;
   /** @deprecated Use {@link #HIVE_DATABASE_NAME_PROP_KEY} */
   @Deprecated
   public static final String HIVE_DATABASE_NAME_PROP = HIVE_DATABASE_NAME_PROP_KEY;
@@ -133,7 +134,7 @@ public class LockConfiguration implements Serializable {
   private final TypedProperties props;
 
   public LockConfiguration(Properties props) {
-    this.props = new TypedProperties(props);
+    this.props = TypedProperties.copy(props);
   }
 
   public TypedProperties getConfig() {

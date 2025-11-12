@@ -25,7 +25,8 @@ import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.HoodieTestCommitUtilities;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
-import org.apache.hudi.client.HoodieTimelineArchiver;
+import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
+import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -48,6 +49,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -65,7 +67,7 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
 
   @BeforeEach
   public void init() throws Exception {
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
 
     // Create table and connect
     String tableName = tableName();
@@ -80,7 +82,7 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
     // Generate archive
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
@@ -91,17 +93,16 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
       String timestamp = String.valueOf(i);
       // Requested Compaction
       HoodieTestCommitMetadataGenerator.createCompactionAuxiliaryMetadata(tablePath,
-          new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp), hadoopConf());
+          INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp), storageConf());
       // Inflight Compaction
       HoodieTestCommitMetadataGenerator.createCompactionAuxiliaryMetadata(tablePath,
-          new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp), hadoopConf());
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, timestamp, hadoopConf());
+          INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp), storageConf());
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, timestamp, storageConf());
     }
 
     // Simulate a compaction commit in metadata table timeline
     // so the archival in data table can happen
-    HoodieTestUtils.createCompactionCommitInMetadataTable(
-        hadoopConf(), metaClient.getFs(), tablePath, "105");
+    HoodieTestUtils.createCompactionCommitInMetadataTable(storageConf(), tablePath, "105");
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     // reload the timeline and get all the commits before archive
@@ -109,7 +110,7 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
 
     // archive
     HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient);
-    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
+    HoodieTimelineArchiver archiver = new TimelineArchiverV2(cfg, table);
     archiver.archiveIfRequired(context());
   }
 
@@ -132,7 +133,7 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
 
     // Generate expected data
     final List<Comparable[]> rows = new ArrayList<>();
-    for (int i = 100; i < 104; i++) {
+    for (int i = 100; i < 102; i++) {
       String instant = String.valueOf(i);
       for (int j = 0; j < 3; j++) {
         Comparable[] defaultComp = new Comparable[] {"commit", instant,
@@ -169,21 +170,20 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
    */
   @Test
   public void testShowCommits() throws Exception {
-    Object cmdResult = shell.evaluate(() -> "show archived commits");
+    Object cmdResult = shell.evaluate(() -> "show archived commits --limit 5");
     assertTrue(ShellEvaluationResultUtil.isSuccess(cmdResult));
     final List<Comparable[]> rows = new ArrayList<>();
 
-    // Test default skipMetadata and limit 10
+    // Test default skipMetadata and limit 5
     TableHeader header = new TableHeader().addTableHeaderField("CommitTime").addTableHeaderField("CommitType");
-    for (int i = 100; i < 103; i++) {
-      String instant = String.valueOf(i);
-      Comparable[] result = new Comparable[] {instant, "commit"};
-      rows.add(result);
-      rows.add(result);
-      rows.add(result);
-    }
-    rows.add(new Comparable[] {"103", "commit"});
-    String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, 10, false, rows);
+    Comparable[] result1 = new Comparable[] {"100", "commit"};
+    Comparable[] result2 = new Comparable[] {"101", "commit"};
+    rows.add(result1);
+    rows.add(result1);
+    rows.add(result1);
+    rows.add(result2);
+    rows.add(result2);
+    String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, 5, false, rows);
     expected = removeNonWordAndStripSpace(expected);
     String got = removeNonWordAndStripSpace(cmdResult.toString());
     assertEquals(expected, got);
@@ -194,7 +194,7 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
 
     rows.clear();
 
-    for (int i = 100; i < 104; i++) {
+    for (int i = 100; i < 102; i++) {
       String instant = String.valueOf(i);
       // Since HoodiePrintHelper order data by default, need to order commitMetadata
       HoodieCommitMetadata metadata = HoodieTestCommitMetadataGenerator.generateCommitMetadata(tablePath, instant);

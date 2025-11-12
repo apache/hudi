@@ -17,13 +17,14 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodiePartitionMetadata
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.exception.HoodieIOException
+import org.apache.hudi.storage.StoragePath
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -32,11 +33,12 @@ import java.io.IOException
 import java.util
 import java.util.Properties
 import java.util.function.{Consumer, Supplier}
-import scala.collection.JavaConversions._
+
+import scala.collection.JavaConverters._
 
 class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "dry_run", DataTypes.BooleanType, true)
   )
 
@@ -58,30 +60,33 @@ class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBu
     val dryRun = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Boolean]
     val tablePath = getBasePath(tableName)
 
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(tablePath).build
+    val metaClient = createMetaClient(jsc, tablePath)
 
-    val engineContext: HoodieLocalEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf)
-    val partitionPaths: util.List[String] = FSUtils.getAllPartitionPaths(engineContext, tablePath, false, false)
-    val basePath: Path = new Path(tablePath)
+    val engineContext: HoodieLocalEngineContext = new HoodieLocalEngineContext(metaClient.getStorageConf)
+    val partitionPaths: util.List[String] = FSUtils.getAllPartitionPaths(engineContext, metaClient, false)
+    val basePath: StoragePath = new StoragePath(tablePath)
 
     val rows = new util.ArrayList[Row](partitionPaths.size)
-    for (partitionPath <- partitionPaths) {
-      val partition: Path = FSUtils.getPartitionPath(tablePath, partitionPath)
-      val textFormatFile: Option[Path] = HoodiePartitionMetadata.textFormatMetaPathIfExists(metaClient.getFs, partition)
-      val baseFormatFile: Option[Path] = HoodiePartitionMetadata.baseFormatMetaPathIfExists(metaClient.getFs, partition)
-      val latestCommit: String = metaClient.getActiveTimeline.getCommitTimeline.lastInstant.get.getTimestamp
+    for (partitionPath <- partitionPaths.asScala) {
+      val partition: StoragePath = FSUtils.constructAbsolutePath(tablePath, partitionPath)
+      val textFormatFile: Option[StoragePath] = HoodiePartitionMetadata.textFormatMetaPathIfExists(
+        metaClient.getStorage, partition)
+      val baseFormatFile: Option[StoragePath] = HoodiePartitionMetadata.baseFormatMetaPathIfExists(
+        metaClient.getStorage, partition)
+      val latestCommit: String = metaClient.getActiveTimeline.getCommitAndReplaceTimeline.lastInstant.get.requestedTime
       var action = if (textFormatFile.isPresent) "MIGRATE" else "NONE"
       if (!dryRun) {
         if (!baseFormatFile.isPresent) {
-          val partitionMetadata: HoodiePartitionMetadata = new HoodiePartitionMetadata(metaClient.getFs, latestCommit,
-            basePath, partition, Option.of(metaClient.getTableConfig.getBaseFileFormat))
-          partitionMetadata.trySave(0)
+          val partitionMetadata: HoodiePartitionMetadata = new HoodiePartitionMetadata(
+            metaClient.getStorage, latestCommit,
+            basePath, partition, Option.of(getWriteConfig(basePath.toString).getBaseFileFormat))
+          partitionMetadata.trySave()
         }
         // delete it, in case we failed midway last time.
         textFormatFile.ifPresent(
-          new Consumer[Path] {
-            override def accept(p: Path): Unit = {
-              try metaClient.getFs.delete(p, false)
+          new Consumer[StoragePath] {
+            override def accept(p: StoragePath): Unit = {
+              try metaClient.getStorage.deleteFile(p)
               catch {
                 case e: IOException =>
                   throw new HoodieIOException(e.getMessage, e)
@@ -95,7 +100,7 @@ class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBu
     }
     val props: Properties = new Properties
     props.setProperty(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key, "true")
-    HoodieTableConfig.update(metaClient.getFs, new Path(metaClient.getMetaPath), props)
+    HoodieTableConfig.update(metaClient.getStorage, metaClient.getMetaPath, props)
 
     rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
   }

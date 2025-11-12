@@ -23,17 +23,15 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.avro.Schema;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -44,7 +42,7 @@ import java.util.Map;
 
 /**
  * Handle to concatenate new records to old records w/o any merging. If Operation is set to Inserts, and if {{@link HoodieWriteConfig#allowDuplicateInserts()}}
- * is set, this handle will be used instead of {@link HoodieMergeHandle}.
+ * is set, this handle will be used instead of {@link HoodieWriteMergeHandle}.
  *
  * Simplified Logic:
  * For every existing record
@@ -69,9 +67,9 @@ import java.util.Map;
  * happen and every batch should have new records to be inserted. Above example is for illustration purposes only.
  */
 @NotThreadSafe
-public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
+public class HoodieConcatHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieConcatHandle.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieConcatHandle.class);
   // a representation of incoming records that tolerates duplicate keys
   private final Iterator<HoodieRecord<T>> recordItr;
 
@@ -85,8 +83,7 @@ public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends 
   public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable,
                             Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
                             HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, Collections.emptyMap(), partitionPath, fileId, dataFileToBeMerged, taskContextSupplier,
-        Option.empty());
+    super(config, instantTime, hoodieTable, Collections.emptyMap(), partitionPath, fileId, dataFileToBeMerged, taskContextSupplier, Option.empty());
     this.recordItr = keyToNewRecords.values().iterator();
   }
 
@@ -94,15 +91,17 @@ public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends 
    * Write old record as is w/o merging with incoming record.
    */
   @Override
-  public void write(GenericRecord oldRecord) {
-    String key = KeyGenUtils.getRecordKeyFromGenericRecord(oldRecord, keyGeneratorOpt);
+  public void write(HoodieRecord oldRecord) {
+    Schema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
+    String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
     try {
       // NOTE: We're enforcing preservation of the record metadata to keep existing semantic
-      writeToFile(new HoodieKey(key, partitionPath), oldRecord, true);
+      writeToFile(new HoodieKey(key, partitionPath), oldRecord, oldSchema, config.getPayloadConfig().getProps(), true);
     } catch (IOException | RuntimeException e) {
-      String errMsg = String.format("Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
+      String errMsg = String.format(
+          "Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
           key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
-      LOG.debug("Old record is " + oldRecord);
+      LOG.debug("Old record is {}", oldRecord);
       throw new HoodieUpsertException(errMsg, e);
     }
     recordsWritten++;

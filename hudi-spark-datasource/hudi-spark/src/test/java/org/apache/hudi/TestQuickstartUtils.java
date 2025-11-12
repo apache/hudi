@@ -19,6 +19,7 @@
 package org.apache.hudi;
 
 import org.apache.hudi.exception.HoodieException;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

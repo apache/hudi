@@ -45,7 +45,8 @@ public class ClusteringOperation implements Serializable {
 
   // Only for serialization/de-serialization
   @Deprecated
-  public ClusteringOperation() {}
+  public ClusteringOperation() {
+  }
 
   private ClusteringOperation(final String dataFilePath, final List<String> deltaFilePaths, final String fileId,
                              final String partitionPath, final String bootstrapFilePath, final int version) {

@@ -23,19 +23,12 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
 import java.io.IOException;
 
 /**
  * Helper class to instantiate embedded timeline service.
  */
 public class EmbeddedTimelineServerHelper {
-
-  private static final Logger LOG = LogManager.getLogger(EmbeddedTimelineService.class);
-
-  private static Option<EmbeddedTimelineService> TIMELINE_SERVER = Option.empty();
 
   /**
    * Instantiate Embedded Timeline Server.
@@ -44,31 +37,10 @@ public class EmbeddedTimelineServerHelper {
    * @return TimelineServer if configured to run
    * @throws IOException
    */
-  public static synchronized Option<EmbeddedTimelineService> createEmbeddedTimelineService(
+  public static EmbeddedTimelineService createEmbeddedTimelineService(
       HoodieEngineContext context, HoodieWriteConfig config) throws IOException {
-    if (config.isEmbeddedTimelineServerReuseEnabled()) {
-      if (!TIMELINE_SERVER.isPresent() || !TIMELINE_SERVER.get().canReuseFor(config.getBasePath())) {
-        TIMELINE_SERVER = Option.of(startTimelineService(context, config));
-      } else {
-        updateWriteConfigWithTimelineServer(TIMELINE_SERVER.get(), config);
-      }
-      return TIMELINE_SERVER;
-    }
-    if (config.isEmbeddedTimelineServerEnabled()) {
-      return Option.of(startTimelineService(context, config));
-    } else {
-      return Option.empty();
-    }
-  }
-
-  private static EmbeddedTimelineService startTimelineService(
-      HoodieEngineContext context, HoodieWriteConfig config) throws IOException {
-    // Run Embedded Timeline Server
-    LOG.info("Starting Timeline service !!");
     Option<String> hostAddr = context.getProperty(EngineProperty.EMBEDDED_SERVER_HOST);
-    EmbeddedTimelineService timelineService = new EmbeddedTimelineService(
-        context, hostAddr.orElse(null), config);
-    timelineService.startServer();
+    EmbeddedTimelineService timelineService = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(context, hostAddr.orElse(null), config);
     updateWriteConfigWithTimelineServer(timelineService, config);
     return timelineService;
   }
@@ -79,10 +51,10 @@ public class EmbeddedTimelineServerHelper {
    * @param config  Hoodie Write Config
    */
   public static void updateWriteConfigWithTimelineServer(EmbeddedTimelineService timelineServer,
-      HoodieWriteConfig config) {
+                                                         HoodieWriteConfig config) {
     // Allow executor to find this newly instantiated timeline service
     if (config.isEmbeddedTimelineServerEnabled()) {
-      config.setViewStorageConfig(timelineServer.getRemoteFileSystemViewConfig());
+      config.setViewStorageConfig(timelineServer.getRemoteFileSystemViewConfig(config));
     }
   }
 }

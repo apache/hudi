@@ -22,7 +22,7 @@ import java.io.Serializable;
 
 /**
  * <p>
- * Exception thrown for Hoodie hearbeat failures. The root of the exception hierarchy.
+ * Exception thrown for Hoodie heartbeat failures. The root of the exception hierarchy.
  * </p>
  * <p>
  * Hoodie Write/Read clients will throw this exception if any of its operations fail. This is a runtime (unchecked)

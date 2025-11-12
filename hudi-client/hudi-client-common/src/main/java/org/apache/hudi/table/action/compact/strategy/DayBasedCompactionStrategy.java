@@ -18,25 +18,24 @@
 
 package org.apache.hudi.table.action.compact.strategy;
 
-import org.apache.hudi.avro.model.HoodieCompactionOperation;
-import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
  * This strategy orders compactions in reverse order of creation of Hive Partitions. It helps to compact data in latest
  * partitions first and then older capped at the Total_IO allowed.
  */
-public class DayBasedCompactionStrategy extends CompactionStrategy {
+public class DayBasedCompactionStrategy extends BoundedIOCompactionStrategy {
 
   // For now, use SimpleDateFormat as default partition format
   protected static final String DATE_PARTITION_FORMAT = "yyyy/MM/dd";
@@ -63,22 +62,15 @@ public class DayBasedCompactionStrategy extends CompactionStrategy {
     return comparator;
   }
 
+  /**
+   * For DayBasedCompactionStrategy, we will not record rolled partitions as missing partitions.
+   */
   @Override
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
-      List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
-    // Iterate through the operations and accept operations as long as we are within the configured target partitions
-    // limit
-    return operations.stream()
-        .collect(Collectors.groupingBy(HoodieCompactionOperation::getPartitionPath)).entrySet().stream()
-        .sorted(Map.Entry.comparingByKey(comparator)).limit(writeConfig.getTargetPartitionsPerDayBasedCompaction())
-        .flatMap(e -> e.getValue().stream()).collect(Collectors.toList());
-  }
-
-  @Override
-  public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
-    return allPartitionPaths.stream().map(partition -> partition.replace("/", "-"))
-        .sorted(Comparator.reverseOrder()).map(partitionPath -> partitionPath.replace("-", "/"))
-        .collect(Collectors.toList()).subList(0, writeConfig.getTargetPartitionsPerDayBasedCompaction());
+  public Pair<List<String>, List<String>> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
+    List<String> res = allPartitionPaths.stream().sorted(comparator)
+        .collect(Collectors.toList()).subList(0, Math.min(allPartitionPaths.size(),
+            writeConfig.getTargetPartitionsPerDayBasedCompaction()));
+    return Pair.of(res, Collections.emptyList());
   }
 
   /**

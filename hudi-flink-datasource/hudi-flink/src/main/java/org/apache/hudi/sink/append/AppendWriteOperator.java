@@ -32,7 +32,7 @@ import org.apache.flink.table.types.logical.RowType;
 public class AppendWriteOperator<I> extends AbstractWriteOperator<I> {
 
   public AppendWriteOperator(Configuration conf, RowType rowType) {
-    super(new AppendWriteFunction<>(conf, rowType));
+    super(AppendWriteFunctions.create(conf, rowType));
   }
 
   public static <I> WriteOperatorFactory<I> getFactory(Configuration conf, RowType rowType) {

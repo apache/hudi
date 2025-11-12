@@ -21,7 +21,7 @@ package org.apache.hudi.client.utils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 
 import org.junit.jupiter.api.Test;
 
@@ -89,7 +89,7 @@ public class TestFileSliceMetricUtils {
   private FileSlice buildFileSlice(long baseFileLen, List<Long> logFileLens) {
     final String baseFilePath = ".b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1";
     FileSlice slice = new FileSlice("partition_0",
-        HoodieActiveTimeline.createNewInstantTime(),
+        InProcessTimeGenerator.createNewInstantTime(),
         UUID.randomUUID().toString());
     HoodieBaseFile baseFile = new HoodieBaseFile(baseFilePath);
     baseFile.setFileLen(baseFileLen);

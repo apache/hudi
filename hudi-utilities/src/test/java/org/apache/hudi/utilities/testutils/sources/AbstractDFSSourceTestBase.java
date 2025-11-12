@@ -19,13 +19,14 @@
 package org.apache.hudi.utilities.testutils.sources;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
+import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.generic.GenericRecord;
@@ -37,8 +38,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,12 +61,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(false, false);
-  }
-
-  @AfterAll
-  public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
+    UtilitiesTestBase.initTestServices(false, false, false);
   }
 
   @BeforeEach
@@ -76,17 +70,20 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
     schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS(), jsc);
   }
 
-  @AfterEach
-  public void teardown() throws Exception {
-    super.teardown();
-  }
-
   /**
    * Prepares the specific {@link Source} to test, by passing in necessary configurations.
    *
    * @return A {@link Source} using DFS as the file system.
    */
-  protected abstract Source prepareDFSSource();
+  protected final Source prepareDFSSource() {
+    return prepareDFSSource(new TypedProperties());
+  }
+
+  protected abstract Source prepareDFSSource(TypedProperties props);
+
+  protected Option<TypedProperties> getSourceFormatAdapterProps() {
+    return Option.empty();
+  }
 
   /**
    * Writes test data, i.e., a {@link List} of {@link HoodieRecord}, to a file on DFS.
@@ -117,15 +114,15 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
    */
   @Test
   public void testReadingFromSource() throws IOException {
-    dfs.mkdirs(new Path(dfsRoot));
-    SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(prepareDFSSource());
+    fs.mkdirs(new Path(dfsRoot));
+    SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(prepareDFSSource(), Option.empty(), getSourceFormatAdapterProps());
 
     // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
     assertEquals(Option.empty(),
         sourceFormatAdapter.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
     // Test respecting sourceLimit
     int sourceLimit = 10;
-    RemoteIterator<LocatedFileStatus> files = dfs.listFiles(generateOneFile("1", "000", 100), true);
+    RemoteIterator<LocatedFileStatus> files = fs.listFiles(generateOneFile("1", "000", 100), true);
     FileStatus file1Status = files.next();
     assertTrue(file1Status.getLen() > sourceLimit);
     assertEquals(Option.empty(),
@@ -143,6 +140,9 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
         .createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
             schemaProvider.getSourceSchema().toString(), sparkSession);
     assertEquals(100, fetch1Rows.count());
+    // city_to_state can't be in except because it is a map
+    assertEquals(0, fetch1AsRows.getBatch().get().drop("city_to_state")
+        .except(fetch1Rows.drop("city_to_state")).count());
 
     // 2. Produce new data, extract new data
     generateOneFile("2", "001", 10000);

@@ -18,9 +18,9 @@
 
 package org.apache.hudi.integ.testsuite.generator;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.integ.testsuite.configuration.DFSDeltaConfig;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.converter.Converter;
@@ -91,10 +91,10 @@ public class DeltaGenerator implements Serializable {
     if (deltaOutputConfig.shouldDeleteOldInputData() && batchId > 1) {
       Path oldInputDir = new Path(deltaOutputConfig.getDeltaBasePath(), Integer.toString(batchId - 1));
       try {
-        FileSystem fs = FSUtils.getFs(oldInputDir.toString(), deltaOutputConfig.getConfiguration());
+        FileSystem fs = HadoopFSUtils.getFs(oldInputDir.toString(), deltaOutputConfig.getConfiguration());
         fs.delete(oldInputDir, true);
       } catch (IOException e) {
-        log.error("Failed to delete older input data direcory " + oldInputDir, e);
+        log.error("Failed to delete older input data directory " + oldInputDir, e);
       }
     }
 

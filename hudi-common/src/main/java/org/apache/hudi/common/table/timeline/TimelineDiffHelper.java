@@ -18,27 +18,35 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+
 /**
  * A helper class used to diff timeline.
  */
 public class TimelineDiffHelper {
 
-  private static final Logger LOG = LogManager.getLogger(TimelineDiffHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TimelineDiffHelper.class);
 
-  public static TimelineDiffResult getNewInstantsForIncrementalSync(HoodieTimeline oldTimeline,
-      HoodieTimeline newTimeline) {
+  private TimelineDiffHelper() {
+  }
+
+  public static TimelineDiffResult getNewInstantsForIncrementalSync(HoodieTableMetaClient metaClient,
+                                                                    HoodieTimeline oldTimeline,
+                                                                    HoodieTimeline newTimeline) {
 
     HoodieTimeline oldT = oldTimeline.filterCompletedAndCompactionInstants();
     HoodieTimeline newT = newTimeline.filterCompletedAndCompactionInstants();
@@ -47,24 +55,24 @@ public class TimelineDiffHelper {
     Option<HoodieInstant> firstInstantInNewTimeline = newT.firstInstant();
 
     if (lastSeenInstant.isPresent() && firstInstantInNewTimeline.isPresent()) {
-      if (HoodieTimeline.compareTimestamps(lastSeenInstant.get().getTimestamp(),
-          HoodieTimeline.LESSER_THAN, firstInstantInNewTimeline.get().getTimestamp())) {
+      if (compareTimestamps(lastSeenInstant.get().requestedTime(),
+          LESSER_THAN, firstInstantInNewTimeline.get().requestedTime())) {
         // The last seen instant is no longer in the timeline. Do not incrementally Sync.
         return TimelineDiffResult.UNSAFE_SYNC_RESULT;
       }
-      Set<HoodieInstant> oldTimelineInstants = oldT.getInstants().collect(Collectors.toSet());
+      Set<HoodieInstant> oldTimelineInstants = oldT.getInstantsAsStream().collect(Collectors.toSet());
 
       List<HoodieInstant> newInstants = new ArrayList<>();
 
       // Check If any pending compaction is lost. If so, do not allow incremental timeline sync
-      List<Pair<HoodieInstant, HoodieInstant>> compactionInstants = getPendingCompactionTransitions(oldT, newT);
+      List<Pair<HoodieInstant, HoodieInstant>> compactionInstants = getPendingActionTransitions(metaClient, oldT.filterPendingCompactionTimeline(),
+          newT, HoodieTimeline.COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION);
       List<HoodieInstant> lostPendingCompactions = compactionInstants.stream()
           .filter(instantPair -> instantPair.getValue() == null).map(Pair::getKey).collect(Collectors.toList());
       if (!lostPendingCompactions.isEmpty()) {
         // If a compaction is unscheduled, fall back to complete refresh of fs view since some log files could have been
         // moved. Its unsafe to incrementally sync in that case.
-        LOG.warn("Some pending compactions are no longer in new timeline (unscheduled ?). They are :"
-            + lostPendingCompactions);
+        LOG.warn("Some pending compactions are no longer in new timeline (unscheduled ?). They are: {}", lostPendingCompactions);
         return TimelineDiffResult.UNSAFE_SYNC_RESULT;
       }
       List<HoodieInstant> finishedCompactionInstants = compactionInstants.stream()
@@ -72,9 +80,10 @@ public class TimelineDiffHelper {
               && instantPair.getValue().isCompleted())
           .map(Pair::getKey).collect(Collectors.toList());
 
-      newTimeline.getInstants().filter(instant -> !oldTimelineInstants.contains(instant)).forEach(newInstants::add);
+      newTimeline.getInstantsAsStream().filter(instant -> !oldTimelineInstants.contains(instant)).forEach(newInstants::add);
 
-      List<Pair<HoodieInstant, HoodieInstant>> logCompactionInstants = getPendingLogCompactionTransitions(oldTimeline, newTimeline);
+      List<Pair<HoodieInstant, HoodieInstant>> logCompactionInstants = getPendingActionTransitions(metaClient, oldTimeline.filterPendingLogCompactionTimeline(),
+          newTimeline, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.LOG_COMPACTION_ACTION);
       List<HoodieInstant> finishedOrRemovedLogCompactionInstants = logCompactionInstants.stream()
           .filter(instantPair -> !instantPair.getKey().isCompleted()
               && (instantPair.getValue() == null || instantPair.getValue().isCompleted()))
@@ -87,52 +96,26 @@ public class TimelineDiffHelper {
     }
   }
 
-  /**
-   * Getting pending log compaction transitions.
-   */
-  private static List<Pair<HoodieInstant, HoodieInstant>> getPendingLogCompactionTransitions(HoodieTimeline oldTimeline,
-                                                                                          HoodieTimeline newTimeline) {
-    Set<HoodieInstant> newTimelineInstants = newTimeline.getInstants().collect(Collectors.toSet());
+  private static List<Pair<HoodieInstant, HoodieInstant>> getPendingActionTransitions(HoodieTableMetaClient metaClient,
+                                                                                      HoodieTimeline pendingActionTimelineFromOld,
+                                                                                      HoodieTimeline newTimeline,
+                                                                                      String completedAction, String pendingAction) {
+    Set<HoodieInstant> newTimelineInstants = newTimeline.getInstantsAsStream().collect(Collectors.toSet());
+    InstantGenerator factory = metaClient.getInstantGenerator();
 
-    return oldTimeline.filterPendingLogCompactionTimeline().getInstants().map(instant -> {
+    return pendingActionTimelineFromOld.getInstantsAsStream().map(instant -> {
       if (newTimelineInstants.contains(instant)) {
         return Pair.of(instant, instant);
       } else {
-        HoodieInstant logCompacted =
-            new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instant.getTimestamp());
-        if (newTimelineInstants.contains(logCompacted)) {
-          return Pair.of(instant, logCompacted);
+        HoodieInstant completedInstant =
+            factory.createNewInstant(State.COMPLETED, completedAction, instant.requestedTime());
+        if (newTimelineInstants.contains(completedInstant)) {
+          return Pair.of(instant, completedInstant);
         }
-        HoodieInstant inflightLogCompacted =
-            new HoodieInstant(State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, instant.getTimestamp());
-        if (newTimelineInstants.contains(inflightLogCompacted)) {
-          return Pair.of(instant, inflightLogCompacted);
-        }
-        return Pair.<HoodieInstant, HoodieInstant>of(instant, null);
-      }
-    }).collect(Collectors.toList());
-  }
-
-  /**
-   * Getting pending compaction transitions.
-   */
-  private static List<Pair<HoodieInstant, HoodieInstant>> getPendingCompactionTransitions(HoodieTimeline oldTimeline,
-      HoodieTimeline newTimeline) {
-    Set<HoodieInstant> newTimelineInstants = newTimeline.getInstants().collect(Collectors.toSet());
-
-    return oldTimeline.filterPendingCompactionTimeline().getInstants().map(instant -> {
-      if (newTimelineInstants.contains(instant)) {
-        return Pair.of(instant, instant);
-      } else {
-        HoodieInstant compacted =
-            new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instant.getTimestamp());
-        if (newTimelineInstants.contains(compacted)) {
-          return Pair.of(instant, compacted);
-        }
-        HoodieInstant inflightCompacted =
-            new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, instant.getTimestamp());
-        if (newTimelineInstants.contains(inflightCompacted)) {
-          return Pair.of(instant, inflightCompacted);
+        HoodieInstant inflightInstant =
+            factory.createNewInstant(State.INFLIGHT, pendingAction, instant.requestedTime());
+        if (newTimelineInstants.contains(inflightInstant)) {
+          return Pair.of(instant, inflightInstant);
         }
         return Pair.<HoodieInstant, HoodieInstant>of(instant, null);
       }

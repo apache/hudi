@@ -284,6 +284,58 @@
                                             "name": "value"
                                         }
                                     ]
+                                },
+                                {
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "type": "record",
+                                    "name": "LocalDateWrapper",
+                                    "doc": "A record wrapping Local Date type to be able to be used it w/in Avro's Union",
+                                    "fields": [
+                                        {
+                                            "type": {
+                                                "type": "int"
+                                                // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
+                                                //       rely on logical types to do proper encoding of the native Java types,
+                                                //       and hereby have to encode statistic manually
+                                                //"logicalType": "date"
+                                            },
+                                            "name": "value"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "type": "record",
+                                    "name": "ArrayWrapper",
+                                    "doc": "A record containing a list of wrapped values.",
+                                    "fields": [
+                                        {
+                                            "name": "wrappedValues",
+                                            "doc": "An array where each element is one of the supported wrapper types.",
+                                            "type": [
+                                                "null",
+                                                {
+                                                    "type": "array",
+                                                    "items": [
+                                                        "null",
+                                                        "org.apache.hudi.avro.model.BooleanWrapper",
+                                                        "org.apache.hudi.avro.model.IntWrapper",
+                                                        "org.apache.hudi.avro.model.LongWrapper",
+                                                        "org.apache.hudi.avro.model.FloatWrapper",
+                                                        "org.apache.hudi.avro.model.DoubleWrapper",
+                                                        "org.apache.hudi.avro.model.BytesWrapper",
+                                                        "org.apache.hudi.avro.model.StringWrapper",
+                                                        "org.apache.hudi.avro.model.DateWrapper",
+                                                        "org.apache.hudi.avro.model.DecimalWrapper",
+                                                        "org.apache.hudi.avro.model.TimeMicrosWrapper",
+                                                        "org.apache.hudi.avro.model.TimestampMicrosWrapper",
+                                                        "org.apache.hudi.avro.model.LocalDateWrapper"
+                                                    ]
+                                                }
+                                            ],
+                                            "default": null
+                                        }
+                                    ]
                                 }
                             ],
                             "default": null
@@ -309,7 +361,9 @@
                                 "org.apache.hudi.avro.model.DateWrapper",
                                 "org.apache.hudi.avro.model.DecimalWrapper",
                                 "org.apache.hudi.avro.model.TimeMicrosWrapper",
-                                "org.apache.hudi.avro.model.TimestampMicrosWrapper"
+                                "org.apache.hudi.avro.model.TimestampMicrosWrapper",
+                                "org.apache.hudi.avro.model.LocalDateWrapper",
+                                "org.apache.hudi.avro.model.ArrayWrapper"
                             ],
                             "default": null
                         },
@@ -353,6 +407,148 @@
                             "doc": "Column range entry valid/deleted flag",
                             "name": "isDeleted",
                             "type": "boolean"
+                        },
+                        // NOTE: This is a new field added in 1.0.0.
+                        //       Typically, the min/max range for each column can become wider i.e. the minValue <= all
+                        //       valid values and the maxValue >= all valid values in the file with updates and deletes.
+                        //       For effective pruning, the min/max range can be updated to a tighter bound during
+                        //       compaction or clustering.
+                        {
+                            "doc": "Whether the min/max range of a column is tight bound or not",
+                            "name": "isTightBound",
+                            "type": "boolean",
+                            "default": false
+                        },
+                        {
+                            "doc": "Value type information containing enum ordinal and optional additional information",
+                            "name": "valueType",
+                            "type": [
+                                "null",
+                                {
+                                    "type": "record",
+                                    "name": "HoodieValueTypeInfo",
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "fields": [
+                                        {
+                                            "doc": "Enum type ordinal representing the value type",
+                                            "name": "typeOrdinal",
+                                            "type": "int"
+                                        },
+                                        {
+                                            "doc": "Optional additional information about the value type",
+                                            "name": "additionalInfo",
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ],
+                                            "default": null
+                                        }
+                                    ]
+                                }
+                            ],
+                            "default": null
+                        }
+                    ]
+                }
+            ],
+            "default" : null
+        },
+        {
+            "name": "recordIndexMetadata",
+            "doc": "Metadata Index that contains information about record keys and their location in the dataset",
+            "type": [
+                "null",
+                 {
+                   "type": "record",
+                   "name": "HoodieRecordIndexInfo",
+                    "fields": [
+                        {
+                            "name": "partitionName",
+                            "type": [
+                                "null",
+                                "string"
+                            ],
+                            "default": null,
+                            "doc": "Refers to the partition name the record belongs to"
+                        },
+                        {
+                            "name": "fileIdHighBits",
+                            "type": [
+                                "null",
+                                "long"
+                            ],
+                            "default": null,
+                            "doc": "Refers to high 64 bits if the fileId is based on UUID format. \nA UUID based fileId is stored as 3 pieces in RLI (fileIdHighBits, fileIdLowBits and fileIndex). \nFileID format is {UUID}-{fileIndex}."
+                        },
+                        {
+                            "name": "fileIdLowBits",
+                            "type": [
+                                "null",
+                                "long"
+                            ],
+                            "default": null,
+                            "doc": "Refers to low 64 bits if the fileId is based on UUID format. \nA UUID based fileId is stored as 3 pieces in RLI (fileIdHighBits, fileIdLowBits and fileIndex). \nFileID format is {UUID}-{fileIndex}."
+                        },
+                        {
+                            "name": "fileIndex",
+                            "type": [
+                                "null",
+                                "int"
+                            ],
+                            "default": null,
+                            "doc": "Index representing file index which is used to re-construct UUID based fileID. Applicable when the fileId is based on UUID format. \nA UUID based fileId is stored as 3 pieces in RLI (fileIdHighBits, fileIdLowBits and fileIndex). \nFileID format is {UUID}-{fileIndex}."
+                        },
+                        {
+                           "name": "fileId",
+                           "type": [
+                               "null",
+                               "string"
+                            ],
+                            "default" : null,
+                            "doc": "Represents fileId of the location where record belongs to. When the encoding is 1, fileID is stored in raw string format."
+                           },
+                        {
+                            "name": "instantTime",
+                            "type": [
+                                "null",
+                                "long"
+                            ],
+                            "default": null,
+                            "doc": "Epoch time in millisecond representing the commit time at which record was added"
+                        },
+                        {
+                            "name": "fileIdEncoding",
+                            "type": "int",
+                            "default": 0,
+                            "doc": "Represents fileId encoding. Possible values are 0 and 1. O represents UUID based fileID, and 1 represents raw string format of the fileId. \nWhen the encoding is 0, reader can deduce fileID from fileIdLowBits, fileIdHighBits and fileIndex."
+                        },
+                        {
+                            "name": "position",
+                            "type": [
+                                "null",
+                                "long"
+                            ],
+                            "default": null,
+                            "doc": "Represents position of record within a file group for easier access. It will be used for index lookup."
+                        }
+                    ]
+                }
+            ],
+            "default" : null
+        },
+        {
+            "name": "SecondaryIndexMetadata",
+            "doc": "Metadata Index that contains information about secondary keys and the corresponding record keys in the dataset",
+            "type": [
+                "null",
+                {
+                    "type": "record",
+                    "name": "HoodieSecondaryIndexInfo",
+                    "fields": [
+                        {
+                            "name": "isDeleted",
+                            "type": "boolean",
+                            "doc": "True if this entry has been deleted"
                         }
                     ]
                 }

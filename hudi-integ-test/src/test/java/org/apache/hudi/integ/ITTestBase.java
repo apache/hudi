@@ -32,9 +32,9 @@ import com.github.dockerjava.core.DockerClientBuilder;
 import com.github.dockerjava.core.DockerClientConfig;
 import com.github.dockerjava.core.command.ExecStartResultCallback;
 import com.github.dockerjava.jaxrs.JerseyDockerCmdExecFactory;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.BeforeEach;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -56,7 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
  */
 public abstract class ITTestBase {
 
-  public static final Logger LOG = LogManager.getLogger(ITTestBase.class);
+  public static final Logger LOG = LoggerFactory.getLogger(ITTestBase.class);
   protected static final String SPARK_WORKER_CONTAINER = "/spark-worker-1";
   protected static final String ADHOC_1_CONTAINER = "/adhoc-1";
   protected static final String ADHOC_2_CONTAINER = "/adhoc-2";
@@ -113,8 +113,10 @@ public abstract class ITTestBase {
   static String getSparkShellCommand(String commandFile) {
     return new StringBuilder().append("spark-shell --jars ").append(HUDI_SPARK_BUNDLE)
         .append(" --master local[2] --driver-class-path ").append(HADOOP_CONF_DIR)
-        .append(
-            " --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --executor-memory 1G --num-executors 1 ")
+        .append(" --conf spark.serializer=org.apache.spark.serializer.KryoSerializer")
+        .append(" --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog")
+        .append(" --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
+        .append(" --deploy-mode client  --driver-memory 1G --executor-memory 1G --num-executors 1")
         .append(" -i ").append(commandFile).toString();
   }
 
@@ -170,7 +172,7 @@ public abstract class ITTestBase {
       TestExecStartResultCallback resultCallback =
           executeCommandStringInDocker(fromContainerName, command, false, true);
       String stderrString = resultCallback.getStderr().toString().trim();
-      if (!stderrString.contains("open")) {
+      if (!stderrString.contains("succeeded")) {
         Thread.sleep(1000);
         return false;
       }
@@ -368,7 +370,8 @@ public abstract class ITTestBase {
     }
 
     if (times != count) {
-      saveUpLogs();
+      // TODO(HUDI-8268): fix the command with pipe
+      // saveUpLogs();
     }
 
     assertEquals(times, count, "Did not find output the expected number of times.");

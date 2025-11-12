@@ -22,8 +22,9 @@ package org.apache.hudi.table.action.restore;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.rollback.RestorePlanActionExecutor;
 
 import java.io.IOException;
 
@@ -39,8 +40,31 @@ public class RestoreUtils {
    */
   public static HoodieRestorePlan getRestorePlan(HoodieTableMetaClient metaClient, HoodieInstant restoreInstant)
       throws IOException {
-    final HoodieInstant requested = HoodieTimeline.getRollbackRequestedInstant(restoreInstant);
-    return TimelineMetadataUtils.deserializeAvroMetadata(
-        metaClient.getActiveTimeline().readRestoreInfoAsBytes(requested).get(), HoodieRestorePlan.class);
+    final HoodieInstant requested = metaClient.getInstantGenerator().getRollbackRequestedInstant(restoreInstant);
+    return metaClient.getActiveTimeline().readRestorePlan(requested);
+  }
+
+  public static String getSavepointToRestoreTimestampV1Schema(HoodieTable table, HoodieRestorePlan plan) {
+    //get earliest rollback
+    String firstRollback = plan.getInstantsToRollback().get(plan.getInstantsToRollback().size() - 1).getCommitTime();
+    //find last instant before first rollback
+    Option<HoodieInstant> savepointInstance = table.getActiveTimeline().getSavePointTimeline().findInstantsBefore(firstRollback).lastInstant();
+    return savepointInstance.isPresent() ? savepointInstance.get().requestedTime() : null;
+  }
+
+  /**
+   * Get the savepoint timestamp that this restore instant is restoring
+   * @param table          the HoodieTable
+   * @param restoreInstant Instant referring to restore action
+   * @return timestamp of the savepoint we are restoring
+   * @throws IOException
+   *
+   * */
+  public static String getSavepointToRestoreTimestamp(HoodieTable table, HoodieInstant restoreInstant) throws IOException {
+    HoodieRestorePlan plan = getRestorePlan(table.getMetaClient(), restoreInstant);
+    if (plan.getVersion().compareTo(RestorePlanActionExecutor.RESTORE_PLAN_VERSION_1) > 0) {
+      return plan.getSavepointToRestoreTimestamp();
+    }
+    return getSavepointToRestoreTimestampV1Schema(table, plan);
   }
 }

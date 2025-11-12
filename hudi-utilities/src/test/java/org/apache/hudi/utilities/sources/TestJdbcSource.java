@@ -20,6 +20,8 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -36,6 +38,7 @@ import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.storage.StorageLevel;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -45,6 +48,10 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.utilities.testutils.JdbcTestUtils.JDBC_DRIVER;
+import static org.apache.hudi.utilities.testutils.JdbcTestUtils.JDBC_PASS;
+import static org.apache.hudi.utilities.testutils.JdbcTestUtils.JDBC_URL;
+import static org.apache.hudi.utilities.testutils.JdbcTestUtils.JDBC_USER;
 import static org.apache.hudi.utilities.testutils.JdbcTestUtils.clearAndInsert;
 import static org.apache.hudi.utilities.testutils.JdbcTestUtils.close;
 import static org.apache.hudi.utilities.testutils.JdbcTestUtils.count;
@@ -62,19 +69,27 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   private static final TypedProperties PROPS = new TypedProperties();
   private static final HoodieTestDataGenerator DATA_GENERATOR = new HoodieTestDataGenerator();
+  private static final String SECRETS_PATH = String.format("%s/%s", sharedTempDir.toAbsolutePath(), "hudi/config/secret");
   private static Connection connection;
 
+  @BeforeAll
+  public static void beforeAll() throws Exception {
+    UtilitiesTestBase.initTestServices(false, false, false);
+  }
+
+  @Override
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.url", "jdbc:h2:mem:test_mem");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.driver.class", "org.h2.Driver");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.user", "test");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.password", "jdbc");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.name", "triprec");
-    connection = DriverManager.getConnection("jdbc:h2:mem:test_mem", "test", "jdbc");
+    PROPS.setProperty("hoodie.streamer.jdbc.url", JDBC_URL);
+    PROPS.setProperty("hoodie.streamer.jdbc.driver.class", JDBC_DRIVER);
+    PROPS.setProperty("hoodie.streamer.jdbc.user", JDBC_USER);
+    PROPS.setProperty("hoodie.streamer.jdbc.password", JDBC_PASS);
+    PROPS.setProperty("hoodie.streamer.jdbc.table.name", "triprec");
+    connection = DriverManager.getConnection(JDBC_URL, JDBC_USER, JDBC_PASS);
   }
 
+  @Override
   @AfterEach
   public void teardown() throws Exception {
     super.teardown();
@@ -83,8 +98,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testSingleCommit() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "true");
+    PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "last_insert");
 
     try {
       int numRecords = 100;
@@ -106,8 +121,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testInsertAndUpdate() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "true");
+    PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "last_insert");
 
     try {
       final String commitTime = "000";
@@ -140,8 +155,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testTwoCommits() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "true");
+    PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "last_insert");
 
     try {
       // Add 10 records with commit time "000"
@@ -168,8 +183,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testIncrementalFetchWithCommitTime() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "true");
+    PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "last_insert");
 
     try {
       // Add 10 records with commit time "000"
@@ -194,8 +209,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testIncrementalFetchWithNoMatchingRows() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "true");
+    PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "last_insert");
 
     try {
       // Add 10 records with commit time "000"
@@ -216,8 +231,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testIncrementalFetchWhenTableRecordsMoreThanSourceLimit() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "id");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "true");
+    PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "id");
 
     try {
       // Add 100 records with commit time "000"
@@ -247,8 +262,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testIncrementalFetchWhenLastCheckpointMoreThanTableRecords() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "id");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "true");
+    PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "id");
 
     try {
       // Add 100 records with commit time "000"
@@ -258,13 +273,13 @@ public class TestJdbcSource extends UtilitiesTestBase {
       InputBatch<Dataset<Row>> batch = runSource(Option.empty(), 100);
       Dataset<Row> rowDataset = batch.getBatch().get();
       assertEquals(100, rowDataset.count());
-      assertEquals("100", batch.getCheckpointForNextBatch());
+      assertEquals(new StreamerCheckpointV2("100"), batch.getCheckpointForNextBatch());
 
       // Add 100 records with commit time "001"
       insert("001", 100, connection, DATA_GENERATOR, PROPS);
 
       // Start incremental scan. With checkpoint greater than the number of records, there should not be any dataset to fetch.
-      batch = runSource(Option.of("200"), 50);
+      batch = runSource(Option.of(new StreamerCheckpointV2("200")), 50);
       rowDataset = batch.getBatch().get();
       assertEquals(0, rowDataset.count());
     } catch (Exception e) {
@@ -274,8 +289,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testIncrementalFetchFallbackToFullFetchWhenError() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "true");
+    PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "last_insert");
 
     try {
       // Add 10 records with commit time "000"
@@ -289,14 +304,14 @@ public class TestJdbcSource extends UtilitiesTestBase {
       // Add 10 records with commit time "001"
       insert("001", 10, connection, DATA_GENERATOR, PROPS);
 
-      PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "dummy_col");
+      PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "dummy_col");
       assertThrows(HoodieException.class, () -> {
         // Start incremental scan with a dummy column that does not exist.
         // This will throw an exception as the default behavior is to not fallback to full fetch.
         runSource(Option.of(batch.getCheckpointForNextBatch()), -1);
       });
 
-      PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.fallback.to.full.fetch", "true");
+      PROPS.setProperty("hoodie.streamer.jdbc.incr.fallback.to.full.fetch", "true");
 
       // Start incremental scan with a dummy column that does not exist.
       // This will fallback to full fetch mode but still throw an exception checkpointing will fail.
@@ -311,7 +326,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testFullFetchWithCommitTime() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "false");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "false");
 
     try {
       // Add 10 records with commit time "000"
@@ -335,8 +350,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testFullFetchWithCheckpoint() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "false");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "false");
+    PROPS.setProperty("hoodie.streamer.jdbc.table.incr.column.name", "last_insert");
 
     try {
       // Add 10 records with commit time "000"
@@ -346,11 +361,11 @@ public class TestJdbcSource extends UtilitiesTestBase {
       InputBatch<Dataset<Row>> batch = runSource(Option.empty(), 10);
       Dataset<Row> rowDataset = batch.getBatch().get();
       assertEquals(10, rowDataset.count());
-      assertEquals("", batch.getCheckpointForNextBatch());
+      assertEquals(new StreamerCheckpointV2(""), batch.getCheckpointForNextBatch());
 
       // Get max of incremental column
       Column incrementalColumn = rowDataset
-          .col(PROPS.getString("hoodie.deltastreamer.jdbc.table.incr.column.name"));
+          .col(PROPS.getString("hoodie.streamer.jdbc.table.incr.column.name"));
       final String max = rowDataset.agg(functions.max(incrementalColumn).cast(DataTypes.StringType)).first()
           .getString(0);
 
@@ -358,7 +373,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
       insert("001", 10, connection, DATA_GENERATOR, PROPS);
 
       // Start incremental scan
-      rowDataset = runSource(Option.of(max), 10).getBatch().get();
+      rowDataset = runSource(Option.of(new StreamerCheckpointV2(max)), 10).getBatch().get();
       assertEquals(10, rowDataset.count());
       assertEquals(10, rowDataset.where("commit_time=001").count());
     } catch (Exception e) {
@@ -372,10 +387,10 @@ public class TestJdbcSource extends UtilitiesTestBase {
       // Write secret string to fs in a file
       writeSecretToFs();
       // Remove secret string from props
-      PROPS.remove("hoodie.deltastreamer.jdbc.password");
+      PROPS.remove("hoodie.streamer.jdbc.password");
       // Set property to read secret from fs file
-      PROPS.setProperty("hoodie.deltastreamer.jdbc.password.file", "file:///tmp/hudi/config/secret");
-      PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "false");
+      PROPS.setProperty("hoodie.streamer.jdbc.password.file", SECRETS_PATH);
+      PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "false");
       // Add 10 records with commit time 000
       clearAndInsert("000", 10, connection, DATA_GENERATOR, PROPS);
       Dataset<Row> rowDataset = runSource(Option.empty(), 10).getBatch().get();
@@ -391,8 +406,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
       // Write secret string to fs in a file
       writeSecretToFs();
       // Remove secret string from props
-      PROPS.remove("hoodie.deltastreamer.jdbc.password");
-      PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "false");
+      PROPS.remove("hoodie.streamer.jdbc.password");
+      PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "false");
       // Add 10 records with commit time 000
       clearAndInsert("000", 10, connection, DATA_GENERATOR, PROPS);
       runSource(Option.empty(), 10);
@@ -401,9 +416,9 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testSourceWithExtraOptions() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.extra.options.fetchsize", "10");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "false");
-    PROPS.remove("hoodie.deltastreamer.jdbc.table.incr.column.name");
+    PROPS.setProperty("hoodie.streamer.jdbc.extra.options.fetchsize", "10");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "false");
+    PROPS.remove("hoodie.streamer.jdbc.table.incr.column.name");
     try {
       // Add 20 records with commit time 000
       clearAndInsert("000", 20, connection, DATA_GENERATOR, PROPS);
@@ -416,8 +431,8 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   @Test
   public void testSourceWithStorageLevel() {
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.storage.level", "NONE");
-    PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "false");
+    PROPS.setProperty("hoodie.streamer.jdbc.storage.level", "NONE");
+    PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "false");
     try {
       // Add 10 records with commit time 000
       clearAndInsert("000", 10, connection, DATA_GENERATOR, PROPS);
@@ -431,13 +446,13 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   private void writeSecretToFs() throws IOException {
     FileSystem fs = FileSystem.get(new Configuration());
-    FSDataOutputStream outputStream = fs.create(new Path("file:///tmp/hudi/config/secret"));
-    outputStream.writeBytes("jdbc");
+    FSDataOutputStream outputStream = fs.create(new Path(SECRETS_PATH));
+    outputStream.writeBytes(JDBC_PASS);
     outputStream.close();
   }
 
-  private InputBatch<Dataset<Row>> runSource(Option<String> lastCkptStr, long sourceLimit) {
+  private InputBatch<Dataset<Row>> runSource(Option<Checkpoint> lastCkptStr, long sourceLimit) {
     Source<Dataset<Row>> jdbcSource = new JdbcSource(PROPS, jsc, sparkSession, null);
-    return jdbcSource.fetchNewData(lastCkptStr, sourceLimit);
+    return jdbcSource.readFromCheckpoint(lastCkptStr, sourceLimit);
   }
 }

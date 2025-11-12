@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -42,12 +43,12 @@ public class JsonDFSSource extends JsonSource {
   }
 
   @Override
-  protected InputBatch<JavaRDD<String>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
-    Pair<Option<String>, String> selPathsWithMaxModificationTime =
+  protected InputBatch<JavaRDD<String>> readFromCheckpoint(Option<Checkpoint> lastCkptStr, long sourceLimit) {
+    Pair<Option<String>, Checkpoint> selPathsWithMaxModificationTime =
         pathSelector.getNextFilePathsAndMaxModificationTime(sparkContext, lastCkptStr, sourceLimit);
     return selPathsWithMaxModificationTime.getLeft()
         .map(pathStr -> new InputBatch<>(Option.of(fromFiles(pathStr)), selPathsWithMaxModificationTime.getRight()))
-        .orElse(new InputBatch<>(Option.empty(), selPathsWithMaxModificationTime.getRight()));
+        .orElseGet(() -> new InputBatch<>(Option.empty(), selPathsWithMaxModificationTime.getRight()));
   }
 
   private JavaRDD<String> fromFiles(String pathStr) {

@@ -21,8 +21,8 @@ package org.apache.hudi.integ.testsuite
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path, PathFilter}
-import org.apache.log4j.LogManager
 import org.apache.spark.sql.{SaveMode, SparkSession}
+import org.slf4j.LoggerFactory
 
 import java.io.Serializable
 
@@ -30,7 +30,7 @@ class SparkDataSourceContinuousIngest(val spark: SparkSession, val conf: Configu
                                       val sourceFormat: String, val checkpointFile: Path, hudiBasePath: Path, hudiOptions: java.util.Map[String, String],
                                       minSyncIntervalSeconds: Long) extends Serializable {
 
-  private val log = LogManager.getLogger(getClass)
+  private val log = LoggerFactory.getLogger(getClass)
 
   def startIngestion(): Unit = {
     val fs = sourcePath.getFileSystem(conf)

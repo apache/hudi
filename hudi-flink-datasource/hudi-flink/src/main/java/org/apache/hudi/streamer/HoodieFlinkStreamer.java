@@ -18,9 +18,9 @@
 
 package org.apache.hudi.streamer;
 
+import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsInference;
@@ -29,16 +29,15 @@ import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.StreamerUtils;
 
 import com.beust.jcommander.JCommander;
+import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.formats.common.TimestampFormat;
-import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
+import org.apache.flink.configuration.StateBackendOptions;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 
 /**
@@ -48,7 +47,6 @@ import org.apache.flink.table.types.logical.RowType;
  */
 public class HoodieFlinkStreamer {
   public static void main(String[] args) throws Exception {
-    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
     final FlinkStreamerConfig cfg = new FlinkStreamerConfig();
     JCommander cmd = new JCommander(cfg, null, args);
@@ -56,16 +54,18 @@ public class HoodieFlinkStreamer {
       cmd.usage();
       System.exit(1);
     }
+    Configuration envConf = new Configuration();
+    envConf.set(StateBackendOptions.STATE_BACKEND, cfg.stateBackend.getName());
+    envConf.set(CheckpointingOptions.CHECKPOINT_STORAGE, "filesystem");
+    if (cfg.flinkCheckPointPath != null) {
+      envConf.set(CheckpointingOptions. CHECKPOINTS_DIRECTORY, cfg.flinkCheckPointPath);
+    }
+    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment(envConf);
     env.enableCheckpointing(cfg.checkpointInterval);
     env.getConfig().setGlobalJobParameters(cfg);
     // We use checkpoint to trigger write operation, including instant generating and committing,
     // There can only be one checkpoint at one time.
     env.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
-
-    env.setStateBackend(cfg.stateBackend);
-    if (cfg.flinkCheckPointPath != null) {
-      env.getCheckpointConfig().setCheckpointStorage(cfg.flinkCheckPointPath);
-    }
 
     TypedProperties kafkaProps = DFSPropertiesConfiguration.getGlobalProps();
     kafkaProps.putAll(StreamerUtil.appendKafkaProps(cfg));
@@ -77,20 +77,9 @@ public class HoodieFlinkStreamer {
             .getLogicalType();
 
     long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();
-    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
 
-    DataStream<RowData> dataStream = env.addSource(new FlinkKafkaConsumer<>(
-            cfg.kafkaTopic,
-            new JsonRowDataDeserializationSchema(
-                rowType,
-                InternalTypeInfo.of(rowType),
-                false,
-                true,
-                TimestampFormat.ISO_8601
-            ), kafkaProps))
-        .name("kafka_source")
-        .uid("uid_kafka_source");
-
+    DataStream<RowData> dataStream = StreamerUtils.createKafkaStream(env, rowType, cfg.kafkaTopic, kafkaProps);
     if (cfg.transformerClassNames != null && !cfg.transformerClassNames.isEmpty()) {
       Option<Transformer> transformer = StreamerUtil.createTransformer(cfg.transformerClassNames);
       if (transformer.isPresent()) {
@@ -99,12 +88,29 @@ public class HoodieFlinkStreamer {
     }
 
     OptionsInference.setupSinkTasks(conf, env.getParallelism());
-    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
-    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
-    if (OptionsResolver.needsAsyncCompaction(conf)) {
-      Pipelines.compact(conf, pipeline);
+    OptionsInference.setupClientId(conf);
+    DataStream<RowData> pipeline;
+    // Append mode
+    if (OptionsResolver.isAppendMode(conf)) {
+      // append mode should not compaction operator
+      conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
+      pipeline = Pipelines.append(conf, rowType, dataStream);
+      if (OptionsResolver.needsAsyncClustering(conf)) {
+        Pipelines.cluster(conf, rowType, pipeline);
+      } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
+        // add clean function to rollback failed writes for lazy failed writes cleaning policy
+        Pipelines.clean(conf, pipeline);
+      } else {
+        Pipelines.dummySink(pipeline);
+      }
     } else {
-      Pipelines.clean(conf, pipeline);
+      DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
+      pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
+      if (OptionsResolver.needsAsyncCompaction(conf)) {
+        Pipelines.compact(conf, pipeline);
+      } else {
+        Pipelines.clean(conf, pipeline);
+      }
     }
 
     env.execute(cfg.targetTableName);

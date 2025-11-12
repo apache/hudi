@@ -18,14 +18,14 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.mapred.RecordReader;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 /**
@@ -34,9 +34,9 @@ import java.util.NoSuchElementException;
  * @param <K> Key Type
  * @param <V> Value Type
  */
-public class RecordReaderValueIterator<K, V> implements Iterator<V> {
+public class RecordReaderValueIterator<K, V> implements ClosableIterator<V> {
 
-  private static final Logger LOG = LogManager.getLogger(RecordReaderValueIterator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RecordReaderValueIterator.class);
 
   private final RecordReader<K, V> reader;
   private V nextVal = null;
@@ -79,7 +79,12 @@ public class RecordReaderValueIterator<K, V> implements Iterator<V> {
     return retVal;
   }
 
-  public void close() throws IOException {
-    this.reader.close();
+  @Override
+  public void close() {
+    try {
+      this.reader.close();
+    } catch (IOException e) {
+      throw new RuntimeException("Could not close reader", e);
+    }
   }
 }

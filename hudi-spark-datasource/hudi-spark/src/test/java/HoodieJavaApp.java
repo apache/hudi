@@ -21,6 +21,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -28,27 +29,25 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.NonPartitionedExtractor;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
-import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.DataFrameWriter;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings;
 import static org.apache.hudi.common.testutils.Transformations.randomSelectAsHoodieKeys;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_ENABLED;
@@ -56,6 +55,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest;
 
 /**
  * Sample program that writes & reads hoodie tables via the Spark datasource.
@@ -98,7 +98,7 @@ public class HoodieJavaApp {
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;
 
-  private static final Logger LOG = LogManager.getLogger(HoodieJavaApp.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieJavaApp.class);
 
   public static void main(String[] args) throws Exception {
     HoodieJavaApp cli = new HoodieJavaApp();
@@ -112,10 +112,10 @@ public class HoodieJavaApp {
   }
 
   public void run() throws Exception {
+    SparkSession spark = SparkSession.builder()
+        .config(getSparkConfForTest("Hoodie Spark APP"))
+        .getOrCreate();
 
-    // Spark session setup..
-    SparkSession spark = SparkSession.builder().appName("Hoodie Spark APP")
-        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer").master("local[1]").getOrCreate();
     JavaSparkContext jssc = new JavaSparkContext(spark.sparkContext());
     spark.sparkContext().setLogLevel("WARN");
     FileSystem fs = FileSystem.get(jssc.hadoopConfiguration());
@@ -156,15 +156,13 @@ public class HoodieJavaApp {
         // this is the partition to place it into
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
         // use to combine duplicate records in input/with disk val
-        .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
+        .option(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp")
         // Used by hive sync and queries
         .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
-        // Add Key Extractor
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
-            nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
-                : SimpleKeyGenerator.class.getCanonicalName())
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "false")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
+        .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
+        .option(DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES().key(), DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES().defaultValue())
         // This will remove any existing data at path below, and create a
         .mode(SaveMode.Overwrite);
 
@@ -186,10 +184,7 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.TABLE_TYPE().key(), tableType) // Hoodie Table Type
         .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
-        .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
-            nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
-                : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
+        .option(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp")
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "false")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
@@ -214,10 +209,7 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.OPERATION().key(), "delete")
         .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
-        .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
-            nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
-                : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
+        .option(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp")
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "false")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
@@ -231,10 +223,7 @@ public class HoodieJavaApp {
     /**
      * Read & do some queries
      */
-    Dataset<Row> snapshotQueryDF = spark.read().format("org.apache.hudi")
-        // pass any path glob, can include hoodie & non-hoodie
-        // datasets
-        .load(tablePath + (nonPartitionedTable ? "/*" : "/*/*/*/*"));
+    Dataset<Row> snapshotQueryDF = spark.read().format("org.apache.hudi").load(tablePath);
     snapshotQueryDF.registerTempTable("hoodie_ro");
     spark.sql("describe hoodie_ro").show();
     // all trips whose fare amount was greater than 2.
@@ -247,7 +236,7 @@ public class HoodieJavaApp {
       Dataset<Row> incQueryDF = spark.read().format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
           // Only changes in write 2 above
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), commitInstantTime1)
+          .option(DataSourceReadOptions.START_COMMIT().key(), commitInstantTime1)
           // For incremental view, pass in the root/base path of dataset
           .load(tablePath);
 

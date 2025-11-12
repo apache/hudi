@@ -18,20 +18,25 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public interface RunsTableService {
 
-  Logger LOG = LogManager.getLogger(RunsTableService.class);
+  Logger LOG = LoggerFactory.getLogger(RunsTableService.class);
 
   default boolean tableServicesEnabled(HoodieWriteConfig config) {
     boolean enabled = config.areTableServicesEnabled();
     if (!enabled) {
-      LOG.warn(String.format("Table services are disabled. Set `%s` to enable.", HoodieWriteConfig.TABLE_SERVICES_ENABLED));
+      LOG.warn("Table services are disabled. Set `{}` to enable.", HoodieWriteConfig.TABLE_SERVICES_ENABLED);
     }
     return enabled;
+  }
+
+  default boolean shouldDelegateToTableServiceManager(HoodieWriteConfig config, ActionType actionType) {
+    return config.getTableServiceManagerConfig().isEnabledAndActionSupported(actionType);
   }
 }

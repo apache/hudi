@@ -32,8 +32,9 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.fs.FSUtils;
+
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.integ.testsuite.reader.SparkBasedReader;
 import org.apache.hudi.integ.testsuite.writer.AvroFileDeltaInputWriter;
 import org.apache.hudi.integ.testsuite.writer.DeltaInputWriter;
@@ -58,12 +59,12 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(false, false);
+    UtilitiesTestBase.initTestServices(true, false, false);
   }
 
   @AfterAll
-  public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
+  public static void cleanupClass() throws IOException {
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @BeforeEach
@@ -82,7 +83,7 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
   public void testAvroFileSinkWriter() throws IOException {
     // 1. Create a Avro File Sink Writer
     DeltaInputWriter<GenericRecord> fileSinkWriter =
-        new AvroFileDeltaInputWriter(jsc.hadoopConfiguration(), dfsBasePath + "/input", schemaProvider.getSourceSchema()
+        new AvroFileDeltaInputWriter(jsc.hadoopConfiguration(), basePath + "/input", schemaProvider.getSourceSchema()
             .toString(), 1024 * 1024L);
     GenericRecordFullPayloadGenerator payloadGenerator =
         new GenericRecordFullPayloadGenerator(schemaProvider.getSourceSchema());
@@ -96,7 +97,7 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
     });
     fileSinkWriter.close();
     DeltaWriteStats deltaWriteStats = fileSinkWriter.getDeltaWriteStats();
-    FileSystem fs = FSUtils.getFs(dfsBasePath, jsc.hadoopConfiguration());
+    FileSystem fs = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration());
     FileStatus[] fileStatuses = fs.listStatus(new Path(deltaWriteStats.getFilePath()));
     // Atleast 1 file was written
     assertEquals(1, fileStatuses.length);
@@ -104,7 +105,7 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
     assertTrue(fileStatuses[0].getLen() > 0);
     // File length should be the same as the number of bytes written
     assertTrue(deltaWriteStats.getBytesWritten() > 0);
-    List<String> paths = Arrays.asList(fs.globStatus(new Path(dfsBasePath + "/*/*.avro")))
+    List<String> paths = Arrays.asList(fs.globStatus(new Path(basePath + "/*/*.avro")))
         .stream().map(f -> f.getPath().toString()).collect(Collectors.toList());
     JavaRDD<GenericRecord> writtenRecords =
         SparkBasedReader.readAvro(sparkSession, schemaProvider.getSourceSchema().toString(), paths, Option.empty(),
@@ -119,7 +120,7 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
   public void testAvroFileSinkCreateNewWriter() throws IOException {
     // 1. Create a Avro File Sink Writer
     DeltaInputWriter<GenericRecord> fileSinkWriter =
-        new AvroFileDeltaInputWriter(jsc.hadoopConfiguration(), dfsBasePath,
+        new AvroFileDeltaInputWriter(jsc.hadoopConfiguration(), basePath,
             schemaProvider.getSourceSchema().toString(),
             1024 * 1024L);
     GenericRecordFullPayloadGenerator payloadGenerator =

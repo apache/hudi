@@ -18,7 +18,14 @@
 
 package org.apache.hudi.utilities.sources.helpers.gcs;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.pubsub.v1.PubsubMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity.ProcessingDecision.DO_SKIP;
 
@@ -29,6 +36,8 @@ import static org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity.Proc
  */
 public class MetadataMessage {
 
+  private static final Logger LOG = LoggerFactory.getLogger(MetadataMessage.class);
+
   // The CSPN message to wrap
   private final PubsubMessage message;
 
@@ -37,6 +46,7 @@ public class MetadataMessage {
   private static final String ATTR_EVENT_TYPE = "eventType";
   private static final String ATTR_OBJECT_ID = "objectId";
   private static final String ATTR_OVERWROTE_GENERATION = "overwroteGeneration";
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   public MetadataMessage(PubsubMessage message) {
     this.message = message;
@@ -58,9 +68,17 @@ public class MetadataMessage {
     if (isOverwriteOfExistingFile()) {
       return new MessageValidity(DO_SKIP,
       "eventType: " + getEventType()
-              + ". Overwrite of existing objectId: " + getObjectId()
-              + " with generation numner: " + getOverwroteGeneration()
+          + ". Overwrite of existing objectId: " + getObjectId()
+          + " with generation number: " + getOverwroteGeneration()
       );
+    }
+
+    try {
+      if (isEmptyFile()) {
+        return new MessageValidity(DO_SKIP, "Object " + getObjectId() + " is empty.");
+      }
+    } catch (IOException e) {
+      LOG.error("Exception while extracting the size for object " + getObjectId(), e);
     }
 
     return MessageValidity.DEFAULT_VALID_MESSAGE;
@@ -82,6 +100,12 @@ public class MetadataMessage {
     return EVENT_NAME_OBJECT_FINALIZE.equals(getEventType());
   }
 
+  private boolean isEmptyFile() throws IOException {
+    String sizeValue = getDataField("size");
+    long size = Long.parseLong(sizeValue);
+    return size <= 0;
+  }
+
   public String getEventType() {
     return getAttr(ATTR_EVENT_TYPE);
   }
@@ -96,6 +120,12 @@ public class MetadataMessage {
 
   private String getAttr(String attrName) {
     return message.getAttributesMap().get(attrName);
+  }
+
+  private String getDataField(String fieldName) throws IOException {
+    JsonNode root = OBJECT_MAPPER.readValue(toStringUtf8(), JsonNode.class);
+    JsonNode fieldNode = root.get(fieldName);
+    return fieldNode.asText();
   }
 
 }

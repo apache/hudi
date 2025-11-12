@@ -21,20 +21,14 @@ package org.apache.hudi.hadoop;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.mapred.FileSplit;
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
-import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 public class InputSplitUtils {
 
   public static void writeString(String str, DataOutput out) throws IOException {
-    byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
+    byte[] bytes = getUTF8Bytes(str);
     out.writeInt(bytes.length);
     out.write(bytes);
   }
@@ -42,7 +36,7 @@ public class InputSplitUtils {
   public static String readString(DataInput in) throws IOException {
     byte[] bytes = new byte[in.readInt()];
     in.readFully(bytes);
-    return new String(bytes, StandardCharsets.UTF_8);
+    return fromUTF8Bytes(bytes);
   }
 
   public static void writeBoolean(Boolean valueToWrite, DataOutput out) throws IOException {
@@ -51,25 +45,5 @@ public class InputSplitUtils {
 
   public static boolean readBoolean(DataInput in) throws IOException {
     return in.readBoolean();
-  }
-
-  /**
-   * Return correct base-file schema based on split.
-   *
-   * @param split File Split
-   * @param conf Configuration
-   * @return
-   */
-  public static Schema getBaseFileSchema(FileSplit split, Configuration conf) {
-    try {
-      if (split instanceof BootstrapBaseFileSplit) {
-        HoodieFileReader storageReader = HoodieFileReaderFactory.getFileReader(conf,
-            ((BootstrapBaseFileSplit)(split)).getBootstrapFileSplit().getPath());
-        return HoodieAvroUtils.addMetadataFields(storageReader.getSchema());
-      }
-      return HoodieRealtimeRecordReaderUtils.readSchema(conf, split.getPath());
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to read footer for parquet " + split.getPath(), e);
-    }
   }
 }

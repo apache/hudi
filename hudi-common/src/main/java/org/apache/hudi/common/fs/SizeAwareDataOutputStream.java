@@ -25,14 +25,14 @@ import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Wrapper for DataOutpuStream to keep track of number of bytes written.
+ * Wrapper for DataOutputStream to keep track of number of bytes written.
  */
 public class SizeAwareDataOutputStream {
 
-  // Actual outpuStream
-  private DataOutputStream outputStream;
+  // Actual outputStream
+  private final DataOutputStream outputStream;
   // Counter to keep track of number of bytes written
-  private AtomicLong size;
+  private final AtomicLong size;
 
   public SizeAwareDataOutputStream(FileOutputStream fileOutputStream, int cacheSize) {
     this.outputStream = new DataOutputStream(new BufferedOutputStream(fileOutputStream, cacheSize));
@@ -55,7 +55,7 @@ public class SizeAwareDataOutputStream {
   }
 
   public void write(byte[] v, int offset, int len) throws IOException {
-    size.addAndGet(len + offset);
+    size.addAndGet((long) len + offset);
     outputStream.write(v, offset, len);
   }
 

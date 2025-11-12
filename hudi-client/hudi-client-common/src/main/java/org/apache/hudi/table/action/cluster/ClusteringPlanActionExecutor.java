@@ -21,29 +21,29 @@ package org.apache.hudi.table.action.cluster;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.BaseActionExecutor;
+import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringPlanStrategy;
+import org.apache.hudi.util.Lazy;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
-public class ClusteringPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieClusteringPlan>> {
+public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseTableServicePlanActionExecutor<T, I, K, O, Option<HoodieClusteringPlan>> {
 
-  private static final Logger LOG = LogManager.getLogger(ClusteringPlanActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ClusteringPlanActionExecutor.class);
 
   private final Option<Map<String, String>> extraMetadata;
 
@@ -57,54 +57,53 @@ public class ClusteringPlanActionExecutor<T extends HoodieRecordPayload, I, K, O
   }
 
   protected Option<HoodieClusteringPlan> createClusteringPlan() {
-    LOG.info("Checking if clustering needs to be run on " + config.getBasePath());
-    Option<HoodieInstant> lastClusteringInstant = table.getActiveTimeline()
-        .filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION)).lastInstant();
+    LOG.info("Checking if clustering needs to be run on {}", config.getBasePath());
+    Option<HoodieInstant> lastClusteringInstant =
+        table.getActiveTimeline().getLastClusteringInstant();
 
     int commitsSinceLastClustering = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
-        .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::getTimestamp).orElse("0"), Integer.MAX_VALUE)
+        .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::requestedTime).orElse("0"), Integer.MAX_VALUE)
         .countInstants();
 
     if (config.inlineClusteringEnabled() && config.getInlineClusterMaxCommits() > commitsSinceLastClustering) {
-      LOG.info("Not scheduling inline clustering as only " + commitsSinceLastClustering
-          + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
-          + config.getInlineClusterMaxCommits());
+      LOG.info("Not scheduling inline clustering as only {} commits was found since last clustering {}. Waiting for {}",
+          commitsSinceLastClustering, lastClusteringInstant,
+          config.getInlineClusterMaxCommits());
       return Option.empty();
     }
 
-    if (config.isAsyncClusteringEnabled() && config.getAsyncClusterMaxCommits() > commitsSinceLastClustering) {
-      LOG.info("Not scheduling async clustering as only " + commitsSinceLastClustering
-          + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
-          + config.getAsyncClusterMaxCommits());
+    if ((config.isAsyncClusteringEnabled() || config.scheduleInlineClustering()) && config.getAsyncClusterMaxCommits() > commitsSinceLastClustering) {
+      LOG.info("Not scheduling async clustering as only {} commits was found since last clustering {}. Waiting for {}",
+          commitsSinceLastClustering, lastClusteringInstant, config.getAsyncClusterMaxCommits());
       return Option.empty();
     }
 
-    LOG.info("Generating clustering plan for table " + config.getBasePath());
+    LOG.info("Generating clustering plan for table {}", config.getBasePath());
     ClusteringPlanStrategy strategy = (ClusteringPlanStrategy) ReflectionUtils.loadClass(
         ClusteringPlanStrategy.checkAndGetClusteringPlanStrategy(config),
             new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class}, table, context, config);
 
-    return strategy.generateClusteringPlan();
+    Lazy<List<String>> partitions = Lazy.lazily(() -> getPartitions(strategy, TableServiceType.CLUSTER));
+
+    return strategy.generateClusteringPlan(this, partitions);
   }
 
   @Override
   public Option<HoodieClusteringPlan> execute() {
     Option<HoodieClusteringPlan> planOption = createClusteringPlan();
     if (planOption.isPresent()) {
+      // To support writing and reading with table version SIX, we need to allow instant action to be REPLACE_COMMIT_ACTION
+      String action =  TimelineLayoutVersion.LAYOUT_VERSION_2.equals(table.getMetaClient().getTimelineLayoutVersion()) ? HoodieTimeline.CLUSTERING_ACTION : HoodieTimeline.REPLACE_COMMIT_ACTION;
       HoodieInstant clusteringInstant =
-          new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime);
-      try {
-        HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
-            .setOperationType(WriteOperationType.CLUSTER.name())
-            .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
-            .setClusteringPlan(planOption.get())
-            .build();
-        table.getActiveTimeline().saveToPendingReplaceCommit(clusteringInstant,
-            TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
-      } catch (IOException ioe) {
-        throw new HoodieIOException("Exception scheduling clustering", ioe);
-      }
+          instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, action, instantTime);
+      HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
+          .setOperationType(WriteOperationType.CLUSTER.name())
+          .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
+          .setClusteringPlan(planOption.get())
+          .build();
+      table.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant, requestedReplaceMetadata);
     }
+
     return planOption;
   }
 }

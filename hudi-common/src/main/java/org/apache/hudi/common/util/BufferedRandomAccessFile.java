@@ -18,7 +18,8 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -57,7 +58,7 @@ import java.nio.ByteBuffer;
  *           License: http://www.apache.org/licenses/LICENSE-2.0
  */
 public final class BufferedRandomAccessFile extends RandomAccessFile {
-  private static final Logger LOG = Logger.getLogger(BufferedRandomAccessFile.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BufferedRandomAccessFile.class);
   static final int DEFAULT_BUFFER_SIZE = (1 << 16); // 64K buffer
   static final int BUFFER_BOUNDARY_MASK = -DEFAULT_BUFFER_SIZE;
 
@@ -196,7 +197,7 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
   }
 
   /**
-   * If the new seek position is in the buffer, adjust the currentPostion.
+   * If the new seek position is in the buffer, adjust the currentPosition.
    * If the new seek position is outside of the buffer, flush the contents to
    * the file and reload the buffer corresponding to the position.
    *

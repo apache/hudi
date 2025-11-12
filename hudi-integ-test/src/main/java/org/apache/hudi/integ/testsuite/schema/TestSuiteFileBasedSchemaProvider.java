@@ -25,20 +25,22 @@ import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.Schema.Type;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 
 /**
  * Appends source ordering field to both source and target schemas. This is required to assist in validation to differentiate records written in different batches.
  */
 public class TestSuiteFileBasedSchemaProvider extends FilebasedSchemaProvider {
 
-  protected static Logger log = LogManager.getLogger(WriterContext.class);
+  protected static Logger log = LoggerFactory.getLogger(WriterContext.class);
 
   public TestSuiteFileBasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
@@ -49,7 +51,7 @@ public class TestSuiteFileBasedSchemaProvider extends FilebasedSchemaProvider {
   private Schema addSourceOrderingFieldToSchema(Schema schema) {
     List<Field> fields = new ArrayList<>();
     for (Schema.Field field : schema.getFields()) {
-      Schema.Field newField = new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal());
+      Schema.Field newField = createNewSchemaField(field);
       for (Map.Entry<String, Object> prop : field.getObjectProps().entrySet()) {
         newField.addProp(prop.getKey(), prop.getValue());
       }

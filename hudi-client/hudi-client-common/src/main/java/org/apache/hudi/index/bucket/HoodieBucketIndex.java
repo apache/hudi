@@ -29,21 +29,26 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+
+import static org.apache.hudi.index.HoodieIndexUtils.tagAsNewRecordIfNeeded;
 
 /**
  * Hash indexing mechanism.
  */
 public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieBucketIndex.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieBucketIndex.class);
 
   protected final int numBuckets;
   protected final List<String> indexKeyFields;
@@ -69,10 +74,9 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
       HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable)
       throws HoodieIndexException {
-    // Get bucket location mapper for the given partitions
-    List<String> partitions = records.map(HoodieRecord::getPartitionPath).distinct().collectAsList();
-    LOG.info("Get BucketIndexLocationMapper for partitions: " + partitions);
-    BucketIndexLocationMapper mapper = getLocationMapper(hoodieTable, partitions);
+
+    // Get bucket location mapper
+    GlobalIndexLocationFunction locFunc = new GlobalIndexLocationFunction(hoodieTable);
 
     return records.mapPartitions(iterator ->
         new LazyIterableIterator<HoodieRecord<R>, HoodieRecord<R>>(iterator) {
@@ -80,13 +84,41 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
           protected HoodieRecord<R> computeNext() {
             // TODO maybe batch the operation to improve performance
             HoodieRecord record = inputItr.next();
-            Option<HoodieRecordLocation> loc = mapper.getRecordLocation(record.getKey());
-            return HoodieIndexUtils.getTaggedRecord(record, loc);
+            Option<HoodieRecordLocation> loc = locFunc.apply(record);
+            return tagAsNewRecordIfNeeded(record, loc);
           }
-        },
-        false
+        }, false
     );
   }
+
+  /**
+   * Global lazy-loading index location function. The index location function can be applied to a hoodie record to get its location under the partition.
+   * The per-partition index location functions are cached for better performance.
+   */
+  class GlobalIndexLocationFunction implements Function<HoodieRecord, Option<HoodieRecordLocation>>, Serializable {
+
+    private final HoodieTable table;
+    private final Map<String/*partition path*/, Function<HoodieRecord, Option<HoodieRecordLocation>>/*location func per partition*/> partitionToIndexFunctionMap;
+
+    public GlobalIndexLocationFunction(HoodieTable table) {
+      this.table = table;
+      this.partitionToIndexFunctionMap = new HashMap<>();
+    }
+
+    @Override
+    public Option<HoodieRecordLocation> apply(HoodieRecord record) {
+      String partitionPath = record.getPartitionPath();
+      if (!partitionToIndexFunctionMap.containsKey(partitionPath)) {
+        partitionToIndexFunctionMap.put(partitionPath, getIndexLocationFunctionForPartition(table, partitionPath));
+      }
+      return partitionToIndexFunctionMap.get(partitionPath).apply(record);
+    }
+  }
+
+  /**
+   * Returns the index location function for the give partition path {@code partitionPath}.
+   */
+  protected abstract Function<HoodieRecord, Option<HoodieRecordLocation>> getIndexLocationFunctionForPartition(HoodieTable table, String partitionPath);
 
   @Override
   public boolean requiresTagging(WriteOperationType operationType) {
@@ -95,6 +127,8 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
       case INSERT_OVERWRITE:
       case UPSERT:
       case DELETE:
+      case DELETE_PREPPED:
+      case BULK_INSERT:
         return true;
       default:
         return false;
@@ -124,9 +158,4 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
   public int getNumBuckets() {
     return numBuckets;
   }
-
-  /**
-   * Get a location mapper for the given table & partitionPath
-   */
-  protected abstract BucketIndexLocationMapper getLocationMapper(HoodieTable table, List<String> partitionPath);
 }

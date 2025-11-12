@@ -19,10 +19,14 @@
 
 package org.apache.hudi.common.data;
 
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.List;
@@ -59,6 +63,7 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper
  * @param <T> type of object.
  */
 public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieData<T> {
+  private static Logger LOG = LoggerFactory.getLogger(HoodieListData.class);
 
   private HoodieListData(List<T> data, boolean lazy) {
     super(data, lazy);
@@ -90,14 +95,50 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
     return new HoodieListData<>(listData, true);
   }
 
+  /**
+   * Creates instance of {@link HoodieListData} bearing *lazy* execution semantic on top of an iterator.
+   * If the iterator is {@link java.io.Closeable}, it will be closed when the stream is closed.
+   * @param iterator a {@link Iterator} of objects in type T
+   * @return a new instance that will process the iterator lazily
+   * @param <T> the type of object
+   */
+  public static <T> HoodieListData<T> lazy(Iterator<T> iterator) {
+    Stream<T> stream = StreamSupport.stream(
+        Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), true).onClose(() -> {
+          if (iterator instanceof AutoCloseable) {
+            try {
+              ((AutoCloseable) iterator).close();
+            } catch (Exception ex) {
+              LOG.warn("Failed to close the iterator", ex);
+            }
+          }
+        });
+    return new HoodieListData<>(stream, true);
+  }
+
+  @Override
+  public int getId() {
+    return -1;
+  }
+
   @Override
   public void persist(String level) {
     // No OP
   }
 
   @Override
+  public void persist(String level, HoodieEngineContext engineContext, HoodieDataCacheKey cacheKey) {
+    // No OP
+  }
+
+  @Override
   public void unpersist() {
     // No OP
+  }
+
+  @Override
+  public void unpersistWithDependencies() {
+    // No OP - in-memory implementation doesn't have dependencies to unpersist
   }
 
   @Override
@@ -108,10 +149,12 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   @Override
   public <O> HoodieData<O> mapPartitions(SerializableFunction<Iterator<T>, Iterator<O>> func, boolean preservesPartitioning) {
     Function<Iterator<T>, Iterator<O>> mapper = throwingMapWrapper(func);
+    Iterator<T> iterator = asStream().iterator();
+    Iterator<O> newIterator = mapper.apply(iterator);
     return new HoodieListData<>(
         StreamSupport.stream(
             Spliterators.spliteratorUnknownSize(
-                mapper.apply(asStream().iterator()), Spliterator.ORDERED), true),
+                newIterator, Spliterator.ORDERED), true).onClose(new IteratorCloser(newIterator)),
         lazy
     );
   }
@@ -119,10 +162,24 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   @Override
   public <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func) {
     Function<T, Iterator<O>> mapper = throwingMapWrapper(func);
-    Stream<O> mappedStream = asStream().flatMap(e ->
-        StreamSupport.stream(
-            Spliterators.spliteratorUnknownSize(mapper.apply(e), Spliterator.ORDERED), true));
+    Stream<O> mappedStream = asStream().flatMap(e -> {
+      Iterator<O> iterator = mapper.apply(e);
+      return StreamSupport.stream(
+          Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), true).onClose(new IteratorCloser(iterator));
+    });
     return new HoodieListData<>(mappedStream, lazy);
+  }
+
+  @Override
+  public <K, V> HoodiePairData<K, V> flatMapToPair(SerializableFunction<T, Iterator<? extends Pair<K, V>>> func) {
+    Function<T, Iterator<? extends Pair<K, V>>> mapper = throwingMapWrapper(func);
+    Stream<Pair<K, V>> mappedStream = asStream().flatMap(e -> {
+      Iterator<? extends Pair<K, V>> iterator = mapper.apply(e);
+      return StreamSupport.stream(
+          Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), true).onClose(new IteratorCloser(iterator));
+    });
+
+    return new HoodieListPairData<>(mappedStream, lazy);
   }
 
   @Override
@@ -166,6 +223,12 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   }
 
   @Override
+  public HoodieData<T> coalesce(int parallelism) {
+    // no op
+    return this;
+  }
+
+  @Override
   public boolean isEmpty() {
     return super.isEmpty();
   }
@@ -177,6 +240,11 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
 
   @Override
   public int getNumPartitions() {
+    return 1;
+  }
+
+  @Override
+  public int deduceNumPartitions() {
     return 1;
   }
 

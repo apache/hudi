@@ -22,21 +22,20 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class MergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseRollbackActionExecutor<T, I, K, O> {
+public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackActionExecutor<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(MergeOnReadRollbackActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MergeOnReadRollbackActionExecutor.class);
 
   public MergeOnReadRollbackActionExecutor(HoodieEngineContext context,
                                            HoodieWriteConfig config,
@@ -45,7 +44,7 @@ public class MergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I,
                                            HoodieInstant commitInstant,
                                            boolean deleteInstants,
                                            boolean skipLocking) {
-    super(context, config, table, instantTime, commitInstant, deleteInstants, skipLocking);
+    super(context, config, table, instantTime, commitInstant, deleteInstants, skipLocking, false);
   }
 
   public MergeOnReadRollbackActionExecutor(HoodieEngineContext context,
@@ -56,13 +55,12 @@ public class MergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I,
                                            boolean deleteInstants,
                                            boolean skipTimelinePublish,
                                            boolean skipLocking) {
-    super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, skipLocking);
+    super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, skipLocking, false);
   }
 
   @Override
   protected List<HoodieRollbackStat> executeRollback(HoodieRollbackPlan hoodieRollbackPlan) {
-    HoodieTimer rollbackTimer = new HoodieTimer();
-    rollbackTimer.startTimer();
+    HoodieTimer rollbackTimer = HoodieTimer.start();
 
     LOG.info("Rolling back instant " + instantToRollback);
 

@@ -22,18 +22,19 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 
@@ -43,11 +44,11 @@ import java.util.List;
  * <p>The cdc about logic is copied from {@link HoodieMergeHandleWithChangeLog},
  * we should refactor it out when there are good abstractions.
  */
-public class FlinkMergeHandleWithChangeLog<T extends HoodieRecordPayload, I, K, O>
+public class FlinkMergeHandleWithChangeLog<T, I, K, O>
     extends FlinkMergeHandle<T, I, K, O> {
   private final HoodieCDCLogger cdcLogger;
 
-  private static final Logger LOG = LogManager.getLogger(FlinkMergeHandleWithChangeLog.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkMergeHandleWithChangeLog.class);
 
   public FlinkMergeHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                        Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
@@ -58,25 +59,36 @@ public class FlinkMergeHandleWithChangeLog<T extends HoodieRecordPayload, I, K, 
         config,
         hoodieTable.getMetaClient().getTableConfig(),
         partitionPath,
-        getFileSystem(),
-        tableSchema,
-        createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX),
+        getStorage(),
+        getWriterSchema(),
+        createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX, Option.empty()),
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
 
-  protected boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, GenericRecord oldRecord, Option<IndexedRecord> indexedRecord) {
-    final boolean result = super.writeUpdateRecord(hoodieRecord, oldRecord, indexedRecord);
+  @Override
+  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, HoodieRecord combineRecord, Schema writerSchema)
+      throws IOException {
+    // TODO [HUDI-5019] Remove these unnecessary newInstance invocations
+    HoodieRecord savedCombineRecord = combineRecord.newInstance();
+    final boolean result = super.writeUpdateRecord(newRecord, oldRecord, combineRecord, writerSchema);
     if (result) {
-      boolean isDelete = HoodieOperation.isDelete(hoodieRecord.getOperation());
-      cdcLogger.put(hoodieRecord, oldRecord, isDelete ? Option.empty() : indexedRecord);
+      boolean isDelete = HoodieOperation.isDelete(newRecord.getOperation());
+      GenericRecord oldAvroRecord = (GenericRecord) toAvroRecord(oldRecord, writeSchemaWithMetaFields, config.getProps()).get();
+      Option<IndexedRecord> newAvroRecordOpt =
+          isDelete ? Option.empty() : toAvroRecord(savedCombineRecord, writerSchema, config.getProps());
+      cdcLogger.put(newRecord, oldAvroRecord, newAvroRecordOpt);
     }
     return result;
   }
 
-  protected void writeInsertRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> insertRecord) {
-    super.writeInsertRecord(hoodieRecord, insertRecord);
-    if (!HoodieOperation.isDelete(hoodieRecord.getOperation())) {
-      cdcLogger.put(hoodieRecord, null, insertRecord);
+  @Override
+  protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
+    Schema schema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
+    // TODO Remove these unnecessary newInstance invocations
+    HoodieRecord<T> savedRecord = newRecord.newInstance();
+    super.writeInsertRecord(newRecord);
+    if (!HoodieOperation.isDelete(newRecord.getOperation())) {
+      cdcLogger.put(newRecord, null, toAvroRecord(savedRecord, schema, config.getProps()));
     }
   }
 

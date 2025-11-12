@@ -17,11 +17,12 @@
 
 package org.apache.spark.sql.parser
 
+import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.spark.sql.parser.{HoodieSqlCommonLexer, HoodieSqlCommonParser}
+
 import org.antlr.v4.runtime.{CharStream, CharStreams, CodePointCharStream, CommonTokenStream, IntStream}
 import org.antlr.v4.runtime.atn.PredictionMode
 import org.antlr.v4.runtime.misc.{Interval, ParseCancellationException}
-import org.apache.hudi.SparkAdapterSupport
-import org.apache.hudi.spark.sql.parser.{HoodieSqlCommonLexer, HoodieSqlCommonParser}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
@@ -31,17 +32,18 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.types.{DataType, StructType}
 
+import scala.jdk.CollectionConverters._
+
 class HoodieCommonSqlParser(session: SparkSession, delegate: ParserInterface)
   extends ParserInterface with Logging with SparkAdapterSupport {
 
   private lazy val builder = new HoodieSqlCommonAstBuilder(session, delegate)
-  private lazy val sparkExtendedParser = sparkAdapter.createExtendedSparkParser
-    .map(_(session, delegate)).getOrElse(delegate)
+  private lazy val sparkExtendedParser = sparkAdapter.createExtendedSparkParser(session, delegate)
 
   override def parsePlan(sqlText: String): LogicalPlan = parse(sqlText) { parser =>
     builder.visit(parser.singleStatement()) match {
       case plan: LogicalPlan => plan
-      case _=> sparkExtendedParser.parsePlan(sqlText)
+      case _ => sparkExtendedParser.parsePlan(sqlText)
     }
   }
 
@@ -57,21 +59,21 @@ class HoodieCommonSqlParser(session: SparkSession, delegate: ParserInterface)
 
   override def parseDataType(sqlText: String): DataType = delegate.parseDataType(sqlText)
 
-  /* SPARK-37266 Added parseQuery to ParserInterface in Spark 3.3.0. This is a patch to prevent
-   hackers from tampering text with persistent view, it won't be called in older Spark
-   Don't mark this as override for backward compatibility
-   Can't use sparkExtendedParser directly here due to the same reason */
-  def parseQuery(sqlText: String): LogicalPlan = parse(sqlText) { parser =>
-    sparkAdapter.getQueryParserFromExtendedSqlParser(session, delegate, sqlText)
-  }
+  /**
+   * SPARK-37266 Added [[parseQuery]] to [[ParserInterface]] in Spark 3.3.0.
+   * Don't mark this as override for backward compatibility
+   */
+  def parseQuery(sqlText: String): LogicalPlan = sparkExtendedParser.parseQuery(sqlText)
 
   def parseRawDataType(sqlText : String) : DataType = {
     throw new UnsupportedOperationException(s"Unsupported parseRawDataType method")
   }
 
-  def parseMultipartIdentifier(sqlText: String): Seq[String] = {
-    sparkAdapter.parseMultipartIdentifier(delegate, sqlText)
-  }
+  /**
+   * Added [[parseMultipartIdentifier]] to [[ParserInterface]] in Spark 3.0.0.
+   * Don't mark this as override for backward compatibility
+   */
+  def parseMultipartIdentifier(sqlText: String): Seq[String] = sparkExtendedParser.parseMultipartIdentifier(sqlText)
 
   protected def parse[T](command: String)(toResult: HoodieSqlCommonParser => T): T = {
     logDebug(s"Parsing command: $command")
@@ -109,9 +111,11 @@ class HoodieCommonSqlParser(session: SparkSession, delegate: ParserInterface)
         throw e.withCommand(command)
       case e: AnalysisException =>
         val position = Origin(e.line, e.startPosition)
-        throw new ParseException(Option(command), e.message, position, position)
+        throw sparkAdapter.newParseException(Option(command), e, position, position)
     }
   }
+
+  def parseRoutineParam(sqlText: String): StructType = throw new UnsupportedOperationException()
 }
 
 /**

@@ -37,9 +37,11 @@ public enum WriteOperationType {
   BULK_INSERT_PREPPED("bulk_insert_prepped"),
   // delete
   DELETE("delete"),
+  DELETE_PREPPED("delete_prepped"),
   BOOTSTRAP("bootstrap"),
   // insert overwrite with static partitioning
   INSERT_OVERWRITE("insert_overwrite"),
+  BUCKET_RESCALE("bucket_rescale"),
   // cluster
   CLUSTER("cluster"),
   // delete partition
@@ -54,7 +56,7 @@ public enum WriteOperationType {
   // alter schema
   ALTER_SCHEMA("alter_schema"),
   // log compact
-  LOG_COMPACT("logcompact"),
+  LOG_COMPACT("log_compact"),
   // used for old version
   UNKNOWN("unknown");
 
@@ -83,6 +85,8 @@ public enum WriteOperationType {
         return BULK_INSERT_PREPPED;
       case "delete":
         return DELETE;
+      case "delete_prepped":
+        return DELETE_PREPPED;
       case "insert_overwrite":
         return INSERT_OVERWRITE;
       case "delete_partition":
@@ -97,6 +101,10 @@ public enum WriteOperationType {
         return INDEX;
       case "alter_schema":
         return ALTER_SCHEMA;
+      case "log_compact":
+        return LOG_COMPACT;
+      case "bucket_rescale":
+        return BUCKET_RESCALE;
       case "unknown":
         return UNKNOWN;
       default:
@@ -113,24 +121,77 @@ public enum WriteOperationType {
   }
 
   public static boolean isChangingRecords(WriteOperationType operationType) {
-    return operationType == UPSERT || operationType == UPSERT_PREPPED || operationType == DELETE;
+    return operationType == UPSERT || operationType == UPSERT_PREPPED || operationType == DELETE || operationType == DELETE_PREPPED;
   }
 
   public static boolean isOverwrite(WriteOperationType operationType) {
     return operationType == INSERT_OVERWRITE || operationType == INSERT_OVERWRITE_TABLE;
   }
 
+  public boolean isInsertOverwriteOrDeletePartition() {
+    return this == INSERT_OVERWRITE || this == INSERT_OVERWRITE_TABLE || this == DELETE_PARTITION;
+  }
+
   /**
    * Whether the operation changes the dataset.
    */
-  public static boolean isDataChange(WriteOperationType operation) {
+  public static boolean yieldChanges(WriteOperationType operation) {
     return operation == WriteOperationType.INSERT
         || operation == WriteOperationType.UPSERT
+        || operation == WriteOperationType.UPSERT_PREPPED
         || operation == WriteOperationType.DELETE
+        || operation == WriteOperationType.DELETE_PREPPED
         || operation == WriteOperationType.BULK_INSERT
         || operation == WriteOperationType.DELETE_PARTITION
         || operation == WriteOperationType.INSERT_OVERWRITE
         || operation == WriteOperationType.INSERT_OVERWRITE_TABLE
         || operation == WriteOperationType.BOOTSTRAP;
+  }
+
+  public static boolean canUpdateSchema(WriteOperationType operation) {
+    return !(operation == WriteOperationType.CLUSTER
+        || operation == WriteOperationType.COMPACT
+        || operation == WriteOperationType.INDEX
+        || operation == WriteOperationType.LOG_COMPACT);
+  }
+
+  public static boolean isInsert(WriteOperationType operation) {
+    return operation == WriteOperationType.INSERT
+        || operation == WriteOperationType.INSERT_PREPPED
+        || operation == WriteOperationType.BULK_INSERT
+        || operation == WriteOperationType.BULK_INSERT_PREPPED
+        || operation == WriteOperationType.INSERT_OVERWRITE
+        || operation == WriteOperationType.INSERT_OVERWRITE_TABLE;
+  }
+
+  public static boolean isInsertWithoutReplace(WriteOperationType operation) {
+    return operation == WriteOperationType.INSERT
+        || operation == WriteOperationType.INSERT_PREPPED
+        || operation == WriteOperationType.BULK_INSERT
+        || operation == WriteOperationType.BULK_INSERT_PREPPED;
+  }
+
+  public static boolean isUpsert(WriteOperationType operation) {
+    return operation == WriteOperationType.UPSERT
+        || operation == WriteOperationType.UPSERT_PREPPED;
+  }
+
+  public static boolean isDelete(WriteOperationType operation) {
+    return operation == DELETE || operation == DELETE_PREPPED;
+  }
+
+  public static boolean isPreppedWriteOperation(WriteOperationType operationType) {
+    return operationType == BULK_INSERT_PREPPED || operationType == INSERT_PREPPED | operationType == UPSERT_PREPPED || operationType == DELETE_PREPPED;
+  }
+
+  public static boolean isCompactionOrClustering(WriteOperationType operationType) {
+    return operationType == COMPACT || operationType == CLUSTER;
+  }
+
+  /**
+   * @return true if streaming writes to metadata table is supported for a given {@link WriteOperationType}. false otherwise.
+   */
+  public static boolean streamingWritesToMetadataSupported(WriteOperationType writeOperationType) {
+    return (isInsertWithoutReplace(writeOperationType) || isChangingRecords(writeOperationType) || isCompactionOrClustering(writeOperationType));
   }
 }

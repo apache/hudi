@@ -18,6 +18,10 @@
 
 package org.apache.hudi.common.util.jvm;
 
+/**
+ * Implementation of {@link MemoryLayoutSpecification} based on
+ * Hot Spot Memory Layout Specification on 32-bit.
+ */
 public class HotSpotMemoryLayoutSpecification32bit implements MemoryLayoutSpecification {
   @Override
   public int getArrayHeaderSize() {

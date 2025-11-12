@@ -18,15 +18,16 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.Dataset;
@@ -49,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class TestSqlSource extends UtilitiesTestBase {
 
   private final boolean useFlattenedSchema = false;
-  private final String sqlSourceConfig = "hoodie.deltastreamer.source.sql.sql.query";
+  private final String sqlSourceConfig = "hoodie.streamer.source.sql.sql.query";
   protected FilebasedSchemaProvider schemaProvider;
   protected HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
   private String dfsRoot;
@@ -59,18 +60,18 @@ public class TestSqlSource extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(false, false);
+    UtilitiesTestBase.initTestServices();
   }
 
   @AfterAll
-  public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
+  public static void cleanupClass() throws IOException {
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @BeforeEach
   public void setup() throws Exception {
-    dfsRoot = UtilitiesTestBase.dfsBasePath + "/parquetFiles";
-    UtilitiesTestBase.dfs.mkdirs(new Path(dfsRoot));
+    dfsRoot = UtilitiesTestBase.basePath + "/parquetFiles";
+    UtilitiesTestBase.fs.mkdirs(new Path(dfsRoot));
     props = new TypedProperties();
     super.setup();
     schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS(), jsc);

@@ -18,35 +18,97 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
-import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
 
+import org.apache.avro.generic.GenericRecord;
+
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.function.BiFunction;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
+import static org.apache.hudi.keygen.KeyGenerator.DEFAULT_COLUMN_VALUE_SEPARATOR;
+import static org.apache.hudi.keygen.KeyGenerator.DEFAULT_RECORD_KEY_PARTS_SEPARATOR;
+import static org.apache.hudi.keygen.KeyGenerator.EMPTY_RECORDKEY_PLACEHOLDER;
+import static org.apache.hudi.keygen.KeyGenerator.NULL_RECORDKEY_PLACEHOLDER;
+import static org.apache.hudi.keygen.KeyGenerator.constructRecordKey;
 
 public class KeyGenUtils {
-
-  protected static final String NULL_RECORDKEY_PLACEHOLDER = "__null__";
-  protected static final String EMPTY_RECORDKEY_PLACEHOLDER = "__empty__";
-
   protected static final String HUDI_DEFAULT_PARTITION_PATH = PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
   public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
-  public static final String DEFAULT_RECORD_KEY_PARTS_SEPARATOR = ",";
+  public static final String RECORD_KEY_GEN_PARTITION_ID_CONFIG = "_hoodie.record.key.gen.partition.id";
+  public static final String RECORD_KEY_GEN_INSTANT_TIME_CONFIG = "_hoodie.record.key.gen.instant.time";
+
+  /**
+   * Infers the key generator type based on the record key and partition fields.
+   * <p>
+   * (1) partition field is empty: {@link KeyGeneratorType#NON_PARTITION};
+   * (2) Only one partition field and one record key field: {@link KeyGeneratorType#SIMPLE};
+   * (3) More than one partition and/or record key fields: {@link KeyGeneratorType#COMPLEX}.
+   *
+   * @param recordsKeyFields Record key field list.
+   * @param partitionFields  Partition field list.
+   * @return Inferred key generator type.
+   */
+  public static KeyGeneratorType inferKeyGeneratorType(
+      Option<String> recordsKeyFields, String partitionFields) {
+    int numRecordKeyFields = recordsKeyFields.map(fields -> fields.split(",").length).orElse(0);
+    KeyGeneratorType partitionKeyGeneratorType = inferKeyGeneratorTypeFromPartitionFields(partitionFields);
+    if (numRecordKeyFields <= 1) {
+      return partitionKeyGeneratorType;
+    } else {
+      // More than one record key fields are configured
+      if (partitionKeyGeneratorType == KeyGeneratorType.SIMPLE) {
+        // if there is a single partition field configured but multiple record key fields, key generator type
+        // should be COMPLEX and not SIMPLE
+        return KeyGeneratorType.COMPLEX;
+      } else {
+        // partition generator type is COMPLEX, CUSTOM or NON_PARTITION. In all these cases, partition
+        // generator type determines the key generator type
+        return partitionKeyGeneratorType;
+      }
+    }
+  }
+
+  // When auto record key gen is enabled, our inference will be based on partition path only.
+  static KeyGeneratorType inferKeyGeneratorTypeFromPartitionFields(String partitionFields) {
+    if (!StringUtils.isNullOrEmpty(partitionFields)) {
+      String[] partitonFields = partitionFields.split(",");
+      if (partitonFields[0].contains(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)) {
+        return KeyGeneratorType.CUSTOM;
+      } else if (partitonFields.length == 1) {
+        return KeyGeneratorType.SIMPLE;
+      } else {
+        return KeyGeneratorType.COMPLEX;
+      }
+    }
+    return KeyGeneratorType.NON_PARTITION;
+  }
 
   /**
    * Fetches record key from the GenericRecord.
-   * @param genericRecord generic record of interest.
+   *
+   * @param genericRecord   generic record of interest.
    * @param keyGeneratorOpt Optional BaseKeyGenerator. If not, meta field will be used.
    * @return the record key for the passed in generic record.
    */
@@ -56,7 +118,8 @@ public class KeyGenUtils {
 
   /**
    * Fetches partition path from the GenericRecord.
-   * @param genericRecord generic record of interest.
+   *
+   * @param genericRecord   generic record of interest.
    * @param keyGeneratorOpt Optional BaseKeyGenerator. If not, meta field will be used.
    * @return the partition path for the passed in generic record.
    */
@@ -72,64 +135,132 @@ public class KeyGenUtils {
    * @see org.apache.hudi.keygen.ComplexAvroKeyGenerator
    */
   public static String[] extractRecordKeys(String recordKey) {
-    String[] fieldKV = recordKey.split(",");
-    return Arrays.stream(fieldKV).map(kv -> {
-      final String[] kvArray = kv.split(":", 2);
-      if (kvArray.length == 1) {
-        return kvArray[0];
-      } else if (kvArray[1].equals(NULL_RECORDKEY_PLACEHOLDER)) {
-        return null;
-      } else if (kvArray[1].equals(EMPTY_RECORDKEY_PLACEHOLDER)) {
-        return "";
+    return extractRecordKeysByFields(recordKey, Collections.emptyList());
+  }
+
+  public static String[] extractRecordKeysByFields(String recordKey, List<String> fields) {
+    // if there is no ',' and ':', then it's a key value
+    if (!recordKey.contains(DEFAULT_RECORD_KEY_PARTS_SEPARATOR) || !recordKey.contains(DEFAULT_COLUMN_VALUE_SEPARATOR)) {
+      return new String[] {recordKey};
+    }
+    // complex key case
+    // Here we're reducing memory allocation for substrings and use index positions,
+    // because for bucket index this will be called for each record, which leads to GC overhead
+    int keyValueSep1;
+    int keyValueSep2;
+    int commaPosition;
+    String currentField;
+    String currentValue;
+    List<String> values = new ArrayList<>();
+    int processed = 0;
+    while (processed < recordKey.length()) {
+      // note that keyValueSeps and commaPosition are absolute
+      keyValueSep1 = recordKey.indexOf(DEFAULT_COLUMN_VALUE_SEPARATOR, processed);
+      currentField = recordKey.substring(processed, keyValueSep1);
+      keyValueSep2 = recordKey.indexOf(DEFAULT_COLUMN_VALUE_SEPARATOR, keyValueSep1 + 1);
+      if (fields.isEmpty() || (fields.size() == 1 && fields.get(0).isEmpty()) || fields.contains(currentField)) {
+        if (keyValueSep2 < 0) {
+          // there is no next key value pair
+          currentValue = recordKey.substring(keyValueSep1 + 1);
+          processed = recordKey.length();
+        } else {
+          // looking for ',' in reverse order to support multiple ',' in key values by looking for the latest ','
+          commaPosition = recordKey.lastIndexOf(DEFAULT_RECORD_KEY_PARTS_SEPARATOR, keyValueSep2);
+          // commaPosition could be -1 if didn't find ',', or we could find ',' from previous key-value pair ('col1:val1,...')
+          // also we could have the last value with ':', so need to check if keyValueSep2 > 0
+          while (commaPosition < keyValueSep1 && keyValueSep2 > 0) {
+            // If we have key value as a timestamp with ':',
+            // then we continue to skip ':' until before the next ':' there is a ',' character.
+            // For instance, 'col1:val1,col2:2014-10-22 13:50:42,col3:val3'
+            //                              ^             ^  ^       ^
+            //   1)              keyValueSep1          skip  skip    keyValueSep2
+            //                                                  ^
+            //                                                  commaPosition
+            //   2)                         |   currentValue    |
+            //                                                  ^
+            //   3)                                             processed
+            keyValueSep2 = recordKey.indexOf(DEFAULT_COLUMN_VALUE_SEPARATOR, keyValueSep2 + 1);
+            commaPosition = recordKey.lastIndexOf(DEFAULT_RECORD_KEY_PARTS_SEPARATOR, keyValueSep2);
+          }
+          if (commaPosition > 0) {
+            currentValue = recordKey.substring(keyValueSep1 + 1, commaPosition);
+            processed = commaPosition + 1;
+          } else {
+            // it could be the last value with many ':', in this case we wouldn't find any ',' before
+            currentValue = recordKey.substring(keyValueSep1 + 1);
+            processed = recordKey.length();
+          }
+        }
+        // here could be any logic of conditional replacing of currentValue
+        if (currentValue.equals(NULL_RECORDKEY_PLACEHOLDER)) {
+          values.add(null);
+        } else if (currentValue.equals(EMPTY_RECORDKEY_PLACEHOLDER)) {
+          values.add("");
+        } else {
+          values.add(currentValue);
+        }
       } else {
-        return kvArray[1];
+        if (keyValueSep2 < 0) {
+          processed = recordKey.length();
+        } else {
+          commaPosition = recordKey.lastIndexOf(DEFAULT_RECORD_KEY_PARTS_SEPARATOR, keyValueSep2);
+          while (commaPosition < keyValueSep1) {
+            // described above
+            keyValueSep2 = recordKey.indexOf(DEFAULT_COLUMN_VALUE_SEPARATOR, keyValueSep2 + 1);
+            commaPosition = recordKey.lastIndexOf(DEFAULT_RECORD_KEY_PARTS_SEPARATOR, keyValueSep2);
+          }
+          if (commaPosition < 0) {
+            // if something went wrong, and there is no ',', we should stop here, and pass the whole recordKey,
+            // otherwise processed = commaPosition + 1 would lead to infinite loop
+            processed = recordKey.length();
+          } else {
+            processed = commaPosition + 1;
+          }
+        }
       }
-    }).toArray(String[]::new);
+    }
+    return values.isEmpty() ? new String[] {recordKey} : values.toArray(new String[0]);
   }
 
   public static String getRecordKey(GenericRecord record, List<String> recordKeyFields, boolean consistentLogicalTimestampEnabled) {
-    boolean keyIsNullEmpty = true;
-    StringBuilder recordKey = new StringBuilder();
-    for (String recordKeyField : recordKeyFields) {
-      String recordKeyValue = HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, true, consistentLogicalTimestampEnabled);
-      if (recordKeyValue == null) {
-        recordKey.append(recordKeyField + ":" + NULL_RECORDKEY_PLACEHOLDER + ",");
-      } else if (recordKeyValue.isEmpty()) {
-        recordKey.append(recordKeyField + ":" + EMPTY_RECORDKEY_PLACEHOLDER + ",");
-      } else {
-        recordKey.append(recordKeyField + ":" + recordKeyValue + ",");
-        keyIsNullEmpty = false;
+    BiFunction<String, Integer, String> valueFunction = (recordKeyField, index) -> {
+      try {
+        return HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, false, consistentLogicalTimestampEnabled);
+      } catch (HoodieException e) {
+        throw new HoodieKeyException("Record key field '" + recordKeyField + "' does not exist in the input record");
       }
-    }
-    recordKey.deleteCharAt(recordKey.length() - 1);
-    if (keyIsNullEmpty) {
-      throw new HoodieKeyException("recordKey values: \"" + recordKey + "\" for fields: "
-          + recordKeyFields.toString() + " cannot be entirely null or empty.");
-    }
-    return recordKey.toString();
+    };
+    return constructRecordKey(recordKeyFields.toArray(new String[]{}), valueFunction);
   }
 
   public static String getRecordPartitionPath(GenericRecord record, List<String> partitionPathFields,
-      boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
+                                              boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
     if (partitionPathFields.isEmpty()) {
       return "";
     }
 
     StringBuilder partitionPath = new StringBuilder();
-    for (String partitionPathField : partitionPathFields) {
+    for (int i = 0; i < partitionPathFields.size(); i++) {
+      String partitionPathField = partitionPathFields.get(i);
       String fieldVal = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true, consistentLogicalTimestampEnabled);
       if (fieldVal == null || fieldVal.isEmpty()) {
-        partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + HUDI_DEFAULT_PARTITION_PATH
-            : HUDI_DEFAULT_PARTITION_PATH);
+        if (hiveStylePartitioning) {
+          partitionPath.append(partitionPathField).append("=");
+        }
+        partitionPath.append(HUDI_DEFAULT_PARTITION_PATH);
       } else {
         if (encodePartitionPath) {
           fieldVal = PartitionPathEncodeUtils.escapePathName(fieldVal);
         }
-        partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + fieldVal : fieldVal);
+        if (hiveStylePartitioning) {
+          partitionPath.append(partitionPathField).append("=");
+        }
+        partitionPath.append(fieldVal);
       }
-      partitionPath.append(DEFAULT_PARTITION_PATH_SEPARATOR);
+      if (i != partitionPathFields.size() - 1) {
+        partitionPath.append(DEFAULT_PARTITION_PATH_SEPARATOR);
+      }
     }
-    partitionPath.deleteCharAt(partitionPath.length() - 1);
     return partitionPath.toString();
   }
 
@@ -142,7 +273,7 @@ public class KeyGenUtils {
   }
 
   public static String getPartitionPath(GenericRecord record, String partitionPathField,
-      boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
+                                        boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
     String partitionPath = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true, consistentLogicalTimestampEnabled);
     if (partitionPath == null || partitionPath.isEmpty()) {
       partitionPath = HUDI_DEFAULT_PARTITION_PATH;
@@ -159,20 +290,12 @@ public class KeyGenUtils {
   /**
    * Create a date time parser class for TimestampBasedKeyGenerator, passing in any configs needed.
    */
-  public static BaseHoodieDateTimeParser createDateTimeParser(TypedProperties props, String parserClass) throws IOException  {
+  public static BaseHoodieDateTimeParser createDateTimeParser(TypedProperties props, String parserClass) throws IOException {
     try {
       return (BaseHoodieDateTimeParser) ReflectionUtils.loadClass(parserClass, props);
     } catch (Throwable e) {
       throw new IOException("Could not load date time parser class " + parserClass, e);
     }
-  }
-
-  public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
-    checkPropNames.forEach(prop -> {
-      if (!props.containsKey(prop)) {
-        throw new HoodieNotSupportedException("Required property " + prop + " is missing");
-      }
-    });
   }
 
   /**
@@ -193,5 +316,55 @@ public class KeyGenUtils {
       }
     }
     return keyGenerator;
+  }
+
+  public static List<String> getRecordKeyFields(TypedProperties props) {
+    return Option.ofNullable(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null))
+        .map(recordKeyConfigValue ->
+            Arrays.stream(recordKeyConfigValue.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList())
+        ).orElse(Collections.emptyList());
+  }
+
+  /**
+   * @param props props of interest.
+   * @return true if record keys need to be auto generated. false otherwise.
+   */
+  public static boolean isAutoGeneratedRecordKeysEnabled(TypedProperties props) {
+    return !props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
+        || props.getProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).equals(StringUtils.EMPTY_STRING);
+    // spark-sql sets record key config to empty string for update, and couple of other statements.
+  }
+
+  public static boolean isComplexKeyGeneratorWithSingleRecordKeyField(HoodieTableConfig tableConfig) {
+    Option<String[]> recordKeyFields = tableConfig.getRecordKeyFields();
+    return KeyGeneratorType.isComplexKeyGenerator(tableConfig)
+        && recordKeyFields.isPresent() && recordKeyFields.get().length == 1;
+  }
+
+  public static String getComplexKeygenErrorMessage(String operation) {
+    return "This table uses the complex key generator with a single record "
+        + "key field. If the table is written with Hudi 0.14.1, 0.15.0, 1.0.0, 1.0.1, or 1.0.2 "
+        + "release before, the table may potentially contain duplicates due to a breaking "
+        + "change in the key encoding in the _hoodie_record_key meta field (HUDI-7001) which "
+        + "is crucial for upserts. Please take action based on the details on the deployment "
+        + "guide (https://hudi.apache.org/docs/deployment#complex-key-generator) "
+        + "before resuming the " + operation + " to the this table. If you're certain "
+        + "that the table is not affected by the key encoding change, set "
+        + "`hoodie.write.complex.keygen.validation.enable=false` to skip this validation.";
+  }
+
+  public static boolean encodeSingleKeyFieldNameForComplexKeyGen(TypedProperties props) {
+    int tableVersionCode = ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION);
+    HoodieTableVersion tableVersion = HoodieTableVersion.fromVersionCode(tableVersionCode);
+    return tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)
+        || !ConfigUtils.getBooleanWithAltKeys(props, COMPLEX_KEYGEN_NEW_ENCODING);
+  }
+
+  public static boolean mayUseNewEncodingForComplexKeyGen(HoodieTableConfig tableConfig) {
+    return tableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)
+        && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig);
   }
 }

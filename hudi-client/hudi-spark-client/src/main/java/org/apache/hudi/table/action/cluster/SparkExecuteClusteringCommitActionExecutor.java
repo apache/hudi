@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -33,7 +32,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
 
-public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class SparkExecuteClusteringCommitActionExecutor<T>
     extends BaseSparkCommitActionExecutor<T> {
 
   private final HoodieClusteringPlan clusteringPlan;
@@ -43,7 +42,7 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
                                                     String instantTime) {
     super(context, config, table, instantTime, WriteOperationType.CLUSTER);
     this.clusteringPlan = ClusteringUtils.getClusteringPlan(
-        table.getMetaClient(), HoodieTimeline.getReplaceCommitRequestedInstant(instantTime))
+        table.getMetaClient(), ClusteringUtils.getRequestedClusteringInstant(instantTime, table.getActiveTimeline(), table.getInstantGenerator()).get())
         .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
             "Unable to read clustering plan for instant: " + instantTime));
   }
@@ -55,6 +54,6 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
 
   @Override
   protected String getCommitActionType() {
-    return HoodieTimeline.REPLACE_COMMIT_ACTION;
+    return HoodieTimeline.CLUSTERING_ACTION;
   }
 }

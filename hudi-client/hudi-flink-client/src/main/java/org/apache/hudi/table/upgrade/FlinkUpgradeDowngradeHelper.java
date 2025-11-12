@@ -19,7 +19,8 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -43,11 +44,20 @@ public class FlinkUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
 
   @Override
   public HoodieTable getTable(HoodieWriteConfig config, HoodieEngineContext context) {
-    return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context);
+    return HoodieFlinkTable.create(config, context);
   }
 
   @Override
   public String getPartitionColumns(HoodieWriteConfig config) {
     return config.getProps().getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
+  }
+
+  @Override
+  public BaseHoodieWriteClient getWriteClient(HoodieWriteConfig config, HoodieEngineContext context) {
+    // Because flink enables reusing of embedded timeline service by default, disable the embedded time service to avoid closing of the reused timeline server.
+    // The write config inherits from the info of the currently running timeline server started in coordinator, even though the flag is disabled, it still can
+    // access the remote timeline server started before.
+    config.setValue(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), "false");
+    return new HoodieFlinkWriteClient(context, config);
   }
 }

@@ -18,13 +18,16 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.HoodieSparkSqlWriter
+import org.apache.hudi.exception.HoodieException
+
+import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.execution.command.DDLUtils
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
-import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
 case class AlterHoodieTableDropPartitionCommand(
    tableIdentifier: TableIdentifier,
@@ -41,7 +44,7 @@ case class AlterHoodieTableDropPartitionCommand(
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
 
     if (!hoodieCatalogTable.isPartitionedTable) {
-      throw new AnalysisException(s"$fullTableName is a non-partitioned table that is not allowed to drop partition")
+      throw new HoodieAnalysisException(s"$fullTableName is a non-partitioned table that is not allowed to drop partition")
     }
 
     DDLUtils.verifyAlterTableType(
@@ -59,11 +62,14 @@ case class AlterHoodieTableDropPartitionCommand(
     // delete partition files by enabling cleaner and setting retention policies.
     val partitionsToDrop = getPartitionPathToDrop(hoodieCatalogTable, normalizedSpecs)
     val parameters = buildHoodieDropPartitionsConfig(sparkSession, hoodieCatalogTable, partitionsToDrop)
-    HoodieSparkSqlWriter.write(
+    val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(
       sparkSession.sqlContext,
       SaveMode.Append,
       parameters,
       sparkSession.emptyDataFrame)
+    if (!success) {
+      throw new HoodieException("Alter table command failed")
+    }
 
     sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
     logInfo(s"Finish execute alter table drop partition command for $fullTableName")

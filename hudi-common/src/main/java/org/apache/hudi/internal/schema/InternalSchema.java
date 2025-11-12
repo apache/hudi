@@ -24,9 +24,8 @@ import org.apache.hudi.internal.schema.Types.RecordType;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -38,6 +37,11 @@ import java.util.stream.Collectors;
  * used to support schema evolution.
  */
 public class InternalSchema implements Serializable {
+  public static final String ARRAY_ELEMENT = "element";
+  public static final String MAP_KEY = "key";
+  public static final String MAP_VALUE = "value";
+
+  private static final InternalSchema EMPTY_SCHEMA = new InternalSchema(-1L, RecordType.get());
 
   private static final long DEFAULT_VERSION_ID = 0;
 
@@ -49,49 +53,50 @@ public class InternalSchema implements Serializable {
   private transient Map<Integer, Field> idToField = null;
   private transient Map<String, Integer> nameToId = null;
   private transient Map<Integer, String> idToName = null;
+  private transient Map<String, Integer> nameToPosition = null;
 
   public static InternalSchema getEmptyInternalSchema() {
-    return new InternalSchema(-1L, new ArrayList<>());
+    return EMPTY_SCHEMA;
   }
 
   public boolean isEmptySchema() {
     return versionId < 0;
   }
 
-  public InternalSchema(List<Field> columns) {
-    this(DEFAULT_VERSION_ID, columns);
+  public InternalSchema(RecordType recordType) {
+    this(DEFAULT_VERSION_ID, recordType);
   }
 
-  public InternalSchema(Field... columns) {
-    this(DEFAULT_VERSION_ID, Arrays.asList(columns));
-  }
-
-  public InternalSchema(long versionId, List<Field> cols) {
-    this.versionId = versionId;
-    this.record = RecordType.get(cols);
-    idToName = cols.isEmpty() ? new HashMap<>() : InternalSchemaBuilder.getBuilder().buildIdToName(record);
-    nameToId = cols.isEmpty() ? new HashMap<>() : idToName.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
-    maxColumnId = idToName.isEmpty() ? -1 : idToName.keySet().stream().max(Comparator.comparing(Integer::valueOf)).get();
-  }
-
-  public InternalSchema(long versionId, int maxColumnId, List<Field> cols) {
+  public InternalSchema(long versionId, int maxColumnId, RecordType recordType) {
     this.maxColumnId = maxColumnId;
     this.versionId = versionId;
-    this.record = RecordType.get(cols);
-    buildIdToName();
+    this.record = recordType;
+    getIdToName();
   }
 
-  public InternalSchema(long versionId, int maxColumnId, Field... cols) {
-    this(versionId, maxColumnId, Arrays.asList(cols));
+  public InternalSchema(long versionId, RecordType recordType) {
+    this.versionId = versionId;
+    this.record = recordType;
+    this.idToName = buildIdToName(record);
+    this.nameToId = recordType.fields().isEmpty()
+        ? Collections.emptyMap()
+        : idToName.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
+    this.maxColumnId = idToName.isEmpty() ? -1 : idToName.keySet().stream().max(Comparator.comparing(Integer::valueOf)).get();
   }
 
   public RecordType getRecord() {
     return record;
   }
 
-  private Map<Integer, String> buildIdToName() {
+  private static Map<Integer, String> buildIdToName(RecordType record) {
+    return record.fields().isEmpty()
+        ? Collections.emptyMap()
+        : InternalSchemaBuilder.getBuilder().buildIdToName(record);
+  }
+
+  private Map<Integer, String> getIdToName() {
     if (idToName == null) {
-      idToName = InternalSchemaBuilder.getBuilder().buildIdToName(record);
+      idToName = buildIdToName(record);
     }
     return idToName;
   }
@@ -121,7 +126,7 @@ public class InternalSchema implements Serializable {
     if (nameToId == null) {
       nameToId = InternalSchemaBuilder.getBuilder().buildNameToId(record);
     }
-    return Arrays.asList(nameToId.keySet().toArray(new String[0]));
+    return new ArrayList<>(nameToId.keySet());
   }
 
   /**
@@ -161,16 +166,13 @@ public class InternalSchema implements Serializable {
   }
 
   /**
-   * Returns the {@link Type} of a sub-field identified by the field name.
+   * Returns the fully qualified name of the field corresponding to the given id.
    *
    * @param id a field id
-   * @return fullName of field of
+   * @return full name of field corresponding to id
    */
-  public String findfullName(int id) {
-    if (idToName == null) {
-      buildIdToName();
-    }
-    String result = idToName.get(id);
+  public String findFullName(int id) {
+    String result = getIdToName().get(id);
     return result == null ? "" : result;
   }
 
@@ -209,10 +211,7 @@ public class InternalSchema implements Serializable {
    * Returns all field ids
    */
   public Set<Integer> getAllIds() {
-    if (idToName == null) {
-      buildIdToName();
-    }
-    return idToName.keySet();
+    return getIdToName().keySet();
   }
 
   /**
@@ -244,15 +243,24 @@ public class InternalSchema implements Serializable {
   }
 
   /**
-   * Whether colName exists in current Schema.
-   * Case insensitive.
+   * Whether {@code colName} exists in the current Schema
    *
-   * @param colName a colName
-   * @return Whether colName exists in current Schema
+   * @param colName a column name
+   * @param caseSensitive whether columns names should be treated as case-sensitive
+   * @return whether schema contains column identified by {@code colName}
    */
-  public boolean findDuplicateCol(String colName) {
-    return idToName.entrySet().stream().map(e -> e.getValue().toLowerCase(Locale.ROOT))
-        .collect(Collectors.toSet()).contains(colName);
+  public boolean hasColumn(String colName, boolean caseSensitive) {
+    if (caseSensitive) {
+      // In case we do a case-sensitive check we just need to validate whether
+      // schema contains field-name as it is
+      return getIdToName().containsValue(colName);
+    } else {
+      return getIdToName().values()
+          .stream()
+          .map(fieldName -> fieldName.toLowerCase(Locale.ROOT))
+          .collect(Collectors.toSet())
+          .contains(colName.toLowerCase(Locale.ROOT));
+    }
   }
 
   public int findIdByName(String name) {
@@ -262,12 +270,24 @@ public class InternalSchema implements Serializable {
     return buildNameToId().getOrDefault(name, -1);
   }
 
+  /**
+   * Returns the full name of the field and its position in the schema.
+   * This differs from its ID in cases where new fields are not appended to the end of schemas.
+   * The output is used when reconciling the order of fields while ingesting.
+   * @return a mapping from full field name to a position
+   */
+  public Map<String, Integer> getNameToPosition() {
+    if (nameToPosition == null) {
+      nameToPosition = InternalSchemaBuilder.getBuilder().buildNameToPosition(record);
+    }
+    return nameToPosition;
+  }
+
   @Override
   public String toString() {
     return String.format("table {\n%s\n}",
         StringUtils.join(record.fields().stream()
-            .map(f -> " " + f)
-            .collect(Collectors.toList()).toArray(new String[0]), "\n"));
+            .map(f -> " " + f).toArray(String[]::new), "\n"));
   }
 
   @Override
@@ -281,6 +301,16 @@ public class InternalSchema implements Serializable {
     if (versionId != that.schemaId()) {
       return false;
     }
+    return record.equals(that.record);
+  }
+
+  public boolean equalsIgnoringVersion(Object o) {
+    if (this == o) {
+      return true;
+    } else if (!(o instanceof InternalSchema)) {
+      return false;
+    }
+    InternalSchema that = (InternalSchema) o;
     return record.equals(that.record);
   }
 

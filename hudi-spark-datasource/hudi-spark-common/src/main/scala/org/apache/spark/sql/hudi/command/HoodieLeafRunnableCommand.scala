@@ -17,9 +17,10 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.trees.HoodieLeafLike
 import org.apache.spark.sql.execution.command.RunnableCommand
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 
 /**
  * Similar to `LeafRunnableCommand` in Spark3.2, `HoodieLeafRunnableCommand` mixed in
@@ -27,3 +28,16 @@ import org.apache.spark.sql.execution.command.RunnableCommand
  * the `withNewChildrenInternal` method repeatedly.
  */
 trait HoodieLeafRunnableCommand extends RunnableCommand with HoodieLeafLike[LogicalPlan]
+
+object HoodieLeafRunnableCommand {
+
+  private[hudi] def stripMetaFieldAttributes(query: LogicalPlan): LogicalPlan = {
+    val filteredOutput = query.output.filterNot(attr => isMetaField(attr.name))
+    if (filteredOutput == query.output) {
+      query
+    } else {
+      Project(filteredOutput, query)
+    }
+  }
+
+}

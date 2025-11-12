@@ -18,24 +18,30 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
-import org.apache.hadoop.mapred.FileSplit;
-import org.apache.hadoop.mapred.JobConf;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeBootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hive.serde.serdeConstants;
+import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
+import org.apache.hadoop.mapred.FileSplit;
+import org.apache.hadoop.mapred.JobConf;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieRealtimeInputFormatUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieRealtimeInputFormatUtils.class);
 
   public static boolean doesBelongToIncrementalQuery(FileSplit s) {
     if (s instanceof HoodieRealtimeFileSplit) {
@@ -65,20 +71,31 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
       readColIdsPrefix = "";
     }
 
-    if (!readColNames.contains(fieldName)) {
+    if (!Arrays.asList(readColNames.split(",")).contains(fieldName)) {
       // If not already in the list - then add it
       conf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, readColNamesPrefix + fieldName);
       conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, readColIdsPrefix + fieldIndex);
-      if (LOG.isDebugEnabled()) {
-        LOG.debug(String.format("Adding extra column " + fieldName + ", to enable log merging cols (%s) ids (%s) ",
-            conf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
-            conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR)));
-      }
+      LOG.debug("Adding extra column {}, to enable log merging cols ({}) ids ({})",
+          fieldName,
+          conf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
+          conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
     }
     return conf;
   }
 
-  public static void addRequiredProjectionFields(Configuration configuration, Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo) {
+  public static void addProjectionField(Configuration conf, String[] fieldName) {
+    if (fieldName.length > 0) {
+      List<String> columnNameList = Arrays.stream(conf.get(serdeConstants.LIST_COLUMNS, "").split(",")).collect(Collectors.toList());
+      Arrays.stream(fieldName).forEach(field -> {
+        int index = columnNameList.indexOf(field);
+        if (index != -1) {
+          addProjectionField(conf, field, index);
+        }
+      });
+    }
+  }
+
+  public static void addVirtualKeysProjection(Configuration configuration, Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo) {
     // Need this to do merge records in HoodieRealtimeRecordReader
     if (!hoodieVirtualKeyInfo.isPresent()) {
       addProjectionField(configuration, HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS);
@@ -101,8 +118,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
           && readColNames.contains(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
     } else {
       return readColNames.contains(hoodieVirtualKeyInfo.get().getRecordKeyField())
-          && (hoodieVirtualKeyInfo.get().getPartitionPathField().isPresent() ? readColNames.contains(hoodieVirtualKeyInfo.get().getPartitionPathField().get())
-          : true);
+          && (!hoodieVirtualKeyInfo.get().getPartitionPathField().isPresent() || readColNames.contains(hoodieVirtualKeyInfo.get().getPartitionPathField().get()));
     }
   }
 

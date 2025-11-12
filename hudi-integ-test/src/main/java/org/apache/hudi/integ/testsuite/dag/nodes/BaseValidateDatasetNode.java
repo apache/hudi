@@ -20,17 +20,18 @@
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.hudi.integ.testsuite.schema.SchemaUtils;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -40,10 +41,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer$;
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
-import org.apache.spark.sql.catalyst.encoders.RowEncoder;
-import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
 
@@ -51,11 +49,8 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import scala.Tuple2;
-import scala.collection.JavaConversions;
-import scala.collection.JavaConverters;
 
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 
@@ -92,21 +87,21 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
         || (itrCountToExecute == -1 && ((curItrCount % validateOnceEveryItr) == 0))) {
       FileSystem fs = new Path(context.getHoodieTestSuiteWriter().getCfg().inputBasePath)
           .getFileSystem(context.getHoodieTestSuiteWriter().getConfiguration());
-      if (context.getHoodieTestSuiteWriter().getCfg().testContinousMode) {
+      if (context.getHoodieTestSuiteWriter().getCfg().testContinuousMode) {
         awaitUntilDeltaStreamerCaughtUp(context, context.getHoodieTestSuiteWriter().getCfg().targetBasePath, fs,
             context.getHoodieTestSuiteWriter().getCfg().inputBasePath);
       }
       SparkSession session = SparkSession.builder().sparkContext(context.getJsc().sc()).getOrCreate();
       // todo: Fix partitioning schemes. For now, assumes data based partitioning.
       String inputPath = context.getHoodieTestSuiteWriter().getCfg().inputBasePath + "/*/*";
-      log.info("Validation using data from input path " + inputPath);
+      log.info("Validation using data from input path {}", inputPath);
       // listing batches to be validated
       String inputPathStr = context.getHoodieTestSuiteWriter().getCfg().inputBasePath;
       if (log.isDebugEnabled()) {
         FileStatus[] fileStatuses = fs.listStatus(new Path(inputPathStr));
-        log.info("fileStatuses length: " + fileStatuses.length);
+        log.info("fileStatuses length: {}", fileStatuses.length);
         for (FileStatus fileStatus : fileStatuses) {
-          log.debug("Listing all Micro batches to be validated :: " + fileStatus.getPath().toString());
+          log.debug("Listing all Micro batches to be validated :: {}", fileStatus.getPath().toString());
         }
       }
 
@@ -120,7 +115,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
         Dataset<Row> exceptHudiDf = trimmedHudiDf.except(inputSnapshotDf);
         long exceptInputCount = exceptInputDf.count();
         long exceptHudiCount = exceptHudiDf.count();
-        log.debug("Except input df count " + exceptInputDf + ", except hudi count " + exceptHudiCount);
+        log.debug("Except input df count {}, except hudi count {}", exceptInputDf, exceptHudiCount);
         if (exceptInputCount != 0 || exceptHudiCount != 0) {
           log.error("Data set validation failed. Total count in hudi " + trimmedHudiDf.count() + ", input df count " + inputSnapshotDf.count()
               + ". InputDf except hudi df = " + exceptInputCount + ", Hudi df except Input df " + exceptHudiCount);
@@ -130,7 +125,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
         Dataset<Row> intersectionDf = inputSnapshotDf.intersect(trimmedHudiDf);
         long inputCount = inputSnapshotDf.count();
         long outputCount = trimmedHudiDf.count();
-        log.debug("Input count: " + inputCount + "; output count: " + outputCount);
+        log.debug("Input count: {}; output count: {}", inputCount, outputCount);
         // the intersected df should be same as inputDf. if not, there is some mismatch.
         if (outputCount == 0 || inputCount == 0 || inputSnapshotDf.except(intersectionDf).count() != 0) {
           log.error("Data set validation failed. Total count in hudi " + outputCount + ", input df count " + inputCount);
@@ -163,7 +158,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
           inputPathStr = context.getHoodieTestSuiteWriter().getCfg().inputBasePath;
           FileStatus[] fileStatuses = fs.listStatus(new Path(inputPathStr));
           for (FileStatus fileStatus : fileStatuses) {
-            log.debug("Micro batch to be deleted " + fileStatus.getPath().toString());
+            log.debug("Micro batch to be deleted {}", fileStatus.getPath());
             fs.delete(fileStatus.getPath(), true);
           }
         }
@@ -172,7 +167,9 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
   }
 
   private void awaitUntilDeltaStreamerCaughtUp(ExecutionContext context, String hudiTablePath, FileSystem fs, String inputPath) throws IOException, InterruptedException {
-    HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf())).setBasePath(hudiTablePath).build();
+    HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf()))
+        .setBasePath(hudiTablePath).build();
     HoodieTimeline commitTimeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     Option<String> latestCheckpoint = getLatestCheckpoint(commitTimeline);
     FileStatus[] subDirs = fs.listStatus(new Path(inputPath));
@@ -192,7 +189,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
       waitedSoFar += 20000;
       if (waitedSoFar >= maxWaitTime) {
         throw new AssertionError("DeltaStreamer has not caught up after 5 mins of wait time. Last known checkpoint "
-            + (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none") + ", expected checkpoint to have caugth up " + latestSubDir);
+            + (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none") + ", expected checkpoint to have caught up " + latestSubDir);
       }
       log.info("Latest sub directory in input path " + latestSubDir + ", latest checkpoint from deltastreamer "
           + (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none"));
@@ -202,8 +199,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
   private Option<String> getLatestCheckpoint(HoodieTimeline timeline) {
     return (Option<String>) timeline.getReverseOrderedInstants().map(instant -> {
       try {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(instant);
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
           return Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
         } else {
@@ -222,8 +218,8 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
     // read input and resolve insert, updates, etc.
     Dataset<Row> inputDf = session.read().format("avro").load(inputPath);
     Dataset<Row> trimmedDf = inputDf;
-    if (!config.inputPartitonsToSkipWithValidate().isEmpty()) {
-      trimmedDf = inputDf.filter("instr(" + partitionPathField + ", \'" + config.inputPartitonsToSkipWithValidate() + "\') != 1");
+    if (!config.inputPartitionsToSkipWithValidate().isEmpty()) {
+      trimmedDf = inputDf.filter("instr(" + partitionPathField + ", \'" + config.inputPartitionsToSkipWithValidate() + "\') != 1");
     }
 
     ExpressionEncoder encoder = getEncoder(inputDf.schema());
@@ -244,10 +240,6 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
   }
 
   private ExpressionEncoder getEncoder(StructType schema) {
-    List<Attribute> attributes = JavaConversions.asJavaCollection(schema.toAttributes()).stream()
-        .map(Attribute::toAttribute).collect(Collectors.toList());
-    return RowEncoder.apply(schema)
-        .resolveAndBind(JavaConverters.asScalaBufferConverter(attributes).asScala().toSeq(),
-            SimpleAnalyzer$.MODULE$);
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().getCatalystExpressionUtils().getEncoder(schema);
   }
 }

@@ -18,40 +18,59 @@
 
 package org.apache.hudi.utilities.sources.helpers.gcs;
 
-import com.google.cloud.pubsub.v1.stub.GrpcSubscriberStub;
+import org.apache.hudi.exception.HoodieException;
+
 import com.google.cloud.pubsub.v1.stub.SubscriberStub;
 import com.google.cloud.pubsub.v1.stub.SubscriberStubSettings;
-import com.google.pubsub.v1.AcknowledgeRequest;
 import com.google.pubsub.v1.ProjectSubscriptionName;
-import com.google.pubsub.v1.PullRequest;
 import com.google.pubsub.v1.PullResponse;
 import com.google.pubsub.v1.ReceivedMessage;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import static com.google.cloud.pubsub.v1.stub.GrpcSubscriberStub.create;
-import static org.apache.hudi.utilities.sources.helpers.gcs.GcsIngestionConfig.DEFAULT_MAX_INBOUND_MESSAGE_SIZE;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.stream.IntStream;
+
+import static org.apache.hudi.utilities.sources.helpers.gcs.GcsIngestionConfig.DEFAULT_MAX_INBOUND_MESSAGE_SIZE;
 
 /**
  * Fetch messages from a specified Google Cloud Pubsub subscription.
  */
 public class PubsubMessagesFetcher {
 
+  private static final int DEFAULT_BATCH_SIZE_ACK_API = 10;
+  private static final long MAX_WAIT_TIME_TO_ACK_MESSAGES = TimeUnit.MINUTES.toMillis(1);
+  private static final int ACK_PRODUCER_THREAD_POOL_SIZE = 3;
+
+  private final ExecutorService threadPool = Executors.newFixedThreadPool(ACK_PRODUCER_THREAD_POOL_SIZE);
   private final String googleProjectId;
   private final String pubsubSubscriptionId;
 
   private final int batchSize;
+  private final int maxMessagesPerSync;
+  private final long maxFetchTimePerSyncSecs;
   private final SubscriberStubSettings subscriberStubSettings;
+  private final PubsubQueueClient pubsubQueueClient;
 
-  private static final Logger LOG = LogManager.getLogger(PubsubMessagesFetcher.class);
+  private static final Logger LOG = LoggerFactory.getLogger(PubsubMessagesFetcher.class);
 
-  public PubsubMessagesFetcher(String googleProjectId, String pubsubSubscriptionId, int batchSize) {
+  public PubsubMessagesFetcher(String googleProjectId, String pubsubSubscriptionId, int batchSize,
+                               int maxMessagesPerSync,
+                               long maxFetchTimePerSyncSecs,
+                               PubsubQueueClient pubsubQueueClient) {
     this.googleProjectId = googleProjectId;
     this.pubsubSubscriptionId = pubsubSubscriptionId;
     this.batchSize = batchSize;
+    this.maxMessagesPerSync = maxMessagesPerSync;
+    this.maxFetchTimePerSyncSecs = maxFetchTimePerSyncSecs;
 
     try {
       /** For details of timeout and retry configs,
@@ -67,49 +86,93 @@ public class PubsubMessagesFetcher {
     } catch (IOException e) {
       throw new HoodieException("Error creating subscriber stub settings", e);
     }
+    this.pubsubQueueClient = pubsubQueueClient;
   }
 
+  public PubsubMessagesFetcher(
+      String googleProjectId,
+      String pubsubSubscriptionId,
+      int batchSize,
+      int maxMessagesPerSync,
+      long maxFetchTimePerSyncSecs) {
+    this(
+        googleProjectId,
+        pubsubSubscriptionId,
+        batchSize,
+        maxMessagesPerSync,
+        maxFetchTimePerSyncSecs,
+        new PubsubQueueClient()
+    );
+  }
+
+  /**
+   * <p>Fetches messages from the Pub/Sub subscription based on the configured limits and timeouts.</p>
+   *
+   * The method pulls messages until one of the following conditions is met:
+   * <li>Number of unacknowledged messages in the subscription is reached</li>
+   * <li>Maximum messages per sync limit is reached</li>
+   * <li>Maximum fetch time per sync is exceeded</li>
+   *
+   * @return list of received messages from the Pub/Sub subscription
+   * @throws HoodieException if an error occurs while fetching messages
+   */
   public List<ReceivedMessage> fetchMessages() {
-    try {
-      try (SubscriberStub subscriber = createSubscriber()) {
-        String subscriptionName = getSubscriptionName();
-        PullResponse pullResponse = makePullRequest(subscriber, subscriptionName);
-        return pullResponse.getReceivedMessagesList();
+    List<ReceivedMessage> messageList = new ArrayList<>();
+    try (SubscriberStub subscriber = pubsubQueueClient.getSubscriber(subscriberStubSettings)) {
+      String subscriptionName = ProjectSubscriptionName.format(googleProjectId, pubsubSubscriptionId);
+      long startTime = System.currentTimeMillis();
+      long unAckedMessages = pubsubQueueClient.getNumUnAckedMessages(this.pubsubSubscriptionId);
+      LOG.info("Found unacked messages " + unAckedMessages);
+      while (messageList.size() < unAckedMessages && messageList.size() < maxMessagesPerSync
+          && ((System.currentTimeMillis() - startTime) < (maxFetchTimePerSyncSecs * 1000))) {
+        PullResponse pullResponse = pubsubQueueClient.makePullRequest(subscriber, subscriptionName, batchSize);
+        messageList.addAll(pullResponse.getReceivedMessagesList());
       }
-    } catch (IOException e) {
+      return messageList;
+    } catch (Exception e) {
       throw new HoodieException("Error when fetching metadata", e);
     }
   }
 
+  /**
+   * <p>Sends acknowledgment for the processed messages to the Pub/Sub subscription.</p>
+   *
+   * Messages are processed in parallel batches for improved performance. Each batch
+   * contains up to {@link #DEFAULT_BATCH_SIZE_ACK_API} messages. The method blocks
+   * until all acknowledgments are completed or the timeout is reached.
+   *
+   * @param messagesToAck list of message acknowledgment IDs to be acknowledged
+   * @throws IOException if acknowledgment fails due to timeout, interruption, or execution error
+   */
   public void sendAcks(List<String> messagesToAck) throws IOException {
-    String subscriptionName = getSubscriptionName();
-    try (SubscriberStub subscriber = createSubscriber()) {
-
-      AcknowledgeRequest acknowledgeRequest = AcknowledgeRequest.newBuilder()
-              .setSubscription(subscriptionName)
-              .addAllAckIds(messagesToAck)
-              .build();
-
-      subscriber.acknowledgeCallable().call(acknowledgeRequest);
-
-      LOG.info("Acknowledged messages: " + messagesToAck);
+    try (SubscriberStub subscriber = pubsubQueueClient.getSubscriber(subscriberStubSettings)) {
+      int numberOfBatches = (int) Math.ceil((double) messagesToAck.size() / DEFAULT_BATCH_SIZE_ACK_API);
+      CompletableFuture.allOf(IntStream.range(0, numberOfBatches)
+              .parallel()
+              .boxed()
+              .map(batchIndex -> getTask(subscriber, messagesToAck, batchIndex)).toArray(CompletableFuture[]::new))
+          .get(MAX_WAIT_TIME_TO_ACK_MESSAGES, TimeUnit.MILLISECONDS);
+      LOG.debug("Flushed out all outstanding acknowledged messages: {}", messagesToAck.size());
+    } catch (ExecutionException | InterruptedException | TimeoutException e) {
+      throw new IOException("Failed to ack messages from PubSub", e);
     }
   }
 
-  private PullResponse makePullRequest(SubscriberStub subscriber, String subscriptionName) {
-    PullRequest pullRequest = PullRequest.newBuilder()
-            .setMaxMessages(batchSize)
-            .setSubscription(subscriptionName)
-            .build();
-
-    return subscriber.pullCallable().call(pullRequest);
-  }
-
-  private GrpcSubscriberStub createSubscriber() throws IOException {
-    return create(subscriberStubSettings);
-  }
-
-  private String getSubscriptionName() {
-    return ProjectSubscriptionName.format(googleProjectId, pubsubSubscriptionId);
+  /**
+   * Creates a batch of messages for the given batch index and sends acknowledgement asynchronously.
+   *
+   * @param subscriber the Pub/Sub subscriber stub to use for the acknowledgment request
+   * @param messagesToAck the complete list of message IDs to be acknowledged
+   * @param batchIndex the zero-based index of the batch to process
+   * @return CompletableFuture that completes when the batch acknowledgment is finished
+   */
+  private CompletableFuture<Void> getTask(SubscriberStub subscriber, List<String> messagesToAck, int batchIndex) {
+    String subscriptionName = ProjectSubscriptionName.format(googleProjectId, pubsubSubscriptionId);
+    List<String> messages = messagesToAck.subList(
+        batchIndex * DEFAULT_BATCH_SIZE_ACK_API,
+        Math.min((batchIndex + 1) * DEFAULT_BATCH_SIZE_ACK_API, messagesToAck.size()));
+    LOG.debug("Sending ack for batch {} with {} messages: {}", batchIndex, messages.size(), messages);
+    return CompletableFuture.runAsync(() -> pubsubQueueClient.makeAckRequest(subscriber, subscriptionName, messages), threadPool);
   }
 }
+

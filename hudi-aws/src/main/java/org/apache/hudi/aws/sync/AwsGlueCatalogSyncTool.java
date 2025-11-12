@@ -18,6 +18,10 @@
 
 package org.apache.hudi.aws.sync;
 
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 
@@ -25,6 +29,9 @@ import com.beust.jcommander.JCommander;
 import org.apache.hadoop.conf.Configuration;
 
 import java.util.Properties;
+
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.RECREATE_GLUE_TABLE_ON_ERROR;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 
 /**
  * Currently Experimental. Utility class that implements syncing a Hudi Table with the
@@ -39,13 +46,18 @@ import java.util.Properties;
  */
 public class AwsGlueCatalogSyncTool extends HiveSyncTool {
 
-  public AwsGlueCatalogSyncTool(Properties props, Configuration hadoopConf) {
-    super(props, hadoopConf);
+  public AwsGlueCatalogSyncTool(Properties props, Configuration hadoopConf, Option<HoodieTableMetaClient> metaClient) {
+    super(props, hadoopConf, metaClient);
   }
 
   @Override
-  protected void initSyncClient(HiveSyncConfig hiveSyncConfig) {
-    syncClient = new AWSGlueCatalogSyncClient(hiveSyncConfig);
+  protected void initSyncClient(HiveSyncConfig hiveSyncConfig, HoodieTableMetaClient metaClient) {
+    syncClient = new AWSGlueCatalogSyncClient(hiveSyncConfig, metaClient);
+  }
+
+  @Override
+  protected boolean shouldRecreateAndSyncTable() {
+    return config.getBooleanOrDefault(RECREATE_GLUE_TABLE_ON_ERROR);
   }
 
   public static void main(String[] args) {
@@ -56,6 +68,11 @@ public class AwsGlueCatalogSyncTool extends HiveSyncTool {
       cmd.usage();
       System.exit(0);
     }
-    new AwsGlueCatalogSyncTool(params.toProps(), new Configuration()).syncHoodieTable();
+    // HiveConf needs to load fs conf to allow instantiation via AWSGlueClientFactory
+    TypedProperties props = params.toProps();
+    Configuration hadoopConf = HadoopFSUtils.getFs(props.getString(META_SYNC_BASE_PATH.key()), new Configuration()).getConf();
+    try (AwsGlueCatalogSyncTool tool = new AwsGlueCatalogSyncTool(props, hadoopConf, Option.empty())) {
+      tool.syncHoodieTable();
+    }
   }
 }

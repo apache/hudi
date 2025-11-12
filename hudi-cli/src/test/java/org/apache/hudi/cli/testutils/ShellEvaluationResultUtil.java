@@ -18,12 +18,14 @@
 
 package org.apache.hudi.cli.testutils;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ShellEvaluationResultUtil {
-  private static final Logger LOGGER = LogManager.getLogger(ShellEvaluationResultUtil.class);
-  private ShellEvaluationResultUtil() {}
+  private static final Logger LOGGER = LoggerFactory.getLogger(ShellEvaluationResultUtil.class);
+
+  private ShellEvaluationResultUtil() {
+  }
 
   public static boolean isSuccess(Object shellEvaluationResult) {
     boolean hasError = shellEvaluationResult instanceof Throwable;

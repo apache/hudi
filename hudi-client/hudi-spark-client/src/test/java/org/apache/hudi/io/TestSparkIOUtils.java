@@ -19,14 +19,14 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.SparkTaskContextSupplier;
-import org.apache.hudi.config.HoodieMemoryConfig;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION;
-import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE;
+import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION;
+import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestSparkIOUtils {

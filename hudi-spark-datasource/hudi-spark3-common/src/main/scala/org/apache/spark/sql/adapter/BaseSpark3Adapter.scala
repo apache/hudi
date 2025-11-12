@@ -17,50 +17,59 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.avro.Schema
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark3RowSerDe}
-import org.apache.hudi.client.utils.SparkRowSerDe
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, Spark3HoodiePartitionCDCFileGroupMapping, Spark3HoodiePartitionFileSliceMapping}
+import org.apache.hudi.client.model.{HoodieInternalRow, Spark3HoodieInternalRow}
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.spark.internal.Logging
-import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
-import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
-import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
-import org.apache.spark.sql.catalyst.parser.ParserInterface
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.connector.catalog.Table
-import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
-import org.apache.spark.sql.hudi.SparkAdapter
-import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.sources.BaseRelation
-import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{HoodieSpark3CatalogUtils, Row, SQLContext, SparkSession}
-import org.apache.spark.storage.StorageLevel
-import org.apache.spark.storage.StorageLevel._
+import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
+import org.apache.hudi.common.util.JsonUtils
+import org.apache.hudi.spark.internal.ReflectUtil
+import org.apache.hudi.storage.StoragePath
 
-import scala.collection.JavaConverters.mapAsScalaMapConverter
-import scala.util.control.NonFatal
+import org.apache.avro.Schema
+import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.internal.Logging
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{AnalysisException, Column, DataFrame, DataFrameUtil, Dataset, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark3DataFrameUtil, Spark3HoodieUnsafeUtils, Spark3HoodieUTF8StringFactory, SparkSession, SQLContext}
+import org.apache.spark.sql.FileFormatUtilsForFileGroupReader.applyFiltersToPlan
+import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
+import org.apache.spark.sql.catalyst.parser.ParseException
+import org.apache.spark.sql.catalyst.planning.PhysicalOperation
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.trees.Origin
+import org.apache.spark.sql.catalyst.util.DateFormatter
+import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
+import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.parquet.HoodieFormatTrait
+import org.apache.spark.sql.hudi.SparkAdapter
+import org.apache.spark.sql.sources.{BaseRelation, Filter}
+import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
+import org.apache.spark.storage.StorageLevel
+import org.apache.spark.unsafe.types.UTF8String
+
+import java.time.ZoneId
+import java.util.TimeZone
+import java.util.concurrent.ConcurrentHashMap
+
+import scala.collection.JavaConverters._
 
 /**
  * Base implementation of [[SparkAdapter]] for Spark 3.x branch
  */
 abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
+  JsonUtils.registerModules()
 
-  def getCatalogUtils: HoodieSpark3CatalogUtils
-
-  override def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
-    val encoder = RowEncoder(schema).resolveAndBind()
-    new Spark3RowSerDe(encoder)
-  }
+  private val cache = new ConcurrentHashMap[ZoneId, DateFormatter](1)
 
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
-  override def getSparkParsePartitionUtil: SparkParsePartitionUtil = Spark3ParsePartitionUtil
-
-  override def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String] = {
-    parser.parseMultipartIdentifier(sqlText)
+  override def getDateFormatter(tz: TimeZone): DateFormatter = {
+    cache.computeIfAbsent(tz.toZoneId, zoneId => ReflectUtil.getDateFormatter(zoneId))
   }
 
   /**
@@ -73,19 +82,18 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     FilePartition.getFilePartitions(sparkSession, partitionedFiles, maxSplitBytes)
   }
 
-  override def isHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
-    unfoldSubqueryAliases(table) match {
-      case LogicalRelation(_, _, Some(table), _) => isHoodieTable(table)
-      case relation: UnresolvedRelation =>
-        try {
-          isHoodieTable(getCatalystPlanUtils.toTableIdentifier(relation), spark)
-        } catch {
-          case NonFatal(e) =>
-            logWarning("Failed to determine whether the table is a hoodie table", e)
-            false
-        }
-      case DataSourceV2Relation(table: Table, _, _, _, _) => isHoodieTable(table.properties())
-      case _=> false
+  /**
+   * Checks whether [[LogicalPlan]] refers to Hudi table, and if it's the case extracts
+   * corresponding [[CatalogTable]]
+   */
+  override def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
+    EliminateSubqueryAliases(plan) match {
+      // First, we need to weed out unresolved plans
+      case plan if !plan.resolved => None
+      // NOTE: When resolving Hudi table we allow [[Filter]]s and [[Project]]s be applied
+      //       on top of it
+      case PhysicalOperation(_, _, LogicalRelation(_, _, Some(table), _)) if isHoodieTable(table) => Some(table)
+      case _ => None
     }
   }
 
@@ -96,29 +104,81 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   override def createRelation(sqlContext: SQLContext,
                               metaClient: HoodieTableMetaClient,
                               schema: Schema,
-                              globPaths: Array[Path],
+                              globPaths: Array[StoragePath],
                               parameters: java.util.Map[String, String]): BaseRelation = {
     val dataSchema = Option(schema).map(AvroConversionUtils.convertAvroSchemaToStructType).orNull
     DefaultSource.createRelation(sqlContext, metaClient, dataSchema, globPaths, parameters.asScala.toMap)
   }
 
-  /**
-   * Converts instance of [[StorageLevel]] to a corresponding string
-   */
-  override def convertStorageLevelToString(level: StorageLevel): String = level match {
-    case NONE => "NONE"
-    case DISK_ONLY => "DISK_ONLY"
-    case DISK_ONLY_2 => "DISK_ONLY_2"
-    case DISK_ONLY_3 => "DISK_ONLY_3"
-    case MEMORY_ONLY => "MEMORY_ONLY"
-    case MEMORY_ONLY_2 => "MEMORY_ONLY_2"
-    case MEMORY_ONLY_SER => "MEMORY_ONLY_SER"
-    case MEMORY_ONLY_SER_2 => "MEMORY_ONLY_SER_2"
-    case MEMORY_AND_DISK => "MEMORY_AND_DISK"
-    case MEMORY_AND_DISK_2 => "MEMORY_AND_DISK_2"
-    case MEMORY_AND_DISK_SER => "MEMORY_AND_DISK_SER"
-    case MEMORY_AND_DISK_SER_2 => "MEMORY_AND_DISK_SER_2"
-    case OFF_HEAP => "OFF_HEAP"
-    case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
+  override def convertStorageLevelToString(level: StorageLevel): String
+
+  override def translateFilter(predicate: Expression,
+                               supportNestedPredicatePushdown: Boolean = false): Option[Filter] = {
+    DataSourceStrategy.translateFilter(predicate, supportNestedPredicatePushdown)
+  }
+
+  override def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch = {
+    new ColumnarBatch(vectors, numRows)
+  }
+
+  override def sqlExecutionWithNewExecutionId[T](sparkSession: SparkSession,
+                                                 queryExecution: QueryExecution,
+                                                 name: Option[String])(body: => T): T = {
+      SQLExecution.withNewExecutionId(queryExecution, name)(body)
+  }
+
+  def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
+
+  override def createInternalRow(metaFields: Array[UTF8String],
+                                sourceRow: InternalRow,
+                                sourceContainsMetaFields: Boolean): HoodieInternalRow = {
+    new Spark3HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields)
+  }
+
+  override def createPartitionCDCFileGroupMapping(partitionValues: InternalRow,
+                                                        fileSplits: List[HoodieCDCFileSplit]): HoodiePartitionCDCFileGroupMapping = {
+    new Spark3HoodiePartitionCDCFileGroupMapping(partitionValues, fileSplits)
+  }
+
+  override def createPartitionFileSliceMapping(values: InternalRow,
+                                                     slices: Map[String, FileSlice]): HoodiePartitionFileSliceMapping = {
+    new Spark3HoodiePartitionFileSliceMapping(values, slices)
+  }
+
+  override def newParseException(command: Option[String],
+                                 exception: AnalysisException,
+                                 start: Origin,
+                                 stop: Origin): ParseException = {
+    new ParseException(command, exception.getMessage, start, stop)
+  }
+
+  override def getUTF8StringFactory: HoodieUTF8StringFactory = Spark3HoodieUTF8StringFactory
+
+  override def splitFiles(sparkSession: SparkSession,
+                          partitionDirectory: PartitionDirectory,
+                          isSplitable: Boolean,
+                          maxSplitSize: Long): Seq[PartitionedFile] = {
+    partitionDirectory.files.flatMap(file =>
+      PartitionedFileUtil.splitFiles(sparkSession, file, file.getPath, isSplitable, maxSplitSize, partitionDirectory.values)
+    )
+  }
+
+  override def createColumnFromExpression(expression: Expression): Column = new Column(expression)
+
+  override def getExpressionFromColumn(column: Column): Expression = column.expr
+
+  override def getUnsafeUtils: HoodieUnsafeUtils = Spark3HoodieUnsafeUtils
+
+  override def getDataFrameUtil: DataFrameUtil = Spark3DataFrameUtil
+
+  override def internalCreateDataFrame(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType, isStreaming: Boolean = false): DataFrame = {
+    spark.internalCreateDataFrame(rdd, schema, isStreaming)
+  }
+
+  def createStreamingDataFrame(sqlContext: SQLContext, relation: HadoopFsRelation, requiredSchema: StructType): DataFrame = {
+    val logicalRelation = LogicalRelation(relation, isStreaming = true)
+    val resolvedSchema = logicalRelation.resolve(requiredSchema, sqlContext.sparkSession.sessionState.analyzer.resolver)
+    Dataset.ofRows(sqlContext.sparkSession, applyFiltersToPlan(logicalRelation, requiredSchema, resolvedSchema,
+        relation.fileFormat.asInstanceOf[HoodieFormatTrait].getRequiredFilters))
   }
 }

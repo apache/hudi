@@ -18,32 +18,44 @@
 
 package org.apache.hudi.timeline.service.handlers;
 
-import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.conflict.detection.TimelineServerBasedDetectionStrategy;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationDispatchingRunnable;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationFuture;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerDirState;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import io.javalin.http.Context;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
+import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
 
 /**
  * REST Handler servicing marker requests.
@@ -64,7 +76,7 @@ import java.util.stream.Collectors;
  * Worker Thread 3               |-------------------------->| writing to MARKERS2
  */
 public class MarkerHandler extends Handler {
-  private static final Logger LOG = LogManager.getLogger(MarkerHandler.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MarkerHandler.class);
 
   private final Registry metricsRegistry;
   // a scheduled executor service to schedule dispatching of marker creation requests
@@ -79,18 +91,17 @@ public class MarkerHandler extends Handler {
   // A thread to dispatch marker creation requests to batch processing threads
   private final MarkerCreationDispatchingRunnable markerCreationDispatchingRunnable;
   private final Object firstCreationRequestSeenLock = new Object();
-  private transient HoodieEngineContext hoodieEngineContext;
+  private final Object earlyConflictDetectionLock = new Object();
   private ScheduledFuture<?> dispatchingThreadFuture;
   private boolean firstCreationRequestSeen;
+  private String currentMarkerDir = null;
+  private TimelineServerBasedDetectionStrategy earlyConflictDetectionStrategy;
 
-  public MarkerHandler(Configuration conf, TimelineService.Config timelineServiceConfig,
-                       HoodieEngineContext hoodieEngineContext, FileSystem fileSystem,
-                       FileSystemViewManager viewManager, Registry metricsRegistry) throws IOException {
-    super(conf, timelineServiceConfig, fileSystem, viewManager);
-    LOG.debug("MarkerHandler FileSystem: " + this.fileSystem.getScheme());
-    LOG.debug("MarkerHandler batching params: batchNumThreads=" + timelineServiceConfig.markerBatchNumThreads
-        + " batchIntervalMs=" + timelineServiceConfig.markerBatchIntervalMs + "ms");
-    this.hoodieEngineContext = hoodieEngineContext;
+  public MarkerHandler(StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
+                       FileSystemViewManager viewManager, Registry metricsRegistry) {
+    super(conf, timelineServiceConfig, viewManager);
+    LOG.debug("MarkerHandler batching params: batchNumThreads={} batchIntervalMs={}ms",
+        timelineServiceConfig.markerBatchNumThreads, timelineServiceConfig.markerBatchIntervalMs);
     this.metricsRegistry = metricsRegistry;
     this.parallelism = timelineServiceConfig.markerParallelism;
     this.dispatchingExecutorService = Executors.newSingleThreadScheduledExecutor();
@@ -107,8 +118,11 @@ public class MarkerHandler extends Handler {
     if (dispatchingThreadFuture != null) {
       dispatchingThreadFuture.cancel(true);
     }
-    dispatchingExecutorService.shutdown();
-    batchingExecutorService.shutdown();
+    dispatchingExecutorService.shutdownNow();
+    batchingExecutorService.shutdownNow();
+    if (earlyConflictDetectionStrategy != null) {
+      earlyConflictDetectionStrategy.stop();
+    }
   }
 
   /**
@@ -121,12 +135,35 @@ public class MarkerHandler extends Handler {
   }
 
   /**
+   * @param markerDir marker directory path.
+   * @return Pending markers from the requests to process.
+   */
+  public Set<String> getPendingMarkersToProcess(String markerDir) {
+    if (markerDirStateMap.containsKey(markerDir)) {
+      MarkerDirState markerDirState = getMarkerDirState(markerDir);
+      return markerDirState.getPendingMarkerCreationRequests(false).stream()
+          .map(MarkerCreationFuture::getMarkerName).collect(Collectors.toSet());
+    }
+    return Collections.emptySet();
+  }
+
+  /**
    * @param markerDir marker directory path
    * @return all marker paths of write IO type "CREATE" and "MERGE"
    */
   public Set<String> getCreateAndMergeMarkers(String markerDir) {
     return getAllMarkers(markerDir).stream()
         .filter(markerName -> !markerName.endsWith(IOType.APPEND.name()))
+        .collect(Collectors.toSet());
+  }
+
+  /**
+   * @param markerDir marker directory path
+   * @return all marker paths of write IO type "APPEND"
+   */
+  public Set<String> getAppendMarkers(String markerDir) {
+    return getAllMarkers(markerDir).stream()
+        .filter(markerName -> markerName.endsWith(IOType.APPEND.name()))
         .collect(Collectors.toSet());
   }
 
@@ -150,8 +187,67 @@ public class MarkerHandler extends Handler {
    * @param markerName marker name
    * @return the {@code CompletableFuture} instance for the request
    */
-  public CompletableFuture<String> createMarker(Context context, String markerDir, String markerName) {
-    LOG.info("Request: create marker " + markerDir + " " + markerName);
+  public CompletableFuture<String> createMarker(Context context, String markerDir, String markerName, String basePath) {
+    // Step1 do early conflict detection if enable
+    if (timelineServiceConfig.earlyConflictDetectionEnable) {
+      try {
+        synchronized (earlyConflictDetectionLock) {
+          if (earlyConflictDetectionStrategy == null) {
+            String strategyClassName = timelineServiceConfig.earlyConflictDetectionStrategy;
+            if (!ReflectionUtils.isSubClass(strategyClassName, TimelineServerBasedDetectionStrategy.class)) {
+              LOG.warn("Cannot use {} for timeline-server-based markers.", strategyClassName);
+              strategyClassName = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy";
+              LOG.warn("Falling back to {}", strategyClassName);
+            }
+
+            earlyConflictDetectionStrategy =
+                (TimelineServerBasedDetectionStrategy) ReflectionUtils.loadClass(
+                    strategyClassName, basePath, markerDir, markerName, timelineServiceConfig.checkCommitConflict);
+          }
+
+          // markerDir => $base_path/.hoodie/.temp/$instant_time
+          // If markerDir is changed like move to the next instant action, we need to fresh this earlyConflictDetectionStrategy.
+          // For specific instant related create marker action, we only call this check/fresh once
+          // instead of starting the conflict detector for every request
+          if (!markerDir.equalsIgnoreCase(currentMarkerDir)) {
+            this.currentMarkerDir = markerDir;
+            Set<String> actions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION);
+            Set<HoodieInstant> completedCommits = new HashSet<>(
+                viewManager.getFileSystemView(basePath)
+                    .getTimeline()
+                    .filterCompletedInstants()
+                    .filter(instant -> actions.contains(instant.getAction()))
+                    .getInstants());
+
+            earlyConflictDetectionStrategy.startAsyncDetection(
+                timelineServiceConfig.asyncConflictDetectorInitialDelayMs,
+                timelineServiceConfig.asyncConflictDetectorPeriodMs,
+                markerDir, basePath, timelineServiceConfig.maxAllowableHeartbeatIntervalInMs,
+                getStorage(basePath), this, completedCommits);
+          }
+        }
+
+        earlyConflictDetectionStrategy.detectAndResolveConflictIfNecessary();
+
+      } catch (HoodieEarlyConflictDetectionException he) {
+        LOG.error("Detected the write conflict due to a concurrent writer, "
+            + "failing the marker creation as the early conflict detection is enabled", he);
+        return finishCreateMarkerFuture(context, markerDir, markerName);
+      } catch (Exception e) {
+        LOG.warn("Failed to execute early conflict detection. Marker creation will continue.", e);
+        // When early conflict detection fails to execute, we still allow the marker creation
+        // to continue
+        return addMarkerCreationRequestForAsyncProcessing(context, markerDir, markerName);
+      }
+    }
+
+    // Step 2 create marker
+    return addMarkerCreationRequestForAsyncProcessing(context, markerDir, markerName);
+  }
+
+  private MarkerCreationFuture addMarkerCreationRequestForAsyncProcessing(
+      Context context, String markerDir, String markerName) {
+    LOG.debug("Request: create marker: {}", markerName);
     MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);
     // Add the future to the list
     MarkerDirState markerDirState = getMarkerDirState(markerDir);
@@ -169,13 +265,24 @@ public class MarkerHandler extends Handler {
     return future;
   }
 
+  private CompletableFuture<String> finishCreateMarkerFuture(Context context, String markerDir, String markerName) {
+    MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);
+    try {
+      future.complete(jsonifyResult(
+          future.getContext(), future.isSuccessful(), metricsRegistry));
+    } catch (JsonProcessingException e) {
+      throw new HoodieException("Failed to JSON encode the value", e);
+    }
+    return future;
+  }
+
   /**
    * Deletes markers in the directory.
    *
    * @param markerDir marker directory path
    * @return {@code true} if successful; {@code false} otherwise.
    */
-  public Boolean deleteMarkers(String markerDir) {
+  public boolean deleteMarkers(String markerDir) {
     boolean result = getMarkerDirState(markerDir).deleteAllMarkers();
     markerDirStateMap.remove(markerDir);
     return result;
@@ -186,8 +293,13 @@ public class MarkerHandler extends Handler {
     if (markerDirState == null) {
       synchronized (markerDirStateMap) {
         if (markerDirStateMap.get(markerDir) == null) {
-          markerDirState = new MarkerDirState(markerDir, timelineServiceConfig.markerBatchNumThreads,
-              fileSystem, metricsRegistry, hoodieEngineContext, parallelism);
+          Option<TimelineServerBasedDetectionStrategy> strategy =
+              timelineServiceConfig.earlyConflictDetectionEnable
+                  && earlyConflictDetectionStrategy != null
+                  ? Option.of(earlyConflictDetectionStrategy) : Option.empty();
+          markerDirState = new MarkerDirState(
+              markerDir, timelineServiceConfig.markerBatchNumThreads,
+              strategy, getStorage(markerDir), metricsRegistry, parallelism);
           markerDirStateMap.put(markerDir, markerDirState);
         } else {
           markerDirState = markerDirStateMap.get(markerDir);

@@ -24,27 +24,27 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
-import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -70,6 +70,7 @@ import java.util.stream.Stream;
 import scala.Tuple2;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.genPseudoRandomUUID;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createSimpleRecord;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -82,20 +83,25 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
 
   private static final Schema SCHEMA = getSchemaFromResource(TestHoodieBloomIndex.class, "/exampleSchema.avsc", true);
   private static final String TEST_NAME_WITH_PARAMS =
-      "[{index}] Test with rangePruning={0}, treeFiltering={1}, bucketizedChecking={2}, useMetadataTable={3}";
+      "[{index}] Test with rangePruning={0}, treeFiltering={1}, bucketizedChecking={2}, "
+          + "useMetadataTable={3}, enableFileGroupIdKeySorting={4}";
   private static final Random RANDOM = new Random(0xDEED);
 
   public static Stream<Arguments> configParams() {
-    // rangePruning, treeFiltering, bucketizedChecking, useMetadataTable
+    // rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting
     Object[][] data = new Object[][] {
-        {true, true, true, false},
-        {false, true, true, false},
-        {true, true, false, false},
-        {true, false, true, false},
-        {true, true, true, true},
-        {false, true, true, true},
-        {true, true, false, true},
-        {true, false, true, true}
+        {true, true, true, false, false},
+        {false, true, true, false, false},
+        {true, true, false, false, false},
+        {true, false, true, false, false},
+        {true, true, true, true, false},
+        {false, true, true, true, false},
+        {true, true, false, true, false},
+        {true, false, true, true, false},
+        {true, true, false, false, true},
+        {true, false, false, false, true},
+        {false, false, false, false, true},
+        {false, true, false, false, true}
     };
     return Stream.of(data).map(Arguments::of);
   }
@@ -104,7 +110,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   public void setUp() throws Exception {
     initSparkContexts();
     initPath();
-    initFileSystem();
+    initHoodieStorage();
     // We have some records to be tagged (two different partitions)
     initMetaClient();
     HoodieIndexConfig.Builder indexBuilder = HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM);
@@ -120,7 +126,8 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   }
 
   private HoodieWriteConfig makeConfig(
-      boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking, boolean useMetadataTable) {
+      boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking,
+      boolean useMetadataTable, boolean enableFileGroupIdKeySorting) {
     // For the bloom index to use column stats and bloom filters from metadata table,
     // the following configs must be set to true:
     // "hoodie.bloom.index.use.metadata"
@@ -134,6 +141,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
             .bloomIndexBucketizedChecking(bucketizedChecking)
             .bloomIndexKeysPerBucket(2)
             .bloomIndexUseMetadata(useMetadataTable)
+            .enableBloomIndexFileGroupIdKeySorting(enableFileGroupIdKeySorting)
             .build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withMetadataIndexBloomFilter(useMetadataTable)
@@ -146,13 +154,13 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   @MethodSource("configParams")
   public void testLoadInvolvedFiles(
       boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking,
-      boolean useMetadataTable) throws Exception {
+      boolean useMetadataTable, boolean enableFileGroupIdKeySorting) throws Exception {
     HoodieWriteConfig config =
-        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable);
+        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     HoodieBloomIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
+    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, Option.of(context));
 
     // Create some partitions, and put some files
     // "2016/01/21": 0 file
@@ -160,22 +168,10 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     // "2015/03/12": 3 files (1_0_20150312101010.parquet, 3_0_20150312101010.parquet, 4_0_20150312101010.parquet)
     testTable.withPartitionMetaFiles("2016/01/21", "2016/04/01", "2015/03/12");
 
-    RawTripTestPayload rowChange1 =
-        new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
-    HoodieRecord record1 =
-        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
-    RawTripTestPayload rowChange2 =
-        new RawTripTestPayload("{\"_row_key\":\"001\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
-    HoodieRecord record2 =
-        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
-    RawTripTestPayload rowChange3 =
-        new RawTripTestPayload("{\"_row_key\":\"002\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
-    HoodieRecord record3 =
-        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
-    RawTripTestPayload rowChange4 =
-        new RawTripTestPayload("{\"_row_key\":\"003\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
-    HoodieRecord record4 =
-        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
+    HoodieRecord record1 = createSimpleRecord("000", "2016-01-31T03:16:41.415Z", 12);
+    HoodieRecord record2 = createSimpleRecord("001", "2016-01-31T03:16:41.415Z", 12);
+    HoodieRecord record3 = createSimpleRecord("002", "2016-01-31T03:16:41.415Z", 12);
+    HoodieRecord record4 = createSimpleRecord("003", "2016-01-31T03:16:41.415Z", 12);
 
     List<String> partitions = Arrays.asList("2016/01/21", "2016/04/01", "2015/03/12");
     List<Pair<String, BloomIndexFileInfo>> filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
@@ -189,28 +185,33 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     final Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
 
     String commitTime = "20160401010101";
-    Path baseFilePath = testTable.forCommit(commitTime).withInserts(partitions.get(1), fileId2, Collections.emptyList());
-    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    StoragePath baseFilePath = testTable.forCommit(commitTime)
+        .withInserts(partitions.get(1), fileId2, Collections.emptyList());
+    long baseFileLength =
+        storage.getPathInfo(new StoragePath(baseFilePath.toUri())).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(partitions.get(1),
         k -> new ArrayList<>()).add(Pair.of(fileId2, Integer.valueOf((int) baseFileLength)));
-    testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT, Arrays.asList(partitions.get(1)),
+    testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT,
+        Arrays.asList(partitions.get(1)),
         partitionToFilesNameLengthMap, false, false);
 
     commitTime = "20150312101010";
     partitionToFilesNameLengthMap.clear();
     testTable.forCommit(commitTime);
     baseFilePath = testTable.withInserts(partitions.get(2), fileId1, Collections.emptyList());
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(partitions.get(2),
         k -> new ArrayList<>()).add(Pair.of(fileId1, Integer.valueOf((int) baseFileLength)));
 
-    baseFilePath = testTable.withInserts(partitions.get(2), fileId3, Collections.singletonList(record1));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFilePath =
+        testTable.withInserts(partitions.get(2), fileId3, Collections.singletonList(record1));
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(partitions.get(2),
         k -> new ArrayList<>()).add(Pair.of(fileId3, Integer.valueOf((int) baseFileLength)));
 
-    baseFilePath = testTable.withInserts(partitions.get(2), fileId4, Arrays.asList(record2, record3, record4));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFilePath =
+        testTable.withInserts(partitions.get(2), fileId4, Arrays.asList(record2, record3, record4));
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(partitions.get(2),
         k -> new ArrayList<>()).add(Pair.of(fileId4, Integer.valueOf((int) baseFileLength)));
 
@@ -244,9 +245,9 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   @MethodSource("configParams")
   public void testRangePruning(
       boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking,
-      boolean useMetadataTable) {
+      boolean useMetadataTable, boolean enableFileGroupIdKeySorting) {
     HoodieWriteConfig config =
-        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable);
+        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     HoodieBloomIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
 
     final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
@@ -259,12 +260,14 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
         jsc.parallelize(Arrays.asList(new Tuple2<>("2017/10/22", "003"), new Tuple2<>("2017/10/22", "002"),
             new Tuple2<>("2017/10/22", "005"), new Tuple2<>("2017/10/22", "004"))).mapToPair(t -> t);
 
-    List<Pair<String, HoodieKey>> comparisonKeyList = HoodieJavaRDD.getJavaRDD(
-        index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, HoodieJavaPairRDD.of(partitionRecordKeyPairRDD))).collect();
+    List<Pair<HoodieFileGroupId, String>> comparisonKeyList =
+        index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, HoodieJavaPairRDD.of(partitionRecordKeyPairRDD)).collectAsList();
 
     assertEquals(10, comparisonKeyList.size());
     Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream()
-        .collect(Collectors.groupingBy(t -> t.getRight().getRecordKey(), Collectors.mapping(Pair::getLeft, Collectors.toList())));
+        .collect(
+            Collectors.groupingBy(t -> t.getRight(),
+                Collectors.mapping(t -> t.getLeft().getFileId(), Collectors.toList())));
 
     assertEquals(4, recordKeyToFileComps.size());
     assertEquals(new HashSet<>(Arrays.asList("f1", "f3", "f4")), new HashSet<>(recordKeyToFileComps.get("002")));
@@ -277,40 +280,24 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   public void testCheckUUIDsAgainstOneFile() throws Exception {
     final String partition = "2016/01/31";
     // Create some records to use
-    String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-    String recordStr3 = "{\"_row_key\":\"3eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
-    String recordStr4 = "{\"_row_key\":\"4eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":32}";
-    RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
-    HoodieRecord record1 =
-        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
-    RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
-    HoodieRecord record2 =
-        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
-    RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
-    HoodieRecord record3 =
-        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
-    RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
-    HoodieRecord record4 =
-        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
+    HoodieRecord record1 = createSimpleRecord("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 12);
+    HoodieRecord record2 = createSimpleRecord("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0", "2016-01-31T03:20:41.415Z", 100);
+    HoodieRecord record3 = createSimpleRecord("3eb5b87c-1fej-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 15);
+    HoodieRecord record4 = createSimpleRecord("4eb5b87c-1fej-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 32);
 
     // We write record1, record2 to a parquet file, but the bloom filter contains (record1,
     // record2, record3).
     BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
     filter.add(record3.getRecordKey());
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, filter, metadataWriter);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, filter, metadataWriter, Option.of(context));
 
     final Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
     final String commitTime = "0000001";
     final String fileId = genRandomUUID();
 
-    Path baseFilePath = testTable.forCommit(commitTime)
+    StoragePath baseFilePath = testTable.forCommit(commitTime)
         .withInserts(partition, fileId, Arrays.asList(record1, record2));
-    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    long baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(partition,
         k -> new ArrayList<>()).add(Pair.of(fileId, Integer.valueOf((int) baseFileLength)));
     testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT, Collections.singletonList(partition),
@@ -328,15 +315,14 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
         Arrays.asList(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(), record4.getRecordKey());
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
-    List<String> results = HoodieIndexUtils.filterKeysFromFile(
-        new Path(Paths.get(basePath, partition, filename).toString()), uuids, hadoopConf);
+    List<Pair<String, Long>> results = HoodieIndexUtils.filterKeysFromFile(
+        new StoragePath(Paths.get(basePath, partition, filename).toString()), uuids, storage);
 
     assertEquals(results.size(), 2);
-    assertTrue(results.get(0).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
-        || results.get(1).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));
-    assertTrue(results.get(0).equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0")
-        || results.get(1).equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0"));
+    assertTrue(results.get(0).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
+        || results.get(1).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));
+    assertTrue(results.get(0).getLeft().equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0")
+        || results.get(1).getLeft().equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0"));
     // TODO(vc): Need more coverage on actual filenames
     // assertTrue(results.get(0)._2().equals(filename));
     // assertTrue(results.get(1)._2().equals(filename));
@@ -346,12 +332,12 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   @MethodSource("configParams")
   public void testTagLocationWithEmptyRDD(
       boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking,
-      boolean useMetadataTable) {
+      boolean useMetadataTable, boolean enableFileGroupIdKeySorting) {
     // We have some records to be tagged (two different partitions)
     JavaRDD<HoodieRecord> recordRDD = jsc.emptyRDD();
     // Also create the metadata and config
     HoodieWriteConfig config =
-        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable);
+        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
 
@@ -367,35 +353,24 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   @MethodSource("configParams")
   public void testTagLocationOnPartitionedTable(
       boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking,
-      boolean useMetadataTable) throws Exception {
+      boolean useMetadataTable, boolean enableFileGroupIdKeySorting) throws Exception {
     // We have some records to be tagged (two different partitions)
     String rowKey1 = genRandomUUID();
     String rowKey2 = genRandomUUID();
     String rowKey3 = genRandomUUID();
-    String recordStr1 = "{\"_row_key\":\"" + rowKey1 + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"" + rowKey2 + "\",\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-    String recordStr3 = "{\"_row_key\":\"" + rowKey3 + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+    HoodieRecord record1 = createSimpleRecord(rowKey1, "2016-01-31T03:16:41.415Z", 12);
+    HoodieRecord record2 = createSimpleRecord(rowKey2, "2016-01-31T03:20:41.415Z", 100);
+    HoodieRecord record3 = createSimpleRecord(rowKey3, "2016-01-31T03:16:41.415Z", 15);
     // place same row key under a different partition.
-    String recordStr4 = "{\"_row_key\":\"" + rowKey1 + "\",\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
-    RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
-    HoodieRecord record1 =
-        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
-    RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
-    HoodieRecord record2 =
-        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
-    RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
-    HoodieRecord record3 =
-        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
-    RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
-    HoodieRecord record4 =
-        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
+    HoodieRecord record4 = createSimpleRecord(rowKey1, "2015-01-31T03:16:41.415Z", 32);
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
 
     // Also create the metadata and config
-    HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable);
+    HoodieWriteConfig config =
+        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     HoodieSparkTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
+    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, Option.of(context));
 
     // Let's tag
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
@@ -413,8 +388,9 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     // We create three parquet file, each having one record. (two different partitions)
     final String fileId1 = genRandomUUID();
     final String commit1 = "0000001";
-    Path baseFilePath = testTable.forCommit(commit1).withInserts(partition1, fileId1, Collections.singletonList(record1));
-    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    StoragePath baseFilePath = testTable.forCommit(commit1)
+        .withInserts(partition1, fileId1, Collections.singletonList(record1));
+    long baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(partition1,
         k -> new ArrayList<>()).add(Pair.of(fileId1, Integer.valueOf((int) baseFileLength)));
     testTable.doWriteOperation(commit1, WriteOperationType.UPSERT, Collections.singletonList(partition1),
@@ -422,8 +398,9 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
 
     final String fileId2 = genRandomUUID();
     final String commit2 = "0000002";
-    baseFilePath = testTable.forCommit(commit2).withInserts(partition1, fileId2, Collections.singletonList(record2));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFilePath = testTable.forCommit(commit2)
+        .withInserts(partition1, fileId2, Collections.singletonList(record2));
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.clear();
     partitionToFilesNameLengthMap.computeIfAbsent(partition1,
         k -> new ArrayList<>()).add(Pair.of(fileId2, Integer.valueOf((int) baseFileLength)));
@@ -432,8 +409,9 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
 
     final String fileId3 = genRandomUUID();
     final String commit3 = "0000003";
-    baseFilePath = testTable.forCommit(commit3).withInserts(partition2, fileId3, Collections.singletonList(record4));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFilePath = testTable.forCommit(commit3)
+        .withInserts(partition2, fileId3, Collections.singletonList(record4));
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.clear();
     partitionToFilesNameLengthMap.computeIfAbsent(partition2,
         k -> new ArrayList<>()).add(Pair.of(fileId3, Integer.valueOf((int) baseFileLength)));
@@ -464,34 +442,25 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   @MethodSource("configParams")
   public void testTagLocationOnNonpartitionedTable(
       boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking,
-      boolean useMetadataTable) throws Exception {
+      boolean useMetadataTable, boolean enableFileGroupIdKeySorting) throws Exception {
     // We have some records to be tagged (two different partitions)
     String rowKey1 = genRandomUUID();
     String rowKey2 = genRandomUUID();
     String rowKey3 = genRandomUUID();
-    String recordStr1 = "{\"_row_key\":\"" + rowKey1 + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"" + rowKey2 + "\",\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-    String recordStr3 = "{\"_row_key\":\"" + rowKey3 + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
 
     String emptyPartitionPath = "";
-    RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
-    HoodieRecord record1 =
-        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), emptyPartitionPath), rowChange1);
-    RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
-    HoodieRecord record2 =
-        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), emptyPartitionPath), rowChange2);
-    RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
-    HoodieRecord record3 =
-        new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), emptyPartitionPath), rowChange3);
+    HoodieRecord record1 = createSimpleRecord(rowKey1, "2016-01-31T03:16:41.415Z", 12, Option.of(""));
+    HoodieRecord record2 = createSimpleRecord(rowKey2, "2016-01-31T03:20:41.415Z", 100, Option.of(""));
+    HoodieRecord record3 = createSimpleRecord(rowKey3, "2016-01-31T03:16:41.415Z", 15, Option.of(""));
 
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3));
 
     // Also create the metadata and config
     HoodieWriteConfig config =
-        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable);
+        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     HoodieSparkTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
+    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, Option.of(context));
 
     // Let's tag
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
@@ -507,8 +476,9 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     // We create three parquet file, each having one record
     final String fileId1 = genRandomUUID();
     final String commit1 = "0000001";
-    Path baseFilePath = testTable.forCommit(commit1).withInserts(emptyPartitionPath, fileId1, Collections.singletonList(record1));
-    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    StoragePath baseFilePath = testTable.forCommit(commit1)
+        .withInserts(emptyPartitionPath, fileId1, Collections.singletonList(record1));
+    long baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(emptyPartitionPath,
         k -> new ArrayList<>()).add(Pair.of(fileId1, Integer.valueOf((int) baseFileLength)));
     testTable.doWriteOperation(commit1, WriteOperationType.UPSERT, Collections.singletonList(emptyPartitionPath),
@@ -516,8 +486,9 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
 
     final String fileId2 = genRandomUUID();
     final String commit2 = "0000002";
-    baseFilePath = testTable.forCommit(commit2).withInserts(emptyPartitionPath, fileId2, Collections.singletonList(record2));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFilePath = testTable.forCommit(commit2)
+        .withInserts(emptyPartitionPath, fileId2, Collections.singletonList(record2));
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.clear();
     partitionToFilesNameLengthMap.computeIfAbsent(emptyPartitionPath,
         k -> new ArrayList<>()).add(Pair.of(fileId2, Integer.valueOf((int) baseFileLength)));
@@ -526,8 +497,9 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
 
     final String fileId3 = UUID.randomUUID().toString();
     final String commit3 = "0000003";
-    baseFilePath = testTable.forCommit(commit3).withInserts(emptyPartitionPath, fileId3, Collections.singletonList(record3));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFilePath = testTable.forCommit(commit3)
+        .withInserts(emptyPartitionPath, fileId3, Collections.singletonList(record3));
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.clear();
     partitionToFilesNameLengthMap.computeIfAbsent(emptyPartitionPath,
         k -> new ArrayList<>()).add(Pair.of(fileId3, Integer.valueOf((int) baseFileLength)));
@@ -554,42 +526,26 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   @MethodSource("configParams")
   public void testCheckExists(
       boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking,
-      boolean useMetadataTable) throws Exception {
+      boolean useMetadataTable, boolean enableFileGroupIdKeySorting) throws Exception {
     // We have some records to be tagged (two different partitions)
-
-    String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-    String recordStr3 = "{\"_row_key\":\"3eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+    HoodieRecord record1 = createSimpleRecord("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 12);
+    HoodieRecord record2 = createSimpleRecord("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0", "2016-01-31T03:20:41.415Z", 100);
+    HoodieRecord record3 = createSimpleRecord("3eb5b87c-1fej-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 15);
     // record key same as recordStr2
-    String recordStr4 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
-    RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
-    HoodieKey key1 = new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath());
-    HoodieRecord record1 = new HoodieAvroRecord(key1, rowChange1);
-    RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
-    HoodieKey key2 = new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath());
-    HoodieRecord record2 = new HoodieAvroRecord(key2, rowChange2);
-    RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
-    HoodieKey key3 = new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath());
-    RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
-    HoodieKey key4 = new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath());
-    HoodieRecord record4 = new HoodieAvroRecord(key4, rowChange4);
-    JavaRDD<HoodieKey> keysRDD = jsc.parallelize(Arrays.asList(key1, key2, key3, key4));
+    HoodieRecord record4 = createSimpleRecord("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0", "2015-01-31T03:16:41.415Z", 32);
+    JavaRDD<HoodieKey> keysRDD = jsc.parallelize(Arrays.asList(record1.getKey(), record2.getKey(), record3.getKey(), record4.getKey()));
 
     // Also create the metadata and config
     HoodieWriteConfig config =
-        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable);
+        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
+    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, Option.of(context));
 
     // Let's tag
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     JavaRDD<HoodieRecord> taggedRecords = tagLocation(
-        bloomIndex, keysRDD.map(k -> new HoodieAvroRecord(k, null)), hoodieTable);
+        bloomIndex, keysRDD.map(k -> new HoodieEmptyRecord<>(k, HoodieRecord.HoodieRecordType.AVRO)), hoodieTable);
     JavaPairRDD<HoodieKey, Option<Pair<String, String>>> recordLocationsRDD = taggedRecords
         .mapToPair(hr -> new Tuple2<>(hr.getKey(), hr.isCurrentLocationKnown()
             ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))
@@ -609,8 +565,9 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     final Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
     // We create three parquet file, each having one record. (two different partitions)
     final String commit1 = "0000001";
-    Path baseFilePath = testTable.forCommit(commit1).withInserts(partition1, fileId1, Collections.singletonList(record1));
-    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    StoragePath baseFilePath = testTable.forCommit(commit1)
+        .withInserts(partition1, fileId1, Collections.singletonList(record1));
+    long baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(partition1,
         k -> new ArrayList<>()).add(Pair.of(fileId1, Integer.valueOf((int) baseFileLength)));
     testTable.doWriteOperation(commit1, WriteOperationType.UPSERT, Collections.singletonList(partition1),
@@ -618,8 +575,9 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
 
     final String commit2 = "0000002";
     partitionToFilesNameLengthMap.clear();
-    baseFilePath = testTable.forCommit(commit2).withInserts(partition1, fileId2, Collections.singletonList(record2));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFilePath = testTable.forCommit(commit2)
+        .withInserts(partition1, fileId2, Collections.singletonList(record2));
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(partition1,
         k -> new ArrayList<>()).add(Pair.of(fileId2, Integer.valueOf((int) baseFileLength)));
     testTable.doWriteOperation(commit2, WriteOperationType.UPSERT, Collections.singletonList(partition1),
@@ -627,8 +585,9 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
 
     final String commit3 = "0000003";
     partitionToFilesNameLengthMap.clear();
-    baseFilePath = testTable.forCommit(commit3).withInserts(partition2, fileId3, Collections.singletonList(record4));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFilePath = testTable.forCommit(commit3)
+        .withInserts(partition2, fileId3, Collections.singletonList(record4));
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(partition2,
         k -> new ArrayList<>()).add(Pair.of(fileId3, Integer.valueOf((int) baseFileLength)));
     testTable.doWriteOperation(commit3, WriteOperationType.UPSERT, Collections.singletonList(partition2),
@@ -666,25 +625,16 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
   @MethodSource("configParams")
   public void testBloomFilterFalseError(
       boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking,
-      boolean useMetadataTable) throws Exception {
+      boolean useMetadataTable, boolean enableFileGroupIdKeySorting) throws Exception {
     // We have two hoodie records
-    String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-
     // We write record1 to a parquet file, using a bloom filter having both records
-    RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
-    HoodieRecord record1 =
-        new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
-    RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
-    HoodieRecord record2 =
-        new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
+    HoodieRecord record1 = createSimpleRecord("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 12);
+    HoodieRecord record2 = createSimpleRecord("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0", "2016-01-31T03:20:41.415Z", 100);
 
     BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1,
         BloomFilterTypeCode.SIMPLE.name());
     filter.add(record2.getRecordKey());
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, filter);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, filter, Option.of(context));
     String fileId = testTable.addCommit("000").getFileIdWithInserts("2016/01/31", record1);
     assertTrue(filter.mightContain(record1.getRecordKey()));
     assertTrue(filter.mightContain(record2.getRecordKey()));
@@ -692,7 +642,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     // We do the tag
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2));
     HoodieWriteConfig config =
-        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable);
+        makeConfig(rangePruning, treeFiltering, bucketizedChecking, useMetadataTable, enableFileGroupIdKeySorting);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
 

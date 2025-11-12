@@ -27,16 +27,19 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * Tests {@link BinaryUtil}.
+ */
 public class TestBinaryUtil {
 
   @Test
   public void testIntConvert() {
     // test Int
     int[] testInt = new int[] {-1, 1, -2, 10000, -100000, 2, Integer.MAX_VALUE, Integer.MIN_VALUE};
-    List<OrginValueWrapper<Integer>> valueWrappers = new ArrayList<>();
+    List<OriginValueWrapper<Integer>> valueWrappers = new ArrayList<>();
     List<ConvertResultWrapper<Integer>> convertResultWrappers = new ArrayList<>();
     for (int i = 0; i < testInt.length; i++) {
-      valueWrappers.add(new OrginValueWrapper<>(i, testInt[i]));
+      valueWrappers.add(new OriginValueWrapper<>(i, testInt[i]));
       convertResultWrappers.add(new ConvertResultWrapper<>(i, BinaryUtil.intTo8Byte(testInt[i])));
     }
 
@@ -53,11 +56,11 @@ public class TestBinaryUtil {
   public void testLongConvert() {
     // test Long
     long[] testLong = new long[] {-1L, 1L, -2L, 10000L, -100000L, 2L, Long.MAX_VALUE, Long.MIN_VALUE};
-    List<OrginValueWrapper<Long>> valueWrappers = new ArrayList<>();
+    List<OriginValueWrapper<Long>> valueWrappers = new ArrayList<>();
     List<ConvertResultWrapper<Long>> convertResultWrappers = new ArrayList<>();
     for (int i = 0; i < testLong.length; i++) {
-      valueWrappers.add(new OrginValueWrapper<>((long)i, testLong[i]));
-      convertResultWrappers.add(new ConvertResultWrapper<>((long)i, BinaryUtil.longTo8Byte(testLong[i])));
+      valueWrappers.add(new OriginValueWrapper<>((long) i, testLong[i]));
+      convertResultWrappers.add(new ConvertResultWrapper<>((long) i, BinaryUtil.longTo8Byte(testLong[i])));
     }
 
     Collections.sort(valueWrappers, ((o1, o2) -> o1.originValue.compareTo(o2.originValue)));
@@ -73,11 +76,11 @@ public class TestBinaryUtil {
   public void testDoubleConvert() {
     // test Long
     double[] testDouble = new double[] {-1.00d, 1.05d, -2.3d, 10000.002d, -100000.7d, 2.9d, Double.MAX_VALUE};
-    List<OrginValueWrapper<Double>> valueWrappers = new ArrayList<>();
+    List<OriginValueWrapper<Double>> valueWrappers = new ArrayList<>();
     List<ConvertResultWrapper<Double>> convertResultWrappers = new ArrayList<>();
     for (int i = 0; i < testDouble.length; i++) {
-      valueWrappers.add(new OrginValueWrapper<>((Double)(i * 1.0), testDouble[i]));
-      convertResultWrappers.add(new ConvertResultWrapper<>((Double)(i * 1.0), BinaryUtil.doubleTo8Byte(testDouble[i])));
+      valueWrappers.add(new OriginValueWrapper<>((Double) (i * 1.0), testDouble[i]));
+      convertResultWrappers.add(new ConvertResultWrapper<>((Double) (i * 1.0), BinaryUtil.doubleTo8Byte(testDouble[i])));
     }
 
     Collections.sort(valueWrappers, ((o1, o2) -> o1.originValue.compareTo(o2.originValue)));
@@ -93,11 +96,11 @@ public class TestBinaryUtil {
   public void testFloatConvert() {
     // test Long
     float[] testDouble = new float[] {-1.00f, 1.05f, -2.3f, 10000.002f, -100000.7f, 2.9f, Float.MAX_VALUE, Float.MIN_VALUE};
-    List<OrginValueWrapper<Float>> valueWrappers = new ArrayList<>();
+    List<OriginValueWrapper<Float>> valueWrappers = new ArrayList<>();
     List<ConvertResultWrapper<Float>> convertResultWrappers = new ArrayList<>();
     for (int i = 0; i < testDouble.length; i++) {
-      valueWrappers.add(new OrginValueWrapper<>((float)(i * 1.0), testDouble[i]));
-      convertResultWrappers.add(new ConvertResultWrapper<>((float)(i * 1.0), BinaryUtil.doubleTo8Byte((double) testDouble[i])));
+      valueWrappers.add(new OriginValueWrapper<>((float) (i * 1.0), testDouble[i]));
+      convertResultWrappers.add(new ConvertResultWrapper<>((float) (i * 1.0), BinaryUtil.doubleTo8Byte((double) testDouble[i])));
     }
 
     Collections.sort(valueWrappers, ((o1, o2) -> o1.originValue.compareTo(o2.originValue)));
@@ -112,16 +115,18 @@ public class TestBinaryUtil {
   private class ConvertResultWrapper<T> {
     T index;
     byte[] result;
+
     public ConvertResultWrapper(T index, byte[] result) {
       this.index = index;
       this.result = result;
     }
   }
 
-  private class OrginValueWrapper<T> {
+  private class OriginValueWrapper<T> {
     T index;
     T originValue;
-    public OrginValueWrapper(T index, T originValue) {
+
+    public OriginValueWrapper(T index, T originValue) {
       this.index = index;
       this.originValue = originValue;
     }

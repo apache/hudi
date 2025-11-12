@@ -23,7 +23,6 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -36,7 +35,7 @@ import org.apache.hudi.table.action.commit.BaseJavaCommitActionExecutor;
 
 import java.util.List;
 
-public class JavaExecuteClusteringCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class JavaExecuteClusteringCommitActionExecutor<T>
     extends BaseJavaCommitActionExecutor<T> {
 
   private final HoodieClusteringPlan clusteringPlan;
@@ -47,7 +46,7 @@ public class JavaExecuteClusteringCommitActionExecutor<T extends HoodieRecordPay
                                                    String instantTime) {
     super(context, config, table, instantTime, WriteOperationType.CLUSTER);
     this.clusteringPlan = ClusteringUtils.getClusteringPlan(
-        table.getMetaClient(), HoodieTimeline.getReplaceCommitRequestedInstant(instantTime))
+        table.getMetaClient(), ClusteringUtils.getRequestedClusteringInstant(instantTime, table.getActiveTimeline(), table.getInstantGenerator()).get())
         .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
             "Unable to read clustering plan for instant: " + instantTime));
   }
@@ -61,6 +60,6 @@ public class JavaExecuteClusteringCommitActionExecutor<T extends HoodieRecordPay
 
   @Override
   protected String getCommitActionType() {
-    return HoodieTimeline.REPLACE_COMMIT_ACTION;
+    return HoodieTimeline.CLUSTERING_ACTION;
   }
 }

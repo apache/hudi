@@ -18,11 +18,12 @@
 
 package org.apache.hudi.sync.adb;
 
-import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.SchemaDifference;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
@@ -76,8 +77,8 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
   private final String databaseName;
   private Connection connection;
 
-  public HoodieAdbJdbcClient(AdbSyncConfig config) {
-    super(config);
+  public HoodieAdbJdbcClient(AdbSyncConfig config, HoodieTableMetaClient metaClient) {
+    super(config, metaClient);
     this.config = config;
     this.databaseName = config.getString(META_SYNC_DATABASE_NAME);
     createAdbConnection();
@@ -261,7 +262,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
   @Override
   public void updateLastCommitTimeSynced(String tableName) {
     // Set the last commit time from the TBLProperties
-    String lastCommitSynced = getActiveTimeline().lastInstant().get().getTimestamp();
+    String lastCommitSynced = getActiveTimeline().lastInstant().get().requestedTime();
     try {
       String sql = constructUpdateTblPropertiesSql(tableName, lastCommitSynced);
       executeAdbSql(sql);
@@ -286,7 +287,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
   }
 
   @Override
-  public void updateTableProperties(String tableName, Map<String, String> tableProperties) {
+  public boolean updateTableProperties(String tableName, Map<String, String> tableProperties) {
     throw new UnsupportedOperationException("Not support updateTableProperties yet");
   }
 
@@ -322,8 +323,10 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
             String str = resultSet.getString(1);
             if (!StringUtils.isNullOrEmpty(str)) {
               List<String> values = partitionValueExtractor.extractPartitionValuesInPath(str);
-              Path storagePartitionPath = FSUtils.getPartitionPath(config.getString(META_SYNC_BASE_PATH), String.join("/", values));
-              String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
+              Path storagePartitionPath =
+                  HadoopFSUtils.constructAbsolutePathInHadoopPath(config.getString(META_SYNC_BASE_PATH), String.join("/", values));
+              String fullStoragePartitionPath =
+                  Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
               partitions.put(values, fullStoragePartitionPath);
             }
           }
@@ -357,7 +360,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
         .append(tableName).append("`").append(" add if not exists ");
     for (String partition : partitions) {
       String partitionClause = getPartitionClause(partition);
-      Path partitionPath = FSUtils.getPartitionPath(config.getString(META_SYNC_BASE_PATH), partition);
+      Path partitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(config.getString(META_SYNC_BASE_PATH), partition);
       String fullPartitionPathStr = config.generateAbsolutePathStr(partitionPath);
       sqlBuilder.append("  partition (").append(partitionClause).append(") location '")
           .append(fullPartitionPathStr).append("' ");
@@ -374,7 +377,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
     String alterTable = "alter table `" + tableName + "`";
     for (String partition : partitions) {
       String partitionClause = getPartitionClause(partition);
-      Path partitionPath = FSUtils.getPartitionPath(config.getString(META_SYNC_BASE_PATH), partition);
+      Path partitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(config.getString(META_SYNC_BASE_PATH), partition);
       String fullPartitionPathStr = config.generateAbsolutePathStr(partitionPath);
       String changePartition = alterTable + " add if not exists partition (" + partitionClause
           + ") location '" + fullPartitionPathStr + "'";
@@ -452,13 +455,14 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
     }
     List<PartitionEvent> events = new ArrayList<>();
     for (String storagePartition : partitionStoragePartitions) {
-      Path storagePartitionPath = FSUtils.getPartitionPath(config.getString(META_SYNC_BASE_PATH), storagePartition);
+      Path storagePartitionPath =
+          HadoopFSUtils.constructAbsolutePathInHadoopPath(config.getString(META_SYNC_BASE_PATH), storagePartition);
       String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
       if (config.getBoolean(ADB_SYNC_USE_HIVE_STYLE_PARTITIONING)) {
         String partition = String.join("/", storagePartitionValues);
-        storagePartitionPath = FSUtils.getPartitionPath(config.getString(META_SYNC_BASE_PATH), partition);
+        storagePartitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(config.getString(META_SYNC_BASE_PATH), partition);
         fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
       }
       if (!storagePartitionValues.isEmpty()) {

@@ -22,7 +22,6 @@ package org.apache.hudi.table.action.deltacommit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -33,17 +32,17 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.JavaBulkInsertHelper;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
-public class JavaUpsertPreppedDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>> extends BaseJavaDeltaCommitActionExecutor<T> {
+public class JavaUpsertPreppedDeltaCommitActionExecutor<T> extends BaseJavaDeltaCommitActionExecutor<T> {
 
-  private static final Logger LOG = LogManager.getLogger(JavaUpsertPreppedDeltaCommitActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(JavaUpsertPreppedDeltaCommitActionExecutor.class);
 
   private final List<HoodieRecord<T>> preppedInputRecords;
 
@@ -96,7 +95,7 @@ public class JavaUpsertPreppedDeltaCommitActionExecutor<T extends HoodieRecordPa
       throw new HoodieUpsertException("Failed to upsert for commit time " + instantTime, e);
     }
 
-    updateIndex(allWriteStatuses, result);
+    updateIndexAndMaybeRunPreCommitValidations(allWriteStatuses, result);
     return result;
   }
 }

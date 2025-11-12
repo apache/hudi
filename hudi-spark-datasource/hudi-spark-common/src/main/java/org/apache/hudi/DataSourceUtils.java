@@ -18,66 +18,78 @@
 
 package org.apache.hudi;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.client.SparkRDDReadClient;
+import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.client.HoodieWriteResult;
+import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TablePathUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieDuplicateKeyException;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.BulkInsertPartitioner;
-import org.apache.hudi.util.DataTypeUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.types.StructType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
+
+import scala.Tuple2;
+
+import static org.apache.hudi.common.util.CommitUtils.getCheckpointValueAsString;
 
 /**
  * Utilities used throughout the data source.
  */
 public class DataSourceUtils {
 
-  private static final Logger LOG = LogManager.getLogger(DataSourceUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DataSourceUtils.class);
 
-  public static String getTablePath(FileSystem fs, Path[] userProvidedPaths) throws IOException {
+  public static String getTablePath(HoodieStorage storage,
+                                    List<StoragePath> userProvidedPaths) throws IOException {
     LOG.info("Getting table path..");
-    for (Path path : userProvidedPaths) {
+    for (StoragePath path : userProvidedPaths) {
       try {
-        Option<Path> tablePath = TablePathUtils.getTablePath(fs, path);
+        Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, path);
         if (tablePath.isPresent()) {
           return tablePath.get().toString();
         }
       } catch (HoodieException he) {
-        LOG.warn("Error trying to get table path from " + path.toString(), he);
+        LOG.warn("Error trying to get table path from {}", path.toString(), he);
       }
     }
 
-    throw new TableNotFoundException("Unable to find a hudi table for the user provided paths.");
+    throw new TableNotFoundException(userProvidedPaths.stream()
+        .map(StoragePath::toString).collect(Collectors.joining(",")));
   }
 
   /**
@@ -87,7 +99,7 @@ public class DataSourceUtils {
    *
    * @see HoodieWriteConfig#getUserDefinedBulkInsertPartitionerClass()
    */
-  private static Option<BulkInsertPartitioner> createUserDefinedBulkInsertPartitioner(HoodieWriteConfig config)
+  public static Option<BulkInsertPartitioner> createUserDefinedBulkInsertPartitioner(HoodieWriteConfig config)
       throws HoodieException {
     String bulkInsertPartitionerClass = config.getUserDefinedBulkInsertPartitionerClass();
     try {
@@ -118,19 +130,6 @@ public class DataSourceUtils {
     }
   }
 
-  /**
-   * Create a payload class via reflection, passing in an ordering/precombine value.
-   */
-  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal)
-      throws IOException {
-    try {
-      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal);
-    } catch (Throwable e) {
-      throw new IOException("Could not create payload for class: " + payloadClass, e);
-    }
-  }
-
   public static Map<String, String> getExtraMetadata(Map<String, String> properties) {
     Map<String, String> extraMetadataMap = new HashMap<>();
     if (properties.containsKey(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX().key())) {
@@ -140,39 +139,32 @@ public class DataSourceUtils {
         }
       });
     }
+    if (properties.containsKey(HoodieSparkSqlWriter.SPARK_STREAMING_BATCH_ID())) {
+      extraMetadataMap.put(HoodieStreamingSink.SINK_CHECKPOINT_KEY(),
+          getCheckpointValueAsString(properties.getOrDefault(DataSourceWriteOptions.STREAMING_CHECKPOINT_IDENTIFIER().key(),
+                  DataSourceWriteOptions.STREAMING_CHECKPOINT_IDENTIFIER().defaultValue()),
+              properties.get(HoodieSparkSqlWriter.SPARK_STREAMING_BATCH_ID())));
+    }
     return extraMetadataMap;
   }
 
-  /**
-   * Create a payload class via reflection, do not ordering/precombine value.
-   */
-  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record)
-      throws IOException {
-    try {
-      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {Option.class}, Option.of(record));
-    } catch (Throwable e) {
-      throw new IOException("Could not create payload for class: " + payloadClass, e);
-    }
-  }
-
-  public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
-    checkPropNames.forEach(prop -> {
-      if (!props.containsKey(prop)) {
-        throw new HoodieNotSupportedException("Required property " + prop + " is missing");
-      }
-    });
-  }
-
   public static HoodieWriteConfig createHoodieConfig(String schemaStr, String basePath,
-      String tblName, Map<String, String> parameters) {
+                                                     String tblName, Map<String, String> parameters) {
     boolean asyncCompact = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key()));
-    boolean inlineCompact = !asyncCompact && parameters.get(DataSourceWriteOptions.TABLE_TYPE().key())
-        .equals(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL());
+    boolean inlineCompact = false;
+    if (parameters.containsKey(HoodieCompactionConfig.INLINE_COMPACT.key())) {
+      // if inline is set, fetch the value from it.
+      inlineCompact = Boolean.parseBoolean(parameters.get(HoodieCompactionConfig.INLINE_COMPACT.key()));
+    }
+    // if inline is false, derive the value from asyncCompact and table type
+    if (!inlineCompact) {
+      inlineCompact = !asyncCompact && parameters.get(DataSourceWriteOptions.TABLE_TYPE().key())
+          .equals(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL());
+    }
     // insert/bulk-insert combining to be true, if filtering for duplicates
     boolean combineInserts = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.INSERT_DROP_DUPS().key()));
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
-        .withPath(basePath).withAutoCommit(false).combineInput(combineInserts, true);
+        .withPath(basePath).combineInput(combineInserts, true);
     if (schemaStr != null) {
       builder = builder.withSchema(schemaStr);
     }
@@ -181,8 +173,11 @@ public class DataSourceUtils {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(inlineCompact).build())
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
-            .withPayloadClass(parameters.get(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key()))
-            .withPayloadOrderingField(parameters.get(DataSourceWriteOptions.PRECOMBINE_FIELD().key()))
+            // For Spark SQL INSERT INTO and MERGE INTO, custom payload classes are used
+            // to realize the SQL functionality, so the write config needs to be fetched first.
+            .withPayloadClass(parameters.getOrDefault(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(),
+                parameters.getOrDefault(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), HoodieTableConfig.getDefaultPayloadClassName())))
+            .withPayloadOrderingFields(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters))
             .build())
         // override above with Hoodie configs specified as options.
         .withProps(parameters).build();
@@ -194,7 +189,7 @@ public class DataSourceUtils {
   }
 
   public static HoodieWriteResult doWriteOperation(SparkRDDWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
-                                                   String instantTime, WriteOperationType operation) throws HoodieException {
+                                                   String instantTime, WriteOperationType operation, Boolean isPrepped) throws HoodieException {
     switch (operation) {
       case BULK_INSERT:
         Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner =
@@ -203,19 +198,34 @@ public class DataSourceUtils {
       case INSERT:
         return new HoodieWriteResult(client.insert(hoodieRecords, instantTime));
       case UPSERT:
+        if (isPrepped) {
+          return new HoodieWriteResult(client.upsertPreppedRecords(hoodieRecords, instantTime));
+        }
+
         return new HoodieWriteResult(client.upsert(hoodieRecords, instantTime));
       case INSERT_OVERWRITE:
         return client.insertOverwrite(hoodieRecords, instantTime);
       case INSERT_OVERWRITE_TABLE:
         return client.insertOverwriteTable(hoodieRecords, instantTime);
       default:
-        throw new HoodieException("Not a valid operation type for doWriteOperation: " + operation.toString());
+        throw new HoodieException("Not a valid operation type for doWriteOperation: " + operation);
     }
   }
 
-  public static HoodieWriteResult doDeleteOperation(SparkRDDWriteClient client, JavaRDD<HoodieKey> hoodieKeys,
-      String instantTime) {
-    return new HoodieWriteResult(client.delete(hoodieKeys, instantTime));
+  public static HoodieWriteResult doDeleteOperation(SparkRDDWriteClient client, JavaRDD<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> hoodieKeysAndLocations,
+      String instantTime, boolean isPrepped) {
+
+    if (isPrepped) {
+      HoodieRecord.HoodieRecordType recordType = client.getConfig().getRecordMerger().getRecordType();
+      JavaRDD<HoodieRecord> records = hoodieKeysAndLocations.map(tuple -> {
+        HoodieRecord record = new HoodieEmptyRecord(tuple._1, recordType);
+        record.setCurrentLocation(tuple._2.get());
+        return record;
+      });
+      return new HoodieWriteResult(client.deletePrepped(records, instantTime));
+    }
+
+    return new HoodieWriteResult(client.delete(hoodieKeysAndLocations.map(tuple -> tuple._1()), instantTime));
   }
 
   public static HoodieWriteResult doDeletePartitionsOperation(SparkRDDWriteClient client, List<String> partitionsToDelete,
@@ -223,79 +233,127 @@ public class DataSourceUtils {
     return client.deletePartitions(partitionsToDelete, instantTime);
   }
 
-  public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
-      String payloadClass) throws IOException {
-    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
-    return new HoodieAvroRecord<>(hKey, payload);
-  }
-
-  public static HoodieRecord createHoodieRecord(GenericRecord gr, HoodieKey hKey,
-                                                String payloadClass) throws IOException {
-    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr);
-    return new HoodieAvroRecord<>(hKey, payload);
-  }
-
   /**
-   * Drop records already present in the dataset.
+   * Drop records already present in the dataset if {@code failOnDuplicates} is {@code false}.
+   * Otherwise, throw a {@link HoodieDuplicateKeyException} if duplicates are found.
    *
-   * @param jssc JavaSparkContext
-   * @param incomingHoodieRecords HoodieRecords to deduplicate
-   * @param writeConfig HoodieWriteConfig
+   * @param engineContext the Spark engine context
+   * @param incomingHoodieRecords the HoodieRecords to deduplicate
+   * @param writeConfig the HoodieWriteConfig
+   * @param failOnDuplicates a flag indicating whether to fail when duplicates are found
+   * @return a JavaRDD of deduplicated HoodieRecords
    */
   @SuppressWarnings("unchecked")
-  public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
-      HoodieWriteConfig writeConfig) {
+  public static JavaRDD<HoodieRecord> handleDuplicates(HoodieSparkEngineContext engineContext,
+                                                       JavaRDD<HoodieRecord> incomingHoodieRecords,
+                                                       HoodieWriteConfig writeConfig,
+                                                       boolean failOnDuplicates) {
     try {
-      SparkRDDReadClient client = new SparkRDDReadClient<>(new HoodieSparkEngineContext(jssc), writeConfig);
+      SparkRDDReadClient client = new SparkRDDReadClient<>(engineContext, writeConfig);
       return client.tagLocation(incomingHoodieRecords)
-          .filter(r -> !((HoodieRecord<HoodieRecordPayload>) r).isCurrentLocationKnown());
+          .filter(r -> shouldIncludeRecord((HoodieRecord<HoodieRecordPayload>) r, failOnDuplicates));
     } catch (TableNotFoundException e) {
-      // this will be executed when there is no hoodie table yet
-      // so no dups to drop
+      // No table exists yet, so no duplicates to drop
       return incomingHoodieRecords;
     }
   }
 
-  @SuppressWarnings("unchecked")
-  public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
-      Map<String, String> parameters) {
-    HoodieWriteConfig writeConfig =
-        HoodieWriteConfig.newBuilder().withPath(parameters.get("path")).withProps(parameters).build();
-    return dropDuplicates(jssc, incomingHoodieRecords, writeConfig);
+  /**
+   * Determines if a record should be included in the result after deduplication.
+   *
+   * @param record            The Hoodie record to evaluate.
+   * @param failOnDuplicates  Whether to fail on detecting duplicates.
+   * @return true if the record should be included; false otherwise.
+   */
+  private static boolean shouldIncludeRecord(HoodieRecord<?> record, boolean failOnDuplicates) {
+    if (!record.isCurrentLocationKnown()) {
+      return true;
+    }
+    if (failOnDuplicates) {
+      // Fail if duplicates are found and the flag is set
+      throw new HoodieDuplicateKeyException(record.getRecordKey());
+    }
+    return false;
   }
 
   /**
-   * Checks whether default value (false) of "hoodie.parquet.writelegacyformat.enabled" should be
-   * overridden in case:
+   * Resolves duplicate records in the provided {@code incomingHoodieRecords}.
+   *
+   * <p>If {@code failOnDuplicates} is {@code false}, duplicate records already present in the dataset
+   * are dropped. Otherwise, a {@link HoodieDuplicateKeyException} is thrown if duplicates are found.</p>
+   *
+   * @param jssc the Spark context used for executing the deduplication
+   * @param incomingHoodieRecords the input {@link JavaRDD} of {@link HoodieRecord} objects to process
+   * @param parameters a map of configuration parameters, including the dataset path under the key {@code "path"}
+   * @param failOnDuplicates a flag indicating whether to fail when duplicates are found
+   * @return a {@link JavaRDD} of deduplicated {@link HoodieRecord} objects
+   */
+  @SuppressWarnings("unchecked")
+  public static JavaRDD<HoodieRecord> resolveDuplicates(JavaSparkContext jssc,
+                                                        JavaRDD<HoodieRecord> incomingHoodieRecords,
+                                                        Map<String, String> parameters,
+                                                        boolean failOnDuplicates) {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(parameters.get("path"))
+        .withProps(parameters).build();
+    return handleDuplicates(
+        new HoodieSparkEngineContext(jssc), incomingHoodieRecords, writeConfig, failOnDuplicates);
+  }
+
+  /**
+   * Spark data source WriteStatus validator.
    *
    * <ul>
-   *   <li>Property has not been explicitly set by the writer</li>
-   *   <li>Data schema contains {@code DecimalType} that would be affected by it</li>
+   *   <li>If there are error records, prints few of them and exit;</li>
+   *   <li>If not, proceeds with the commit.</li>
    * </ul>
-   *
-   * If both of the aforementioned conditions are true, will override the default value of the config
-   * (by essentially setting the value) to make sure that the produced Parquet data files could be
-   * read by {@code AvroParquetReader}
-   *
-   * @param properties properties specified by the writer
-   * @param schema schema of the dataset being written
    */
-  public static void tryOverrideParquetWriteLegacyFormatProperty(Map<String, String> properties, StructType schema) {
-    if (DataTypeUtils.hasSmallPrecisionDecimalType(schema)
-        && properties.get(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key()) == null) {
-      // ParquetWriteSupport writes DecimalType to parquet as INT32/INT64 when the scale of decimalType
-      // is less than {@code Decimal.MAX_LONG_DIGITS}, but {@code AvroParquetReader} which is used by
-      // {@code HoodieParquetReader} does not support DecimalType encoded as INT32/INT64 as.
-      //
-      // To work this problem around we're checking whether
-      //    - Schema contains any decimals that could be encoded as INT32/INT64
-      //    - {@code HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED} has not been explicitly
-      //    set by the writer
-      //
-      // If both of these conditions are true, then we override the default value of {@code
-      // HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED} and set it to "true"
-      LOG.warn("Small Decimal Type found in the persisted schema, reverting default value of 'hoodie.parquet.writelegacyformat.enabled' to true");
-      properties.put(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key(), "true");
+  static class SparkDataSourceWriteStatusValidator implements WriteStatusValidator {
+
+    private final WriteOperationType writeOperationType;
+    private final AtomicBoolean hasErrored;
+
+    public SparkDataSourceWriteStatusValidator(WriteOperationType writeOperationType, AtomicBoolean hasErrored) {
+      this.writeOperationType = writeOperationType;
+      this.hasErrored = hasErrored;
+    }
+
+    @Override
+    public boolean validate(long totalRecords, long totalErroredRecords, Option<HoodieData<WriteStatus>> writeStatusesOpt) {
+      if (totalErroredRecords > 0) {
+        hasErrored.set(true);
+        ValidationUtils.checkArgument(writeStatusesOpt.isPresent(), "RDD <WriteStatus> expected to be present when there are errors");
+        long errorCount = HoodieJavaRDD.getJavaRDD(writeStatusesOpt.get())
+            .filter(WriteStatus::hasErrors)
+            .count();
+
+        String errorSummary = String.format(
+            "%s operation failed with %d error(s).%n%n"
+                + "Total write statuses with errors: %d%n%n"
+                + "Check the driver logs for error stacktraces which provide more information on the failure.",
+            writeOperationType,
+            totalErroredRecords,
+            errorCount);
+
+        LOG.error(errorSummary);
+
+        if (LOG.isTraceEnabled()) {
+          LOG.trace("Printing out the top 100 errors");
+
+          HoodieJavaRDD.getJavaRDD(writeStatusesOpt.get()).filter(WriteStatus::hasErrors)
+              .take(100)
+              .forEach(ws -> {
+                LOG.trace("Global error:", ws.getGlobalError());
+                if (!ws.getErrors().isEmpty()) {
+                  ws.getErrors().forEach((k, v) -> LOG.trace("Error for key {}: {}", k, v));
+                }
+              });
+        }
+        return false;
+      } else {
+        return true;
+      }
     }
   }
 }
+

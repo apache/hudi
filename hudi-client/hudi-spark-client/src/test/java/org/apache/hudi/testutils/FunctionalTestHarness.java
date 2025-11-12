@@ -24,20 +24,24 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.testutils.providers.DFSProvider;
 import org.apache.hudi.testutils.providers.HoodieMetaClientProvider;
 import org.apache.hudi.testutils.providers.HoodieWriteClientProvider;
 import org.apache.hudi.testutils.providers.SparkProvider;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -48,6 +52,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Properties;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
@@ -65,7 +70,7 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
 
   private static transient HdfsTestService hdfsTestService;
   private static transient MiniDFSCluster dfsCluster;
-  private static transient DistributedFileSystem dfs;
+  private static transient HoodieStorage storage;
 
   /**
    * An indicator of the initialization status.
@@ -99,13 +104,13 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
   }
 
   @Override
-  public DistributedFileSystem dfs() {
-    return dfs;
+  public HoodieStorage hoodieStorage() {
+    return storage;
   }
 
   @Override
   public Path dfsBasePath() {
-    return dfs.getWorkingDirectory();
+    return new Path("/tmp");
   }
 
   @Override
@@ -113,19 +118,24 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
     return context;
   }
 
-  public HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath) throws IOException {
-    return getHoodieMetaClient(hadoopConf, basePath, new Properties());
+  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath) throws IOException {
+    return getHoodieMetaClient(storageConf, basePath, new Properties());
   }
 
   @Override
-  public HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath, Properties props) throws IOException {
-    props = HoodieTableMetaClient.withPropertyBuilder()
+  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props,
+      HoodieTableType tableType) throws IOException {
+    return HoodieTableMetaClient.newTableBuilder()
       .setTableName(RAW_TRIPS_TEST_NAME)
-      .setTableType(COPY_ON_WRITE)
+      .setTableType(tableType)
       .setPayloadClass(HoodieAvroPayload.class)
       .fromProperties(props)
-      .build();
-    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, props);
+      .initTable(storageConf.newInstance(), basePath);
+  }
+
+  @Override
+  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props) throws IOException {
+    return getHoodieMetaClient(storageConf, basePath, props, COPY_ON_WRITE);
   }
 
   @Override
@@ -138,7 +148,7 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
     initialized = spark != null && hdfsTestService != null;
     if (!initialized) {
       SparkConf sparkConf = conf();
-      SparkRDDWriteClient.registerClasses(sparkConf);
+      HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
       SparkRDDReadClient.addHoodieSupport(sparkConf);
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();
@@ -147,8 +157,8 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
 
       hdfsTestService = new HdfsTestService();
       dfsCluster = hdfsTestService.start(true);
-      dfs = dfsCluster.getFileSystem();
-      dfs.mkdirs(dfs.getWorkingDirectory());
+      storage = new HoodieHadoopStorage(dfsCluster.getFileSystem());
+      storage.createDirectory(new StoragePath("/tmp"));
 
       Runtime.getRuntime().addShutdownHook(new Thread(() -> {
         hdfsTestService.stop();
@@ -172,11 +182,16 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
 
   @AfterAll
   public static synchronized void cleanUpAfterAll() throws IOException {
-    Path workDir = dfs.getWorkingDirectory();
-    FileSystem fs = workDir.getFileSystem(hdfsTestService.getHadoopConf());
-    FileStatus[] fileStatuses = dfs.listStatus(workDir);
-    for (FileStatus f : fileStatuses) {
-      fs.delete(f.getPath(), true);
+    StoragePath workDir = new StoragePath("/tmp");
+    HoodieStorage storage = new HoodieHadoopStorage(
+        workDir, HadoopFSUtils.getStorageConf(hdfsTestService.getHadoopConf()));
+    List<StoragePathInfo> pathInfoList = storage.listDirectEntries(workDir);
+    for (StoragePathInfo f : pathInfoList) {
+      if (f.isDirectory()) {
+        storage.deleteDirectory(f.getPath());
+      } else {
+        storage.deleteFile(f.getPath());
+      }
     }
     if (hdfsTestService != null) {
       hdfsTestService.stop();

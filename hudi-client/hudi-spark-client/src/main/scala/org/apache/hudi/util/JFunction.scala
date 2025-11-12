@@ -17,7 +17,7 @@
 
 package org.apache.hudi.util
 
-import org.apache.hudi.common.function.{SerializableFunction, SerializablePairFunction}
+import org.apache.hudi.common.function.{SerializableFunction, SerializableFunctionUnchecked, SerializablePairFunction}
 import org.apache.hudi.common.util.collection
 
 import scala.language.implicitConversions
@@ -26,6 +26,8 @@ import scala.language.implicitConversions
  * Utility allowing for seamless conversion b/w Java/Scala functional primitives
  */
 object JFunction {
+
+  def scalaFunction1Noop[T]: T => Unit = _ => {}
 
   ////////////////////////////////////////////////////////////
   // From Java to Scala
@@ -38,6 +40,11 @@ object JFunction {
   // From Scala to Java
   ////////////////////////////////////////////////////////////
 
+  implicit def toJavaSupplier[R](f: () => R): java.util.function.Supplier[R] =
+    new java.util.function.Supplier[R] {
+      override def get(): R = f.apply()
+    }
+
   implicit def toJavaFunction[T, R](f: Function[T, R]): java.util.function.Function[T, R] =
     new java.util.function.Function[T, R] {
       override def apply(t: T): R = f.apply(t)
@@ -48,12 +55,17 @@ object JFunction {
       override def apply(t: T): R = f.apply(t)
     }
 
-  implicit def toJavaSerializablePairFunction[T, K, V](f: Function[T, collection.Pair[K, V]]): SerializablePairFunction[T, K, V] =
+  implicit def toJavaSerializableFunctionUnchecked[T, R](f: Function[T, R]): SerializableFunctionUnchecked[T, R] =
+    new SerializableFunctionUnchecked[T, R] {
+      override def apply(t: T): R = f.apply(t)
+    }
+
+  implicit def toJavaSerializableFunctionPairOut[T, K, V](f: Function[T, collection.Pair[K, V]]): SerializablePairFunction[T, K, V] =
     new SerializablePairFunction[T, K, V] {
       override def call(t: T): collection.Pair[K, V] = f.apply(t)
     }
 
-  implicit def toJava[T](f: T => Unit): java.util.function.Consumer[T] =
+  implicit def toJavaConsumer[T](f: T => Unit): java.util.function.Consumer[T] =
     new java.util.function.Consumer[T] {
       override def accept(t: T): Unit = f.apply(t)
     }

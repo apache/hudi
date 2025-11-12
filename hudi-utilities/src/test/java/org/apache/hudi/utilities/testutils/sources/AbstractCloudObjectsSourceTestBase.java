@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.testutils.sources;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
@@ -25,7 +26,6 @@ import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.testutils.CloudObjectTestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
-import com.amazonaws.services.sqs.AmazonSQS;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -33,6 +33,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import software.amazon.awssdk.services.sqs.SqsClient;
 
 import java.io.IOException;
 import java.util.List;
@@ -50,16 +51,16 @@ public abstract class AbstractCloudObjectsSourceTestBase extends UtilitiesTestBa
   protected String sqsUrl = "test-queue";
   protected String regionName = "us-east-1";
   @Mock
-  protected AmazonSQS sqs;
+  protected SqsClient sqs;
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(false, false);
+    UtilitiesTestBase.initTestServices();
   }
 
   @AfterAll
-  public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
+  public static void cleanupClass() throws IOException {
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @BeforeEach
@@ -79,7 +80,7 @@ public abstract class AbstractCloudObjectsSourceTestBase extends UtilitiesTestBa
    *
    * @return A {@link Source} using DFS as the file system.
    */
-  protected abstract Source prepareCloudObjectSource();
+  protected abstract Source prepareCloudObjectSource(TypedProperties props);
 
   /**
    * Writes test data, i.e., a {@link List} of {@link HoodieRecord}, to a file on DFS.

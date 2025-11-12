@@ -21,20 +21,21 @@ package org.apache.hudi.sink.clustering;
 import org.apache.hudi.async.HoodieAsyncTableService;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.compact.HoodieFlinkCompactor;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.CompactionUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.JCommander;
@@ -75,12 +76,10 @@ public class HoodieFlinkClusteringJob {
   }
 
   public static void main(String[] args) throws Exception {
-    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-
     FlinkClusteringConfig cfg = getFlinkClusteringConfig(args);
     Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
 
-    AsyncClusteringService service = new AsyncClusteringService(cfg, conf, env);
+    AsyncClusteringService service = new AsyncClusteringService(cfg, conf);
 
     new HoodieFlinkClusteringJob(service).start(cfg.serviceMode);
   }
@@ -165,40 +164,37 @@ public class HoodieFlinkClusteringJob {
     private final HoodieFlinkTable<?> table;
 
     /**
-     * Flink Execution Environment.
-     */
-    private final StreamExecutionEnvironment env;
-
-    /**
      * Executor Service.
      */
     private final ExecutorService executor;
 
-    public AsyncClusteringService(FlinkClusteringConfig cfg, Configuration conf, StreamExecutionEnvironment env) throws Exception {
+    public AsyncClusteringService(FlinkClusteringConfig cfg, Configuration conf) throws Exception {
       this.cfg = cfg;
       this.conf = conf;
-      this.env = env;
       this.executor = Executors.newFixedThreadPool(1);
 
       // create metaClient
       this.metaClient = StreamerUtil.createMetaClient(conf);
 
       // set table name
-      conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
+      conf.set(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
 
       // set table type
-      conf.setString(FlinkOptions.TABLE_TYPE, metaClient.getTableConfig().getTableType().name());
+      conf.set(FlinkOptions.TABLE_TYPE, metaClient.getTableConfig().getTableType().name());
 
       // set record key field
-      conf.setString(FlinkOptions.RECORD_KEY_FIELD, metaClient.getTableConfig().getRecordKeyFieldProp());
+      conf.set(FlinkOptions.RECORD_KEY_FIELD, metaClient.getTableConfig().getRecordKeyFieldProp());
 
       // set partition field
-      conf.setString(FlinkOptions.PARTITION_PATH_FIELD, metaClient.getTableConfig().getPartitionFieldProp());
+      conf.set(FlinkOptions.PARTITION_PATH_FIELD, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig()).orElse(""));
 
       // set table schema
       CompactionUtil.setAvroSchema(conf, metaClient);
 
-      this.writeClient = StreamerUtil.createWriteClient(conf);
+      // infer metadata config
+      CompactionUtil.inferMetadataConf(conf, metaClient);
+
+      this.writeClient = FlinkWriteClients.createWriteClientV2(conf);
       this.writeConfig = writeClient.getConfig();
       this.table = writeClient.getHoodieTable();
     }
@@ -250,12 +246,9 @@ public class HoodieFlinkClusteringJob {
         // create a clustering plan on the timeline
         ClusteringUtil.validateClusteringScheduling(conf);
 
-        String clusteringInstantTime = cfg.clusteringInstantTime != null ? cfg.clusteringInstantTime
-            : HoodieActiveTimeline.createNewInstantTime();
-
-        LOG.info("Creating a clustering plan for instant [" + clusteringInstantTime + "]");
-        boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
-        if (!scheduled) {
+        LOG.info("Creating a clustering plan");
+        Option<String> clusteringInstantTime = writeClient.scheduleClustering(Option.empty());
+        if (!clusteringInstantTime.isPresent()) {
           // do nothing.
           LOG.info("No clustering plan for this job");
           return;
@@ -274,7 +267,7 @@ public class HoodieFlinkClusteringJob {
       final HoodieInstant clusteringInstant;
       if (cfg.clusteringInstantTime != null) {
         clusteringInstant = instants.stream()
-            .filter(i -> i.getTimestamp().equals(cfg.clusteringInstantTime))
+            .filter(i -> i.requestedTime().equals(cfg.clusteringInstantTime))
             .findFirst()
             .orElseThrow(() -> new HoodieException("Clustering instant [" + cfg.clusteringInstantTime + "] not found"));
       } else {
@@ -283,12 +276,13 @@ public class HoodieFlinkClusteringJob {
             CompactionUtil.isLIFO(cfg.clusteringSeq) ? instants.get(instants.size() - 1) : instants.get(0);
       }
 
-      HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(
-          clusteringInstant.getTimestamp());
-      if (table.getMetaClient().getActiveTimeline().containsInstant(inflightInstant)) {
+      Option<HoodieInstant> inflightInstantOpt = ClusteringUtils.getInflightClusteringInstant(clusteringInstant.requestedTime(),
+          table.getActiveTimeline(), table.getInstantGenerator());
+      if (inflightInstantOpt.isPresent()) {
         LOG.info("Rollback inflight clustering instant: [" + clusteringInstant + "]");
-        table.rollbackInflightClustering(inflightInstant,
-            commitToRollback -> writeClient.getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+        table.rollbackInflightClustering(inflightInstantOpt.get(),
+            commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
+            writeClient.getTransactionManager());
         table.getMetaClient().reloadActiveTimeline();
       }
 
@@ -308,40 +302,34 @@ public class HoodieFlinkClusteringJob {
       if (clusteringPlan == null || (clusteringPlan.getInputGroups() == null)
           || (clusteringPlan.getInputGroups().isEmpty())) {
         // no clustering plan, do nothing and return.
-        LOG.info("No clustering plan for instant " + clusteringInstant.getTimestamp());
+        LOG.info("No clustering plan for instant " + clusteringInstant.requestedTime());
         return;
       }
 
-      HoodieInstant instant = HoodieTimeline.getReplaceCommitRequestedInstant(clusteringInstant.getTimestamp());
-      HoodieTimeline pendingClusteringTimeline = table.getActiveTimeline().filterPendingReplaceTimeline();
-      if (!pendingClusteringTimeline.containsInstant(instant)) {
-        // this means that the clustering plan was written to auxiliary path(.tmp)
-        // but not the meta path(.hoodie), this usually happens when the job crush
-        // exceptionally.
+      HoodieInstant instant = ClusteringUtils.getRequestedClusteringInstant(clusteringInstant.requestedTime(),
+          table.getActiveTimeline(), table.getInstantGenerator()).get();
 
-        // clean the clustering plan in auxiliary path and cancels the clustering.
-        LOG.warn("The clustering plan was fetched through the auxiliary path(.tmp) but not the meta path(.hoodie).\n"
-            + "Clean the clustering plan in auxiliary path and cancels the clustering");
-        CompactionUtil.cleanInstant(table.getMetaClient(), instant);
-        return;
-      }
+      int inputGroupSize = clusteringPlan.getInputGroups().size();
 
       // get clusteringParallelism.
-      int clusteringParallelism = conf.getInteger(FlinkOptions.CLUSTERING_TASKS) == -1
-          ? clusteringPlan.getInputGroups().size() : conf.getInteger(FlinkOptions.CLUSTERING_TASKS);
+      int clusteringParallelism = conf.get(FlinkOptions.CLUSTERING_TASKS) == -1
+          ? inputGroupSize
+          : Math.min(conf.get(FlinkOptions.CLUSTERING_TASKS), inputGroupSize);
 
       // Mark instant as clustering inflight
-      table.getActiveTimeline().transitionReplaceRequestedToInflight(instant, Option.empty());
+      ClusteringUtils.transitionClusteringOrReplaceRequestedToInflight(instant, Option.empty(), table.getActiveTimeline());
 
       final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
       final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
       final RowType rowType = (RowType) rowDataType.getLogicalType();
 
+      StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
       // setup configuration
       long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();
-      conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
+      conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
 
-      DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstant.getTimestamp(), clusteringPlan))
+      DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstant.requestedTime(), clusteringPlan, conf))
           .name("clustering_source")
           .uid("uid_clustering_source")
           .rebalance()
@@ -350,16 +338,20 @@ public class HoodieFlinkClusteringJob {
               new ClusteringOperator(conf, rowType))
           .setParallelism(clusteringParallelism);
 
-      ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
-          conf.getInteger(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
+      if (OptionsResolver.sortClusteringEnabled(conf)) {
+        ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
+            conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
+      }
 
       dataStream
           .addSink(new ClusteringCommitSink(conf))
           .name("clustering_commit")
           .uid("uid_clustering_commit")
-          .setParallelism(1);
+          .setParallelism(1)
+          .getTransformation()
+          .setMaxParallelism(1);
 
-      env.execute("flink_hudi_clustering_" + clusteringInstant.getTimestamp());
+      env.execute("flink_hudi_clustering_" + clusteringInstant.requestedTime());
     }
 
     /**

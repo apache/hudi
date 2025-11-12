@@ -18,12 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import com.codahale.metrics.Histogram;
-import com.codahale.metrics.Snapshot;
-import com.codahale.metrics.UniformReservoir;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
@@ -34,6 +28,13 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.NumericUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
+
+import com.codahale.metrics.Histogram;
+import com.codahale.metrics.Snapshot;
+import com.codahale.metrics.UniformReservoir;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -45,7 +46,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * CLI command to displays stats options.
@@ -69,18 +69,17 @@ public class StatsCommand {
     long totalRecordsWritten = 0;
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
+    HoodieTimeline timeline = activeTimeline.getCommitAndReplaceTimeline().filterCompletedInstants();
 
     List<Comparable[]> rows = new ArrayList<>();
     DecimalFormat df = new DecimalFormat("#.00");
-    for (HoodieInstant instantTime : timeline.getInstants().collect(Collectors.toList())) {
+    for (HoodieInstant instant : timeline.getInstants()) {
       String waf = "0";
-      HoodieCommitMetadata commit = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(instantTime).get(),
-          HoodieCommitMetadata.class);
+      HoodieCommitMetadata commit = activeTimeline.readCommitMetadata(instant);
       if (commit.fetchTotalUpdateRecordsWritten() > 0) {
         waf = df.format((float) commit.fetchTotalRecordsWritten() / commit.fetchTotalUpdateRecordsWritten());
       }
-      rows.add(new Comparable[] {instantTime.getTimestamp(), commit.fetchTotalUpdateRecordsWritten(),
+      rows.add(new Comparable[] {instant.requestedTime(), commit.fetchTotalUpdateRecordsWritten(),
           commit.fetchTotalRecordsWritten(), waf});
       totalRecordsUpserted += commit.fetchTotalUpdateRecordsWritten();
       totalRecordsWritten += commit.fetchTotalRecordsWritten();
@@ -114,16 +113,18 @@ public class StatsCommand {
               defaultValue = "false") final boolean headerOnly)
       throws IOException {
 
-    FileSystem fs = HoodieCLI.fs;
-    String globPath = String.format("%s/%s/*", HoodieCLI.getTableMetaClient().getBasePath(), globRegex);
-    List<FileStatus> statuses = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(globPath));
+    HoodieStorage storage = HoodieCLI.storage;
+    String globPath =
+        String.format("%s/%s/*", HoodieCLI.getTableMetaClient().getBasePath(), globRegex);
+    List<StoragePathInfo> pathInfoList = FSUtils.getGlobStatusExcludingMetaFolder(storage,
+        new StoragePath(globPath));
 
     // max, min, #small files < 10MB, 50th, avg, 95th
     Histogram globalHistogram = new Histogram(new UniformReservoir(MAX_FILES));
     HashMap<String, Histogram> commitHistoMap = new HashMap<>();
-    for (FileStatus fileStatus : statuses) {
-      String instantTime = FSUtils.getCommitTime(fileStatus.getPath().getName());
-      long sz = fileStatus.getLen();
+    for (StoragePathInfo pathInfo : pathInfoList) {
+      String instantTime = FSUtils.getCommitTime(pathInfo.getPath().getName());
+      long sz = pathInfo.getLength();
       if (!commitHistoMap.containsKey(instantTime)) {
         commitHistoMap.put(instantTime, new Histogram(new UniformReservoir(MAX_FILES)));
       }

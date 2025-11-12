@@ -19,12 +19,15 @@
 package org.apache.hudi.internal.schema.action;
 
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Auxiliary class.
@@ -59,6 +62,8 @@ public class InternalSchemaMerger {
   // we can pass colNewName to reWriteRecordWithNewSchema directly, everything is ok.
   private boolean useColNameFromFileSchema = true;
 
+  private final Map<String,String> renamedFields = new HashMap<>();
+
   public InternalSchemaMerger(InternalSchema fileSchema, InternalSchema querySchema, boolean ignoreRequiredAttribute, boolean useColumnTypeFromFileSchema, boolean useColNameFromFileSchema) {
     this.fileSchema = fileSchema;
     this.querySchema = querySchema;
@@ -78,7 +83,16 @@ public class InternalSchemaMerger {
    */
   public InternalSchema mergeSchema() {
     Types.RecordType record = (Types.RecordType) mergeType(querySchema.getRecord(), 0);
-    return new InternalSchema(record.fields());
+    return new InternalSchema(record);
+  }
+
+  /**
+   * Create final read schema to read avro/parquet file.
+   *
+   * @return read schema to read avro/parquet file.
+   */
+  public Pair<InternalSchema, Map<String, String>> mergeSchemaGetRenamed() {
+    return Pair.of(mergeSchema(), renamedFields);
   }
 
   /**
@@ -116,9 +130,9 @@ public class InternalSchemaMerger {
       Type newType = newTypes.get(i);
       Types.Field oldField = oldFields.get(i);
       int fieldId = oldField.fieldId();
-      String fullName = querySchema.findfullName(fieldId);
+      String fullName = querySchema.findFullName(fieldId);
       if (fileSchema.findField(fieldId) != null) {
-        if (fileSchema.findfullName(fieldId).equals(fullName)) {
+        if (fileSchema.findFullName(fieldId).equals(fullName)) {
           // maybe col type changed, deal with it.
           newFields.add(Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name(), newType, oldField.doc()));
         } else {
@@ -150,6 +164,14 @@ public class InternalSchemaMerger {
     String nameFromQuerySchema = querySchema.findField(fieldId).name();
     String finalFieldName = useColNameFromFileSchema ? nameFromFileSchema : nameFromQuerySchema;
     Type typeFromFileSchema = fieldFromFileSchema.type();
+    if (!useColNameFromFileSchema) {
+      // use full name here to prevent conflicts for composite types
+      // e.g., origin schema: ROW<f_row: ROW<f1 STRING, f2 BIGINT>, f3 STRING>, and perform
+      // schema change: 1) rename `f_row.f1` to `f_row.f_str`; 2) rename `f3` to `f_str`.
+      // If we do not use full name as map key for `renamedFields`, name changes for `f_row.f_1` will
+      // be override in `renamedFields`, and get the unexpected final name mapping (`f_str` -> `f3`).
+      renamedFields.put(querySchema.findFullName(fieldId), nameFromFileSchema);
+    }
     // Current design mechanism guarantees nestedType change is not allowed, so no need to consider.
     if (newType.isNestedType()) {
       return Types.Field.get(oldField.fieldId(), oldField.isOptional(),
@@ -173,7 +195,7 @@ public class InternalSchemaMerger {
       }
       String parentName = sb.toString();
       int parentFieldIdFromQuerySchema = querySchema.findIdByName(parentName);
-      String parentNameFromFileSchema = fileSchema.findfullName(parentFieldIdFromQuerySchema);
+      String parentNameFromFileSchema = fileSchema.findFullName(parentFieldIdFromQuerySchema);
       if (parentNameFromFileSchema.isEmpty()) {
         break;
       }

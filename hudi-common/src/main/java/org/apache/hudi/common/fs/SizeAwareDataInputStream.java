@@ -36,30 +36,32 @@ public class SizeAwareDataInputStream {
   }
 
   public int readInt() throws IOException {
+    int value = dis.readInt();
     numberOfBytesRead.addAndGet(Integer.BYTES);
-    return dis.readInt();
+    return value;
   }
 
   public void readFully(byte[] b, int off, int len) throws IOException {
-    numberOfBytesRead.addAndGet(len);
     dis.readFully(b, off, len);
+    numberOfBytesRead.addAndGet(len);
   }
 
   public void readFully(byte[] b) throws IOException {
-    numberOfBytesRead.addAndGet(b.length);
     dis.readFully(b);
+    numberOfBytesRead.addAndGet(b.length);
   }
 
   public int skipBytes(int n) throws IOException {
-    numberOfBytesRead.addAndGet(n);
-    return dis.skipBytes(n);
+    int numOfBytes = dis.skipBytes(n);
+    numberOfBytesRead.addAndGet(numOfBytes);
+    return numOfBytes;
   }
 
   public void close() throws IOException {
     dis.close();
   }
 
-  public Integer getNumberOfBytesRead() {
+  public int getNumberOfBytesRead() {
     return numberOfBytesRead.get();
   }
 }

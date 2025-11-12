@@ -28,13 +28,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests {@link TypedProperties}.
+ */
 public class TestTypedProperties {
   @Test
   public void testGetString() {
     Properties properties = new Properties();
     properties.put("key1", "value1");
 
-    TypedProperties typedProperties = new TypedProperties(properties);
+    TypedProperties typedProperties = TypedProperties.copy(properties);
     assertEquals("value1", typedProperties.getString("key1"));
     assertEquals("value1", typedProperties.getString("key1", "default"));
     assertEquals("default", typedProperties.getString("key2", "default"));
@@ -45,7 +48,7 @@ public class TestTypedProperties {
     Properties properties = new Properties();
     properties.put("key1", "123");
 
-    TypedProperties typedProperties = new TypedProperties(properties);
+    TypedProperties typedProperties = TypedProperties.copy(properties);
     assertEquals(123, typedProperties.getInteger("key1"));
     assertEquals(123, typedProperties.getInteger("key1", 456));
     assertEquals(456, typedProperties.getInteger("key2", 456));
@@ -57,7 +60,7 @@ public class TestTypedProperties {
     Properties properties = new Properties();
     properties.put("key1", "123.4");
 
-    TypedProperties typedProperties = new TypedProperties(properties);
+    TypedProperties typedProperties = TypedProperties.copy(properties);
     assertEquals(123.4, typedProperties.getDouble("key1"));
     assertEquals(123.4, typedProperties.getDouble("key1", 0.001D));
     assertEquals(0.001D, typedProperties.getDouble("key2", 0.001D));
@@ -68,7 +71,7 @@ public class TestTypedProperties {
     Properties properties = new Properties();
     properties.put("key1", "1354354354");
 
-    TypedProperties typedProperties = new TypedProperties(properties);
+    TypedProperties typedProperties = TypedProperties.copy(properties);
     assertEquals(1354354354, typedProperties.getLong("key1"));
     assertEquals(1354354354, typedProperties.getLong("key1", 8578494434L));
     assertEquals(8578494434L, typedProperties.getLong("key2", 8578494434L));
@@ -79,13 +82,13 @@ public class TestTypedProperties {
     Properties properties = new Properties();
     properties.put("key1", "true");
 
-    TypedProperties typedProperties = new TypedProperties(properties);
+    TypedProperties typedProperties = TypedProperties.copy(properties);
     assertTrue(typedProperties.getBoolean("key1"));
     assertTrue(typedProperties.getBoolean("key1", false));
     assertFalse(typedProperties.getBoolean("key2", false));
     // test getBoolean with non-string value for key2
     properties.put("key2", true);
-    typedProperties = new TypedProperties(properties);
+    typedProperties = TypedProperties.copy(properties);
     assertTrue(typedProperties.getBoolean("key1", false));
     assertTrue(typedProperties.getBoolean("key2", false));
     // put non-string value in TypedProperties
@@ -99,7 +102,7 @@ public class TestTypedProperties {
     properties.put("key1", "1");
     properties.put("key2", 2);
 
-    TypedProperties props = new TypedProperties(properties);
+    TypedProperties props = TypedProperties.copy(properties);
     assertEquals(1, props.getInteger("key1"));
     assertEquals(2, props.getInteger("key2"));
     // put non-string value in TypedProperties

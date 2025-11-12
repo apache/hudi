@@ -20,13 +20,12 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -36,9 +35,9 @@ import javax.annotation.concurrent.NotThreadSafe;
  * Please use this with caution. This can end up creating very large files if not used correctly.
  */
 @NotThreadSafe
-public class HoodieUnboundedCreateHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieCreateHandle<T, I, K, O> {
+public class HoodieUnboundedCreateHandle<T, I, K, O> extends HoodieCreateHandle<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieUnboundedCreateHandle.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieUnboundedCreateHandle.class);
 
   public HoodieUnboundedCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                      String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,

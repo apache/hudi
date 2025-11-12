@@ -24,20 +24,20 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
+import org.apache.hudi.cli.utils.CLIUtils;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.utilities.UtilHelpers;
+
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
-import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -46,6 +46,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import scala.collection.JavaConverters;
 
 /**
  * CLI command to show cleans options.
@@ -57,19 +59,24 @@ public class CleansCommand {
   public String showCleans(
       @ShellOption(value = {"--limit"}, help = "Limit commits", defaultValue = "-1") final Integer limit,
       @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--startTs"}, help = "start time for cleans, default: now - 10 days",
+          defaultValue = ShellOption.NULL) String startTs,
+      @ShellOption(value = {"--endTs"}, help = "end time for clean, default: upto latest",
+          defaultValue = ShellOption.NULL) String endTs,
+      @ShellOption(value = {"--includeArchivedTimeline"}, help = "Include archived commits as well",
+          defaultValue = "false") final boolean includeArchivedTimeline,
       @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
           defaultValue = "false") final boolean headerOnly)
       throws IOException {
 
-    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
+    HoodieTimeline activeTimeline = CLIUtils.getTimelineInRange(startTs, endTs, includeArchivedTimeline);
     HoodieTimeline timeline = activeTimeline.getCleanerTimeline().filterCompletedInstants();
     List<HoodieInstant> cleans = timeline.getReverseOrderedInstants().collect(Collectors.toList());
     List<Comparable[]> rows = new ArrayList<>();
     for (HoodieInstant clean : cleans) {
-      HoodieCleanMetadata cleanMetadata =
-          TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(clean).get());
-      rows.add(new Comparable[] {clean.getTimestamp(), cleanMetadata.getEarliestCommitToRetain(),
+      HoodieCleanMetadata cleanMetadata = timeline.readCleanMetadata(clean);
+      rows.add(new Comparable[] {clean.requestedTime(), cleanMetadata.getEarliestCommitToRetain(),
           cleanMetadata.getTotalFilesDeleted(), cleanMetadata.getTimeTakenInMillis()});
     }
 
@@ -93,14 +100,13 @@ public class CleansCommand {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCleanerTimeline().filterCompletedInstants();
-    HoodieInstant cleanInstant = new HoodieInstant(false, HoodieTimeline.CLEAN_ACTION, instantTime);
+    HoodieInstant cleanInstant = HoodieCLI.getTableMetaClient().createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, instantTime);
 
     if (!timeline.containsInstant(cleanInstant)) {
       return "Clean " + instantTime + " not found in metadata " + timeline;
     }
 
-    HoodieCleanMetadata cleanMetadata =
-        TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(cleanInstant).get());
+    HoodieCleanMetadata cleanMetadata = timeline.readCleanMetadata(cleanInstant);
     List<Comparable[]> rows = new ArrayList<>();
     for (Map.Entry<String, HoodieCleanPartitionMetadata> entry : cleanMetadata.getPartitionMetadata().entrySet()) {
       String path = entry.getKey();
@@ -136,8 +142,7 @@ public class CleansCommand {
         Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
-    String cmd = SparkMain.SparkCommand.CLEAN.toString();
-    sparkLauncher.addAppArgs(cmd, master, sparkMemory, metaClient.getBasePath(), propsFilePath);
+    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.CLEAN, master, sparkMemory, HoodieCLI.basePath, propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);

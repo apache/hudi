@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieCatalogException;
 
 import org.apache.flink.configuration.ConfigOption;
@@ -50,7 +51,7 @@ public class HoodieCatalogFactory implements CatalogFactory {
   public Catalog createCatalog(Context context) {
     final FactoryUtil.CatalogFactoryHelper helper =
         FactoryUtil.createCatalogFactoryHelper(this, context);
-    helper.validate();
+    helper.validateExcept(HadoopConfigurations.HADOOP_PREFIX);
     String mode = helper.getOptions().get(CatalogOptions.MODE);
     switch (mode.toLowerCase(Locale.ROOT)) {
       case "hms":

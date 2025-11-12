@@ -17,20 +17,22 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.sync.common.util.ConfigUtils
+import org.apache.hudi.common.util.ConfigUtils
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
+
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.{QualifiedTableName, TableIdentifier}
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog._
 
 /**
  * Physical plan node for dropping a table.
  */
 case class DropHoodieTableCommand(
-    tableIdentifier: TableIdentifier,
+                                   tableIdentifier: TableIdentifier,
     ifExists: Boolean,
     isView: Boolean,
     purge: Boolean) extends HoodieLeafRunnableCommand {
@@ -44,10 +46,7 @@ case class DropHoodieTableCommand(
     if (!sparkSession.catalog.tableExists(tableIdentifier.unquotedString)) {
       sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
     }
-    val qualifiedTableName = QualifiedTableName(
-      tableIdentifier.database.getOrElse(sparkSession.sessionState.catalog.getCurrentDatabase),
-      tableIdentifier.table)
-    sparkSession.sessionState.catalog.invalidateCachedTable(qualifiedTableName)
+    sparkSession.sessionState.catalog.invalidateCachedTable(tableIdentifier)
 
     dropTableInCatalog(sparkSession, tableIdentifier, ifExists, purge)
 
@@ -85,10 +84,11 @@ case class DropHoodieTableCommand(
     // Recursively delete table directories
     if (purge) {
       logInfo("Clean up " + basePath)
-      val targetPath = new Path(basePath)
+      val targetPath = new StoragePath(basePath)
       val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
-      val fs = FSUtils.getFs(basePath, sparkSession.sparkContext.hadoopConfiguration)
-      FSUtils.deleteDir(engineContext, fs, targetPath, sparkSession.sparkContext.defaultParallelism)
+      val storage = HoodieStorageUtils.getStorage(basePath,
+        HadoopFSUtils.getStorageConf(sparkSession.sparkContext.hadoopConfiguration))
+      FSUtils.deleteDir(engineContext, storage, targetPath, sparkSession.sparkContext.defaultParallelism)
     }
   }
 

@@ -18,10 +18,11 @@
 
 package org.apache.hudi.sink.bulk;
 
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.table.HoodieFlinkTable;
+import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.FlinkTables;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -66,7 +67,7 @@ public class TestBulkInsertWriteHelper {
   @Test
   void testWrite() throws Exception {
     HoodieFlinkTable<?> table = FlinkTables.createTable(conf);
-    String instant = HoodieActiveTimeline.createNewInstantTime();
+    String instant = WriteClientTestUtils.createNewInstantTime();
     RowType rowType = TestConfigurations.ROW_TYPE;
     BulkInsertWriterHelper writerHelper = new BulkInsertWriterHelper(conf, table, table.getConfig(), instant,
         1, 1, 0, rowType, false);
@@ -85,7 +86,7 @@ public class TestBulkInsertWriteHelper {
     TestData.checkWrittenData(tempFile, expected);
 
     // set up preserveHoodieMetadata as true and check again
-    RowType rowType2 = BulkInsertWriterHelper.addMetadataFields(rowType, false);
+    RowType rowType2 = DataTypeUtils.addMetadataFields(rowType, false);
     BulkInsertWriterHelper writerHelper2 = new BulkInsertWriterHelper(conf, table, table.getConfig(), instant,
         1, 1, 0, rowType2, true);
     for (RowData row: rowsWithMetadata(instant, TestData.DATA_SET_INSERT)) {

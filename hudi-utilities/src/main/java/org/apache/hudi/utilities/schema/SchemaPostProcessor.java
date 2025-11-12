@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -31,10 +32,14 @@ import java.io.Serializable;
  */
 public abstract class SchemaPostProcessor implements Serializable {
 
-  /** Configs supported. */
+  /**
+   * Configs supported.
+   */
+  @Deprecated
   public static class Config {
+    @Deprecated
     public static final String SCHEMA_POST_PROCESSOR_PROP =
-        "hoodie.deltastreamer.schemaprovider.schema_post_processor";
+        SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR.key();
   }
 
   private static final long serialVersionUID = 1L;

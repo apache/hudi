@@ -22,6 +22,7 @@ spark-submit \
 --conf spark.rdd.compress=true  \
 --conf spark.kryoserializer.buffer.max=2000m \
 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar' \
 --conf spark.memory.storageFraction=0.1 \
 --conf spark.shuffle.service.enabled=true  \
 --conf spark.sql.hive.convertMetastoreParquet=false  \

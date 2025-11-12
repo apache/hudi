@@ -24,11 +24,11 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
@@ -38,6 +38,7 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.util.Utf8;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
@@ -48,14 +49,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.UUID;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.genPseudoRandomUUID;
 
 /**
  * A utility class for testing schema.
@@ -63,13 +68,31 @@ import java.util.stream.Stream;
 public final class SchemaTestUtil {
 
   private static final String RESOURCE_SAMPLE_DATA = "/sample.data";
+  private static final MercifulJsonConverter CONVERTER = new MercifulJsonConverter();
+
+  private final Random random = new Random(0xDEED);
+
+  public SchemaTestUtil() {
+  }
 
   public static Schema getSimpleSchema() throws IOException {
     return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test.avsc"));
   }
+  
+  public static Schema getSchemaFromResourceFilePath(String filePath) throws IOException {
+    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream(filePath));
+  }
+
+  public static Schema getSchema(String path) throws IOException {
+    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream(path));
+  }
 
   public static List<IndexedRecord> generateTestRecords(int from, int limit) throws IOException, URISyntaxException {
     return toRecords(getSimpleSchema(), getSimpleSchema(), from, limit);
+  }
+
+  public static List<IndexedRecord> generateTestRecords(String schemaPath, String dataPath) throws IOException, URISyntaxException {
+    return toRecords(getSchema(schemaPath), getSchema(schemaPath), dataPath);
   }
 
   public static List<GenericRecord> generateTestGenericRecords(int from, int limit) throws IOException, URISyntaxException {
@@ -84,6 +107,15 @@ public final class SchemaTestUtil {
     } catch (IOException e) {
       throw new HoodieIOException("Could not read data from " + RESOURCE_SAMPLE_DATA, e);
     }
+  }
+
+  public static Schema getSchemaFromFields(List<String> fields) {
+    SchemaBuilder.FieldAssembler<Schema> schemaFieldAssembler = SchemaBuilder.builder().record("test_schema")
+        .namespace("test_namespace").fields();
+    for (String field : fields) {
+      schemaFieldAssembler = schemaFieldAssembler.name(field).type().stringType().noDefault();
+    }
+    return schemaFieldAssembler.endRecord();
   }
 
   private static <T extends IndexedRecord> List<T> toRecords(Schema writerSchema, Schema readerSchema, int from, int limit)
@@ -104,6 +136,24 @@ public final class SchemaTestUtil {
     }
   }
 
+  private static <T extends IndexedRecord> List<T> toRecords(Schema writerSchema, Schema readerSchema, String path)
+      throws IOException, URISyntaxException {
+    GenericDatumReader<T> reader = new GenericDatumReader<>(writerSchema, readerSchema);
+    Path dataPath = initializeSampleDataPath(path);
+
+    try (Stream<String> stream = Files.lines(dataPath)) {
+      return stream.map(s -> {
+        try {
+          return reader.read(null, DecoderFactory.get().jsonDecoder(writerSchema, s));
+        } catch (IOException e) {
+          throw new HoodieIOException("Could not read data from " + path, e);
+        }
+      }).collect(Collectors.toList());
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not read data from " + path, e);
+    }
+  }
+
   /**
    * Required to register the necessary JAR:// file system.
    * @return Path to the sample data in the resource file.
@@ -115,7 +165,16 @@ public final class SchemaTestUtil {
     if (resource.toString().contains("!")) {
       return uriToPath(resource);
     } else {
-      return Paths.get(SchemaTestUtil.class.getResource(RESOURCE_SAMPLE_DATA).toURI());
+      return Paths.get(resource);
+    }
+  }
+
+  private static Path initializeSampleDataPath(String path) throws IOException, URISyntaxException {
+    URI resource = SchemaTestUtil.class.getResource(path).toURI();
+    if (resource.toString().contains("!")) {
+      return uriToPath(resource);
+    } else {
+      return Paths.get(resource);
     }
   }
 
@@ -131,25 +190,62 @@ public final class SchemaTestUtil {
     return fs.getPath(array[1]);
   }
 
-  public static List<IndexedRecord> generateHoodieTestRecords(int from, int limit)
-      throws IOException, URISyntaxException {
-    List<IndexedRecord> records = generateTestRecords(from, limit);
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    Schema hoodieFieldsSchema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
-    return records.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, hoodieFieldsSchema)).map(p -> {
-      p.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, UUID.randomUUID().toString());
-      p.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, "0000/00/00");
-      p.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
-      return p;
-    }).collect(Collectors.toList());
-
+  /**
+   * Generates a list of random UUIDs
+   *
+   * @param size          Number of UUIDs to return.
+   * @param existingUUIDs Existing UUIDs to include.
+   * @return A list of UUIDs.
+   */
+  public List<String> genRandomUUID(int size, List<String> existingUUIDs) {
+    Set<String> uuidSet = new HashSet<>(existingUUIDs);
+    while (uuidSet.size() < size) {
+      uuidSet.add(genRandomUUID());
+    }
+    return new ArrayList<>(uuidSet);
   }
 
-  public static List<HoodieRecord> generateHoodieTestRecords(int from, int limit, Schema schema)
+  public List<IndexedRecord> generateHoodieTestRecords(int from, int limit)
+      throws IOException, URISyntaxException {
+    String instantTime = InProcessTimeGenerator.createNewInstantTime();
+    List<String> recorKeyList = genRandomUUID(limit, Collections.emptyList());
+    return generateHoodieTestRecords(from, recorKeyList, "0000/00/00", instantTime);
+  }
+
+  /**
+   * Generates test records.
+   *
+   * @param from          Offset to start picking records.
+   * @param recordKeyList Record keys to use.
+   * @param partitionPath Partition path to use.
+   * @param instantTime   Hudi instant time.
+   * @return A list of {@link IndexedRecord}.
+   * @throws IOException
+   * @throws URISyntaxException
+   */
+  public List<IndexedRecord> generateHoodieTestRecords(int from,
+                                                       List<String> recordKeyList,
+                                                       String partitionPath,
+                                                       String instantTime)
+      throws IOException, URISyntaxException {
+    List<IndexedRecord> records = generateTestRecords(from, recordKeyList.size());
+    Schema hoodieFieldsSchema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    List<IndexedRecord> recordsWithMetaFields = new ArrayList<>();
+    for (int i = 0; i < recordKeyList.size(); i++) {
+      GenericRecord newRecord = HoodieAvroUtils.rewriteRecord((GenericRecord) records.get(i), hoodieFieldsSchema);
+      newRecord.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKeyList.get(i));
+      newRecord.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, partitionPath);
+      newRecord.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
+      recordsWithMetaFields.add(newRecord);
+    }
+    return recordsWithMetaFields;
+  }
+
+  public List<HoodieRecord> generateHoodieTestRecords(int from, int limit, Schema schema)
       throws IOException, URISyntaxException {
     List<IndexedRecord> records = generateTestRecords(from, limit);
     return records.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, schema))
-        .map(p -> convertToHoodieRecords(p, UUID.randomUUID().toString(), "000/00/00")).collect(Collectors.toList());
+        .map(p -> convertToHoodieRecords(p, genRandomUUID(), "000/00/00")).collect(Collectors.toList());
   }
 
   private static HoodieRecord convertToHoodieRecords(IndexedRecord iRecord, String key, String partitionPath) {
@@ -169,11 +265,10 @@ public final class SchemaTestUtil {
 
   }
 
-  public static List<HoodieRecord> generateHoodieTestRecordsWithoutHoodieMetadata(int from, int limit)
+  public List<HoodieRecord> generateHoodieTestRecordsWithoutHoodieMetadata(int from, int limit)
       throws IOException, URISyntaxException {
-
     List<IndexedRecord> iRecords = generateTestRecords(from, limit);
-    return iRecords.stream().map(r -> new HoodieAvroRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
+    return iRecords.stream().map(r -> new HoodieAvroRecord<>(new HoodieKey(genRandomUUID(), "0000/00/00"),
         new HoodieAvroPayload(Option.of((GenericRecord) r)))).collect(Collectors.toList());
   }
 
@@ -223,13 +318,12 @@ public final class SchemaTestUtil {
   public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber, String instantTime,
       String fileId, boolean populateMetaFields) throws IOException {
     SampleTestRecord record = new SampleTestRecord(instantTime, recordNumber, fileId, populateMetaFields);
-    MercifulJsonConverter converter = new MercifulJsonConverter();
-    return converter.convert(record.toJsonString(), schema);
+    return CONVERTER.convert(record.toJsonString(), schema);
   }
 
   public static Schema getSchemaFromResource(Class<?> clazz, String name, boolean withHoodieMetadata) {
-    try {
-      Schema schema = new Schema.Parser().parse(clazz.getResourceAsStream(name));
+    try (InputStream schemaInputStream = clazz.getResourceAsStream(name)) {
+      Schema schema = new Schema.Parser().parse(schemaInputStream);
       return withHoodieMetadata ? HoodieAvroUtils.addMetadataFields(schema) : schema;
     } catch (IOException e) {
       throw new RuntimeException(String.format("Failed to get schema from resource `%s` for class `%s`", name, clazz.getName()));
@@ -357,5 +451,9 @@ public final class SchemaTestUtil {
         }
       };
     }
+  }
+
+  private String genRandomUUID() {
+    return genPseudoRandomUUID(random).toString();
   }
 }

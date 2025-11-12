@@ -20,9 +20,9 @@ package org.apache.hudi.hive.testutils;
 
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.HiveMetaStore;
@@ -34,8 +34,6 @@ import org.apache.hadoop.hive.metastore.TUGIBasedProcessor;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.thrift.TUGIContainingTransport;
 import org.apache.hive.service.server.HiveServer2;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.thrift.TProcessor;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.server.TServer;
@@ -47,6 +45,8 @@ import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 import org.apache.thrift.transport.TTransportFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -61,7 +61,7 @@ import java.util.concurrent.Executors;
 
 public class HiveTestService {
 
-  private static final Logger LOG = LogManager.getLogger(HiveTestService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveTestService.class);
   private static final int CONNECTION_TIMEOUT_MS = 30000;
   private static final String BIND_HOST = "127.0.0.1";
   private static final int HS2_THRIFT_PORT = 9999;
@@ -220,7 +220,7 @@ public class HiveTestService {
   }
 
   private static String getHiveLocation(String baseLocation) {
-    return baseLocation + Path.SEPARATOR + "hive";
+    return baseLocation + StoragePath.SEPARATOR + "hive";
   }
 
   private HiveServer2 startHiveServer(HiveConf serverConf) {
@@ -273,7 +273,7 @@ public class HiveTestService {
   private TServer startMetaStore(HiveConf conf) throws IOException {
     try {
       // Server will create new threads up to max as necessary. After an idle
-      // period, it will destory threads to keep the number of threads in the
+      // period, it will destroy threads to keep the number of threads in the
       // pool to min.
       String host = conf.getVar(ConfVars.HIVE_SERVER2_THRIFT_BIND_HOST);
       int port = conf.getIntVar(ConfVars.METASTORE_SERVER_PORT);

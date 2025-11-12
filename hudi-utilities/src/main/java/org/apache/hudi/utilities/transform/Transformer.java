@@ -27,6 +27,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.StructType;
 
 /**
  * Transform source to target dataset before writing.
@@ -45,4 +46,11 @@ public interface Transformer {
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset, TypedProperties properties);
+
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  default StructType transformedSchema(JavaSparkContext jsc, SparkSession sparkSession, StructType incomingStruct, TypedProperties properties) {
+    Dataset<Row> emptyDataset = sparkSession.createDataFrame(sparkSession.emptyDataFrame().rdd(), incomingStruct);
+    Dataset<Row> transformedDataset = this.apply(jsc, sparkSession, emptyDataset, properties);
+    return transformedDataset.schema();
+  }
 }

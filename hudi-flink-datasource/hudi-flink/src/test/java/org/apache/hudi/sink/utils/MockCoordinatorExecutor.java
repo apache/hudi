@@ -33,7 +33,7 @@ public class MockCoordinatorExecutor extends NonThrownExecutor {
   private static final Logger LOG = LoggerFactory.getLogger(MockCoordinatorExecutor.class);
 
   public MockCoordinatorExecutor(OperatorCoordinator.Context context) {
-    super(LOG, (errMsg, t) -> context.failJob(new HoodieException(errMsg, t)), true);
+    super(LOG, null, (errMsg, t) -> context.failJob(new HoodieException(errMsg, t)), true);
   }
 
   @Override
@@ -50,6 +50,7 @@ public class MockCoordinatorExecutor extends NonThrownExecutor {
       // if we have a JVM critical error, promote it immediately, there is a good
       // chance the
       // logging or job failing will not succeed anymore
+      LOG.error("Executor executes action [{}] failed.", actionString, t);
       ExceptionUtils.rethrowIfFatalErrorOrOOM(t);
       final String errMsg = String.format("Executor executes action [%s] error", actionString);
       if (hook != null) {

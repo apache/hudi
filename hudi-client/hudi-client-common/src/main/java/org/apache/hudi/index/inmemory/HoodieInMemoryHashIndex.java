@@ -24,10 +24,14 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.ArrayList;
@@ -60,11 +64,13 @@ public class HoodieInMemoryHashIndex
       HoodieTable hoodieTable) {
     return records.mapPartitions(hoodieRecordIterator -> {
       List<HoodieRecord<R>> taggedRecords = new ArrayList<>();
+      HoodieTimeline commitsTimeline = hoodieTable.getMetaClient().getCommitsTimeline().filterCompletedInstants();
       while (hoodieRecordIterator.hasNext()) {
         HoodieRecord<R> record = hoodieRecordIterator.next();
-        if (recordLocationMap.containsKey(record.getKey())) {
+        HoodieRecordLocation location = recordLocationMap.get(record.getKey());
+        if ((location != null) && HoodieIndexUtils.checkIfValidCommit(commitsTimeline, location.getInstantTime())) {
           record.unseal();
-          record.setCurrentLocation(recordLocationMap.get(record.getKey()));
+          record.setCurrentLocation(location);
           record.seal();
         }
         taggedRecords.add(record);
@@ -78,15 +84,14 @@ public class HoodieInMemoryHashIndex
       HoodieData<WriteStatus> writeStatuses, HoodieEngineContext context,
       HoodieTable hoodieTable) {
     return writeStatuses.map(writeStatus -> {
-      for (HoodieRecord record : writeStatus.getWrittenRecords()) {
-        if (!writeStatus.isErrored(record.getKey())) {
-          HoodieKey key = record.getKey();
-          Option<HoodieRecordLocation> newLocation = record.getNewLocation();
+      for (HoodieRecordDelegate recordDelegate : writeStatus.getIndexStats().getWrittenRecordDelegates()) {
+        if (!writeStatus.isErrored(recordDelegate.getHoodieKey())) {
+          Option<HoodieRecordLocation> newLocation = recordDelegate.getNewLocation();
           if (newLocation.isPresent()) {
-            recordLocationMap.put(key, newLocation.get());
+            recordLocationMap.put(recordDelegate.getHoodieKey(), newLocation.get());
           } else {
             // Delete existing index for a deleted record
-            recordLocationMap.remove(key);
+            recordLocationMap.remove(recordDelegate.getHoodieKey());
           }
         }
       }
@@ -121,5 +126,12 @@ public class HoodieInMemoryHashIndex
   @Override
   public boolean isImplicitWithStorage() {
     return false;
+  }
+
+  @VisibleForTesting
+  public static void clear() {
+    if (recordLocationMap != null) {
+      recordLocationMap.clear();
+    }
   }
 }

@@ -36,14 +36,13 @@ public class TestParquetDFSSource extends AbstractDFSSourceTestBase {
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
-    this.dfsRoot = dfsBasePath + "/parquetFiles";
+    this.dfsRoot = basePath + "/parquetFiles";
     this.fileSuffix = ".parquet";
   }
 
   @Override
-  public Source prepareDFSSource() {
-    TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.deltastreamer.source.dfs.root", dfsRoot);
+  public Source prepareDFSSource(TypedProperties props) {
+    props.setProperty("hoodie.streamer.source.dfs.root", dfsRoot);
     return new ParquetDFSSource(props, jsc, sparkSession, schemaProvider);
   }
 

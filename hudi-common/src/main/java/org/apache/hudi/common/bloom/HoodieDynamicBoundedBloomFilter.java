@@ -19,16 +19,19 @@
 package org.apache.hudi.common.bloom;
 
 import org.apache.hudi.common.util.Base64CodecUtil;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieIndexException;
-
-import org.apache.hadoop.util.bloom.Key;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
+
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.io.util.IOUtils.getDataInputStream;
 
 /**
  * Hoodie's dynamic bloom bounded bloom filter. This is based largely on Hadoop's DynamicBloomFilter, but with a bound
@@ -45,7 +48,7 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
    *
    * @param numEntries The total number of entries.
    * @param errorRate  maximum allowable error rate.
-   * @param hashType   type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
+   * @param hashType   type of the hashing function (see {@link org.apache.hudi.common.util.hash.Hash}).
    * @return the {@link HoodieDynamicBoundedBloomFilter} thus created
    */
   HoodieDynamicBoundedBloomFilter(int numEntries, double errorRate, int hashType, int maxNoOfEntries) {
@@ -61,24 +64,34 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
    * Generate {@link HoodieDynamicBoundedBloomFilter} from the given {@code serString} serialized string.
    *
    * @param serString the serialized string which represents the {@link HoodieDynamicBoundedBloomFilter}
-   * @param typeCode  type code of the bloom filter
    */
-  public HoodieDynamicBoundedBloomFilter(String serString, BloomFilterTypeCode typeCode) {
+  public HoodieDynamicBoundedBloomFilter(String serString) {
     // ignoring the type code for now, since we have just one version
     byte[] bytes = Base64CodecUtil.decode(serString);
-    DataInputStream dis = new DataInputStream(new ByteArrayInputStream(bytes));
-    try {
-      internalDynamicBloomFilter = new InternalDynamicBloomFilter();
-      internalDynamicBloomFilter.readFields(dis);
-      dis.close();
+    try (DataInputStream stream = new DataInputStream(new ByteArrayInputStream(bytes))) {
+      extractAndSetInternalBloomFilter(stream);
     } catch (IOException e) {
-      throw new HoodieIndexException("Could not deserialize BloomFilter instance", e);
+      throw new HoodieIndexException("Could not deserialize BloomFilter from string", e);
+    }
+  }
+
+  /**
+   * Creates {@link HoodieDynamicBoundedBloomFilter} from the given {@link ByteBuffer}.
+   *
+   * @param byteBuffer {@link ByteBuffer} containing the serialized bloom filter.
+   */
+  public HoodieDynamicBoundedBloomFilter(ByteBuffer byteBuffer) {
+    // ignoring the type code for now, since we have just one version
+    try (DataInputStream stream = getDataInputStream(Base64CodecUtil.decode(byteBuffer))) {
+      extractAndSetInternalBloomFilter(stream);
+    } catch (IOException e) {
+      throw new HoodieIndexException("Could not deserialize BloomFilter from byte buffer", e);
     }
   }
 
   @Override
   public void add(String key) {
-    add(key.getBytes(StandardCharsets.UTF_8));
+    add(getUTF8Bytes(key));
   }
 
   @Override
@@ -88,7 +101,7 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
 
   @Override
   public boolean mightContain(String key) {
-    return internalDynamicBloomFilter.membershipTest(new Key(key.getBytes(StandardCharsets.UTF_8)));
+    return internalDynamicBloomFilter.membershipTest(new Key(getUTF8Bytes(key)));
   }
 
   @Override
@@ -108,6 +121,46 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
   @Override
   public BloomFilterTypeCode getBloomFilterTypeCode() {
     return BloomFilterTypeCode.DYNAMIC_V0;
+  }
+
+  private void extractAndSetInternalBloomFilter(DataInputStream dis) throws IOException {
+    internalDynamicBloomFilter = new InternalDynamicBloomFilter();
+    internalDynamicBloomFilter.readFields(dis);
+  }
+
+  @Override
+  public void or(BloomFilter other) {
+    if (other != null) {
+      ValidationUtils.checkArgument(other instanceof HoodieDynamicBoundedBloomFilter,
+          "HoodieDynamicBoundedBloomFilter can only perform OR operations with other HoodieDynamicBoundedBloomFilter.");
+      HoodieDynamicBoundedBloomFilter otherFilter = (HoodieDynamicBoundedBloomFilter) other;
+      int sourceMatrixLength = this.getMatrixLength();
+      int targetMatrixLength = otherFilter.getMatrixLength();
+      if (targetMatrixLength > sourceMatrixLength) {
+        this.rescaleFromTarget(targetMatrixLength);
+      } else {
+        otherFilter.rescaleFromTarget(sourceMatrixLength);
+      }
+      this.internalDynamicBloomFilter.or(otherFilter.internalDynamicBloomFilter);
+    }
+  }
+
+  /**
+   * rescale the internal dynamic bloom filter by length
+   * @param targetMatrixLength
+   * @return
+   */
+  @VisibleForTesting
+  protected HoodieDynamicBoundedBloomFilter rescaleFromTarget(int targetMatrixLength) {
+    int initMatrixLength = this.internalDynamicBloomFilter.getMatrixLength();
+    int needAddRowNum = targetMatrixLength - initMatrixLength;
+    this.internalDynamicBloomFilter.addRows(needAddRowNum);
+    return this;
+  }
+
+  @VisibleForTesting
+  protected int getMatrixLength() {
+    return this.internalDynamicBloomFilter.getMatrixLength();
   }
 }
 

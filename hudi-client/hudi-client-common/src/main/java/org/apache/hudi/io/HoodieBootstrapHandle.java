@@ -18,13 +18,19 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.JsonProperties;
+import org.apache.avro.Schema;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 
 /**
  * This class is essentially same as Create Handle but overrides two things
@@ -33,16 +39,30 @@ import org.apache.hudi.table.HoodieTable;
  *    writing more than 1 skeleton file for the same bootstrap file.
  * @param <T> HoodieRecordPayload
  */
-public class HoodieBootstrapHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieCreateHandle<T, I, K, O> {
+public class HoodieBootstrapHandle<T, I, K, O> extends HoodieCreateHandle<T, I, K, O> {
+
+  // NOTE: We have to use schema containing all the meta-fields in here b/c unlike for [[HoodieAvroRecord]],
+  //       [[HoodieSparkRecord]] requires records to always bear either all or no meta-fields in the
+  //       record schema (ie partial inclusion of the meta-fields in the schema is not allowed)
+  public static final Schema METADATA_BOOTSTRAP_RECORD_SCHEMA = createMetadataBootstrapRecordSchema();
 
   public HoodieBootstrapHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T, I, K, O> hoodieTable,
       String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
     super(config, commitTime, hoodieTable, partitionPath, fileId,
-        Option.of(HoodieAvroUtils.RECORD_KEY_SCHEMA), taskContextSupplier);
+        Option.of(METADATA_BOOTSTRAP_RECORD_SCHEMA), taskContextSupplier);
   }
 
   @Override
   public boolean canWrite(HoodieRecord record) {
     return true;
+  }
+
+  private static Schema createMetadataBootstrapRecordSchema() {
+    List<Schema.Field> fields =
+        HoodieRecord.HOODIE_META_COLUMNS.stream()
+            .map(metaField ->
+                new Schema.Field(metaField, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE))
+            .collect(Collectors.toList());
+    return Schema.createRecord("HoodieRecordKey", "", "", false, fields);
   }
 }

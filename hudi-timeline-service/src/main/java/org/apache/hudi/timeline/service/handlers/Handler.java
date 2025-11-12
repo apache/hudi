@@ -19,25 +19,25 @@
 package org.apache.hudi.timeline.service.handlers;
 
 import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-
-import java.io.IOException;
 
 public abstract class Handler {
 
-  protected final Configuration conf;
+  protected final StorageConfiguration<?> conf;
   protected final TimelineService.Config timelineServiceConfig;
-  protected final FileSystem fileSystem;
   protected final FileSystemViewManager viewManager;
 
-  public Handler(Configuration conf, TimelineService.Config timelineServiceConfig,
-                 FileSystem fileSystem, FileSystemViewManager viewManager) throws IOException {
-    this.conf = conf;
+  public Handler(StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
+                 FileSystemViewManager viewManager) {
+    this.conf = conf.newInstance();
     this.timelineServiceConfig = timelineServiceConfig;
-    this.fileSystem = fileSystem;
     this.viewManager = viewManager;
+  }
+
+  protected HoodieStorage getStorage(String path) {
+    return HoodieStorageUtils.getStorage(path, conf);
   }
 }

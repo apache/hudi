@@ -38,7 +38,18 @@
                     "type": "long",
                     "doc": "Size of this file in bytes"
                 }
-            }], "default":null }
+            }], "default":null },
+            {"name": "logFilesFromFailedCommit",
+             "type": ["null", {
+               "type": "map",
+               "doc": "Log files from the failed commit(commit to be rolled back)",
+               "values": {
+                   "type": "long",
+                   "doc": "Size of this file in bytes"
+               }
+             }],
+             "default":null
+            }
         ]
      }}},
      {

@@ -19,13 +19,20 @@
 package org.apache.hudi.utilities.sources.debezium;
 
 import org.apache.hudi.common.model.debezium.DebeziumConstants;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestMysqlDebeziumSource extends TestAbstractDebeziumSource {
@@ -92,5 +99,34 @@ public class TestMysqlDebeziumSource extends TestAbstractDebeziumSource {
         .allMatch(r -> r.getLong(0) == TEST_TS_MS));
     assertTrue(records.select(DebeziumConstants.ADDED_SEQ_COL_NAME).collectAsList().stream()
         .allMatch(r -> r.getString(0).equals(EXPECTED_TEST_SEQ)));
+  }
+
+  private String invokeGenerateUniqueSequence(String fileId, Long pos) throws Exception {
+    Method method = MysqlDebeziumSource.class.getDeclaredMethod("generateUniqueSequence", String.class, Long.class);
+    method.setAccessible(true);
+    try {
+      return (String) method.invoke(null, fileId, pos);
+    } catch (InvocationTargetException e) {
+      throw (Exception) e.getCause();
+    }
+  }
+
+  @Test
+  public void testGenerateUniqueSequenceValid() throws Exception {
+    assertEquals("288947.12345", invokeGenerateUniqueSequence("mysql-bin-changelog.288947", 12345L));
+    assertEquals("binlog.0", invokeGenerateUniqueSequence("binlog", 0L));
+  }
+
+  @Test
+  public void testGenerateUniqueSequenceInvalidFileId() {
+    assertThrows(HoodieReadFromSourceException.class, () -> invokeGenerateUniqueSequence(null, 12345L));
+    assertThrows(HoodieReadFromSourceException.class, () -> invokeGenerateUniqueSequence("", 0L));
+    assertThrows(HoodieReadFromSourceException.class, () -> invokeGenerateUniqueSequence("   ", 12345L));
+  }
+
+  @Test
+  public void testGenerateUniqueSequenceInvalidPos() {
+    assertThrows(HoodieReadFromSourceException.class, () -> invokeGenerateUniqueSequence("mysql-bin.288947", null));
+    assertThrows(HoodieReadFromSourceException.class, () -> invokeGenerateUniqueSequence("mysql-bin.288947", -1L));
   }
 }

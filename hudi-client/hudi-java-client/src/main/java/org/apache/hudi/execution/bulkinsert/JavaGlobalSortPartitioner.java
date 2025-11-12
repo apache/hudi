@@ -19,7 +19,6 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import java.util.Comparator;
@@ -32,7 +31,7 @@ import java.util.List;
  *
  * @param <T> HoodieRecordPayload type
  */
-public class JavaGlobalSortPartitioner<T extends HoodieRecordPayload>
+public class JavaGlobalSortPartitioner<T>
     implements BulkInsertPartitioner<List<HoodieRecord<T>>> {
 
   @Override
@@ -44,16 +43,10 @@ public class JavaGlobalSortPartitioner<T extends HoodieRecordPayload>
       public int compare(Object o1, Object o2) {
         HoodieRecord o11 = (HoodieRecord) o1;
         HoodieRecord o22 = (HoodieRecord) o2;
-        String left = new StringBuilder()
-            .append(o11.getPartitionPath())
-            .append("+")
-            .append(o11.getRecordKey())
-            .toString();
-        String right = new StringBuilder()
-            .append(o22.getPartitionPath())
-            .append("+")
-            .append(o22.getRecordKey())
-            .toString();
+        String left = o11.getPartitionPath()
+            + "+" + o11.getRecordKey();
+        String right = o22.getPartitionPath()
+            + "+" + o22.getRecordKey();
         return left.compareTo(right);
       }
     });

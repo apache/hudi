@@ -20,8 +20,8 @@ package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
-
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

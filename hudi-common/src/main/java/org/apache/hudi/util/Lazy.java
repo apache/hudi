@@ -19,6 +19,7 @@
 package org.apache.hudi.util;
 
 import javax.annotation.concurrent.ThreadSafe;
+
 import java.util.function.Supplier;
 
 /**

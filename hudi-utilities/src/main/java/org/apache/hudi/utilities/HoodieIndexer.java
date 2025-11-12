@@ -35,14 +35,15 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.jetbrains.annotations.TestOnly;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -50,16 +51,19 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 
 /**
+ * TODO: [HUDI-8294]
  * A tool to run metadata indexing asynchronously.
  * <p>
  * Example command (assuming indexer.properties contains related index configs, see {@link org.apache.hudi.common.config.HoodieMetadataConfig} for configs):
@@ -85,11 +89,11 @@ import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
  */
 public class HoodieIndexer {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieIndexer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieIndexer.class);
   static final String DROP_INDEX = "dropindex";
 
   private final HoodieIndexer.Config cfg;
-  private TypedProperties props;
+  private final TypedProperties props;
   private final JavaSparkContext jsc;
   private final HoodieTableMetaClient metaClient;
 
@@ -126,8 +130,8 @@ public class HoodieIndexer {
     public String indexTypes = null;
     @Parameter(names = {"--mode", "-m"}, description = "Set job mode: Set \"schedule\" to generate an indexing plan; "
         + "Set \"execute\" to execute the indexing plan at the given instant, which means --instant-time is required here; "
-        + "Set \"scheduleandExecute\" to generate an indexing plan first and execute that plan immediately;"
-        + "Set \"dropindex\" to drop the index types specified in --index-types;")
+        + "Set \"scheduleAndExecute\" to generate an indexing plan first and execute that plan immediately;"
+        + "Set \"dropIndex\" to drop the index types specified in --index-types;")
     public String runningMode = null;
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
@@ -147,7 +151,7 @@ public class HoodieIndexer {
 
     if (cfg.help || args.length == 0) {
       cmd.usage();
-      System.exit(1);
+      throw new HoodieException("Indexing failed for basePath : " + cfg.basePath);
     }
 
     final JavaSparkContext jsc = UtilHelpers.buildSparkContext("indexing-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
@@ -155,11 +159,10 @@ public class HoodieIndexer {
     int result = indexer.start(cfg.retry);
     String resultMsg = String.format("Indexing with basePath: %s, tableName: %s, runningMode: %s",
         cfg.basePath, cfg.tableName, cfg.runningMode);
-    if (result == -1) {
-      LOG.error(resultMsg + " failed");
-    } else {
-      LOG.info(resultMsg + " success");
+    if (result != 0) {
+      throw new HoodieException(resultMsg + " failed");
     }
+    LOG.info(resultMsg + " success");
     jsc.stop();
   }
 
@@ -180,6 +183,9 @@ public class HoodieIndexer {
       }
       if (PARTITION_NAME_BLOOM_FILTERS.equals(p)) {
         props.setProperty(ENABLE_METADATA_INDEX_BLOOM_FILTER.key(), "true");
+      }
+      if (PARTITION_NAME_RECORD_INDEX.equals(p)) {
+        props.setProperty(GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
       }
     });
 
@@ -236,7 +242,8 @@ public class HoodieIndexer {
     if (indexExists(partitionTypes)) {
       return Option.empty();
     }
-    Option<String> indexingInstant = client.scheduleIndexing(partitionTypes);
+
+    Option<String> indexingInstant = client.scheduleIndexing(partitionTypes, Collections.emptyList());
     if (!indexingInstant.isPresent()) {
       LOG.error("Scheduling of index action did not return any instant.");
     }
@@ -275,7 +282,7 @@ public class HoodieIndexer {
             .filterPendingIndexTimeline()
             .firstInstant();
         if (earliestPendingIndexInstant.isPresent()) {
-          cfg.indexInstantTime = earliestPendingIndexInstant.get().getTimestamp();
+          cfg.indexInstantTime = earliestPendingIndexInstant.get().requestedTime();
           LOG.info("Found the earliest scheduled indexing instant which will be executed: "
               + cfg.indexInstantTime);
         } else {
@@ -299,7 +306,8 @@ public class HoodieIndexer {
   }
 
   private int dropIndex(JavaSparkContext jsc) throws Exception {
-    List<MetadataPartitionType> partitionTypes = getRequestedPartitionTypes(cfg.indexTypes, Option.empty());
+    List<String> partitionTypes = getRequestedPartitionTypes(cfg.indexTypes, Option.empty())
+        .stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList());
     String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
       client.dropIndex(partitionTypes);
@@ -316,8 +324,7 @@ public class HoodieIndexer {
       return false;
     }
     List<HoodieIndexPartitionInfo> indexPartitionInfos = commitMetadata.get().getIndexPartitionInfos();
-    LOG.info(String.format("Indexing complete for partitions: %s",
-        indexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toList())));
+    LOG.info("Indexing complete for partitions: {}", indexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toList()));
     return isIndexBuiltForAllRequestedTypes(indexPartitionInfos);
   }
 
@@ -327,24 +334,17 @@ public class HoodieIndexer {
     Set<String> requestedPartitions = getRequestedPartitionTypes(cfg.indexTypes, Option.empty()).stream()
         .map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
     requestedPartitions.removeAll(indexedPartitions);
-    return requestedPartitions.isEmpty();
+    if (requestedPartitions.isEmpty()) {
+      return true;
+    }
+    metaClient.reloadTableConfig();
+    return metaClient.getTableConfig().getMetadataPartitions().containsAll(indexedPartitions);
   }
 
   List<MetadataPartitionType> getRequestedPartitionTypes(String indexTypes, Option<HoodieMetadataConfig> metadataConfig) {
     List<String> requestedIndexTypes = Arrays.asList(indexTypes.split(","));
     return requestedIndexTypes.stream()
-        .map(p -> {
-          MetadataPartitionType metadataPartitionType = MetadataPartitionType.valueOf(p.toUpperCase(Locale.ROOT));
-          if (metadataConfig.isPresent()) { // this is expected to be non-null during scheduling where file groups for a given partition are instantiated for the first time.
-            if (!metadataPartitionType.getPartitionPath().equals(MetadataPartitionType.FILES.toString())) {
-              if (metadataPartitionType.getPartitionPath().equals(MetadataPartitionType.COLUMN_STATS.getPartitionPath())) {
-                metadataPartitionType.setFileGroupCount(metadataConfig.get().getColumnStatsIndexFileGroupCount());
-              } else if (metadataPartitionType.getPartitionPath().equals(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath())) {
-                metadataPartitionType.setFileGroupCount(metadataConfig.get().getBloomFilterIndexFileGroupCount());
-              }
-            }
-          }
-          return metadataPartitionType;
-        }).collect(Collectors.toList());
+        .map(p -> MetadataPartitionType.valueOf(p.toUpperCase(Locale.ROOT)))
+        .collect(Collectors.toList());
   }
 }

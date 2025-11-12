@@ -18,14 +18,15 @@
 package org.apache.spark
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.viewfs.ViewFileSystem
 import org.apache.hadoop.fs._
+import org.apache.hadoop.fs.viewfs.ViewFileSystem
 import org.apache.hadoop.hdfs.DistributedFileSystem
 import org.apache.spark.internal.Logging
 import org.apache.spark.metrics.source.HiveCatalogMetrics
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.FileNotFoundException
+
 import scala.collection.mutable
 
 /**

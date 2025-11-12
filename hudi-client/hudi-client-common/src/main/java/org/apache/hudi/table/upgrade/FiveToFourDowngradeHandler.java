@@ -19,17 +19,13 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
-
-import java.util.HashMap;
-import java.util.Map;
 
 public class FiveToFourDowngradeHandler implements DowngradeHandler {
 
   @Override
-  public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
-    return new HashMap<>();
+  public UpgradeDowngrade.TableConfigChangeSet downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+    return new UpgradeDowngrade.TableConfigChangeSet();
   }
 }

@@ -18,17 +18,25 @@
 
 package org.apache.hudi.sink.common;
 
+import org.apache.hudi.adapter.ProcessFunctionAdapter;
+import org.apache.hudi.sink.event.Correspondent;
+
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
-import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
+import org.apache.flink.table.data.RowData;
 
 /**
  * Base class for write function.
  *
  * @param <I> the input type
  */
-public abstract class AbstractWriteFunction<I> extends ProcessFunction<I, Object> implements BoundedOneInput {
+public abstract class AbstractWriteFunction<I> extends ProcessFunctionAdapter<I, RowData> implements BoundedOneInput {
+  /**
+   * Sets up the {@code Correspondent} for responsive request.
+   */
+  public abstract void setCorrespondent(Correspondent correspondent);
+
   /**
    * Sets up the event gateway.
    */

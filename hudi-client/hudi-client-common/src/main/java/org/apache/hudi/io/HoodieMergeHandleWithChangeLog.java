@@ -20,10 +20,10 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Option;
@@ -31,9 +31,13 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -41,7 +45,10 @@ import java.util.Map;
 /**
  * A merge handle that supports logging change logs.
  */
-public class HoodieMergeHandleWithChangeLog<T extends HoodieRecordPayload, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
+public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHandleWithChangeLog.class);
+
   protected final HoodieCDCLogger cdcLogger;
 
   public HoodieMergeHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -53,9 +60,9 @@ public class HoodieMergeHandleWithChangeLog<T extends HoodieRecordPayload, I, K,
         config,
         hoodieTable.getMetaClient().getTableConfig(),
         partitionPath,
-        fs,
-        tableSchema,
-        createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX),
+        storage,
+        getWriterSchema(),
+        createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX, Option.empty()),
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
 
@@ -71,25 +78,32 @@ public class HoodieMergeHandleWithChangeLog<T extends HoodieRecordPayload, I, K,
         config,
         hoodieTable.getMetaClient().getTableConfig(),
         partitionPath,
-        fs,
-        tableSchema,
-        createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX),
+        storage,
+        getWriterSchema(),
+        createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX, Option.empty()),
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
 
-  protected boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, GenericRecord oldRecord, Option<IndexedRecord> indexedRecord) {
-    final boolean result = super.writeUpdateRecord(hoodieRecord, oldRecord, indexedRecord);
+  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, HoodieRecord combinedRecord, Schema writerSchema)
+      throws IOException {
+    // TODO [HUDI-5019] Remove these unnecessary newInstance invocations
+    HoodieRecord savedCombineRecord = combinedRecord.newInstance();
+    final boolean result = super.writeUpdateRecord(newRecord, oldRecord, combinedRecord, writerSchema);
     if (result) {
-      boolean isDelete = HoodieOperation.isDelete(hoodieRecord.getOperation());
-      cdcLogger.put(hoodieRecord, oldRecord, isDelete ? Option.empty() : indexedRecord);
+      boolean isDelete = HoodieOperation.isDelete(newRecord.getOperation());
+      Option<IndexedRecord> avroRecordOpt = toAvroRecord(savedCombineRecord, writerSchema, config.getPayloadConfig().getProps());
+      cdcLogger.put(newRecord, (GenericRecord) oldRecord.getData(), isDelete ? Option.empty() : avroRecordOpt);
     }
     return result;
   }
 
-  protected void writeInsertRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> insertRecord) {
-    super.writeInsertRecord(hoodieRecord, insertRecord);
-    if (!HoodieOperation.isDelete(hoodieRecord.getOperation())) {
-      cdcLogger.put(hoodieRecord, null, insertRecord);
+  protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
+    Schema schema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
+    // TODO Remove these unnecessary newInstance invocations
+    HoodieRecord<T> savedRecord = newRecord.newInstance();
+    super.writeInsertRecord(newRecord);
+    if (!HoodieOperation.isDelete(newRecord.getOperation()) && !savedRecord.isDelete(deleteContext, config.getPayloadConfig().getProps())) {
+      cdcLogger.put(newRecord, null, savedRecord.toIndexedRecord(schema, config.getPayloadConfig().getProps()).map(HoodieAvroIndexedRecord::getData));
     }
   }
 

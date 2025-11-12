@@ -21,6 +21,11 @@ package org.apache.hudi.common.testutils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
+import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
+import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameGenerator;
+import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
 
 import java.util.Comparator;
 import java.util.List;
@@ -30,14 +35,18 @@ import java.util.stream.Stream;
 /**
  * A mocked {@link HoodieActiveTimeline}.
  */
-public class MockHoodieTimeline extends HoodieActiveTimeline {
+public class MockHoodieTimeline extends ActiveTimelineV2 {
 
   public MockHoodieTimeline(Stream<String> completed, Stream<String> inflights) {
     super();
+    InstantGenerator instantGenerator = new DefaultInstantGenerator();
+    InstantFileNameGenerator instantFileNameGenerator = new DefaultInstantFileNameGenerator();
+
     this.setInstants(Stream
-        .concat(completed.map(s -> new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, s)),
-            inflights.map(s -> new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, s)))
-        .sorted(Comparator.comparing(HoodieInstant::getFileName)).collect(Collectors.toList()));
+        .concat(completed.map(s -> instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, s,
+                InProcessTimeGenerator.createNewInstantTime())),
+            inflights.map(s -> instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, s)))
+        .sorted(Comparator.comparing(instantFileNameGenerator::getFileName)).collect(Collectors.toList()));
   }
 
   public MockHoodieTimeline(List<HoodieInstant> instants) {

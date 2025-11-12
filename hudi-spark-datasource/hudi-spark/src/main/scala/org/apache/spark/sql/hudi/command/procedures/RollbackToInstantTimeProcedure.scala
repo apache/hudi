@@ -18,23 +18,23 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
+import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
 
 class RollbackToInstantTimeProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "instant_time", DataTypes.StringType, None))
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "instant_time", DataTypes.StringType))
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
     StructField("rollback_result", DataTypes.BooleanType, nullable = true, Metadata.empty))
@@ -52,28 +52,35 @@ class RollbackToInstantTimeProcedure extends BaseProcedure with ProcedureBuilder
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
-    val client = createHoodieClient(jsc, basePath)
-    client.getConfig.setValue(ROLLBACK_USING_MARKERS_ENABLE, "false")
-    val config = getWriteConfig(basePath)
-    val metaClient = HoodieTableMetaClient.builder
-      .setConf(jsc.hadoopConfiguration)
-      .setBasePath(config.getBasePath)
-      .setLoadActiveTimelineOnLoad(false)
-      .setConsistencyGuardConfig(config.getConsistencyGuardConfig)
-      .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion)))
-      .build
+    var client: SparkRDDWriteClient[_] = null
+    try {
+      client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, Map.empty, scala.Option(table))
+      client.getConfig.setValue(ROLLBACK_USING_MARKERS_ENABLE, "false")
+      val config = getWriteConfig(basePath)
+      val metaClient = HoodieTableMetaClient.builder
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration))
+        .setBasePath(config.getBasePath)
+        .setLoadActiveTimelineOnLoad(false)
+        .setConsistencyGuardConfig(config.getConsistencyGuardConfig)
+        .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion)))
+        .build
 
-    val activeTimeline = metaClient.getActiveTimeline
-    val completedTimeline: HoodieTimeline = activeTimeline.getCommitsTimeline.filterCompletedInstants
-    val filteredTimeline = completedTimeline.containsInstant(instantTime)
-    if (!filteredTimeline) {
-      throw new HoodieException(s"Commit $instantTime not found in Commits $completedTimeline")
+      val activeTimeline = metaClient.getActiveTimeline
+      val filteredTimeline = activeTimeline.containsInstant(instantTime)
+      if (!filteredTimeline) {
+        throw new HoodieException(s"Commit $instantTime not found in Commits $activeTimeline")
+      }
+
+      val result = if (client.rollback(instantTime)) true else false
+      spark.catalog.refreshTable(table)
+      val outputRow = Row(result)
+
+      Seq(outputRow)
+    } finally {
+      if (client != null) {
+        client.close()
+      }
     }
-
-    val result = if (client.rollback(instantTime)) true else false
-    val outputRow = Row(result)
-
-    Seq(outputRow)
   }
 
   override def build: Procedure = new RollbackToInstantTimeProcedure()

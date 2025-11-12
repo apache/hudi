@@ -20,6 +20,8 @@
 package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hive.SchemaDifference;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
@@ -32,6 +34,8 @@ import java.util.Map;
 public interface HoodieMetaSyncOperations {
 
   String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
+
+  String HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC = "last_commit_completion_time_sync";
 
   /**
    * Create the table.
@@ -51,6 +55,27 @@ public interface HoodieMetaSyncOperations {
                            String serdeClass,
                            Map<String, String> serdeProperties,
                            Map<String, String> tableProperties) {
+
+  }
+
+  /**
+   * Create or replace the table.
+   *
+   * @param tableName         The table name.
+   * @param storageSchema     The table schema.
+   * @param inputFormatClass  The input format class of this table.
+   * @param outputFormatClass The output format class of this table.
+   * @param serdeClass        The serde class of this table.
+   * @param serdeProperties   The serde properties of this table.
+   * @param tableProperties   The table properties for this table.
+   */
+  default void createOrReplaceTable(String tableName,
+                                    MessageType storageSchema,
+                                    String inputFormatClass,
+                                    String outputFormatClass,
+                                    String serdeClass,
+                                    Map<String, String> serdeProperties,
+                                    Map<String, String> tableProperties) {
 
   }
 
@@ -97,6 +122,13 @@ public interface HoodieMetaSyncOperations {
   }
 
   /**
+   * Get partitions given input list of partitions.
+   */
+  default List<Partition> getPartitionsFromList(String tableName, List<String> partitionList) {
+    return Collections.emptyList();
+  }
+
+  /**
    * Check if a database already exists in the metastore.
    */
   default boolean databaseExists(String databaseName) {
@@ -136,7 +168,7 @@ public interface HoodieMetaSyncOperations {
   /**
    * Update schema for the table in the metastore.
    */
-  default void updateTableSchema(String tableName, MessageType newSchema) {
+  default void updateTableSchema(String tableName, MessageType newSchema, SchemaDifference schemaDiff) {
 
   }
 
@@ -155,16 +187,32 @@ public interface HoodieMetaSyncOperations {
   }
 
   /**
-   * Update the field comments for table in metastore, by using the ones from storage.
+   * Get the base path of the table from metastore
    */
-  default void updateTableComments(String tableName, List<FieldSchema> fromMetastore, List<FieldSchema> fromStorage) {
+  default String getTableLocation(String tableName) {
+    return StringUtils.EMPTY_STRING;
+  }
 
+  /**
+   * Update the field comments for table in metastore, by using the ones from storage.
+   *
+   * @return
+   */
+  default boolean updateTableComments(String tableName, List<FieldSchema> fromMetastore, List<FieldSchema> fromStorage) {
+    return false;
   }
 
   /**
    * Get the timestamp of last sync.
    */
   default Option<String> getLastCommitTimeSynced(String tableName) {
+    return Option.empty();
+  }
+
+  /**
+   * Get the commit completion time of last sync
+   */
+  default Option<String> getLastCommitCompletionTimeSynced(String tableName) {
     return Option.empty();
   }
 
@@ -177,16 +225,20 @@ public interface HoodieMetaSyncOperations {
 
   /**
    * Update the table properties in metastore.
+   *
+   * @return true if properties updated.
    */
-  default void updateTableProperties(String tableName, Map<String, String> tableProperties) {
-
+  default boolean updateTableProperties(String tableName, Map<String, String> tableProperties) {
+    return false;
   }
 
   /**
    * Update the SerDe properties in metastore.
+   *
+   * @return true if properties updated.
    */
-  default void updateSerdeProperties(String tableName, Map<String, String> serdeProperties) {
-
+  default boolean updateSerdeProperties(String tableName, Map<String, String> serdeProperties, boolean useRealtimeFormat) {
+    return false;
   }
 
   /**
@@ -208,5 +260,12 @@ public interface HoodieMetaSyncOperations {
    */
   default void deleteLastReplicatedTimeStamp(String tableName) {
 
+  }
+
+  /**
+   * Generates a push down filter string to retrieve existing partitions
+   */
+  default String generatePushDownFilter(List<String> writtenPartitions, List<FieldSchema> partitionFields) {
+    throw new UnsupportedOperationException();
   }
 }

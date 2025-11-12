@@ -18,19 +18,19 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -42,7 +42,8 @@ public class TestBootstrapUtils extends HoodieClientTestBase {
     List<String> folders = Arrays.asList("2016/04/15", "2016/05/16", "2016/05/17");
     folders.forEach(f -> {
       try {
-        metaClient.getFs().mkdirs(new Path(new Path(basePath), f));
+        metaClient.getStorage().createDirectory(
+            new StoragePath(basePath, f));
       } catch (IOException e) {
         throw new HoodieException(e);
       }
@@ -61,24 +62,27 @@ public class TestBootstrapUtils extends HoodieClientTestBase {
 
     files.forEach(f -> {
       try {
-        metaClient.getFs().create(new Path(new Path(basePath), f));
+        metaClient.getStorage().create(new StoragePath(basePath, f));
       } catch (IOException e) {
         throw new HoodieException(e);
       }
     });
 
-    List<Pair<String, List<HoodieFileStatus>>> collected = BootstrapUtils.getAllLeafFoldersWithFiles(metaClient,
-            metaClient.getFs(), basePath, context);
+    List<Pair<String, List<HoodieFileStatus>>> collected =
+        BootstrapUtils.getAllLeafFoldersWithFiles(
+            metaClient.getTableConfig().getBaseFileFormat(),
+            metaClient.getStorage(),
+            basePath, context);
     assertEquals(3, collected.size());
-    collected.stream().forEach(k -> {
-      assertEquals(2, k.getRight().size());
-    });
+    collected.forEach(k -> assertEquals(2, k.getRight().size()));
 
     // Simulate reading from un-partitioned dataset
-    collected = BootstrapUtils.getAllLeafFoldersWithFiles(metaClient, metaClient.getFs(), basePath + "/" + folders.get(0), context);
+    collected =
+        BootstrapUtils.getAllLeafFoldersWithFiles(
+            metaClient.getTableConfig().getBaseFileFormat(),
+            metaClient.getStorage(),
+            basePath + "/" + folders.get(0), context);
     assertEquals(1, collected.size());
-    collected.stream().forEach(k -> {
-      assertEquals(2, k.getRight().size());
-    });
+    collected.forEach(k -> assertEquals(2, k.getRight().size()));
   }
 }

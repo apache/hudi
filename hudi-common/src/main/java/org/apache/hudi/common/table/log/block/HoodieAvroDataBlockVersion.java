@@ -20,7 +20,7 @@ package org.apache.hudi.common.table.log.block;
 
 /**
  * A set of feature flags associated with a data log block format. Versions are changed when the log block format
- * changes. TODO(na) - Implement policies around major/minor versions
+ * changes.
  */
 final class HoodieAvroDataBlockVersion extends HoodieLogBlockVersion {
 

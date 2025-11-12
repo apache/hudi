@@ -28,6 +28,10 @@ object HoodieProcedures {
     if (builderSupplier.isDefined) builderSupplier.get.get() else null
   }
 
+  def procedures(): Map[String, Supplier[ProcedureBuilder]] = {
+    BUILDERS
+  }
+
   private def initProcedureBuilders: Map[String, Supplier[ProcedureBuilder]] = {
     Map((RunCompactionProcedure.NAME, RunCompactionProcedure.builder)
       ,(ShowCompactionProcedure.NAME, ShowCompactionProcedure.builder)
@@ -49,6 +53,7 @@ object HoodieProcedures {
       ,(DeleteMarkerProcedure.NAME, DeleteMarkerProcedure.builder)
       ,(ShowRollbacksProcedure.NAME, ShowRollbacksProcedure.builder)
       ,(ShowRollbackDetailProcedure.NAME, ShowRollbackDetailProcedure.builder)
+      ,(RunRollbackInflightTableServiceProcedure.NAME, RunRollbackInflightTableServiceProcedure.builder)
       ,(ExportInstantsProcedure.NAME, ExportInstantsProcedure.builder)
       ,(ShowAllFileSystemViewProcedure.NAME, ShowAllFileSystemViewProcedure.builder)
       ,(ShowLatestFileSystemViewProcedure.NAME, ShowLatestFileSystemViewProcedure.builder)
@@ -62,6 +67,8 @@ object HoodieProcedures {
       ,(ShowBootstrapPartitionsProcedure.NAME, ShowBootstrapPartitionsProcedure.builder)
       ,(UpgradeTableProcedure.NAME, UpgradeTableProcedure.builder)
       ,(DowngradeTableProcedure.NAME, DowngradeTableProcedure.builder)
+      ,(ShowMetadataTableColumnStatsProcedure.NAME, ShowMetadataTableColumnStatsProcedure.builder)
+      ,(ShowColumnStatsOverlapProcedure.NAME, ShowColumnStatsOverlapProcedure.builder)
       ,(ShowMetadataTableFilesProcedure.NAME, ShowMetadataTableFilesProcedure.builder)
       ,(ShowMetadataTablePartitionsProcedure.NAME, ShowMetadataTablePartitionsProcedure.builder)
       ,(CreateMetadataTableProcedure.NAME, CreateMetadataTableProcedure.builder)
@@ -70,6 +77,7 @@ object HoodieProcedures {
       ,(ShowMetadataTableStatsProcedure.NAME, ShowMetadataTableStatsProcedure.builder)
       ,(ValidateMetadataTableFilesProcedure.NAME, ValidateMetadataTableFilesProcedure.builder)
       ,(ShowFsPathDetailProcedure.NAME, ShowFsPathDetailProcedure.builder)
+      ,(ShowFileStatusProcedure.NAME, ShowFileStatusProcedure.builder)
       ,(CopyToTableProcedure.NAME, CopyToTableProcedure.builder)
       ,(RepairAddpartitionmetaProcedure.NAME, RepairAddpartitionmetaProcedure.builder)
       ,(RepairCorruptedCleanFilesProcedure.NAME, RepairCorruptedCleanFilesProcedure.builder)
@@ -80,7 +88,22 @@ object HoodieProcedures {
       ,(ValidateHoodieSyncProcedure.NAME, ValidateHoodieSyncProcedure.builder)
       ,(ShowInvalidParquetProcedure.NAME, ShowInvalidParquetProcedure.builder)
       ,(HiveSyncProcedure.NAME, HiveSyncProcedure.builder)
-      ,(CopyToTempView.NAME, CopyToTempView.builder)
+      ,(CopyToTempViewProcedure.NAME, CopyToTempViewProcedure.builder)
+      ,(ShowCommitExtraMetadataProcedure.NAME, ShowCommitExtraMetadataProcedure.builder)
+      ,(ShowTablePropertiesProcedure.NAME, ShowTablePropertiesProcedure.builder)
+      ,(HelpProcedure.NAME, HelpProcedure.builder)
+      ,(ArchiveCommitsProcedure.NAME, ArchiveCommitsProcedure.builder)
+      ,(RunTTLProcedure.NAME, RunTTLProcedure.builder)
+      ,(DropPartitionProcedure.NAME, DropPartitionProcedure.builder)
+      ,(TruncateTableProcedure.NAME, TruncateTableProcedure.builder)
+      ,(PartitionBucketIndexManager.NAME, PartitionBucketIndexManager.builder)
+      ,(ShowCleansProcedure.NAME, ShowCleansProcedure.builder)
+      ,(ShowCleansPartitionMetadataProcedure.NAME, ShowCleansPartitionMetadataProcedure.builder)
+      ,(ShowCleansPlanProcedure.NAME, ShowCleansPlanProcedure.builder)
+      ,(SetAuditLockProcedure.NAME, SetAuditLockProcedure.builder)
+      ,(ShowAuditLockStatusProcedure.NAME, ShowAuditLockStatusProcedure.builder)
+      ,(ValidateAuditLockProcedure.NAME, ValidateAuditLockProcedure.builder)
+      ,(CleanupAuditLockProcedure.NAME, CleanupAuditLockProcedure.builder)
     )
   }
 }

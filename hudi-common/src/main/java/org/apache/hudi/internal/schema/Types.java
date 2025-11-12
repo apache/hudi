@@ -18,22 +18,28 @@
 
 package org.apache.hudi.internal.schema;
 
-import org.apache.hudi.internal.schema.Type.PrimitiveType;
 import org.apache.hudi.internal.schema.Type.NestedType;
+import org.apache.hudi.internal.schema.Type.PrimitiveType;
 
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+/**
+ * Types supported in schema evolution.
+ */
 public class Types {
   private Types() {
   }
 
+  /**
+   * Boolean primitive type.
+   */
   public static class BooleanType extends PrimitiveType {
     private static final BooleanType INSTANCE = new BooleanType();
 
@@ -52,6 +58,9 @@ public class Types {
     }
   }
 
+  /**
+   * Integer primitive type.
+   */
   public static class IntType extends PrimitiveType {
     private static final IntType INSTANCE = new IntType();
 
@@ -70,6 +79,9 @@ public class Types {
     }
   }
 
+  /**
+   * Long primitive type.
+   */
   public static class LongType extends PrimitiveType {
     private static final LongType INSTANCE = new LongType();
 
@@ -88,6 +100,9 @@ public class Types {
     }
   }
 
+  /**
+   * Float primitive type.
+   */
   public static class FloatType extends PrimitiveType {
     private static final FloatType INSTANCE = new FloatType();
 
@@ -106,6 +121,9 @@ public class Types {
     }
   }
 
+  /**
+   * Double primitive type.
+   */
   public static class DoubleType extends PrimitiveType {
     private static final DoubleType INSTANCE = new DoubleType();
 
@@ -124,6 +142,9 @@ public class Types {
     }
   }
 
+  /**
+   * Date primitive type.
+   */
   public static class DateType extends PrimitiveType {
     private static final DateType INSTANCE = new DateType();
 
@@ -142,6 +163,9 @@ public class Types {
     }
   }
 
+  /**
+   * Time primitive type.
+   */
   public static class TimeType extends PrimitiveType {
     private static final TimeType INSTANCE = new TimeType();
 
@@ -163,6 +187,9 @@ public class Types {
     }
   }
 
+  /**
+   * Time primitive type.
+   */
   public static class TimestampType extends PrimitiveType {
     private static final TimestampType INSTANCE = new TimestampType();
 
@@ -184,6 +211,9 @@ public class Types {
     }
   }
 
+  /**
+   * String primitive type.
+   */
   public static class StringType extends PrimitiveType {
     private static final StringType INSTANCE = new StringType();
 
@@ -202,6 +232,9 @@ public class Types {
     }
   }
 
+  /**
+   * Binary primitive type.
+   */
   public static class BinaryType extends PrimitiveType {
     private static final BinaryType INSTANCE = new BinaryType();
 
@@ -220,6 +253,9 @@ public class Types {
     }
   }
 
+  /**
+   * Fixed primitive type.
+   */
   public static class FixedType extends PrimitiveType {
     public static FixedType getFixed(int size) {
       return new FixedType(size);
@@ -263,15 +299,12 @@ public class Types {
     }
   }
 
-  public static class DecimalType extends PrimitiveType {
-    public static DecimalType get(int precision, int scale) {
-      return new DecimalType(precision, scale);
-    }
+  public abstract static class DecimalBase extends PrimitiveType {
 
-    private final int scale;
-    private final int precision;
+    protected final int scale;
+    protected final int precision;
 
-    private DecimalType(int precision, int scale) {
+    protected DecimalBase(int precision, int scale) {
       this.scale = scale;
       this.precision = precision;
     }
@@ -281,12 +314,12 @@ public class Types {
      * can be casted into `this` safely without losing any precision or range.
      */
     public boolean isWiderThan(PrimitiveType other) {
-      if (other instanceof DecimalType)  {
-        DecimalType dt = (DecimalType) other;
+      if (other instanceof DecimalBase)  {
+        DecimalBase dt = (DecimalBase) other;
         return (precision - scale) >= (dt.precision - dt.scale) && scale > dt.scale;
       }
       if (other instanceof IntType) {
-        return isWiderThan(get(10, 0));
+        return (precision - scale) >= 10 && scale > 0;
       }
       return false;
     }
@@ -296,12 +329,12 @@ public class Types {
      * can be casted into `other` safely without losing any precision or range.
      */
     public boolean isTighterThan(PrimitiveType other) {
-      if (other instanceof DecimalType)  {
-        DecimalType dt = (DecimalType) other;
+      if (other instanceof DecimalBase)  {
+        DecimalBase dt = (DecimalBase) other;
         return (precision - scale) <= (dt.precision - dt.scale) && scale <= dt.scale;
       }
       if (other instanceof IntType) {
-        return isTighterThan(get(10, 0));
+        return (precision - scale) <= 10 && scale <= 0;
       }
       return false;
     }
@@ -315,24 +348,14 @@ public class Types {
     }
 
     @Override
-    public TypeID typeId() {
-      return TypeID.DECIMAL;
-    }
-
-    @Override
-    public String toString() {
-      return String.format("decimal(%d, %d)", precision, scale);
-    }
-
-    @Override
     public boolean equals(Object o) {
       if (this == o) {
         return true;
-      } else if (!(o instanceof DecimalType)) {
+      } else if (!(o instanceof DecimalBase)) {
         return false;
       }
 
-      DecimalType that = (DecimalType) o;
+      DecimalBase that = (DecimalBase) o;
       if (scale != that.scale) {
         return false;
       }
@@ -341,10 +364,116 @@ public class Types {
 
     @Override
     public int hashCode() {
-      return Objects.hash(DecimalType.class, scale, precision);
+      return Objects.hash(this.getClass(), scale, precision);
     }
   }
 
+  /**
+   * Decimal primitive type.
+   */
+  public static class DecimalType extends DecimalTypeFixed {
+    public static DecimalType get(int precision, int scale) {
+      return new DecimalType(precision, scale);
+    }
+
+    /**
+     * Return the minimum number of bytes needed to store a decimal with a give 'precision'.
+     * reference from Spark release 3.1 .
+     */
+    private static int computeMinBytesForDecimalPrecision(int precision) {
+      int numBytes = 1;
+      while (Math.pow(2.0, 8 * numBytes - 1) < Math.pow(10.0, precision)) {
+        numBytes += 1;
+      }
+      return numBytes;
+    }
+
+    private DecimalType(int precision, int scale) {
+      super(precision, scale, computeMinBytesForDecimalPrecision(precision));
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.DECIMAL;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("decimal(%d, %d)", precision, scale);
+    }
+  }
+
+  public static class DecimalTypeBytes extends DecimalBase {
+    public static DecimalTypeBytes get(int precision, int scale) {
+      return new DecimalTypeBytes(precision, scale);
+    }
+
+    private DecimalTypeBytes(int precision, int scale) {
+      super(precision, scale);
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.DECIMAL_BYTES;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("decimal_bytes(%d, %d)", precision, scale);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (super.equals(o)) {
+        return o instanceof DecimalTypeBytes;
+      }
+      return false;
+    }
+  }
+
+  public static class DecimalTypeFixed extends DecimalBase {
+    public static DecimalTypeFixed get(int precision, int scale, int size) {
+      return new DecimalTypeFixed(precision, scale, size);
+    }
+
+    private final int size;
+
+    public int getFixedSize() {
+      return size;
+    }
+
+    private DecimalTypeFixed(int precision, int scale, int size) {
+      super(precision, scale);
+      this.size = size;
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.DECIMAL_FIXED;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("decimal_fixed(%d, %d)[%d]", precision, scale, size);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(DecimalTypeFixed.class, scale, precision, size);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (super.equals(o)) {
+        return o instanceof DecimalTypeFixed && ((DecimalTypeFixed) o).size == size;
+      }
+      return false;
+    }
+  }
+
+  /**
+   * UUID primitive type.
+   */
   public static class UUIDType extends PrimitiveType {
     private static final UUIDType INSTANCE = new UUIDType();
 
@@ -360,6 +489,78 @@ public class Types {
     @Override
     public String toString() {
       return "uuid";
+    }
+  }
+
+  public static class TimeMillisType extends PrimitiveType {
+    private static final TimeMillisType INSTANCE = new TimeMillisType();
+
+    public static TimeMillisType get() {
+      return INSTANCE;
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.TIME_MILLIS;
+    }
+
+    @Override
+    public String toString() {
+      return "time-millis";
+    }
+  }
+
+  public static class TimestampMillisType extends PrimitiveType {
+    private static final TimestampMillisType INSTANCE = new TimestampMillisType();
+
+    public static TimestampMillisType get() {
+      return INSTANCE;
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.TIMESTAMP_MILLIS;
+    }
+
+    @Override
+    public String toString() {
+      return "timestamp-millis";
+    }
+  }
+
+  public static class LocalTimestampMillisType extends PrimitiveType {
+    private static final LocalTimestampMillisType INSTANCE = new LocalTimestampMillisType();
+
+    public static LocalTimestampMillisType get() {
+      return INSTANCE;
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.LOCAL_TIMESTAMP_MILLIS;
+    }
+
+    @Override
+    public String toString() {
+      return "local-timestamp-millis";
+    }
+  }
+
+  public static class LocalTimestampMicrosType extends PrimitiveType {
+    private static final LocalTimestampMicrosType INSTANCE = new LocalTimestampMicrosType();
+
+    public static LocalTimestampMicrosType get() {
+      return INSTANCE;
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.LOCAL_TIMESTAMP_MICROS;
+    }
+
+    @Override
+    public String toString() {
+      return "local-timestamp-micros";
     }
   }
 
@@ -456,26 +657,25 @@ public class Types {
     }
   }
 
+  /**
+   * Record nested type.
+   */
   public static class RecordType extends NestedType {
-
-    public static RecordType get(List<Field> fields) {
-      return new RecordType(fields);
-    }
-
-    public static RecordType get(Field... fields) {
-      return new RecordType(Arrays.asList(fields));
-    }
+    // NOTE: This field is necessary to provide for lossless conversion b/w Avro and
+    //       InternalSchema and back (Avro unfortunately relies not only on structural equivalence of
+    //       schemas but also corresponding Record type's "name" when evaluating their compatibility);
+    //       This field is nullable
+    private final String name;
 
     private final Field[] fields;
 
     private transient Map<String, Field> nameToFields = null;
+    private transient Map<String, Field> lowercaseNameToFields = null;
     private transient Map<Integer, Field> idToFields = null;
 
-    private RecordType(List<Field> fields) {
-      this.fields = new Field[fields.size()];
-      for (int i = 0; i < this.fields.length; i += 1) {
-        this.fields[i] = fields.get(i);
-      }
+    private RecordType(List<Field> fields, String name) {
+      this.name = name;
+      this.fields = fields.toArray(new Field[0]);
     }
 
     @Override
@@ -483,34 +683,51 @@ public class Types {
       return Arrays.asList(fields);
     }
 
-    public Field field(String name) {
+    /**
+     * Case-sensitive get field by name
+     */
+    public Field fieldByName(String name) {
       if (nameToFields == null) {
-        nameToFields = new HashMap<>();
-        for (Field field : fields) {
-          nameToFields.put(field.name().toLowerCase(Locale.ROOT), field);
-        }
+        nameToFields = Arrays.stream(fields)
+            .collect(Collectors.toMap(
+                Field::name,
+                field -> field));
       }
-      return nameToFields.get(name.toLowerCase(Locale.ROOT));
+      return nameToFields.get(name);
+    }
+
+    public Field fieldByNameCaseInsensitive(String name) {
+      if (lowercaseNameToFields == null) {
+        lowercaseNameToFields = Arrays.stream(fields)
+            .collect(Collectors.toMap(
+                field -> field.name.toLowerCase(Locale.ROOT),
+                field -> field));
+      }
+      return lowercaseNameToFields.get(name.toLowerCase(Locale.ROOT));
     }
 
     @Override
     public Field field(int id) {
       if (idToFields == null) {
-        idToFields = new HashMap<>();
-        for (Field field : fields) {
-          idToFields.put(field.fieldId(), field);
-        }
+        idToFields = Arrays.stream(fields)
+            .collect(Collectors.toMap(
+                Field::fieldId,
+                field -> field));
       }
       return idToFields.get(id);
     }
 
     @Override
     public Type fieldType(String name) {
-      Field field = field(name);
+      Field field = fieldByNameCaseInsensitive(name);
       if (field != null) {
         return field.type();
       }
       return null;
+    }
+
+    public String name() {
+      return name;
     }
 
     @Override
@@ -525,6 +742,8 @@ public class Types {
 
     @Override
     public boolean equals(Object o) {
+      // NOTE: We're not comparing {@code RecordType}'s names here intentionally
+      //       relying exclusively on structural equivalence
       if (this == o) {
         return true;
       } else if (!(o instanceof RecordType)) {
@@ -537,13 +756,30 @@ public class Types {
 
     @Override
     public int hashCode() {
+      // NOTE: {@code hashCode} has to match for objects for which {@code equals} returns true,
+      //       hence we don't hash the {@code name} in here
       return Objects.hash(Field.class, Arrays.hashCode(fields));
+    }
+
+    public static RecordType get(List<Field> fields) {
+      return new RecordType(fields, null);
+    }
+
+    public static RecordType get(List<Field> fields, String recordName) {
+      return new RecordType(fields, recordName);
+    }
+
+    public static RecordType get(Field... fields) {
+      return new RecordType(Arrays.asList(fields), null);
     }
   }
 
+  /**
+   * Array nested type.
+   */
   public static class ArrayType extends NestedType {
     public static ArrayType get(int elementId, boolean isOptional, Type elementType) {
-      return new ArrayType(Field.get(elementId, isOptional,"element", elementType));
+      return new ArrayType(Field.get(elementId, isOptional, "element", elementType));
     }
 
     private final Field elementField;
@@ -574,7 +810,7 @@ public class Types {
 
     @Override
     public List<Field> fields() {
-      return Arrays.asList(elementField);
+      return Collections.singletonList(elementField);
     }
 
     public int elementId() {
@@ -612,6 +848,9 @@ public class Types {
     }
   }
 
+  /**
+   * Map nested type.
+   */
   public static class MapType extends NestedType {
 
     public static MapType get(int keyId, int valueId, Type keyType, Type valueType) {

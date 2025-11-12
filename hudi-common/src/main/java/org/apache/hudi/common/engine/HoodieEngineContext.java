@@ -18,18 +18,28 @@
 
 package org.apache.hudi.common.engine;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableSortingIterator;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.storage.StorageConfiguration;
 
+import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -44,17 +54,17 @@ public abstract class HoodieEngineContext {
   /**
    * A wrapped hadoop configuration which can be serialized.
    */
-  private SerializableConfiguration hadoopConf;
+  private final StorageConfiguration<?> storageConf;
 
   protected TaskContextSupplier taskContextSupplier;
 
-  public HoodieEngineContext(SerializableConfiguration hadoopConf, TaskContextSupplier taskContextSupplier) {
-    this.hadoopConf = hadoopConf;
+  public HoodieEngineContext(StorageConfiguration<?> storageConf, TaskContextSupplier taskContextSupplier) {
+    this.storageConf = storageConf;
     this.taskContextSupplier = taskContextSupplier;
   }
 
-  public SerializableConfiguration getHadoopConf() {
-    return hadoopConf;
+  public StorageConfiguration<?> getStorageConf() {
+    return storageConf;
   }
 
   public TaskContextSupplier getTaskContextSupplier() {
@@ -65,16 +75,22 @@ public abstract class HoodieEngineContext {
 
   public abstract <T> HoodieData<T> emptyHoodieData();
 
+  public abstract <K, V> HoodiePairData<K, V> emptyHoodiePairData();
+
   public <T> HoodieData<T> parallelize(List<T> data) {
-    return parallelize(data, data.size());
+    if (data.isEmpty()) {
+      return emptyHoodieData();
+    } else {
+      return parallelize(data, data.size());
+    }
   }
 
   public abstract <T> HoodieData<T> parallelize(List<T> data, int parallelism);
 
   public abstract <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism);
 
-  public abstract <I, K, V> List<V> mapToPairAndReduceByKey(
-      List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism);
+  public abstract <I, K, V> List<V> mapToPairAndReduceByKey(List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc,
+                                                            SerializableBiFunction<V, V, V> reduceFunc, int parallelism);
 
   public abstract <I, K, V> Stream<ImmutablePair<K, V>> mapPartitionsToPairAndReduceByKey(
       Stream<I> data, SerializablePairFlatMapFunction<Iterator<I>, K, V> flatMapToPairFunc,
@@ -95,4 +111,96 @@ public abstract class HoodieEngineContext {
 
   public abstract void setJobStatus(String activeModule, String activityDescription);
 
+  public abstract void putCachedDataIds(HoodieDataCacheKey cacheKey, int... ids);
+
+  public abstract List<Integer> getCachedDataIds(HoodieDataCacheKey cacheKey);
+
+  public abstract List<Integer> removeCachedDataIds(HoodieDataCacheKey cacheKey);
+
+  public abstract void cancelJob(String jobId);
+
+  public abstract void cancelAllJobs();
+
+  /**
+   * Aggregate the elements of each partition, and then the results for all the partitions, using given combine functions and a neutral "zero value".
+   *
+   * @param data
+   * @param zeroValue the initial value for the accumulated result of each partition for the seqOp operator
+   * @param seqOp     function to aggregate the elements of each partition
+   * @param combOp    function to combine results from different partitions
+   * @param <I>       input object type
+   * @param <O>       output object type
+   * @return the result of the aggregation
+   */
+  public abstract <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp);
+
+  public abstract <T> ReaderContextFactory<T> getReaderContextFactory(HoodieTableMetaClient metaClient);
+
+  /**
+   * Returns reader context factory for write operations in the table.
+   *
+   * @param metaClient Table meta client
+   * @param recordType Record type
+   * @param properties Typed properties
+   */
+  public ReaderContextFactory<?> getReaderContextFactoryForWrite(HoodieTableMetaClient metaClient, HoodieRecord.HoodieRecordType recordType,
+                                                                 TypedProperties properties) {
+    if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
+      String payloadClass = ConfigUtils.getPayloadClass(properties);
+      return new AvroReaderContextFactory(metaClient, payloadClass, properties);
+    }
+    return getEngineReaderContextFactory(metaClient);
+  }
+
+  /**
+   * Returns reader context factory specific for the engine.
+   *
+   * @param metaClient Table metadata client
+   */
+  public abstract ReaderContextFactory<?> getEngineReaderContextFactory(HoodieTableMetaClient metaClient);
+
+  /**
+   * Groups values by key and applies a processing function to each group.
+   *
+   * <p>This method takes key-value pairs, groups all values that share the same key,
+   * and applies a processing function to each group. The processing function receives
+   * the grouped values as an Iterator and can transform them into new results.
+   *
+   * <p><b>Preconditions:</b>
+   * <ul>
+   *   <li>data must contain key-value pairs</li>
+   *   <li>processFunc must not be null</li>
+   *   <li>keySpace must contain all possible keys that may appear in the data</li>
+   *   <li>Both key type (K) and value type (V) must implement Comparable</li>
+   * </ul>
+   *
+   * <p><b>Postconditions:</b>
+   * <ul>
+   *   <li>All values with the same key are grouped together for processing</li>
+   *   <li>Each value from the input data is processed exactly once</li>
+   *   <li>Values passed to processFunc are sorted within each group</li>
+   *   <li>For performance, a single key's values may be split across multiple calls to processFunc</li>
+   *   <li>The function returns a collection containing all results from processFunc</li>
+   * </ul>
+   *
+   * @param data The input key-value pairs to process
+   * @param processFunc Function that processes a group of values (as Iterator) and produces results
+   * @param keySpace Complete set of all possible keys in the data. Used for efficient data distribution
+   * @param preservesPartitioning whether to maintain the same data partitioning in the output
+   * @param <K> Type of the key (must be Comparable)
+   * @param <V> Type of the value (must be Comparable)
+   * @param <R> Type of the result produced by processFunc
+   * @return Collection of all results produced by processFunc
+   */
+  public <K extends Comparable<K>, V extends Comparable<V>, R> HoodieData<R> mapGroupsByKey(HoodiePairData<K, V> data,
+                                                                                            SerializableFunction<Iterator<V>, Iterator<R>> processFunc,
+                                                                                            List<K> keySpace,
+                                                                                            boolean preservesPartitioning) {
+    // Group values by key and apply the function to each group
+    return data.groupByKey()
+            .values()
+            .flatMap(it -> processFunc.apply(new ClosableSortingIterator<>(it.iterator())));
+  }
+
+  public abstract KeyGenerator createKeyGenerator(TypedProperties props) throws IOException;
 }

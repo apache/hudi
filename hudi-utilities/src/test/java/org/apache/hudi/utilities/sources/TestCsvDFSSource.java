@@ -38,25 +38,24 @@ public class TestCsvDFSSource extends AbstractDFSSourceTestBase {
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
-    this.dfsRoot = dfsBasePath + "/jsonFiles";
+    this.dfsRoot = basePath + "/jsonFiles";
     this.fileSuffix = ".json";
     this.useFlattenedSchema = true;
     this.schemaProvider = new FilebasedSchemaProvider(
-        Helpers.setupSchemaOnDFS("delta-streamer-config", "source-flattened.avsc"), jsc);
+        Helpers.setupSchemaOnDFS("streamer-config", "source-flattened.avsc"), jsc);
   }
 
   @Override
-  public Source prepareDFSSource() {
-    TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.deltastreamer.source.dfs.root", dfsRoot);
-    props.setProperty("hoodie.deltastreamer.csv.header", Boolean.toString(true));
-    props.setProperty("hoodie.deltastreamer.csv.sep", "\t");
+  public Source prepareDFSSource(TypedProperties props) {
+    props.setProperty("hoodie.streamer.source.dfs.root", dfsRoot);
+    props.setProperty("hoodie.streamer.csv.header", Boolean.toString(true));
+    props.setProperty("hoodie.streamer.csv.sep", "\t");
     return new CsvDFSSource(props, jsc, sparkSession, schemaProvider);
   }
 
   @Override
   public void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException {
     UtilitiesTestBase.Helpers.saveCsvToDFS(
-        true, '\t', Helpers.jsonifyRecords(records), dfs, path.toString());
+        true, '\t', Helpers.jsonifyRecords(records), fs, path.toString());
   }
 }

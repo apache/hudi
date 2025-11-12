@@ -17,12 +17,12 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.HoodieTimer
-import org.apache.hudi.metadata.{HoodieTableMetadata, SparkHoodieBackedTableMetadataWriter}
+import org.apache.hudi.metadata.{HoodieTableMetadata, SparkMetadataWriterFactory}
+import org.apache.hudi.storage.StoragePath
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
@@ -32,7 +32,7 @@ import java.util.function.Supplier
 
 class InitMetadataTableProcedure extends BaseProcedure with ProcedureBuilder with SparkAdapterSupport with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "read_only", DataTypes.BooleanType, false)
   )
 
@@ -51,20 +51,20 @@ class InitMetadataTableProcedure extends BaseProcedure with ProcedureBuilder wit
     val readOnly = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Boolean]
 
     val basePath = getBasePath(tableName)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    val metadataPath = new Path(HoodieTableMetadata.getMetadataTableBasePath(basePath))
+    val metaClient = createMetaClient(jsc, basePath)
+    val metadataPath = new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(basePath))
     try {
-      metaClient.getFs.listStatus(metadataPath)
+      metaClient.getStorage.listDirectEntries(metadataPath)
     } catch {
       case e: FileNotFoundException =>
         // Metadata directory does not exist yet
         throw new RuntimeException("Metadata directory (" + metadataPath.toString + ") does not exist.")
     }
 
-    val timer = new HoodieTimer().startTimer
+    val timer = HoodieTimer.start
     if (!readOnly) {
       val writeConfig = getWriteConfig(basePath)
-      SparkHoodieBackedTableMetadataWriter.create(metaClient.getHadoopConf, writeConfig, new HoodieSparkEngineContext(jsc))
+      SparkMetadataWriterFactory.create(metaClient.getStorageConf, writeConfig, new HoodieSparkEngineContext(jsc), metaClient.getTableConfig)
     }
 
     val action = if (readOnly) "Opened" else "Initialized"

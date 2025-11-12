@@ -25,16 +25,14 @@ import org.apache.hudi.hive.util.HivePartitionUtil;
 
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.metadata.Hive;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -51,15 +49,15 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
  */
 public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 
-  private static final Logger LOG = LogManager.getLogger(HiveQueryDDLExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveQueryDDLExecutor.class);
 
   private final IMetaStoreClient metaStoreClient;
   private SessionState sessionState;
   private Driver hiveDriver;
 
-  public HiveQueryDDLExecutor(HiveSyncConfig config) throws HiveException, MetaException {
+  public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient) {
     super(config);
-    this.metaStoreClient = Hive.get(config.getHiveConf()).getMSC();
+    this.metaStoreClient = metaStoreClient;
     try {
       this.sessionState = new SessionState(config.getHiveConf(),
           UserGroupInformation.getCurrentUser().getShortUserName());
@@ -91,7 +89,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     try {
       for (String sql : sqls) {
         if (hiveDriver != null) {
-          HoodieTimer timer = new HoodieTimer().startTimer();
+          HoodieTimer timer = HoodieTimer.start();
           responses.add(hiveDriver.run(sql));
           LOG.info(String.format("Time taken to execute [%s]: %s ms", sql, timer.endTimer()));
         }
@@ -155,6 +153,9 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   public void close() {
     if (metaStoreClient != null) {
       Hive.closeCurrent();
+    }
+    if (hiveDriver != null) {
+      hiveDriver.close();
     }
   }
 }

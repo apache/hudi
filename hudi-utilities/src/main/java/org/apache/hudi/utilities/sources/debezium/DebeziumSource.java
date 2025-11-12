@@ -18,33 +18,30 @@
 
 package org.apache.hudi.utilities.sources.debezium;
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
-
-import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
-import org.apache.avro.Schema.Type;
-import org.apache.avro.generic.GenericRecord;
-
 import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
+import org.apache.hudi.utilities.config.KafkaSourceConfig;
+import org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.RowSource;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
+import org.apache.hudi.utilities.sources.helpers.KafkaSourceUtil;
 
+import org.apache.avro.Schema;
+import org.apache.avro.Schema.Field;
+import org.apache.avro.Schema.Type;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -56,6 +53,16 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.streaming.kafka010.KafkaUtils;
 import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS;
 
 /**
  * Base class for Debezium streaming source which expects change events as Kafka Avro records.
@@ -63,7 +70,7 @@ import org.apache.spark.streaming.kafka010.OffsetRange;
  */
 public abstract class DebeziumSource extends RowSource {
 
-  private static final Logger LOG = LogManager.getLogger(DebeziumSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DebeziumSource.class);
   // these are native kafka's config. do not change the config names.
   private static final String NATIVE_KAFKA_KEY_DESERIALIZER_PROP = "key.deserializer";
   private static final String NATIVE_KAFKA_VALUE_DESERIALIZER_PROP = "value.deserializer";
@@ -72,26 +79,25 @@ public abstract class DebeziumSource extends RowSource {
   private static final String DATE_CONNECT_NAME = "custom.debezium.DateString";
 
   private final KafkaOffsetGen offsetGen;
-  private final HoodieDeltaStreamerMetrics metrics;
+  private final HoodieIngestionMetrics metrics;
   private final SchemaRegistryProvider schemaRegistryProvider;
   private final String deserializerClassName;
 
   public DebeziumSource(TypedProperties props, JavaSparkContext sparkContext,
                         SparkSession sparkSession,
                         SchemaProvider schemaProvider,
-                        HoodieDeltaStreamerMetrics metrics) {
+                        HoodieIngestionMetrics metrics) {
     super(props, sparkContext, sparkSession, schemaProvider);
 
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class.getName());
-    deserializerClassName = props.getString(DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS().key(),
-        DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS().defaultValue());
+    deserializerClassName = getStringWithAltKeys(props, KAFKA_AVRO_VALUE_DESERIALIZER_CLASS, true);
 
     try {
       props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, Class.forName(deserializerClassName).getName());
     } catch (ClassNotFoundException e) {
       String error = "Could not load custom avro kafka deserializer: " + deserializerClassName;
       LOG.error(error);
-      throw new HoodieException(error, e);
+      throw new HoodieReadFromSourceException(error, e);
     }
 
     // Currently, debezium source requires Confluent/Kafka schema-registry to fetch the latest schema.
@@ -101,33 +107,32 @@ public abstract class DebeziumSource extends RowSource {
       schemaRegistryProvider = (SchemaRegistryProvider) schemaProvider;
     }
 
+    if (deserializerClassName.equals(KafkaAvroSchemaDeserializer.class.getName())) {
+      KafkaSourceUtil.configureSchemaDeserializer(schemaRegistryProvider, props);
+    }
+
     offsetGen = new KafkaOffsetGen(props);
     this.metrics = metrics;
   }
 
   @Override
-  protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
+  protected Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     String overrideCheckpointStr = props.getString(OVERRIDE_CHECKPOINT_STRING, "");
 
-    OffsetRange[] offsetRanges = offsetGen.getNextOffsetRanges(lastCkptStr, sourceLimit, metrics);
+    OffsetRange[] offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpoint, sourceLimit, metrics);
     long totalNewMsgs = CheckpointUtils.totalNewMessages(offsetRanges);
     LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
 
-    if (totalNewMsgs == 0) {
-      // If there are no new messages, use empty dataframe with no schema. This is because the schema from schema registry can only be considered
-      // up to date if a change event has occurred.
-      return Pair.of(Option.of(sparkSession.emptyDataFrame()), overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr);
-    } else {
-      try {
-        String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(props.getString(SchemaRegistryProvider.Config.SRC_SCHEMA_REGISTRY_URL_PROP));
-        Dataset<Row> dataset = toDataset(offsetRanges, offsetGen, schemaStr);
-        LOG.info(String.format("Spark schema of Kafka Payload for topic %s:\n%s", offsetGen.getTopicName(), dataset.schema().treeString()));
-        LOG.info(String.format("New checkpoint string: %s", CheckpointUtils.offsetsToStr(offsetRanges)));
-        return Pair.of(Option.of(dataset), overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr);
-      } catch (IOException exc) {
-        LOG.error("Fatal error reading and parsing incoming debezium event", exc);
-        throw new HoodieException("Fatal error reading and parsing incoming debezium event", exc);
-      }
+    try {
+      String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(getStringWithAltKeys(props, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
+      Dataset<Row> dataset = toDataset(offsetRanges, offsetGen, schemaStr);
+      LOG.info("Spark schema of Kafka Payload for topic {}:\n{}", offsetGen.getTopicName(), dataset.schema().treeString());
+      LOG.info("New checkpoint string: {}", CheckpointUtils.offsetsToStr(offsetRanges));
+      return Pair.of(Option.of(dataset),
+              new StreamerCheckpointV2(overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr));
+    } catch (Exception e) {
+      LOG.error("Fatal error reading and parsing incoming debezium event", e);
+      throw new HoodieReadFromSourceException("Fatal error reading and parsing incoming debezium event", e);
     }
   }
 
@@ -193,7 +198,7 @@ public abstract class DebeziumSource extends RowSource {
             }
           }).map(Field::name).collect(Collectors.toList());
 
-      LOG.info("Date fields: " + dateFields.toString());
+      LOG.info("Date fields: {}", dateFields);
 
       for (String dateCol : dateFields) {
         dataset = dataset.withColumn(dateCol, functions.col(dateCol).cast(DataTypes.DateType));
@@ -242,8 +247,7 @@ public abstract class DebeziumSource extends RowSource {
 
   @Override
   public void onCommit(String lastCkptStr) {
-    if (this.props.getBoolean(KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET.key(),
-        KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET.defaultValue())) {
+    if (getBooleanWithAltKeys(this.props, KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET)) {
       offsetGen.commitOffsetToKafka(lastCkptStr);
     }
   }

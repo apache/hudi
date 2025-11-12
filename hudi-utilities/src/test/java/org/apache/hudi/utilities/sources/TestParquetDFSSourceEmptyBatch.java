@@ -20,6 +20,7 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -49,8 +50,8 @@ public class TestParquetDFSSourceEmptyBatch extends ParquetDFSSource {
   }
 
   @Override
-  public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
-    Pair<Option<Dataset<Row>>, String> toReturn = super.fetchNextBatch(lastCkptStr, sourceLimit);
+  public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
+    Pair<Option<Dataset<Row>>, Checkpoint> toReturn = super.fetchNextBatch(lastCheckpoint, sourceLimit);
     if (emptyBatches.contains(counter++)) {
       return Pair.of(Option.empty(), toReturn.getRight());
     }

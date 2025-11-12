@@ -17,33 +17,31 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
+import org.apache.hudi.common.table.timeline.HoodieInstant.State
+import org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION
+import org.apache.hudi.exception.HoodieException
+
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
+
 import java.io.IOException
 import java.util
 import java.util.function.Supplier
 
-import org.apache.hudi.avro.model.HoodieRollbackMetadata
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.HoodieInstant.State
-import org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline, TimelineMetadataUtils}
-import org.apache.hudi.common.util.CollectionUtils
-import org.apache.hudi.exception.HoodieException
-import org.apache.spark.sql.Row
-import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
-
-import scala.collection.JavaConversions.asScalaBuffer
 import scala.collection.JavaConverters._
 
 class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with ProcedureBuilder {
   private val ROLLBACKS_PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10)
   )
 
   private val ROLLBACK_PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.required(2, "instant_time", DataTypes.StringType, None)
+    ProcedureParameter.required(2, "instant_time", DataTypes.StringType)
   )
 
   private val ROLLBACKS_OUTPUT_TYPE = new StructType(Array[StructField](
@@ -73,11 +71,11 @@ class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with Pr
     val limit = getArgValueOrDefault(args, parameters(1)).get.asInstanceOf[Int]
 
     val basePath = getBasePath(tableName)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    val activeTimeline = new RollbackTimeline(metaClient)
+    val metaClient = createMetaClient(jsc, basePath)
+    val activeTimeline = metaClient.getActiveTimeline
     if (showDetails) {
       val instantTime = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[String]
-      getRollbackDetail(activeTimeline, instantTime, limit)
+      getRollbackDetail(metaClient, activeTimeline, instantTime, limit)
     } else {
       getRollbacks(activeTimeline, limit)
     }
@@ -85,20 +83,18 @@ class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with Pr
 
   override def build: Procedure = new ShowRollbacksProcedure(showDetails)
 
-  class RollbackTimeline(metaClient: HoodieTableMetaClient) extends HoodieActiveTimeline(metaClient,
-    CollectionUtils.createImmutableSet(HoodieTimeline.ROLLBACK_EXTENSION)) {
-  }
-
-  def getRollbackDetail(activeTimeline: RollbackTimeline,
-                  instantTime: String,
-                  limit: Int): Seq[Row] = {
+  def getRollbackDetail(metaClient: HoodieTableMetaClient,
+                        activeTimeline: HoodieActiveTimeline,
+                        instantTime: String,
+                        limit: Int): Seq[Row] = {
     val rows = new util.ArrayList[Row]
-    val metadata = TimelineMetadataUtils.deserializeAvroMetadata(activeTimeline.getInstantDetails(
-      new HoodieInstant(State.COMPLETED, ROLLBACK_ACTION, instantTime)).get, classOf[HoodieRollbackMetadata])
+    val instantGenerator = metaClient.getTimelineLayout.getInstantGenerator
+    val metadata = activeTimeline.readRollbackMetadata(
+      instantGenerator.createNewInstant(State.COMPLETED, ROLLBACK_ACTION, instantTime))
 
     metadata.getPartitionMetadata.asScala.toMap.iterator.foreach(entry => Stream
-      .concat(entry._2.getSuccessDeleteFiles.map(f => (f, true)),
-        entry._2.getFailedDeleteFiles.map(f => (f, false)))
+      .concat(entry._2.getSuccessDeleteFiles.asScala.map(f => (f, true)),
+        entry._2.getFailedDeleteFiles.asScala.map(f => (f, false)))
       .iterator.foreach(fileWithDeleteStatus => {
         rows.add(Row(metadata.getStartRollbackTime, metadata.getCommitsRollback.toString,
           entry._1, fileWithDeleteStatus._1, fileWithDeleteStatus._2))
@@ -106,15 +102,14 @@ class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with Pr
     rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
   }
 
-  def getRollbacks(activeTimeline: RollbackTimeline,
+  def getRollbacks(activeTimeline: HoodieActiveTimeline,
                    limit: Int): Seq[Row] = {
     val rows = new util.ArrayList[Row]
     val rollback = activeTimeline.getRollbackTimeline.filterCompletedInstants
 
     rollback.getInstants.iterator().asScala.foreach(instant => {
       try {
-        val metadata = TimelineMetadataUtils.deserializeAvroMetadata(activeTimeline.getInstantDetails(instant).get,
-          classOf[HoodieRollbackMetadata])
+        val metadata = activeTimeline.readRollbackMetadata(instant)
 
         metadata.getCommitsRollback.iterator().asScala.foreach(c => {
           rows.add(Row(metadata.getStartRollbackTime, c,
@@ -123,7 +118,7 @@ class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with Pr
         })
       } catch {
         case e: IOException =>
-          throw new HoodieException(s"Failed to get rollback's info from instant ${instant.getTimestamp}.")
+          throw new HoodieException(s"Failed to get rollback's info from instant ${instant.requestedTime}.")
       }
     })
     rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList

@@ -18,8 +18,9 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.adapter.CollectOutputAdapter;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.sink.compact.CompactFunction;
+import org.apache.hudi.sink.compact.CompactOperator;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
@@ -33,14 +34,14 @@ import org.apache.flink.runtime.memory.MemoryManager;
 import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorContext;
 import org.apache.flink.runtime.operators.testutils.MockEnvironment;
 import org.apache.flink.runtime.operators.testutils.MockEnvironmentBuilder;
+import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
-import org.apache.flink.util.Collector;
-
-import java.util.ArrayList;
-import java.util.List;
+import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.streaming.runtime.tasks.StreamTask;
+import org.apache.flink.streaming.runtime.tasks.TestProcessingTimeService;
 
 /**
- * A wrapper class to manipulate the {@link org.apache.hudi.sink.compact.CompactFunction} instance for testing.
+ * A wrapper class to manipulate the {@link CompactOperator} instance for testing.
  */
 public class CompactFunctionWrapper {
   private final Configuration conf;
@@ -48,20 +49,32 @@ public class CompactFunctionWrapper {
   private final IOManager ioManager;
   private final StreamingRuntimeContext runtimeContext;
 
+  private final StreamTask<?, ?> streamTask;
+  private final StreamConfig streamConfig;
+
   /**
    * Function that generates the {@link HoodieCompactionPlan}.
    */
   private CompactionPlanOperator compactionPlanOperator;
   /**
+   * Output to collect the compaction plan events.
+   */
+  private CollectOutputAdapter<CompactionPlanEvent> planEventOutput;
+  /**
+   * Output to collect the compaction commit events.
+   */
+  private CollectOutputAdapter<CompactionCommitEvent> commitEventOutput;
+  /**
    * Function that executes the compaction task.
    */
-  private CompactFunction compactFunction;
+  private CompactOperator compactOperator;
   /**
    * Stream sink to handle compaction commits.
    */
   private CompactionCommitSink commitSink;
 
-  public CompactFunctionWrapper(Configuration conf) throws Exception {
+  public CompactFunctionWrapper(Configuration conf, StreamTask<?, ?> streamTask, StreamConfig streamConfig) {
+    this.conf = conf;
     this.ioManager = new IOManagerAsync();
     MockEnvironment environment = new MockEnvironmentBuilder()
         .setTaskName("mockTask")
@@ -69,19 +82,25 @@ public class CompactFunctionWrapper {
         .setIOManager(ioManager)
         .build();
     this.runtimeContext = new MockStreamingRuntimeContext(false, 1, 0, environment);
-    this.conf = conf;
+    this.streamTask = streamTask;
+    this.streamConfig = streamConfig;
   }
 
   public void openFunction() throws Exception {
     compactionPlanOperator = new CompactionPlanOperator(conf);
+    planEventOutput =  new CollectOutputAdapter<>();
+    compactionPlanOperator.setup(streamTask, streamConfig, planEventOutput);
     compactionPlanOperator.open();
 
-    compactFunction = new CompactFunction(conf);
-    compactFunction.setRuntimeContext(runtimeContext);
-    compactFunction.open(conf);
+    compactOperator = new CompactOperator(conf);
+    // CAUTION: deprecated API used.
+    compactOperator.setProcessingTimeService(new TestProcessingTimeService());
+    commitEventOutput = new CollectOutputAdapter<>();
+    compactOperator.setup(streamTask, streamConfig, commitEventOutput);
+    compactOperator.open();
     final NonThrownExecutor syncExecutor = new MockCoordinatorExecutor(
         new MockOperatorCoordinatorContext(new OperatorID(), 1));
-    compactFunction.setExecutor(syncExecutor);
+    compactOperator.setExecutor(syncExecutor);
 
     commitSink = new CompactionCommitSink(conf);
     commitSink.setRuntimeContext(runtimeContext);
@@ -90,31 +109,28 @@ public class CompactFunctionWrapper {
 
   public void compact(long checkpointID) throws Exception {
     // collect the CompactEvents.
-    CollectorOutput<CompactionPlanEvent> output = new CollectorOutput<>();
-    compactionPlanOperator.setOutput(output);
+    compactionPlanOperator.setOutput(planEventOutput);
     compactionPlanOperator.notifyCheckpointComplete(checkpointID);
     // collect the CompactCommitEvents
-    List<CompactionCommitEvent> compactCommitEvents = new ArrayList<>();
-    for (CompactionPlanEvent event : output.getRecords()) {
-      compactFunction.processElement(event, null, new Collector<CompactionCommitEvent>() {
-        @Override
-        public void collect(CompactionCommitEvent event) {
-          compactCommitEvents.add(event);
-        }
-
-        @Override
-        public void close() {
-
-        }
-      });
+    for (CompactionPlanEvent event : planEventOutput.getRecords()) {
+      compactOperator.processElement(new StreamRecord<>(event));
     }
     // handle and commit the compaction
-    for (CompactionCommitEvent event : compactCommitEvents) {
+    for (CompactionCommitEvent event : commitEventOutput.getRecords()) {
       commitSink.invoke(event, null);
     }
   }
 
   public void close() throws Exception {
     ioManager.close();
+    if (compactionPlanOperator != null) {
+      compactionPlanOperator.close();
+    }
+    if (compactOperator != null) {
+      compactOperator.close();
+    }
+    if (commitSink != null) {
+      commitSink.close();
+    }
   }
 }

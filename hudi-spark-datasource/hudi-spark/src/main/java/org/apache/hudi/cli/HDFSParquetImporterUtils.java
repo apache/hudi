@@ -18,14 +18,6 @@
 
 package org.apache.hudi.cli;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -33,7 +25,6 @@ import org.apache.hudi.common.HoodieJsonPayload;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -46,28 +37,39 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.util.LongAccumulator;
-import scala.Tuple2;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.Serializable;
 import java.io.StringReader;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Properties;
+
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
  * Loads data from Parquet Sources.
@@ -75,7 +77,7 @@ import java.util.Properties;
 public class HDFSParquetImporterUtils implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(HDFSParquetImporterUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HDFSParquetImporterUtils.class);
   private static final DateTimeFormatter PARTITION_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd")
       .withZone(ZoneId.systemDefault());
 
@@ -123,9 +125,9 @@ public class HDFSParquetImporterUtils implements Serializable {
   }
 
   public int dataImport(JavaSparkContext jsc) {
-    FileSystem fs = FSUtils.getFs(this.targetPath, jsc.hadoopConfiguration());
+    FileSystem fs = HadoopFSUtils.getFs(this.targetPath, jsc.hadoopConfiguration());
     this.props = this.propsFilePath == null || this.propsFilePath.isEmpty() ? buildProperties(this.configs)
-        : readConfig(fs.getConf(), new Path(this.propsFilePath), this.configs).getProps(true);
+        : readConfig(fs.getConf(), new StoragePath(this.propsFilePath), this.configs).getProps(true);
     LOG.info("Starting data import with configs : " + props.toString());
     int ret = -1;
     try {
@@ -151,11 +153,10 @@ public class HDFSParquetImporterUtils implements Serializable {
 
       if (!fs.exists(new Path(this.targetPath))) {
         // Initialize target hoodie table.
-        Properties properties = HoodieTableMetaClient.withPropertyBuilder()
+        HoodieTableMetaClient.newTableBuilder()
             .setTableName(this.tableName)
             .setTableType(this.tableType)
-            .build();
-        HoodieTableMetaClient.initTableAndGetMetaClient(jsc.hadoopConfiguration(), this.targetPath, properties);
+            .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), this.targetPath);
       }
 
       // Get schema.
@@ -191,7 +192,7 @@ public class HDFSParquetImporterUtils implements Serializable {
             job.getConfiguration())
         // To reduce large number of tasks.
         .coalesce(16 * this.parallelism).map(entry -> {
-          GenericRecord genericRecord = ((Tuple2<Void, GenericRecord>) entry)._2();
+          GenericRecord genericRecord = ((scala.Tuple2<Void, GenericRecord>) entry)._2();
           Object partitionField = genericRecord.get(this.partitionKey);
           if (partitionField == null) {
             throw new HoodieIOException("partition key is missing. :" + this.partitionKey);
@@ -201,13 +202,13 @@ public class HDFSParquetImporterUtils implements Serializable {
             throw new HoodieIOException("row field is missing. :" + this.rowKey);
           }
           String partitionPath = partitionField.toString();
-          LOG.debug("Row Key : " + rowField + ", Partition Path is (" + partitionPath + ")");
+          LOG.debug("Row Key : {}, Partition Path is ({}})", rowField, partitionPath);
           if (partitionField instanceof Number) {
             try {
               long ts = (long) (Double.parseDouble(partitionField.toString()) * 1000L);
               partitionPath = PARTITION_FORMATTER.format(Instant.ofEpochMilli(ts));
             } catch (NumberFormatException nfe) {
-              LOG.warn("Unable to parse date from partition field. Assuming partition as (" + partitionField + ")");
+              LOG.warn("Unable to parse date from partition field. Assuming partition as ({})", partitionField);
             }
           }
           return new HoodieAvroRecord<>(new HoodieKey(rowField.toString(), partitionPath),
@@ -227,13 +228,19 @@ public class HDFSParquetImporterUtils implements Serializable {
                                                                    JavaRDD<HoodieRecord<T>> hoodieRecords) {
     switch (this.command.toLowerCase()) {
       case "upsert": {
-        return client.upsert(hoodieRecords, instantTime);
+        JavaRDD<WriteStatus> writeStatusJavaRDD = client.upsert(hoodieRecords, instantTime);
+        client.commit(instantTime, writeStatusJavaRDD);
+        return writeStatusJavaRDD;
       }
       case "bulkinsert": {
-        return client.bulkInsert(hoodieRecords, instantTime);
+        JavaRDD<WriteStatus> writeStatusJavaRDD = client.bulkInsert(hoodieRecords, instantTime);
+        client.commit(instantTime, writeStatusJavaRDD);
+        return writeStatusJavaRDD;
       }
       default: {
-        return client.insert(hoodieRecords, instantTime);
+        JavaRDD<WriteStatus> writeStatusJavaRDD = client.insert(hoodieRecords, instantTime);
+        client.commit(instantTime, writeStatusJavaRDD);
+        return writeStatusJavaRDD;
       }
     }
   }
@@ -248,12 +255,12 @@ public class HDFSParquetImporterUtils implements Serializable {
     return properties;
   }
 
-  public static DFSPropertiesConfiguration readConfig(Configuration hadoopConfig, Path cfgPath, List<String> overriddenProps) {
+  public static DFSPropertiesConfiguration readConfig(Configuration hadoopConfig, StoragePath cfgPath, List<String> overriddenProps) {
     DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgPath);
     try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");
-        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
+        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))), cfgPath);
       }
     } catch (IOException ioe) {
       throw new HoodieIOException("Unexpected error adding config overrides", ioe);
@@ -272,10 +279,11 @@ public class HDFSParquetImporterUtils implements Serializable {
    */
   public static SparkRDDWriteClient<HoodieRecordPayload> createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
                                                                             int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
-    HoodieCompactionConfig compactionConfig = compactionStrategyClass
+    Option<CompactionStrategy> strategyOpt = compactionStrategyClass.map(ReflectionUtils::loadClass);
+    HoodieCompactionConfig compactionConfig = strategyOpt
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
-            .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
-        .orElse(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build());
+            .withCompactionStrategy(strategy).build())
+        .orElseGet(() -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build());
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
             .withParallelism(parallelism, parallelism)
@@ -304,7 +312,7 @@ public class HDFSParquetImporterUtils implements Serializable {
     try (FSDataInputStream inputStream = fs.open(p)) {
       inputStream.readFully(0, buf.array(), 0, buf.array().length);
     }
-    return new String(buf.array(), StandardCharsets.UTF_8);
+    return fromUTF8Bytes(buf.array());
   }
 
   public static int handleErrors(JavaSparkContext jsc, String instantTime, JavaRDD<WriteStatus> writeResponse) {
@@ -312,14 +320,14 @@ public class HDFSParquetImporterUtils implements Serializable {
     writeResponse.foreach(writeStatus -> {
       if (writeStatus.hasErrors()) {
         errors.add(1);
-        LOG.error(String.format("Error processing records :writeStatus:%s", writeStatus.getStat().toString()));
+        LOG.error("Error processing records :writeStatus:{}", writeStatus.getStat());
       }
     });
     if (errors.value() == 0) {
-      LOG.info(String.format("Table imported into hoodie with %s instant time.", instantTime));
+      LOG.info("Table imported into hoodie with {} instant time.", instantTime);
       return 0;
     }
-    LOG.error(String.format("Import failed with %d errors.", errors.value()));
+    LOG.error("Import failed with {} errors.", errors.value());
     return -1;
   }
 }

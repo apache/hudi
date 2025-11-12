@@ -19,9 +19,14 @@
 package org.apache.hudi.sink.partitioner;
 
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.hash.BucketIndexUtil;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 
 import org.apache.flink.api.common.functions.Partitioner;
+import org.apache.flink.configuration.Configuration;
 
 /**
  * Bucket index input partitioner.
@@ -31,18 +36,24 @@ import org.apache.flink.api.common.functions.Partitioner;
  */
 public class BucketIndexPartitioner<T extends HoodieKey> implements Partitioner<T> {
 
-  private final int bucketNum;
   private final String indexKeyFields;
+  private final NumBucketsFunction numBucketsFunction;
 
-  public BucketIndexPartitioner(int bucketNum, String indexKeyFields) {
-    this.bucketNum = bucketNum;
+  private Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc;
+
+  public BucketIndexPartitioner(Configuration conf, String indexKeyFields) {
     this.indexKeyFields = indexKeyFields;
+    this.numBucketsFunction = new NumBucketsFunction(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
+        conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
   }
 
   @Override
   public int partition(HoodieKey key, int numPartitions) {
-    int curBucket = BucketIdentifier.getBucketId(key, indexKeyFields, bucketNum);
-    int globalHash = (key.getPartitionPath() + curBucket).hashCode() & Integer.MAX_VALUE;
-    return BucketIdentifier.mod(globalHash, numPartitions);
+    if (this.partitionIndexFunc == null) {
+      this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(numPartitions);
+    }
+    int numBuckets = numBucketsFunction.getNumBuckets(key.getPartitionPath());
+    int curBucket = BucketIdentifier.getBucketId(key.getRecordKey(), indexKeyFields, numBuckets);
+    return this.partitionIndexFunc.apply(numBuckets, key.getPartitionPath(), curBucket);
   }
 }

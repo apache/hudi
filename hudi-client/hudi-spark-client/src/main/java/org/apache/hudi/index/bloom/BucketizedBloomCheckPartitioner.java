@@ -18,18 +18,20 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.util.NumericUtils;
-import org.apache.hudi.common.util.collection.Pair;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import scala.Tuple2;
 
 /**
  * Partitions bloom filter checks by spreading out comparisons across buckets of work.
@@ -56,43 +58,63 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class BucketizedBloomCheckPartitioner extends Partitioner {
 
-  private static final Logger LOG = LogManager.getLogger(BucketizedBloomCheckPartitioner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BucketizedBloomCheckPartitioner.class);
 
   private int partitions;
 
   /**
    * Stores the final mapping of a file group to a list of partitions for its keys.
    */
-  private Map<String, List<Integer>> fileGroupToPartitions;
+  private Map<HoodieFileGroupId, List<Integer>> fileGroupToPartitions;
 
   /**
    * Create a partitioner that computes a plan based on provided workload characteristics.
    *
-   * @param targetPartitions maximum number of partitions to target
-   * @param fileGroupToComparisons number of expected comparisons per file group
-   * @param keysPerBucket maximum number of keys to pack in a single bucket
+   * @param configuredBloomIndexParallelism configured bloom index parallelism;
+   *                                        0 means not configured by the user
+   * @param inputParallelism                input parallelism
+   * @param fileGroupToComparisons          number of expected comparisons per file group
+   * @param keysPerBucket                   maximum number of keys to pack in a single bucket
+   * @param shouldUseDynamicParallelism     whether the parallelism should be determined
+   *                                        by the keys per bucket
    */
-  public BucketizedBloomCheckPartitioner(int targetPartitions, Map<String, Long> fileGroupToComparisons,
-      int keysPerBucket) {
+  public BucketizedBloomCheckPartitioner(
+      int configuredBloomIndexParallelism,
+      int inputParallelism,
+      Map<HoodieFileGroupId, Long> fileGroupToComparisons,
+      int keysPerBucket,
+      boolean shouldUseDynamicParallelism) {
     this.fileGroupToPartitions = new HashMap<>();
 
-    Map<String, Integer> bucketsPerFileGroup = new HashMap<>();
+    Map<HoodieFileGroupId, Integer> bucketsPerFileGroup = new HashMap<>();
     // Compute the buckets needed per file group, using simple uniform distribution
     fileGroupToComparisons.forEach((f, c) -> bucketsPerFileGroup.put(f, (int) Math.ceil((c * 1.0) / keysPerBucket)));
     int totalBuckets = bucketsPerFileGroup.values().stream().mapToInt(i -> i).sum();
-    // If totalBuckets > targetPartitions, no need to have extra partitions
-    this.partitions = Math.min(targetPartitions, totalBuckets);
+
+    if (configuredBloomIndexParallelism > 0) {
+      // If bloom index parallelism is configured, the number of buckets is
+      // limited by the configured bloom index parallelism
+      this.partitions = Math.min(configuredBloomIndexParallelism, totalBuckets);
+    } else if (shouldUseDynamicParallelism) {
+      // If bloom index parallelism is not configured, and dynamic buckets are enabled,
+      // honor the number of buckets calculated based on the keys per bucket
+      this.partitions = totalBuckets;
+    } else {
+      // If bloom index parallelism is not configured, and dynamic buckets are disabled,
+      // honor the input parallelism as the max number of buckets to use
+      this.partitions = Math.min(inputParallelism, totalBuckets);
+    }
 
     // PHASE 1 : start filling upto minimum number of buckets into partitions, taking all but one bucket from each file
     // This tries to first optimize for goal 1 above, with knowledge that each partition needs a certain minimum number
     // of buckets and assigns buckets in the same order as file groups. If we were to simply round robin, then buckets
     // for a file group is more or less guaranteed to be placed on different partitions all the time.
     int minBucketsPerPartition = Math.max((int) Math.floor((1.0 * totalBuckets) / partitions), 1);
-    LOG.info(String.format("TotalBuckets %d, min_buckets/partition %d", totalBuckets, minBucketsPerPartition));
+    LOG.info("TotalBuckets {}, min_buckets/partition {}, partitions {}", totalBuckets, minBucketsPerPartition, partitions);
     int[] bucketsFilled = new int[partitions];
-    Map<String, AtomicInteger> bucketsFilledPerFileGroup = new HashMap<>();
+    Map<HoodieFileGroupId, AtomicInteger> bucketsFilledPerFileGroup = new HashMap<>();
     int partitionIndex = 0;
-    for (Map.Entry<String, Integer> e : bucketsPerFileGroup.entrySet()) {
+    for (Map.Entry<HoodieFileGroupId, Integer> e : bucketsPerFileGroup.entrySet()) {
       for (int b = 0; b < Math.max(1, e.getValue() - 1); b++) {
         // keep filled counts upto date
         bucketsFilled[partitionIndex]++;
@@ -115,7 +137,7 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
     // PHASE 2 : for remaining unassigned buckets, round robin over partitions once. Since we withheld 1 bucket from
     // each file group uniformly, this remaining is also an uniform mix across file groups. We just round robin to
     // optimize for goal 2.
-    for (Map.Entry<String, Integer> e : bucketsPerFileGroup.entrySet()) {
+    for (Map.Entry<HoodieFileGroupId, Integer> e : bucketsPerFileGroup.entrySet()) {
       int remaining = e.getValue() - bucketsFilledPerFileGroup.get(e.getKey()).intValue();
       for (int r = 0; r < remaining; r++) {
         // mark this partition against the file group
@@ -142,15 +164,16 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
 
   @Override
   public int getPartition(Object key) {
-    final Pair<String, String> parts = (Pair<String, String>) key;
-    final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", parts.getRight());
-    final List<Integer> candidatePartitions = fileGroupToPartitions.get(parts.getLeft());
-    final int idx = (int) Math.floorMod((int) hashOfKey, candidatePartitions.size());
+    final Tuple2<HoodieFileGroupId, String> parts = (Tuple2<HoodieFileGroupId, String>) key;
+    // TODO replace w/ more performant hash
+    final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", parts._2());
+    final List<Integer> candidatePartitions = fileGroupToPartitions.get(parts._1());
+    final int idx = Math.floorMod((int) hashOfKey, candidatePartitions.size());
     assert idx >= 0;
     return candidatePartitions.get(idx);
   }
 
-  Map<String, List<Integer>> getFileGroupToPartitions() {
+  Map<HoodieFileGroupId, List<Integer>> getFileGroupToPartitions() {
     return fileGroupToPartitions;
   }
 }

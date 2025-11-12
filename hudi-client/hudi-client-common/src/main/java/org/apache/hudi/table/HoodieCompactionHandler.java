@@ -22,7 +22,6 @@ package org.apache.hudi.table;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
@@ -36,15 +35,15 @@ import java.util.Map;
  *
  * @param <T> HoodieRecordPayload type.
  */
-public interface HoodieCompactionHandler<T extends HoodieRecordPayload> {
+public interface HoodieCompactionHandler<T> {
   Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath, String fileId,
                                            Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException;
 
   Iterator<List<WriteStatus>> handleInsert(String instantTime, String partitionPath, String fileId,
-                                           Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap);
+                                           Map<String, HoodieRecord<?>> recordMap);
 
   default Iterator<List<WriteStatus>> handleInsertsForLogCompaction(String instantTime, String partitionPath, String fileId,
-                                                           Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap,
+                                                           Map<String, HoodieRecord<?>> recordMap,
                                                            Map<HoodieLogBlock.HeaderMetadataType, String> header) {
     throw new HoodieNotSupportedException("Operation is not yet supported");
   }

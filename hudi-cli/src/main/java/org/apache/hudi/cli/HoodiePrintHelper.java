@@ -29,7 +29,6 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-
 /**
  * Helper class to render table for hoodie-cli.
  */

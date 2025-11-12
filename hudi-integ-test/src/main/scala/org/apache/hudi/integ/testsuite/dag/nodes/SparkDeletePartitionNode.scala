@@ -20,19 +20,16 @@
 package org.apache.hudi.integ.testsuite.dag.nodes
 
 
-import org.apache.avro.Schema
+import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.client.WriteStatus
-import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext
 import org.apache.hudi.integ.testsuite.schema.SchemaUtils
-import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkUtils}
-import org.apache.log4j.LogManager
-import org.apache.spark.api.java.JavaRDD
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SaveMode
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 
@@ -43,7 +40,7 @@ import scala.collection.JavaConverters._
  */
 class SparkDeletePartitionNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
 
-  private val log = LogManager.getLogger(getClass)
+  private val log = LoggerFactory.getLogger(getClass)
   config = dagNodeConfig
 
   /**
@@ -57,8 +54,8 @@ class SparkDeletePartitionNode(dagNodeConfig: Config) extends DagNode[RDD[WriteS
     println("Generating input data for node {}", this.getName)
 
     context.getWriterContext.getSparkSession.emptyDataFrame.write.format("hudi")
-      .options(DataSourceWriteOptions.translateSqlOptions(context.getWriterContext.getProps.asScala.toMap))
-      .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), SchemaUtils.SOURCE_ORDERING_FIELD)
+      .options(DataSourceWriteOptions.mayBeDerivePartitionPath(context.getWriterContext.getProps.asScala.toMap))
+        .option(DataSourceWriteOptions.ORDERING_FIELDS.key(), SchemaUtils.SOURCE_ORDERING_FIELD)
       .option(DataSourceWriteOptions.TABLE_NAME.key, context.getHoodieTestSuiteWriter.getCfg.targetTableName)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, context.getHoodieTestSuiteWriter.getCfg.tableType)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_PARTITION_OPERATION_OPT_VAL)

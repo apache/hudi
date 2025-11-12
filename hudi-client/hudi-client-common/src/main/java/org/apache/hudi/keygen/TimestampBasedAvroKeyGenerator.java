@@ -17,7 +17,6 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
@@ -27,7 +26,8 @@ import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
-import org.apache.hudi.keygen.parser.HoodieDateTimeParser;
+
+import org.apache.avro.generic.GenericRecord;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
@@ -41,15 +41,21 @@ import java.time.LocalDate;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
+import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.DATE_TIME_PARSER;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.INPUT_TIME_UNIT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * Avro Key generator, that relies on timestamps for partitioning field. Still picks record key by name.
  */
 public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
   public enum TimestampType implements Serializable {
-    UNIX_TIMESTAMP, DATE_STRING, MIXED, EPOCHMILLISECONDS, SCALAR
+    UNIX_TIMESTAMP, DATE_STRING, MIXED, EPOCHMILLISECONDS, EPOCHMICROSECONDS, SCALAR
   }
 
   private final TimeUnit timeUnit;
@@ -76,23 +82,27 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
   }
 
   TimestampBasedAvroKeyGenerator(TypedProperties config, String recordKeyField, String partitionPathField) throws IOException {
-    super(config, recordKeyField, partitionPathField);
-    String dateTimeParserClass = config.getString(KeyGeneratorOptions.Config.DATE_TIME_PARSER_PROP, HoodieDateTimeParser.class.getName());
+    super(config, Option.ofNullable(recordKeyField), partitionPathField);
+    String dateTimeParserClass = getStringWithAltKeys(config, DATE_TIME_PARSER, true);
     this.parser = KeyGenUtils.createDateTimeParser(config, dateTimeParserClass);
     this.inputDateTimeZone = parser.getInputDateTimeZone();
     this.outputDateTimeZone = parser.getOutputDateTimeZone();
     this.outputDateFormat = parser.getOutputDateFormat();
-    this.timestampType = TimestampType.valueOf(config.getString(KeyGeneratorOptions.Config.TIMESTAMP_TYPE_FIELD_PROP));
+    this.timestampType = TimestampType.valueOf(getStringWithAltKeys(config, TIMESTAMP_TYPE_FIELD));
 
     switch (this.timestampType) {
       case EPOCHMILLISECONDS:
         timeUnit = MILLISECONDS;
         break;
+      case EPOCHMICROSECONDS:
+        timeUnit = MICROSECONDS;
+        break;
       case UNIX_TIMESTAMP:
         timeUnit = SECONDS;
         break;
       case SCALAR:
-        String timeUnitStr = config.getString(KeyGeneratorOptions.Config.INPUT_TIME_UNIT, TimeUnit.SECONDS.toString());
+        String timeUnitStr = getStringWithAltKeys(
+            config, INPUT_TIME_UNIT, TimeUnit.SECONDS.toString());
         timeUnit = TimeUnit.valueOf(timeUnitStr.toUpperCase());
         break;
       default:
@@ -126,7 +136,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
       // {Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP} won't be null, it has been checked in the initialization process of
       // inputFormatter
       String delimiter = parser.getConfigInputDateFormatDelimiter();
-      String format = config.getString(KeyGeneratorOptions.Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "").split(delimiter)[0];
+      String format = getStringWithAltKeys(config, TIMESTAMP_INPUT_DATE_FORMAT, true).split(delimiter)[0];
 
       // if both input and output timeZone are not configured, use GMT.
       if (null != inputDateTimeZone) {
@@ -181,7 +191,9 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
       timeMs = convertLongTimeToMillis(((LocalDate) partitionVal).toEpochDay());
     } else if (partitionVal instanceof CharSequence) {
       if (!inputFormatter.isPresent()) {
-        throw new HoodieException("Missing input formatter. Ensure " + KeyGeneratorOptions.Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP + " config is set when timestampType is DATE_STRING or MIXED!");
+        throw new HoodieException("Missing input formatter. Ensure "
+            + TIMESTAMP_INPUT_DATE_FORMAT.key()
+            + " config is set when timestampType is DATE_STRING or MIXED!");
       }
       DateTime parsedDateTime = inputFormatter.get().parseDateTime(partitionVal.toString());
       if (this.outputDateTimeZone == null) {
@@ -189,7 +201,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
         partitionFormatter = partitionFormatter.withZone(parsedDateTime.getZone());
       }
 
-      timeMs = inputFormatter.get().parseDateTime(partitionVal.toString()).getMillis();
+      timeMs = parsedDateTime.getMillis();
     } else {
       throw new HoodieNotSupportedException(
           "Unexpected type for partition field: " + partitionVal.getClass().getName());
@@ -205,7 +217,8 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
   private long convertLongTimeToMillis(Long partitionVal) {
     if (timeUnit == null) {
       // should not be possible
-      throw new RuntimeException(KeyGeneratorOptions.Config.INPUT_TIME_UNIT + " is not specified but scalar it supplied as time value");
+      throw new RuntimeException(INPUT_TIME_UNIT.key()
+          + " is not specified but scalar it supplied as time value");
     }
     return MILLISECONDS.convert(partitionVal, timeUnit);
   }

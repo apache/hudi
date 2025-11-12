@@ -18,14 +18,15 @@
 
 package org.apache.hudi.common.model.debezium;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -37,13 +38,13 @@ import java.io.IOException;
  * - For inserts, op=i
  * - For deletes, op=d
  * - For updates, op=u
- * - For snapshort inserts, op=r
+ * - For snapshot inserts, op=r
  * <p>
  * This payload implementation will issue matching insert, delete, updates against the hudi table
  */
 public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvroPayload {
 
-  private static final Logger LOG = LogManager.getLogger(AbstractDebeziumAvroPayload.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractDebeziumAvroPayload.class);
 
   public AbstractDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
@@ -54,19 +55,37 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
   }
 
   @Override
+  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue) {
+    if (oldValue.getRecordBytes().length == 0) {
+      // use natural order for delete record
+      return this;
+    }
+    if (((Comparable) oldValue.getOrderingValue()).compareTo(orderingVal) > 0) {
+      // pick the payload with greatest ordering value
+      return oldValue;
+    } else {
+      return this;
+    }
+  }
+
+  @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    IndexedRecord insertRecord = getInsertRecord(schema);
-    return handleDeleteOperation(insertRecord);
+    Option<IndexedRecord> insertValue = getInsertRecord(schema);
+    return insertValue.isPresent() ? handleDeleteOperation(insertValue.get()) : Option.empty();
   }
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
     // Step 1: If the time occurrence of the current record in storage is higher than the time occurrence of the
     // insert record (including a delete record), pick the current record.
-    if (shouldPickCurrentRecord(currentValue, getInsertRecord(schema), schema)) {
+    Option<IndexedRecord> insertValue = getRecord(schema);
+    if (!insertValue.isPresent()) {
+      return Option.empty();
+    }
+    if (shouldPickCurrentRecord(currentValue, insertValue.get(), schema)) {
       return Option.of(currentValue);
     }
-    // Step 2: Pick the insert record (as a delete record if its a deleted event)
+    // Step 2: Pick the insert record (as a delete record if it is a deleted event)
     return getInsertValue(schema);
   }
 
@@ -76,14 +95,23 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
     boolean delete = false;
     if (insertRecord instanceof GenericRecord) {
       GenericRecord record = (GenericRecord) insertRecord;
-      Object value = record.get(DebeziumConstants.FLATTENED_OP_COL_NAME);
-      delete = value != null && value.toString().equalsIgnoreCase(DebeziumConstants.DELETE_OP);
+      delete = isDebeziumDeleteRecord(record);
     }
 
     return delete ? Option.empty() : Option.of(insertRecord);
   }
 
-  private IndexedRecord getInsertRecord(Schema schema) throws IOException {
-    return super.getInsertValue(schema).get();
+  private Option<IndexedRecord> getInsertRecord(Schema schema) throws IOException {
+    return super.getInsertValue(schema);
+  }
+
+  @Override
+  protected boolean isDeleteRecord(GenericRecord record) {
+    return isDebeziumDeleteRecord(record) || super.isDeleteRecord(record);
+  }
+
+  private static boolean isDebeziumDeleteRecord(GenericRecord record) {
+    Object value = HoodieAvroUtils.getFieldVal(record, DebeziumConstants.FLATTENED_OP_COL_NAME);
+    return value != null && value.toString().equalsIgnoreCase(DebeziumConstants.DELETE_OP);
   }
 }

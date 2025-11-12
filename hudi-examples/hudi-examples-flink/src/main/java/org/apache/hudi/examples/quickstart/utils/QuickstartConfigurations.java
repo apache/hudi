@@ -18,24 +18,26 @@
 
 package org.apache.hudi.examples.quickstart.utils;
 
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.examples.quickstart.factory.CollectSinkTableFactory;
+import org.apache.hudi.examples.quickstart.factory.ContinuousFileSourceFactory;
+import org.apache.hudi.streamer.FlinkStreamerConfig;
+
+import org.apache.flink.configuration.ConfigOption;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.catalog.Column;
+import org.apache.flink.table.catalog.ResolvedSchema;
+import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
+import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.RowType;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import org.apache.flink.configuration.ConfigOption;
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.table.api.DataTypes;
-import org.apache.flink.table.api.TableSchema;
-import org.apache.flink.table.catalog.ResolvedSchema;
-import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
-import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.logical.RowType;
-import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.examples.quickstart.factory.CollectSinkTableFactory;
-import org.apache.hudi.examples.quickstart.factory.ContinuousFileSourceFactory;
-import org.apache.hudi.streamer.FlinkStreamerConfig;
 
 /**
  * Configurations for the test.
@@ -48,7 +50,7 @@ public class QuickstartConfigurations {
           DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
           DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
           DataTypes.FIELD("age", DataTypes.INT()),
-          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
+          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // ordering field
           DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
       .notNull();
 
@@ -66,7 +68,7 @@ public class QuickstartConfigurations {
           DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
           DataTypes.FIELD("age", DataTypes.INT()),
           DataTypes.FIELD("salary", DataTypes.DOUBLE()),
-          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
+          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // ordering field
           DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
       .notNull();
 
@@ -111,12 +113,11 @@ public class QuickstartConfigurations {
   }
 
   public static String getCreateHudiCatalogDDL(final String catalogName, final String catalogPath) {
-    StringBuilder builder = new StringBuilder();
-    builder.append("create catalog ").append(catalogName).append(" with (\n");
-    builder.append("  'type' = 'hudi',\n"
-        + "  'catalog.path' = '").append(catalogPath).append("'");
-    builder.append("\n)");
-    return builder.toString();
+    return "create catalog " + catalogName + " with (\n"
+        + "  'type' = 'hudi',\n"
+        + "  'catalog.path' = '"
+        + catalogPath + "'"
+        + "\n)";
   }
 
   public static String getFileSourceDDL(String tableName) {
@@ -159,22 +160,21 @@ public class QuickstartConfigurations {
         + ")";
   }
 
-  public static String getCollectSinkDDL(String tableName, TableSchema tableSchema) {
+  public static String getCollectSinkDDL(String tableName, ResolvedSchema tableSchema) {
     final StringBuilder builder = new StringBuilder("create table " + tableName + "(\n");
-    String[] fieldNames = tableSchema.getFieldNames();
-    DataType[] fieldTypes = tableSchema.getFieldDataTypes();
-    for (int i = 0; i < fieldNames.length; i++) {
+    List<Column> columns = tableSchema.getColumns();
+    for (int i = 0; i < columns.size(); i++) {
+      Column column = columns.get(i);
       builder.append("  `")
-          .append(fieldNames[i])
+          .append(column.getName())
           .append("` ")
-          .append(fieldTypes[i].toString());
-      if (i != fieldNames.length - 1) {
+          .append(column.getDataType());
+      if (i != columns.size() - 1) {
         builder.append(",");
       }
       builder.append("\n");
     }
-    final String withProps = ""
-        + ") with (\n"
+    final String withProps = ") with (\n"
         + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "'\n"
         + ")";
     builder.append(withProps);
@@ -201,12 +201,12 @@ public class QuickstartConfigurations {
 
   public static Configuration getDefaultConf(String tablePath) {
     Configuration conf = new Configuration();
-    conf.setString(FlinkOptions.PATH, tablePath);
-    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
+    conf.set(FlinkOptions.PATH, tablePath);
+    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
         Objects.requireNonNull(Thread.currentThread()
             .getContextClassLoader().getResource("test_read_schema.avsc")).toString());
-    conf.setString(FlinkOptions.TABLE_NAME, "TestHoodieTable");
-    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    conf.set(FlinkOptions.TABLE_NAME, "TestHoodieTable");
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
     return conf;
   }
 

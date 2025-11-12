@@ -19,7 +19,6 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.UtilHelpers;
 
 import org.apache.avro.Schema;
@@ -28,45 +27,33 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_CONNECTION_URL;
+import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_DBTABLE;
+import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_DRIVER_TYPE;
+import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_NULLABLE;
+import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_PASSWORD;
+import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_TIMEOUT;
+import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_USERNAME;
+
 /**
  * A schema provider to get metadata through Jdbc.
  */
 public class JdbcbasedSchemaProvider extends SchemaProvider {
   private Schema sourceSchema;
-  private Map<String, String> options = new HashMap<>();
-
-  /**
-   * Configs supported.
-   */
-  public static class Config {
-    // The JDBC URL to connect to. The source-specific connection properties may be specified in the URL.
-    // e.g., jdbc:postgresql://localhost/test?user=fred&password=secret
-    private static final String SOURCE_SCHEMA_JDBC_CONNECTION_URL = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.connection.url";
-    // The class name of the JDBC driver to use to connect to this URL. such as org.h2.Driver
-    private static final String SOURCE_SCHEMA_JDBC_DRIVER_TYPE = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.driver.type";
-    private static final String SOURCE_SCHEMA_JDBC_USERNAME = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.username";
-    private static final String SOURCE_SCHEMA_JDBC_PASSWORD = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.password";
-    // example : test_database.test1_table or test1_table
-    private static final String SOURCE_SCHEMA_JDBC_DBTABLE = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.dbtable";
-    // The number of seconds the driver will wait for a Statement object to execute to the given number of seconds.
-    // Zero means there is no limit. In the write path, this option depends on how JDBC drivers implement the API setQueryTimeout,
-    // e.g., the h2 JDBC driver checks the timeout of each query instead of an entire JDBC batch. It defaults to 0.
-    private static final String SOURCE_SCHEMA_JDBC_TIMEOUT = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.timeout";
-    // If true, all the columns are nullable.
-    private static final String SOURCE_SCHEMA_JDBC_NULLABLE = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.nullable";
-  }
+  private final Map<String, String> options = new HashMap<>();
 
   public JdbcbasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
-    options.put("url", props.getString(Config.SOURCE_SCHEMA_JDBC_CONNECTION_URL));
-    options.put("driver", props.getString(Config.SOURCE_SCHEMA_JDBC_DRIVER_TYPE));
-    options.put("user", props.getString(Config.SOURCE_SCHEMA_JDBC_USERNAME));
-    options.put("password", props.getString(Config.SOURCE_SCHEMA_JDBC_PASSWORD));
-    options.put("dbtable", props.getString(Config.SOURCE_SCHEMA_JDBC_DBTABLE));
+    options.put("url", getStringWithAltKeys(props, SOURCE_SCHEMA_JDBC_CONNECTION_URL));
+    options.put("driver", getStringWithAltKeys(props, SOURCE_SCHEMA_JDBC_DRIVER_TYPE));
+    options.put("user", getStringWithAltKeys(props, SOURCE_SCHEMA_JDBC_USERNAME));
+    options.put("password", getStringWithAltKeys(props, SOURCE_SCHEMA_JDBC_PASSWORD));
+    options.put("dbtable", getStringWithAltKeys(props, SOURCE_SCHEMA_JDBC_DBTABLE));
     // the number of seconds the driver will wait for a Statement object to execute to the given
     // number of seconds. Zero means there is no limit.
-    options.put("queryTimeout", props.getString(Config.SOURCE_SCHEMA_JDBC_TIMEOUT, "0"));
-    options.put("nullable", props.getString(Config.SOURCE_SCHEMA_JDBC_NULLABLE, "true"));
+    options.put("queryTimeout", getStringWithAltKeys(props, SOURCE_SCHEMA_JDBC_TIMEOUT, "0"));
+    options.put("nullable", getStringWithAltKeys(props, SOURCE_SCHEMA_JDBC_NULLABLE, "true"));
   }
 
   @Override
@@ -75,11 +62,6 @@ public class JdbcbasedSchemaProvider extends SchemaProvider {
       return sourceSchema;
     }
 
-    try {
-      sourceSchema = UtilHelpers.getJDBCSchema(options);
-    } catch (Exception e) {
-      throw new HoodieException("Failed to get Schema through jdbc. ", e);
-    }
-    return sourceSchema;
+    return UtilHelpers.getJDBCSchema(options);
   }
 }

@@ -18,17 +18,21 @@
 
 package org.apache.hudi.client.heartbeat;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.List;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
@@ -46,48 +50,67 @@ public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
   @Test
   public void testStartHeartbeat() throws IOException {
     HoodieHeartbeatClient hoodieHeartbeatClient =
-        new HoodieHeartbeatClient(metaClient.getFs(), metaClient.getBasePath(), heartBeatInterval, numTolerableMisses);
+        new HoodieHeartbeatClient(metaClient.getStorage(), metaClient.getBasePath().toString(),
+            heartBeatInterval,
+            numTolerableMisses);
     hoodieHeartbeatClient.start(instantTime1);
-    FileStatus [] fs = metaClient.getFs().listStatus(new Path(hoodieHeartbeatClient.getHeartbeatFolderPath()));
-    assertTrue(fs.length == 1);
-    assertTrue(fs[0].getPath().toString().contains(instantTime1));
+    List<StoragePathInfo> listFiles = metaClient.getStorage().listDirectEntries(
+        new StoragePath(hoodieHeartbeatClient.getHeartbeatFolderPath()));
+    assertTrue(listFiles.size() == 1);
+    assertTrue(listFiles.get(0).getPath().toString().contains(instantTime1));
   }
 
   @Test
   public void testStopHeartbeat() {
     HoodieHeartbeatClient hoodieHeartbeatClient =
-        new HoodieHeartbeatClient(metaClient.getFs(), metaClient.getBasePath(), heartBeatInterval, numTolerableMisses);
+        new HoodieHeartbeatClient(metaClient.getStorage(), metaClient.getBasePath().toString(),
+            heartBeatInterval, numTolerableMisses);
     hoodieHeartbeatClient.start(instantTime1);
-    hoodieHeartbeatClient.stop(instantTime1);
-    await().atMost(5, SECONDS).until(() -> hoodieHeartbeatClient.getHeartbeat(instantTime1).getNumHeartbeats() > 0);
-    Integer numHeartBeats = hoodieHeartbeatClient.getHeartbeat(instantTime1).getNumHeartbeats();
-    assertTrue(numHeartBeats == 1);
+    HoodieHeartbeatClient.Heartbeat heartbeat = hoodieHeartbeatClient.stop(instantTime1);
+    await().atMost(5, SECONDS).until(() -> heartbeat.getNumHeartbeats() > 0);
+    assertEquals(1, (int) heartbeat.getNumHeartbeats());
+    assertNull(hoodieHeartbeatClient.getHeartbeat(instantTime1), "Heartbeat should be removed from client cache after explicit stop");
   }
 
   @Test
   public void testIsHeartbeatExpired() throws IOException {
     HoodieHeartbeatClient hoodieHeartbeatClient =
-        new HoodieHeartbeatClient(metaClient.getFs(), metaClient.getBasePath(), heartBeatInterval, numTolerableMisses);
+        new HoodieHeartbeatClient(metaClient.getStorage(), metaClient.getBasePath().toString(),
+            heartBeatInterval, numTolerableMisses);
     hoodieHeartbeatClient.start(instantTime1);
     hoodieHeartbeatClient.stop(instantTime1);
-    assertFalse(hoodieHeartbeatClient.isHeartbeatExpired(instantTime1));
+    assertTrue(hoodieHeartbeatClient.isHeartbeatExpired(instantTime1), "The explicit stopped instant is deemed expiry for heartbeats");
   }
 
   @Test
   public void testNumHeartbeatsGenerated() {
     Long heartBeatInterval = 5000L;
     HoodieHeartbeatClient hoodieHeartbeatClient =
-        new HoodieHeartbeatClient(metaClient.getFs(), metaClient.getBasePath(), heartBeatInterval, numTolerableMisses);
+        new HoodieHeartbeatClient(metaClient.getStorage(), metaClient.getBasePath().toString(),
+            heartBeatInterval, numTolerableMisses);
     hoodieHeartbeatClient.start("100");
     await().atMost(5, SECONDS).until(() -> hoodieHeartbeatClient.getHeartbeat(instantTime1).getNumHeartbeats() >= 1);
   }
 
   @Test
-  public void testDeleteWrongHeartbeat() throws IOException {
+  public void testDeleteWrongHeartbeat() {
     HoodieHeartbeatClient hoodieHeartbeatClient =
-        new HoodieHeartbeatClient(metaClient.getFs(), metaClient.getBasePath(), heartBeatInterval, numTolerableMisses);
+        new HoodieHeartbeatClient(metaClient.getStorage(), metaClient.getBasePath().toString(),
+            heartBeatInterval, numTolerableMisses);
     hoodieHeartbeatClient.start(instantTime1);
     hoodieHeartbeatClient.stop(instantTime1);
-    assertFalse(HeartbeatUtils.deleteHeartbeatFile(metaClient.getFs(), basePath, instantTime2));
+    assertFalse(
+        HeartbeatUtils.deleteHeartbeatFile(metaClient.getStorage(), basePath, instantTime2));
+  }
+
+  @Test
+  public void testStopHeartbeatTimers() throws IOException {
+    HoodieHeartbeatClient hoodieHeartbeatClient =
+        new HoodieHeartbeatClient(metaClient.getStorage(), metaClient.getBasePath().toString(),
+            heartBeatInterval, numTolerableMisses);
+    hoodieHeartbeatClient.start(instantTime1);
+    hoodieHeartbeatClient.stopHeartbeatTimers();
+    assertFalse(hoodieHeartbeatClient.isHeartbeatExpired(instantTime1));
+    assertTrue(hoodieHeartbeatClient.getHeartbeat(instantTime1).isHeartbeatStopped());
   }
 }

@@ -21,7 +21,7 @@ package org.apache.hudi.client.transaction;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieWriteConflictException;
@@ -40,7 +40,7 @@ public interface ConflictResolutionStrategy {
    * Stream of instants to check conflicts against.
    * @return
    */
-  Stream<HoodieInstant> getCandidateInstants(HoodieActiveTimeline activeTimeline, HoodieInstant currentInstant, Option<HoodieInstant> lastSuccessfulInstant);
+  Stream<HoodieInstant> getCandidateInstants(HoodieTableMetaClient metaClient, HoodieInstant currentInstant, Option<HoodieInstant> lastSuccessfulInstant);
 
   /**
    * Implementations of this method will determine whether a conflict exists between 2 commits.
@@ -61,4 +61,11 @@ public interface ConflictResolutionStrategy {
   Option<HoodieCommitMetadata> resolveConflict(HoodieTable table,
       ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) throws HoodieWriteConflictException;
 
+  /**
+   * Write clients uses their preCommit API to run conflict resolution.
+   * This method determines whether to execute preCommit for table services like clustering.
+   * @return boolean
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  boolean isPreCommitRequired();
 }

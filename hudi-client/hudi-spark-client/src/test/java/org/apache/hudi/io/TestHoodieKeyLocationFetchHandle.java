@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -26,21 +27,19 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
@@ -52,7 +51,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -69,7 +67,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Tests {@link HoodieKeyLocationFetchHandle}.
  */
-public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
+public class TestHoodieKeyLocationFetchHandle extends HoodieSparkClientTestHarness {
 
   private HoodieWriteConfig config;
 
@@ -78,7 +76,7 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
     initSparkContexts("TestRecordFetcher");
     initPath();
     initTestDataGenerator();
-    initFileSystem();
+    initHoodieStorage();
   }
 
   @AfterEach
@@ -89,7 +87,7 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testFetchHandle(boolean populateMetaFields) throws Exception {
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, populateMetaFields ? new Properties() : getPropertiesForKeyGen());
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE, populateMetaFields ? new Properties() : getPropertiesForKeyGen());
     config = getConfigBuilder()
         .withProperties(getPropertiesForKeyGen())
         .withIndexConfig(HoodieIndexConfig.newBuilder()
@@ -104,15 +102,16 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
 
     List<Tuple2<String, HoodieBaseFile>> partitionPathFileIdPairs = loadAllFilesForPartitions(new ArrayList<>(partitionRecordsMap.keySet()), context, hoodieTable);
 
-    BaseKeyGenerator keyGenerator = (BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(getPropertiesForKeyGen()));
+    BaseKeyGenerator keyGenerator = (BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(TypedProperties.copy(getPropertiesForKeyGen()));
 
     for (Tuple2<String, HoodieBaseFile> entry : partitionPathFileIdPairs) {
       HoodieKeyLocationFetchHandle fetcherHandle = new HoodieKeyLocationFetchHandle(config, hoodieTable, Pair.of(entry._1, entry._2),
           populateMetaFields ? Option.empty() : Option.of(keyGenerator));
-      Iterator<Pair<HoodieKey, HoodieRecordLocation>> result = fetcherHandle.locations().iterator();
-      List<Tuple2<HoodieKey, HoodieRecordLocation>> actualList = new ArrayList<>();
-      result.forEachRemaining(x -> actualList.add(new Tuple2<>(x.getLeft(), x.getRight())));
-      assertEquals(expectedList.get(new Tuple2<>(entry._1, entry._2.getFileId())), actualList);
+      try (ClosableIterator<Pair<HoodieKey, HoodieRecordLocation>> result = fetcherHandle.locations()) {
+        List<Tuple2<HoodieKey, HoodieRecordLocation>> actualList = new ArrayList<>();
+        result.forEachRemaining(x -> actualList.add(new Tuple2<>(x.getLeft(), x.getRight())));
+        assertEquals(expectedList.get(new Tuple2<>(entry._1, entry._2.getFileId())), actualList);
+      }
     }
   }
 
@@ -147,8 +146,10 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
         String fileId = testTable.addCommit(instantTime).getFileIdWithInserts(entry.getKey(), recordsPerSlice.toArray(new HoodieRecord[0]));
         Tuple2<String, String> fileIdInstantTimePair = new Tuple2<>(fileId, instantTime);
         List<Tuple2<HoodieKey, HoodieRecordLocation>> expectedEntries = new ArrayList<>();
+        // record position
+        long position = 0;
         for (HoodieRecord record : recordsPerSlice) {
-          expectedEntries.add(new Tuple2<>(record.getKey(), new HoodieRecordLocation(fileIdInstantTimePair._2, fileIdInstantTimePair._1)));
+          expectedEntries.add(new Tuple2<>(record.getKey(), new HoodieRecordLocation(fileIdInstantTimePair._2, fileIdInstantTimePair._1, position++)));
         }
         expectedList.put(new Tuple2<>(entry.getKey(), fileIdInstantTimePair._1), expectedEntries);
       }
@@ -164,7 +165,7 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
         .map(pf -> new Tuple2<>(pf.getKey(), pf.getValue())).collect(toList());
   }
 
-  private HoodieWriteConfig.Builder getConfigBuilder() {
+  public HoodieWriteConfig.Builder getConfigBuilder() {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)
@@ -173,7 +174,6 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).build())
         .forTable("test-trip-table")
         .withIndexConfig(HoodieIndexConfig.newBuilder().build())
-        .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-            .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
+        .withEmbeddedTimelineServerEnabled(true);
   }
 }

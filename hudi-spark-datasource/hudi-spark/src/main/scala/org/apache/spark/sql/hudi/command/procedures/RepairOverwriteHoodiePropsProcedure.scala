@@ -17,24 +17,24 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
+import org.apache.hadoop.fs.Path
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
-import java.io.FileInputStream
 import java.util
 import java.util.Properties
 import java.util.function.Supplier
-import scala.collection.JavaConversions._
-import scala.collection.JavaConverters.asScalaIteratorConverter
+
+import scala.collection.JavaConverters._
 
 class RepairOverwriteHoodiePropsProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "new_props_file_path", DataTypes.StringType, None)
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "new_props_file_path", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -47,6 +47,14 @@ class RepairOverwriteHoodiePropsProcedure extends BaseProcedure with ProcedureBu
 
   def outputType: StructType = OUTPUT_TYPE
 
+  def loadNewProps(filePath: String, props: Properties):Unit = {
+    val fs = HadoopFSUtils.getFs(filePath, spark.sessionState.newHadoopConf())
+    val fis = fs.open(new Path(filePath))
+    props.load(fis)
+
+    fis.close()
+  }
+
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
@@ -54,22 +62,25 @@ class RepairOverwriteHoodiePropsProcedure extends BaseProcedure with ProcedureBu
     val overwriteFilePath = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
     val tablePath = getBasePath(tableName)
 
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(tablePath).build
+    val metaClient = createMetaClient(jsc, tablePath)
 
     var newProps = new Properties
-    newProps.load(new FileInputStream(overwriteFilePath))
+    loadNewProps(overwriteFilePath, newProps)
     val oldProps = metaClient.getTableConfig.propsMap
-    val metaPathDir = new Path(tablePath, METAFOLDER_NAME)
-    HoodieTableConfig.create(metaClient.getFs, metaPathDir, newProps)
+    // Copy Initial Version from old props to new props
+    if (oldProps.containsKey(HoodieTableConfig.INITIAL_VERSION.key)) {
+      newProps.put(HoodieTableConfig.INITIAL_VERSION.key, oldProps.get(HoodieTableConfig.INITIAL_VERSION.key))
+    }
+    HoodieTableConfig.create(metaClient.getStorage, metaClient.getMetaPath, newProps)
     // reload new props as checksum would have been added
     newProps = HoodieTableMetaClient.reload(metaClient).getTableConfig.getProps
 
     val allPropKeys = new util.TreeSet[String]
-    allPropKeys.addAll(newProps.keySet.stream.iterator().asScala.map(key => key.toString).toList)
+    allPropKeys.addAll(newProps.keySet.stream.iterator().asScala.map(key => key.toString).toList.asJava)
     allPropKeys.addAll(oldProps.keySet)
 
     val rows = new util.ArrayList[Row](allPropKeys.size)
-    for (propKey <- allPropKeys) {
+    for (propKey <- allPropKeys.asScala) {
       rows.add(Row(propKey, oldProps.getOrDefault(propKey, "null"),
         newProps.getOrDefault(propKey, "null").toString))
     }

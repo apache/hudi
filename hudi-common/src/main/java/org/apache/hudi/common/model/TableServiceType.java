@@ -36,7 +36,7 @@ public enum TableServiceType {
       case CLEAN:
         return HoodieTimeline.CLEAN_ACTION;
       case CLUSTER:
-        return HoodieTimeline.REPLACE_COMMIT_ACTION;
+        return HoodieTimeline.CLUSTERING_ACTION;
       case LOG_COMPACT:
         return HoodieTimeline.LOG_COMPACTION_ACTION;
       default:

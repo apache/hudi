@@ -20,35 +20,44 @@
 package org.apache.hudi.table.action.restore;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClusteringUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 
-public class CopyOnWriteRestoreActionExecutor<T extends HoodieRecordPayload, I, K, O>
+public class CopyOnWriteRestoreActionExecutor<T, I, K, O>
     extends BaseRestoreActionExecutor<T, I, K, O> {
   public CopyOnWriteRestoreActionExecutor(HoodieEngineContext context,
                                           HoodieWriteConfig config,
                                           HoodieTable table,
                                           String instantTime,
-                                          String restoreInstantTime) {
-    super(context, config, table, instantTime, restoreInstantTime);
+                                          String savepointToRestoreTimestamp) {
+    super(context, config, table, instantTime, savepointToRestoreTimestamp);
   }
 
   @Override
   protected HoodieRollbackMetadata rollbackInstant(HoodieInstant instantToRollback) {
     if (!instantToRollback.getAction().equals(HoodieTimeline.COMMIT_ACTION)
-        && !instantToRollback.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+        && !ClusteringUtils.isClusteringOrReplaceCommitAction(instantToRollback.getAction())) {
       throw new HoodieRollbackException("Unsupported action in rollback instant:" + instantToRollback);
     }
-    table.getMetaClient().reloadActiveTimeline();
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
-    table.scheduleRollback(context, newInstantTime, instantToRollback, false, false);
+    String newInstantTime;
+    try (TransactionManager transactionManager = new TransactionManager(config, table.getStorage())) {
+      table.getMetaClient().reloadActiveTimeline();
+      transactionManager.beginStateChange(Option.empty(), Option.empty());
+      try {
+        newInstantTime = table.getMetaClient().createNewInstantTime(false);
+        table.scheduleRollback(context, newInstantTime, instantToRollback, false, false, true);
+      } finally {
+        transactionManager.endStateChange(Option.empty());
+      }
+    }
     table.getMetaClient().reloadActiveTimeline();
     CopyOnWriteRollbackActionExecutor rollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(
         context,

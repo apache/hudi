@@ -22,26 +22,22 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.ExecutorFactory;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 
 import java.util.Iterator;
 import java.util.List;
-import java.util.Properties;
 import java.util.function.Function;
 
 /**
  * Lazy Iterable, that writes a stream of HoodieRecords sorted by the partitionPath, into new files.
  */
-public abstract class HoodieLazyInsertIterable<T extends HoodieRecordPayload>
+public abstract class HoodieLazyInsertIterable<T>
     extends LazyIterableIterator<HoodieRecord<T>, List<WriteStatus>> {
 
   protected final HoodieWriteConfig hoodieConfig;
@@ -78,19 +74,17 @@ public abstract class HoodieLazyInsertIterable<T extends HoodieRecordPayload>
   }
 
   // Used for caching HoodieRecord along with insertValue. We need this to offload computation work to buffering thread.
-  public static class HoodieInsertValueGenResult<T extends HoodieRecord> {
-    public T record;
-    public Option<IndexedRecord> insertValue;
-    // It caches the exception seen while fetching insert value.
-    public Option<Exception> exception = Option.empty();
+  public static class HoodieInsertValueGenResult<R extends HoodieRecord> {
+    private final R record;
+    public final Schema schema;
 
-    public HoodieInsertValueGenResult(T record, Schema schema, Properties properties) {
+    public HoodieInsertValueGenResult(R record, Schema schema) {
       this.record = record;
-      try {
-        this.insertValue = ((HoodieRecordPayload) record.getData()).getInsertValue(schema, properties);
-      } catch (Exception e) {
-        this.exception = Option.of(e);
-      }
+      this.schema = schema;
+    }
+
+    public R getResult() {
+      return record;
     }
   }
 
@@ -98,21 +92,35 @@ public abstract class HoodieLazyInsertIterable<T extends HoodieRecordPayload>
    * Transformer function to help transform a HoodieRecord. This transformer is used by BufferedIterator to offload some
    * expensive operations of transformation to the reader thread.
    */
-  static <T extends HoodieRecordPayload> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformFunction(
-      Schema schema, HoodieWriteConfig config) {
-    return hoodieRecord -> new HoodieInsertValueGenResult(hoodieRecord, schema, config.getProps());
+  public <T> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformer(Schema schema,
+                                                                                                HoodieWriteConfig writeConfig) {
+    return getTransformerInternal(schema, writeConfig);
   }
 
-  static <T extends HoodieRecordPayload> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformFunction(
-      Schema schema) {
-    return hoodieRecord -> new HoodieInsertValueGenResult(hoodieRecord, schema, CollectionUtils.emptyProps());
+  public static <T> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformerInternal(Schema schema,
+                                                                                                                HoodieWriteConfig writeConfig) {
+    // NOTE: Whether record have to be cloned here is determined based on the executor type used
+    //       for writing: executors relying on an inner queue, will be keeping references to the records
+    //       and therefore in the environments where underlying buffer holding the record could be
+    //       reused (for ex, Spark) we need to make sure that we get a clean copy of
+    //       it since these records will be subsequently buffered (w/in the in-memory queue);
+    //       Only case when we don't need to make a copy is when using [[SimpleExecutor]] which
+    //       is guaranteed to not hold on to references to any records
+    boolean shouldClone = ExecutorFactory.isBufferingRecords(writeConfig);
+
+    return record -> {
+      HoodieRecord<T> clonedRecord = shouldClone ? record.copy() : record;
+      return new HoodieInsertValueGenResult(clonedRecord, schema);
+    };
   }
 
   @Override
-  protected void start() {}
+  protected void start() {
+  }
 
   @Override
-  protected void end() {}
+  protected void end() {
+  }
 
   protected CopyOnWriteInsertHandler getInsertHandler() {
     return new CopyOnWriteInsertHandler(hoodieConfig, instantTime, areRecordsSorted, hoodieTable, idPrefix,

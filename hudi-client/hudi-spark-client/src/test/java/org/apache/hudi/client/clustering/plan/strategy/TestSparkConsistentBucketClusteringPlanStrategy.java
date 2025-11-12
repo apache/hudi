@@ -19,6 +19,7 @@
 package org.apache.hudi.client.clustering.plan.strategy;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.FileSlice;
@@ -29,13 +30,14 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.table.action.cluster.strategy.BaseConsistentHashingBucketClusteringPlanStrategy;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -43,6 +45,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Properties;
 import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -50,15 +53,15 @@ import java.util.stream.IntStream;
 import static org.apache.hudi.config.HoodieIndexConfig.BUCKET_MERGE_THRESHOLD;
 import static org.apache.hudi.config.HoodieIndexConfig.BUCKET_SPLIT_THRESHOLD;
 
-public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieClientTestHarness {
+public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieSparkClientTestHarness {
 
   private final Random random = new Random();
 
   private void setup() throws IOException {
     initPath();
     initSparkContexts();
-    initFileSystem();
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
+    initHoodieStorage();
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
   }
 
   @AfterEach
@@ -70,8 +73,10 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieClien
   public void testBuildSplitClusteringGroup() throws IOException {
     setup();
     int maxFileSize = 5120;
+    Properties props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BUCKET)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET)
             .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING)
             .withBucketMaxNum(6)
             .withBucketNum("4").build())
@@ -110,8 +115,10 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieClien
   public void testBuildMergeClusteringGroup() throws Exception {
     setup();
     int maxFileSize = 5120;
+    Properties props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BUCKET)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET)
             .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING)
             .withBucketMinNum(4)
             .withBucketNum("4").build())
@@ -126,7 +133,7 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieClien
     ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata);
 
     int mergeSize = (int) (maxFileSize * BUCKET_MERGE_THRESHOLD.defaultValue());
-    int[] fsSize = {0, maxFileSize, mergeSize / 2, mergeSize / 2, mergeSize / 2, maxFileSize, mergeSize / 4, mergeSize / 4};
+    int[] fsSize = {0, maxFileSize, mergeSize / 2, mergeSize / 2 + 10, mergeSize / 2, maxFileSize, mergeSize / 4, mergeSize / 4};
     List<FileSlice> fileSlices = IntStream.range(0, metadata.getNodes().size()).mapToObj(
         i -> createFileSliceWithSize(metadata.getNodes().get(i).getFileIdPrefix(), fsSize[i] / 2, fsSize[i] / 2)
     ).collect(Collectors.toList());
@@ -146,7 +153,7 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieClien
     Assertions.assertEquals(fileSlices.get(7).getFileId(), groups.get(0).getSlices().get(1).getFileId());
     Assertions.assertEquals(fileSlices.get(6).getFileId(), groups.get(0).getSlices().get(0).getFileId());
     Assertions.assertEquals(3, groups.get(0).getSlices().size());
-    List<ConsistentHashingNode> nodes = ConsistentHashingNode.fromJsonString(groups.get(0).getExtraMetadata().get(SparkConsistentBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY));
+    List<ConsistentHashingNode> nodes = ConsistentHashingNode.fromJsonString(groups.get(0).getExtraMetadata().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY));
     Assertions.assertEquals(3, nodes.size());
     Assertions.assertEquals(ConsistentHashingNode.NodeTag.DELETE, nodes.get(0).getTag());
     Assertions.assertEquals(ConsistentHashingNode.NodeTag.DELETE, nodes.get(1).getTag());
@@ -157,11 +164,24 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieClien
     Assertions.assertEquals(fileSlices.get(2).getFileId(), groups.get(1).getSlices().get(0).getFileId());
     Assertions.assertEquals(fileSlices.get(3).getFileId(), groups.get(1).getSlices().get(1).getFileId());
     Assertions.assertEquals(2, groups.get(1).getSlices().size());
-    nodes = ConsistentHashingNode.fromJsonString(groups.get(1).getExtraMetadata().get(SparkConsistentBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY));
+    nodes = ConsistentHashingNode.fromJsonString(groups.get(1).getExtraMetadata().get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY));
     Assertions.assertEquals(2, nodes.size());
     Assertions.assertEquals(ConsistentHashingNode.NodeTag.DELETE, nodes.get(0).getTag());
     Assertions.assertEquals(ConsistentHashingNode.NodeTag.REPLACE, nodes.get(1).getTag());
     Assertions.assertEquals(metadata.getNodes().get(3).getValue(), nodes.get(1).getValue());
+
+    HoodieConsistentHashingMetadata metadata1 = new HoodieConsistentHashingMetadata("partition", 4);
+    ConsistentBucketIdentifier identifier1 = new ConsistentBucketIdentifier(metadata1);
+
+    int[] fsSize1 = {mergeSize / 4, mergeSize / 4, maxFileSize, mergeSize / 4};
+    List<FileSlice> fileSlices1 = IntStream.range(0, metadata1.getNodes().size()).mapToObj(
+        i -> createFileSliceWithSize(metadata1.getNodes().get(i).getFileIdPrefix(), fsSize1[i] / 2, fsSize1[i] / 2)
+    ).collect(Collectors.toList());
+
+    Triple<List<HoodieClusteringGroup>, Integer, List<FileSlice>> res1 = planStrategy.buildMergeClusteringGroup(identifier1,
+        fileSlices1.stream().filter(fs -> fs.getTotalFileSize() < mergeSize).collect(Collectors.toList()), 4);
+    Assertions.assertEquals(1, res1.getLeft().size(), "should have 1 clustering group");
+    Assertions.assertEquals(3, res1.getLeft().get(0).getSlices().size(), "should have 3 input files");
   }
 
   private FileSlice createFileSliceWithSize(String fileIdPfx, long baseFileSize, long totalLogFileSize) {
@@ -186,5 +206,4 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieClien
 
     return fs;
   }
-
 }

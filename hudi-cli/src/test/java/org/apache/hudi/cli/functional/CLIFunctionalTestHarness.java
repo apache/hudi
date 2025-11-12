@@ -20,14 +20,17 @@
 package org.apache.hudi.cli.functional;
 
 import org.apache.hudi.client.SparkRDDReadClient;
-import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.providers.SparkProvider;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -36,9 +39,12 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Paths;
 
 public class CLIFunctionalTestHarness implements SparkProvider {
+
+  protected static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
 
   protected static int timelineServicePort =
       FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
@@ -91,8 +97,8 @@ public class CLIFunctionalTestHarness implements SparkProvider {
     return Paths.get(basePath(), tableName).toString();
   }
 
-  public Configuration hadoopConf() {
-    return jsc().hadoopConfiguration();
+  public StorageConfiguration<Configuration> storageConf() {
+    return HadoopFSUtils.getStorageConfWithCopy(jsc().hadoopConfiguration());
   }
 
   @BeforeEach
@@ -100,7 +106,7 @@ public class CLIFunctionalTestHarness implements SparkProvider {
     initialized = spark != null;
     if (!initialized) {
       SparkConf sparkConf = conf();
-      SparkRDDWriteClient.registerClasses(sparkConf);
+      HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
       SparkRDDReadClient.addHoodieSupport(sparkConf);
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();
@@ -113,7 +119,7 @@ public class CLIFunctionalTestHarness implements SparkProvider {
   }
 
   @AfterAll
-  public static synchronized void cleanUpAfterAll() {
+  public static synchronized void cleanUpAfterAll() throws IOException {
     if (spark != null) {
       spark.close();
       spark = null;

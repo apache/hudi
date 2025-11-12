@@ -15,7 +15,7 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG HADOOP_VERSION=2.8.4 
+ARG HADOOP_VERSION=3.3.4 
 FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
 
 ENV HIVE_HOME /opt/hive
@@ -24,7 +24,7 @@ ENV HADOOP_HOME /opt/hadoop-$HADOOP_VERSION
 
 WORKDIR /opt
 
-ARG HIVE_VERSION=2.3.3
+ARG HIVE_VERSION=3.1.3
 ARG HIVE_URL=https://archive.apache.org/dist/hive/hive-$HIVE_VERSION/apache-hive-$HIVE_VERSION-bin.tar.gz
 ENV HIVE_VERSION ${HIVE_VERSION}
 ENV HIVE_URL ${HIVE_URL}
@@ -41,15 +41,13 @@ RUN echo "Hive URL is :${HIVE_URL}" && wget ${HIVE_URL} -O hive.tar.gz && \
 
 #Custom configuration goes here
 ADD conf/hive-site.xml $HADOOP_CONF_DIR
+ADD conf/hive-site.xml $HIVE_HOME/conf
 ADD conf/beeline-log4j2.properties $HIVE_HOME/conf
 ADD conf/hive-env.sh $HIVE_HOME/conf
 ADD conf/hive-exec-log4j2.properties $HIVE_HOME/conf
 ADD conf/hive-log4j2.properties $HIVE_HOME/conf
 ADD conf/ivysettings.xml $HIVE_HOME/conf
 ADD conf/llap-daemon-log4j2.properties $HIVE_HOME/conf
-
-# Setup Hoodie Library jars
-ADD target/ /var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/
 
 ENV HUDI_HADOOP_BUNDLE=/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-hadoop-mr-bundle.jar
 ENV HUDI_HIVE_SYNC_BUNDLE=/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-hive-sync-bundle.jar

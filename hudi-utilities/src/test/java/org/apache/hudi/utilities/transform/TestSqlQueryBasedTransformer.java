@@ -27,20 +27,22 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.Collections;
 
+import static org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestSqlQueryBasedTransformer {
 
   @Test
-  public void testSqlQuery() {
+  public void testSqlQuery() throws IOException {
 
     SparkSession spark = SparkSession
         .builder()
-        .master("local[2]")
-        .appName(TestSqlQueryBasedTransformer.class.getName())
+        .config(getSparkConfForTest(TestSqlQueryBasedTransformer.class.getName()))
         .getOrCreate();
 
     JavaSparkContext jsc = JavaSparkContext.fromSparkContext(spark.sparkContext());
@@ -78,10 +80,14 @@ public class TestSqlQueryBasedTransformer {
         + "from\n"
         + "\t<SRC>";
     TypedProperties props = new TypedProperties();
-    props.put("hoodie.deltastreamer.transformer.sql", transSql);
+    props.put("hoodie.streamer.transformer.sql", transSql);
 
     // transform
     SqlQueryBasedTransformer transformer = new SqlQueryBasedTransformer();
+
+    // test if the class throws illegal argument exception when sql-config is missing
+    assertThrows(IllegalArgumentException.class, () -> transformer.apply(jsc, spark, ds, new TypedProperties()));
+
     Dataset<Row> result = transformer.apply(jsc, spark, ds, props);
 
     // check result

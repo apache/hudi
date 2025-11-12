@@ -18,22 +18,21 @@
 
 package org.apache.hudi.cdc
 
-import org.apache.hudi.AvroConversionUtils
-import org.apache.hudi.DataSourceReadOptions
-import org.apache.hudi.HoodieDataSourceHelper
-import org.apache.hudi.HoodieTableSchema
-import org.apache.hudi.common.table.cdc.HoodieCDCUtils._
-import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.TableSchemaResolver
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, HoodieDataSourceHelper, HoodieTableSchema}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.cdc.HoodieCDCExtractor
+import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils._
 import org.apache.hudi.common.table.log.InstantRange
+import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.internal.schema.InternalSchema
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{Row, SparkSession, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.{Row, SQLContext, SparkSession}
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
@@ -50,8 +49,11 @@ class CDCRelation(
     metaClient: HoodieTableMetaClient,
     startInstant: String,
     endInstant: String,
-    options: Map[String, String]
+    options: Map[String, String],
+    rangeType: RangeType = InstantRange.RangeType.OPEN_CLOSED
 ) extends BaseRelation with PrunedFilteredScan with Logging {
+
+  imbueConfigs(sqlContext)
 
   val spark: SparkSession = sqlContext.sparkSession
 
@@ -80,7 +82,8 @@ class CDCRelation(
         .startInstant(startInstant)
         .endInstant(endInstant)
         .nullableBoundary(true)
-        .rangeType(InstantRange.RangeType.OPEN_CLOSE).build())
+        .rangeType(rangeType).build(),
+      false)
 
   override final def needConversion: Boolean = false
 
@@ -121,6 +124,11 @@ class CDCRelation(
     )
     cdcRdd.asInstanceOf[RDD[InternalRow]]
   }
+
+  def imbueConfigs(sqlContext: SQLContext): Unit = {
+    // Disable vectorized reading for CDC relation
+    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "false")
+  }
 }
 
 object CDCRelation {
@@ -131,7 +139,7 @@ object CDCRelation {
 
   /**
    * CDC Schema For Spark.
-   * Also it's schema when `hoodie.table.cdc.supplemental.logging.mode` is `cdc_data_before_after`.
+   * Also it's schema when `hoodie.table.cdc.supplemental.logging.mode` is [[DATA_BEFORE_AFTER]].
    * Here we use the debezium format.
    */
   val FULL_CDC_SPARK_SCHEMA: StructType = {
@@ -146,7 +154,7 @@ object CDCRelation {
   }
 
   /**
-   * CDC Schema For Spark when `hoodie.table.cdc.supplemental.logging.mode` is `op_key`.
+   * CDC Schema For Spark when `hoodie.table.cdc.supplemental.logging.mode` is [[OP_KEY_ONLY]].
    */
   val MIN_CDC_SPARK_SCHEMA: StructType = {
     StructType(
@@ -158,7 +166,7 @@ object CDCRelation {
   }
 
   /**
-   * CDC Schema For Spark when `hoodie.table.cdc.supplemental.logging.mode` is `cdc_data_before`.
+   * CDC Schema For Spark when `hoodie.table.cdc.supplemental.logging.mode` is [[DATA_BEFORE]].
    */
   val CDC_WITH_BEFORE_SPARK_SCHEMA: StructType = {
     StructType(
@@ -180,29 +188,28 @@ object CDCRelation {
   def getCDCRelation(
       sqlContext: SQLContext,
       metaClient: HoodieTableMetaClient,
-      options: Map[String, String]): CDCRelation = {
+      options: Map[String, String],
+      rangeType: RangeType = RangeType.OPEN_CLOSED): CDCRelation = {
 
     if (!isCDCEnabled(metaClient)) {
-      throw new IllegalArgumentException(s"It isn't a CDC hudi table on ${metaClient.getBasePathV2.toString}")
+      throw new IllegalArgumentException(s"It isn't a CDC hudi table on ${metaClient.getBasePath}")
     }
 
-    val startingInstant = options.getOrElse(DataSourceReadOptions.BEGIN_INSTANTTIME.key(),
-      throw new HoodieException("CDC Query should provide the valid start version or timestamp")
+    val startCompletionTime = options.getOrElse(DataSourceReadOptions.START_COMMIT.key(),
+      throw new HoodieException(s"CDC Query should provide the valid start completion time "
+        + s"through the option ${DataSourceReadOptions.START_COMMIT.key()}")
     )
-    val endingInstant = options.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(),
+    val endCompletionTime = options.getOrElse(DataSourceReadOptions.END_COMMIT.key(),
       getTimestampOfLatestInstant(metaClient)
     )
-    if (startingInstant > endingInstant) {
-      throw new HoodieException(s"This is not a valid range between $startingInstant and $endingInstant")
-    }
 
-    new CDCRelation(sqlContext, metaClient, startingInstant, endingInstant, options)
+    new CDCRelation(sqlContext, metaClient, startCompletionTime, endCompletionTime, options, rangeType)
   }
 
   def getTimestampOfLatestInstant(metaClient: HoodieTableMetaClient): String = {
     val latestInstant = metaClient.getActiveTimeline.lastInstant()
     if (latestInstant.isPresent) {
-      latestInstant.get().getTimestamp
+      latestInstant.get().requestedTime
     } else {
       throw new HoodieException("No valid instant in Active Timeline.")
     }

@@ -31,5 +31,7 @@ public enum EngineProperty {
   // Amount of total memory available to each engine executor
   TOTAL_MEMORY_AVAILABLE,
   // Fraction of that memory, that is already in use by the engine
-  MEMORY_FRACTION_IN_USE
+  MEMORY_FRACTION_IN_USE,
+  DELTASYNC_POOL_NAME,
+  SINGLE_TASK_CORES
 }

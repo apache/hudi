@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline}
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
@@ -28,7 +28,8 @@ import java.util.stream.Collectors
 
 class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -43,16 +44,17 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder {
     super.checkArgs(PARAMETERS, args)
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
+    val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
 
-    val basePath: String = getBasePath(tableName)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val basePath: String = getBasePath(tableName, tablePath)
+    val metaClient = createMetaClient(jsc, basePath)
 
     val activeTimeline: HoodieActiveTimeline = metaClient.getActiveTimeline
     val timeline: HoodieTimeline = activeTimeline.getSavePointTimeline.filterCompletedInstants
     val commits: util.List[HoodieInstant] = timeline.getReverseOrderedInstants.collect(Collectors.toList[HoodieInstant])
 
     if (commits.isEmpty) Seq.empty[Row] else {
-      commits.toArray.map(instant => instant.asInstanceOf[HoodieInstant].getTimestamp).map(p => Row(p)).toSeq
+      commits.toArray.map(instant => instant.asInstanceOf[HoodieInstant].requestedTime).map(p => Row(p)).toSeq
     }
   }
 
@@ -66,4 +68,3 @@ object ShowSavepointsProcedure {
     override def get(): ShowSavepointsProcedure = new ShowSavepointsProcedure()
   }
 }
-

@@ -23,13 +23,12 @@ import org.apache.hudi.client.BaseClusterer;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
@@ -45,7 +44,7 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
 
   public static final String CLUSTERING_POOL_NAME = "hoodiecluster";
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(AsyncClusteringService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AsyncClusteringService.class);
   private final int maxConcurrentClustering;
   protected transient HoodieEngineContext context;
   private transient BaseClusterer clusteringClient;
@@ -76,11 +75,11 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
         LOG.info("Setting pool name for clustering to " + CLUSTERING_POOL_NAME);
         context.setProperty(EngineProperty.CLUSTERING_POOL_NAME, CLUSTERING_POOL_NAME);
         while (!isShutdownRequested()) {
-          final HoodieInstant instant = fetchNextAsyncServiceInstant();
+          final String instant = fetchNextAsyncServiceInstant();
           if (null != instant) {
-            LOG.info("Starting clustering for instant " + instant);
+            LOG.info("Starting clustering for instant {}", instant);
             clusteringClient.cluster(instant);
-            LOG.info("Finished clustering for instant " + instant);
+            LOG.info("Finished clustering for instant {}", instant);
           }
         }
         LOG.info("Clustering executor shutting down properly");

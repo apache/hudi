@@ -114,11 +114,129 @@
                         "name":"fileSizeInBytes",
                         "type":["null","long"],
                         "default" : null
+                     },
+                     {
+                        "name": "logVersion",
+                        "type": [
+                           "null",
+                           "int"
+                        ],
+                        "default": null
+                     },
+                     {
+                        "name": "logOffset",
+                        "type": [
+                           "null",
+                           "long"
+                        ],
+                        "default": null
+                     },
+                     {
+                        "name": "baseFile",
+                        "type": [
+                           "null",
+                           "string"
+                        ],
+                        "default": null
+                     },
+                     {
+                        "name": "logFiles",
+                        "type": [
+                           "null",
+                           {
+                              "type": "array",
+                              "items": "string",
+                              "default": null
+                           }
+                        ],
+                        "default": null
+                     },
+                     {
+                        "name": "cdcStats",
+                        "type": [
+                           "null",
+                           {
+                              "type": "map",
+                              "values": "long",
+                              "default": null
+                           }
+                        ],
+                        "default": null
+                     },
+                     {
+                        "name":"prevBaseFile",
+                        "type":["null","string"],
+                        "default": null
+                     },
+                     {
+                        "name":"minEventTime",
+                        "type":["null","long"],
+                        "default": null
+                     },
+                     {
+                        "name":"maxEventTime", 
+                        "type":["null","long"],
+                        "default": null
+                     },
+                     {
+                        "name":"runtimeStats",
+                        "type":["null", {
+                           "type": "record",
+                           "name": "HoodieRuntimeStats",
+                           "fields": [
+                              {
+                                 "name": "totalScanTime",
+                                 "type": ["null", "long"],
+                                 "default": null
+                              },
+                              {
+                                 "name": "totalCreateTime",
+                                 "type": ["null", "long"],
+                                 "default": null
+                              },
+                              {
+                                 "name": "totalUpsertTime",
+                                 "type": ["null", "long"],
+                                 "default": null
+                              }
+                           ]
+                        }],
+                        "default": null
+                     },
+                     {
+                        "name":"totalLogFilesCompacted",
+                        "type":["null","long"],
+                        "default" : null
+                     },
+                     {
+                        "name":"totalLogReadTimeMs",
+                        "type":["null","long"],
+                        "default" : null
+                     },
+                     {
+                        "name":"totalLogSizeCompacted",
+                        "type":["null","long"],
+                        "default" : null
+                     },
+                     {
+                        "name":"tempPath",
+                        "type":["null","string"],
+                        "default" : null
+                     },
+                     {
+                        "name":"numUpdates",
+                        "type":["null","long"],
+                        "default" : null
                      }
                   ]
                }
             }
          }],
+         "default": null
+      },
+      {
+         "name":"compacted",
+         "type":["null", "boolean"],
          "default": null
       },
       {

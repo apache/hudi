@@ -18,12 +18,13 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimePath;
 import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.List;

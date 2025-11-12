@@ -20,6 +20,7 @@ package org.apache.hudi.sink.common;
 
 import org.apache.hudi.sink.StreamWriteOperator;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
+import org.apache.hudi.sink.event.Correspondent;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.OperatorID;
@@ -30,13 +31,14 @@ import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.SimpleUdfStreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamOperator;
 import org.apache.flink.streaming.api.operators.StreamOperatorParameters;
+import org.apache.flink.table.data.RowData;
 
 /**
  * Factory class for {@link StreamWriteOperator}.
  */
 public class WriteOperatorFactory<I>
-    extends SimpleUdfStreamOperatorFactory<Object>
-    implements CoordinatedOperatorFactory<Object>, OneInputStreamOperatorFactory<I, Object> {
+    extends SimpleUdfStreamOperatorFactory<RowData>
+    implements CoordinatedOperatorFactory<RowData>, OneInputStreamOperatorFactory<I, RowData> {
   private static final long serialVersionUID = 1L;
 
   private final AbstractWriteOperator<I> operator;
@@ -54,13 +56,16 @@ public class WriteOperatorFactory<I>
 
   @Override
   @SuppressWarnings("unchecked")
-  public <T extends StreamOperator<Object>> T createStreamOperator(StreamOperatorParameters<Object> parameters) {
+  public <T extends StreamOperator<RowData>> T createStreamOperator(StreamOperatorParameters<RowData> parameters) {
+    // necessary setting for the operator.
+    super.createStreamOperator(parameters);
+
     final OperatorID operatorID = parameters.getStreamConfig().getOperatorID();
     final OperatorEventDispatcher eventDispatcher = parameters.getOperatorEventDispatcher();
 
+    this.operator.setCorrespondent(Correspondent.getInstance(operatorID,
+        parameters.getContainingTask().getEnvironment().getOperatorCoordinatorEventGateway()));
     this.operator.setOperatorEventGateway(eventDispatcher.getOperatorEventGateway(operatorID));
-    this.operator.setup(parameters.getContainingTask(), parameters.getStreamConfig(), parameters.getOutput());
-    this.operator.setProcessingTimeService(this.processingTimeService);
     eventDispatcher.registerEventHandler(operatorID, operator);
     return (T) operator;
   }

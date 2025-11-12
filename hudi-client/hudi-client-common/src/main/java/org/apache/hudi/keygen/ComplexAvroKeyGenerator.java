@@ -17,9 +17,11 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+
+import org.apache.avro.generic.GenericRecord;
 
 import java.util.Arrays;
 import java.util.stream.Collectors;
@@ -29,26 +31,35 @@ import java.util.stream.Collectors;
  */
 public class ComplexAvroKeyGenerator extends BaseKeyGenerator {
   public static final String DEFAULT_RECORD_KEY_SEPARATOR = ":";
+  private final SerializableFunctionUnchecked<GenericRecord, String> recordKeyFunction;
 
   public ComplexAvroKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","))
-        .map(String::trim)
-        .filter(s -> !s.isEmpty())
-        .collect(Collectors.toList());
+    this.recordKeyFields = KeyGenUtils.getRecordKeyFields(props);
     this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(","))
         .map(String::trim)
         .filter(s -> !s.isEmpty())
         .collect(Collectors.toList());
+    this.recordKeyFunction = getRecordKeyFunc(KeyGenUtils.encodeSingleKeyFieldNameForComplexKeyGen(props));
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames(), isConsistentLogicalTimestampEnabled());
+    return recordKeyFunction.apply(record);
   }
 
   @Override
   public String getPartitionPath(GenericRecord record) {
     return KeyGenUtils.getRecordPartitionPath(record, getPartitionPathFields(), hiveStylePartitioning, encodePartitionPath, isConsistentLogicalTimestampEnabled());
+  }
+
+  private SerializableFunctionUnchecked<GenericRecord, String> getRecordKeyFunc(boolean encodeSingleKeyFieldName) {
+    if (getRecordKeyFieldNames().size() == 1) {
+      if (encodeSingleKeyFieldName) {
+        return record -> KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames(), isConsistentLogicalTimestampEnabled());
+      }
+      return record -> KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames().get(0), isConsistentLogicalTimestampEnabled());
+    }
+    return record -> KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames(), isConsistentLogicalTimestampEnabled());
   }
 }

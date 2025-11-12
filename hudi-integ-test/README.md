@@ -14,6 +14,7 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
+<!-- TODO: [HUDI-8294] make this whole readme make sense for spark 3-->
 
 This page describes in detail how to run end to end tests on a hudi dataset that helps in improving our confidence 
 in a release as well as perform large scale performance benchmarks.  
@@ -205,6 +206,7 @@ spark-submit \
 --conf spark.rdd.compress=true  \
 --conf spark.kryoserializer.buffer.max=2000m \
 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar \
 --conf spark.memory.storageFraction=0.1 \
 --conf spark.shuffle.service.enabled=true  \
 --conf spark.sql.hive.convertMetastoreParquet=false  \
@@ -251,6 +253,7 @@ spark-submit \
 --conf spark.rdd.compress=true  \
 --conf spark.kryoserializer.buffer.max=2000m \
 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar \
 --conf spark.memory.storageFraction=0.1 \
 --conf spark.shuffle.service.enabled=true  \
 --conf spark.sql.hive.convertMetastoreParquet=false  \
@@ -359,7 +362,7 @@ If you wish to do a cumulative validation, do not set delete_input_data in Valid
 may not scale beyond certain point since input data as well as hudi content's keeps occupying the disk and grows for 
 every cycle.
 
-Lets see an example where you don't set "delete_input_data" as part of Validation. 
+Let's see an example where you don't set "delete_input_data" as part of Validation. 
 ```
      Insert
      Upsert
@@ -443,6 +446,7 @@ spark-submit \
 --conf spark.rdd.compress=true  \
 --conf spark.kryoserializer.buffer.max=2000m \
 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar \
 --conf spark.memory.storageFraction=0.1 \
 --conf spark.shuffle.service.enabled=true  \
 --conf spark.sql.hive.convertMetastoreParquet=false  \
@@ -491,7 +495,7 @@ cow-long-running-multi-partitions.yaml: long running dag wit 50 iterations with 
 ```
 
 To run test suite jobs for MOR table, pretty much any of these dags can be used as is. Only change is with the 
-spark-shell commnad, you need to fix the table type. 
+spark-shell command, you need to fix the table type. 
 ```
 --table-type MERGE_ON_READ
 ```
@@ -547,7 +551,7 @@ multi-writer-local-2.properties
 multi-writer-local-3.properties
 multi-writer-local-4.properties
 
-These have configs that uses InProcessLockProvider. Configs specifc to InProcessLockProvider is:
+These have configs that uses InProcessLockProvider. Configs specific to InProcessLockProvider is:
 hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.InProcessLockProvider
 
 multi-writer-1.properties
@@ -571,6 +575,7 @@ Sample spark-submit command to test one delta streamer and a spark data source w
 --conf spark.task.maxFailures=100 --conf spark.memory.fraction=0.4 \  
 --conf spark.rdd.compress=true  --conf spark.kryoserializer.buffer.max=2000m \ 
 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar \
 --conf spark.memory.storageFraction=0.1 --conf spark.shuffle.service.enabled=true \  
 --conf spark.sql.hive.convertMetastoreParquet=false  --conf spark.driver.maxResultSize=12g \ 
 --conf spark.executor.heartbeatInterval=120s --conf spark.network.timeout=600s \
@@ -605,6 +610,7 @@ Sample spark-submit command to test one delta streamer and a spark data source w
 --conf spark.task.maxFailures=100 --conf spark.memory.fraction=0.4 \  
 --conf spark.rdd.compress=true  --conf spark.kryoserializer.buffer.max=2000m \
 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar \
 --conf spark.memory.storageFraction=0.1 --conf spark.shuffle.service.enabled=true  \
 --conf spark.sql.hive.convertMetastoreParquet=false  --conf spark.driver.maxResultSize=12g \
 --conf spark.executor.heartbeatInterval=120s --conf spark.network.timeout=600s \
@@ -632,7 +638,7 @@ Sample spark-submit command to test one delta streamer and a spark data source w
 
 Properties that differ from previous scenario and this one are:
 --input-base-paths refers to 4 paths instead of 2
---props-paths again, refers to 4 paths intead of 2.
+--props-paths again, refers to 4 paths instead of 2.
   -- Each property file will contain properties for one spark datasource writer. 
 --workload-yaml-paths refers to 4 paths instead of 2.
   -- Each yaml file used different range of partitions so that there won't be any conflicts while doing concurrent writes.
@@ -646,7 +652,7 @@ die because there is an inflight delta commit from another writer.
 =======
 ### Testing async table services
 We can test async table services with deltastreamer using below command. 3 additional arguments are required to test async 
-table services comapared to previous command. 
+table services compared to previous command. 
 
 ```shell
 --continuous \
@@ -663,6 +669,7 @@ Here is the full command:
 --conf spark.rdd.compress=true \
 --conf spark.kryoserializer.buffer.max=2000m \
 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar \
 --conf spark.memory.storageFraction=0.1 \
 --conf spark.shuffle.service.enabled=true \
 --conf spark.sql.hive.convertMetastoreParquet=false \
@@ -704,7 +711,7 @@ Example command : // execute the command from within docker folder.
 ./generate_test_suite.sh --execute_test_suite false --include_medium_test_suite_yaml true --include_long_test_suite_yaml true
 
 By default, generate_test_suite will run sanity test. In addition it supports 3 more yamls. 
-medium_test_suite, long_test_suite and clustering_test_suite. Users can add the required yamls via command line as per thier 
+medium_test_suite, long_test_suite and clustering_test_suite. Users can add the required yamls via command line as per their 
 necessity. 
 
 Also, "--execute_test_suite" false will generate all required files and yamls in a local staging directory if users want to inspect them.

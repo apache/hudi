@@ -21,22 +21,25 @@ import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.model.{BootstrapFileMapping, HoodieFileGroupId}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.exception.HoodieException
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
-import scala.collection.JavaConversions._
+
 import scala.collection.JavaConverters._
 
 class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.optional(1, "partition_path", DataTypes.StringType, ""),
-    ProcedureParameter.optional(2, "file_ids", DataTypes.StringType, ""),
-    ProcedureParameter.optional(3, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(4, "sort_by", DataTypes.StringType, "partition"),
-    ProcedureParameter.optional(5, "desc", DataTypes.BooleanType, false)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "partition_path", DataTypes.StringType, ""),
+    ProcedureParameter.optional(3, "file_ids", DataTypes.StringType, ""),
+    ProcedureParameter.optional(4, "limit", DataTypes.IntegerType, 10),
+    ProcedureParameter.optional(5, "sort_by", DataTypes.StringType, "partition"),
+    ProcedureParameter.optional(6, "desc", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(7, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -55,14 +58,18 @@ class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder 
     super.checkArgs(PARAMETERS, args)
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
-    val partitionPath = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
-    val fileIds = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
-    val limit = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[Int]
-    val sortBy = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
-    val desc = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[Boolean]
+    val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
+    val partitionPath = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
+    val fileIds = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
+    val limit = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[Int]
+    val sortBy = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[String]
+    val desc = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[Boolean]
+    val filter = getArgValueOrDefault(args, PARAMETERS(7)).get.asInstanceOf[String]
 
-    val basePath: String = getBasePath(tableName)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    validateFilter(filter, outputType)
+
+    val basePath: String = getBasePath(tableName, tablePath)
+    val metaClient = createMetaClient(jsc, basePath)
 
     if (partitionPath.isEmpty && fileIds.nonEmpty) throw new IllegalStateException("PartitionPath is mandatory when passing fileIds.")
 
@@ -75,24 +82,26 @@ class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder 
     if (fileIds.nonEmpty) {
       val fileGroupIds = fileIds.split(",").toList.map((fileId: String) => new HoodieFileGroupId(partitionPath, fileId)).asJava
       mappingList.addAll(indexReader.getSourceFileMappingForFileIds(fileGroupIds).values)
-    } else if (partitionPath.nonEmpty) mappingList.addAll(indexReader.getSourceFileMappingForPartition(partitionPath))
-    else {
-      for (part <- indexedPartitions) {
+    } else if (partitionPath.nonEmpty) {
+      mappingList.addAll(indexReader.getSourceFileMappingForPartition(partitionPath))
+    } else {
+      for (part <- indexedPartitions.asScala) {
         mappingList.addAll(indexReader.getSourceFileMappingForPartition(part))
       }
     }
 
-    val rows: java.util.List[Row] = mappingList
+    val rows: java.util.List[Row] = mappingList.asScala
       .map(mapping => Row(mapping.getPartitionPath, mapping.getFileId, mapping.getBootstrapBasePath,
-        mapping.getBootstrapPartitionPath, mapping.getBootstrapFileStatus.getPath.getUri)).toList
+        mapping.getBootstrapPartitionPath, mapping.getBootstrapFileStatus.getPath.getUri)).asJava
 
     val df = spark.createDataFrame(rows, OUTPUT_TYPE)
 
-    if (desc) {
+    val results = if (desc) {
       df.orderBy(df(sortBy).desc).limit(limit).collect()
     } else {
       df.orderBy(df(sortBy).asc).limit(limit).collect()
     }
+    applyFilter(results, filter, outputType)
   }
 
   private def createBootstrapIndexReader(metaClient: HoodieTableMetaClient) = {
@@ -111,6 +120,3 @@ object ShowBootstrapMappingProcedure {
     override def get() = new ShowBootstrapMappingProcedure
   }
 }
-
-
-

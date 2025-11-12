@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.exception.HoodieException;
+
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -33,6 +34,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.cli.utils.CommitUtil.countNewRecords;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
 /**
  * CLI command to display sync options.
@@ -73,12 +76,12 @@ public class HoodieSyncValidateCommand {
     }
 
     String targetLatestCommit =
-        targetTimeline.getInstants().iterator().hasNext() ? targetTimeline.lastInstant().get().getTimestamp() : "0";
+        targetTimeline.getInstants().iterator().hasNext() ? targetTimeline.lastInstant().get().requestedTime() : "0";
     String sourceLatestCommit =
-        sourceTimeline.getInstants().iterator().hasNext() ? sourceTimeline.lastInstant().get().getTimestamp() : "0";
+        sourceTimeline.getInstants().iterator().hasNext() ? sourceTimeline.lastInstant().get().requestedTime() : "0";
 
     if (sourceLatestCommit != null
-        && HoodieTimeline.compareTimestamps(targetLatestCommit, HoodieTimeline.GREATER_THAN, sourceLatestCommit)) {
+        && compareTimestamps(targetLatestCommit, GREATER_THAN, sourceLatestCommit)) {
       // source is behind the target
       return getString(target, targetTimeline, source, sourceCount, targetCount, sourceLatestCommit);
     } else {
@@ -90,13 +93,13 @@ public class HoodieSyncValidateCommand {
   private String getString(HoodieTableMetaClient target, HoodieTimeline targetTimeline, HoodieTableMetaClient source, long sourceCount, long targetCount, String sourceLatestCommit)
       throws IOException {
     List<HoodieInstant> commitsToCatchup = targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE)
-        .getInstants().collect(Collectors.toList());
+        .getInstants();
     if (commitsToCatchup.isEmpty()) {
       return "Count difference now is (count(" + target.getTableConfig().getTableName() + ") - count("
           + source.getTableConfig().getTableName() + ") == " + (targetCount - sourceCount);
     } else {
       long newInserts = countNewRecords(target,
-          commitsToCatchup.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()));
+          commitsToCatchup.stream().map(HoodieInstant::requestedTime).collect(Collectors.toList()));
       return "Count difference now is (count(" + target.getTableConfig().getTableName() + ") - count("
           + source.getTableConfig().getTableName() + ") == " + (targetCount - sourceCount) + ". Catch up count is "
           + newInserts;

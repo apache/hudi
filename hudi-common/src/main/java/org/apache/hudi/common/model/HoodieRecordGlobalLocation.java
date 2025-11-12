@@ -18,12 +18,16 @@
 
 package org.apache.hudi.common.model;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+
 import java.util.Objects;
 
 /**
  * Similar with {@link org.apache.hudi.common.model.HoodieRecordLocation} but with partition path.
  */
-public class HoodieRecordGlobalLocation extends HoodieRecordLocation {
+public final class HoodieRecordGlobalLocation extends HoodieRecordLocation {
   private static final long serialVersionUID = 1L;
 
   private String partitionPath;
@@ -36,14 +40,18 @@ public class HoodieRecordGlobalLocation extends HoodieRecordLocation {
     this.partitionPath = partitionPath;
   }
 
+  public HoodieRecordGlobalLocation(String partitionPath, String instantTime, String fileId, long position) {
+    super(instantTime, fileId, position);
+    this.partitionPath = partitionPath;
+  }
+
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("HoodieGlobalRecordLocation {");
-    sb.append("partitionPath=").append(partitionPath).append(", ");
-    sb.append("instantTime=").append(instantTime).append(", ");
-    sb.append("fileId=").append(fileId);
-    sb.append('}');
-    return sb.toString();
+    return "HoodieGlobalRecordLocation {" + "partitionPath=" + partitionPath + ", "
+        + "instantTime=" + instantTime + ", "
+        + "fileId=" + fileId + ", "
+        + "position=" + position
+        + '}';
   }
 
   @Override
@@ -84,14 +92,28 @@ public class HoodieRecordGlobalLocation extends HoodieRecordLocation {
    * Returns the record location as local.
    */
   public HoodieRecordLocation toLocal(String instantTime) {
-    return new HoodieRecordLocation(instantTime, fileId);
+    return new HoodieRecordLocation(instantTime, fileId, position);
   }
 
   /**
    * Copy the location with given partition path.
    */
   public HoodieRecordGlobalLocation copy(String partitionPath) {
-    return new HoodieRecordGlobalLocation(partitionPath, instantTime, fileId);
+    return new HoodieRecordGlobalLocation(partitionPath, instantTime, fileId, position);
+  }
+
+  @Override
+  public void write(Kryo kryo, Output output) {
+    super.write(kryo, output);
+
+    kryo.writeObjectOrNull(output, partitionPath, String.class);
+  }
+
+  @Override
+  public void read(Kryo kryo, Input input) {
+    super.read(kryo, input);
+
+    this.partitionPath = kryo.readObject(input, String.class);
   }
 }
 

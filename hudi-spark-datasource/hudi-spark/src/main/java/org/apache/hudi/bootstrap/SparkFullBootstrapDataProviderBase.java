@@ -18,19 +18,24 @@
 
 package org.apache.hudi.bootstrap;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.bootstrap.FullRecordBootstrapDataProvider;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.SparkKeyGeneratorInterface;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 
@@ -39,8 +44,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.StructType;
 
-import java.io.IOException;
 import java.util.List;
 
 public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBootstrapDataProvider<JavaRDD<HoodieRecord>> {
@@ -55,34 +60,40 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
 
   @Override
   public JavaRDD<HoodieRecord> generateInputRecords(String tableName, String sourceBasePath,
-                                                    List<Pair<String, List<HoodieFileStatus>>> partitionPathsWithFiles) {
+                                                    List<Pair<String, List<HoodieFileStatus>>> partitionPathsWithFiles, HoodieWriteConfig config) {
     String[] filePaths = partitionPathsWithFiles.stream().map(Pair::getValue)
-        .flatMap(f -> f.stream().map(fs -> FileStatusUtils.toPath(fs.getPath()).toString()))
+        .flatMap(f -> f.stream().map(fs -> HadoopFSUtils.toPath(fs.getPath()).toString()))
         .toArray(String[]::new);
 
     // NOTE: "basePath" option is required for spark to discover the partition column
     // More details at https://spark.apache.org/docs/latest/sql-data-sources-parquet.html#partition-discovery
+    HoodieRecordType recordType =  config.getRecordMerger().getRecordType();
     Dataset inputDataset = sparkSession.read().format(getFormat()).option("basePath", sourceBasePath).load(filePaths);
-    try {
-      KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
-      String structName = tableName + "_record";
-      String namespace = "hoodie." + tableName;
+    KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+    String orderingFieldsStr = ConfigUtils.getOrderingFieldsStrDuringWrite(props);
+    String structName = tableName + "_record";
+    String namespace = "hoodie." + tableName;
+    if (recordType == HoodieRecordType.AVRO) {
       RDD<GenericRecord> genericRecords = HoodieSparkUtils.createRdd(inputDataset, structName, namespace, false,
           Option.empty());
       return genericRecords.toJavaRDD().map(gr -> {
         String orderingVal = HoodieAvroUtils.getNestedFieldValAsString(
-            gr, props.getString("hoodie.datasource.write.precombine.field"), false, props.getBoolean(
+            gr, orderingFieldsStr, false, props.getBoolean(
                 KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
                 Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue())));
-        try {
-          return DataSourceUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr),
-              props.getString("hoodie.datasource.write.payload.class"));
-        } catch (IOException ioe) {
-          throw new HoodieIOException(ioe.getMessage(), ioe);
-        }
+        return HoodieRecordUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr), ConfigUtils.getPayloadClass(props), false, null);
       });
-    } catch (IOException ioe) {
-      throw new HoodieIOException(ioe.getMessage(), ioe);
+    } else if (recordType == HoodieRecordType.SPARK) {
+      SparkKeyGeneratorInterface sparkKeyGenerator = (SparkKeyGeneratorInterface) keyGenerator;
+      StructType structType = inputDataset.schema();
+      return inputDataset.queryExecution().toRdd().toJavaRDD().map(internalRow -> {
+        String recordKey = sparkKeyGenerator.getRecordKey(internalRow, structType).toString();
+        String partitionPath = sparkKeyGenerator.getPartitionPath(internalRow, structType).toString();
+        HoodieKey key = new HoodieKey(recordKey, partitionPath);
+        return new HoodieSparkRecord(key, internalRow, structType, false);
+      });
+    } else {
+      throw new UnsupportedOperationException(recordType.name());
     }
   }
 

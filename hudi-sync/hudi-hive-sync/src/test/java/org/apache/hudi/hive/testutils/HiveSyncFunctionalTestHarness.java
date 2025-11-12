@@ -23,9 +23,12 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
+import org.apache.hudi.hive.util.IMetaStoreClientUtil;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -45,7 +48,6 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
@@ -84,6 +86,10 @@ public class HiveSyncFunctionalTestHarness {
     return hiveTestService.getHiveServer().getHiveConf();
   }
 
+  public StorageConfiguration<Configuration> storageConf() {
+    return HadoopFSUtils.getStorageConf(hiveConf());
+  }
+
   public ZookeeperTestService zkService() {
     return zookeeperTestService;
   }
@@ -96,19 +102,18 @@ public class HiveSyncFunctionalTestHarness {
     props.setProperty(META_SYNC_DATABASE_NAME.key(), "hivesynctestdb");
     props.setProperty(META_SYNC_TABLE_NAME.key(), "hivesynctesttable");
     props.setProperty(META_SYNC_BASE_PATH.key(), Files.createDirectories(tempDir.resolve("hivesynctestcase-" + Instant.now().toEpochMilli())).toUri().toString());
-    props.setProperty(META_SYNC_ASSUME_DATE_PARTITION.key(), "true");
     props.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
     props.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
     return new HiveSyncConfig(props, hiveConf());
   }
 
   public HoodieHiveSyncClient hiveClient(HiveSyncConfig hiveSyncConfig) throws IOException {
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(hiveSyncConfig.getString(META_SYNC_TABLE_NAME))
         .setPayloadClass(HoodieAvroPayload.class)
-        .initTable(hadoopConf, hiveSyncConfig.getString(META_SYNC_BASE_PATH));
-    return new HoodieHiveSyncClient(hiveSyncConfig);
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(hadoopConf), hiveSyncConfig.getString(META_SYNC_BASE_PATH));
+    return new HoodieHiveSyncClient(hiveSyncConfig, metaClient);
   }
 
   public void dropTables(String database, String... tables) throws IOException, HiveException, MetaException {
@@ -116,7 +121,7 @@ public class HiveSyncFunctionalTestHarness {
     hiveSyncConfig.setValue(META_SYNC_DATABASE_NAME, database);
     for (String table : tables) {
       hiveSyncConfig.setValue(META_SYNC_TABLE_NAME, table);
-      new HiveQueryDDLExecutor(hiveSyncConfig).runSQL("drop table if exists " + table);
+      new HiveQueryDDLExecutor(hiveSyncConfig, IMetaStoreClientUtil.getMSC(hiveSyncConfig.getHiveConf())).runSQL("drop table if exists " + table);
     }
   }
 
@@ -124,7 +129,7 @@ public class HiveSyncFunctionalTestHarness {
     HiveSyncConfig hiveSyncConfig = hiveSyncConf();
     for (String database : databases) {
       hiveSyncConfig.setValue(META_SYNC_DATABASE_NAME, database);
-      new HiveQueryDDLExecutor(hiveSyncConfig).runSQL("drop database if exists " + database);
+      new HiveQueryDDLExecutor(hiveSyncConfig, IMetaStoreClientUtil.getMSC(hiveSyncConfig.getHiveConf())).runSQL("drop database if exists " + database);
     }
   }
 

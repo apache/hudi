@@ -34,7 +34,10 @@ import org.apache.spark.unsafe.types.UTF8String;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.keygen.CustomAvroKeyGenerator.getPartitionPathFormatException;
 
 /**
  * This is a generic implementation of KeyGenerator where users can configure record key as a single field or a combination of fields. Similarly partition path can be configured to have multiple
@@ -49,28 +52,59 @@ import java.util.stream.Collectors;
  *
  * RecordKey is internally generated using either SimpleKeyGenerator or ComplexKeyGenerator.
  *
- * @deprecated
  */
-@Deprecated
 public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
   private final CustomAvroKeyGenerator customAvroKeyGenerator;
+  private final List<BuiltinKeyGenerator> partitionKeyGenerators;
+  private final BuiltinKeyGenerator recordKeyGenerator;
 
   public CustomKeyGenerator(TypedProperties props) {
     // NOTE: We have to strip partition-path configuration, since it could only be interpreted by
     //       this key-gen
     super(stripPartitionPathConfig(props));
-    this.recordKeyFields =
-        Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","))
-            .map(String::trim)
-            .collect(Collectors.toList());
+    this.recordKeyFields = Option.ofNullable(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null))
+        .map(recordKeyConfigValue ->
+            Arrays.stream(recordKeyConfigValue.split(","))
+                .map(String::trim)
+                .collect(Collectors.toList())
+        ).orElse(Collections.emptyList());
     String partitionPathFields = props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
     this.partitionPathFields = partitionPathFields == null
         ? Collections.emptyList()
         : Arrays.stream(partitionPathFields.split(",")).map(String::trim).collect(Collectors.toList());
     this.customAvroKeyGenerator = new CustomAvroKeyGenerator(props);
+    this.recordKeyGenerator = getRecordKeyFieldNames().size() == 1
+        ? new SimpleKeyGenerator(config, Option.ofNullable(config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())), null)
+        : new ComplexKeyGenerator(config);
+    this.partitionKeyGenerators = getPartitionKeyGenerators(this.partitionPathFields, config);
+  }
 
-    validateRecordKeyFields();
+  private static List<BuiltinKeyGenerator> getPartitionKeyGenerators(List<String> partitionPathFields, TypedProperties config) {
+    if (partitionPathFields.size() == 1 && partitionPathFields.get(0).isEmpty()) {
+      return Collections.emptyList();
+    } else {
+      return partitionPathFields.stream().map(field -> {
+        String[] fieldWithType = field.split(CUSTOM_KEY_GENERATOR_SPLIT_REGEX);
+        if (fieldWithType.length != 2) {
+          throw getPartitionPathFormatException();
+        }
+        String partitionPathField = fieldWithType[0];
+        CustomAvroKeyGenerator.PartitionKeyType keyType = CustomAvroKeyGenerator.PartitionKeyType.valueOf(fieldWithType[1].toUpperCase());
+        switch (keyType) {
+          case SIMPLE:
+            return new SimpleKeyGenerator(config, partitionPathField);
+          case TIMESTAMP:
+            try {
+              return new TimestampBasedKeyGenerator(config, partitionPathField);
+            } catch (IOException ioe) {
+              throw new HoodieKeyGeneratorException("Unable to initialise TimestampBasedKeyGenerator class", ioe);
+            }
+          default:
+            throw new HoodieKeyGeneratorException("Please provide valid PartitionKeyType with fields! You provided: " + keyType);
+        }
+      }).collect(Collectors.toList());
+    }
   }
 
   @Override
@@ -85,9 +119,7 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    return getRecordKeyFieldNames().size() == 1
-        ? new SimpleKeyGenerator(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()), null).getRecordKey(row)
-        : new ComplexKeyGenerator(config).getRecordKey(row);
+    return recordKeyGenerator.getRecordKey(row);
   }
 
   @Override
@@ -100,69 +132,34 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
     return UTF8String.fromString(getPartitionPath(Option.empty(), Option.empty(), Option.of(Pair.of(row, schema))));
   }
 
-  private String getPartitionPath(Option<GenericRecord> record, Option<Row> row, Option<Pair<InternalRow, StructType>> internalRowStructTypePair) {
+  public String getPartitionPath(Option<GenericRecord> record, Option<Row> row, Option<Pair<InternalRow, StructType>> internalRowStructTypePair) {
     if (getPartitionPathFields() == null) {
       throw new HoodieKeyException("Unable to find field names for partition path in cfg");
     }
-
-    String partitionPathField;
-    StringBuilder partitionPath = new StringBuilder();
-
-    //Corresponds to no partition case
-    if (getPartitionPathFields().size() == 1 && getPartitionPathFields().get(0).isEmpty()) {
+    // Corresponds to no partition case
+    if (partitionKeyGenerators.isEmpty()) {
       return "";
     }
-    for (String field : getPartitionPathFields()) {
-      String[] fieldWithType = field.split(CustomAvroKeyGenerator.SPLIT_REGEX);
-      if (fieldWithType.length != 2) {
-        throw new HoodieKeyGeneratorException("Unable to find field names for partition path in proper format");
+    StringBuilder partitionPath = new StringBuilder();
+    for (int i = 0; i < partitionKeyGenerators.size(); i++) {
+      BuiltinKeyGenerator keyGenerator = partitionKeyGenerators.get(i);
+      if (record.isPresent()) {
+        partitionPath.append(keyGenerator.getPartitionPath(record.get()));
+      } else if (row.isPresent()) {
+        partitionPath.append(keyGenerator.getPartitionPath(row.get()));
+      } else {
+        partitionPath.append(keyGenerator.getPartitionPath(internalRowStructTypePair.get().getKey(),
+            internalRowStructTypePair.get().getValue()));
       }
-
-      partitionPathField = fieldWithType[0];
-      CustomAvroKeyGenerator.PartitionKeyType keyType = CustomAvroKeyGenerator.PartitionKeyType.valueOf(fieldWithType[1].toUpperCase());
-      switch (keyType) {
-        case SIMPLE:
-          if (record.isPresent()) {
-            partitionPath.append(new SimpleKeyGenerator(config, partitionPathField).getPartitionPath(record.get()));
-          } else if (row.isPresent()) {
-            partitionPath.append(new SimpleKeyGenerator(config, partitionPathField).getPartitionPath(row.get()));
-          } else {
-            partitionPath.append(new SimpleKeyGenerator(config, partitionPathField).getPartitionPath(internalRowStructTypePair.get().getKey(),
-                internalRowStructTypePair.get().getValue()));
-          }
-          break;
-        case TIMESTAMP:
-          try {
-            if (record.isPresent()) {
-              partitionPath.append(new TimestampBasedKeyGenerator(config, partitionPathField).getPartitionPath(record.get()));
-            } else if (row.isPresent()) {
-              partitionPath.append(new TimestampBasedKeyGenerator(config, partitionPathField).getPartitionPath(row.get()));
-            } else {
-              partitionPath.append(new TimestampBasedKeyGenerator(config, partitionPathField).getPartitionPath(internalRowStructTypePair.get().getKey(),
-                  internalRowStructTypePair.get().getValue()));
-            }
-          } catch (IOException ioe) {
-            throw new HoodieKeyGeneratorException("Unable to initialise TimestampBasedKeyGenerator class", ioe);
-          }
-          break;
-        default:
-          throw new HoodieKeyGeneratorException("Please provide valid PartitionKeyType with fields! You provided: " + keyType);
+      if (i != partitionKeyGenerators.size() - 1) {
+        partitionPath.append(customAvroKeyGenerator.getDefaultPartitionPathSeparator());
       }
-
-      partitionPath.append(customAvroKeyGenerator.getDefaultPartitionPathSeparator());
     }
-    partitionPath.deleteCharAt(partitionPath.length() - 1);
     return partitionPath.toString();
   }
 
-  private void validateRecordKeyFields() {
-    if (getRecordKeyFieldNames() == null || getRecordKeyFieldNames().isEmpty()) {
-      throw new HoodieKeyException("Unable to find field names for record key in cfg");
-    }
-  }
-
   private static TypedProperties stripPartitionPathConfig(TypedProperties props) {
-    TypedProperties filtered = new TypedProperties(props);
+    TypedProperties filtered = TypedProperties.copy(props);
     // NOTE: We have to stub it out w/ empty string, since we properties are:
     //         - Expected to bear this config
     //         - Can't be stubbed out w/ null

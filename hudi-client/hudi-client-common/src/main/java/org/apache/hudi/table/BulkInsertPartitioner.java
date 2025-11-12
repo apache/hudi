@@ -20,34 +20,40 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.io.WriteHandleFactory;
 
 import java.io.Serializable;
 
 /**
- * Repartition input records into at least expected number of output partitions. It should give below guarantees -
- * Output partition will have records from only one hoodie partition. - Average records per output
- * partitions should be almost equal to (#inputRecords / #outputPartitions) to avoid possible skews.
+ * Partitions the input records for bulk insert operation.
+ * <p>
+ * The actual implementation of {@link BulkInsertPartitioner} is determined by the bulk insert
+ * sort mode, {@link BulkInsertSortMode}, specified by
+ * {@code HoodieWriteConfig.BULK_INSERT_SORT_MODE} (`hoodie.bulkinsert.sort.mode`).
  */
 public interface BulkInsertPartitioner<I> extends Serializable {
 
   /**
-   * Repartitions the input records into at least expected number of output partitions.
+   * Partitions the input records based on the number of output partitions as a hint.
+   * <p>
+   * Note that, the number of output partitions may or may not be enforced, depending on the
+   * specific implementation.
    *
-   * @param records          Input Hoodie records
-   * @param outputPartitions Expected number of output partitions
+   * @param records          Input Hoodie records.
+   * @param outputPartitions Expected number of output partitions as a hint.
    * @return
    */
   I repartitionRecords(I records, int outputPartitions);
 
   /**
-   * @return {@code true} if the records within a partition are sorted; {@code false} otherwise.
+   * @return {@code true} if the records are sorted by partition-path; {@code false} otherwise.
    */
   boolean arePartitionRecordsSorted();
 
   /**
    * Return file group id prefix for the given data partition.
-   * By defauult, return a new file group id prefix, so that incoming records will route to a fresh new file group
+   * By default, return a new file group id prefix, so that incoming records will route to a fresh new file group
    *
    * @param partitionId data partition
    * @return
@@ -65,5 +71,4 @@ public interface BulkInsertPartitioner<I> extends Serializable {
   default Option<WriteHandleFactory> getWriteHandleFactory(int partitionId) {
     return Option.empty();
   }
-
 }

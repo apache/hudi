@@ -63,15 +63,15 @@ select id, name, price, cast(dt as string) from h0_p;
 # CREATE TABLE
 
 create table h1 (
-  id bigint,
+  id int,
   name string,
   price double,
-  ts bigint
+  ts int
 ) using hudi
 options (
   type = '${tableType}',
   primaryKey = 'id',
-  preCombineField = 'ts'
+  orderingFields = 'ts'
 )
 location '${tmpDir}/h1';
 +----------+
@@ -79,17 +79,17 @@ location '${tmpDir}/h1';
 +----------+
 
 create table h1_p (
-  id bigint,
+  id int,
   name string,
   price double,
-  ts bigint,
+  ts int,
   dt string
 ) using hudi
 partitioned by (dt)
 options (
   type = '${tableType}',
   primaryKey = 'id',
-  preCombineField = 'ts'
+  orderingFields = 'ts'
 )
 location '${tmpDir}/h1_p';
 +----------+
@@ -208,7 +208,7 @@ using (
   select 5 as _id, 'a5' as _name, 10 as _price, 1000 as _ts, '2021-05-08' as dt
 ) s0
 on s0._id = t0.id
-when matched then update set *
+when matched then update set id = _id, name = _name, price = _price, ts = _ts, dt = s0.dt
 when not matched then insert (id, name, price, ts, dt) values(_id, _name, _price, _ts, s0.dt);
 +----------+
 | ok       |
@@ -231,10 +231,10 @@ using (
   select 6 as id, '_insert' as name, 10 as price, 1000 as ts, '2021-05-08' as dt
 ) s0
 on s0.id = t0.id
-when matched and name = '_update'
+when matched and s0.name = '_update'
   then update set id = s0.id, name = s0.name, price = s0.price, ts = s0.ts, dt = s0.dt
-when matched and name = '_delete' then delete
-when not matched and name = '_insert' then insert *;
+when matched and s0.name = '_delete' then delete
+when not matched and s0.name = '_insert' then insert *;
 +----------+
 | ok       |
 +----------+

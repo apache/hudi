@@ -26,15 +26,19 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
+import org.apache.hudi.common.table.log.HoodieLogBlockMetadataScanner;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.compact.LogCompactionExecutionHelper;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Set;
@@ -42,30 +46,38 @@ import java.util.stream.Collectors;
 
 public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, O> extends BaseHoodieCompactionPlanGenerator<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieLogCompactionPlanGenerator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieLogCompactionPlanGenerator.class);
+  private final HoodieCompactionStrategy compactionStrategy;
 
-  public HoodieLogCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
-    super(table, engineContext, writeConfig);
+  public HoodieLogCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig,
+                                          BaseTableServicePlanActionExecutor executor) {
+    super(table, engineContext, writeConfig, executor);
+    this.compactionStrategy = HoodieCompactionStrategy.newBuilder()
+        .setStrategyParams(getStrategyParams())
+        .setCompactorClassName("org.apache.hudi.table.action.compact.LogCompactionExecutionHelper") // added for compatibility between releases
+        .build();
   }
 
   @Override
-  protected HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations) {
-    HoodieCompactionStrategy compactionStrategy = HoodieCompactionStrategy.newBuilder()
-        .setStrategyParams(getStrategyParams())
-        .setCompactorClassName(LogCompactionExecutionHelper.class.getName())
-        .build();
+  protected HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations, Pair<List<String>, List<String>> partitionPair) {
     return HoodieCompactionPlan.newBuilder()
         .setOperations(operations)
         .setVersion(CompactionUtils.LATEST_COMPACTION_METADATA_VERSION)
         .setStrategy(compactionStrategy)
+        .setMissingSchedulePartitions(partitionPair.getRight())
         .setPreserveHoodieMetadata(true)
         .build();
   }
 
   @Override
-  protected boolean filterFileSlice(FileSlice fileSlice, String lastCompletedInstantTime, Set<HoodieFileGroupId> pendingFileGroupIds) {
-    return isFileSliceEligibleForLogCompaction(fileSlice, lastCompletedInstantTime)
-        && super.filterFileSlice(fileSlice, lastCompletedInstantTime, pendingFileGroupIds);
+  protected List<String> getPartitions() {
+    return executor.getPartitions(compactionStrategy, TableServiceType.LOG_COMPACT);
+  }
+
+  @Override
+  protected boolean filterFileSlice(FileSlice fileSlice, String lastCompletedInstantTime,
+                                    Set<HoodieFileGroupId> pendingFileGroupIds, Option<InstantRange> instantRange) {
+    return super.filterFileSlice(fileSlice, lastCompletedInstantTime, pendingFileGroupIds, instantRange) && isFileSliceEligibleForLogCompaction(fileSlice, lastCompletedInstantTime, instantRange);
   }
 
   @Override
@@ -74,28 +86,28 @@ public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, 
   }
 
   /**
-   * Can schedule logcompaction if log files count is greater than 4 or total log blocks is greater than 4.
+   * Can schedule logcompaction if log files count or total log blocks is greater than the configured threshold.
    * @param fileSlice File Slice under consideration.
+   * @param instantRange Range of valid instants.
    * @return Boolean value that determines whether log compaction will be scheduled or not.
    */
-  private boolean isFileSliceEligibleForLogCompaction(FileSlice fileSlice, String maxInstantTime) {
-    LOG.info("Checking if fileId " + fileSlice.getFileId() + " and partition "
-        + fileSlice.getPartitionPath() + " eligible for log compaction.");
+  private boolean isFileSliceEligibleForLogCompaction(FileSlice fileSlice, String maxInstantTime,
+                                                      Option<InstantRange> instantRange) {
+    LOG.info("Checking if fileId {} and partition {} eligible for log compaction.", fileSlice.getFileId(), fileSlice.getPartitionPath());
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
-    HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
-        .withFileSystem(metaClient.getFs())
-        .withBasePath(hoodieTable.getMetaClient().getBasePath())
-        .withLogFilePaths(fileSlice.getLogFiles()
-            .sorted(HoodieLogFile.getLogFileComparator())
-            .map(file -> file.getPath().toString())
-            .collect(Collectors.toList()))
-        .withLatestInstantTime(maxInstantTime)
-        .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
-        .withUseScanV2(true)
-        .build();
-    scanner.scanInternal(Option.empty(), true);
+    long numLogFiles = fileSlice.getLogFiles().count();
+    if (numLogFiles >= writeConfig.getLogCompactionBlocksThreshold()) {
+      LOG.info("Total logs files ({}) is greater than log blocks threshold is {}", numLogFiles, writeConfig.getLogCompactionBlocksThreshold());
+      return true;
+    }
+    HoodieLogBlockMetadataScanner scanner = new HoodieLogBlockMetadataScanner(metaClient, fileSlice.getLogFiles()
+        .sorted(HoodieLogFile.getLogFileComparator())
+        .collect(Collectors.toList()),
+        writeConfig.getMaxDFSStreamBufferSize(),
+        maxInstantTime,
+        instantRange);
     int totalBlocks = scanner.getCurrentInstantLogBlocks().size();
-    LOG.info("Total blocks seen are " + totalBlocks);
+    LOG.info("Total blocks seen are {}, log blocks threshold is {}", totalBlocks, writeConfig.getLogCompactionBlocksThreshold());
 
     // If total blocks in the file slice is > blocks threshold value(default value is 5).
     // Log compaction can be scheduled.

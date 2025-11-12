@@ -19,11 +19,13 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.storage.HoodieStorage;
 
-import org.apache.hadoop.fs.FSDataInputStream;
-
+import java.io.ByteArrayOutputStream;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * Command block issues a specific command to the scanner.
@@ -43,10 +45,10 @@ public class HoodieCommandBlock extends HoodieLogBlock {
     this(Option.empty(), null, false, Option.empty(), header, new HashMap<>());
   }
 
-  public HoodieCommandBlock(Option<byte[]> content, FSDataInputStream inputStream, boolean readBlockLazily,
+  public HoodieCommandBlock(Option<byte[]> content, Supplier<SeekableDataInputStream> inputStreamSupplier, boolean readBlockLazily,
                             Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
-                            Map<HeaderMetadataType, String> footer) {
-    super(header, footer, blockContentLocation, content, inputStream, readBlockLazily);
+                            Map<FooterMetadataType, String> footer) {
+    super(header, footer, blockContentLocation, content, inputStreamSupplier, readBlockLazily);
     this.type =
         HoodieCommandBlockTypeEnum.values()[Integer.parseInt(header.get(HeaderMetadataType.COMMAND_BLOCK_TYPE))];
   }
@@ -61,7 +63,7 @@ public class HoodieCommandBlock extends HoodieLogBlock {
   }
 
   @Override
-  public byte[] getContentBytes() {
-    return new byte[0];
+  public ByteArrayOutputStream getContentBytes(HoodieStorage storage) {
+    return new ByteArrayOutputStream(0);
   }
 }

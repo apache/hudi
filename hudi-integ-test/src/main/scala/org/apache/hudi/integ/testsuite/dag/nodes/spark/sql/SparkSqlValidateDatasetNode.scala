@@ -24,8 +24,9 @@ import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext
 import org.apache.hudi.integ.testsuite.dag.nodes.BaseValidateDatasetNode
 import org.apache.hudi.integ.testsuite.utils.SparkSqlUtils
-import org.apache.spark.sql.types.StructType
+
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
+import org.apache.spark.sql.types.StructType
 import org.slf4j.{Logger, LoggerFactory}
 
 /**

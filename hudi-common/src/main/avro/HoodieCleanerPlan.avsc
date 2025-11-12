@@ -105,6 +105,15 @@
       { "type":"array", "items":"string"}
       ],
       "default": null
-    }
+    },
+   {
+      "name":"extraMetadata",
+      "type":["null", {
+         "type":"map",
+         "values":"string",
+         "default": null
+      }],
+      "default": null
+   }
   ]
 }

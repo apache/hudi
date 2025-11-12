@@ -22,6 +22,8 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
@@ -139,6 +141,7 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   public boolean requiresTagging(WriteOperationType operationType) {
     switch (operationType) {
       case DELETE:
+      case DELETE_PREPPED:
       case UPSERT:
         return true;
       default:
@@ -152,11 +155,77 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   public void close() {
   }
 
+  @EnumDescription("Determines how input records are indexed, i.e., looked up based on the key "
+      + "for the location in the existing table. Default is SIMPLE on Spark engine, and INMEMORY "
+      + "on Flink and Java engines.")
   public enum IndexType {
-    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE, BUCKET, FLINK_STATE
+    @EnumFieldDescription("Uses in-memory hashmap in Spark and Java engine and Flink in-memory "
+        + "state in Flink for indexing.")
+    INMEMORY,
+
+    @EnumFieldDescription("Employs bloom filters built out of the record keys, "
+        + "optionally also pruning candidate files using record key ranges. "
+        + "Key uniqueness is enforced inside partitions.")
+    BLOOM,
+
+    @EnumFieldDescription("Employs bloom filters built out of the record keys, "
+        + "optionally also pruning candidate files using record key ranges. "
+        + "Key uniqueness is enforced across all partitions in the table. ")
+    GLOBAL_BLOOM,
+
+    @EnumFieldDescription("Performs a lean join of the incoming update/delete records "
+        + "against keys extracted from the table on storage."
+        + "Key uniqueness is enforced inside partitions.")
+    SIMPLE,
+
+    @EnumFieldDescription("Performs a lean join of the incoming update/delete records "
+        + "against keys extracted from the table on storage."
+        + "Key uniqueness is enforced across all partitions in the table.")
+    GLOBAL_SIMPLE,
+
+    @EnumFieldDescription("locates the file group containing the record fast by using bucket "
+        + "hashing, particularly beneficial in large scale. Use `hoodie.index.bucket.engine` to "
+        + "choose bucket engine type, i.e., how buckets are generated.")
+    BUCKET,
+
+    @EnumFieldDescription("Internal Config for indexing based on Flink state.")
+    FLINK_STATE,
+
+    @Deprecated
+    @EnumFieldDescription("Index which saves the record key to location mappings in the "
+        + "HUDI Metadata Table. Record index is a global index, enforcing key uniqueness across all "
+        + "partitions in the table. Supports sharding to achieve very high scale. For a table with "
+        + "keys that are only unique inside each partition, use `RECORD_LEVEL_INDEX` instead. "
+        + "This enum is deprecated. Use GLOBAL_RECORD_LEVEL_INDEX for global uniqueness of record "
+        + "keys or RECORD_LEVEL_INDEX for partition-level uniqueness of record keys.")
+    RECORD_INDEX,
+
+    @EnumFieldDescription("Index which saves the record key to location mappings in the "
+        + "HUDI Metadata Table. Record index is a global index, enforcing key uniqueness across all "
+        + "partitions in the table. Supports sharding to achieve very high scale. For a table with "
+        + "keys that are only unique inside each partition, use `RECORD_LEVEL_INDEX` instead.")
+    GLOBAL_RECORD_LEVEL_INDEX,
+
+    @EnumFieldDescription("Index which saves the record key to location mappings in the "
+        + "HUDI Metadata Table. Supports sharding to achieve very high scale. This is a "
+        + "non global index, where keys can be replicated across partitions, since a "
+        + "pair of partition path and record keys will uniquely map to a location using "
+        + "this index. If users expect record keys to be unique across all partitions, "
+        + "use `GLOBAL_RECORD_LEVEL_INDEX` instead.")
+    RECORD_LEVEL_INDEX
   }
 
+  @EnumDescription("Determines the type of bucketing or hashing to use when `hoodie.index.type`"
+      + " is set to `BUCKET`.")
   public enum BucketIndexEngineType {
-    SIMPLE, CONSISTENT_HASHING
+
+    @EnumFieldDescription("Uses a fixed number of buckets for file groups which cannot shrink or "
+        + "expand. This works for both COW and MOR tables.")
+    SIMPLE,
+
+    @EnumFieldDescription("Supports dynamic number of buckets with bucket resizing to properly "
+        + "size each bucket. This solves potential data skew problem where one bucket can be "
+        + "significantly larger than others in SIMPLE engine type. This only works with MOR tables.")
+    CONSISTENT_HASHING
   }
 }

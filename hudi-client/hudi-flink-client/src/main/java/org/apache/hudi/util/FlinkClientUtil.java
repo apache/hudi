@@ -18,7 +18,12 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.common.config.HoodieMemoryConfig;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.flink.api.java.hadoop.mapred.utils.HadoopUtils;
 import org.apache.flink.configuration.Configuration;
@@ -35,7 +40,8 @@ public class FlinkClientUtil {
    * Creates the meta client.
    */
   public static HoodieTableMetaClient createMetaClient(String basePath) {
-    return HoodieTableMetaClient.builder().setBasePath(basePath).setConf(FlinkClientUtil.getHadoopConf()).build();
+    return HoodieTableMetaClient.builder().setBasePath(basePath)
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(FlinkClientUtil.getHadoopConf())).build();
   }
 
   /**
@@ -86,5 +92,22 @@ public class FlinkClientUtil {
       return hadoopConfiguration;
     }
     return null;
+  }
+
+  /**
+   * Get merged {@link TypedProperties} from {@link HoodieTableConfig} and {@link HoodieWriteConfig}, which is used by FileGroup reader.
+   *
+   * @param tableConfig The hoodie table configuration
+   * @param writeConfig the hoodie write configuration
+   *
+   * @return Merged {@link TypedProperties} from {@link HoodieTableConfig} and {@link HoodieWriteConfig}
+   */
+  public static TypedProperties getReadProps(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
+    TypedProperties props = new TypedProperties();
+    props.putAll(tableConfig.getProps());
+    writeConfig.getProps().forEach(props::putIfAbsent);
+    // For compatibility, log scanner uses MAX_MEMORY_FOR_COMPACTION for merging and FileGroup reader uses MAX_MEMORY_FOR_MERGE for merging.
+    props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), writeConfig.getString(HoodieMemoryConfig.MAX_MEMORY_FOR_COMPACTION));
+    return props;
   }
 }

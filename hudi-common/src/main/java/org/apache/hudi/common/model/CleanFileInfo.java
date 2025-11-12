@@ -21,7 +21,11 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 
 import java.io.Serializable;
+import java.util.Objects;
 
+/**
+ * File info for clean action.
+ */
 public class CleanFileInfo implements Serializable {
 
   private final String filePath;
@@ -42,6 +46,23 @@ public class CleanFileInfo implements Serializable {
 
   public HoodieCleanFileInfo toHoodieFileCleanInfo() {
     return new HoodieCleanFileInfo(filePath, isBootstrapBaseFile);
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    CleanFileInfo that = (CleanFileInfo) o;
+    return isBootstrapBaseFile == that.isBootstrapBaseFile && Objects.equals(filePath, that.filePath);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(filePath, isBootstrapBaseFile);
   }
 }
 

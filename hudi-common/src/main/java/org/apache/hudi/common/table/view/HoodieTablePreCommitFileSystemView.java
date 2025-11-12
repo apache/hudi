@@ -18,10 +18,10 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.storage.StoragePath;
 
 import java.util.Collections;
 import java.util.List;
@@ -38,12 +38,12 @@ import java.util.stream.Stream;
  *
  */
 public class HoodieTablePreCommitFileSystemView {
-  
-  private Map<String, List<String>> partitionToReplaceFileIds;
-  private List<HoodieWriteStat> filesWritten;
-  private String preCommitInstantTime;
-  private SyncableFileSystemView completedCommitsFileSystemView;
-  private HoodieTableMetaClient tableMetaClient;
+
+  private final Map<String, List<String>> partitionToReplaceFileIds;
+  private final List<HoodieWriteStat> filesWritten;
+  private final String preCommitInstantTime;
+  private final SyncableFileSystemView completedCommitsFileSystemView;
+  private final HoodieTableMetaClient tableMetaClient;
 
   /**
    * Create a file system view for the inflight commit that we are validating.
@@ -71,7 +71,7 @@ public class HoodieTablePreCommitFileSystemView {
     Map<String, HoodieBaseFile> newFilesWrittenForPartition = filesWritten.stream()
         .filter(file -> partitionStr.equals(file.getPartitionPath()))
         .collect(Collectors.toMap(HoodieWriteStat::getFileId, writeStat -> 
-            new HoodieBaseFile(new Path(tableMetaClient.getBasePath(), writeStat.getPath()).toString())));
+            new HoodieBaseFile(new StoragePath(tableMetaClient.getBasePath(), writeStat.getPath()).toString(), writeStat.getFileId(), preCommitInstantTime, null)));
 
     Stream<HoodieBaseFile> committedBaseFiles = this.completedCommitsFileSystemView.getLatestBaseFiles(partitionStr);
     Map<String, HoodieBaseFile> allFileIds = committedBaseFiles

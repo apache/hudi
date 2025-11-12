@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
@@ -35,8 +36,8 @@ import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.schema.SchemaProvider;
 
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -49,7 +50,7 @@ import java.util.List;
  */
 public class BufferedConnectWriter extends AbstractConnectWriter {
 
-  private static final Logger LOG = LogManager.getLogger(BufferedConnectWriter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BufferedConnectWriter.class);
 
   private final HoodieEngineContext context;
   private final HoodieJavaWriteClient writeClient;
@@ -80,7 +81,9 @@ public class BufferedConnectWriter extends AbstractConnectWriter {
           new DefaultSizeEstimator(),
           new HoodieRecordSizeEstimator(new Schema.Parser().parse(config.getSchema())),
           config.getCommonConfig().getSpillableDiskMapType(),
-          config.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
+          new DefaultSerializer<>(),
+          config.getCommonConfig().isBitCaskDiskMapCompressionEnabled(),
+          getClass().getSimpleName());
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }

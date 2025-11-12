@@ -19,16 +19,18 @@
 
 package org.apache.hudi.common.util.hash;
 
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.util.IOUtils;
+
 import net.jpountz.xxhash.XXHash32;
 import net.jpountz.xxhash.XXHash64;
 import net.jpountz.xxhash.XXHashFactory;
-import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.hudi.exception.HoodieIOException;
 
 import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * A stateless Hash class which generates ID for the desired bit count.
@@ -77,14 +79,14 @@ public class HashID implements Serializable {
   }
 
   /**
-   * Get the hash value for a string message and for the desired @{@link Size}.
+   * Get the hash value for a string message and for the desired @{@link HashID.Size}.
    *
    * @param message - String message to get the hash value for
-   * @param bits    - @{@link Size} of the hash value
+   * @param bits    - @{@link HashID.Size} of the hash value
    * @return Hash value for the message as byte array
    */
   public static byte[] hash(final String message, final Size bits) {
-    return hash(message.getBytes(StandardCharsets.UTF_8), bits);
+    return hash(getUTF8Bytes(message), bits);
   }
 
   /**
@@ -106,8 +108,26 @@ public class HashID implements Serializable {
     }
   }
 
+  /**
+   * Get the hash value as string for a given string and for the desired @{@link Size}.
+   *
+   * @param input - String message to get the hash value for.
+   * @param size  - @{@link Size} of the hash value
+   * @return Hash value for the message as string.
+   */
+  public static String generateXXHashAsString(String input, Size size) {
+    // Compute the hash
+    byte[] hashBytes = hash(input, size);
+    // Convert the hash value to a hexadecimal string
+    StringBuilder hexString = new StringBuilder();
+    for (byte hashByte : hashBytes) {
+      hexString.append(String.format("%02X", hashByte));
+    }
+    return hexString.toString();
+  }
+
   public static int getXXHash32(final String message, int hashSeed) {
-    return getXXHash32(message.getBytes(StandardCharsets.UTF_8), hashSeed);
+    return getXXHash32(getUTF8Bytes(message), hashSeed);
   }
 
   public static int getXXHash32(final byte[] message, int hashSeed) {
@@ -120,10 +140,10 @@ public class HashID implements Serializable {
     switch (bits) {
       case BITS_32:
         XXHash32 hash32 = factory.hash32();
-        return Bytes.toBytes(hash32.hash(message, 0, message.length, HASH_SEED));
+        return IOUtils.toBytes(hash32.hash(message, 0, message.length, HASH_SEED));
       case BITS_64:
         XXHash64 hash64 = factory.hash64();
-        return Bytes.toBytes(hash64.hash(message, 0, message.length, HASH_SEED));
+        return IOUtils.toBytes(hash64.hash(message, 0, message.length, HASH_SEED));
       default:
         throw new HoodieIOException("XX" + bits + " hash is unsupported!");
     }

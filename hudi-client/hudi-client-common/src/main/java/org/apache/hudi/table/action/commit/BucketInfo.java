@@ -50,12 +50,10 @@ public class BucketInfo implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("BucketInfo {");
-    sb.append("bucketType=").append(bucketType).append(", ");
-    sb.append("fileIdPrefix=").append(fileIdPrefix).append(", ");
-    sb.append("partitionPath=").append(partitionPath);
-    sb.append('}');
-    return sb.toString();
+    return "BucketInfo {" + "bucketType=" + bucketType + ", "
+        + "fileIdPrefix=" + fileIdPrefix + ", "
+        + "partitionPath=" + partitionPath
+        + '}';
   }
 
   @Override

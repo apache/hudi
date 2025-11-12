@@ -23,13 +23,14 @@ import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.connect.writers.BufferedConnectWriter;
 import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.schema.SchemaProvider;
+import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -58,8 +59,8 @@ public class TestBufferedConnectWriter {
   @BeforeEach
   public void setUp() throws Exception {
     mockHoodieJavaWriteClient = mock(HoodieJavaWriteClient.class);
-    Configuration hadoopConf = new Configuration();
-    javaEngineContext = new HoodieJavaEngineContext(hadoopConf);
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    javaEngineContext = new HoodieJavaEngineContext(storageConf);
     configs = KafkaConnectConfigs.newBuilder().build();
     schemaProvider = new TestAbstractConnectWriter.TestSchemaProvider();
     writeConfig = HoodieWriteConfig.newBuilder()

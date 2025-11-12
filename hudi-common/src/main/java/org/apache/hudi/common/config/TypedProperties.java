@@ -18,12 +18,14 @@
 
 package org.apache.hudi.common.config;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.stream.Collectors;
@@ -37,7 +39,7 @@ public class TypedProperties extends Properties implements Serializable {
     super(null);
   }
 
-  public TypedProperties(Properties defaults) {
+  protected TypedProperties(Properties defaults) {
     if (Objects.nonNull(defaults)) {
       for (Enumeration<?> e = defaults.propertyNames(); e.hasMoreElements(); ) {
         Object k = e.nextElement();
@@ -75,6 +77,10 @@ public class TypedProperties extends Properties implements Serializable {
 
   public String getString(String property, String defaultValue) {
     return containsKey(property) ? getProperty(property) : defaultValue;
+  }
+
+  public Option<String> getNonEmptyStringOpt(String property, String defaultValue) {
+    return Option.ofNullable(StringUtils.emptyToNull(getString(property, defaultValue)));
   }
 
   public List<String> getStringList(String property, String delimiter, List<String> defaultVal) {
@@ -118,5 +124,48 @@ public class TypedProperties extends Properties implements Serializable {
 
   public double getDouble(String property, double defaultValue) {
     return containsKey(property) ? Double.parseDouble(getProperty(property)) : defaultValue;
+  }
+
+  /**
+   * This method is introduced to get rid of the scala compile error:
+   * <pre>
+   *   <code>
+   *   ambiguous reference to overloaded definition,
+   *   both method putAll in class Properties of type (x$1: java.util.Map[_, _])Unit
+   *   and  method putAll in class Hashtable of type (x$1: java.util.Map[_ <: Object, _ <: Object])Unit
+   *   match argument types (java.util.HashMap[Nothing,Nothing])
+   *       properties.putAll(new java.util.HashMap())
+   *   </code>
+   * </pre>
+   *
+   * @param items The new items to put
+   */
+  public static TypedProperties fromMap(Map<?, ?> items) {
+    TypedProperties props = new TypedProperties();
+    props.putAll(items);
+    return props;
+  }
+
+  /**
+   * This method is introduced to get rid of the scala compile error:
+   * <pre>
+   *   <code>
+   *   ambiguous reference to overloaded definition,
+   *   both method putAll in class Properties of type (x$1: java.util.Map[_, _])Unit
+   *   and  method putAll in class Hashtable of type (x$1: java.util.Map[_ <: Object, _ <: Object])Unit
+   *   match argument types (java.util.HashMap[Nothing,Nothing])
+   *       properties.putAll(new java.util.HashMap())
+   *   </code>
+   * </pre>
+   *
+   * @param props The properties
+   * @param items The new items to put
+   */
+  public static void putAll(TypedProperties props, Map<?, ?> items) {
+    props.putAll(items);
+  }
+
+  public static TypedProperties copy(Properties defaults) {
+    return new TypedProperties(defaults);
   }
 }

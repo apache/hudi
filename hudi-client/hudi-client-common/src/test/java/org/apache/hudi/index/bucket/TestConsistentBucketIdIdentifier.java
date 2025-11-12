@@ -30,7 +30,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -196,5 +198,44 @@ public class TestConsistentBucketIdIdentifier {
       isException = true;
     }
     assertEquals(true, isException);
+  }
+
+  @Test
+  public void testGeneratePartitionToFileIdPfxIdxMap() {
+    Map<String, ConsistentBucketIdentifier> partitionToIdentifier = new HashMap<>();
+
+    for (int i = 0; i < 8; i++) {
+      String partitionPath = "partition" + i;
+      HoodieConsistentHashingMetadata metadata = new HoodieConsistentHashingMetadata(partitionPath, 8);
+      ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata);
+      partitionToIdentifier.put(partitionPath, identifier);
+    }
+
+    Map<String, Map<String, Integer>> partitionToFileIdPfxIdxMap = ConsistentBucketIndexUtils.generatePartitionToFileIdPfxIdxMap(partitionToIdentifier);
+
+    for (int i = 0; i < 8; i++) {
+      String partitionPath = "partition" + i;
+      HoodieConsistentHashingMetadata metadata = new HoodieConsistentHashingMetadata(partitionPath, 8);
+      ConsistentBucketIdentifier identifier = partitionToIdentifier.get(partitionPath);
+      Map<String, Integer> fileIdPfxToIdx = partitionToFileIdPfxIdxMap.get(partitionPath);
+
+      assertEquals(8, fileIdPfxToIdx.size());
+
+      int startIdx = 0;
+      int endIdx = 8 * 8;
+      // Check all bucket numbers are in range
+      assertTrue(fileIdPfxToIdx.values().stream()
+          .allMatch(id -> id >= startIdx && id < endIdx));
+
+      // Check all fileIdPrefix generated are valid file id
+      assertTrue(fileIdPfxToIdx.keySet().stream()
+          .map(fileIdPrefix -> FSUtils.createNewFileId(fileIdPrefix, 0))
+          .allMatch(fileId -> identifier.getBucketByFileId(fileId) != null));
+    }
+
+    // Check We have 64 distinct buckets
+    assertEquals(64, partitionToFileIdPfxIdxMap.values().stream()
+        .flatMap(fileIdPfxToIdx -> fileIdPfxToIdx.values().stream())
+        .distinct().count());
   }
 }

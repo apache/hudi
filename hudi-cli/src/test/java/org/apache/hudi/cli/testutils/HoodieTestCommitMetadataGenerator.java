@@ -22,17 +22,17 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -40,7 +40,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.baseFileName;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableList;
 
 /**
@@ -63,58 +65,58 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
   /**
    * Create a commit file with default CommitMetadata.
    */
-  public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration) throws Exception {
+  public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration) throws Exception {
     createCommitFileWithMetadata(basePath, commitTime, configuration, Option.empty(), Option.empty());
   }
 
-  public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
+  public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration,
       Option<Integer> writes, Option<Integer> updates) throws Exception {
     createCommitFileWithMetadata(basePath, commitTime, configuration, writes, updates, Collections.emptyMap());
   }
 
-  public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
+  public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration,
                                                   Option<Integer> writes, Option<Integer> updates, Map<String, String> extraMetadata) throws Exception {
     createCommitFileWithMetadata(basePath, commitTime, configuration, UUID.randomUUID().toString(),
         UUID.randomUUID().toString(), writes, updates, extraMetadata);
   }
 
-  public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
+  public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration,
       String fileId1, String fileId2, Option<Integer> writes, Option<Integer> updates) throws Exception {
     createCommitFileWithMetadata(basePath, commitTime, configuration, fileId1, fileId2, writes, updates, Collections.emptyMap());
   }
 
-  public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
+  public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration,
       String fileId1, String fileId2, Option<Integer> writes, Option<Integer> updates, Map<String, String> extraMetadata) throws Exception {
-    List<String> commitFileNames = Arrays.asList(HoodieTimeline.makeCommitFileName(commitTime), HoodieTimeline.makeInflightCommitFileName(commitTime),
-        HoodieTimeline.makeRequestedCommitFileName(commitTime));
+    List<String> commitFileNames = Arrays.asList(
+        INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(commitTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+        INSTANT_FILE_NAME_GENERATOR.makeInflightCommitFileName(commitTime),
+        INSTANT_FILE_NAME_GENERATOR.makeRequestedCommitFileName(commitTime));
     for (String name : commitFileNames) {
       HoodieCommitMetadata commitMetadata =
               generateCommitMetadata(basePath, commitTime, fileId1, fileId2, writes, updates, extraMetadata, true);
-      String content = commitMetadata.toJsonString();
-      createFileWithMetadata(basePath, configuration, name, content);
+      createFileWithMetadata(basePath, configuration, name, commitMetadata);
     }
   }
 
-  public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
+  public static void createCommitFileWithMetadata(String basePath, String commitTime, StorageConfiguration<?> configuration,
                                                   String fileId1, String fileId2, Option<Integer> writes,
                                                   Option<Integer> updates, Map<String, String> extraMetadata,
                                                   boolean setDefaultFileId) throws Exception {
     List<String> commitFileNames = Arrays.asList(
-        HoodieTimeline.makeCommitFileName(commitTime),
-        HoodieTimeline.makeInflightCommitFileName(commitTime),
-        HoodieTimeline.makeRequestedCommitFileName(commitTime));
+        INSTANT_FILE_NAME_GENERATOR.makeCommitFileName(commitTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+        INSTANT_FILE_NAME_GENERATOR.makeInflightCommitFileName(commitTime),
+        INSTANT_FILE_NAME_GENERATOR.makeRequestedCommitFileName(commitTime));
     for (String name : commitFileNames) {
       HoodieCommitMetadata commitMetadata =
           generateCommitMetadata(basePath, commitTime, fileId1, fileId2, writes, updates, extraMetadata, setDefaultFileId);
-      String content = commitMetadata.toJsonString();
-      createFileWithMetadata(basePath, configuration, name, content);
+      createFileWithMetadata(basePath, configuration, name, commitMetadata);
     }
   }
 
-  static void createFileWithMetadata(String basePath, Configuration configuration, String name, String content) throws IOException {
+  static <T> void createFileWithMetadata(String basePath, StorageConfiguration<?> configuration, String name, T metadata) throws IOException {
     Path commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + name);
-    try (FSDataOutputStream os = FSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
-      os.writeBytes(new String(content.getBytes(StandardCharsets.UTF_8)));
+    try (OutputStream os = HadoopFSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
+      COMMIT_METADATA_SER_DE.getInstantWriter(metadata).get().writeToStream(os);
     }
   }
 
@@ -140,8 +142,8 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
                                                             String fileId2, Option<Integer> writes,
                                                             Option<Integer> updates, Map<String, String> extraMetadata,
                                                             boolean setDefaultFileId) throws Exception {
-    FileCreateUtils.createBaseFile(basePath, DEFAULT_FIRST_PARTITION_PATH, commitTime, fileId1);
-    FileCreateUtils.createBaseFile(basePath, DEFAULT_SECOND_PARTITION_PATH, commitTime, fileId2);
+    FileCreateUtilsLegacy.createBaseFile(basePath, DEFAULT_FIRST_PARTITION_PATH, commitTime, fileId1);
+    FileCreateUtilsLegacy.createBaseFile(basePath, DEFAULT_SECOND_PARTITION_PATH, commitTime, fileId2);
     return generateCommitMetadata(new HashMap<String, List<String>>() {
       {
         put(DEFAULT_FIRST_PARTITION_PATH, createImmutableList(baseFileName(DEFAULT_FIRST_PARTITION_PATH, fileId1)));

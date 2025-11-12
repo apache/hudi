@@ -18,13 +18,16 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
+import org.apache.hudi.config.HoodieErrorTableConfig;
+import org.apache.hudi.utilities.config.KafkaSourceConfig;
+import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
 import org.apache.hudi.utilities.schema.ProtoClassBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config;
+import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
+import org.apache.hudi.utilities.streamer.DefaultStreamContext;
+import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.test.proto.Nested;
 import org.apache.hudi.utilities.test.proto.Sample;
 import org.apache.hudi.utilities.test.proto.SampleEnum;
@@ -36,10 +39,14 @@ import com.google.protobuf.DoubleValue;
 import com.google.protobuf.FloatValue;
 import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
+import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
+import com.google.protobuf.util.JsonFormat;
 import com.google.protobuf.util.Timestamps;
+import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
+import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -50,10 +57,12 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -62,43 +71,73 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_PROTO_VALUE_DESERIALIZER_CLASS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Tests against {@link ProtoKafkaSource}.
  */
 public class TestProtoKafkaSource extends BaseTestKafkaSource {
+  private static final JsonFormat.Printer PRINTER = JsonFormat.printer().omittingInsignificantWhitespace();
   private static final Random RANDOM = new Random();
+  private static final String MOCK_REGISTRY_URL = "mock://127.0.0.1:8081";
 
+  @Override
   protected TypedProperties createPropsForKafkaSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy) {
     TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.deltastreamer.source.kafka.topic", topic);
+    props.setProperty("hoodie.streamer.source.kafka.topic", topic);
     props.setProperty("bootstrap.servers", testUtils.brokerAddress());
     props.setProperty("auto.offset.reset", resetStrategy);
     props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-    props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents",
+    props.setProperty("hoodie.streamer.kafka.source.maxEvents",
         maxEventsToReadFromKafkaSource != null ? String.valueOf(maxEventsToReadFromKafkaSource) :
-            String.valueOf(Config.MAX_EVENTS_FROM_KAFKA_SOURCE_PROP.defaultValue()));
+            String.valueOf(KafkaSourceConfig.MAX_EVENTS_FROM_KAFKA_SOURCE.defaultValue()));
     props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
-    props.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME.key(), Sample.class.getName());
+    props.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), Sample.class.getName());
     return props;
   }
 
   @Override
-  SourceFormatAdapter createSource(TypedProperties props) {
+  protected SourceFormatAdapter createSource(TypedProperties props) {
     this.schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
-    Source protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    Source protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), metrics, new DefaultStreamContext(schemaProvider, sourceProfile));
     return new SourceFormatAdapter(protoKafkaSource);
   }
 
-  @Test
-  public void testProtoKafkaSourceWithFlattenWrappedPrimitives() {
-
-    // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testProtoKafkaSourceFlatten";
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testProtoKafkaSourceWithConfluentProtoDeserialization(boolean persistSourceRdd) {
+    final String topic = TEST_TOPIC_PREFIX + "testProtoKafkaSourceWithConfluentDeserializer_" + persistSourceRdd;
     testUtils.createTopic(topic, 2);
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
-    props.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
+    props.put(KAFKA_PROTO_VALUE_DESERIALIZER_CLASS.key(),
+        "io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer");
+    props.put("schema.registry.url", MOCK_REGISTRY_URL);
+    props.put("hoodie.streamer.schemaprovider.registry.url", MOCK_REGISTRY_URL);
+    props.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
+    props.setProperty(HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD.key(), String.valueOf(persistSourceRdd));
+    // class name is not required so we'll remove it
+    props.remove(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key());
+    SchemaProvider schemaProvider = new SchemaRegistryProvider(props, jsc());
+    ProtoKafkaSource protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    List<Sample> messages = createSampleMessages(1000);
+    sendMessagesToKafkaWithConfluentSerializer(topic, 2, messages);
+    // Assert messages are read correctly
+    JavaRDD<Message> messagesRead = protoKafkaSource.fetchNext(Option.empty(), 1000).getBatch().get();
+    assertEquals(messages.stream().map(this::protoToJson).collect(Collectors.toSet()),
+        new HashSet<>(messagesRead.map(message -> PRINTER.print(message)).collect()));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testProtoKafkaSourceWithFlattenWrappedPrimitives(boolean persistSourceRdd) {
+    // topic setup.
+    final String topic = TEST_TOPIC_PREFIX + "test_proto_kafka_source_flatten_persist_source_rdd_" + persistSourceRdd;
+    testUtils.createTopic(topic, 2);
+    TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+    props.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
+    props.setProperty(HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD.key(), Boolean.toString(persistSourceRdd));
     SchemaProvider schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
     Source protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(protoKafkaSource);
@@ -109,8 +148,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900);
     assertEquals(900, fetch1.getBatch().get().count());
     // Test Avro To DataFrame<Row> path
-    Dataset<Row> fetch1AsRows = AvroConversionUtils.createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
-        schemaProvider.getSourceSchema().toString(), protoKafkaSource.getSparkSession());
+    Dataset<Row> fetch1AsRows = kafkaSource.fetchNewDataInRowFormat(Option.empty(), 900).getBatch().get();
     assertEquals(900, fetch1AsRows.count());
 
     // 2. Produce new data, extract new data
@@ -157,7 +195,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
           .setPrimitiveFixedSignedLong(RANDOM.nextLong())
           .setPrimitiveBoolean(RANDOM.nextBoolean())
           .setPrimitiveString(UUID.randomUUID().toString())
-          .setPrimitiveBytes(ByteString.copyFrom(UUID.randomUUID().toString().getBytes()));
+          .setPrimitiveBytes(ByteString.copyFrom(getUTF8Bytes(UUID.randomUUID().toString())));
 
       // randomly set nested messages, lists, and maps to test edge cases
       if (RANDOM.nextBoolean()) {
@@ -178,7 +216,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
             .setWrappedDouble(DoubleValue.of(RANDOM.nextDouble()))
             .setWrappedFloat(FloatValue.of(RANDOM.nextFloat()))
             .setWrappedBoolean(BoolValue.of(RANDOM.nextBoolean()))
-            .setWrappedBytes(BytesValue.of(ByteString.copyFrom(UUID.randomUUID().toString().getBytes())))
+            .setWrappedBytes(BytesValue.of(ByteString.copyFrom(getUTF8Bytes(UUID.randomUUID().toString()))))
             .setEnum(SampleEnum.SECOND)
             .setTimestamp(Timestamps.fromMillis(System.currentTimeMillis()));
       }
@@ -193,9 +231,9 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
   }
 
   @Override
-  void sendMessagesToKafka(String topic, int count, int numPartitions) {
+  protected void sendMessagesToKafka(String topic, int count, int numPartitions) {
     List<Sample> messages = createSampleMessages(count);
-    try (Producer<String, byte[]> producer = new KafkaProducer<>(getProducerProperties())) {
+    try (Producer<String, byte[]> producer = new KafkaProducer<>(getProducerProperties(false))) {
       for (int i = 0; i < messages.size(); i++) {
         // use consistent keys to get even spread over partitions for test expectations
         producer.send(new ProducerRecord<>(topic, Integer.toString(i % numPartitions), messages.get(i).toByteArray()));
@@ -203,14 +241,38 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     }
   }
 
-  private Properties getProducerProperties() {
+  private void sendMessagesToKafkaWithConfluentSerializer(String topic, int numPartitions, List<Sample> messages) {
+    try (Producer<String, Message> producer = new KafkaProducer<>(getProducerProperties(true))) {
+      for (int i = 0; i < messages.size(); i++) {
+        // use consistent keys to get even spread over partitions for test expectations
+        producer.send(new ProducerRecord<>(topic, Integer.toString(i % numPartitions), messages.get(i)));
+      }
+    }
+  }
+
+  private Properties getProducerProperties(boolean useConfluentProtobufSerializer) {
     Properties props = new Properties();
     props.put("bootstrap.servers", testUtils.brokerAddress());
-    props.put("value.serializer", ByteArraySerializer.class.getName());
-    // Key serializer is required.
+    if (useConfluentProtobufSerializer) {
+      props.put("value.serializer", KafkaProtobufSerializer.class.getName());
+      props.put("value.deserializer", KafkaProtobufDeserializer.class.getName());
+      props.put("schema.registry.url", MOCK_REGISTRY_URL);
+      props.put("auto.register.schemas", "true");
+    } else {
+      props.put("value.serializer", ByteArraySerializer.class.getName());
+      // Key serializer is required.
+    }
     props.put("key.serializer", StringSerializer.class.getName());
     // wait for all in-sync replicas to ack sends
     props.put("acks", "all");
     return props;
+  }
+
+  private String protoToJson(Message input) {
+    try {
+      return PRINTER.print(input);
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to convert proto to json", e);
+    }
   }
 }

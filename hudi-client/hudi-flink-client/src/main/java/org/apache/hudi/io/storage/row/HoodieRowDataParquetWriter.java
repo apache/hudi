@@ -18,46 +18,49 @@
 
 package org.apache.hudi.io.storage.row;
 
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.client.model.HoodieRowDataCreation;
+import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.flink.table.data.RowData;
-import org.apache.hadoop.fs.Path;
-import org.apache.parquet.hadoop.ParquetFileWriter;
-import org.apache.parquet.hadoop.ParquetWriter;
 
 import java.io.IOException;
+import java.util.function.Function;
 
 /**
- * Parquet's impl of {@link HoodieRowDataFileWriter} to write {@link RowData}s.
+ * Parquet's impl of {@link HoodieRowDataFileWriter} to write fink {@link RowData}s.
  */
-public class HoodieRowDataParquetWriter extends ParquetWriter<RowData>
+public class HoodieRowDataParquetWriter extends HoodieBaseParquetWriter<RowData>
     implements HoodieRowDataFileWriter {
-
-  private final Path file;
-  private final HoodieWrapperFileSystem fs;
-  private final long maxFileSize;
   private final HoodieRowDataParquetWriteSupport writeSupport;
+  private final String fileName;
 
-  public HoodieRowDataParquetWriter(Path file, HoodieParquetConfig<HoodieRowDataParquetWriteSupport> parquetConfig)
-      throws IOException {
-    super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
-        ParquetFileWriter.Mode.CREATE, parquetConfig.getWriteSupport(), parquetConfig.getCompressionCodecName(),
-        parquetConfig.getBlockSize(), parquetConfig.getPageSize(), parquetConfig.getPageSize(),
-        DEFAULT_IS_DICTIONARY_ENABLED, DEFAULT_IS_VALIDATING_ENABLED,
-        DEFAULT_WRITER_VERSION, FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
-    this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf());
-    this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(FSUtils.registerFileSystem(file,
-        parquetConfig.getHadoopConf()));
-    this.maxFileSize = parquetConfig.getMaxFileSize()
-        + Math.round(parquetConfig.getMaxFileSize() * parquetConfig.getCompressionRatio());
+  private final String instantTime;
+  private final boolean populateMetaFields;
+  private final boolean withOperation;
+  private final Function<Long, String> seqIdGenerator;
+
+  public HoodieRowDataParquetWriter(
+      StoragePath file,
+      HoodieParquetConfig<HoodieRowDataParquetWriteSupport> parquetConfig,
+      String instantTime,
+      TaskContextSupplier taskContextSupplier,
+      boolean populateMetaFields,
+      boolean withOperation) throws IOException {
+    super(file, parquetConfig);
+    this.fileName = file.getName();
     this.writeSupport = parquetConfig.getWriteSupport();
-  }
-
-  @Override
-  public boolean canWrite() {
-    return fs.getBytesWritten(file) < maxFileSize;
+    this.instantTime = instantTime;
+    this.populateMetaFields = populateMetaFields;
+    this.withOperation = withOperation;
+    this.seqIdGenerator = recordIndex -> {
+      Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
+      return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
+    };
   }
 
   @Override
@@ -67,12 +70,17 @@ public class HoodieRowDataParquetWriter extends ParquetWriter<RowData>
   }
 
   @Override
-  public void writeRow(RowData row) throws IOException {
-    super.write(row);
+  public void writeRowWithMetaData(HoodieKey key, RowData row) throws IOException {
+    if (populateMetaFields) {
+      RowData rowWithMeta = updateRecordMetadata(row, key, getWrittenRecordCount());
+      writeRow(key.getRecordKey(), rowWithMeta);
+    } else {
+      writeRow(key.getRecordKey(), row);
+    }
   }
 
-  @Override
-  public void close() throws IOException {
-    super.close();
+  private RowData updateRecordMetadata(RowData row, HoodieKey key, long recordCount) {
+    return HoodieRowDataCreation.create(instantTime, seqIdGenerator.apply(recordCount),
+        key.getRecordKey(), key.getPartitionPath(), fileName, row, withOperation, true);
   }
 }

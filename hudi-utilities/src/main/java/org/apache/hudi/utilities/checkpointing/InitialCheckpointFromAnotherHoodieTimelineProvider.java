@@ -18,16 +18,18 @@
 
 package org.apache.hudi.utilities.checkpointing;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+
+import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.util.Objects;
 
-import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
+import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_KEY;
 
 /**
  * This is used to set a checkpoint from latest commit of another (mirror) hudi dataset.
@@ -44,7 +46,9 @@ public class InitialCheckpointFromAnotherHoodieTimelineProvider extends InitialC
   @Override
   public void init(Configuration config) throws HoodieException {
     super.init(config);
-    this.anotherDsHoodieMetaClient = HoodieTableMetaClient.builder().setConf(config).setBasePath(path.toString()).build();
+    this.anotherDsHoodieMetaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(config))
+        .setBasePath(path.toString()).build();
   }
 
   @Override
@@ -52,9 +56,8 @@ public class InitialCheckpointFromAnotherHoodieTimelineProvider extends InitialC
     return anotherDsHoodieMetaClient.getCommitsTimeline().filterCompletedInstants().getReverseOrderedInstants()
         .map(instant -> {
           try {
-            HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-                .fromBytes(anotherDsHoodieMetaClient.getActiveTimeline().getInstantDetails(instant).get(),
-                    HoodieCommitMetadata.class);
+            HoodieCommitMetadata commitMetadata =
+                anotherDsHoodieMetaClient.getActiveTimeline().readCommitMetadata(instant);
             return commitMetadata.getMetadata(CHECKPOINT_KEY);
           } catch (IOException e) {
             return null;

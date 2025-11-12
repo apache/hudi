@@ -17,12 +17,12 @@
   <parent>
     <artifactId>hudi-spark-datasource</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.13.0-SNAPSHOT</version>
+    <version>1.2.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
   <artifactId>hudi-spark3.3.x_2.12</artifactId>
-  <version>0.13.0-SNAPSHOT</version>
+  <version>1.2.0-SNAPSHOT</version>
 
   <name>hudi-spark3.3.x_2.12</name>
   <packaging>jar</packaging>
@@ -175,7 +175,7 @@
 
     <dependency>
       <groupId>org.apache.spark</groupId>
-      <artifactId>spark-sql_2.12</artifactId>
+      <artifactId>spark-sql_${scala.binary.version}</artifactId>
       <version>${spark33.version}</version>
       <scope>provided</scope>
       <optional>true</optional>
@@ -183,7 +183,7 @@
 
     <dependency>
       <groupId>org.apache.spark</groupId>
-      <artifactId>spark-catalyst_2.12</artifactId>
+      <artifactId>spark-catalyst_${scala.binary.version}</artifactId>
       <version>${spark33.version}</version>
       <scope>provided</scope>
       <optional>true</optional>
@@ -191,7 +191,7 @@
 
     <dependency>
       <groupId>org.apache.spark</groupId>
-      <artifactId>spark-core_2.12</artifactId>
+      <artifactId>spark-core_${scala.binary.version}</artifactId>
       <version>${spark33.version}</version>
       <scope>provided</scope>
       <optional>true</optional>
@@ -231,6 +231,13 @@
       <version>${project.version}</version>
     </dependency>
 
+    <!-- Hoodie Spark 3.x common  -->
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-spark3-common</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
     <dependency>
       <groupId>org.json4s</groupId>
       <artifactId>json4s-jackson_${scala.binary.version}</artifactId>
@@ -243,18 +250,10 @@
       </exclusions>
     </dependency>
 
-    <!-- Hoodie Spark 3.x common  -->
     <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark3-common</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-
-    <!-- Hoodie Spark >= 3.2 common  -->
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark3.2plus-common</artifactId>
-      <version>${project.version}</version>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-common</artifactId>
+      <scope>provided</scope>
     </dependency>
 
     <!-- Hoodie - Test -->
@@ -291,6 +290,14 @@
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-hadoop-common</artifactId>
+      <version>${project.version}</version>
+      <classifier>tests</classifier>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
 
     <dependency>
       <groupId>org.apache.hudi</groupId>
@@ -300,42 +307,18 @@
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
-
     <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter-api</artifactId>
-      <scope>test</scope>
-
-    </dependency>
-
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter-params</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-hdfs</artifactId>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-core_${scala.binary.version}</artifactId>
+      <version>${spark3.version}</version>
       <classifier>tests</classifier>
       <scope>test</scope>
-      <!-- Need these exclusions to make sure JavaSparkContext can be setup. https://issues.apache.org/jira/browse/SPARK-1693 -->
-      <exclusions>
-        <exclusion>
-          <groupId>org.mortbay.jetty</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>javax.servlet.jsp</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>javax.servlet</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
-
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
 </project> 

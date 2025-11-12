@@ -21,7 +21,8 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
+import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.sources.AbstractCloudObjectsSourceTestBase;
 
 import org.apache.avro.generic.GenericRecord;
@@ -29,15 +30,19 @@ import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.List;
 
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_REGION;
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_URL;
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_FS;
+import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD;
+import static org.apache.hudi.utilities.config.S3SourceConfig.S3_SOURCE_QUEUE_FS;
+import static org.apache.hudi.utilities.config.S3SourceConfig.S3_SOURCE_QUEUE_REGION;
+import static org.apache.hudi.utilities.config.S3SourceConfig.S3_SOURCE_QUEUE_URL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Basic tests for {@link S3EventsSource}.
@@ -47,9 +52,10 @@ public class TestS3EventsSource extends AbstractCloudObjectsSourceTestBase {
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
-    this.dfsRoot = dfsBasePath + "/parquetFiles";
+    this.dfsRoot = basePath + "/parquetFiles";
     this.fileSuffix = ".parquet";
-    dfs.mkdirs(new Path(dfsRoot));
+    fs.mkdirs(new Path(dfsRoot));
+    schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS("streamer-config", "s3-metadata.avsc"), jsc);
   }
 
   @AfterEach
@@ -62,10 +68,11 @@ public class TestS3EventsSource extends AbstractCloudObjectsSourceTestBase {
    *
    * @throws IOException
    */
-  @Test
-  public void testReadingFromSource() throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testReadingFromSource(boolean persistSourceRdd) throws IOException {
 
-    SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(prepareCloudObjectSource());
+    SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(prepareCloudObjectSource(generateProperties(persistSourceRdd)));
 
     // 1. Extract without any checkpoint => (no data available)
     generateMessageInQueue(null);
@@ -80,6 +87,7 @@ public class TestS3EventsSource extends AbstractCloudObjectsSourceTestBase {
     InputBatch<JavaRDD<GenericRecord>> fetch1 =
         sourceFormatAdapter.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
     assertEquals(1, fetch1.getBatch().get().count());
+    verifyRddsArePersisted(sourceFormatAdapter, fetch1, persistSourceRdd);
 
     // 3. Produce new data, extract new data
     generateMessageInQueue("2");
@@ -92,17 +100,36 @@ public class TestS3EventsSource extends AbstractCloudObjectsSourceTestBase {
     GenericRecord s3 = (GenericRecord) fetch2.getBatch().get().rdd().first().get("s3");
     GenericRecord s3Object = (GenericRecord) s3.get("object");
     assertEquals("2.parquet", s3Object.get("key").toString());
+    verifyRddsArePersisted(sourceFormatAdapter, fetch2, persistSourceRdd);
   }
 
   @Override
-  public Source prepareCloudObjectSource() {
-    TypedProperties props = new TypedProperties();
-    props.setProperty(S3_SOURCE_QUEUE_URL, sqsUrl);
-    props.setProperty(S3_SOURCE_QUEUE_REGION, regionName);
-    props.setProperty(S3_SOURCE_QUEUE_FS, "hdfs");
-    S3EventsSource dfsSource = new S3EventsSource(props, jsc, sparkSession, null);
+  public Source prepareCloudObjectSource(TypedProperties props) {
+    S3EventsSource dfsSource = new S3EventsSource(props, jsc, sparkSession, schemaProvider);
     dfsSource.sqs = this.sqs;
     return dfsSource;
+  }
+
+  private TypedProperties generateProperties(boolean persistSourceRdd) {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(S3_SOURCE_QUEUE_URL.key(), sqsUrl);
+    props.setProperty(S3_SOURCE_QUEUE_REGION.key(), regionName);
+    props.setProperty(S3_SOURCE_QUEUE_FS.key(), "hdfs");
+    props.setProperty(ERROR_TABLE_PERSIST_SOURCE_RDD.key(), String.valueOf(persistSourceRdd));
+    return props;
+  }
+
+  private void verifyRddsArePersisted(SourceFormatAdapter sourceFormatAdapter,
+                                      InputBatch<JavaRDD<GenericRecord>> inputBatch,
+                                      boolean persistSourceRdd) {
+    if (persistSourceRdd) {
+      assertTrue(inputBatch.getBatch().get().rdd().toDebugString().contains("CachedPartitions"));
+      assertEquals(1, jsc.getPersistentRDDs().size());
+    } else {
+      assertFalse(inputBatch.getBatch().get().rdd().toDebugString().contains("CachedPartitions"));
+      assertEquals(0, jsc.getPersistentRDDs().size());
+    }
+    sourceFormatAdapter.getSource().releaseResources();
   }
 
   @Override

@@ -20,11 +20,19 @@ package org.apache.hudi.exception;
 
 public class HoodieUpgradeDowngradeException extends HoodieException {
 
+  public HoodieUpgradeDowngradeException(String msg) {
+    super(msg);
+  }
+
   public HoodieUpgradeDowngradeException(String msg, Throwable t) {
     super(msg, t);
   }
 
   public HoodieUpgradeDowngradeException(int fromVersion, int toVersion, boolean upgrade) {
-    super(String.format("Cannot %s from version %s -> %s", upgrade ? "upgrade" : "downgrade", fromVersion, toVersion), null);
+    this(fromVersion, toVersion, upgrade, null);
+  }
+
+  public HoodieUpgradeDowngradeException(int fromVersion, int toVersion, boolean upgrade, Throwable t) {
+    super(String.format("Cannot %s from version %s -> %s", upgrade ? "upgrade" : "downgrade", fromVersion, toVersion), t);
   }
 }

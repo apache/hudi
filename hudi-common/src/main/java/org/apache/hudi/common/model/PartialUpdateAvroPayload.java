@@ -18,16 +18,18 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
-
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -85,9 +87,38 @@ import java.util.Properties;
  *  Result data after preCombine or combineAndGetUpdateValue:
  *      id      ts      name    price
  *      1       2       name_1  price_1
- *</pre>
+ * </pre>
+ *
+ * <p>Gotchas:
+ * <p>In cases where a batch of records is preCombine before combineAndGetUpdateValue with the underlying records to be updated located in parquet files, the end states of records might not be as how
+ * one will expect when applying a straightforward partial update.
+ *
+ * <p>Gotchas-Example:
+ * <pre>
+ *  -- Insertion order of records:
+ *  INSERT INTO t1 VALUES (1, 'a1', 10, 1000);                          -- (1)
+ *  INSERT INTO t1 VALUES (1, 'a1', 11, 999), (1, 'a1_0', null, 1001);  -- (2)
+ *
+ *  SELECT id, name, price, _ts FROM t1;
+ *  -- One would the results to return:
+ *  -- 1    a1_0    10.0    1001
+
+ *  -- However, the results returned are:
+ *  -- 1    a1_0    11.0    1001
+ *
+ *  -- This occurs as preCombine is applied on (2) first to return:
+ *  -- 1    a1_0    11.0    1001
+ *
+ *  -- And this then combineAndGetUpdateValue with the existing oldValue:
+ *  -- 1    a1_0    10.0    1000
+ *
+ *  -- To return:
+ *  -- 1    a1_0    11.0    1001
+ * </pre>
  */
 public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvroPayload {
+
+  private static final Logger LOG = LoggerFactory.getLogger(PartialUpdateAvroPayload.class);
 
   public PartialUpdateAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
@@ -99,20 +130,21 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
 
   @Override
   public PartialUpdateAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue, Schema schema, Properties properties) {
-    if (oldValue.recordBytes.length == 0) {
-      // use natural order for delete record
+    if (isEmptyRecord()) {
+      // use natural order for deleted record
       return this;
     }
     // pick the payload with greater ordering value as insert record
-    final boolean shouldPickOldRecord = oldValue.orderingVal.compareTo(orderingVal) > 0 ? true : false;
+    final boolean shouldPickOldRecord = oldValue.orderingVal.compareTo(orderingVal) > 0;
     try {
-      GenericRecord oldRecord = HoodieAvroUtils.bytesToAvro(oldValue.recordBytes, schema);
-      Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, shouldPickOldRecord);
+      GenericRecord oldRecord = (GenericRecord) oldValue.getRecord(schema).get();
+      Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, shouldPickOldRecord, true);
       if (mergedRecord.isPresent()) {
         return new PartialUpdateAvroPayload((GenericRecord) mergedRecord.get(),
             shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal);
       }
     } catch (Exception ex) {
+      LOG.warn("PartialUpdateAvroPayload precombine failed with ", ex);
       return this;
     }
     return this;
@@ -120,12 +152,12 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
-    return this.mergeOldRecord(currentValue, schema, false);
+    return this.mergeOldRecord(currentValue, schema, false, false);
   }
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties prop) throws IOException {
-    return mergeOldRecord(currentValue, schema, isRecordNewer(orderingVal, currentValue, prop));
+    return mergeOldRecord(currentValue, schema, isRecordNewer(orderingVal, currentValue, prop), false);
   }
 
   /**
@@ -139,19 +171,31 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
   //  Utilities
   // -------------------------------------------------------------------------
 
+  /**
+   * Merge old record with new record.
+   *
+   * @param oldRecord
+   * @param schema
+   * @param isOldRecordNewer
+   * @param isPreCombining   flag for deleted record combine logic
+   *                         1 preCombine: if delete record is newer, return merged record with _hoodie_is_deleted = true
+   *                         2 combineAndGetUpdateValue:  if delete record is newer, return empty since we don't need to store deleted data to storage
+   * @return
+   * @throws IOException
+   */
   private Option<IndexedRecord> mergeOldRecord(IndexedRecord oldRecord,
-      Schema schema,
-      boolean isOldRecordNewer) throws IOException {
-    Option<IndexedRecord> recordOption = getInsertValue(schema);
+                                               Schema schema,
+                                               boolean isOldRecordNewer, boolean isPreCombining) throws IOException {
+    Option<IndexedRecord> recordOption = getInsertValue(schema, isPreCombining);
 
-    if (!recordOption.isPresent()) {
+    if (!recordOption.isPresent() && !isPreCombining) {
       // use natural order for delete record
       return Option.empty();
     }
 
     if (isOldRecordNewer && schema.getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD) != null) {
       // handling disorder, should use the metadata fields of the updating record
-      return mergeDisorderRecordsWithMetadata(schema, (GenericRecord) oldRecord, (GenericRecord) recordOption.get());
+      return mergeDisorderRecordsWithMetadata(schema, (GenericRecord) oldRecord, (GenericRecord) recordOption.get(), isPreCombining);
     } else if (isOldRecordNewer) {
       return mergeRecords(schema, (GenericRecord) oldRecord, (GenericRecord) recordOption.get());
     } else {
@@ -160,19 +204,33 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
   }
 
   /**
+   * return itself as long as it called by preCombine
+   * @param schema
+   * @param isPreCombining
+   * @return
+   * @throws IOException
+   */
+  public Option<IndexedRecord> getInsertValue(Schema schema, boolean isPreCombining) throws IOException {
+    if (isEmptyRecord() || (!isPreCombining && isDeletedRecord)) {
+      return Option.empty();
+    }
+
+    return getRecord(schema);
+  }
+
+  /**
    * Merges the given disorder records with metadata.
    *
    * @param schema         The record schema
    * @param oldRecord      The current record from file
    * @param updatingRecord The incoming record
-   *
    * @return the merged record option
    */
   protected Option<IndexedRecord> mergeDisorderRecordsWithMetadata(
       Schema schema,
       GenericRecord oldRecord,
-      GenericRecord updatingRecord) {
-    if (isDeleteRecord(oldRecord)) {
+      GenericRecord updatingRecord, boolean isPreCombining) {
+    if (isDeleteRecord(oldRecord) && !isPreCombining) {
       return Option.empty();
     } else {
       final GenericRecordBuilder builder = new GenericRecordBuilder(schema);
@@ -198,28 +256,24 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
    * Returns whether the given record is newer than the record of this payload.
    *
    * @param orderingVal
-   * @param record The record
-   * @param prop   The payload properties
-   *
+   * @param record      The record
+   * @param prop        The payload properties
    * @return true if the given record is newer
    */
   private static boolean isRecordNewer(Comparable orderingVal, IndexedRecord record, Properties prop) {
-    String orderingField = prop.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
-    if (!StringUtils.isNullOrEmpty(orderingField)) {
+    String[] orderingFields = ConfigUtils.getOrderingFields(prop);
+    if (orderingFields != null) {
       boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(prop.getProperty(
           KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
           KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
 
-      Comparable oldOrderingVal =
-          (Comparable) HoodieAvroUtils.getNestedFieldVal(
-              (GenericRecord) record,
-              orderingField,
-              true,
-              consistentLogicalTimestampEnabled);
+      Comparable oldOrderingVal = OrderingValues.create(
+          orderingFields,
+          field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) record, field, true, consistentLogicalTimestampEnabled));
 
       // pick the payload with greater ordering value as insert record
       return oldOrderingVal != null
-          && ReflectionUtils.isSameClass(oldOrderingVal, orderingVal)
+          && OrderingValues.isSameClass(oldOrderingVal, orderingVal)
           && oldOrderingVal.compareTo(orderingVal) > 0;
     }
     return false;

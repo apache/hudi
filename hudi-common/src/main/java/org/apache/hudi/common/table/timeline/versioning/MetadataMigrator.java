@@ -79,7 +79,7 @@ public class MetadataMigrator<T> {
     if (metadataVersion == targetVersion) {
       return metadata;
     } else if (metadataVersion > targetVersion) {
-      return dowgradeToVersion(metadata, metadataVersion, targetVersion);
+      return downgradeToVersion(metadata, metadataVersion, targetVersion);
     } else {
       return upgradeToVersion(metadata, metadataVersion, targetVersion);
     }
@@ -95,7 +95,7 @@ public class MetadataMigrator<T> {
     return metadata;
   }
 
-  private T dowgradeToVersion(T metadata, int metadataVersion, int targetVersion) {
+  private T downgradeToVersion(T metadata, int metadataVersion, int targetVersion) {
     int newVersion = metadataVersion - 1;
     while (newVersion >= targetVersion) {
       VersionMigrator<T> downgrader = migrators.get(newVersion);

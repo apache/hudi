@@ -18,14 +18,19 @@
 package org.apache.hudi.common.util;
 
 import javax.annotation.Nonnull;
+
 import java.util.Arrays;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * Utils for Java type cast.
+ */
 public final class TypeUtils {
 
-  private TypeUtils() {}
+  private TypeUtils() {
+  }
 
   /**
    * Maps values from the provided Enum's {@link Class} into corresponding values,

@@ -17,30 +17,33 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.avro.generic.IndexedRecord
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.config.HoodieCommonConfig
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieReaderConfig}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieLogFile
-import org.apache.hudi.common.table.log.block.HoodieDataBlock
+import org.apache.hudi.common.model.{HoodieLogFile, HoodieRecordPayload}
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.log.{HoodieLogFormat, HoodieMergedLogRecordScanner}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.ValidationUtils
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieMemoryConfig}
-import org.apache.parquet.avro.AvroSchemaConverter
+import org.apache.hudi.common.table.log.block.HoodieDataBlock
+import org.apache.hudi.common.util.{FileIOUtils, ValidationUtils}
+import org.apache.hudi.storage.StoragePath
+
+import org.apache.avro.generic.IndexedRecord
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.Objects
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuilder {
   override def parameters: Array[ProcedureParameter] = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "log_file_path_pattern", DataTypes.StringType, None),
-    ProcedureParameter.optional(2, "merge", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(3, "limit", DataTypes.IntegerType, 10)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.required(2, "log_file_path_pattern", DataTypes.StringType),
+    ProcedureParameter.optional(3, "merge", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(4, "limit", DataTypes.IntegerType, 10),
+    ProcedureParameter.optional(5, "filter", DataTypes.StringType, "")
   )
 
   override def outputType: StructType = StructType(Array[StructField](
@@ -48,37 +51,39 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
   ))
 
   override def call(args: ProcedureArgs): Seq[Row] = {
-    checkArgs(parameters, args)
     val table = getArgValueOrDefault(args, parameters(0))
-    val logFilePathPattern: String = getArgValueOrDefault(args, parameters(1)).get.asInstanceOf[String]
-    val merge: Boolean = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[Boolean]
-    val limit: Int = getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[Int]
-    val basePath = getBasePath(table)
-    val client = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    val fs = client.getFs
-    val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(logFilePathPattern)).iterator().asScala
+    val path = getArgValueOrDefault(args, parameters(1))
+    val basePath = getBasePath(table, path)
+    checkArgs(parameters, args)
+    val logFilePathPattern: String = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[String]
+    val merge: Boolean = getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[Boolean]
+    val limit: Int = getArgValueOrDefault(args, parameters(4)).get.asInstanceOf[Int]
+    val filter = getArgValueOrDefault(args, parameters(5)).get.asInstanceOf[String]
+
+    validateFilter(filter, outputType)
+    val client = createMetaClient(jsc, basePath)
+    val storage = client.getStorage
+    val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(logFilePathPattern)).iterator().asScala
       .map(_.getPath.toString).toList
     ValidationUtils.checkArgument(logFilePaths.nonEmpty, "There is no log file")
-    val converter = new AvroSchemaConverter()
     val allRecords: java.util.List[IndexedRecord] = new java.util.ArrayList[IndexedRecord]
     if (merge) {
-      val schema = converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePaths.last))))
+      val schema = Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePaths.last)))
       val scanner = HoodieMergedLogRecordScanner.newBuilder
-        .withFileSystem(fs)
+        .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(logFilePaths.asJava)
         .withReaderSchema(schema)
-        .withLatestInstantTime(client.getActiveTimeline.getCommitTimeline.lastInstant.get.getTimestamp)
-        .withReadBlocksLazily(java.lang.Boolean.parseBoolean(HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE.defaultValue))
-        .withReverseReader(java.lang.Boolean.parseBoolean(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue))
+        .withLatestInstantTime(client.getActiveTimeline.getCommitAndReplaceTimeline.lastInstant.get.requestedTime)
+        .withReverseReader(java.lang.Boolean.parseBoolean(HoodieReaderConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue))
         .withBufferSize(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.defaultValue)
         .withMaxMemorySizeInBytes(HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
-        .withSpillableMapBasePath(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.defaultValue)
+        .withSpillableMapBasePath(FileIOUtils.getDefaultSpillableMapBasePath)
         .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue)
         .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue)
         .build
       scanner.asScala.foreach(hoodieRecord => {
-        val record = hoodieRecord.getData.getInsertValue(schema).get()
+        val record = hoodieRecord.getData.asInstanceOf[HoodieRecordPayload[_]].getInsertValue(schema).get()
         if (allRecords.size() < limit) {
           allRecords.add(record)
         }
@@ -86,16 +91,16 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     } else {
       logFilePaths.toStream.takeWhile(_ => allRecords.size() < limit).foreach {
         logFilePath => {
-          val schema = converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePath))))
-          val reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(logFilePath), schema)
+          val schema = Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePath)))
+          val reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(logFilePath), schema)
           while (reader.hasNext) {
             val block = reader.next()
             block match {
               case dataBlock: HoodieDataBlock =>
-                val recordItr = dataBlock.getRecordIterator
+                val recordItr = dataBlock.getRecordIterator(HoodieRecordType.AVRO)
                 recordItr.asScala.foreach(record => {
                   if (allRecords.size() < limit) {
-                    allRecords.add(record)
+                    allRecords.add(record.getData.asInstanceOf[IndexedRecord])
                   }
                 })
                 recordItr.close()
@@ -109,7 +114,8 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     allRecords.asScala.foreach(record => {
       rows.add(Row(record.toString))
     })
-    rows.asScala
+    val results = rows.asScala.toSeq
+    applyFilter(results, filter, outputType)
   }
 
   override def build: Procedure = new ShowHoodieLogFileRecordsProcedure

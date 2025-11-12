@@ -57,12 +57,12 @@
  <check level="error" class="org.scalastyle.scalariform.EqualsHashCodeChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.scalariform.IllegalImportsChecker" enabled="true">
   <parameters>
-   <parameter name="illegalImports"><![CDATA[sun._,java.awt._]]></parameter>
+   <parameter name="illegalImports"><![CDATA[sun._,java.awt._,com.google.common,org.codehaus.jackson]]></parameter>
   </parameters>
  </check>
  <check level="error" class="org.scalastyle.scalariform.ParameterNumberChecker" enabled="true">
   <parameters>
-   <parameter name="maxParameters"><![CDATA[10]]></parameter>
+   <parameter name="maxParameters"><![CDATA[12]]></parameter>
   </parameters>
  </check>
  <check level="error" class="org.scalastyle.scalariform.MagicNumberChecker" enabled="false">
@@ -72,7 +72,7 @@
  </check>
  <check level="error" class="org.scalastyle.scalariform.NoWhitespaceBeforeLeftBracketChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.scalariform.NoWhitespaceAfterLeftBracketChecker" enabled="true"/>
- <check level="warning" class="org.scalastyle.scalariform.ReturnChecker" enabled="true"/>
+ <check level="error" class="org.scalastyle.scalariform.ReturnChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.scalariform.NullChecker" enabled="false"/>
  <check level="error" class="org.scalastyle.scalariform.NoCloneChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.scalariform.NoFinalizeChecker" enabled="true"/>
@@ -120,20 +120,14 @@
  <check level="error" class="org.scalastyle.file.NewLineAtEofChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.file.NoNewLineAtEofChecker" enabled="false"/>
  <check level="error" class="org.scalastyle.scalariform.BlockImportChecker" enabled="false"/>
- <check level="error" class="org.scalastyle.scalariform.ImportOrderChecker" enabled="false">
+ <check level="error" class="org.scalastyle.scalariform.ImportOrderChecker" enabled="true">
   <parameters>
    <parameter name="groups">hudi,3rdParty,javax,java,scala</parameter>
    <parameter name="group.hudi">org\.apache\.hudi\..*</parameter>
-   <parameter name="group.3rdParty">(?!org\.apache\.hudi\.).*</parameter>
-   <parameter name="group.javax">java?\..*</parameter>
-   <parameter name="group.java">javax?\..*</parameter>
+   <parameter name="group.3rdParty">(?!org\.apache\.hudi\.|javax\.|java\.|scala\.).*</parameter>
+   <parameter name="group.javax">javax\..*</parameter>
+   <parameter name="group.java">java\..*</parameter>
    <parameter name="group.scala">scala\..*</parameter>
   </parameters>
  </check>
- <check level="error" class="org.scalastyle.scalariform.IllegalImportsChecker" enabled="true">
-  <parameters>
-   <parameter name="illegalImports"><![CDATA[com.google.common]]></parameter>
-  </parameters>
- </check>
-
 </scalastyle>

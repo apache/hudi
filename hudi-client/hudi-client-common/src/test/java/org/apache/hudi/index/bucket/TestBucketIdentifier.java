@@ -70,8 +70,7 @@ public class TestBucketIdentifier {
   public void testBucketFileId() {
     int[] ids = {0, 4, 8, 16, 32, 64, 128, 256, 512, 1000, 1024, 4096, 10000, 100000};
     for (int id : ids) {
-      String bucketIdStr = BucketIdentifier.bucketIdStr(id);
-      String fileId = BucketIdentifier.newBucketFileIdPrefix(bucketIdStr);
+      String fileId = BucketIdentifier.newBucketFileIdPrefix(id);
       assert BucketIdentifier.bucketIdFromFileId(fileId) == id;
     }
   }
@@ -83,7 +82,7 @@ public class TestBucketIdentifier {
     GenericRecord record = getRecord();
     HoodieRecord hoodieRecord = new HoodieAvroRecord(
         new HoodieKey(KeyGenUtils.getRecordKey(record, recordKeyField, false), ""), null);
-    int bucketId = BucketIdentifier.getBucketId(hoodieRecord, indexKeyField, 8);
+    int bucketId = BucketIdentifier.getBucketId(hoodieRecord.getRecordKey(), indexKeyField, 8);
     assert bucketId == BucketIdentifier.getBucketId(
         Arrays.asList(record.get(indexKeyField).toString()), 8);
   }
@@ -95,29 +94,31 @@ public class TestBucketIdentifier {
     GenericRecord record = getRecord();
     HoodieRecord hoodieRecord = new HoodieAvroRecord(
         new HoodieKey(KeyGenUtils.getRecordKey(record, recordKeyField, false), ""), null);
-    int bucketId = BucketIdentifier.getBucketId(hoodieRecord, indexKeyField, 8);
+    int bucketId = BucketIdentifier.getBucketId(hoodieRecord.getRecordKey(), indexKeyField, 8);
     assert bucketId == BucketIdentifier.getBucketId(
         Arrays.asList(record.get(indexKeyField).toString()), 8);
   }
 
   @Test
   public void testGetHashKeys() {
-    BucketIdentifier identifier = new BucketIdentifier();
-    List<String> keys = identifier.getHashKeys(new HoodieKey("abc", "partition"), "");
+    // if for recordKey one column only is used, then there is no added column name before value
+    List<String> keys = BucketIdentifier.getHashKeys("abc", "");
     assertEquals(1, keys.size());
     assertEquals("abc", keys.get(0));
 
-    keys = identifier.getHashKeys(new HoodieKey("f1:abc", "partition"), "f1");
-    assertEquals(1, keys.size());
-    assertEquals("abc", keys.get(0));
-
-    keys = identifier.getHashKeys(new HoodieKey("f1:abc,f2:bcd", "partition"), "f2");
+    // complex keys, composite from key-value pairs
+    keys = BucketIdentifier.getHashKeys("f1:abc,f2:bcd", "f2");
     assertEquals(1, keys.size());
     assertEquals("bcd", keys.get(0));
 
-    keys = identifier.getHashKeys(new HoodieKey("f1:abc,f2:bcd", "partition"), "f1,f2");
+    keys = BucketIdentifier.getHashKeys("f1:abc,f2:bcd", "f1,f2");
     assertEquals(2, keys.size());
     assertEquals("abc", keys.get(0));
     assertEquals("bcd", keys.get(1));
+
+    keys = BucketIdentifier.getHashKeys("f1:abc,f2:bcd,efg", "f1,f2");
+    assertEquals(2, keys.size());
+    assertEquals("abc", keys.get(0));
+    assertEquals("bcd,efg", keys.get(1));
   }
 }

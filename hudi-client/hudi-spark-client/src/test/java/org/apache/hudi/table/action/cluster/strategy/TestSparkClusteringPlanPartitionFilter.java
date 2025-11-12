@@ -26,6 +26,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 
+import org.joda.time.DateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -62,7 +63,7 @@ public class TestSparkClusteringPlanPartitionFilter {
     fakeTimeBasedPartitionsPath.add("20210718");
     fakeTimeBasedPartitionsPath.add("20210716");
     fakeTimeBasedPartitionsPath.add("20210719");
-    List list = sg.filterPartitionPaths(fakeTimeBasedPartitionsPath);
+    List list = (List)sg.filterPartitionPaths(null, fakeTimeBasedPartitionsPath).getLeft();
     assertEquals(3, list.size());
   }
 
@@ -80,7 +81,7 @@ public class TestSparkClusteringPlanPartitionFilter {
     fakeTimeBasedPartitionsPath.add("20210718");
     fakeTimeBasedPartitionsPath.add("20210716");
     fakeTimeBasedPartitionsPath.add("20210719");
-    List list = sg.filterPartitionPaths(fakeTimeBasedPartitionsPath);
+    List list = (List)sg.filterPartitionPaths(null, fakeTimeBasedPartitionsPath).getLeft();
     assertEquals(1, list.size());
     assertSame("20210718", list.get(0));
   }
@@ -100,8 +101,36 @@ public class TestSparkClusteringPlanPartitionFilter {
     fakeTimeBasedPartitionsPath.add("20211221");
     fakeTimeBasedPartitionsPath.add("20211222");
     fakeTimeBasedPartitionsPath.add("20211224");
-    List list = sg.filterPartitionPaths(fakeTimeBasedPartitionsPath);
+    List list = (List)sg.filterPartitionPaths(config, fakeTimeBasedPartitionsPath).getLeft();
     assertEquals(1, list.size());
     assertSame("20211222", list.get(0));
+  }
+
+  @Test
+  public void testDayRollingPartitionFilter() {
+    HoodieWriteConfig config = hoodieWriteConfigBuilder.withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode.DAY_ROLLING)
+            .build())
+        .build();
+    PartitionAwareClusteringPlanStrategy sg = new SparkSizeBasedClusteringPlanStrategy(table, context, config);
+    ArrayList<String> fakeTimeBasedPartitionsPath = new ArrayList<>();
+    for (int i = 0; i < 24; i++) {
+      fakeTimeBasedPartitionsPath.add("20220301" + (i >= 10 ? String.valueOf(i) : "0" + i));
+    }
+    List filterPartitions = (List)sg.filterPartitionPaths(null, fakeTimeBasedPartitionsPath).getLeft();
+    assertEquals(1, filterPartitions.size());
+    assertEquals(fakeTimeBasedPartitionsPath.get(DateTime.now().getHourOfDay()), filterPartitions.get(0));
+    fakeTimeBasedPartitionsPath = new ArrayList<>();
+    for (int i = 0; i < 24; i++) {
+      fakeTimeBasedPartitionsPath.add("20220301" + (i >= 10 ? String.valueOf(i) : "0" + i));
+      fakeTimeBasedPartitionsPath.add("20220302" + (i >= 10 ? String.valueOf(i) : "0" + i));
+    }
+    filterPartitions = (List)sg.filterPartitionPaths(null, fakeTimeBasedPartitionsPath).getLeft();
+    assertEquals(2, filterPartitions.size());
+
+    int hourOfDay = DateTime.now().getHourOfDay();
+    String suffix = hourOfDay >= 10 ? hourOfDay + "" : "0" + hourOfDay;
+    assertEquals("20220301" + suffix, filterPartitions.get(0));
+    assertEquals("20220302" + suffix, filterPartitions.get(1));
   }
 }

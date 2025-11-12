@@ -18,9 +18,10 @@
 
 package org.apache.hudi.common.model;
 
-import java.io.Serializable;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.bootstrap.FileStatusUtils;
+
+import java.io.Serializable;
 
 /**
  * POJO storing (partitionPath, hoodieFileId) -> external base file path.
@@ -41,7 +42,7 @@ public class BootstrapBaseFileMapping implements Serializable {
   }
 
   public BaseFile getBootstrapBaseFile() {
-    return new BaseFile(FileStatusUtils.toFileStatus(bootstrapFileStatus));
+    return new BaseFile(FileStatusUtils.toStoragePathInfo(bootstrapFileStatus));
   }
 
   @Override

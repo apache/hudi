@@ -30,4 +30,10 @@ public interface SourceCommitCallback {
    */
   default void onCommit(String lastCkptStr) {
   }
+
+  /**
+   * Release resources cached by source.
+   */
+  default void releaseResources() {
+  }
 }

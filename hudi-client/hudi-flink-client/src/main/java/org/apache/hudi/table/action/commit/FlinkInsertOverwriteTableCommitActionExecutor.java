@@ -18,36 +18,28 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import java.util.List;
+import java.util.Iterator;
 
 /**
  * Flink INSERT OVERWRITE TABLE commit action executor.
  */
-public class FlinkInsertOverwriteTableCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class FlinkInsertOverwriteTableCommitActionExecutor<T>
     extends FlinkInsertOverwriteCommitActionExecutor<T> {
 
   public FlinkInsertOverwriteTableCommitActionExecutor(HoodieEngineContext context,
                                                        HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+                                                       BucketInfo bucketInfo,
                                                        HoodieWriteConfig config,
                                                        HoodieTable table,
                                                        String instantTime,
-                                                       List<HoodieRecord<T>> inputRecords) {
-    super(context, writeHandle, config, table, instantTime, inputRecords, WriteOperationType.INSERT_OVERWRITE_TABLE);
-  }
-
-  @Override
-  public HoodieWriteMetadata<List<WriteStatus>> execute() {
-    return FlinkWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
-        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType);
+                                                       Iterator<HoodieRecord<T>> inputRecords) {
+    super(context, writeHandle, bucketInfo, config, table, instantTime, inputRecords, WriteOperationType.INSERT_OVERWRITE_TABLE);
   }
 }

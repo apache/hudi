@@ -45,9 +45,21 @@ dag_content:
       delete_input_data: false
     type: ValidateDatasetNode
     deps: first_insert
+  first_presto_query:
+    config:
+      execute_itr_count: 5
+      presto_props:
+        prop1: "SET SESSION hive.parquet_use_column_names = true"
+      presto_queries:
+        query1: "select count(*) from testdb.table1"
+        result1: 30000
+        query2: "select count(*) from testdb.table1 group by _row_key having count(*) > 1"
+        result2: 0
+    type: PrestoQueryNode
+    deps: second_validate
   last_validate:
     config:
       execute_itr_count: 5
       delete_input_data: true
     type: ValidateAsyncOperations
-    deps: second_validate
+    deps: first_presto_query

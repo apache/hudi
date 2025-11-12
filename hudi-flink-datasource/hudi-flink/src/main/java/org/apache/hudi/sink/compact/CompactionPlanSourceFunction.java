@@ -18,13 +18,15 @@
 
 package org.apache.hudi.sink.compact;
 
+import org.apache.hudi.adapter.AbstractRichFunctionAdapter;
+import org.apache.hudi.adapter.SourceFunctionAdapter;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.util.StreamerUtil;
 
-import org.apache.flink.api.common.functions.AbstractRichFunction;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,14 +43,13 @@ import java.util.stream.Collectors;
  *
  * <ul>
  *   <li>If the timeline has no inflight instants,
- *   use {@link org.apache.hudi.common.table.timeline.HoodieActiveTimeline#createNewInstantTime()}
- *   as the instant time;</li>
+ *   use {@link org.apache.hudi.common.table.timeline.HoodieActiveTimeline#createNewInstantTime() as the instant time;</li>
  *   <li>If the timeline has inflight instants,
  *   use the median instant time between [last complete instant time, earliest inflight instant time]
  *   as the instant time.</li>
  * </ul>
  */
-public class CompactionPlanSourceFunction extends AbstractRichFunction implements SourceFunction<CompactionPlanEvent> {
+public class CompactionPlanSourceFunction extends AbstractRichFunctionAdapter implements SourceFunctionAdapter<CompactionPlanEvent> {
 
   protected static final Logger LOG = LoggerFactory.getLogger(CompactionPlanSourceFunction.class);
 
@@ -56,9 +57,11 @@ public class CompactionPlanSourceFunction extends AbstractRichFunction implement
    * compaction plan instant -> compaction plan
    */
   private final List<Pair<String, HoodieCompactionPlan>> compactionPlans;
+  private final Configuration conf;
 
-  public CompactionPlanSourceFunction(List<Pair<String, HoodieCompactionPlan>> compactionPlans) {
+  public CompactionPlanSourceFunction(List<Pair<String, HoodieCompactionPlan>> compactionPlans, Configuration conf) {
     this.compactionPlans = compactionPlans;
+    this.conf = conf;
   }
 
   @Override
@@ -68,11 +71,16 @@ public class CompactionPlanSourceFunction extends AbstractRichFunction implement
 
   @Override
   public void run(SourceContext sourceContext) throws Exception {
+    HoodieTimeline pendingCompactionTimeline = StreamerUtil.createMetaClient(conf).getActiveTimeline().filterPendingCompactionTimeline();
     for (Pair<String, HoodieCompactionPlan> pair : compactionPlans) {
+      if (!pendingCompactionTimeline.containsInstant(pair.getLeft())) {
+        LOG.warn("{} not found in pending compaction instants.", pair.getLeft());
+        continue;
+      }
       HoodieCompactionPlan compactionPlan = pair.getRight();
       List<CompactionOperation> operations = compactionPlan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
-      LOG.info("CompactionPlanFunction compacting " + operations + " files");
+      LOG.info("CompactionPlanFunction compacting {} files", operations);
       for (CompactionOperation operation : operations) {
         sourceContext.collect(new CompactionPlanEvent(pair.getLeft(), operation));
       }

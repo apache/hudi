@@ -21,13 +21,12 @@ package org.apache.hudi.config;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.translator.IdentityBootstrapPartitionPathTranslator;
-import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
+import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.common.model.BootstrapIndexType;
 
 import java.io.File;
 import java.io.FileReader;
@@ -56,59 +55,67 @@ public class HoodieBootstrapConfig extends HoodieConfig {
   public static final ConfigProperty<String> PARTITION_SELECTOR_REGEX_MODE = ConfigProperty
       .key("hoodie.bootstrap.mode.selector.regex.mode")
       .defaultValue(METADATA_ONLY.name())
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withValidValues(METADATA_ONLY.name(), FULL_RECORD.name())
-      .withDocumentation("Bootstrap mode to apply for partition paths, that match regex above. "
-          + "METADATA_ONLY will generate just skeleton base files with keys/footers, avoiding full cost of rewriting the dataset. "
-          + "FULL_RECORD will perform a full copy/rewrite of the data as a Hudi table.");
+      .withDocumentation(BootstrapMode.class);
 
   public static final ConfigProperty<String> MODE_SELECTOR_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.mode.selector")
       .defaultValue(MetadataOnlyBootstrapModeSelector.class.getCanonicalName())
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Selects the mode in which each file/partition in the bootstrapped dataset gets bootstrapped");
+
+  public static final ConfigProperty<String> DATA_QUERIES_ONLY = ConfigProperty
+      .key("hoodie.bootstrap.data.queries.only")
+      .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Improves query performance, but queries cannot use hudi metadata fields");
 
   public static final ConfigProperty<String> FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.full.input.provider")
       .defaultValue("org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider")
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Class to use for reading the bootstrap dataset partitions/files, for Bootstrap mode FULL_RECORD");
-
-  public static final ConfigProperty<String> KEYGEN_CLASS_NAME = ConfigProperty
-      .key("hoodie.bootstrap.keygen.class")
-      .noDefaultValue()
-      .sinceVersion("0.6.0")
-      .withDocumentation("Key generator implementation to be used for generating keys from the bootstrapped dataset");
-
-  public static final ConfigProperty<String> KEYGEN_TYPE = ConfigProperty
-      .key("hoodie.bootstrap.keygen.type")
-      .defaultValue(KeyGeneratorType.SIMPLE.name())
-      .sinceVersion("0.9.0")
-      .withDocumentation("Type of build-in key generator, currently support SIMPLE, COMPLEX, TIMESTAMP, CUSTOM, NON_PARTITION, GLOBAL_DELETE");
 
   public static final ConfigProperty<String> PARTITION_PATH_TRANSLATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.partitionpath.translator.class")
       .defaultValue(IdentityBootstrapPartitionPathTranslator.class.getName())
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Translates the partition paths from the bootstrapped data into how is laid out as a Hudi table.");
 
   public static final ConfigProperty<String> PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.bootstrap.parallelism")
       .defaultValue("1500")
+      .markAdvanced()
       .sinceVersion("0.6.0")
-      .withDocumentation("Parallelism value to be used to bootstrap data into hudi");
+      .withDocumentation("For metadata-only bootstrap, Hudi parallelizes the operation so that "
+          + "each table partition is handled by one Spark task. This config limits the number "
+          + "of parallelism. We pick the configured parallelism if the number of table partitions "
+          + "is larger than this configured value. The parallelism is assigned to the number of "
+          + "table partitions if it is smaller than the configured value. For full-record "
+          + "bootstrap, i.e., BULK_INSERT operation of the records, this configured value is "
+          + "passed as the BULK_INSERT shuffle parallelism (`hoodie.bulkinsert.shuffle.parallelism`), "
+          + "determining the BULK_INSERT write behavior. If you see that the bootstrap is slow "
+          + "due to the limited parallelism, you can increase this.");
 
   public static final ConfigProperty<String> PARTITION_SELECTOR_REGEX_PATTERN = ConfigProperty
       .key("hoodie.bootstrap.mode.selector.regex")
       .defaultValue(".*")
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Matches each bootstrap dataset partition against this regex and applies the mode below to it.");
 
   public static final ConfigProperty<String> INDEX_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.index.class")
       .defaultValue(HFileBootstrapIndex.class.getName())
+      .markAdvanced()
       .sinceVersion("0.6.0")
-      .withDocumentation("Implementation to use, for mapping a skeleton base file to a boostrap base file.");
+      .withDocumentation("Implementation to use, for mapping a skeleton base file to a bootstrap base file.");
 
   /**
    * @deprecated Use {@link #BASE_PATH} and its methods instead
@@ -140,11 +147,6 @@ public class HoodieBootstrapConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String DEFAULT_FULL_BOOTSTRAP_INPUT_PROVIDER = FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME.defaultValue();
-  /**
-   * @deprecated Use {@link #KEYGEN_CLASS_NAME} and its methods instead
-   */
-  @Deprecated
-  public static final String BOOTSTRAP_KEYGEN_CLASS = KEYGEN_CLASS_NAME.key();
   /**
    * @deprecated Use {@link #PARTITION_PATH_TRANSLATOR_CLASS_NAME} and its methods instead
    */
@@ -220,16 +222,6 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withBootstrapKeyGenClass(String keyGenClass) {
-      bootstrapConfig.setValue(KEYGEN_CLASS_NAME, keyGenClass);
-      return this;
-    }
-
-    public Builder withBootstrapKeyGenType(String keyGenType) {
-      bootstrapConfig.setValue(KEYGEN_TYPE, keyGenType);
-      return this;
-    }
-
     public Builder withBootstrapPartitionPathTranslatorClass(String partitionPathTranslatorClass) {
       bootstrapConfig
           .setValue(PARTITION_PATH_TRANSLATOR_CLASS_NAME, partitionPathTranslatorClass);
@@ -258,8 +250,7 @@ public class HoodieBootstrapConfig extends HoodieConfig {
 
     public HoodieBootstrapConfig build() {
       // TODO: use infer function instead
-      bootstrapConfig.setDefaultValue(INDEX_CLASS_NAME, HoodieTableConfig.getDefaultBootstrapIndexClass(
-          bootstrapConfig.getProps()));
+      bootstrapConfig.setDefaultValue(INDEX_CLASS_NAME, BootstrapIndexType.getDefaultBootstrapIndexClassName(bootstrapConfig));
       bootstrapConfig.setDefaults(HoodieBootstrapConfig.class.getName());
       return bootstrapConfig;
     }

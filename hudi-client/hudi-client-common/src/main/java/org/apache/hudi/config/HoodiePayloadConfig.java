@@ -22,7 +22,8 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.StringUtils;
 
 import java.io.File;
 import java.io.FileReader;
@@ -41,28 +42,30 @@ import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_F
         + "control merges based on specific business fields in the data.")
 public class HoodiePayloadConfig extends HoodieConfig {
 
-  public static final ConfigProperty<String> ORDERING_FIELD = ConfigProperty
-      .key(PAYLOAD_ORDERING_FIELD_PROP_KEY)
-      .defaultValue("ts")
-      .withDocumentation("Table column/field name to order records that have the same key, before "
-          + "merging and writing to storage.");
-
   public static final ConfigProperty<String> EVENT_TIME_FIELD = ConfigProperty
       .key(PAYLOAD_EVENT_TIME_FIELD_PROP_KEY)
       .defaultValue("ts")
+      .markAdvanced()
       .withDocumentation("Table column/field name to derive timestamp associated with the records. This can"
           + "be useful for e.g, determining the freshness of the table.");
 
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
-      .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
+      .defaultValue(HoodieTableConfig.getDefaultPayloadClassName())
+      .markAdvanced()
       .withDocumentation("This needs to be same as class used during insert/upserts. Just like writing, compaction also uses "
         + "the record payload class to merge records in the log against each other, merge again with the base file and "
         + "produce the final record to be written after compaction.");
 
-  /** @deprecated Use {@link #PAYLOAD_CLASS_NAME} and its methods instead */
+  /** @deprecated Use {@link HoodieWriteConfig#PRECOMBINE_FIELD_NAME} and its methods instead */
   @Deprecated
-  public static final String DEFAULT_PAYLOAD_CLASS = PAYLOAD_CLASS_NAME.defaultValue();
+  public static final ConfigProperty<String> ORDERING_FIELDS = ConfigProperty
+      .key(PAYLOAD_ORDERING_FIELD_PROP_KEY)
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("Table column/field name to order records that have the same key, before "
+          + "merging and writing to storage.");
+
   /** @deprecated Use {@link #PAYLOAD_CLASS_NAME} and its methods instead */
   @Deprecated
   public static final String PAYLOAD_CLASS_PROP = PAYLOAD_CLASS_NAME.key();
@@ -91,8 +94,10 @@ public class HoodiePayloadConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withPayloadOrderingField(String payloadOrderingField) {
-      payloadConfig.setValue(ORDERING_FIELD, String.valueOf(payloadOrderingField));
+    public Builder withPayloadOrderingFields(String payloadOrderingFields) {
+      if (StringUtils.nonEmpty(payloadOrderingFields)) {
+        payloadConfig.setValue(ORDERING_FIELDS, payloadOrderingFields);
+      }
       return this;
     }
 

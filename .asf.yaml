@@ -42,8 +42,13 @@ github:
     master:
       required_pull_request_reviews:
         required_approving_review_count: 1
+  collaborators:
+    - ad1happy2go
+    - rangareddy
+    - deepakpanda93
 notifications:
   commits:      commits@hudi.apache.org
   issues:       commits@hudi.apache.org
   pullrequests: commits@hudi.apache.org
+  discussions:  dev@hudi.apache.org
   jira_options: link label

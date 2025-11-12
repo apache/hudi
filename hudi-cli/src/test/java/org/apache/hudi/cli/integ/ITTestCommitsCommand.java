@@ -19,15 +19,16 @@
 package org.apache.hudi.cli.integ;
 
 import org.apache.hudi.cli.HoodieCLI;
-import org.apache.hudi.cli.commands.RollbacksCommand;
 import org.apache.hudi.cli.commands.TableCommand;
 import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -71,11 +72,12 @@ public class ITTestCommitsCommand extends HoodieCLIIntegrationTestBase {
     tableName = "test_table_" + ITTestCommitsCommand.class.getName();
     basePath = Paths.get(basePath, tableName).toString();
 
-    HoodieCLI.conf = jsc.hadoopConfiguration();
+    HoodieCLI.conf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration());
     // Create table and connect
     new TableCommand().createTable(
         basePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
-        "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        "", HoodieTableVersion.current().versionCode(),
+        "org.apache.hudi.common.model.HoodieAvroPayload");
 
     initMetaClient();
   }
@@ -96,9 +98,9 @@ public class ITTestCommitsCommand extends HoodieCLIIntegrationTestBase {
     HoodieTestTable.of(metaClient)
         .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
         .addCommit("100")
-        .withBaseFilesInPartitions(partitionAndFileId)
+        .withBaseFilesInPartitions(partitionAndFileId).getLeft()
         .addCommit("101")
-        .withBaseFilesInPartitions(partitionAndFileId)
+        .withBaseFilesInPartitions(partitionAndFileId).getLeft()
         .addCommit("102")
         .withBaseFilesInPartitions(partitionAndFileId);
 
@@ -111,7 +113,7 @@ public class ITTestCommitsCommand extends HoodieCLIIntegrationTestBase {
 
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
 
-    HoodieActiveTimeline rollbackTimeline = new RollbacksCommand.RollbackTimeline(metaClient);
+    HoodieActiveTimeline rollbackTimeline = metaClient.getActiveTimeline();
     assertEquals(1, rollbackTimeline.getRollbackTimeline().countInstants(), "There should have 1 rollback instant.");
 
     HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
@@ -127,7 +129,7 @@ public class ITTestCommitsCommand extends HoodieCLIIntegrationTestBase {
 
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
 
-    HoodieActiveTimeline rollbackTimeline2 = new RollbacksCommand.RollbackTimeline(metaClient);
+    HoodieActiveTimeline rollbackTimeline2 = metaClient.getActiveTimeline();
     assertEquals(2, rollbackTimeline2.getRollbackTimeline().countInstants(), "There should have 2 rollback instant.");
 
     HoodieActiveTimeline timeline2 = metaClient.reloadActiveTimeline();
@@ -143,7 +145,7 @@ public class ITTestCommitsCommand extends HoodieCLIIntegrationTestBase {
         () -> assertEquals("Commit 100 rolled back", result3.toString()));
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
 
-    HoodieActiveTimeline rollbackTimeline3 = new RollbacksCommand.RollbackTimeline(metaClient);
+    HoodieActiveTimeline rollbackTimeline3 = metaClient.getActiveTimeline();
     assertEquals(3, rollbackTimeline3.getRollbackTimeline().countInstants(), "There should have 3 rollback instant.");
 
     HoodieActiveTimeline timeline3 = metaClient.reloadActiveTimeline();

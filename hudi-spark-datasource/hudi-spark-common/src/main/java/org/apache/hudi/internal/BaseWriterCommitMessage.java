@@ -18,23 +18,24 @@
 
 package org.apache.hudi.internal;
 
-import org.apache.hudi.client.HoodieInternalWriteStatus;
+import org.apache.hudi.client.WriteStatus;
 
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
 
 /**
  * Base class for HoodieWriterCommitMessage used by Spark datasource v2.
  */
-public class BaseWriterCommitMessage {
+public class BaseWriterCommitMessage implements Serializable {
 
-  private List<HoodieInternalWriteStatus> writeStatuses;
+  private final List<WriteStatus> writeStatuses;
 
-  public BaseWriterCommitMessage(List<HoodieInternalWriteStatus> writeStatuses) {
+  public BaseWriterCommitMessage(List<WriteStatus> writeStatuses) {
     this.writeStatuses = writeStatuses;
   }
 
-  public List<HoodieInternalWriteStatus> getWriteStatuses() {
+  public List<WriteStatus> getWriteStatuses() {
     return writeStatuses;
   }
 

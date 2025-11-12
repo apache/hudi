@@ -21,8 +21,10 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.utilities.testutils.sources.AbstractDFSSourceTestBase;
+
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
+
 import java.io.IOException;
 import java.util.List;
 
@@ -34,14 +36,13 @@ public class TestAvroDFSSource extends AbstractDFSSourceTestBase {
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
-    this.dfsRoot = dfsBasePath + "/avroFiles";
+    this.dfsRoot = basePath + "/avroFiles";
     this.fileSuffix = ".avro";
   }
 
   @Override
-  protected Source prepareDFSSource() {
-    TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.deltastreamer.source.dfs.root", dfsRoot);
+  protected Source prepareDFSSource(TypedProperties props) {
+    props.setProperty("hoodie.streamer.source.dfs.root", dfsRoot);
     try {
       return new AvroDFSSource(props, jsc, sparkSession, schemaProvider);
     } catch (IOException e) {

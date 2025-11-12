@@ -18,8 +18,6 @@
 
 package org.apache.hudi.internal.schema.visitor;
 
-import static org.apache.hudi.internal.schema.utils.InternalSchemaUtils.createFullName;
-
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
@@ -30,11 +28,13 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.internal.schema.utils.InternalSchemaUtils.createFullName;
+
 /**
  * Schema visitor to produce name -> id map for internalSchema.
  */
 public class NameToIDVisitor extends InternalSchemaVisitor<Map<String, Integer>> {
-  private final Deque fieldNames = new LinkedList<>();
+  private final Deque<String> fieldNames = new LinkedList<>();
   private final Map<String, Integer> nameToId = new HashMap<>();
 
   @Override
@@ -95,14 +95,14 @@ public class NameToIDVisitor extends InternalSchemaVisitor<Map<String, Integer>>
 
   @Override
   public Map<String, Integer> array(Types.ArrayType array, Map<String, Integer> elementResult) {
-    nameToId.put(createFullName("element", fieldNames), array.elementId());
+    nameToId.put(createFullName(InternalSchema.ARRAY_ELEMENT, fieldNames), array.elementId());
     return nameToId;
   }
 
   @Override
   public Map<String, Integer> map(Types.MapType map, Map<String, Integer> keyResult, Map<String, Integer> valueResult) {
-    nameToId.put(createFullName("key", fieldNames), map.keyId());
-    nameToId.put(createFullName("value", fieldNames), map.valueId());
+    nameToId.put(createFullName(InternalSchema.MAP_KEY, fieldNames), map.keyId());
+    nameToId.put(createFullName(InternalSchema.MAP_VALUE, fieldNames), map.valueId());
     return nameToId;
   }
 

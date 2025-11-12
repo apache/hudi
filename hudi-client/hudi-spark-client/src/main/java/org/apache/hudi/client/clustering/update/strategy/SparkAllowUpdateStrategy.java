@@ -22,7 +22,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.table.HoodieTable;
 
@@ -33,7 +32,7 @@ import java.util.stream.Collectors;
 /**
  * Allow ingestion commits during clustering job.
  */
-public class SparkAllowUpdateStrategy<T extends HoodieRecordPayload<T>> extends BaseSparkUpdateStrategy<T> {
+public class SparkAllowUpdateStrategy<T> extends BaseSparkUpdateStrategy<T> {
 
   public SparkAllowUpdateStrategy(
       HoodieEngineContext engineContext, HoodieTable table, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
@@ -44,7 +43,7 @@ public class SparkAllowUpdateStrategy<T extends HoodieRecordPayload<T>> extends 
   public Pair<HoodieData<HoodieRecord<T>>, Set<HoodieFileGroupId>> handleUpdate(HoodieData<HoodieRecord<T>> taggedRecordsRDD) {
     List<HoodieFileGroupId> fileGroupIdsWithRecordUpdate = getGroupIdsWithUpdate(taggedRecordsRDD);
     Set<HoodieFileGroupId> fileGroupIdsWithUpdatesAndPendingClustering = fileGroupIdsWithRecordUpdate.stream()
-        .filter(f -> fileGroupsInPendingClustering.contains(f))
+        .filter(fileGroupsInPendingClustering::contains)
         .collect(Collectors.toSet());
     return Pair.of(taggedRecordsRDD, fileGroupIdsWithUpdatesAndPendingClustering);
   }

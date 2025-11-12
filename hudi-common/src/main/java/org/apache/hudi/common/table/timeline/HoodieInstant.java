@@ -18,98 +18,45 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hadoop.fs.FileStatus;
+import org.apache.hudi.common.util.StringUtils;
 
 import java.io.Serializable;
 import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
 
 /**
  * A Hoodie Instant represents a action done on a hoodie table. All actions start with a inflight instant and then
  * create a completed instant after done.
- *
- * @see HoodieTimeline
  */
 public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
-  /**
-   * A COMPACTION action eventually becomes COMMIT when completed. So, when grouping instants
-   * for state transitions, this needs to be taken into account
-   */
-  private static final Map<String, String> COMPARABLE_ACTIONS = createComparableActionsMap();
+  public static final String FILE_NAME_FORMAT_ERROR = "The provided file name %s does not conform to the required format";
+  public static final String UNDERSCORE = "_";
+  public static final String EMPTY_FILE_EXTENSION = "";
 
-  public static final Comparator<HoodieInstant> ACTION_COMPARATOR =
-      Comparator.comparing(instant -> getComparableAction(instant.getAction()));
+  private final State state;
+  private final String action;
+  private final String requestedTime;
+  private final String completionTime;
+  // Marker for older formats, we need the state transition time (pre table version 7)
+  private boolean isLegacy = false;
+  private final Comparator<HoodieInstant> comparator;
 
-  public static final Comparator<HoodieInstant> COMPARATOR = Comparator.comparing(HoodieInstant::getTimestamp)
-      .thenComparing(ACTION_COMPARATOR).thenComparing(HoodieInstant::getState);
-
-  public static String getComparableAction(String action) {
-    return COMPARABLE_ACTIONS.getOrDefault(action, action);
+  public HoodieInstant(State state, String action, String requestTime, Comparator<HoodieInstant> comparator) {
+    this(state, action, requestTime, null, comparator);
   }
 
-  public static String getTimelineFileExtension(String fileName) {
-    Objects.requireNonNull(fileName);
-    int dotIndex = fileName.indexOf('.');
-    return dotIndex == -1 ? "" : fileName.substring(dotIndex);
+  public HoodieInstant(State state, String action, String requestTime, String completionTime, Comparator<HoodieInstant> comparator) {
+    this(state, action, requestTime, completionTime, false, comparator);
   }
 
-  /**
-   * Instant State.
-   */
-  public enum State {
-    // Requested State (valid state for Compaction)
-    REQUESTED,
-    // Inflight instant
-    INFLIGHT,
-    // Committed instant
-    COMPLETED,
-    // Invalid instant
-    INVALID
-  }
-
-  private State state = State.COMPLETED;
-  private String action;
-  private String timestamp;
-
-  /**
-   * Load the instant from the meta FileStatus.
-   */
-  public HoodieInstant(FileStatus fileStatus) {
-    // First read the instant timestamp. [==>20170101193025<==].commit
-    String fileName = fileStatus.getPath().getName();
-    String fileExtension = getTimelineFileExtension(fileName);
-    timestamp = fileName.replace(fileExtension, "");
-
-    // Next read the action for this marker
-    action = fileExtension.replaceFirst(".", "");
-    if (action.equals("inflight")) {
-      // This is to support backwards compatibility on how in-flight commit files were written
-      // General rule is inflight extension is .<action>.inflight, but for commit it is .inflight
-      action = "commit";
-      state = State.INFLIGHT;
-    } else if (action.contains(HoodieTimeline.INFLIGHT_EXTENSION)) {
-      state = State.INFLIGHT;
-      action = action.replace(HoodieTimeline.INFLIGHT_EXTENSION, "");
-    } else if (action.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
-      state = State.REQUESTED;
-      action = action.replace(HoodieTimeline.REQUESTED_EXTENSION, "");
-    }
-  }
-
-  public HoodieInstant(boolean isInflight, String action, String timestamp) {
-    // TODO: vb - Preserving for avoiding cascading changes. This constructor will be updated in subsequent PR
-    this.state = isInflight ? State.INFLIGHT : State.COMPLETED;
-    this.action = action;
-    this.timestamp = timestamp;
-  }
-
-  public HoodieInstant(State state, String action, String timestamp) {
+  public HoodieInstant(State state, String action, String requestedTime, String completionTime, boolean isLegacy, Comparator<HoodieInstant> comparator) {
     this.state = state;
     this.action = action;
-    this.timestamp = timestamp;
+    this.requestedTime = requestedTime;
+    this.completionTime = completionTime;
+    this.isLegacy = isLegacy;
+    this.comparator = comparator;
   }
 
   public boolean isCompleted() {
@@ -128,74 +75,12 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     return action;
   }
 
-  public String getTimestamp() {
-    return timestamp;
+  public String requestedTime() {
+    return requestedTime;
   }
 
-  /**
-   * Get the filename for this instant.
-   */
-  public String getFileName() {
-    if (HoodieTimeline.COMMIT_ACTION.equals(action)) {
-      return isInflight() ? HoodieTimeline.makeInflightCommitFileName(timestamp)
-          : isRequested() ? HoodieTimeline.makeRequestedCommitFileName(timestamp)
-              : HoodieTimeline.makeCommitFileName(timestamp);
-    } else if (HoodieTimeline.CLEAN_ACTION.equals(action)) {
-      return isInflight() ? HoodieTimeline.makeInflightCleanerFileName(timestamp)
-          : isRequested() ? HoodieTimeline.makeRequestedCleanerFileName(timestamp)
-              : HoodieTimeline.makeCleanerFileName(timestamp);
-    } else if (HoodieTimeline.ROLLBACK_ACTION.equals(action)) {
-      return isInflight() ? HoodieTimeline.makeInflightRollbackFileName(timestamp)
-          : isRequested() ? HoodieTimeline.makeRequestedRollbackFileName(timestamp)
-              : HoodieTimeline.makeRollbackFileName(timestamp);
-    } else if (HoodieTimeline.SAVEPOINT_ACTION.equals(action)) {
-      return isInflight() ? HoodieTimeline.makeInflightSavePointFileName(timestamp)
-          : HoodieTimeline.makeSavePointFileName(timestamp);
-    } else if (HoodieTimeline.DELTA_COMMIT_ACTION.equals(action)) {
-      return isInflight() ? HoodieTimeline.makeInflightDeltaFileName(timestamp)
-          : isRequested() ? HoodieTimeline.makeRequestedDeltaFileName(timestamp)
-              : HoodieTimeline.makeDeltaFileName(timestamp);
-    } else if (HoodieTimeline.COMPACTION_ACTION.equals(action)) {
-      if (isInflight()) {
-        return HoodieTimeline.makeInflightCompactionFileName(timestamp);
-      } else if (isRequested()) {
-        return HoodieTimeline.makeRequestedCompactionFileName(timestamp);
-      } else {
-        return HoodieTimeline.makeCommitFileName(timestamp);
-      }
-    } else if (HoodieTimeline.LOG_COMPACTION_ACTION.equals(action)) {
-      if (isInflight()) {
-        return HoodieTimeline.makeInflightLogCompactionFileName(timestamp);
-      } else if (isRequested()) {
-        return HoodieTimeline.makeRequestedLogCompactionFileName(timestamp);
-      } else {
-        return HoodieTimeline.makeDeltaFileName(timestamp);
-      }
-    } else if (HoodieTimeline.RESTORE_ACTION.equals(action)) {
-      return isInflight() ? HoodieTimeline.makeInflightRestoreFileName(timestamp)
-          : isRequested() ? HoodieTimeline.makeRequestedRestoreFileName(timestamp)
-          : HoodieTimeline.makeRestoreFileName(timestamp);
-    } else if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(action)) {
-      return isInflight() ? HoodieTimeline.makeInflightReplaceFileName(timestamp)
-          : isRequested() ? HoodieTimeline.makeRequestedReplaceFileName(timestamp)
-          : HoodieTimeline.makeReplaceFileName(timestamp);
-    } else if (HoodieTimeline.INDEXING_ACTION.equals(action)) {
-      return isInflight() ? HoodieTimeline.makeInflightIndexFileName(timestamp)
-          : isRequested() ? HoodieTimeline.makeRequestedIndexFileName(timestamp)
-          : HoodieTimeline.makeIndexCommitFileName(timestamp);
-    } else if (HoodieTimeline.SCHEMA_COMMIT_ACTION.equals(action)) {
-      return isInflight() ? HoodieTimeline.makeInflightSchemaFileName(timestamp)
-          : isRequested() ? HoodieTimeline.makeRequestSchemaFileName(timestamp)
-          : HoodieTimeline.makeSchemaFileName(timestamp);
-    }
-    throw new IllegalArgumentException("Cannot get file name for unknown action " + action);
-  }
-
-  private static final Map<String, String> createComparableActionsMap() {
-    Map<String, String> comparableMap = new HashMap<>();
-    comparableMap.put(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMMIT_ACTION);
-    comparableMap.put(HoodieTimeline.LOG_COMPACTION_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION);
-    return comparableMap;
+  public boolean isLegacy() {
+    return isLegacy;
   }
 
   @Override
@@ -207,25 +92,46 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       return false;
     }
     HoodieInstant that = (HoodieInstant) o;
-    return state == that.state && Objects.equals(action, that.action) && Objects.equals(timestamp, that.timestamp);
+    return state == that.state && Objects.equals(action, that.action) && Objects.equals(requestedTime, that.requestedTime);
   }
 
   public State getState() {
     return state;
   }
 
+  public String getCompletionTime() {
+    return completionTime;
+  }
+
   @Override
   public int hashCode() {
-    return Objects.hash(state, action, timestamp);
+    return Objects.hash(state, action, requestedTime);
   }
 
   @Override
   public int compareTo(HoodieInstant o) {
-    return COMPARATOR.compare(this, o);
+    return comparator.compare(this, o);
   }
 
   @Override
   public String toString() {
-    return "[" + ((isInflight() || isRequested()) ? "==>" : "") + timestamp + "__" + action + "__" + state + "]";
+    return "[" + ((isInflight() || isRequested()) ? "==>" : "")
+        + requestedTime
+        + (StringUtils.isNullOrEmpty(completionTime) ? "" : ("__" + completionTime))
+        + "__" + action + "__" + state + "]";
+  }
+
+  /**
+   * Instant State.
+   */
+  public enum State {
+    // Requested State (valid state for Compaction)
+    REQUESTED,
+    // Inflight instant
+    INFLIGHT,
+    // Committed instant
+    COMPLETED,
+    // Invalid instant
+    NIL
   }
 }

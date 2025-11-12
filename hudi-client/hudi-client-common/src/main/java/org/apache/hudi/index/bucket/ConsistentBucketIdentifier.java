@@ -86,6 +86,14 @@ public class ConsistentBucketIdentifier extends BucketIdentifier {
     return getBucket(getHashKeys(hoodieKey.getRecordKey(), indexKeyFields));
   }
 
+  public ConsistentHashingNode getBucket(String recordKey, List<String> indexKeyFields) {
+    return getBucket(getHashKeys(recordKey, indexKeyFields));
+  }
+
+  public ConsistentHashingNode getBucket(String recordKey, String indexKeyFields) {
+    return getBucket(getHashKeys(recordKey, indexKeyFields));
+  }
+
   protected ConsistentHashingNode getBucket(List<String> hashKeys) {
     int hashValue = HashID.getXXHash32(String.join("", hashKeys), 0);
     return getBucket(hashValue & HoodieConsistentHashingMetadata.HASH_VALUE_MASK);
@@ -109,6 +117,21 @@ public class ConsistentBucketIdentifier extends BucketIdentifier {
   public ConsistentHashingNode getFormerBucket(int hashValue) {
     SortedMap<Integer, ConsistentHashingNode> headMap = ring.headMap(hashValue);
     return headMap.isEmpty() ? ring.lastEntry().getValue() : headMap.get(headMap.lastKey());
+  }
+
+  /**
+   * Get the latter node of the given node (inferred from file id).
+   */
+  public ConsistentHashingNode getLatterBucket(String fileId) {
+    return getLatterBucket(getBucketByFileId(fileId).getValue());
+  }
+
+  /**
+   * Get the latter node of the given node (inferred from hash value).
+   */
+  public ConsistentHashingNode getLatterBucket(int hashValue) {
+    SortedMap<Integer, ConsistentHashingNode> tailMap = ring.tailMap(hashValue, false);
+    return tailMap.isEmpty() ? ring.firstEntry().getValue() : tailMap.get(tailMap.firstKey());
   }
 
   public List<ConsistentHashingNode> mergeBucket(List<String> fileIds) {

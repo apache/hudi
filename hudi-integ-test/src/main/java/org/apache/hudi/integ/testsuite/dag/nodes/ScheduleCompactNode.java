@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 
@@ -41,13 +42,13 @@ public class ScheduleCompactNode extends DagNode<Option<String>> {
     // testing for now
     // Find the last commit and extra the extra metadata to be passed to the schedule compaction. This is
     // done to ensure the CHECKPOINT is correctly passed from commit to commit
-    HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setConf(executionContext.getHoodieTestSuiteWriter().getConfiguration()).setBasePath(executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath)
-            .build();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(executionContext.getHoodieTestSuiteWriter().getConfiguration()))
+        .setBasePath(executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath)
+        .build();
     Option<HoodieInstant> lastInstant = metaClient.getActiveTimeline().getCommitsTimeline().lastInstant();
     if (lastInstant.isPresent()) {
-      HoodieCommitMetadata metadata = org.apache.hudi.common.model.HoodieCommitMetadata.fromBytes(metaClient
-          .getActiveTimeline().getInstantDetails(lastInstant.get()).get(), HoodieCommitMetadata.class);
+      HoodieCommitMetadata metadata = metaClient.getActiveTimeline().readCommitMetadata(lastInstant.get());
       Option<String> scheduledInstant = executionContext.getHoodieTestSuiteWriter().scheduleCompaction(Option.of(metadata
           .getExtraMetadata()));
       if (scheduledInstant.isPresent()) {

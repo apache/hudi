@@ -21,13 +21,12 @@ package org.apache.hudi.sink.bulk;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
+import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
-import org.apache.hudi.sink.meta.CkpMetadata;
-import org.apache.hudi.sink.utils.TimeWait;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.utils.RuntimeContextUtils;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
@@ -39,7 +38,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -85,19 +83,14 @@ public class BulkInsertWriteFunction<I>
   private transient HoodieFlinkWriteClient writeClient;
 
   /**
-   * The initial inflight instant when start up.
+   * Correspondent to request the instant time.
    */
-  private volatile String initInstant;
+  private transient Correspondent correspondent;
 
   /**
    * Gateway to send operator events to the operator coordinator.
    */
   private transient OperatorEventGateway eventGateway;
-
-  /**
-   * Checkpoint metadata.
-   */
-  private CkpMetadata ckpMetadata;
 
   /**
    * Constructs a StreamingSinkFunction.
@@ -111,23 +104,19 @@ public class BulkInsertWriteFunction<I>
 
   @Override
   public void open(Configuration parameters) throws IOException {
-    this.taskID = getRuntimeContext().getIndexOfThisSubtask();
-    this.writeClient = StreamerUtil.createWriteClient(this.config, getRuntimeContext());
-    this.ckpMetadata = CkpMetadata.getInstance(config);
-    this.initInstant = lastPendingInstant();
-    sendBootstrapEvent();
-    initWriterHelper();
+    this.taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
+    this.writeClient = FlinkWriteClients.createWriteClient(this.config, getRuntimeContext());
   }
 
   @Override
-  public void processElement(I value, Context ctx, Collector<Object> out) throws IOException {
+  public void processElement(I value, Context ctx, Collector<RowData> out) throws IOException {
+    initWriterHelperIfNeeded();
     this.writerHelper.write((RowData) value);
   }
 
   @Override
   public void close() {
     if (this.writeClient != null) {
-      this.writeClient.cleanHandlesGracefully();
       this.writeClient.close();
     }
   }
@@ -136,6 +125,7 @@ public class BulkInsertWriteFunction<I>
    * End input action for batch source.
    */
   public void endInput() {
+    initWriterHelperIfNeeded();
     final List<WriteStatus> writeStatus = this.writerHelper.getWriteStatuses(this.taskID);
 
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
@@ -157,6 +147,11 @@ public class BulkInsertWriteFunction<I>
   //  Getter/Setter
   // -------------------------------------------------------------------------
 
+  @Override
+  public void setCorrespondent(Correspondent correspondent) {
+    this.correspondent = correspondent;
+  }
+
   public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
     this.eventGateway = operatorEventGateway;
   }
@@ -165,48 +160,19 @@ public class BulkInsertWriteFunction<I>
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private void initWriterHelper() {
-    String instant = instantToWrite();
-    this.writerHelper = WriterHelpers.getWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
-        instant, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
-        this.rowType);
-  }
-
-  private void sendBootstrapEvent() {
-    WriteMetadataEvent event = WriteMetadataEvent.builder()
-        .taskID(taskID)
-        .writeStatus(Collections.emptyList())
-        .instantTime("")
-        .bootstrap(true)
-        .build();
-    this.eventGateway.sendEventToCoordinator(event);
-    LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
+  private void initWriterHelperIfNeeded() {
+    if (writerHelper == null) {
+      String instant = instantToWrite();
+      this.writerHelper = WriterHelpers.getWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
+          instant, this.taskID, RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext()), RuntimeContextUtils.getAttemptNumber(getRuntimeContext()),
+          this.rowType);
+    }
   }
 
   /**
-   * Returns the last pending instant time.
+   * Returns the instant to write.
    */
-  protected String lastPendingInstant() {
-    return this.ckpMetadata.lastPendingInstant();
-  }
-
   private String instantToWrite() {
-    String instant = lastPendingInstant();
-    // if exactly-once semantics turns on,
-    // waits for the checkpoint notification until the checkpoint timeout threshold hits.
-    TimeWait timeWait = TimeWait.builder()
-        .timeout(config.getLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT))
-        .action("instant initialize")
-        .build();
-    while (instant == null || instant.equals(this.initInstant)) {
-      // wait condition:
-      // 1. there is no inflight instant
-      // 2. the inflight instant does not change
-      // sleep for a while
-      timeWait.waitFor();
-      // refresh the inflight instant
-      instant = lastPendingInstant();
-    }
-    return instant;
+    return this.correspondent.requestInstantTime(-1L);
   }
 }

@@ -29,6 +29,7 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -58,8 +59,8 @@ public class NonThrownExecutor implements AutoCloseable {
   private final boolean waitForTasksFinish;
 
   @VisibleForTesting
-  protected NonThrownExecutor(Logger logger, @Nullable ExceptionHook exceptionHook, boolean waitForTasksFinish) {
-    this.executor = Executors.newSingleThreadExecutor();
+  protected NonThrownExecutor(Logger logger, @Nullable ThreadFactory threadFactory, @Nullable ExceptionHook exceptionHook, boolean waitForTasksFinish) {
+    this.executor = threadFactory == null ? Executors.newSingleThreadExecutor() : Executors.newSingleThreadExecutor(threadFactory);
     this.logger = logger;
     this.exceptionHook = exceptionHook;
     this.waitForTasksFinish = waitForTasksFinish;
@@ -136,15 +137,15 @@ public class NonThrownExecutor implements AutoCloseable {
   }
 
   private void handleException(Throwable t, ExceptionHook hook, Supplier<String> actionString) {
-    // if we have a JVM critical error, promote it immediately, there is a good
-    // chance the
-    // logging or job failing will not succeed any more
-    ExceptionUtils.rethrowIfFatalErrorOrOOM(t);
     final String errMsg = String.format("Executor executes action [%s] error", actionString.get());
     logger.error(errMsg, t);
     if (hook != null) {
       hook.apply(errMsg, t);
     }
+    // if we have a JVM critical error, promote it immediately, there is a good
+    // chance the
+    // logging or job failing will not succeed any more
+    ExceptionUtils.rethrowIfFatalErrorOrOOM(t);
   }
 
   private Supplier<String> getActionString(String actionName, Object... actionParams) {
@@ -168,6 +169,7 @@ public class NonThrownExecutor implements AutoCloseable {
    */
   public static class Builder {
     private final Logger logger;
+    private ThreadFactory threadFactory;
     private ExceptionHook exceptionHook;
     private boolean waitForTasksFinish = false;
 
@@ -176,7 +178,12 @@ public class NonThrownExecutor implements AutoCloseable {
     }
 
     public NonThrownExecutor build() {
-      return new NonThrownExecutor(logger, exceptionHook, waitForTasksFinish);
+      return new NonThrownExecutor(logger, threadFactory, exceptionHook, waitForTasksFinish);
+    }
+
+    public Builder threadFactory(ThreadFactory threadFactory) {
+      this.threadFactory = threadFactory;
+      return this;
     }
 
     public Builder exceptionHook(ExceptionHook exceptionHook) {

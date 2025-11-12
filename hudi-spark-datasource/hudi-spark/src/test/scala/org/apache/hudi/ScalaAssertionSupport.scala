@@ -20,7 +20,7 @@ package org.apache.hudi
 
 import org.junit.jupiter.api.Assertions.fail
 
-class ScalaAssertionSupport {
+trait ScalaAssertionSupport {
 
   def assertThrows[T <: Throwable, R](expectedExceptionClass: Class[T])(f: => R): T = {
     try {
@@ -30,8 +30,8 @@ class ScalaAssertionSupport {
         // scalastyle:off return
         return t.asInstanceOf[T]
       // scalastyle:on return
-      case ot @ _ =>
-        fail(s"Expected exception of class $expectedExceptionClass, but ${ot.getClass} has been thrown")
+      case ot : Throwable =>
+        fail(s"Expected exception of class $expectedExceptionClass, but ${ot.getClass} has been thrown: $ot\n${ot.getStackTrace.mkString("\n")}")
     }
 
     fail(s"Expected exception of class $expectedExceptionClass, but nothing has been thrown")

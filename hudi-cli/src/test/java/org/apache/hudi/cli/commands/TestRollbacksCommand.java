@@ -32,13 +32,14 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -100,21 +101,23 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
         )
         .withRollbackUsingMarkers(false)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
-    HoodieMetadataTestTable.of(metaClient, SparkHoodieBackedTableMetadataWriter.create(
-            metaClient.getHadoopConf(), config, context))
-        .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
-        .addCommit("100")
-        .withBaseFilesInPartitions(partitionAndFileId)
-        .addCommit("101")
-        .withBaseFilesInPartitions(partitionAndFileId)
-        .addInflightCommit("102")
-        .withBaseFilesInPartitions(partitionAndFileId);
+    try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
+        metaClient.getStorageConf(), config, context)) {
+      HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context))
+          .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
+          .addCommit("100")
+          .withBaseFilesInPartitions(partitionAndFileId).getLeft()
+          .addCommit("101")
+          .withBaseFilesInPartitions(partitionAndFileId).getLeft()
+          .addInflightCommit("102")
+          .withBaseFilesInPartitions(partitionAndFileId);
 
-    // generate two rollback
-    try (BaseHoodieWriteClient client = new SparkRDDWriteClient(context(), config)) {
-      // Rollback inflight commit3 and commit2
-      client.rollback("102");
-      client.rollback("101");
+      // generate two rollback
+      try (BaseHoodieWriteClient client = new SparkRDDWriteClient(context(), config)) {
+        // Rollback inflight commit3 and commit2
+        client.rollback("102");
+        client.rollback("101");
+      }
     }
   }
 
@@ -127,15 +130,14 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // get rollback instants
-    HoodieActiveTimeline activeTimeline = new RollbacksCommand.RollbackTimeline(HoodieCLI.getTableMetaClient());
-    Stream<HoodieInstant> rollback = activeTimeline.getRollbackTimeline().filterCompletedInstants().getInstants();
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
+    Stream<HoodieInstant> rollback = activeTimeline.getRollbackTimeline().filterCompletedInstants().getInstantsAsStream();
 
     List<Comparable[]> rows = new ArrayList<>();
     rollback.sorted().forEach(instant -> {
       try {
         // get pair of rollback time and instant time
-        HoodieRollbackMetadata metadata = TimelineMetadataUtils
-            .deserializeAvroMetadata(activeTimeline.getInstantDetails(instant).get(), HoodieRollbackMetadata.class);
+        HoodieRollbackMetadata metadata = activeTimeline.readRollbackMetadata(instant);
         metadata.getCommitsRollback().forEach(c -> {
           Comparable[] row = new Comparable[5];
           row[0] = metadata.getStartRollbackTime();
@@ -168,18 +170,17 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
   @Test
   public void testShowRollback() throws IOException {
     // get instant
-    HoodieActiveTimeline activeTimeline = new RollbacksCommand.RollbackTimeline(HoodieCLI.getTableMetaClient());
-    Stream<HoodieInstant> rollback = activeTimeline.getRollbackTimeline().filterCompletedInstants().getInstants();
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
+    Stream<HoodieInstant> rollback = activeTimeline.getRollbackTimeline().filterCompletedInstants().getInstantsAsStream();
     HoodieInstant instant = rollback.findFirst().orElse(null);
     assertNotNull(instant, "The instant can not be null.");
 
-    Object result = shell.evaluate(() -> "show rollback --instant " + instant.getTimestamp());
+    Object result = shell.evaluate(() -> "show rollback --instant " + instant.requestedTime());
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     List<Comparable[]> rows = new ArrayList<>();
     // get metadata of instant
-    HoodieRollbackMetadata metadata = TimelineMetadataUtils.deserializeAvroMetadata(
-        activeTimeline.getInstantDetails(instant).get(), HoodieRollbackMetadata.class);
+    HoodieRollbackMetadata metadata = activeTimeline.readRollbackMetadata(instant);
     // generate expect result
     metadata.getPartitionMetadata().forEach((key, value) -> Stream
         .concat(value.getSuccessDeleteFiles().stream().map(f -> Pair.of(f, true)),

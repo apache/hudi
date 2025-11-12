@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.adapter.CollectOutputAdapter;
 import org.apache.hudi.sink.clustering.ClusteringCommitEvent;
 import org.apache.hudi.sink.clustering.ClusteringCommitSink;
 import org.apache.hudi.sink.clustering.ClusteringOperator;
@@ -56,9 +57,13 @@ public class ClusteringFunctionWrapper {
    */
   private ClusteringPlanOperator clusteringPlanOperator;
   /**
+   * Output to collect the clustering plan events.
+   */
+  private CollectOutputAdapter<ClusteringPlanEvent> planEventOutput;
+  /**
    * Output to collect the clustering commit events.
    */
-  private CollectorOutput<ClusteringCommitEvent> commitEventOutput;
+  private CollectOutputAdapter<ClusteringCommitEvent> commitEventOutput;
   /**
    * Function that executes the clustering task.
    */
@@ -69,6 +74,7 @@ public class ClusteringFunctionWrapper {
   private ClusteringCommitSink commitSink;
 
   public ClusteringFunctionWrapper(Configuration conf, StreamTask<?, ?> streamTask, StreamConfig streamConfig) {
+    this.conf = conf;
     this.ioManager = new IOManagerAsync();
     MockEnvironment environment = new MockEnvironmentBuilder()
         .setTaskName("mockTask")
@@ -76,19 +82,20 @@ public class ClusteringFunctionWrapper {
         .setIOManager(ioManager)
         .build();
     this.runtimeContext = new MockStreamingRuntimeContext(false, 1, 0, environment);
-    this.conf = conf;
     this.streamTask = streamTask;
     this.streamConfig = streamConfig;
   }
 
   public void openFunction() throws Exception {
     clusteringPlanOperator = new ClusteringPlanOperator(conf);
+    planEventOutput =  new CollectOutputAdapter<>();
+    clusteringPlanOperator.setup(streamTask, streamConfig, planEventOutput);
     clusteringPlanOperator.open();
 
     clusteringOperator = new ClusteringOperator(conf, TestConfigurations.ROW_TYPE);
     // CAUTION: deprecated API used.
     clusteringOperator.setProcessingTimeService(new TestProcessingTimeService());
-    commitEventOutput = new CollectorOutput<>();
+    commitEventOutput = new CollectOutputAdapter<>();
     clusteringOperator.setup(streamTask, streamConfig, commitEventOutput);
     clusteringOperator.open();
     final NonThrownExecutor syncExecutor = new MockCoordinatorExecutor(
@@ -102,7 +109,7 @@ public class ClusteringFunctionWrapper {
 
   public void cluster(long checkpointID) throws Exception {
     // collect the ClusteringPlanEvents.
-    CollectorOutput<ClusteringPlanEvent> planOutput = new CollectorOutput<>();
+    CollectOutputAdapter<ClusteringPlanEvent> planOutput = new CollectOutputAdapter<>();
     clusteringPlanOperator.setOutput(planOutput);
     clusteringPlanOperator.notifyCheckpointComplete(checkpointID);
     // collect the ClusteringCommitEvents

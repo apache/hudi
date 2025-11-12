@@ -34,7 +34,6 @@ import org.apache.hudi.utils.TestUtils;
 import org.apache.avro.Schema;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
-import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
 import org.apache.flink.streaming.runtime.tasks.StreamTaskActionExecutor;
 import org.apache.flink.streaming.runtime.tasks.mailbox.MailboxDefaultAction;
@@ -57,7 +56,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.configuration.FlinkOptions.PARTITION_DEFAULT_NAME;
 import static org.apache.hudi.configuration.FlinkOptions.TABLE_TYPE;
 import static org.apache.hudi.configuration.FlinkOptions.TABLE_TYPE_MERGE_ON_READ;
 import static org.hamcrest.CoreMatchers.is;
@@ -69,6 +67,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestStreamReadOperator {
   private static final Map<String, String> EXPECTED = new HashMap<>();
+  private static final String TIME_CHARACTERISTIC = "timechar";
 
   static {
     EXPECTED.put("par1", "+I[id1, Danny, 23, 1970-01-01T00:00:00.001, par1], +I[id2, Stephen, 33, 1970-01-01T00:00:00.002, par1]");
@@ -86,7 +85,7 @@ public class TestStreamReadOperator {
   public void before() throws Exception {
     final String basePath = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(basePath);
-    conf.setString(TABLE_TYPE, TABLE_TYPE_MERGE_ON_READ);
+    conf.set(TABLE_TYPE, TABLE_TYPE_MERGE_ON_READ);
 
     StreamerUtil.initTableIfNotExists(conf);
   }
@@ -242,9 +241,8 @@ public class TestStreamReadOperator {
 
   private OneInputStreamOperatorTestHarness<MergeOnReadInputSplit, RowData> createReader() throws Exception {
     final String basePath = tempFile.getAbsolutePath();
-    final org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(new Configuration());
-    final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(hadoopConf).setBasePath(basePath).build();
+    final HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(
+        basePath, HadoopConfigurations.getHadoopConf(new Configuration()));
     final List<String> partitionKeys = Collections.singletonList("partition");
 
     // This input format is used to opening the emitted split.
@@ -268,14 +266,14 @@ public class TestStreamReadOperator {
         .config(conf)
         .tableState(hoodieTableState)
         .fieldTypes(rowDataType.getChildren())
-        .defaultPartName(PARTITION_DEFAULT_NAME.defaultValue()).limit(1000L)
+        .limit(1000L)
         .emitDelete(true)
         .build();
 
     OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory(inputFormat);
     OneInputStreamOperatorTestHarness<MergeOnReadInputSplit, RowData> harness = new OneInputStreamOperatorTestHarness<>(
-        factory, 1, 1, 0);
-    harness.getStreamConfig().setTimeCharacteristic(TimeCharacteristic.ProcessingTime);
+            factory, 1, 1, 0);
+    harness.getStreamConfig().getConfiguration().setString(TIME_CHARACTERISTIC, "0");
 
     return harness;
   }

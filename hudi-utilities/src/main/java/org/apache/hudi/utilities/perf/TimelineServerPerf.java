@@ -20,9 +20,7 @@ package org.apache.hudi.utilities.perf;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -31,6 +29,9 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.utilities.UtilHelpers;
 
@@ -39,16 +40,13 @@ import com.beust.jcommander.Parameter;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Snapshot;
 import com.codahale.metrics.UniformReservoir;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -62,30 +60,31 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+
 public class TimelineServerPerf implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(TimelineServerPerf.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TimelineServerPerf.class);
   private final Config cfg;
   private transient TimelineService timelineServer;
   private final boolean useExternalTimelineServer;
   private String hostAddr;
 
-  public TimelineServerPerf(Config cfg) throws IOException {
+  public TimelineServerPerf(Config cfg) {
     this.cfg = cfg;
     useExternalTimelineServer = (cfg.serverHost != null);
     TimelineService.Config timelineServiceConf = cfg.getTimelineServerConfig();
     this.timelineServer = new TimelineService(
-        new HoodieLocalEngineContext(FSUtils.prepareHadoopConf(new Configuration())),
-        new Configuration(), timelineServiceConf, FileSystem.get(new Configuration()),
-        TimelineService.buildFileSystemViewManager(timelineServiceConf,
-            new SerializableConfiguration(FSUtils.prepareHadoopConf(new Configuration()))));
+        HadoopFSUtils.getStorageConf(),
+        timelineServiceConf,
+        TimelineService.buildFileSystemViewManager(timelineServiceConf, HadoopFSUtils.getStorageConf()));
   }
 
   private void setHostAddrFromSparkConf(SparkConf sparkConf) {
     String hostAddr = sparkConf.get("spark.driver.host", null);
     if (hostAddr != null) {
-      LOG.info("Overriding hostIp to (" + hostAddr + ") found in spark-conf. It was " + this.hostAddr);
+      LOG.info("Overriding hostIp to ({}) found in spark-conf. It was {}", hostAddr, this.hostAddr);
       this.hostAddr = hostAddr;
     } else {
       LOG.warn("Unable to find driver bind address from spark config");
@@ -95,10 +94,6 @@ public class TimelineServerPerf implements Serializable {
   public void run() throws IOException {
     JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-view-perf-" + cfg.basePath, cfg.sparkMaster);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(engineContext, cfg.basePath, cfg.useFileListingFromMetadata, true);
-    Collections.shuffle(allPartitionPaths);
-    List<String> selected = allPartitionPaths.stream().filter(p -> !p.contains("error")).limit(cfg.maxPartitions)
-        .collect(Collectors.toList());
 
     if (!useExternalTimelineServer) {
       this.timelineServer.startService();
@@ -107,21 +102,34 @@ public class TimelineServerPerf implements Serializable {
       this.hostAddr = cfg.serverHost;
     }
 
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(timelineServer.getConf()).setBasePath(cfg.basePath).setLoadActiveTimelineOnLoad(true).build();
-    SyncableFileSystemView fsView = new RemoteHoodieTableFileSystemView(this.hostAddr, cfg.serverPort, metaClient);
+    HoodieTableMetaClient metaClient =
+        HoodieTableMetaClient.builder()
+            .setConf(timelineServer.getStorageConf().newInstance())
+            .setBasePath(cfg.basePath)
+            .setLoadActiveTimelineOnLoad(true).build();
+
+    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(engineContext, metaClient, cfg.useFileListingFromMetadata);
+    Collections.shuffle(allPartitionPaths);
+    List<String> selected = allPartitionPaths.stream().filter(p -> !p.contains("error")).limit(cfg.maxPartitions)
+        .collect(Collectors.toList());
+    SyncableFileSystemView fsView =
+        new RemoteHoodieTableFileSystemView(this.hostAddr, cfg.serverPort, metaClient);
 
     String reportDir = cfg.reportDir;
-    metaClient.getFs().mkdirs(new Path(reportDir));
+    metaClient.getStorage().createDirectory(new StoragePath(reportDir));
 
     String dumpPrefix = UUID.randomUUID().toString();
     System.out.println("First Iteration to load all partitions");
-    Dumper d = new Dumper(metaClient.getFs(), new Path(reportDir, String.format("1_%s.csv", dumpPrefix)));
+    Dumper d = new Dumper(
+        metaClient.getStorage(), new StoragePath(reportDir, String.format("1_%s.csv",
+        dumpPrefix)));
     d.init();
     d.dump(runLookups(jsc, selected, fsView, 1, 0));
     d.close();
     System.out.println("\n\n\n First Iteration is done");
 
-    Dumper d2 = new Dumper(metaClient.getFs(), new Path(reportDir, String.format("2_%s.csv", dumpPrefix)));
+    Dumper d2 = new Dumper(metaClient.getStorage(),
+        new StoragePath(reportDir, String.format("2_%s.csv", dumpPrefix)));
     d2.init();
     d2.dump(runLookups(jsc, selected, fsView, cfg.numIterations, cfg.numCoresPerExecutor));
     d2.close();
@@ -184,23 +192,23 @@ public class TimelineServerPerf implements Serializable {
 
   private static class Dumper implements Serializable {
 
-    private final Path dumpPath;
-    private final FileSystem fileSystem;
-    private FSDataOutputStream outputStream;
+    private final StoragePath dumpPath;
+    private final HoodieStorage storage;
+    private OutputStream outputStream;
 
-    public Dumper(FileSystem fs, Path dumpPath) {
+    public Dumper(HoodieStorage storage, StoragePath dumpPath) {
       this.dumpPath = dumpPath;
-      this.fileSystem = fs;
+      this.storage = storage;
     }
 
     public void init() throws IOException {
-      outputStream = fileSystem.create(dumpPath, true);
+      outputStream = storage.create(dumpPath, true);
       addHeader();
     }
 
     private void addHeader() throws IOException {
       String header = "Partition,Thread,Min,Max,Mean,Median,75th,95th\n";
-      outputStream.write(header.getBytes());
+      outputStream.write(getUTF8Bytes(header));
       outputStream.flush();
     }
 
@@ -210,7 +218,7 @@ public class TimelineServerPerf implements Serializable {
             x.medianTime, x.p75, x.p95);
         System.out.println(row);
         try {
-          outputStream.write(row.getBytes());
+          outputStream.write(getUTF8Bytes(row));
         } catch (IOException e) {
           throw new RuntimeException(e);
         }

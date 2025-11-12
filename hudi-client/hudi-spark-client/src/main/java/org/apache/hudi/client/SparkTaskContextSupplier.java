@@ -51,6 +51,16 @@ public class SparkTaskContextSupplier extends TaskContextSupplier implements Ser
   }
 
   @Override
+  public Supplier<Integer> getTaskAttemptNumberSupplier() {
+    return () -> TaskContext.get().attemptNumber();
+  }
+
+  @Override
+  public Supplier<Integer> getStageAttemptNumberSupplier() {
+    return () -> TaskContext.get().stageAttemptNumber();
+  }
+
+  @Override
   public Option<String> getProperty(EngineProperty prop) {
     if (prop == EngineProperty.TOTAL_MEMORY_AVAILABLE) {
       // This is hard-coded in spark code {@link
@@ -86,7 +96,16 @@ public class SparkTaskContextSupplier extends TaskContextSupplier implements Ser
             .get(SPARK_EXECUTOR_EXECUTOR_CORES_PROP, DEFAULT_SPARK_EXECUTOR_CORES));
       }
       return Option.empty();
+    } else if (prop == EngineProperty.SINGLE_TASK_CORES) {
+      final String DEFAULT_SINGLE_TASK_CORES = "1";
+      final String SINGLE_TASK_CORES_PROP = "spark.task.cpus";
+      if (SparkEnv.get() != null) {
+        return Option.ofNullable(SparkEnv.get().conf()
+            .get(SINGLE_TASK_CORES_PROP, DEFAULT_SINGLE_TASK_CORES));
+      }
+      return Option.empty();
     }
     throw new HoodieException("Unknown engine property :" + prop);
   }
+
 }

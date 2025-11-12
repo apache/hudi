@@ -18,30 +18,36 @@
 
 package org.apache.hudi.examples.quickstart;
 
-import static org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations.sql;
-import java.util.Collection;
-import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.examples.quickstart.factory.CollectSinkTableFactory;
+import org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations;
+
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.TableResult;
-import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
+import org.apache.flink.table.catalog.Catalog;
 import org.apache.flink.table.catalog.ObjectPath;
+import org.apache.flink.table.catalog.ResolvedCatalogTable;
+import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.types.Row;
-import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.examples.quickstart.factory.CollectSinkTableFactory;
-import org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations;
 import org.jetbrains.annotations.NotNull;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations.sql;
 
 public final class HoodieFlinkQuickstart {
   private EnvironmentSettings settings = null;
@@ -89,7 +95,7 @@ public final class HoodieFlinkQuickstart {
       settings = EnvironmentSettings.newInstance().build();
       TableEnvironment streamTableEnv = TableEnvironmentImpl.create(settings);
       streamTableEnv.getConfig().getConfiguration()
-          .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
+          .set(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
       Configuration execConf = streamTableEnv.getConfig().getConfiguration();
       execConf.setString("execution.checkpointing.interval", "2s");
       // configure not to retry after failure
@@ -117,13 +123,13 @@ public final class HoodieFlinkQuickstart {
     // the index records must be loaded first before data records for BucketAssignFunction to keep upsert semantics correct,
     // so we suggest disabling these 2 options to use streaming state-backend for batch execution mode
     // to keep the strategy before 1.14.
-    conf.setBoolean("execution.sorted-inputs.enabled", false);
-    conf.setBoolean("execution.batch-state-backend.enabled", false);
+    conf.setString("execution.sorted-inputs.enabled", "false");
+    conf.setString("execution.batch-state-backend.enabled", "false");
     StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment(conf);
     settings = EnvironmentSettings.newInstance().inBatchMode().build();
     TableEnvironment batchTableEnv = StreamTableEnvironment.create(execEnv, settings);
     batchTableEnv.getConfig().getConfiguration()
-        .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
+        .set(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
     return batchTableEnv;
   }
 
@@ -136,6 +142,7 @@ public final class HoodieFlinkQuickstart {
         .option(FlinkOptions.PATH, tablePath)
         .option(FlinkOptions.READ_AS_STREAMING, true)
         .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
   }
@@ -170,7 +177,7 @@ public final class HoodieFlinkQuickstart {
     TableResult tableResult = tEnv.executeSql(insert);
     // wait to finish
     try {
-      tableResult.getJobClient().get().getJobExecutionResult().get();
+      tableResult.await();
     } catch (InterruptedException | ExecutionException ex) {
       // ignored
     }
@@ -187,7 +194,10 @@ public final class HoodieFlinkQuickstart {
     if (sourceTable != null) {
       // use the source table schema as the sink schema if the source table was specified, .
       ObjectPath objectPath = new ObjectPath(tEnv.getCurrentDatabase(), sourceTable);
-      TableSchema schema = tEnv.getCatalog(tEnv.getCurrentCatalog()).get().getTable(objectPath).getSchema();
+      String currentCatalog = tEnv.getCurrentCatalog();
+      Catalog catalog = tEnv.getCatalog(currentCatalog).get();
+      ResolvedCatalogTable table = (ResolvedCatalogTable) catalog.getTable(objectPath);
+      ResolvedSchema schema = table.getResolvedSchema();
       sinkDDL = QuickstartConfigurations.getCollectSinkDDL("sink", schema);
     } else {
       sinkDDL = QuickstartConfigurations.getCollectSinkDDL("sink");

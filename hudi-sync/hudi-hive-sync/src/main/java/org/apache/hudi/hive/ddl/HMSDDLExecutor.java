@@ -19,13 +19,14 @@
 package org.apache.hudi.hive.ddl;
 
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.util.HivePartitionUtil;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import org.apache.hadoop.fs.Path;
@@ -43,10 +44,10 @@ import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -68,17 +69,17 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
  */
 public class HMSDDLExecutor implements DDLExecutor {
 
-  private static final Logger LOG = LogManager.getLogger(HMSDDLExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HMSDDLExecutor.class);
 
   private final HiveSyncConfig syncConfig;
   private final String databaseName;
   private final IMetaStoreClient client;
   private final PartitionValueExtractor partitionValueExtractor;
 
-  public HMSDDLExecutor(HiveSyncConfig syncConfig) throws HiveException, MetaException {
+  public HMSDDLExecutor(HiveSyncConfig syncConfig, IMetaStoreClient metaStoreClient) throws HiveException, MetaException {
     this.syncConfig = syncConfig;
     this.databaseName = syncConfig.getStringOrDefault(META_SYNC_DATABASE_NAME);
-    this.client = Hive.get(syncConfig.getHiveConf()).getMSC();
+    this.client = metaStoreClient;
     try {
       this.partitionValueExtractor =
           (PartitionValueExtractor) Class.forName(syncConfig.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS)).newInstance();
@@ -128,12 +129,12 @@ public class HMSDDLExecutor implements DDLExecutor {
 
       if (!syncConfig.getBoolean(HIVE_CREATE_MANAGED_TABLE)) {
         newTb.putToParameters("EXTERNAL", "TRUE");
+        newTb.setTableType(TableType.EXTERNAL_TABLE.toString());
       }
 
       for (Map.Entry<String, String> entry : tableProperties.entrySet()) {
         newTb.putToParameters(entry.getKey(), entry.getValue());
       }
-      newTb.setTableType(TableType.EXTERNAL_TABLE.toString());
       client.createTable(newTb);
     } catch (Exception e) {
       LOG.error("failed to create table " + tableName, e);
@@ -204,7 +205,8 @@ public class HMSDDLExecutor implements DDLExecutor {
           partitionSd.setInputFormat(sd.getInputFormat());
           partitionSd.setOutputFormat(sd.getOutputFormat());
           partitionSd.setSerdeInfo(sd.getSerdeInfo());
-          String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.getString(META_SYNC_BASE_PATH), x).toString();
+          String fullPartitionPath =
+              FSUtils.constructAbsolutePath(syncConfig.getString(META_SYNC_BASE_PATH), x).toString();
           List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(x);
           partitionSd.setLocation(fullPartitionPath);
           partitionList.add(new Partition(partitionValues, databaseName, tableName, 0, 0, partitionSd, null));
@@ -228,10 +230,10 @@ public class HMSDDLExecutor implements DDLExecutor {
     try {
       StorageDescriptor sd = client.getTable(databaseName, tableName).getSd();
       List<Partition> partitionList = changedPartitions.stream().map(partition -> {
-        Path partitionPath = FSUtils.getPartitionPath(syncConfig.getString(META_SYNC_BASE_PATH), partition);
+        Path partitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(syncConfig.getString(META_SYNC_BASE_PATH), partition);
         String partitionScheme = partitionPath.toUri().getScheme();
         String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
-            ? FSUtils.getDFSFullPartitionPath(syncConfig.getHadoopFileSystem(), partitionPath) : partitionPath.toString();
+            ? HadoopFSUtils.getDFSFullPartitionPath(syncConfig.getHadoopFileSystem(), partitionPath) : partitionPath.toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
         StorageDescriptor partitionSd = sd.deepCopy();
         partitionSd.setLocation(fullPartitionPath);

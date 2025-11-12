@@ -18,27 +18,28 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
-import org.apache.hudi.common.model.HoodieCommitMetadata
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieDefaultTimeline, HoodieInstant}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.Collections
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure with ProcedureBuilder {
   var sortByFieldParameter: ProcedureParameter = _
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
     StructField("commit_time", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("state_transition_time", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("action", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("total_bytes_written", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_files_added", DataTypes.LongType, nullable = true, Metadata.empty),
@@ -51,6 +52,7 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
 
   private val METADATA_OUTPUT_TYPE = new StructType(Array[StructField](
     StructField("commit_time", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("state_transition_time", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("action", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("partition", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("file_id", DataTypes.StringType, nullable = true, Metadata.empty),
@@ -80,7 +82,7 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
 
     val activeTimeline = metaClient.getActiveTimeline
     if (includeExtraMetadata) {
@@ -92,19 +94,19 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
 
   override def build: Procedure = new ShowCommitsProcedure(includeExtraMetadata)
 
-  private def getCommitsWithMetadata(timeline: HoodieDefaultTimeline,
+  private def getCommitsWithMetadata(timeline: HoodieTimeline,
                                      limit: Int): Seq[Row] = {
-    import scala.collection.JavaConversions._
+    import scala.collection.JavaConverters._
 
     val (rows: util.ArrayList[Row], newCommits: util.ArrayList[HoodieInstant]) = getSortCommits(timeline)
-
+    val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)
-      val commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
-      for (partitionWriteStat <- commitMetadata.getPartitionToWriteStats.entrySet) {
-        for (hoodieWriteStat <- partitionWriteStat.getValue) {
+      val commitMetadata = timeline.readCommitMetadata(commit)
+      for (partitionWriteStat <- commitMetadata.getPartitionToWriteStats.entrySet.asScala) {
+        for (hoodieWriteStat <- partitionWriteStat.getValue.asScala) {
           rows.add(Row(
-            commit.getTimestamp, commit.getAction, hoodieWriteStat.getPartitionPath,
+            commit.requestedTime, commit.getCompletionTime, commit.getAction, hoodieWriteStat.getPartitionPath,
             hoodieWriteStat.getFileId, hoodieWriteStat.getPrevCommit, hoodieWriteStat.getNumWrites,
             hoodieWriteStat.getNumInserts, hoodieWriteStat.getNumDeletes, hoodieWriteStat.getNumUpdateWrites,
             hoodieWriteStat.getTotalWriteErrors, hoodieWriteStat.getTotalLogBlocks, hoodieWriteStat.getTotalCorruptLogBlock,
@@ -117,24 +119,25 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
     rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
   }
 
-  private def getSortCommits(timeline: HoodieDefaultTimeline): (util.ArrayList[Row], util.ArrayList[HoodieInstant]) = {
+  private def getSortCommits(timeline: HoodieTimeline): (util.ArrayList[Row], util.ArrayList[HoodieInstant]) = {
     val rows = new util.ArrayList[Row]
     // timeline can be read from multiple files. So sort is needed instead of reversing the collection
     val commits: util.List[HoodieInstant] = timeline.getCommitsTimeline.filterCompletedInstants
       .getInstants.toArray().map(instant => instant.asInstanceOf[HoodieInstant]).toList.asJava
     val newCommits = new util.ArrayList[HoodieInstant](commits)
-    Collections.sort(newCommits, HoodieInstant.COMPARATOR.reversed)
+    val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
+    Collections.sort(newCommits, layout.getInstantComparator.requestedTimeOrderedComparator.reversed)
     (rows, newCommits)
   }
 
-  def getCommits(timeline: HoodieDefaultTimeline,
+  def getCommits(timeline: HoodieTimeline,
                  limit: Int): Seq[Row] = {
     val (rows: util.ArrayList[Row], newCommits: util.ArrayList[HoodieInstant]) = getSortCommits(timeline)
-
+    val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)
-      val commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
-      rows.add(Row(commit.getTimestamp, commit.getAction, commitMetadata.fetchTotalBytesWritten, commitMetadata.fetchTotalFilesInsert,
+      val commitMetadata = timeline.readCommitMetadata(commit)
+      rows.add(Row(commit.requestedTime, commit.getCompletionTime, commit.getAction, commitMetadata.fetchTotalBytesWritten, commitMetadata.fetchTotalFilesInsert,
         commitMetadata.fetchTotalFilesUpdated, commitMetadata.fetchTotalPartitionsWritten,
         commitMetadata.fetchTotalRecordsWritten, commitMetadata.fetchTotalUpdateRecordsWritten,
         commitMetadata.fetchTotalWriteErrors))

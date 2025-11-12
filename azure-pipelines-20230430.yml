@@ -1,0 +1,596 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# NOTE:
+# This config file defines how Azure CI runs tests with Spark 3.5 and Flink 1.18 profiles.
+# PRs will need to keep in sync with master's version to trigger the CI runs.
+# See scripts/jacoco/README.md for how aggregated code coverage report works
+# across multiple modules.
+
+trigger:
+  branches:
+    include:
+      - '*'  # must quote since "*" is a YAML reserved character; we want a string
+
+pool:
+  vmImage: 'ubuntu-22.04'
+
+parameters:
+  - name: job3456UTModules
+    type: object
+    default:
+      - 'hudi-spark-datasource'
+      - 'hudi-spark-datasource/hudi-spark'
+      - 'hudi-spark-datasource/hudi-spark3.5.x'
+      - 'hudi-spark-datasource/hudi-spark3-common'
+      - 'hudi-spark-datasource/hudi-spark-common'
+  - name: job10UTModules
+    type: object
+    default:
+      - '!hudi-hadoop-common'
+      - '!hudi-hadoop-mr'
+      - '!hudi-client/hudi-java-client'
+      - '!hudi-client/hudi-spark-client'
+      - '!hudi-cli'
+      - '!hudi-examples'
+      - '!hudi-examples/hudi-examples-common'
+      - '!hudi-examples/hudi-examples-flink'
+      - '!hudi-examples/hudi-examples-java'
+      - '!hudi-examples/hudi-examples-spark'
+      - '!hudi-spark-datasource'
+      - '!hudi-spark-datasource/hudi-spark'
+      - '!hudi-spark-datasource/hudi-spark3.5.x'
+      - '!hudi-spark-datasource/hudi-spark3-common'
+      - '!hudi-spark-datasource/hudi-spark-common'
+      - '!hudi-utilities'
+  - name: job10FTModules
+    type: object
+    default:
+      - '!hudi-client/hudi-spark-client'
+      - '!hudi-cli'
+      - '!hudi-examples'
+      - '!hudi-examples/hudi-examples-common'
+      - '!hudi-examples/hudi-examples-flink'
+      - '!hudi-examples/hudi-examples-java'
+      - '!hudi-examples/hudi-examples-spark'
+      - '!hudi-spark-datasource/hudi-spark'
+      - '!hudi-utilities'
+  - name: job6HudiSparkDdlOthersWildcardSuites
+    type: object
+    default:
+      - 'org.apache.hudi'
+      - 'org.apache.spark.hudi'
+      - 'org.apache.spark.sql.avro'
+      - 'org.apache.spark.sql.execution'
+      - 'org.apache.spark.sql.hudi.analysis'
+      - 'org.apache.spark.sql.hudi.command'
+      - 'org.apache.spark.sql.hudi.common'
+      - 'org.apache.spark.sql.hudi.ddl'
+      - 'org.apache.spark.sql.hudi.procedure'
+  - name: jacocoModules
+    type: object
+    default:
+      - '!hudi-examples/hudi-examples-k8s'
+      - '!packaging/hudi-aws-bundle'
+      - '!packaging/hudi-cli-bundle'
+      - '!packaging/hudi-datahub-sync-bundle'
+      - '!packaging/hudi-flink-bundle'
+      - '!packaging/hudi-gcp-bundle'
+      - '!packaging/hudi-hadoop-mr-bundle'
+      - '!packaging/hudi-hive-sync-bundle'
+      - '!packaging/hudi-kafka-connect-bundle'
+      - '!packaging/hudi-metaserver-server-bundle'
+      - '!packaging/hudi-presto-bundle'
+      - '!packaging/hudi-spark-bundle'
+      - '!packaging/hudi-timeline-server-bundle'
+      - '!packaging/hudi-trino-bundle'
+      - '!packaging/hudi-utilities-slim-bundle'
+
+variables:
+  BUILD_PROFILES: '-Dscala-2.12 -Dspark3.5 -Dflink1.18'
+  PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
+  MVN_OPTS_INSTALL: '-T 3 -Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS) -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5'
+  MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
+  JAVA_MVN_TEST_FILTER: '-DwildcardSuites=skipScalaTests -DfailIfNoTests=false'
+  SCALA_MVN_TEST_FILTER: '-Dtest=skipJavaTests -DfailIfNoTests=false'
+  JOB3456_MODULES: ${{ join(',',parameters.job3456UTModules) }}
+  JAVA_FUNCTIONAL_PACKAGE_TEST_FILTER: '**/org/apache/hudi/functional/**/*'
+  MVN_ARG_FUNCTIONAL_PACKAGE_TEST: "-Dtest=\"$(JAVA_FUNCTIONAL_PACKAGE_TEST_FILTER)\""
+  MVN_ARG_NON_FUNCTIONAL_PACKAGE_TEST: "-Dtest=\"!$(JAVA_FUNCTIONAL_PACKAGE_TEST_FILTER)\""
+  JOB6_SPARK_DDL_OTHERS_WILDCARD_SUITES: ${{ join(',',parameters.job6HudiSparkDdlOthersWildcardSuites) }}
+  JOB10_UT_MODULES: ${{ join(',',parameters.job10UTModules) }}
+  JOB10_FT_MODULES: ${{ join(',',parameters.job10FTModules) }}
+  JACOCO_AGENT_DESTFILE1_ARG: '-Djacoco.agent.dest.filename=jacoco1.exec'
+  JACOCO_AGENT_DESTFILE2_ARG: '-Djacoco.agent.dest.filename=jacoco2.exec'
+  JACOCO_AGENT_DESTFILE3_ARG: '-Djacoco.agent.dest.filename=jacoco3.exec'
+  JACOCO_MODULES: ${{ join(',',parameters.jacocoModules) }}
+
+stages:
+  - stage: test
+    variables:
+      - name: DOCKER_BUILDKIT
+        value: 1
+    jobs:
+      - job: UT_FT_1
+        displayName: UT hudi-hadoop-common & UT FT client/spark-client
+        timeoutInMinutes: '90'
+        steps:
+          - task: Maven@4
+            displayName: maven install
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: $(MVN_OPTS_INSTALL) -pl hudi-client/hudi-spark-client -am
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+          - task: Maven@4
+            displayName: UT hudi-hadoop-common
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE1_ARG) -pl hudi-hadoop-common
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - task: Maven@4
+            displayName: UT client/spark-client
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE2_ARG) -pl hudi-client/hudi-spark-client
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - task: Maven@4
+            displayName: FT client/spark-client
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              # TODO(HUDI-9143): Investigate why Jacoco execution data file is corrupt
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests -Djacoco.agent.dest.filename=jacoco2.corrupt -pl hudi-client/hudi-spark-client
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - script: |
+              ./scripts/jacoco/download_jacoco.sh
+              ./scripts/jacoco/merge_jacoco_exec_files.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
+            displayName: 'Merge JaCoCo Execution Data Files'
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Merged JaCoCo Execution Data File'
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/merged-jacoco.exec'
+              ArtifactName: 'merged-jacoco-$(Build.BuildId)-1'
+              publishLocation: 'Container'
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+            displayName: Top 100 long-running testcases
+      - job: UT_FT_2
+        displayName: FTA hudi-spark
+        timeoutInMinutes: '90'
+        steps:
+          - task: Maven@4
+            displayName: maven install
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: $(MVN_OPTS_INSTALL) -pl hudi-spark-datasource/hudi-spark -am
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+          - task: Maven@4
+            displayName: FTA hudi-spark-datasource/hudi-spark
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests $(JACOCO_AGENT_DESTFILE1_ARG) -pl hudi-spark-datasource/hudi-spark
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - script: |
+              ./scripts/jacoco/download_jacoco.sh
+              ./scripts/jacoco/merge_jacoco_exec_files.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
+            displayName: 'Merge JaCoCo Execution Data Files'
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Merged JaCoCo Execution Data File'
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/merged-jacoco.exec'
+              ArtifactName: 'merged-jacoco-$(Build.BuildId)-2'
+              publishLocation: 'Container'
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+            displayName: Top 100 long-running testcases
+      - job: UT_FT_3
+        displayName: UT spark-datasource Java Test 1
+        timeoutInMinutes: '120'
+        steps:
+          - task: Maven@4
+            displayName: maven install
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+          - task: Maven@4
+            displayName: Java UT spark-datasource functional package
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Punit-tests $(JAVA_MVN_TEST_FILTER) $(MVN_ARG_FUNCTIONAL_PACKAGE_TEST) $(JACOCO_AGENT_DESTFILE2_ARG) -pl $(JOB3456_MODULES)
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - script: |
+              ./scripts/jacoco/download_jacoco.sh
+              ./scripts/jacoco/merge_jacoco_exec_files.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
+            displayName: 'Merge JaCoCo Execution Data Files'
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Merged JaCoCo Execution Data File'
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/merged-jacoco.exec'
+              ArtifactName: 'merged-jacoco-$(Build.BuildId)-3'
+              publishLocation: 'Container'
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+            displayName: Top 100 long-running testcases
+      - job: UT_FT_4
+        displayName: UT spark-datasource Java Test 2
+        timeoutInMinutes: '90'
+        steps:
+          - task: Maven@4
+            displayName: maven install
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+          - task: Maven@4
+            displayName: Java UT spark-datasource non-functional package
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Punit-tests $(JAVA_MVN_TEST_FILTER) $(MVN_ARG_NON_FUNCTIONAL_PACKAGE_TEST) $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - script: |
+              ./scripts/jacoco/download_jacoco.sh
+              ./scripts/jacoco/merge_jacoco_exec_files.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
+            displayName: 'Merge JaCoCo Execution Data Files'
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Merged JaCoCo Execution Data File'
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/merged-jacoco.exec'
+              ArtifactName: 'merged-jacoco-$(Build.BuildId)-4'
+              publishLocation: 'Container'
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+            displayName: Top 100 long-running testcases
+      - job: UT_FT_5
+        displayName: UT spark-datasource DML
+        timeoutInMinutes: '90'
+        steps:
+          - task: Maven@4
+            displayName: maven install
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+          - task: Maven@4
+            displayName: Scala UT spark-datasource DML 1
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="org.apache.spark.sql.hudi.dml.others" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - script: |
+              ./scripts/jacoco/download_jacoco.sh
+              ./scripts/jacoco/merge_jacoco_exec_files.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
+            displayName: 'Merge JaCoCo Execution Data Files'
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Merged JaCoCo Execution Data File'
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/merged-jacoco.exec'
+              ArtifactName: 'merged-jacoco-$(Build.BuildId)-5'
+              publishLocation: 'Container'
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+            displayName: Top 100 long-running testcases
+      - job: UT_FT_6
+        displayName: UT spark-datasource DDL & Others
+        timeoutInMinutes: '90'
+        steps:
+          - task: Maven@4
+            displayName: maven install
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+          - task: Maven@4
+            displayName: Scala UT spark-datasource DDL & Others
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="$(JOB6_SPARK_DDL_OTHERS_WILDCARD_SUITES)" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - script: |
+              ./scripts/jacoco/download_jacoco.sh
+              ./scripts/jacoco/merge_jacoco_exec_files.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
+            displayName: 'Merge JaCoCo Execution Data Files'
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Merged JaCoCo Execution Data File'
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/merged-jacoco.exec'
+              ArtifactName: 'merged-jacoco-$(Build.BuildId)-6'
+              publishLocation: 'Container'
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+            displayName: Top 100 long-running testcases
+      - job: UT_FT_7
+        displayName: UT Hudi Streamer & FT utilities
+        timeoutInMinutes: '90'
+        steps:
+          - task: Docker@2
+            displayName: "login to docker hub"
+            inputs:
+              command: "login"
+              containerRegistry: "apachehudi-docker-hub"
+          - task: Docker@2
+            displayName: "load repo into image"
+            inputs:
+              containerRegistry: 'apachehudi-docker-hub'
+              repository: 'apachehudi/hudi-ci-bundle-validation-base'
+              command: 'build'
+              Dockerfile: '**/Dockerfile'
+              ImageName: $(Build.BuildId)
+          - task: Docker@2
+            displayName: "UT Hudi Streamer & FT utilities"
+            inputs:
+              containerRegistry: 'apachehudi-docker-hub'
+              repository: 'apachehudi/hudi-ci-bundle-validation-base'
+              command: 'run'
+              arguments: >
+                -v $(Build.SourcesDirectory):/hudi
+                -i docker.io/apachehudi/hudi-ci-bundle-validation-base:$(Build.BuildId)
+                /bin/bash -c "mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source -pl hudi-utilities -am
+                && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE1_ARG) -Dtest="TestHoodie*" -DfailIfNoTests=false -DargLine="-Xmx4g" -pl hudi-utilities
+                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests $(JACOCO_AGENT_DESTFILE2_ARG) -DfailIfNoTests=false -DargLine="-Xmx4g" -pl hudi-utilities"
+          - task: PublishTestResults@2
+            displayName: 'Publish Test Results'
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              searchFolder: '$(Build.SourcesDirectory)'
+              failTaskOnFailedTests: true
+          - script: |
+              ./scripts/jacoco/download_jacoco.sh
+              ./scripts/jacoco/merge_jacoco_exec_files.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
+            displayName: 'Merge JaCoCo Execution Data Files'
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Merged JaCoCo Execution Data File'
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/merged-jacoco.exec'
+              ArtifactName: 'merged-jacoco-$(Build.BuildId)-7'
+              publishLocation: 'Container'
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+            displayName: Top 100 long-running testcases
+      - job: UT_FT_8
+        displayName: UT FT Spark and SQL (additional)
+        timeoutInMinutes: '110'
+        steps:
+          - task: Maven@4
+            displayName: maven install
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+          - task: Maven@4
+            displayName: Scala UT spark-datasource Hudi SQL features
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="org.apache.spark.sql.hudi.feature" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - task: Maven@4
+            displayName: Scala UT spark-datasource DML 2
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Punit-tests $(SCALA_MVN_TEST_FILTER) -DwildcardSuites="org.apache.spark.sql.hudi.dml.insert" $(JACOCO_AGENT_DESTFILE2_ARG) -pl $(JOB3456_MODULES)
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - task: Maven@4
+            displayName: FTC hudi-spark-datasource/hudi-spark
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests-c $(JACOCO_AGENT_DESTFILE3_ARG) -pl hudi-spark-datasource/hudi-spark
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - script: |
+              ./scripts/jacoco/download_jacoco.sh
+              ./scripts/jacoco/merge_jacoco_exec_files.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
+            displayName: 'Merge JaCoCo Execution Data Files'
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Merged JaCoCo Execution Data File'
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/merged-jacoco.exec'
+              ArtifactName: 'merged-jacoco-$(Build.BuildId)-8'
+              publishLocation: 'Container'
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+            displayName: Top 100 long-running testcases
+      - job: UT_FT_9
+        displayName: FT spark 2
+        timeoutInMinutes: '90'
+        steps:
+          - task: Maven@4
+            displayName: maven install
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: $(MVN_OPTS_INSTALL) -pl hudi-client/hudi-spark-client,hudi-spark-datasource/hudi-spark -am
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+          - task: Maven@4
+            displayName: FTB hudi-spark-datasource/hudi-spark
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests-b $(JACOCO_AGENT_DESTFILE1_ARG) -pl hudi-spark-datasource/hudi-spark
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - script: |
+              ./scripts/jacoco/download_jacoco.sh
+              ./scripts/jacoco/merge_jacoco_exec_files.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
+            displayName: 'Merge JaCoCo Execution Data Files'
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Merged JaCoCo Execution Data File'
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/merged-jacoco.exec'
+              ArtifactName: 'merged-jacoco-$(Build.BuildId)-9'
+              publishLocation: 'Container'
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+            displayName: Top 100 long-running testcases
+      - job: UT_FT_10
+        displayName: UT FT common & other modules
+        timeoutInMinutes: '90'
+        steps:
+          - task: Docker@2
+            displayName: "login to docker hub"
+            inputs:
+              command: "login"
+              containerRegistry: "apachehudi-docker-hub"
+          - task: Docker@2
+            displayName: "load repo into image"
+            inputs:
+              containerRegistry: 'apachehudi-docker-hub'
+              repository: 'apachehudi/hudi-ci-bundle-validation-base'
+              command: 'build'
+              Dockerfile: '**/Dockerfile'
+              ImageName: $(Build.BuildId)
+          - task: Docker@2
+            displayName: "UT FT common & other modules"
+            inputs:
+              containerRegistry: 'apachehudi-docker-hub'
+              repository: 'apachehudi/hudi-ci-bundle-validation-base'
+              command: 'run'
+              arguments: >
+                -v $(Build.SourcesDirectory):/hudi
+                -i docker.io/apachehudi/hudi-ci-bundle-validation-base:$(Build.BuildId)
+                /bin/bash -c "mvn clean install $(MVN_OPTS_INSTALL) -Phudi-platform-service -Pthrift-gen-source
+                && mvn test  $(MVN_OPTS_TEST) -Punit-tests -DfailIfNoTests=false -DargLine="-Xmx4g" $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB10_UT_MODULES)
+                && mvn test  $(MVN_OPTS_TEST) -Punit-tests $(JACOCO_AGENT_DESTFILE2_ARG) -Dtest="!TestHoodie*" -DfailIfNoTests=false -DargLine="-Xmx4g" -pl hudi-utilities
+                && mvn test  $(MVN_OPTS_TEST) -Pfunctional-tests -DfailIfNoTests=false -DargLine="-Xmx4g" $(JACOCO_AGENT_DESTFILE3_ARG) -pl $(JOB10_FT_MODULES)"
+          - task: PublishTestResults@2
+            displayName: 'Publish Test Results'
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              searchFolder: '$(Build.SourcesDirectory)'
+              failTaskOnFailedTests: true
+          - script: |
+              ./scripts/jacoco/download_jacoco.sh
+              ./scripts/jacoco/merge_jacoco_exec_files.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
+            displayName: 'Merge JaCoCo Execution Data Files'
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Merged JaCoCo Execution Data File'
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/merged-jacoco.exec'
+              ArtifactName: 'merged-jacoco-$(Build.BuildId)-10'
+              publishLocation: 'Container'
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+            displayName: Top 100 long-running testcases
+      - job: MergeAndPublishCoverage
+        displayName: 'Merge and Publish JaCoCo Code Coverage'
+        dependsOn:
+          - UT_FT_1
+          - UT_FT_2
+          - UT_FT_3
+          - UT_FT_4
+          - UT_FT_5
+          - UT_FT_6
+          - UT_FT_7
+          - UT_FT_8
+          - UT_FT_9
+          - UT_FT_10
+        steps:
+          - task: DownloadBuildArtifacts@0
+            displayName: 'Download JaCoCo Execution Data Files'
+            inputs:
+              buildType: 'current'
+              downloadType: 'specific'
+              downloadPath: '$(System.ArtifactsDirectory)'
+              itemPattern: |
+                **/merged-jacoco-$(Build.BuildId)-*/*.exec
+          - task: JavaToolInstaller@0
+            inputs:
+              versionSpec: '8'
+              jdkArchitectureOption: 'x64'
+              jdkSourceOption: 'PreInstalled'
+          - script: |
+              ./scripts/jacoco/download_jacoco.sh
+              ./scripts/jacoco/merge_jacoco_job_files.sh jacoco-lib/lib/jacococli.jar $(System.ArtifactsDirectory) $(Build.SourcesDirectory)
+            displayName: 'Merge JaCoCo Execution Data Files'
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Merged JaCoCo Execution Data File'
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/jacoco.exec'
+              ArtifactName: 'merged-jacoco-$(Build.BuildId)-final'
+              publishLocation: 'Container'
+          - task: Maven@4
+            displayName: 'Aggregate Source and Class Files for JaCoCo'
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean package'
+              options: $(MVN_OPTS_INSTALL) -Pcopy-files-for-jacoco -pl $(JACOCO_MODULES)
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+          - script: |
+              ./scripts/jacoco/generate_jacoco_coverage_report.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
+            displayName: 'Generate JaCoCo Code Coverage Report'
+          - task: PublishCodeCoverageResults@1
+            displayName: 'Publish JaCoCo Code Coverage'
+            inputs:
+              codeCoverageTool: 'JaCoCo'
+              summaryFileLocation: '$(Build.SourcesDirectory)/jacoco-report.xml'
+              reportDirectory: '$(Build.SourcesDirectory)/jacoco-html-report'
+              failIfCoverageEmpty: true

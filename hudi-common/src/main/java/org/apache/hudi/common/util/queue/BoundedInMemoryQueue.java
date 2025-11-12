@@ -24,8 +24,8 @@ import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -49,7 +49,7 @@ import java.util.function.Function;
  * @param <I> input payload data type
  * @param <O> output payload data type
  */
-public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
+public class BoundedInMemoryQueue<I, O> implements HoodieMessageQueue<I, O>, Iterable<O> {
 
   /** Interval used for polling records in the queue. **/
   public static final int RECORD_POLL_INTERVAL_SEC = 1;
@@ -60,7 +60,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   /** Maximum records that will be cached. **/
   private static final int RECORD_CACHING_LIMIT = 128 * 1024;
 
-  private static final Logger LOG = LogManager.getLogger(BoundedInMemoryQueue.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BoundedInMemoryQueue.class);
 
   /**
    * It indicates number of records to cache. We will be using sampled record's average size to
@@ -68,7 +68,13 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
    */
   public final Semaphore rateLimiter = new Semaphore(1);
 
-  /** Used for sampling records with "RECORD_SAMPLING_RATE" frequency. **/
+  /** Sampling rate used to determine avg record size in bytes, Default is {@link #RECORD_SAMPLING_RATE} **/
+  private final int recordSamplingRate;
+
+  /** Maximum records can be cached, default is {@link #RECORD_CACHING_LIMIT} **/
+  private final int recordCacheLimit;
+
+  /** Used for sampling records with "recordSamplingRate" frequency. **/
   public final AtomicLong samplingRecordCounter = new AtomicLong(-1);
 
   /** Internal queue for records. **/
@@ -120,22 +126,35 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
     this(memoryLimit, transformFunction, new DefaultSizeEstimator() {});
   }
 
+  public BoundedInMemoryQueue(final long memoryLimit, final Function<I, O> transformFunction,
+                              final SizeEstimator<O> payloadSizeEstimator) {
+    this(memoryLimit, transformFunction, payloadSizeEstimator, RECORD_SAMPLING_RATE, RECORD_CACHING_LIMIT);
+  }
+
   /**
    * Construct BoundedInMemoryQueue with passed in size estimator.
    *
    * @param memoryLimit MemoryLimit in bytes
    * @param transformFunction Transformer Function to convert input payload type to stored payload type
    * @param payloadSizeEstimator Payload Size Estimator
+   * @param recordSamplingRate record sampling rate
+   * @param recordCacheLimit record cache limit
    */
   public BoundedInMemoryQueue(final long memoryLimit, final Function<I, O> transformFunction,
-      final SizeEstimator<O> payloadSizeEstimator) {
+                              final SizeEstimator<O> payloadSizeEstimator,
+                              final int recordSamplingRate,
+                              final int recordCacheLimit) {
     this.memoryLimit = memoryLimit;
     this.transformFunction = transformFunction;
     this.payloadSizeEstimator = payloadSizeEstimator;
     this.iterator = new QueueIterator();
+    this.recordSamplingRate = recordSamplingRate;
+    this.recordCacheLimit = recordCacheLimit;
+    LOG.info("recordSamplingRate: {}, recordCacheLimit: {}", recordSamplingRate, recordCacheLimit);
   }
 
-  public int size() {
+  @Override
+  public long size() {
     return this.queue.size();
   }
 
@@ -147,7 +166,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
    * @param payload Payload to size
    */
   private void adjustBufferSizeIfNeeded(final O payload) throws InterruptedException {
-    if (this.samplingRecordCounter.incrementAndGet() % RECORD_SAMPLING_RATE != 0) {
+    if (this.samplingRecordCounter.incrementAndGet() % recordSamplingRate != 0) {
       return;
     }
 
@@ -155,7 +174,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
     final long newAvgRecordSizeInBytes =
         Math.max(1, (avgRecordSizeInBytes * numSamples + recordSizeInBytes) / (numSamples + 1));
     final int newRateLimit =
-        (int) Math.min(RECORD_CACHING_LIMIT, Math.max(1, this.memoryLimit / newAvgRecordSizeInBytes));
+        (int) Math.min(recordCacheLimit, Math.max(1, this.memoryLimit / newAvgRecordSizeInBytes));
 
     // If there is any change in number of records to cache then we will either release (if it increased) or acquire
     // (if it decreased) to adjust rate limiting to newly computed value.
@@ -174,6 +193,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
    *
    * @param t Item to be queued
    */
+  @Override
   public void insertRecord(I t) throws Exception {
     // If already closed, throw exception
     if (isWriteDone.get()) {
@@ -203,7 +223,8 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
    * Reader interface but never exposed to outside world as this is a single consumer queue. Reading is done through a
    * singleton iterator for this queue.
    */
-  private Option<O> readNextRecord() {
+  @Override
+  public Option<O> readNextRecord() {
     if (this.isReadDone.get()) {
       return Option.empty();
     }
@@ -237,9 +258,16 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   /**
    * Puts an empty entry to queue to denote termination.
    */
-  public void close() {
+  @Override
+  public void seal() {
     // done queueing records notifying queue-reader.
     isWriteDone.set(true);
+  }
+
+  @Override
+  public void close() {
+    // NOTE: Closing is a no-op to support the 1-sided case, when the queue
+    //       is just populated (for subsequent reading), but never consumed
   }
 
   private void throwExceptionIfFailed() {
@@ -252,11 +280,22 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   /**
    * API to allow producers and consumer to communicate termination due to failure.
    */
+  @Override
   public void markAsFailed(Throwable e) {
     this.hasFailed.set(e);
     // release the permits so that if the queueing thread is waiting for permits then it will
     // get it.
-    this.rateLimiter.release(RECORD_CACHING_LIMIT + 1);
+    this.rateLimiter.release(recordCacheLimit + 1);
+  }
+
+  @Override
+  public Throwable getThrowable() {
+    return this.hasFailed.get();
+  }
+
+  @Override
+  public boolean isEmpty() {
+    return this.queue.size() == 0;
   }
 
   @Override

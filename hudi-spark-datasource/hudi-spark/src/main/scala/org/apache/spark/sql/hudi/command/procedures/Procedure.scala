@@ -18,11 +18,7 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType
-
-import java.util
-import scala.collection.mutable
 
 /**
  * An interface representing a stored procedure available for execution.

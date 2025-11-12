@@ -17,21 +17,32 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import com.codahale.metrics.{Histogram, Snapshot, UniformReservoir}
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.util.ValidationUtils
+import org.apache.hudi.storage.StoragePath
+
+import com.codahale.metrics.{Histogram, Snapshot, UniformReservoir}
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.command.procedures.StatsFileSizeProcedure.MAX_FILES
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters.{asScalaBufferConverter, mapAsScalaMapConverter}
 
 class StatsFileSizeProcedure extends BaseProcedure with ProcedureBuilder {
 
+  final def validateGlobRegex(globRegex: String, maximumPartitionDepth: Int): Unit = {
+    // filterNot to remove leading directory split if required
+    val providedPartitionDepth = globRegex.split("/").filterNot(x => x.isEmpty).length - 1
+    // validate globRegex
+    ValidationUtils.checkState(providedPartitionDepth == maximumPartitionDepth,
+      s"Provided partition_path file depth of $providedPartitionDepth does " +
+        s"not match table's maximum partition depth of $maximumPartitionDepth)")
+  }
+
   override def parameters: Array[ProcedureParameter] = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "partition_path", DataTypes.StringType, ""),
     ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 10)
   )
@@ -54,16 +65,26 @@ class StatsFileSizeProcedure extends BaseProcedure with ProcedureBuilder {
     val globRegex = getArgValueOrDefault(args, parameters(1)).get.asInstanceOf[String]
     val limit: Int = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[Int]
     val basePath = getBasePath(table)
-    val fs = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build.getFs
-    val globPath = String.format("%s/%s/*", basePath, globRegex)
-    val statuses = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(globPath))
-
+    val metaClient = createMetaClient(jsc, basePath)
+    val storage = metaClient.getStorage
+    val isTablePartitioned = metaClient.getTableConfig.isTablePartitioned
+    val maximumPartitionDepth = if (isTablePartitioned) metaClient.getTableConfig.getPartitionFields.get.length else 0
+    val sanitisedGlobRegex = (isTablePartitioned, globRegex) match {
+      case (false, _) => "/*"
+      case (true, "") =>
+        String.format("/%s/*", List.fill(maximumPartitionDepth)("*").mkString("/"))
+      case (true, _) =>
+        String.format("/%s/*", globRegex)
+    }
+    validateGlobRegex(sanitisedGlobRegex, maximumPartitionDepth)
+    val globPath = String.format("%s/%s", basePath, sanitisedGlobRegex)
+    val statuses = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(globPath))
     val globalHistogram = new Histogram(new UniformReservoir(MAX_FILES))
     val commitHistogramMap = new java.util.HashMap[String, Histogram]()
     statuses.asScala.foreach(
       status => {
         val instantTime = FSUtils.getCommitTime(status.getPath.getName)
-        val len = status.getLen
+        val len = status.getLength
         commitHistogramMap.putIfAbsent(instantTime, new Histogram(new UniformReservoir(MAX_FILES)))
         commitHistogramMap.get(instantTime).update(len)
         globalHistogram.update(len)

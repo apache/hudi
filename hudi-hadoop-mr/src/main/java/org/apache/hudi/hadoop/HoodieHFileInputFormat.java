@@ -18,6 +18,9 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.ArrayWritable;
@@ -26,8 +29,6 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 
 import java.io.IOException;
 
@@ -37,7 +38,7 @@ import java.io.IOException;
 @UseFileSplitsFromInputFormat
 public class HoodieHFileInputFormat extends HoodieCopyOnWriteTableInputFormat {
 
-  protected HoodieDefaultTimeline filterInstantsTimeline(HoodieDefaultTimeline timeline) {
+  protected HoodieTimeline filterInstantsTimeline(HoodieTimeline timeline) {
     return HoodieInputFormatUtils.filterInstantsTimeline(timeline);
   }
 

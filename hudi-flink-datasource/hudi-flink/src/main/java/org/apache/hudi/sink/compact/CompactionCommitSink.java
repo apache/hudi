@@ -23,16 +23,17 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.util.CompactionUtil;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.MetricGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,6 +83,11 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
    */
   private transient HoodieFlinkTable<?> table;
 
+  /**
+   * Compaction metrics.
+   */
+  private transient FlinkCompactionMetrics compactionMetrics;
+
   public CompactionCommitSink(Configuration conf) {
     super(conf);
     this.conf = conf;
@@ -91,19 +97,35 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     if (writeClient == null) {
-      this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
+      this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     }
     this.commitBuffer = new HashMap<>();
     this.compactionPlanCache = new HashMap<>();
     this.table = this.writeClient.getHoodieTable();
+    registerMetrics();
   }
 
   @Override
   public void invoke(CompactionCommitEvent event, Context context) throws Exception {
     final String instant = event.getInstant();
+    if (event.isFailed()
+        || (event.getWriteStatuses() != null
+        && event.getWriteStatuses().stream().anyMatch(writeStatus -> writeStatus.getTotalErrorRecords() > 0))) {
+      LOG.warn("Received abnormal CompactionCommitEvent of instant {}, task ID is {},"
+              + " is failed: {}, error record count: {}",
+          instant, event.getTaskID(), event.isFailed(), getNumErrorRecords(event));
+    }
     commitBuffer.computeIfAbsent(instant, k -> new HashMap<>())
         .put(event.getFileId(), event);
     commitIfNecessary(instant, commitBuffer.get(instant).values());
+  }
+
+  private long getNumErrorRecords(CompactionCommitEvent event) {
+    if (event.getWriteStatuses() == null) {
+      return -1L;
+    }
+    return event.getWriteStatuses().stream()
+        .map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
   }
 
   /**
@@ -131,10 +153,11 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
     if (events.stream().anyMatch(CompactionCommitEvent::isFailed)) {
       try {
         // handle failure case
-        CompactionUtil.rollbackCompaction(table, instant);
+        CompactionUtil.rollbackCompaction(table, instant, writeClient.getTransactionManager());
       } finally {
         // remove commitBuffer to avoid obsolete metadata commit
         reset(instant);
+        this.compactionMetrics.markCompactionRolledBack();
       }
       return;
     }
@@ -144,6 +167,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
     } catch (Throwable throwable) {
       // make it fail-safe
       LOG.error("Error while committing compaction instant: " + instant, throwable);
+      this.compactionMetrics.markCompactionRolledBack();
     } finally {
       // reset the status
       reset(instant);
@@ -157,14 +181,29 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
 
+    long numErrorRecords = statuses.stream().map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
+
+    if (numErrorRecords > 0 && !this.conf.get(FlinkOptions.IGNORE_FAILED)) {
+      // handle failure case
+      LOG.error("Got {} error records during compaction of instant {},\n"
+          + "option '{}' is configured as false,"
+          + "rolls back the compaction", numErrorRecords, instant, FlinkOptions.IGNORE_FAILED.key());
+      CompactionUtil.rollbackCompaction(table, instant, writeClient.getTransactionManager());
+      this.compactionMetrics.markCompactionRolledBack();
+      return;
+    }
+
     HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(
         table, instant, HoodieListData.eager(statuses), writeClient.getConfig().getSchema());
 
     // commit the compaction
-    this.writeClient.commitCompaction(instant, metadata, Option.empty());
+    this.writeClient.completeCompaction(metadata, table, instant);
+
+    this.compactionMetrics.updateCommitMetrics(instant, metadata);
+    this.compactionMetrics.markCompactionCompleted();
 
     // Whether to clean up the old log file when compaction
-    if (!conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
+    if (!conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
       this.writeClient.clean();
     }
   }
@@ -172,5 +211,11 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   private void reset(String instant) {
     this.commitBuffer.remove(instant);
     this.compactionPlanCache.remove(instant);
+  }
+
+  private void registerMetrics() {
+    MetricGroup metrics = getRuntimeContext().getMetricGroup();
+    compactionMetrics = new FlinkCompactionMetrics(metrics);
+    compactionMetrics.registerMetrics();
   }
 }

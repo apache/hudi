@@ -32,12 +32,20 @@ public class CompactionPlanEvent implements Serializable {
 
   private CompactionOperation operation;
 
+  private int index;
+
   public CompactionPlanEvent() {
   }
 
   public CompactionPlanEvent(String instantTime, CompactionOperation operation) {
     this.compactionInstantTime = instantTime;
     this.operation = operation;
+  }
+
+  public CompactionPlanEvent(String instantTime, CompactionOperation operation, int index) {
+    this.compactionInstantTime = instantTime;
+    this.operation = operation;
+    this.index = index;
   }
 
   public void setCompactionInstantTime(String compactionInstantTime) {
@@ -54,5 +62,9 @@ public class CompactionPlanEvent implements Serializable {
 
   public CompactionOperation getOperation() {
     return operation;
+  }
+
+  public int getIndex() {
+    return index;
   }
 }

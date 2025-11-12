@@ -35,6 +35,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+/**
+ * Utils for Hudi instant time.
+ */
 public class DateTimeUtils {
   private static final Map<String, ChronoUnit> LABEL_TO_UNIT_MAP =
       Collections.unmodifiableMap(initMap());
@@ -46,6 +49,12 @@ public class DateTimeUtils {
     long epochSeconds = microsFromEpoch / (1_000_000L);
     long nanoAdjustment = (microsFromEpoch % (1_000_000L)) * 1_000L;
 
+    return Instant.ofEpochSecond(epochSeconds, nanoAdjustment);
+  }
+
+  public static Instant nanosToInstant(long nanosFromEpoch) {
+    long epochSeconds = nanosFromEpoch / (1_000_000_000L);
+    long nanoAdjustment = nanosFromEpoch % (1_000_000_000L);
     return Instant.ofEpochSecond(epochSeconds, nanoAdjustment);
   }
 
@@ -66,6 +75,44 @@ public class DateTimeUtils {
 
       return Math.addExact(micros, nanos / 1_000L);
     }
+  }
+
+  /**
+   * This is based off instantToMicros above.
+   * */
+  public static long instantToNanos(Instant instant) {
+    long seconds = instant.getEpochSecond();
+    int nanos = instant.getNano();
+
+    if (seconds < 0 && nanos > 0) {
+      // Shift seconds by +1, then subtract a full second in nanos
+      long totalNanos = Math.multiplyExact(seconds + 1, 1_000_000_000L);
+      long adjustment = nanos - 1_000_000_000L;
+      return Math.addExact(totalNanos, adjustment);
+    } else {
+      long totalNanos = Math.multiplyExact(seconds, 1_000_000_000L);
+      return Math.addExact(totalNanos, nanos);
+    }
+  }
+
+  public static final long MICROS_PER_MILLIS = 1000L;
+
+  /**
+   * Converts the timestamp to milliseconds since epoch. In Spark timestamp values have microseconds
+   * precision, so this conversion is lossy.
+   */
+  public static Long microsToMillis(Long micros) {
+    // When the timestamp is negative i.e before 1970, we need to adjust the milliseconds portion.
+    // Example - 1965-01-01 10:11:12.123456 is represented as (-157700927876544) in micro precision.
+    // In millis precision the above needs to be represented as (-157700927877).
+    return Math.floorDiv(micros, MICROS_PER_MILLIS);
+  }
+
+  /**
+   * Converts milliseconds since the epoch to microseconds.
+   */
+  public static Long millisToMicros(Long millis) {
+    return Math.multiplyExact(millis, MICROS_PER_MILLIS);
   }
 
   /**

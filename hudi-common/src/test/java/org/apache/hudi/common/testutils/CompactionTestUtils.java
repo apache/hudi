@@ -27,14 +27,12 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.StoragePath;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -49,11 +47,13 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
-import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
-import static org.apache.hudi.common.testutils.FileCreateUtils.createBaseFile;
-import static org.apache.hudi.common.testutils.FileCreateUtils.createLogFile;
-import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.baseFileName;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.createBaseFile;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.createLogFile;
+import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.logFileName;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -110,7 +110,7 @@ public class CompactionTestUtils {
       }
     });
 
-    metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePath()).setLoadActiveTimelineOnLoad(true).build();
+    metaClient = createMetaClient(metaClient.getStorageConf().newInstance(), metaClient.getBasePath(), metaClient.getTableConfig().getTableVersion());
     Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> pendingCompactionMap =
         CompactionUtils.getAllPendingCompactionOperations(metaClient);
 
@@ -137,30 +137,30 @@ public class CompactionTestUtils {
   public static void scheduleCompaction(HoodieTableMetaClient metaClient, String instantTime,
       HoodieCompactionPlan compactionPlan) throws IOException {
     metaClient.getActiveTimeline().saveToCompactionRequested(
-        new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, instantTime),
-        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
+        INSTANT_GENERATOR.createNewInstant(State.REQUESTED, COMPACTION_ACTION, instantTime),
+        compactionPlan);
   }
 
   public static void createDeltaCommit(HoodieTableMetaClient metaClient, String instantTime) {
-    HoodieInstant requested = new HoodieInstant(State.REQUESTED, DELTA_COMMIT_ACTION, instantTime);
+    HoodieInstant requested = INSTANT_GENERATOR.createNewInstant(State.REQUESTED, DELTA_COMMIT_ACTION, instantTime);
     metaClient.getActiveTimeline().createNewInstant(requested);
     metaClient.getActiveTimeline().transitionRequestedToInflight(requested, Option.empty());
     metaClient.getActiveTimeline().saveAsComplete(
-        new HoodieInstant(State.INFLIGHT, DELTA_COMMIT_ACTION, instantTime), Option.empty());
+        INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, DELTA_COMMIT_ACTION, instantTime), Option.empty());
   }
 
   public static void scheduleInflightCompaction(HoodieTableMetaClient metaClient, String instantTime,
       HoodieCompactionPlan compactionPlan) throws IOException {
     scheduleCompaction(metaClient, instantTime, compactionPlan);
     metaClient.getActiveTimeline()
-        .transitionCompactionRequestedToInflight(new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, instantTime));
+        .transitionCompactionRequestedToInflight(INSTANT_GENERATOR.createNewInstant(State.REQUESTED, COMPACTION_ACTION, instantTime));
   }
 
   public static HoodieCompactionPlan createCompactionPlan(HoodieTableMetaClient metaClient, String instantTime,
       String compactionInstantTime, int numFileIds, boolean createDataFile, boolean deltaCommitsAfterCompactionRequests) {
     List<HoodieCompactionOperation> ops = IntStream.range(0, numFileIds).boxed().map(idx -> {
       try {
-        final String basePath = metaClient.getBasePath();
+        final String basePath = metaClient.getBasePath().toString();
         final String partition = DEFAULT_PARTITION_PATHS[0];
         final String fileId = UUID.randomUUID().toString();
         if (createDataFile) {
@@ -173,10 +173,12 @@ public class CompactionTestUtils {
           slice.setBaseFile(new DummyHoodieBaseFile(Paths.get(basePath, partition,
               baseFileName(instantTime, fileId)).toString()));
         }
-        String logFilePath1 = Paths.get(basePath, partition, logFileName(instantTime, fileId, 1)).toString();
-        String logFilePath2 = Paths.get(basePath, partition, logFileName(instantTime, fileId, 2)).toString();
-        slice.addLogFile(new HoodieLogFile(new Path(logFilePath1)));
-        slice.addLogFile(new HoodieLogFile(new Path(logFilePath2)));
+        String logFilePath1 =
+            Paths.get(basePath, partition, logFileName(instantTime, fileId, 1)).toString();
+        String logFilePath2 =
+            Paths.get(basePath, partition, logFileName(instantTime, fileId, 2)).toString();
+        slice.addLogFile(new HoodieLogFile(new StoragePath(logFilePath1)));
+        slice.addLogFile(new HoodieLogFile(new StoragePath(logFilePath2)));
         HoodieCompactionOperation op =
             CompactionUtils.buildFromFileSlice(partition, slice, Option.empty());
         if (deltaCommitsAfterCompactionRequests) {
@@ -189,7 +191,7 @@ public class CompactionTestUtils {
       }
     }).collect(Collectors.toList());
     return new HoodieCompactionPlan(ops.isEmpty() ? null : ops, new HashMap<>(),
-        CompactionUtils.LATEST_COMPACTION_METADATA_VERSION, null, null);
+        CompactionUtils.LATEST_COMPACTION_METADATA_VERSION, null, null, null);
   }
 
   /**

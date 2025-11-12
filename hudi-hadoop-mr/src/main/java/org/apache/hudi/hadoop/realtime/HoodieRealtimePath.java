@@ -18,10 +18,11 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.PathWithBootstrapFileStatus;
+
+import org.apache.hadoop.fs.Path;
 
 import java.util.List;
 
@@ -89,7 +90,7 @@ public class HoodieRealtimePath extends Path {
   }
 
   public boolean isSplitable() {
-    return !toString().contains(".log") && !includeBootstrapFilePath();
+    return !toString().contains(".log") && deltaLogFiles.isEmpty() && !includeBootstrapFilePath();
   }
 
   public PathWithBootstrapFileStatus getPathWithBootstrapFileStatus() {

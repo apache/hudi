@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.hadoop.realtime.HoodieMergeOnReadTableInputFormat;
+
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -28,7 +30,6 @@ import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.hudi.hadoop.realtime.HoodieMergeOnReadTableInputFormat;
 
 import java.io.IOException;
 

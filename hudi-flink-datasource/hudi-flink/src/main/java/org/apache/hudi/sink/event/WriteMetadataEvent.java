@@ -19,7 +19,9 @@
 package org.apache.hudi.sink.event;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.util.WriteStatusMerger;
 
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 
@@ -27,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * An operator event to mark successful checkpoint batch write.
@@ -38,6 +41,7 @@ public class WriteMetadataEvent implements OperatorEvent {
 
   private List<WriteStatus> writeStatuses;
   private int taskID;
+  private long checkpointId;
   private String instantTime;
   private boolean lastBatch;
 
@@ -68,12 +72,14 @@ public class WriteMetadataEvent implements OperatorEvent {
    */
   private WriteMetadataEvent(
       int taskID,
+      long checkpointId,
       String instantTime,
       List<WriteStatus> writeStatuses,
       boolean lastBatch,
       boolean endInput,
       boolean bootstrap) {
     this.taskID = taskID;
+    this.checkpointId = checkpointId;
     this.instantTime = instantTime;
     this.writeStatuses = new ArrayList<>(writeStatuses);
     this.lastBatch = lastBatch;
@@ -106,6 +112,14 @@ public class WriteMetadataEvent implements OperatorEvent {
 
   public void setTaskID(int taskID) {
     this.taskID = taskID;
+  }
+
+  public Long getCheckpointId() {
+    return checkpointId;
+  }
+
+  public void setCheckpointId(long checkpointId) {
+    this.checkpointId = checkpointId;
   }
 
   public String getInstantTime() {
@@ -149,11 +163,9 @@ public class WriteMetadataEvent implements OperatorEvent {
     ValidationUtils.checkArgument(this.taskID == other.taskID);
     // the instant time could be monotonically increasing
     this.instantTime = other.instantTime;
-    this.lastBatch |= other.lastBatch; // true if one of the event lastBatch is true
-    List<WriteStatus> statusList = new ArrayList<>();
-    statusList.addAll(this.writeStatuses);
-    statusList.addAll(other.writeStatuses);
-    this.writeStatuses = statusList;
+    // true if one of the event lastBatch is true
+    this.lastBatch |= other.lastBatch;
+    this.writeStatuses = mergeWriteStatuses(this.writeStatuses, other.writeStatuses);
   }
 
   /**
@@ -168,6 +180,7 @@ public class WriteMetadataEvent implements OperatorEvent {
     return "WriteMetadataEvent{"
         + "writeStatusesSize=" + writeStatuses.size()
         + ", taskID=" + taskID
+        + ", checkpointId=" + checkpointId
         + ", instantTime='" + instantTime + '\''
         + ", lastBatch=" + lastBatch
         + ", endInput=" + endInput
@@ -180,18 +193,39 @@ public class WriteMetadataEvent implements OperatorEvent {
   // -------------------------------------------------------------------------
 
   /**
-   * Creates empty bootstrap event for task {@code taskId}.
+   * Creates empty bootstrap event for task {@code taskId} with checkpoint ID {@code checkpointId}.
    *
    * <p>The event indicates that the new instant can start directly,
    * there is no old instant write statuses to recover.
    */
-  public static WriteMetadataEvent emptyBootstrap(int taskId) {
+  public static WriteMetadataEvent emptyBootstrap(int taskId, long checkpointId) {
     return WriteMetadataEvent.builder()
         .taskID(taskId)
+        .checkpointId(checkpointId)
         .instantTime(BOOTSTRAP_INSTANT)
         .writeStatus(Collections.emptyList())
         .bootstrap(true)
         .build();
+  }
+
+  private static List<WriteStatus> mergeWriteStatuses(List<WriteStatus> curStatuses, List<WriteStatus> newStatuses) {
+    List<WriteStatus> merged = new ArrayList<>();
+    // put the new write statuses behind and use single parallelism #stream
+    // so that the new write status is merged as the second param.
+    merged.addAll(curStatuses);
+    merged.addAll(newStatuses);
+    return merged
+        .stream()
+        .collect(Collectors.groupingBy(writeStatus -> {
+          if (writeStatus.getStat() instanceof HoodieDeltaWriteStat) {
+            return writeStatus.getStat().getPartitionPath() + writeStatus.getStat().getPath();
+          } else {
+            return writeStatus.getStat().getPartitionPath() + writeStatus.getStat().getFileId();
+          }
+        }))
+        .values().stream()
+        .map(duplicates -> duplicates.stream().reduce(WriteStatusMerger::merge).get())
+        .collect(Collectors.toList());
   }
 
   // -------------------------------------------------------------------------
@@ -204,6 +238,7 @@ public class WriteMetadataEvent implements OperatorEvent {
   public static class Builder {
     private List<WriteStatus> writeStatus;
     private Integer taskID;
+    private Long checkpointId = -1L;
     private String instantTime;
     private boolean lastBatch = false;
     private boolean endInput = false;
@@ -213,11 +248,16 @@ public class WriteMetadataEvent implements OperatorEvent {
       Objects.requireNonNull(taskID);
       Objects.requireNonNull(instantTime);
       Objects.requireNonNull(writeStatus);
-      return new WriteMetadataEvent(taskID, instantTime, writeStatus, lastBatch, endInput, bootstrap);
+      return new WriteMetadataEvent(taskID, checkpointId, instantTime, writeStatus, lastBatch, endInput, bootstrap);
     }
 
     public Builder taskID(int taskID) {
       this.taskID = taskID;
+      return this;
+    }
+
+    public Builder checkpointId(long checkpointId) {
+      this.checkpointId = checkpointId;
       return this;
     }
 

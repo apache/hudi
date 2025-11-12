@@ -17,19 +17,23 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hudi.HoodieCLIUtils
+import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.table.marker.WriteMarkersFactory
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
+
 import scala.util.{Failure, Success, Try}
 
 class DeleteMarkerProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "instant_time", DataTypes.StringType, None)
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "instant_time", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -46,21 +50,32 @@ class DeleteMarkerProcedure extends BaseProcedure with ProcedureBuilder with Log
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
     val instantTime = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
     val basePath = getBasePath(tableName)
+    val instantTimes = instantTime.split(",")
+    var currentInstant = ""
 
+    var client: SparkRDDWriteClient[_] = null
     val result = Try {
-      val client = createHoodieClient(jsc, basePath)
+      client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, Map.empty,
+        tableName.asInstanceOf[Option[String]])
       val config = client.getConfig
       val context = client.getEngineContext
       val table = HoodieSparkTable.create(config, context)
-      WriteMarkersFactory.get(config.getMarkersType, table, instantTime)
-        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism)
+      for (it <- instantTimes) {
+        currentInstant = it
+        WriteMarkersFactory.get(config.getMarkersType, table, it)
+          .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism)
+      }
     } match {
       case Success(_) =>
         logInfo(s"Marker $instantTime deleted.")
         true
       case Failure(e) =>
-        logWarning(s"Failed: Could not clean marker instantTime: $instantTime.", e)
+        logWarning(s"Could not clean marker instantTime: $currentInstant.", e)
         false
+    }
+
+    if (client != null) {
+      client.close()
     }
 
     Seq(Row(result))

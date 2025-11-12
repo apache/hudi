@@ -20,10 +20,12 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.test.proto.Child;
+import org.apache.hudi.utilities.test.proto.FirstBatch;
 import org.apache.hudi.utilities.test.proto.Nested;
 import org.apache.hudi.utilities.test.proto.Parent;
 import org.apache.hudi.utilities.test.proto.Sample;
 import org.apache.hudi.utilities.test.proto.SampleEnum;
+import org.apache.hudi.utilities.test.proto.SecondBatch;
 import org.apache.hudi.utilities.test.proto.WithOneOf;
 
 import com.google.protobuf.BoolValue;
@@ -56,8 +58,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -67,6 +69,8 @@ import java.util.Random;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.utilities.sources.helpers.ProtoConversionUtil.toUnsignedBigInteger;
 
 public class TestProtoConversionUtil {
@@ -176,6 +180,31 @@ public class TestProtoConversionUtil {
     Assertions.assertEquals("12297829379609722880", toUnsignedBigInteger(-6148914694099828736L).toString());
   }
 
+  @Test
+  void validateOldProtoReadWithNewSchema() {
+    // validate that a proto message can be read with a newer schema with fields added/removed
+    // this case can happen when processing a mixed batch of protos during one round of StreamSync
+    ProtoConversionUtil.SchemaConfig schemaConfig = new ProtoConversionUtil.SchemaConfig(true, 1, true);
+    Schema evolvedSchema = ProtoConversionUtil.getAvroSchemaForMessageClass(SecondBatch.class, schemaConfig);
+    FirstBatch message = FirstBatch.newBuilder()
+        .setId(123L)
+        .setName("first_last")
+        .build();
+    GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(evolvedSchema, message), evolvedSchema);
+    GenericData.Record expected = new GenericData.Record(evolvedSchema);
+    expected.put("id", 123L);
+    // required fields will be populated with defaults
+    expected.put("age", 0);
+    expected.put("address", Collections.emptyList());
+    expected.put("nullable_timestamp", null);
+    expected.put("nullable_long", null);
+    Schema decimalSchema = evolvedSchema.getField("primitive_unsigned_long").schema();
+    expected.put("primitive_unsigned_long", DECIMAL_CONVERSION.toFixed(new BigDecimal(BigInteger.ZERO), decimalSchema, decimalSchema.getLogicalType()));
+    expected.put("test_enum", "FIRST");
+    expected.put("binary", ByteBuffer.wrap(new byte[0]));
+    Assertions.assertEquals(expected, actual);
+  }
+
   private void assertUnsignedLongCorrectness(Schema fieldSchema, long expectedValue, GenericFixed actual) {
     BigDecimal actualPrimitiveUnsignedLong = DECIMAL_CONVERSION.fromFixed(actual, fieldSchema,
         fieldSchema.getLogicalType());
@@ -205,7 +234,7 @@ public class TestProtoConversionUtil {
     long primitiveFixedSignedLong = RANDOM.nextLong();
     boolean primitiveBoolean = RANDOM.nextBoolean();
     String primitiveString = randomString(10);
-    byte[] primitiveBytes = randomString(10).getBytes();
+    byte[] primitiveBytes = getUTF8Bytes(randomString(10));
 
     double wrappedDouble = RANDOM.nextDouble();
     float wrappedFloat = RANDOM.nextFloat();
@@ -215,7 +244,7 @@ public class TestProtoConversionUtil {
     long wrappedUnsignedLong = primitiveUnsignedLongInUnsignedRange ? RANDOM.nextLong() : Long.parseUnsignedLong(MAX_UNSIGNED_LONG) - RANDOM.nextInt(1000);
     boolean wrappedBoolean = RANDOM.nextBoolean();
     String wrappedString = randomString(10);
-    byte[] wrappedBytes = randomString(10).getBytes();
+    byte[] wrappedBytes = getUTF8Bytes(randomString(10));
     SampleEnum enumValue = SampleEnum.forNumber(RANDOM.nextInt(1));
 
     List<Integer> primitiveList = Arrays.asList(RANDOM.nextInt(), RANDOM.nextInt(), RANDOM.nextInt());
@@ -358,7 +387,7 @@ public class TestProtoConversionUtil {
     expectedRecord.put("primitive_fixed_signed_long", 0L);
     expectedRecord.put("primitive_boolean", false);
     expectedRecord.put("primitive_string", "");
-    expectedRecord.put("primitive_bytes", ByteBuffer.wrap("".getBytes()));
+    expectedRecord.put("primitive_bytes", ByteBuffer.wrap(getUTF8Bytes("")));
     expectedRecord.put("repeated_primitive", Collections.emptyList());
     expectedRecord.put("map_primitive", Collections.emptyList());
     expectedRecord.put("nested_message", null);
@@ -577,6 +606,6 @@ public class TestProtoConversionUtil {
   private static String randomString(int size) {
     byte[] bytes = new byte[size];
     RANDOM.nextBytes(bytes);
-    return new String(bytes, StandardCharsets.UTF_8);
+    return fromUTF8Bytes(bytes);
   }
 }

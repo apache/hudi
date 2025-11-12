@@ -18,7 +18,8 @@
 
 package org.apache.hudi.common.bloom;
 
-import org.apache.hadoop.util.hash.Hash;
+import org.apache.hudi.common.util.hash.Hash;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
@@ -58,5 +59,16 @@ public class TestInternalDynamicBloomFilter {
       lastKnownBloomSize = serString.length();
       index++;
     }
+  }
+
+  @Test
+  public void testInternalDynamicBloomFilterRescale() {
+    HoodieDynamicBoundedBloomFilter filter = new HoodieDynamicBoundedBloomFilter(1000,
+        0.000001, Hash.MURMUR_HASH, 10000);
+    assertEquals(1, filter.getMatrixLength());
+    HoodieDynamicBoundedBloomFilter rescaledToSize2Filter = filter.rescaleFromTarget(2);
+    assertEquals(2, rescaledToSize2Filter.getMatrixLength());
+    HoodieDynamicBoundedBloomFilter rescaledToSize4Filter = rescaledToSize2Filter.rescaleFromTarget(4);
+    assertEquals(4, rescaledToSize4Filter.getMatrixLength());
   }
 }

@@ -30,8 +30,8 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
@@ -47,11 +47,11 @@ import static org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCal
  */
 public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieWriteCommitKafkaCallback.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteCommitKafkaCallback.class);
 
-  private HoodieConfig hoodieConfig;
-  private String bootstrapServers;
-  private String topic;
+  private final HoodieConfig hoodieConfig;
+  private final String bootstrapServers;
+  private final String topic;
 
   public HoodieWriteCommitKafkaCallback(HoodieWriteConfig config) {
     this.hoodieConfig = config;
@@ -65,7 +65,7 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
     String callbackMsg = HoodieWriteCommitCallbackUtil.convertToJsonString(callbackMessage);
     try (KafkaProducer<String, String> producer = createProducer(hoodieConfig)) {
       ProducerRecord<String, String> record = buildProducerRecord(hoodieConfig, callbackMsg);
-      producer.send(record);
+      producer.send(record).get();
       LOG.info("Send callback message succeed");
     } catch (Exception e) {
       LOG.error("Send kafka callback msg failed : ", e);
@@ -85,10 +85,10 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
     kafkaProducerProps.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     // default "all" to ensure no message loss
     kafkaProducerProps.setProperty(ProducerConfig.ACKS_CONFIG, hoodieConfig
-        .getString(ACKS));
+        .getStringOrDefault(ACKS));
     // retries 3 times by default
     kafkaProducerProps.setProperty(ProducerConfig.RETRIES_CONFIG, hoodieConfig
-        .getString(RETRIES));
+        .getStringOrDefault(RETRIES));
     kafkaProducerProps.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
         "org.apache.kafka.common.serialization.StringSerializer");
     kafkaProducerProps.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
@@ -137,8 +137,13 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
 
     @Override
     public void onCompletion(RecordMetadata metadata, Exception exception) {
-      LOG.info(String.format("message offset=%s partition=%s timestamp=%s topic=%s",
-          metadata.offset(), metadata.partition(), metadata.timestamp(), metadata.topic()));
+      if (null != metadata) {
+        LOG.info("message offset={} partition={} timestamp={} topic={}",
+                metadata.offset(), metadata.partition(), metadata.timestamp(), metadata.topic());
+      }
+      if (null != exception) {
+        LOG.error("Send kafka callback msg failed : ", exception);
+      }
     }
   }
 

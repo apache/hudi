@@ -18,9 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
@@ -29,18 +26,21 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.NumericUtils;
-import org.apache.hudi.common.util.Option;
+
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
+
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -49,6 +49,9 @@ import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
 
 /**
  * CLI command to display file system options.
@@ -149,7 +152,7 @@ public class FileSystemViewCommand {
     } else {
       if (maxInstant.isEmpty()) {
         maxInstant = HoodieCLI.getTableMetaClient().getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
-            .get().getTimestamp();
+            .get().requestedTime();
       }
       fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(partition, maxInstant);
     }
@@ -169,12 +172,12 @@ public class FileSystemViewCommand {
         row[idx++] = fs.getLogFiles().count();
         row[idx++] = fs.getLogFiles().mapToLong(HoodieLogFile::getFileSize).sum();
         long logFilesScheduledForCompactionTotalSize =
-            fs.getLogFiles().filter(lf -> lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
+            fs.getLogFiles().filter(lf -> lf.getDeltaCommitTime().equals(fs.getBaseInstantTime()))
                 .mapToLong(HoodieLogFile::getFileSize).sum();
         row[idx++] = logFilesScheduledForCompactionTotalSize;
 
         long logFilesUnscheduledTotalSize =
-            fs.getLogFiles().filter(lf -> !lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
+            fs.getLogFiles().filter(lf -> !lf.getDeltaCommitTime().equals(fs.getBaseInstantTime()))
                 .mapToLong(HoodieLogFile::getFileSize).sum();
         row[idx++] = logFilesUnscheduledTotalSize;
 
@@ -184,9 +187,9 @@ public class FileSystemViewCommand {
         double logUnscheduledToBaseRatio = dataFileSize > 0 ? logFilesUnscheduledTotalSize / (dataFileSize * 1.0) : -1;
         row[idx++] = logUnscheduledToBaseRatio;
 
-        row[idx++] = fs.getLogFiles().filter(lf -> lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
+        row[idx++] = fs.getLogFiles().filter(lf -> lf.getDeltaCommitTime().equals(fs.getBaseInstantTime()))
             .collect(Collectors.toList()).toString();
-        row[idx++] = fs.getLogFiles().filter(lf -> !lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
+        row[idx++] = fs.getLogFiles().filter(lf -> !lf.getDeltaCommitTime().equals(fs.getBaseInstantTime()))
             .collect(Collectors.toList()).toString();
       }
       rows.add(row);
@@ -236,16 +239,17 @@ public class FileSystemViewCommand {
   private HoodieTableFileSystemView buildFileSystemView(String globRegex, String maxInstant, boolean basefileOnly,
                                                         boolean includeMaxInstant, boolean includeInflight, boolean excludeCompaction) throws IOException {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setConf(client.getHadoopConf()).setBasePath(client.getBasePath()).setLoadActiveTimelineOnLoad(true).build();
-    FileSystem fs = HoodieCLI.fs;
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(client.getStorageConf().newInstance())
+        .setBasePath(client.getBasePath()).setLoadActiveTimelineOnLoad(true).build();
+    HoodieStorage storage = HoodieCLI.storage;
     String globPath = String.format("%s/%s/*", client.getBasePath(), globRegex);
-    List<FileStatus> statuses = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(globPath));
+    List<StoragePathInfo> pathInfoList = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(globPath));
     Stream<HoodieInstant> instantsStream;
 
     HoodieTimeline timeline;
     if (basefileOnly) {
-      timeline = metaClient.getActiveTimeline().getCommitTimeline();
+      timeline = metaClient.getActiveTimeline().getCommitAndReplaceTimeline();
     } else if (excludeCompaction) {
       timeline = metaClient.getActiveTimeline().getCommitsTimeline();
     } else {
@@ -256,20 +260,19 @@ public class FileSystemViewCommand {
       timeline = timeline.filterCompletedInstants();
     }
 
-    instantsStream = timeline.getInstants();
+    instantsStream = timeline.getInstantsAsStream();
 
     if (!maxInstant.isEmpty()) {
       final BiPredicate<String, String> predicate;
       if (includeMaxInstant) {
-        predicate = HoodieTimeline.GREATER_THAN_OR_EQUALS;
+        predicate = GREATER_THAN_OR_EQUALS;
       } else {
-        predicate = HoodieTimeline.GREATER_THAN;
+        predicate = GREATER_THAN;
       }
-      instantsStream = instantsStream.filter(is -> predicate.test(maxInstant, is.getTimestamp()));
+      instantsStream = instantsStream.filter(is -> predicate.test(maxInstant, is.requestedTime()));
     }
-
-    HoodieTimeline filteredTimeline = new HoodieDefaultTimeline(instantsStream,
-        (Function<HoodieInstant, Option<byte[]>> & Serializable) metaClient.getActiveTimeline()::getInstantDetails);
-    return new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses.toArray(new FileStatus[0]));
+    TimelineFactory timelineFactory = metaClient.getTableFormat().getTimelineFactory();
+    HoodieTimeline filteredTimeline = timelineFactory.createDefaultTimeline(instantsStream, metaClient.getActiveTimeline());
+    return new HoodieTableFileSystemView(metaClient, filteredTimeline, pathInfoList);
   }
 }

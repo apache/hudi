@@ -18,8 +18,10 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 
@@ -28,11 +30,10 @@ import java.util.Iterator;
  *
  * @param <I> Item type produced for the buffer.
  */
-public class IteratorBasedQueueProducer<I> implements BoundedInMemoryQueueProducer<I> {
+public class IteratorBasedQueueProducer<I> implements HoodieProducer<I> {
 
-  private static final Logger LOG = LogManager.getLogger(IteratorBasedQueueProducer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(IteratorBasedQueueProducer.class);
 
-  // input iterator for producing items in the buffer.
   private final Iterator<I> inputIterator;
 
   public IteratorBasedQueueProducer(Iterator<I> inputIterator) {
@@ -40,11 +41,18 @@ public class IteratorBasedQueueProducer<I> implements BoundedInMemoryQueueProduc
   }
 
   @Override
-  public void produce(BoundedInMemoryQueue<I, ?> queue) throws Exception {
+  public void produce(HoodieMessageQueue<I, ?> queue) throws Exception {
     LOG.info("starting to buffer records");
     while (inputIterator.hasNext()) {
       queue.insertRecord(inputIterator.next());
     }
     LOG.info("finished buffering records");
+  }
+
+  @Override
+  public void close() {
+    if (inputIterator instanceof ClosableIterator) {
+      ((ClosableIterator<I>) inputIterator).close();
+    }
   }
 }

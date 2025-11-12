@@ -17,24 +17,29 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
-import org.apache.avro.generic.GenericRecord
+import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.testutils.SchemaTestUtil
+import org.apache.hudi.common.testutils.{OrderingFieldsTestUtils, SchemaTestUtil}
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
-import org.apache.hudi.config.HoodiePayloadConfig
+import org.apache.hudi.config.{HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, HoodieKeyException}
 import org.apache.hudi.keygen._
-import org.apache.hudi.testutils.KeyGeneratorTestUtilities
+import org.apache.hudi.testutils.SparkDatasetTestUtils
+
+import org.apache.avro.Schema
+import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 
 /**
  * Tests on the default key generator, payload classes.
@@ -48,12 +53,13 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
   var internalRow: InternalRow = _
   val testStructName = "testStructName"
   val testNamespace = "testNamespace"
+  val encoder = sparkAdapter.getCatalystExpressionUtils.getEncoder(structType)
 
   @BeforeEach def initialize(): Unit = {
     baseRecord = SchemaTestUtil
       .generateAvroRecordFromJson(schema, 1, "001", "f1")
-    baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
-    internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
+    baseRow = getRow(baseRecord, schema, structType)
+    internalRow = getInternalRow(baseRow)
   }
 
   private def getKeyConfig(recordKeyFieldName: String, partitionPathField: String, hiveStylePartitioning: String): TypedProperties = {
@@ -94,8 +100,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       val props = new TypedProperties()
       props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "partitionField")
 
-      assertThrows(classOf[IllegalArgumentException]) {
-        new SimpleKeyGenerator(props)
+      assertThrows(classOf[IndexOutOfBoundsException]) {
+        new SimpleKeyGenerator(props).getRecordKey(baseRecord)
       }
     }
 
@@ -144,16 +150,16 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       val keyGen = new SimpleKeyGenerator(getKeyConfig("field1", "name", "false"))
 
       baseRecord.put("name", "")
-      baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
-      internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
+      baseRow = getRow(baseRecord, schema, structType)
+      internalRow = getInternalRow(baseRow)
 
       assertEquals(DEFAULT_PARTITION_PATH, keyGen.getKey(baseRecord).getPartitionPath)
       assertEquals(DEFAULT_PARTITION_PATH, keyGen.getPartitionPath(baseRow))
       assertEquals(UTF8String.fromString(DEFAULT_PARTITION_PATH), keyGen.getPartitionPath(internalRow, structType))
 
       baseRecord.put("name", null)
-      baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
-      internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
+      baseRow = getRow(baseRecord, schema, structType)
+      internalRow = getInternalRow(baseRow)
 
       assertEquals(DEFAULT_PARTITION_PATH, keyGen.getKey(baseRecord).getPartitionPath)
       assertEquals(DEFAULT_PARTITION_PATH, keyGen.getPartitionPath(baseRow))
@@ -168,8 +174,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       val keyGen = new SimpleKeyGenerator(props)
 
       baseRecord.put("field1", "")
-      baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
-      internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
+      baseRow = getRow(baseRecord, schema, structType)
+      internalRow = getInternalRow(baseRow)
 
       assertThrows(classOf[HoodieKeyException]) {
         keyGen.getKey(baseRecord)
@@ -182,8 +188,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       }
 
       baseRecord.put("field1", null)
-      baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
-      internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
+      baseRow = getRow(baseRecord, schema, structType)
+      internalRow = getInternalRow(baseRow)
 
       assertThrows(classOf[HoodieKeyException]) {
         keyGen.getKey(baseRecord)
@@ -209,6 +215,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     val STRUCT_NAME: String = "hoodieRowTopLevelField"
     val NAMESPACE: String = "hoodieRow"
     var converterFn: Function1[Row, GenericRecord] = _
+    var internalConverterFn: Function1[InternalRow, GenericRecord] = _
 
     override def getKey(record: GenericRecord): HoodieKey = {
       new HoodieKey(HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyProp, true, false),
@@ -259,7 +266,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     }
 
     // Record's key field not specified
-    assertThrows(classOf[IllegalArgumentException]) {
+    assertThrows(classOf[HoodieKeyException]) {
       val props = new TypedProperties()
       props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionField")
       val keyGen = new ComplexKeyGenerator(props)
@@ -333,8 +340,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       val keyGen = new ComplexKeyGenerator(getKeyConfig("field1,name", "field1,name", "false"))
 
       baseRecord.put("name", "")
-      baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
-      internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
+      baseRow = getRow(baseRecord, schema, structType)
+      internalRow = getInternalRow(baseRow)
 
       val expectedKey = new HoodieKey("field1:field1,name:__empty__", "field1/" + DEFAULT_PARTITION_PATH)
 
@@ -351,8 +358,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       val keyGen = new ComplexKeyGenerator(getKeyConfig("field1,name", "field1,name", "false"))
 
       baseRecord.put("name", null)
-      baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
-      internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
+      baseRow = getRow(baseRecord, schema, structType)
+      internalRow = getInternalRow(baseRow)
 
       val expectedKey = new HoodieKey("field1:field1,name:__null__", "field1/" + DEFAULT_PARTITION_PATH)
 
@@ -374,8 +381,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       baseRecord.put("name", "")
       baseRecord.put("field1", null)
 
-      baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
-      internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
+      baseRow = getRow(baseRecord, schema, structType)
+      internalRow = getInternalRow(baseRow)
 
       assertThrows(classOf[HoodieKeyException]) {
         keyGen.getKey(baseRecord)
@@ -395,8 +402,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       baseRecord.put("name", "name1")
       baseRecord.put("field1", "field1")
 
-      baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
-      internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
+      baseRow = getRow(baseRecord, schema, structType)
+      internalRow = getInternalRow(baseRow)
 
       val expectedKey = new HoodieKey("field1:field1,name:name1", "field1/name1")
 
@@ -409,9 +416,69 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     }
 
     {
-      val keyGen = new ComplexKeyGenerator(getKeyConfig("field1,", "field1,", "false"))
+      val config = getKeyConfig("field1, name", "field1, name", "false")
+      // This config should not affect record key encoding for multiple record key fields
+      config.put(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key, "true")
+      val keyGen = new ComplexKeyGenerator(config)
 
-      val expectedKey = new HoodieKey("field1:field1", "field1")
+      baseRow = getRow(baseRecord, schema, structType)
+      internalRow = getInternalRow(baseRow)
+
+      val expectedKey = new HoodieKey("field1:field1,name:name1", "field1/name1")
+
+      assertEquals(expectedKey, keyGen.getKey(baseRecord))
+
+      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
+      assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
+    }
+
+    {
+      baseRecord.put("name", "value1")
+      baseRecord.put("field1", "value2")
+      // Default: encode record key field name if there is a single record key field
+      val keyGen = new ComplexKeyGenerator(getKeyConfig("name,", "field1,", "false"))
+
+      val expectedKey = new HoodieKey("name:value1", "value2")
+
+      assertEquals(expectedKey, keyGen.getKey(baseRecord))
+
+      baseRow = getRow(baseRecord, schema, structType)
+      internalRow = getInternalRow(baseRow)
+
+      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
+      assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
+    }
+
+    {
+      // Testing that config set to true but expecting old format (field name included)
+      val config = getKeyConfig("name,", "field1,", "false")
+      config.put(HoodieWriteConfig.WRITE_TABLE_VERSION.key, "8")
+      config.put(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key, "false")
+      val keyGen = new ComplexKeyGenerator(config)
+
+      val expectedKey = new HoodieKey("name:value1", "value2")
+
+      assertEquals(expectedKey, keyGen.getKey(baseRecord))
+
+      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
+      assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
+    }
+
+    {
+      // Turning off the encoding of record key field name if there is a single record key field
+      val config = getKeyConfig("name,", "field1,", "false")
+      config.put(HoodieWriteConfig.WRITE_TABLE_VERSION.key, "8")
+      // This config should affect record key encoding for single record key fields
+      config.put(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key, "true")
+      val keyGen = new ComplexKeyGenerator(config)
+
+      val expectedKey = new HoodieKey("value1", "value2")
 
       assertEquals(expectedKey, keyGen.getKey(baseRecord))
 
@@ -457,8 +524,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     {
       // If one part of the record key is empty, replace with "__empty__"
       baseRecord.put("name", "")
-      baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
-      internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
+      baseRow = getRow(baseRecord, schema, structType)
+      internalRow = getInternalRow(baseRow)
 
       val keyGen = new GlobalDeleteKeyGenerator(getKeyConfig("field1,name", "field1,name", "false"))
 
@@ -473,8 +540,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     {
       // If one part of the record key is null, replace with "__null__"
       baseRecord.put("name", null)
-      baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
-      internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
+      baseRow = getRow(baseRecord, schema, structType)
+      internalRow = getInternalRow(baseRow)
 
       val keyGen = new GlobalDeleteKeyGenerator(getKeyConfig("field1,name", "field1,name", "false"))
 
@@ -491,8 +558,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       val props = new TypedProperties()
       props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionField")
 
-      assertThrows(classOf[IllegalArgumentException]) {
-        new GlobalDeleteKeyGenerator(props)
+      assertThrows(classOf[HoodieKeyException]) {
+        new GlobalDeleteKeyGenerator(props).getRecordKey(baseRecord)
       }
     }
 
@@ -519,8 +586,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
 
       baseRecord.put("name", "")
       baseRecord.put("field1", null)
-      baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
-      internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
+      baseRow = getRow(baseRecord, schema, structType)
+      internalRow = getInternalRow(baseRow)
 
       assertThrows(classOf[HoodieKeyException]) {
         keyGen.getKey(baseRecord)
@@ -543,7 +610,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     // it will provide the record with greatest combine value
     val combinedPayload12 = overWritePayload1.preCombine(overWritePayload2)
     val combinedGR12 = combinedPayload12.getInsertValue(schema).get().asInstanceOf[GenericRecord]
-    assertEquals("field2", combinedGR12.get("field1").toString)
+    assertEquals("field1", combinedGR12.get("field1").toString)
 
     // and it will be deterministic, to order of processing.
     val combinedPayload21 = overWritePayload2.preCombine(overWritePayload1)
@@ -551,11 +618,13 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     assertEquals("field2", combinedGR21.get("field1").toString)
   }
 
-  @Test def testOverwriteWithLatestAvroPayloadCombineAndGetUpdateValue(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("org.apache.hudi.common.testutils.OrderingFieldsTestUtils#configureOrderingFields"))
+  def testOverwriteWithLatestAvroPayloadCombineAndGetUpdateValue(key: String): Unit = {
+    val props = new TypedProperties()
+    OrderingFieldsTestUtils.setOrderingFieldsConfig(props, key, "favoriteIntNumber")
     val baseOrderingVal: Object = baseRecord.get("favoriteIntNumber")
     val fieldSchema: Schema = baseRecord.getSchema().getField("favoriteIntNumber").schema()
-    val props = new TypedProperties()
-    props.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, "favoriteIntNumber");
 
     val basePayload = new OverwriteWithLatestAvroPayload(baseRecord, HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, baseOrderingVal, false).asInstanceOf[Comparable[_]])
 
@@ -564,16 +633,16 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     val laterOrderingVal: Object = laterRecord.get("favoriteIntNumber")
     val newerPayload = new OverwriteWithLatestAvroPayload(laterRecord, HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal, false).asInstanceOf[Comparable[_]])
 
-    // it will provide the record with greatest combine value
+    // it always returns the latest payload.
     val preCombinedPayload = basePayload.preCombine(newerPayload)
     val precombinedGR = preCombinedPayload.getInsertValue(schema).get().asInstanceOf[GenericRecord]
-    assertEquals("field2", precombinedGR.get("field1").toString)
+    assertEquals("field1", precombinedGR.get("field1").toString)
   }
 
   @Test def testDefaultHoodieRecordPayloadCombineAndGetUpdateValue(): Unit = {
     val fieldSchema: Schema = baseRecord.getSchema().getField("favoriteIntNumber").schema()
     val props = HoodiePayloadConfig.newBuilder()
-      .withPayloadOrderingField("favoriteIntNumber").build().getProps;
+      .withPayloadOrderingFields("favoriteIntNumber").build().getProps;
 
     val laterRecord = SchemaTestUtil
       .generateAvroRecordFromJson(schema, 2, "001", "f1")
@@ -617,4 +686,12 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     val combined12 = combinedPayload12.getInsertValue(schema)
     assertEquals(Option.empty(), combined12)
   }
+
+  def getRow(record: GenericRecord, schema: Schema, structType: StructType): Row = {
+    val converterFn = AvroConversionUtils.createConverterToRow(schema, structType)
+    val row = converterFn.apply(record)
+    new GenericRowWithSchema(structType.fieldNames.indices.map(i => row.get(i)).toArray, structType)
+  }
+
+  def getInternalRow(row: Row): InternalRow = SparkDatasetTestUtils.serializeRow(encoder, row)
 }

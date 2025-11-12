@@ -18,19 +18,24 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.Option;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hudi.common.util.Option;
 import org.junit.jupiter.api.Test;
 
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+/**
+ * Tests {@link AWSDmsAvroPayload}.
+ */
 public class TestAWSDmsAvroPayload {
 
   private static final String AVRO_SCHEMA_STRING = "{\"type\": \"record\","
@@ -102,6 +107,7 @@ public class TestAWSDmsAvroPayload {
       Option<IndexedRecord> outputPayload = payload.combineAndGetUpdateValue(oldRecord, avroSchema, properties);
       // expect nothing to be committed to table
       assertFalse(outputPayload.isPresent());
+      assertTrue(payload.isDeleted(avroSchema, properties));
     } catch (Exception e) {
       fail("Unexpected exception");
     }
@@ -138,19 +144,13 @@ public class TestAWSDmsAvroPayload {
     deleteRecord.put("Op", "D");
 
     GenericRecord oldRecord = new GenericData.Record(avroSchema);
-    oldRecord.put("field1", 4);
+    oldRecord.put("field1", 3);
     oldRecord.put("Op", "I");
 
     AWSDmsAvroPayload payload = new AWSDmsAvroPayload(Option.of(deleteRecord));
     AWSDmsAvroPayload insertPayload = new AWSDmsAvroPayload(Option.of(oldRecord));
 
-    try {
-      OverwriteWithLatestAvroPayload output = payload.preCombine(insertPayload);
-      Option<IndexedRecord> outputPayload = output.getInsertValue(avroSchema, properties);
-      // expect nothing to be committed to table
-      assertFalse(outputPayload.isPresent());
-    } catch (Exception e) {
-      fail("Unexpected exception");
-    }
+    OverwriteWithLatestAvroPayload output = payload.preCombine(insertPayload);
+    assertEquals(payload, output);
   }
 }

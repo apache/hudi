@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -29,33 +28,36 @@ import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import java.util.Iterator;
 import java.util.List;
 
 /**
  * Flink INSERT OVERWRITE commit action executor.
  */
-public class FlinkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class FlinkInsertOverwriteCommitActionExecutor<T>
     extends BaseFlinkCommitActionExecutor<T> {
 
-  protected List<HoodieRecord<T>> inputRecords;
+  protected Iterator<HoodieRecord<T>> inputRecords;
 
   public FlinkInsertOverwriteCommitActionExecutor(HoodieEngineContext context,
                                                   HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+                                                  BucketInfo bucketInfo,
                                                   HoodieWriteConfig config,
                                                   HoodieTable table,
                                                   String instantTime,
-                                                  List<HoodieRecord<T>> inputRecords) {
-    this(context, writeHandle, config, table, instantTime, inputRecords, WriteOperationType.INSERT_OVERWRITE);
+                                                  Iterator<HoodieRecord<T>> inputRecords) {
+    this(context, writeHandle, bucketInfo, config, table, instantTime, inputRecords, WriteOperationType.INSERT_OVERWRITE);
   }
 
   public FlinkInsertOverwriteCommitActionExecutor(HoodieEngineContext context,
                                                   HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+                                                  BucketInfo bucketInfo,
                                                   HoodieWriteConfig config,
                                                   HoodieTable table,
                                                   String instantTime,
-                                                  List<HoodieRecord<T>> inputRecords,
+                                                  Iterator<HoodieRecord<T>> inputRecords,
                                                   WriteOperationType writeOperationType) {
-    super(context, writeHandle, config, table, instantTime, writeOperationType);
+    super(context, writeHandle, bucketInfo, config, table, instantTime, writeOperationType);
     this.inputRecords = inputRecords;
   }
 

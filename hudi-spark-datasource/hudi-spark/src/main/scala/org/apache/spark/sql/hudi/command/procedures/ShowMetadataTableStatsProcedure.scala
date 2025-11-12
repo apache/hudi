@@ -19,18 +19,21 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
-import scala.collection.JavaConversions._
+
+import scala.collection.JavaConverters._
 
 class ShowMetadataTableStatsProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -46,19 +49,23 @@ class ShowMetadataTableStatsProcedure() extends BaseProcedure with ProcedureBuil
     super.checkArgs(PARAMETERS, args)
 
     val table = getArgValueOrDefault(args, PARAMETERS(0))
+    val path = getArgValueOrDefault(args, PARAMETERS(1))
+    val filter = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
 
-    val basePath = getBasePath(table)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    validateFilter(filter, outputType)
+    val basePath = getBasePath(table, path)
+    val metaClient = createMetaClient(jsc, basePath)
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
-    val metadata = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getHadoopConf),
-      config, basePath, "/tmp")
+    val metadata = new HoodieBackedTableMetadata(
+      new HoodieLocalEngineContext(metaClient.getStorageConf), metaClient.getStorage, config, basePath)
     val stats = metadata.stats
 
     val rows = new util.ArrayList[Row]
-    for (entry <- stats.entrySet) {
+    for (entry <- stats.entrySet.asScala) {
       rows.add(Row(entry.getKey, entry.getValue))
     }
-    rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
+    val results = rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
+    applyFilter(results, filter, outputType)
   }
 
   override def build: Procedure = new ShowMetadataTableStatsProcedure()
@@ -71,5 +78,3 @@ object ShowMetadataTableStatsProcedure {
     override def get() = new ShowMetadataTableStatsProcedure()
   }
 }
-
-

@@ -18,79 +18,124 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
-import org.apache.hudi.client.bootstrap.BootstrapRecordPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.ParquetReaderIterator;
-import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
+import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieBootstrapHandle;
+import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.ExecutorFactory;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.apache.parquet.avro.AvroParquetReader;
-import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
-import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
+import org.apache.spark.sql.HoodieInternalRowUtils$;
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
+import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
+import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
+import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
+import java.util.function.Function;
+
+import static org.apache.hudi.io.HoodieBootstrapHandle.METADATA_BOOTSTRAP_RECORD_SCHEMA;
+import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFactory;
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
-  private static final Logger LOG = LogManager.getLogger(ParquetBootstrapMetadataHandler.class);
 
   public ParquetBootstrapMetadataHandler(HoodieWriteConfig config, HoodieTable table, HoodieFileStatus srcFileStatus) {
     super(config, table, srcFileStatus);
   }
 
   @Override
-  Schema getAvroSchema(Path sourceFilePath) throws IOException {
-    ParquetMetadata readFooter = ParquetFileReader.readFooter(table.getHadoopConf(), sourceFilePath,
+  Schema getAvroSchema(StoragePath sourceFilePath) throws IOException {
+    ParquetMetadata readFooter = ParquetFileReader.readFooter(
+        (Configuration) table.getStorageConf().unwrap(), new Path(sourceFilePath.toUri()),
         ParquetMetadataConverter.NO_FILTER);
     MessageType parquetSchema = readFooter.getFileMetaData().getSchema();
-    return new AvroSchemaConverter().convert(parquetSchema);
+    return getAvroSchemaConverter((Configuration) table.getStorageConf().unwrap()).convert(parquetSchema);
   }
 
   @Override
-  void executeBootstrap(HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle,
-                        Path sourceFilePath, KeyGeneratorInterface keyGenerator, String partitionPath, Schema avroSchema) throws Exception {
-    BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void> wrapper = null;
-    ParquetReader<IndexedRecord> reader =
-        AvroParquetReader.<IndexedRecord>builder(sourceFilePath).withConf(table.getHadoopConf()).build();
+  protected void executeBootstrap(HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle,
+                                  StoragePath sourceFilePath,
+                                  KeyGeneratorInterface keyGenerator,
+                                  String partitionPath,
+                                  Schema schema) throws Exception {
+    HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
+
+    HoodieFileReader reader = getHoodieSparkIOFactory(table.getStorage()).getReaderFactory(recordType)
+        .getFileReader(table.getConfig(), sourceFilePath);
+
+    HoodieExecutor<Void> executor = null;
     try {
-      wrapper = new BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void>(config.getWriteBufferLimitBytes(),
-          new ParquetReaderIterator(reader), new BootstrapRecordConsumer(bootstrapHandle), inp -> {
-        String recKey = keyGenerator.getKey(inp).getRecordKey();
-        GenericRecord gr = new GenericData.Record(HoodieAvroUtils.RECORD_KEY_SCHEMA);
-        gr.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recKey);
-        BootstrapRecordPayload payload = new BootstrapRecordPayload(gr);
-        HoodieRecord rec = new HoodieAvroRecord(new HoodieKey(recKey, partitionPath), payload);
-        return rec;
-      }, table.getPreExecuteRunnable());
-      wrapper.execute();
+      Function<HoodieRecord, HoodieRecord> transformer = record -> {
+        String recordKey = record.getRecordKey(schema, Option.of(keyGenerator));
+        return createNewMetadataBootstrapRecord(recordKey, partitionPath, recordType)
+            // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+            //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+            //       it since these records will be inserted into the queue later.
+            .copy();
+      };
+      ClosableIterator<HoodieRecord> recordIterator = reader.getRecordIterator(schema);
+      executor = ExecutorFactory.create(config, recordIterator,
+          new BootstrapRecordConsumer(bootstrapHandle), transformer, table.getPreExecuteRunnable());
+      executor.execute();
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
-      reader.close();
-      if (null != wrapper) {
-        wrapper.shutdownNow();
-        wrapper.awaitTermination();
+      // NOTE: If executor is initialized it's responsible for gracefully shutting down
+      //       both producer and consumer
+      if (executor != null) {
+        executor.shutdownNow();
+        executor.awaitTermination();
+      } else {
+        reader.close();
+        bootstrapHandle.close();
       }
-      bootstrapHandle.close();
     }
+  }
+
+  private HoodieRecord createNewMetadataBootstrapRecord(String recordKey, String partitionPath, HoodieRecord.HoodieRecordType recordType) {
+    HoodieKey hoodieKey = new HoodieKey(recordKey, partitionPath);
+    switch (recordType) {
+      case AVRO:
+        GenericRecord avroRecord = new GenericData.Record(METADATA_BOOTSTRAP_RECORD_SCHEMA);
+        avroRecord.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKey);
+        return new HoodieAvroIndexedRecord(hoodieKey, avroRecord);
+
+      case SPARK:
+        StructType schema = HoodieInternalRowUtils$.MODULE$.getCachedSchema(METADATA_BOOTSTRAP_RECORD_SCHEMA);
+        UnsafeProjection unsafeProjection = HoodieInternalRowUtils$.MODULE$.getCachedUnsafeProjection(schema, schema);
+
+        GenericInternalRow row = new GenericInternalRow(METADATA_BOOTSTRAP_RECORD_SCHEMA.getFields().size());
+        row.update(HoodieRecord.RECORD_KEY_META_FIELD_ORD, UTF8String.fromString(recordKey));
+
+        UnsafeRow unsafeRow = unsafeProjection.apply(row);
+
+        return new HoodieSparkRecord(hoodieKey, unsafeRow,false);
+
+      default:
+        throw new UnsupportedOperationException(String.format("Record type %s is not supported yet!", recordType));
+    }
+
   }
 }
 

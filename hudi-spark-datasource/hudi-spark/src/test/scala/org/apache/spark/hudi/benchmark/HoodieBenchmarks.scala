@@ -16,13 +16,15 @@
  */
 package org.apache.spark.hudi.benchmark
 
+import org.apache.hadoop.shaded.com.google.common.reflect.ClassPath
+
 import java.io.File
 import java.lang.reflect.Modifier
 import java.nio.file.{FileSystems, Paths}
 import java.util.Locale
+
 import scala.collection.JavaConverters._
 import scala.util.Try
-import org.apache.hbase.thirdparty.com.google.common.reflect.ClassPath
 
 /**
  * Reference from spark.

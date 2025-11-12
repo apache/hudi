@@ -17,11 +17,12 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
-import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
+import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.internal.SQLConf
 
 trait HoodieCatalystPlansUtils {
@@ -49,46 +50,83 @@ trait HoodieCatalystPlansUtils {
   def createExplainCommand(plan: LogicalPlan, extended: Boolean): LogicalPlan
 
   /**
-   * Convert a AliasIdentifier to TableIdentifier.
-   */
-  def toTableIdentifier(aliasId: AliasIdentifier): TableIdentifier
-
-  /**
-   * Convert a UnresolvedRelation to TableIdentifier.
-   */
-  def toTableIdentifier(relation: UnresolvedRelation): TableIdentifier
-
-  /**
    * Create Join logical plan.
    */
   def createJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType): Join
 
   /**
-   * Test if the logical plan is a Insert Into LogicalPlan.
+   * Decomposes [[MatchMergeIntoTable]] into its arguments with accommodation for
+   * case class changes of [[MergeIntoTable]] in Spark 3.4.
+   *
+   * Before Spark 3.4.0 (five arguments):
+   *
+   * case class MergeIntoTable(
+   * targetTable: LogicalPlan,
+   * sourceTable: LogicalPlan,
+   * mergeCondition: Expression,
+   * matchedActions: Seq[MergeAction],
+   * notMatchedActions: Seq[MergeAction]) extends BinaryCommand with SupportsSubquery
+   *
+   * Since Spark 3.4.0 (six arguments):
+   *
+   * case class MergeIntoTable(
+   * targetTable: LogicalPlan,
+   * sourceTable: LogicalPlan,
+   * mergeCondition: Expression,
+   * matchedActions: Seq[MergeAction],
+   * notMatchedActions: Seq[MergeAction],
+   * notMatchedBySourceActions: Seq[MergeAction]) extends BinaryCommand with SupportsSubquery
    */
-  def isInsertInto(plan: LogicalPlan): Boolean
+  def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)]
 
   /**
-   * Get the member of the Insert Into LogicalPlan.
+   * Decomposes [[MatchCreateIndex]] into its arguments with accommodation.
    */
-  def getInsertIntoChildren(plan: LogicalPlan):
-    Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)]
+  def unapplyCreateIndex(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])]
 
   /**
-   * if the logical plan is a TimeTravelRelation LogicalPlan.
+   * Decomposes [[MatchDropIndex]] into its arguments with accommodation.
    */
-  def isRelationTimeTravel(plan: LogicalPlan): Boolean
+  def unapplyDropIndex(plan: LogicalPlan): Option[(LogicalPlan, String, Boolean)]
 
   /**
-   * Get the member of the TimeTravelRelation LogicalPlan.
+   * Decomposes [[MatchShowIndexes]] into its arguments with accommodation.
    */
-  def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])]
+  def unapplyShowIndexes(plan: LogicalPlan): Option[(LogicalPlan, Seq[Attribute])]
 
   /**
-   * Create a Insert Into LogicalPlan.
+   * Decomposes [[MatchRefreshIndex]] into its arguments with accommodation.
    */
-  def createInsertInto(table: LogicalPlan, partition: Map[String, Option[String]],
-                       query: LogicalPlan, overwrite: Boolean, ifPartitionNotExists: Boolean): LogicalPlan
+  def unapplyRefreshIndex(plan: LogicalPlan): Option[(LogicalPlan, String)]
+
+  /**
+   * Spark requires file formats to append the partition path fields to the end of the schema.
+   * For tables where the partition path fields are not at the end of the schema, we don't want
+   * to return the schema in the wrong order when they do a query like "select *". To fix this
+   * behavior, we apply a projection onto FileScan when the file format has HoodieFormatTrait
+   *
+   * Additionally, incremental queries require filters to be added to the plan
+   */
+  def maybeApplyForNewFileFormat(plan: LogicalPlan): LogicalPlan
+
+  /**
+   * Decomposes [[InsertIntoStatement]] into its arguments allowing to accommodate for API
+   * changes in Spark 3.3
+   * @return a option tuple with (table logical plan, userSpecifiedCols, partitionSpec, query, overwrite, ifPartitionNotExists)
+   *         userSpecifiedCols: only than the version of Spark32 will return, other is empty
+   */
+  def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Seq[String], Map[String, Option[String]], LogicalPlan, Boolean, Boolean)]
+
+  /**
+   * Decomposes [[CreateTableLikeCommand]] into its arguments allowing to accommodate for API
+   * changes in Spark 3
+   */
+  def unapplyCreateTableLikeCommand(plan: LogicalPlan): Option[(TableIdentifier, TableIdentifier, CatalogStorageFormat, Option[String], Map[String, String], Boolean)]
+
+  /**
+   * Rebases instance of {@code InsertIntoStatement} onto provided instance of {@code targetTable} and {@code query}
+   */
+  def rebaseInsertIntoStatement(iis: LogicalPlan, targetTable: LogicalPlan, query: LogicalPlan): LogicalPlan
 
   /**
    * Test if the logical plan is a Repair Table LogicalPlan.
@@ -98,6 +136,28 @@ trait HoodieCatalystPlansUtils {
   /**
    * Get the member of the Repair Table LogicalPlan.
    */
-  def getRepairTableChildren(plan: LogicalPlan):
-    Option[(TableIdentifier, Boolean, Boolean, String)]
+  def getRepairTableChildren(plan: LogicalPlan): Option[(TableIdentifier, Boolean, Boolean, String)]
+
+  /**
+   * Calls fail analysis on
+   *s
+   */
+  def failAnalysisForMIT(a: Attribute, cols: String): Unit = {}
+
+  /**
+   * Throws TABLE_OR_VIEW_NOT_FOUND error for non-existent table
+   */
+  def failTableNotFound(tableName: String): Unit = {}
+
+  def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan
+
+  /**
+   * true if both plans produce the same attributes in the same order
+   */
+  def produceSameOutput(a: LogicalPlan, b: LogicalPlan): Boolean
+
+  /**
+   * Add a project to use the table column names for INSERT INTO BY NAME with specified cols
+   */
+  def createProjectForByNameQuery(lr: LogicalRelation, plan: LogicalPlan): Option[LogicalPlan]
 }

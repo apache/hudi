@@ -34,8 +34,8 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -50,7 +50,7 @@ import java.util.Map;
 public class HoodieSinkTask extends SinkTask {
 
   public static final String TASK_ID_CONFIG_NAME = "task.id";
-  private static final Logger LOG = LogManager.getLogger(HoodieSinkTask.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSinkTask.class);
 
   private final Map<TopicPartition, TransactionCoordinator> transactionCoordinators;
   private final Map<TopicPartition, TransactionParticipant> transactionParticipants;
@@ -175,7 +175,7 @@ public class HoodieSinkTask extends SinkTask {
           LOG.debug("Closing data writer due to task start failure.");
           worker.stop();
         } catch (Throwable t) {
-          LOG.debug(String.format("Error closing and stopping data writer: %s", t.getMessage()), t);
+          LOG.warn("Error closing and stopping data writer", t);
         }
       }
     }

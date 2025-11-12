@@ -18,18 +18,18 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hadoop.fs.Path
-
-import org.apache.hudi.common.table.HoodieTableConfig
-
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog._
+import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.execution.command.PartitionStatistics
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.util.ThreadUtils
 
 import java.util.concurrent.TimeUnit.MILLISECONDS
+
+import scala.language.postfixOps
 import scala.util.control.NonFatal
 
 /**
@@ -54,12 +54,12 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
     val table = catalog.getTableMetadata(tableName)
     val tableIdentWithDB = table.identifier.quotedString
     if (table.partitionColumnNames.isEmpty) {
-      throw new AnalysisException(
+      throw new HoodieAnalysisException(
         s"Operation not allowed: $cmd only works on partitioned tables: $tableIdentWithDB")
     }
 
     if (table.storage.locationUri.isEmpty) {
-      throw new AnalysisException(s"Operation not allowed: $cmd only works on table with " +
+      throw new HoodieAnalysisException(s"Operation not allowed: $cmd only works on table with " +
         s"location provided: $tableIdentWithDB")
     }
 
@@ -67,8 +67,7 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
     logInfo(s"Recover all the partitions in $root")
 
     val hoodieCatalogTable = HoodieCatalogTable(spark, table.identifier)
-    val isHiveStyledPartitioning = hoodieCatalogTable.catalogProperties.
-      getOrElse(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key, "true").toBoolean
+    val isHiveStyledPartitioning = hoodieCatalogTable.tableConfig.getHiveStylePartitioningEnable.toBoolean
 
     val partitionSpecsAndLocs: Seq[(TablePartitionSpec, Path)] = hoodieCatalogTable.
       getPartitionPaths.map(partitionPath => {
@@ -84,15 +83,15 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
     } else 0
     val addedAmount = if (enableAddPartitions) {
       val total = partitionSpecsAndLocs.length
-      val partitionStats = if (spark.sqlContext.conf.gatherFastStats) {
-        HoodieSqlCommonUtils.getFilesInPartitions(spark, table, partitionSpecsAndLocs
-          .map(_._2.toString))
-          .mapValues(statuses => PartitionStatistics(statuses.length, statuses.map(_.getLen).sum))
+      val partitionList = partitionSpecsAndLocs.map(_._2.toString)
+      val partitionStats = if (spark.sessionState.conf.gatherFastStats && total > 0) {
+        HoodieSqlCommonUtils.getFilesInPartitions(spark, table, hoodieCatalogTable.metaClient, partitionList)
+          .mapValues(statuses => PartitionStatistics(statuses.length, statuses.map(_.getLength).sum))
       } else {
         Map.empty[String, PartitionStatistics]
       }
       logInfo(s"Finished to gather the fast stats for all $total partitions.")
-      addPartitions(spark, table, partitionSpecsAndLocs, partitionStats)
+      addPartitions(spark, table, partitionSpecsAndLocs, partitionStats.toMap)
       total
     } else 0
     // Updates the table to indicate that its partition metadata is stored in the Hive metastore.

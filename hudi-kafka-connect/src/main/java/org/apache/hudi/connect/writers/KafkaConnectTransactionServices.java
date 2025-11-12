@@ -21,28 +21,29 @@ package org.apache.hudi.connect.writers;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -58,11 +59,11 @@ import java.util.Set;
  */
 public class KafkaConnectTransactionServices implements ConnectTransactionServices {
 
-  private static final Logger LOG = LogManager.getLogger(KafkaConnectTransactionServices.class);
+  private static final Logger LOG = LoggerFactory.getLogger(KafkaConnectTransactionServices.class);
 
   private final KafkaConnectConfigs connectConfigs;
   private final Option<HoodieTableMetaClient> tableMetaClient;
-  private final Configuration hadoopConf;
+  private final StorageConfiguration<Configuration> storageConf;
   private final HoodieWriteConfig writeConfig;
   private final String tableBasePath;
   private final String tableName;
@@ -80,28 +81,30 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
 
     tableBasePath = writeConfig.getBasePath();
     tableName = writeConfig.getTableName();
-    hadoopConf = KafkaConnectUtils.getDefaultHadoopConf(connectConfigs);
-    context = new HoodieJavaEngineContext(hadoopConf);
+    storageConf = KafkaConnectUtils.getDefaultStorageConf(connectConfigs);
+    context = new HoodieJavaEngineContext(storageConf);
 
     try {
-      KeyGenerator keyGenerator = HoodieAvroKeyGeneratorFactory.createKeyGenerator(
-          new TypedProperties(connectConfigs.getProps()));
+      KeyGenerator keyGenerator = HoodieAvroKeyGeneratorFactory.createAvroKeyGeneratorByType(
+          connectConfigs.getProps());
       String recordKeyFields = KafkaConnectUtils.getRecordKeyColumns(keyGenerator);
-      String partitionColumns = KafkaConnectUtils.getPartitionColumns(keyGenerator,
-          new TypedProperties(connectConfigs.getProps()));
+      String partitionColumns = KafkaConnectUtils.getPartitionColumnsForKeyGenerator(keyGenerator,
+          connectConfigs.getProps());
 
       LOG.info(String.format("Setting record key %s and partition fields %s for table %s",
           recordKeyFields, partitionColumns, tableBasePath + tableName));
 
-      tableMetaClient = Option.of(HoodieTableMetaClient.withPropertyBuilder()
+      tableMetaClient = Option.of(HoodieTableMetaClient.newTableBuilder()
           .setTableType(HoodieTableType.COPY_ON_WRITE.name())
           .setTableName(tableName)
           .setPayloadClassName(HoodieAvroPayload.class.getName())
           .setRecordKeyFields(recordKeyFields)
           .setPartitionFields(partitionColumns)
+          .setTableVersion(writeConfig.getWriteVersion())
+          .setTableFormat(connectConfigs.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT))
           .setKeyGeneratorClassProp(writeConfig.getKeyGeneratorClass())
           .fromProperties(connectConfigs.getProps())
-          .initTable(hadoopConf, tableBasePath));
+          .initTable(storageConf.newInstance(), tableBasePath));
 
       javaClient = new HoodieJavaWriteClient<>(context, writeConfig);
     } catch (Exception exception) {
@@ -161,11 +164,11 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
     if (connectConfigs.isMetaSyncEnabled()) {
       Set<String> syncClientToolClasses = new HashSet<>(
           Arrays.asList(connectConfigs.getMetaSyncClasses().split(",")));
-      FileSystem fs = FSUtils.getFs(tableBasePath, new Configuration());
+      FileSystem fs = HadoopFSUtils.getFs(tableBasePath, new Configuration());
       for (String impl : syncClientToolClasses) {
         // TODO kafka connect config needs to support setting base file format
         String baseFileFormat = connectConfigs.getStringOrDefault(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT);
-        SyncUtilHelpers.runHoodieMetaSync(impl.trim(), connectConfigs.getProps(), hadoopConf, fs, tableBasePath, baseFileFormat);
+        SyncUtilHelpers.runHoodieMetaSync(impl.trim(), connectConfigs.getProps(), storageConf.unwrap(), fs, tableBasePath, baseFileFormat);
       }
     }
   }

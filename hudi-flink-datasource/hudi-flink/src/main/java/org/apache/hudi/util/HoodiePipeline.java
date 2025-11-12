@@ -18,6 +18,8 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.adapter.DataStreamScanProviderAdapter;
+import org.apache.hudi.adapter.DataStreamSinkProviderAdapter;
 import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTableFactory;
@@ -28,21 +30,21 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
+import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
 import org.apache.flink.table.catalog.Catalog;
 import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.ResolvedCatalogTable;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
-import org.apache.flink.table.connector.sink.DataStreamSinkProvider;
-import org.apache.flink.table.connector.source.DataStreamScanProvider;
 import org.apache.flink.table.connector.source.ScanTableSource;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.table.runtime.connector.sink.SinkRuntimeProviderContext;
 import org.apache.flink.table.runtime.connector.source.ScanRuntimeProviderContext;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.flink.table.utils.EncodingUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -72,7 +74,7 @@ import java.util.stream.Collectors;
  */
 public class HoodiePipeline {
 
-  private static final Logger LOG = LogManager.getLogger(HoodiePipeline.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodiePipeline.class);
 
   /**
    * Returns the builder for hoodie pipeline construction.
@@ -122,6 +124,19 @@ public class HoodiePipeline {
      */
     public Builder partition(String... partitions) {
       this.partitions = new ArrayList<>(Arrays.asList(partitions));
+      return this;
+    }
+
+    /**
+     * Add table schema.
+     */
+    public Builder schema(Schema schema) {
+      for (Schema.UnresolvedColumn column : schema.getColumns()) {
+        column(column.toString());
+      }
+      if (schema.getPrimaryKey().isPresent()) {
+        pk(schema.getPrimaryKey().get().getColumnNames().stream().map(EncodingUtils::escapeIdentifier).collect(Collectors.joining(", ")));
+      }
       return this;
     }
 
@@ -195,12 +210,12 @@ public class HoodiePipeline {
         .append(") NOT ENFORCED\n")
         .append(")\n");
     if (!partitionField.isEmpty()) {
-      String partitons = partitionField
+      String partitions = partitionField
           .stream()
           .map(partitionName -> "`" + partitionName + "`")
           .collect(Collectors.joining(","));
       builder.append("PARTITIONED BY (")
-          .append(partitons)
+          .append(partitions)
           .append(")\n");
     }
     builder.append("with ('connector' = 'hudi'");
@@ -226,7 +241,7 @@ public class HoodiePipeline {
   private static DataStreamSink<?> sink(DataStream<RowData> input, ObjectIdentifier tablePath, ResolvedCatalogTable catalogTable, boolean isBounded) {
     FactoryUtil.DefaultDynamicTableContext context = Utils.getTableContext(tablePath, catalogTable, Configuration.fromMap(catalogTable.getOptions()));
     HoodieTableFactory hoodieTableFactory = new HoodieTableFactory();
-    return ((DataStreamSinkProvider) hoodieTableFactory.createDynamicTableSink(context)
+    return ((DataStreamSinkProviderAdapter) hoodieTableFactory.createDynamicTableSink(context)
         .getSinkRuntimeProvider(new SinkRuntimeProviderContext(isBounded)))
         .consumeDataStream(input);
   }
@@ -241,7 +256,7 @@ public class HoodiePipeline {
   private static DataStream<RowData> source(StreamExecutionEnvironment execEnv, ObjectIdentifier tablePath, ResolvedCatalogTable catalogTable) {
     FactoryUtil.DefaultDynamicTableContext context = Utils.getTableContext(tablePath, catalogTable, Configuration.fromMap(catalogTable.getOptions()));
     HoodieTableFactory hoodieTableFactory = new HoodieTableFactory();
-    DataStreamScanProvider dataStreamScanProvider = (DataStreamScanProvider) ((ScanTableSource) hoodieTableFactory
+    DataStreamScanProviderAdapter dataStreamScanProvider = (DataStreamScanProviderAdapter) ((ScanTableSource) hoodieTableFactory
         .createDynamicTableSource(context))
         .getScanRuntimeProvider(new ScanRuntimeProviderContext());
     return dataStreamScanProvider.produceDataStream(execEnv);

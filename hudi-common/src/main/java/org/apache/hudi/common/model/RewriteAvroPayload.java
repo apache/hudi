@@ -18,19 +18,20 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.Option;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hudi.common.util.Option;
 
 import java.io.IOException;
 
 /**
- * Default payload used for rewrite use cases where we dont change schema. We dont need to serialize/deserialize avro record in payload.
+ * Default payload used for rewrite use cases where we don't change schema. We dont need to serialize/deserialize avro record in payload.
  */
 public class RewriteAvroPayload implements HoodieRecordPayload<RewriteAvroPayload> {
 
-  private GenericRecord record;
+  private final GenericRecord record;
   
   public RewriteAvroPayload(GenericRecord record) {
     this.record = record;

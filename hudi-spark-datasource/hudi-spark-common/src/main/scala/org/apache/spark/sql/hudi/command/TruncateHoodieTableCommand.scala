@@ -17,17 +17,21 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieSparkSqlWriter
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
+
+import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
+import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getPartitionPathToDrop, normalizePartitionSpec}
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
-import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
 /**
  * Command for truncate hudi table.
@@ -48,31 +52,34 @@ case class TruncateHoodieTableCommand(
     val tableId = table.identifier.quotedString
 
     if (table.tableType == CatalogTableType.VIEW) {
-      throw new AnalysisException(
+      throw new HoodieAnalysisException(
         s"Operation not allowed: TRUNCATE TABLE on views: $tableId")
     }
 
     if (table.partitionColumnNames.isEmpty && partitionSpec.isDefined) {
-      throw new AnalysisException(
+      throw new HoodieAnalysisException(
         s"Operation not allowed: TRUNCATE TABLE ... PARTITION is not supported " +
           s"for tables that are not partitioned: $tableId")
     }
 
     val basePath = hoodieCatalogTable.tableLocation
     val properties = hoodieCatalogTable.tableConfig.getProps
-    val hadoopConf = sparkSession.sessionState.newHadoopConf()
 
     // If we have not specified the partition, truncate will delete all the data in the table path
     if (partitionSpec.isEmpty) {
-      val targetPath = new Path(basePath)
+      val targetPath = new StoragePath(basePath)
       val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
-      val fs = FSUtils.getFs(basePath, sparkSession.sparkContext.hadoopConfiguration)
-      FSUtils.deleteDir(engineContext, fs, targetPath, sparkSession.sparkContext.defaultParallelism)
+      val storage = HoodieStorageUtils.getStorage(
+        basePath, HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf))
+      FSUtils.deleteDir(engineContext, storage, targetPath, sparkSession.sparkContext.defaultParallelism)
 
       // ReInit hoodie.properties
-      HoodieTableMetaClient.withPropertyBuilder()
+      val metaClient = HoodieTableMetaClient.newTableBuilder()
         .fromProperties(properties)
-        .initTable(hadoopConf, hoodieCatalogTable.tableLocation)
+        .initTable(
+          HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf),
+          hoodieCatalogTable.tableLocation)
+      hoodieCatalogTable.tableConfig.clearMetadataPartitions(metaClient)
     } else {
       val normalizedSpecs: Seq[Map[String, String]] = Seq(partitionSpec.map { spec =>
         normalizePartitionSpec(
@@ -85,11 +92,14 @@ case class TruncateHoodieTableCommand(
       // drop partitions to lazy clean
       val partitionsToDrop = getPartitionPathToDrop(hoodieCatalogTable, normalizedSpecs)
       val parameters = buildHoodieDropPartitionsConfig(sparkSession, hoodieCatalogTable, partitionsToDrop)
-      HoodieSparkSqlWriter.write(
+      val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(
         sparkSession.sqlContext,
         SaveMode.Append,
         parameters,
         sparkSession.emptyDataFrame)
+      if (!success) {
+        throw new HoodieException("Truncate Hoodie Table command failed")
+      }
     }
 
     // After deleting the data, refresh the table to make sure we don't keep around a stale

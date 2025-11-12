@@ -18,15 +18,16 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes
 
-import org.apache.avro.Schema
+import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.hudi.client.WriteStatus
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkUtils}
-import org.apache.log4j.LogManager
+
+import org.apache.avro.Schema
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SaveMode
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 
@@ -37,7 +38,7 @@ import scala.collection.JavaConverters._
  */
 class SparkDeleteNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
 
-  private val log = LogManager.getLogger(getClass)
+  private val log = LoggerFactory.getLogger(getClass)
   config = dagNodeConfig
 
   /**
@@ -64,7 +65,7 @@ class SparkDeleteNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
       context.getWriterContext.getSparkSession)
 
     inputDF.write.format("hudi")
-      .options(DataSourceWriteOptions.translateSqlOptions(context.getWriterContext.getProps.asScala.toMap))
+      .options(DataSourceWriteOptions.mayBeDerivePartitionPath(context.getWriterContext.getProps.asScala.toMap))
       .option(DataSourceWriteOptions.TABLE_NAME.key, context.getHoodieTestSuiteWriter.getCfg.targetTableName)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, context.getHoodieTestSuiteWriter.getCfg.tableType)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)

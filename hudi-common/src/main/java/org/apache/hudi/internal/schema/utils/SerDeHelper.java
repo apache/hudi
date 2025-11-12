@@ -18,11 +18,7 @@
 
 package org.apache.hudi.internal.schema.utils;
 
-import com.fasterxml.jackson.core.JsonFactory;
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
+import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -30,10 +26,14 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.JsonNode;
+
 import java.io.IOException;
 import java.io.StringWriter;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -41,6 +41,9 @@ import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Utils of serialization and deserialization.
+ */
 public class SerDeHelper {
   private SerDeHelper() {
 
@@ -70,6 +73,8 @@ public class SerDeHelper {
 
   private static final Pattern FIXED = Pattern.compile("fixed\\[(\\d+)\\]");
   private static final Pattern DECIMAL = Pattern.compile("decimal\\((\\d+),\\s+(\\d+)\\)");
+  private static final Pattern DECIMAL_BYTES = Pattern.compile("decimal_bytes\\((\\d+),\\s*(\\d+)\\)");
+  private static final Pattern DECIMAL_FIXED = Pattern.compile("decimal_fixed\\((\\d+),\\s*(\\d+)\\)\\[(\\d+)\\]");
 
   /**
    * Convert history internalSchemas to json.
@@ -184,14 +189,29 @@ public class SerDeHelper {
     }
   }
 
-  private static Type parserTypeFromJson(JsonNode jsonNode) {
+  private static Type parseTypeFromJson(JsonNode jsonNode) {
     if (jsonNode.isTextual()) {
       String type = jsonNode.asText().toLowerCase(Locale.ROOT);
       // deal with fixed and decimal
+      Matcher decimalFixed = DECIMAL_FIXED.matcher(type);
+      if (decimalFixed.matches()) {
+        return Types.DecimalTypeFixed.get(
+            Integer.parseInt(decimalFixed.group(1)),
+            Integer.parseInt(decimalFixed.group(2)),
+            Integer.parseInt(decimalFixed.group(3)));
+      }
       Matcher fixed = FIXED.matcher(type);
       if (fixed.matches()) {
         return Types.FixedType.getFixed(Integer.parseInt(fixed.group(1)));
       }
+
+      Matcher decimalBytes = DECIMAL_BYTES.matcher(type);
+      if (decimalBytes.matches()) {
+        return Types.DecimalTypeBytes.get(
+            Integer.parseInt(decimalBytes.group(1)),
+            Integer.parseInt(decimalBytes.group(2)));
+      }
+
       Matcher decimal = DECIMAL.matcher(type);
       if (decimal.matches()) {
         return Types.DecimalType.get(
@@ -214,8 +234,16 @@ public class SerDeHelper {
           return Types.DateType.get();
         case TIME:
           return Types.TimeType.get();
+        case TIME_MILLIS:
+          return Types.TimeMillisType.get();
         case TIMESTAMP:
           return Types.TimestampType.get();
+        case TIMESTAMP_MILLIS:
+          return Types.TimestampMillisType.get();
+        case LOCAL_TIMESTAMP_MICROS:
+          return Types.LocalTimestampMicrosType.get();
+        case LOCAL_TIMESTAMP_MILLIS:
+          return Types.LocalTimestampMillisType.get();
         case STRING:
           return Types.StringType.get();
         case UUID:
@@ -236,7 +264,7 @@ public class SerDeHelper {
           // extract
           int id = field.get(ID).asInt();
           String name = field.get(NAME).asText();
-          Type type = parserTypeFromJson(field.get(TYPE));
+          Type type = parseTypeFromJson(field.get(TYPE));
           String doc = field.has(DOC) ? field.get(DOC).asText() : null;
           boolean optional = field.get(OPTIONAL).asBoolean();
           // build fields
@@ -245,14 +273,14 @@ public class SerDeHelper {
         return Types.RecordType.get(fields);
       } else if (ARRAY.equals(typeStr)) {
         int elementId = jsonNode.get(ELEMENT_ID).asInt();
-        Type elementType = parserTypeFromJson(jsonNode.get(ELEMENT));
+        Type elementType = parseTypeFromJson(jsonNode.get(ELEMENT));
         boolean optional = jsonNode.get(ELEMENT_OPTIONAL).asBoolean();
         return Types.ArrayType.get(elementId, optional, elementType);
       } else if (MAP.equals(typeStr)) {
         int keyId = jsonNode.get(KEY_ID).asInt();
-        Type keyType = parserTypeFromJson(jsonNode.get(KEY));
+        Type keyType = parseTypeFromJson(jsonNode.get(KEY));
         int valueId = jsonNode.get(VALUE_ID).asInt();
-        Type valueType = parserTypeFromJson(jsonNode.get(VALUE));
+        Type valueType = parseTypeFromJson(jsonNode.get(VALUE));
         boolean optional = jsonNode.get(VALUE_OPTIONAL).asBoolean();
         return Types.MapType.get(keyId, valueId, keyType, valueType, optional);
       }
@@ -269,14 +297,14 @@ public class SerDeHelper {
   public static InternalSchema fromJson(JsonNode jsonNode) {
     Integer maxColumnId = !jsonNode.has(MAX_COLUMN_ID) ? null : jsonNode.get(MAX_COLUMN_ID).asInt();
     Long versionId = !jsonNode.has(VERSION_ID) ? null : jsonNode.get(VERSION_ID).asLong();
-    Types.RecordType type = (Types.RecordType)parserTypeFromJson(jsonNode);
+    Types.RecordType type = (Types.RecordType) parseTypeFromJson(jsonNode);
     if (versionId == null) {
-      return new InternalSchema(type.fields());
+      return new InternalSchema(type);
     } else {
       if (maxColumnId != null) {
-        return new InternalSchema(versionId, maxColumnId, type.fields());
+        return new InternalSchema(versionId, maxColumnId, type);
       } else {
-        return new InternalSchema(versionId, type.fields());
+        return new InternalSchema(versionId, type);
       }
     }
   }
@@ -292,7 +320,7 @@ public class SerDeHelper {
       return Option.empty();
     }
     try {
-      return Option.of(fromJson((new ObjectMapper(new JsonFactory())).readValue(json, JsonNode.class)));
+      return Option.of(fromJson(JsonUtils.getObjectMapper().readTree(json)));
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -308,7 +336,7 @@ public class SerDeHelper {
   public static TreeMap<Long, InternalSchema> parseSchemas(String json) {
     TreeMap<Long, InternalSchema> result = new TreeMap<>();
     try {
-      JsonNode jsonNode = (new ObjectMapper(new JsonFactory())).readValue(json, JsonNode.class);
+      JsonNode jsonNode = JsonUtils.getObjectMapper().readTree(json);
       if (!jsonNode.has(SCHEMAS)) {
         throw new IllegalArgumentException(String.format("cannot parser schemas from current json string, missing key name: %s", SCHEMAS));
       }
@@ -338,7 +366,7 @@ public class SerDeHelper {
       return "";
     }
     if (oldSchemas == null || oldSchemas.isEmpty()) {
-      return toJson(Arrays.asList(newSchema));
+      return toJson(Collections.singletonList(newSchema));
     }
     String checkedString = "{\"schemas\":[";
     if (!oldSchemas.startsWith("{\"schemas\":")) {

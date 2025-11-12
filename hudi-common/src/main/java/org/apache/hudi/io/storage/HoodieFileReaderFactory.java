@@ -18,45 +18,119 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+import org.apache.avro.Schema;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
-import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 
+/**
+ * Factory methods to create Hudi file reader.
+ */
 public class HoodieFileReaderFactory {
 
-  public static <R extends IndexedRecord> HoodieFileReader<R> getFileReader(Configuration conf, Path path) throws IOException {
+  protected final HoodieStorage storage;
+  public HoodieFileReaderFactory(HoodieStorage storage) {
+    this.storage = storage;
+  }
+
+  public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, StoragePath path) throws IOException {
     final String extension = FSUtils.getFileExtension(path.toString());
     if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetFileReader(conf, path);
+      return getFileReader(hoodieConfig, path, PARQUET, Option.empty());
     }
     if (HFILE.getFileExtension().equals(extension)) {
-      return newHFileFileReader(conf, path);
+      return getFileReader(hoodieConfig, path, HFILE, Option.empty());
     }
     if (ORC.getFileExtension().equals(extension)) {
-      return newOrcFileReader(conf, path);
+      return getFileReader(hoodieConfig, path, ORC, Option.empty());
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
-  private static <R extends IndexedRecord> HoodieFileReader<R> newParquetFileReader(Configuration conf, Path path) {
-    return new HoodieParquetReader<>(conf, path);
+  public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, StoragePath path, HoodieFileFormat format)
+      throws IOException {
+    return getFileReader(hoodieConfig, path, format, Option.empty());
   }
 
-  private static <R extends IndexedRecord> HoodieFileReader<R> newHFileFileReader(Configuration conf, Path path) throws IOException {
-    CacheConfig cacheConfig = new CacheConfig(conf);
-    return new HoodieHFileReader<>(conf, path, cacheConfig);
+  public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, StoragePath path, HoodieFileFormat format,
+                                        Option<Schema> schemaOption) throws IOException {
+    switch (format) {
+      case PARQUET:
+        return newParquetFileReader(path);
+      case HFILE:
+        return newHFileFileReader(hoodieConfig, path, schemaOption);
+      case ORC:
+        return newOrcFileReader(path);
+      default:
+        throw new UnsupportedOperationException(format + " format not supported yet.");
+    }
   }
 
-  private static <R extends IndexedRecord> HoodieFileReader<R> newOrcFileReader(Configuration conf, Path path) {
-    return new HoodieOrcReader<>(conf, path);
+  public HoodieFileReader getFileReader(HoodieConfig hoodieConfig, StoragePathInfo pathInfo, HoodieFileFormat format,
+                                        Option<Schema> schemaOption) throws IOException {
+    switch (format) {
+      case PARQUET:
+        return newParquetFileReader(pathInfo.getPath());
+      case HFILE:
+        return newHFileFileReader(hoodieConfig, pathInfo, schemaOption);
+      case ORC:
+        return newOrcFileReader(pathInfo.getPath());
+      default:
+        throw new UnsupportedOperationException(format + " format not supported yet.");
+    }
   }
+
+  public HoodieFileReader getContentReader(HoodieConfig hoodieConfig, StoragePath path, HoodieFileFormat format,
+                                           HoodieStorage storage, byte[] content,
+                                           Option<Schema> schemaOption) throws IOException {
+    switch (format) {
+      case HFILE:
+        return newHFileFileReader(hoodieConfig, path, storage, content, schemaOption);
+      default:
+        throw new UnsupportedOperationException(format + " format not supported yet.");
+    }
+  }
+
+  protected HoodieFileReader newParquetFileReader(StoragePath path) {
+    throw new UnsupportedOperationException();
+  }
+
+  protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig, StoragePath path,
+                                                Option<Schema> schemaOption) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig, StoragePathInfo pathInfo,
+                                                Option<Schema> schemaOption) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig, StoragePath path,
+                                                HoodieStorage storage, byte[] content, Option<Schema> schemaOption)
+      throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  protected HoodieFileReader newOrcFileReader(StoragePath path) {
+    throw new UnsupportedOperationException();
+  }
+
+  public HoodieFileReader newBootstrapFileReader(HoodieFileReader skeletonFileReader,
+                                                 HoodieFileReader dataFileReader,
+                                                 Option<String[]> partitionFields,
+                                                 Object[] partitionValues) {
+    throw new UnsupportedOperationException();
+  }
+
 }

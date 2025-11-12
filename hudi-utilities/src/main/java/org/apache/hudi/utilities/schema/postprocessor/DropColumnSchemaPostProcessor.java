@@ -20,13 +20,14 @@ package org.apache.hudi.utilities.schema.postprocessor;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
+import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 
 import org.apache.avro.Schema;
-import org.apache.hudi.utilities.schema.SchemaPostProcessor;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -35,34 +36,41 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+
 /**
  * A {@link SchemaPostProcessor} that support to delete column(s) from given schema.
  * <p>
  * Multiple columns are separated by commas.
  * For example:
  * <p>
- * properties.put("hoodie.deltastreamer.schemaprovider.schema_post_processor.delete.columns", "column1,column2").
+ * properties.put("hoodie.streamer.schemaprovider.schema_post_processor.delete.columns", "column1,column2").
  */
 public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
 
-  private static final Logger LOG = LogManager.getLogger(DropColumnSchemaPostProcessor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DropColumnSchemaPostProcessor.class);
 
   public DropColumnSchemaPostProcessor(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
   }
 
+  @Deprecated
   public static class Config {
+    @Deprecated
     public static final String DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP =
-        "hoodie.deltastreamer.schemaprovider.schema_post_processor.delete.columns";
+        SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key();
   }
 
   @Override
   public Schema processSchema(Schema schema) {
 
-    String columnToDeleteStr = this.config.getString(Config.DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP);
+    String columnToDeleteStr = getStringWithAltKeys(
+        this.config, SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN);
 
     if (StringUtils.isNullOrEmpty(columnToDeleteStr)) {
-      LOG.warn(String.format("Param %s is null or empty, return original schema", Config.DELETE_COLUMN_POST_PROCESSOR_COLUMN_PROP));
+      LOG.warn("Param {} is null or empty, return original schema",
+          SchemaProviderPostProcessorConfig.DELETE_COLUMN_POST_PROCESSOR_COLUMN.key());
     }
 
     // convert field to lowerCase for compare purpose
@@ -75,7 +83,7 @@ public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
 
     for (Schema.Field sourceField : sourceFields) {
       if (!columnsToDelete.contains(sourceField.name().toLowerCase(Locale.ROOT))) {
-        targetFields.add(new Schema.Field(sourceField.name(), sourceField.schema(), sourceField.doc(), sourceField.defaultVal()));
+        targetFields.add(createNewSchemaField(sourceField));
       }
     }
 

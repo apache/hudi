@@ -18,9 +18,7 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -28,16 +26,20 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -49,6 +51,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.TIMESTAMP_AS_OF;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf;
+import static org.apache.hudi.common.util.StringUtils.nonEmpty;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
  * Given a path is a part of - Hoodie table = accepts ONLY the latest version of each path - Non-Hoodie table = then
@@ -63,13 +68,13 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.TIMESTAMP_AS_OF;
 public class HoodieROTablePathFilter implements Configurable, PathFilter, Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(HoodieROTablePathFilter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieROTablePathFilter.class);
 
   /**
    * Its quite common, to have all files from a given partition path be passed into accept(), cache the check for hoodie
    * metadata for known partition paths and the latest versions of files.
    */
-  private Map<String, HashSet<Path>> hoodiePathCache;
+  private final Map<String, HashSet<Path>> hoodiePathCache;
 
   /**
    * Paths that are known to be non-hoodie tables.
@@ -82,14 +87,14 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
   Map<String, HoodieTableMetaClient> metaClientCache;
 
   /**
-   * Hadoop configurations for the FileSystem.
+   * Storage configurations for read.
    */
-  private SerializableConfiguration conf;
+  private StorageConfiguration<?> conf;
 
   private transient HoodieLocalEngineContext engineContext;
 
 
-  private transient FileSystem fs;
+  private transient HoodieStorage storage;
 
   public HoodieROTablePathFilter() {
     this(new Configuration());
@@ -98,7 +103,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
   public HoodieROTablePathFilter(Configuration conf) {
     this.hoodiePathCache = new ConcurrentHashMap<>();
     this.nonHoodiePathCache = new HashSet<>();
-    this.conf = new SerializableConfiguration(conf);
+    this.conf = HadoopFSUtils.getStorageConfWithCopy(conf);
     this.metaClientCache = new HashMap<>();
   }
 
@@ -119,33 +124,26 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
   public boolean accept(Path path) {
 
     if (engineContext == null) {
-      this.engineContext = new HoodieLocalEngineContext(this.conf.get());
+      this.engineContext = new HoodieLocalEngineContext(this.conf);
     }
 
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Checking acceptance for path " + path);
-    }
+    LOG.debug("Checking acceptance for path {}", path);
     Path folder = null;
     try {
-      if (fs == null) {
-        fs = path.getFileSystem(conf.get());
+      if (storage == null) {
+        storage = new HoodieHadoopStorage(convertToStoragePath(path), conf);
       }
 
       // Assumes path is a file
       folder = path.getParent(); // get the immediate parent.
       // Try to use the caches.
       if (nonHoodiePathCache.contains(folder.toString())) {
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("Accepting non-hoodie path from cache: " + path);
-        }
+        LOG.debug("Accepting non-hoodie path from cache: {}", path);
         return true;
       }
 
       if (hoodiePathCache.containsKey(folder.toString())) {
-        if (LOG.isDebugEnabled()) {
-          LOG.debug(String.format("%s Hoodie path checked against cache, accept => %s \n", path,
-              hoodiePathCache.get(folder.toString()).contains(path)));
-        }
+        LOG.debug("{} Hoodie path checked against cache, accept => {}", path, hoodiePathCache.get(folder.toString()).contains(path));
         return hoodiePathCache.get(folder.toString()).contains(path);
       }
 
@@ -153,16 +151,15 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
       String filePath = path.toString();
       if (filePath.contains("/" + HoodieTableMetaClient.METAFOLDER_NAME + "/")
           || filePath.endsWith("/" + HoodieTableMetaClient.METAFOLDER_NAME)) {
-        if (LOG.isDebugEnabled()) {
-          LOG.debug(String.format("Skipping Hoodie Metadata file  %s \n", filePath));
-        }
+        LOG.debug("Skipping Hoodie Metadata file {}", filePath);
         return false;
       }
 
       // Perform actual checking.
       Path baseDir;
-      if (HoodiePartitionMetadata.hasPartitionMetadata(fs, folder)) {
-        HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, folder);
+      StoragePath storagePath = convertToStoragePath(folder);
+      if (HoodiePartitionMetadata.hasPartitionMetadata(storage, storagePath)) {
+        HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(storage, storagePath);
         metadata.readFromFS();
         baseDir = HoodieHiveUtils.getNthParent(folder, metadata.getPartitionDepth());
       } else {
@@ -172,53 +169,53 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
       if (baseDir != null) {
         // Check whether baseDir in nonHoodiePathCache
         if (nonHoodiePathCache.contains(baseDir.toString())) {
-          if (LOG.isDebugEnabled()) {
-            LOG.debug("Accepting non-hoodie path from cache: " + path);
-          }
+          LOG.debug("Accepting non-hoodie path from cache: {}", path);
           return true;
         }
         HoodieTableFileSystemView fsView = null;
         try {
           HoodieTableMetaClient metaClient = metaClientCache.get(baseDir.toString());
           if (null == metaClient) {
-            metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir.toString()).setLoadActiveTimelineOnLoad(true).build();
+            metaClient = HoodieTableMetaClient.builder()
+                .setConf(storage.getConf().newInstance()).setBasePath(baseDir.toString())
+                .setLoadActiveTimelineOnLoad(true).build();
             metaClientCache.put(baseDir.toString(), metaClient);
           }
 
-          if (getConf().get(TIMESTAMP_AS_OF.key()) != null) {
+          final Configuration conf = getConf();
+          final String timestampAsOf = conf.get(TIMESTAMP_AS_OF.key());
+          if (nonEmpty(timestampAsOf)) {
+            validateTimestampAsOf(metaClient, timestampAsOf);
+
             // Build FileSystemViewManager with specified time, it's necessary to set this config when you may
             // access old version files. For example, in spark side, using "hoodie.datasource.read.paths"
             // which contains old version files, if not specify this value, these files will be filtered.
             fsView = FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext,
-                metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()),
-                metaClient.getActiveTimeline().filterCompletedInstants().findInstantsBeforeOrEquals(getConf().get(TIMESTAMP_AS_OF.key())));
+                metaClient, HoodieInputFormatUtils.buildMetadataConfig(conf),
+                metaClient.getActiveTimeline().filterCompletedInstants().findInstantsBeforeOrEquals(timestampAsOf));
           } else {
             fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
-                metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()));
+                metaClient, HoodieInputFormatUtils.buildMetadataConfig(conf));
           }
-          String partition = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), folder);
+          String partition = HadoopFSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath().toString()), folder);
           List<HoodieBaseFile> latestFiles = fsView.getLatestBaseFiles(partition).collect(Collectors.toList());
           // populate the cache
           if (!hoodiePathCache.containsKey(folder.toString())) {
             hoodiePathCache.put(folder.toString(), new HashSet<>());
           }
-          LOG.info("Based on hoodie metadata from base path: " + baseDir.toString() + ", caching " + latestFiles.size()
-              + " files under " + folder);
+          LOG.info("Based on hoodie metadata from base path: {}, caching {} files under {}", baseDir, latestFiles.size(), folder);
           for (HoodieBaseFile lfile : latestFiles) {
             hoodiePathCache.get(folder.toString()).add(new Path(lfile.getPath()));
           }
 
           // accept the path, if its among the latest files.
           if (LOG.isDebugEnabled()) {
-            LOG.debug(String.format("%s checked after cache population, accept => %s \n", path,
-                hoodiePathCache.get(folder.toString()).contains(path)));
+            LOG.debug("{} checked after cache population, accept => {}", path, hoodiePathCache.get(folder.toString()).contains(path));
           }
           return hoodiePathCache.get(folder.toString()).contains(path);
         } catch (TableNotFoundException e) {
           // Non-hoodie path, accept it.
-          if (LOG.isDebugEnabled()) {
-            LOG.debug(String.format("(1) Caching non-hoodie path under %s with basePath %s \n", folder.toString(), baseDir.toString()));
-          }
+          LOG.debug("(1) Caching non-hoodie path under {} with basePath {}", folder, baseDir);
           nonHoodiePathCache.add(folder.toString());
           nonHoodiePathCache.add(baseDir.toString());
           return true;
@@ -229,9 +226,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
         }
       } else {
         // files is at < 3 level depth in FS tree, can't be hoodie dataset
-        if (LOG.isDebugEnabled()) {
-          LOG.debug(String.format("(2) Caching non-hoodie path under %s \n", folder.toString()));
-        }
+        LOG.debug("(2) Caching non-hoodie path under{}", folder);
         nonHoodiePathCache.add(folder.toString());
         return true;
       }
@@ -244,11 +239,11 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
 
   @Override
   public void setConf(Configuration conf) {
-    this.conf = new SerializableConfiguration(conf);
+    this.conf = HadoopFSUtils.getStorageConfWithCopy(conf);
   }
 
   @Override
   public Configuration getConf() {
-    return conf.get();
+    return conf.unwrapAs(Configuration.class);
   }
 }

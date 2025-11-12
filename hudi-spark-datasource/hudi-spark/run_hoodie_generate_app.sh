@@ -23,7 +23,7 @@ function error_exit {
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 #Ensure we pick the right jar even for hive11 builds
-HUDI_JAR=`ls -c $DIR/../../packaging/hudi-spark-bundle/target/hudi-spark*-bundle*.jar | grep -v sources | head -1`
+HUDI_JAR=`ls -c $DIR/../../packaging/hudi-spark-bundle/target/hudi-spark*-bundle*.jar | grep -v sources | grep -v javadoc | head -1`
 
 if [ -z "$HADOOP_CONF_DIR" ]; then
   echo "setting hadoop conf dir"

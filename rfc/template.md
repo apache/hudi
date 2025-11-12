@@ -16,8 +16,6 @@
 -->
 # RFC-[number]: [Title]
 
-
-
 ## Proposers
 
 - @<proposer1 github username>
@@ -29,7 +27,7 @@
 
 ## Status
 
-JIRA: <link to umbrella JIRA>
+Issue: <Link to GH feature issue>
 
 > Please keep the status updated in `rfc/README.md`.
 
@@ -38,7 +36,7 @@ JIRA: <link to umbrella JIRA>
 Describe the problem you are trying to solve and a brief description of why it’s needed
 
 ## Background
-Introduce any much background context which is relevant or necessary to understand the feature and design choices.
+Introduce any background context that is relevant or necessary to understand the feature and design choices.
 
 ## Implementation
 Describe the new thing you want to do in appropriate detail, how it fits into the project architecture. 

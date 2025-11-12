@@ -22,12 +22,12 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -52,7 +52,7 @@ import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getTableMetaCl
  */
 public class InputPathHandler {
 
-  public static final Logger LOG = LogManager.getLogger(InputPathHandler.class);
+  public static final Logger LOG = LoggerFactory.getLogger(InputPathHandler.class);
 
   private final Configuration conf;
   // tableName to metadata mapping for all Hoodie tables(both incremental & snapshot)
@@ -60,7 +60,7 @@ public class InputPathHandler {
   private final Map<HoodieTableMetaClient, List<Path>> groupedIncrementalPaths;
   private final List<Path> snapshotPaths;
   private final List<Path> nonHoodieInputPaths;
-  private boolean isIncrementalUseDatabase;
+  private final boolean isIncrementalUseDatabase;
 
   public InputPathHandler(Configuration conf, Path[] inputPaths, List<String> incrementalTables) throws IOException {
     this.conf = conf;
@@ -94,8 +94,10 @@ public class InputPathHandler {
       throws IOException {
     for (Path inputPath : inputPaths) {
       boolean basePathKnown = false;
+      String inputPathStr = inputPath.toString();
       for (HoodieTableMetaClient metaClient : tableMetaClientMap.values()) {
-        if (inputPath.toString().contains(metaClient.getBasePath())) {
+        String basePathStr = metaClient.getBasePath().toString();
+        if (inputPathStr.equals(basePathStr) || inputPathStr.startsWith(basePathStr + "/")) {
           // We already know the base path for this inputPath.
           basePathKnown = true;
           // Check if this is for a snapshot query

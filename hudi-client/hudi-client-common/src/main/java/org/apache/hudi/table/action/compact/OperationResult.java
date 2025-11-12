@@ -33,7 +33,8 @@ public class OperationResult<T> implements Serializable {
   private boolean success;
   private Option<Exception> exception;
 
-  public OperationResult() {}
+  public OperationResult() {
+  }
 
   public OperationResult(T operation, boolean success, Option<Exception> exception) {
     this.operation = operation;

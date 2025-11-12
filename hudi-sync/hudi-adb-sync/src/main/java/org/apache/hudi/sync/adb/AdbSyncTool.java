@@ -19,7 +19,9 @@
 package org.apache.hudi.sync.adb;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HadoopConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.SchemaDifference;
@@ -27,10 +29,10 @@ import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
-import org.apache.hudi.sync.common.util.ConfigUtils;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 
 import com.beust.jcommander.JCommander;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
 import org.apache.parquet.schema.MessageType;
@@ -83,11 +85,15 @@ public class AdbSyncTool extends HoodieSyncTool {
   private final Option<String> roTableTableName;
 
   public AdbSyncTool(Properties props) {
-    super(props);
+    this(props, HadoopConfigUtils.createHadoopConf(props), Option.empty());
+  }
+
+  public AdbSyncTool(Properties props, Configuration hadoopConf, Option<HoodieTableMetaClient> metaClientOption) {
+    super(props, hadoopConf);
     this.config = new AdbSyncConfig(props);
     this.databaseName = config.getString(META_SYNC_DATABASE_NAME);
     this.tableName = config.getString(META_SYNC_TABLE_NAME);
-    this.syncClient = new HoodieAdbJdbcClient(config);
+    this.syncClient = new HoodieAdbJdbcClient(config, metaClientOption.orElseGet(() -> buildMetaClient(config)));
     switch (syncClient.getTableType()) {
       case COPY_ON_WRITE:
         this.snapshotTableName = tableName;
@@ -156,18 +162,6 @@ public class AdbSyncTool extends HoodieSyncTool {
       throw new HoodieAdbSyncException("ADB database does not exists:" + databaseName);
     }
 
-    // Currently HoodieBootstrapRelation does support reading bootstrap MOR rt table,
-    // so we disable the syncAsSparkDataSourceTable here to avoid read such kind table
-    // by the data source way (which will use the HoodieBootstrapRelation).
-    // TODO after we support bootstrap MOR rt table in HoodieBootstrapRelation[HUDI-2071],
-    //  we can remove this logical.
-    if (syncClient.isBootstrap()
-        && syncClient.getTableType() == HoodieTableType.MERGE_ON_READ
-        && !readAsOptimized) {
-      config.setValue(ADB_SYNC_SYNC_AS_SPARK_DATA_SOURCE_TABLE, "false");
-      LOG.info("Disable sync as spark datasource table for mor rt table:{}", tableName);
-    }
-
     if (config.getBoolean(ADB_SYNC_DROP_TABLE_BEFORE_CREATION)) {
       LOG.info("Drop table before creation, tableName:{}", tableName);
       syncClient.dropTable(tableName);
@@ -194,7 +188,7 @@ public class AdbSyncTool extends HoodieSyncTool {
     if (config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
       writtenPartitionsSince = new ArrayList<>();
     } else {
-      writtenPartitionsSince = syncClient.getWrittenPartitionsSince(lastCommitTimeSynced);
+      writtenPartitionsSince = syncClient.getWrittenPartitionsSince(lastCommitTimeSynced, Option.empty());
     }
     LOG.info("Scan partitions complete, partitionNum:{}", writtenPartitionsSince.size());
 
@@ -202,7 +196,7 @@ public class AdbSyncTool extends HoodieSyncTool {
     syncPartitions(tableName, writtenPartitionsSince);
 
     // Update sync commit time
-    // whether to skip syncing commit time stored in tbl properties, since it is time consuming.
+    // whether to skip syncing commit time stored in tbl properties, since it is time-consuming.
     if (!config.getBoolean(ADB_SYNC_SKIP_LAST_COMMIT_TIME_SYNC)) {
       syncClient.updateLastCommitTimeSynced(tableName);
     }

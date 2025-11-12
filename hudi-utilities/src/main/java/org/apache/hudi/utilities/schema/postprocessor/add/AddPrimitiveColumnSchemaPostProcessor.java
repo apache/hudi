@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.schema.postprocessor.add;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
@@ -30,6 +31,16 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getRawValueWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_DEFAULT_PROP;
+import static org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_DOC_PROP;
+import static org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_NAME_PROP;
+import static org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_NULLABLE_PROP;
+import static org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_TYPE_PROP;
 
 /**
  * A {@link SchemaPostProcessor} used to add a new column of primitive types to given schema. Only supports adding one
@@ -47,7 +58,7 @@ public class AddPrimitiveColumnSchemaPostProcessor extends SchemaPostProcessor {
 
   @Override
   public Schema processSchema(Schema schema) {
-    String newColumnName = this.config.getString(BaseSchemaPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_NAME_PROP.key());
+    String newColumnName = getStringWithAltKeys(this.config, SCHEMA_POST_PROCESSOR_ADD_COLUMN_NAME_PROP);
 
     if (schema.getField(newColumnName) != null) {
       throw new HoodieSchemaPostProcessException(String.format("Column %s already exist!", newColumnName));
@@ -58,7 +69,7 @@ public class AddPrimitiveColumnSchemaPostProcessor extends SchemaPostProcessor {
 
 
     for (Schema.Field sourceField : sourceFields) {
-      targetFields.add(new Schema.Field(sourceField.name(), sourceField.schema(), sourceField.doc(), sourceField.defaultVal()));
+      targetFields.add(createNewSchemaField(sourceField));
     }
 
     // add new column to the end
@@ -69,13 +80,12 @@ public class AddPrimitiveColumnSchemaPostProcessor extends SchemaPostProcessor {
 
   private Schema.Field buildNewColumn() {
 
-    String columnName = this.config.getString(BaseSchemaPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_NAME_PROP.key());
-    String type = this.config.getString(BaseSchemaPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_TYPE_PROP.key()).toUpperCase(Locale.ROOT);
-    String doc = this.config.getString(BaseSchemaPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_DOC_PROP.key(), null);
-    Object defaultValue = this.config.getOrDefault(BaseSchemaPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_DEFAULT_PROP.key(),
-        null);
-    boolean nullable = this.config.getBoolean(BaseSchemaPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_NULLABLE_PROP.key(),
-        BaseSchemaPostProcessorConfig.SCHEMA_POST_PROCESSOR_ADD_COLUMN_NULLABLE_PROP.defaultValue());
+    String columnName = getStringWithAltKeys(this.config, SCHEMA_POST_PROCESSOR_ADD_COLUMN_NAME_PROP);
+    String type = getStringWithAltKeys(this.config, SCHEMA_POST_PROCESSOR_ADD_COLUMN_TYPE_PROP).toUpperCase(Locale.ROOT);
+    String doc = getStringWithAltKeys(this.config, SCHEMA_POST_PROCESSOR_ADD_COLUMN_DOC_PROP, true);
+    Option<Object> defaultValue = getRawValueWithAltKeys(this.config, SCHEMA_POST_PROCESSOR_ADD_COLUMN_DEFAULT_PROP);
+
+    boolean nullable = getBooleanWithAltKeys(this.config, SCHEMA_POST_PROCESSOR_ADD_COLUMN_NULLABLE_PROP);
 
     ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(columnName));
     ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(type));
@@ -83,7 +93,7 @@ public class AddPrimitiveColumnSchemaPostProcessor extends SchemaPostProcessor {
 
     Schema newSchema = createSchema(type, nullable);
 
-    return new Schema.Field(columnName, newSchema, doc, defaultValue);
+    return new Schema.Field(columnName, newSchema, doc, defaultValue.isPresent() ? defaultValue.get() : null);
   }
 
   private Schema createSchema(String type, boolean nullable) {

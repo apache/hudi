@@ -18,23 +18,33 @@
 
 package org.apache.hudi.sink.bucket;
 
+import org.apache.hudi.client.model.HoodieFlinkInternalRow;
+import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.common.AbstractWriteOperator;
 import org.apache.hudi.sink.common.WriteOperatorFactory;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.types.logical.RowType;
 
 /**
  * Operator for {@link BucketStreamWriteFunction}.
- *
- * @param <I> The input type
  */
-public class BucketStreamWriteOperator<I> extends AbstractWriteOperator<I> {
+public class BucketStreamWriteOperator extends AbstractWriteOperator<HoodieFlinkInternalRow> {
 
-  public BucketStreamWriteOperator(Configuration conf) {
-    super(new BucketStreamWriteFunction<>(conf));
+  public BucketStreamWriteOperator(Configuration conf, RowType rowType) {
+    super(getWriteFunction(conf, rowType));
   }
 
-  public static <I> WriteOperatorFactory<I> getFactory(Configuration conf) {
-    return WriteOperatorFactory.instance(conf, new BucketStreamWriteOperator<>(conf));
+  private static AbstractWriteFunction<HoodieFlinkInternalRow> getWriteFunction(Configuration conf, RowType rowType) {
+    if (OptionsResolver.isConsistentHashingBucketIndexType(conf)) {
+      return new ConsistentBucketStreamWriteFunction(conf, rowType);
+    } else {
+      return new BucketStreamWriteFunction(conf, rowType);
+    }
+  }
+
+  public static WriteOperatorFactory<HoodieFlinkInternalRow> getFactory(Configuration conf, RowType rowType) {
+    return WriteOperatorFactory.instance(conf, new BucketStreamWriteOperator(conf, rowType));
   }
 }

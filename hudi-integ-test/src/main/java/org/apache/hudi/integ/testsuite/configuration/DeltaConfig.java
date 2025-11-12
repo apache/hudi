@@ -18,11 +18,11 @@
 
 package org.apache.hudi.integ.testsuite.configuration;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hadoop.conf.Configuration;
@@ -40,13 +40,13 @@ public class DeltaConfig implements Serializable {
 
   private final DeltaOutputMode deltaOutputMode;
   private final DeltaInputType deltaInputType;
-  private final SerializableConfiguration configuration;
+  private final StorageConfiguration<Configuration> storageConf;
 
   public DeltaConfig(DeltaOutputMode deltaOutputMode, DeltaInputType deltaInputType,
-      SerializableConfiguration configuration) {
+                     StorageConfiguration<Configuration> storageConf) {
     this.deltaOutputMode = deltaOutputMode;
     this.deltaInputType = deltaInputType;
-    this.configuration = configuration;
+    this.storageConf = storageConf;
   }
 
   public DeltaOutputMode getDeltaOutputMode() {
@@ -58,7 +58,7 @@ public class DeltaConfig implements Serializable {
   }
 
   public Configuration getConfiguration() {
-    return configuration.get();
+    return storageConf.unwrap();
   }
 
   /**
@@ -234,7 +234,7 @@ public class DeltaConfig implements Serializable {
       return Integer.valueOf(configsMap.getOrDefault(VALIDATE_ONCE_EVERY_ITR, 1).toString());
     }
 
-    public String inputPartitonsToSkipWithValidate() {
+    public String inputPartitionsToSkipWithValidate() {
       return configsMap.getOrDefault(INPUT_PARTITIONS_TO_SKIP_VALIDATE, "").toString();
     }
 

@@ -18,19 +18,23 @@
 
 package org.apache.hudi.source;
 
-import org.apache.hudi.adapter.AbstractStreamOperatorAdapter;
-import org.apache.hudi.adapter.AbstractStreamOperatorFactoryAdapter;
-import org.apache.hudi.adapter.MailboxExecutorAdapter;
-import org.apache.hudi.adapter.Utils;
+import org.apache.hudi.adapter.SourceFunctionAdapter;
+import org.apache.hudi.adapter.YieldingOperatorFactoryAdapter;
+import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
+import org.apache.hudi.utils.RuntimeContextUtils;
+import org.apache.hudi.utils.SourceContextUtils;
 
+import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.state.JavaSerializer;
 import org.apache.flink.runtime.state.StateInitializationContext;
 import org.apache.flink.runtime.state.StateSnapshotContext;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
+import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
+import org.apache.flink.streaming.api.operators.AbstractStreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamOperator;
@@ -58,7 +62,7 @@ import java.util.concurrent.LinkedBlockingDeque;
  * This architecture allows the separation of split reading from processing the checkpoint barriers,
  * thus removing any potential back-pressure.
  */
-public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
+public class StreamReadOperator extends AbstractStreamOperator<RowData>
     implements OneInputStreamOperator<MergeOnReadInputSplit, RowData> {
 
   private static final Logger LOG = LoggerFactory.getLogger(StreamReadOperator.class);
@@ -68,11 +72,11 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
   // It's the same thread that runs this operator and checkpoint actions. Use this executor to schedule only
   // splits for subsequent reading, so that a new checkpoint could be triggered without blocking a long time
   // for exhausting all scheduled split reading tasks.
-  private final MailboxExecutorAdapter executor;
+  private final MailboxExecutor executor;
 
   private MergeOnReadInputFormat format;
 
-  private transient SourceFunction.SourceContext<RowData> sourceContext;
+  private transient SourceFunctionAdapter.SourceContext<RowData> sourceContext;
 
   private transient ListState<MergeOnReadInputSplit> inputSplitsState;
 
@@ -84,8 +88,10 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
   // When there are no more files to read, this will be set to IDLE.
   private transient volatile SplitState currentSplitState;
 
+  private transient FlinkStreamReadMetrics readMetrics;
+
   private StreamReadOperator(MergeOnReadInputFormat format, ProcessingTimeService timeService,
-                             MailboxExecutorAdapter mailboxExecutor) {
+      MailboxExecutor mailboxExecutor) {
     this.format = Preconditions.checkNotNull(format, "The InputFormat should not be null.");
     this.processingTimeService = timeService;
     this.executor = Preconditions.checkNotNull(mailboxExecutor, "The mailboxExecutor should not be null.");
@@ -94,6 +100,8 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
   @Override
   public void initializeState(StateInitializationContext context) throws Exception {
     super.initializeState(context);
+
+    registerMetrics();
 
     // TODO Replace Java serialization with Avro approach to keep state compatibility.
     inputSplitsState = context.getOperatorStateStore().getListState(
@@ -105,7 +113,7 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
     // Recover splits state from flink state backend if possible.
     splits = new LinkedBlockingDeque<>();
     if (context.isRestored()) {
-      int subtaskIdx = getRuntimeContext().getIndexOfThisSubtask();
+      int subtaskIdx = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
       LOG.info("Restoring state for operator {} (task ID: {}).", getClass().getSimpleName(), subtaskIdx);
 
       for (MergeOnReadInputSplit split : inputSplitsState.get()) {
@@ -113,12 +121,11 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
       }
     }
 
-    this.sourceContext = Utils.getSourceContext(
-        getOperatorConfig().getTimeCharacteristic(),
+    this.sourceContext = SourceContextUtils.getSourceContext(
+        getOperatorConfig(),
         getProcessingTimeService(),
-        getContainingTask(),
         output,
-        getRuntimeContext().getExecutionConfig().getAutoWatermarkInterval());
+        RuntimeContextUtils.getWatermarkInternal(getRuntimeContext()));
 
     // Enqueue to process the recovered input splits.
     enqueueProcessSplits();
@@ -161,7 +168,9 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
       // there is only one log message for one data bucket.
       LOG.info("Processing input split : {}", split);
       format.open(split);
+      readMetrics.setSplitLatestCommit(split.getLatestCommit());
     }
+
     try {
       consumeAsMiniBatch(split);
     } finally {
@@ -225,6 +234,12 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
     }
   }
 
+  private void registerMetrics() {
+    MetricGroup metrics = getRuntimeContext().getMetricGroup();
+    readMetrics = new FlinkStreamReadMetrics(metrics);
+    readMetrics.registerMetrics();
+  }
+
   public static OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory(MergeOnReadInputFormat format) {
     return new OperatorFactory(format);
   }
@@ -233,8 +248,8 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
     IDLE, RUNNING
   }
 
-  private static class OperatorFactory extends AbstractStreamOperatorFactoryAdapter<RowData>
-      implements OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> {
+  private static class OperatorFactory extends AbstractStreamOperatorFactory<RowData>
+      implements OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData>, YieldingOperatorFactoryAdapter<RowData> {
 
     private final MergeOnReadInputFormat format;
 
@@ -245,7 +260,7 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
     @SuppressWarnings("unchecked")
     @Override
     public <O extends StreamOperator<RowData>> O createStreamOperator(StreamOperatorParameters<RowData> parameters) {
-      StreamReadOperator operator = new StreamReadOperator(format, processingTimeService, getMailboxExecutorAdapter());
+      StreamReadOperator operator = new StreamReadOperator(format, processingTimeService, getMailboxExecutor());
       operator.setup(parameters.getContainingTask(), parameters.getStreamConfig(), parameters.getOutput());
       return (O) operator;
     }

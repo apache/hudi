@@ -21,7 +21,6 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.HoodieTestCommitGenerator;
 import org.apache.hudi.client.SparkRDDReadClient;
-import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -30,12 +29,12 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.providers.SparkProvider;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -46,6 +45,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.provider.Arguments;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.security.SecureRandom;
@@ -67,7 +68,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieRepairTool extends HoodieCommonTestHarness implements SparkProvider {
-  private static final Logger LOG = LogManager.getLogger(TestHoodieRepairTool.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieRepairTool.class);
   // Instant time -> List<Pair<relativePartitionPath, fileId>>
   private static final Map<String, List<Pair<String, String>>> BASE_FILE_INFO = new HashMap<>();
   private static final Map<String, List<Pair<String, String>>> LOG_FILE_INFO = new HashMap<>();
@@ -93,7 +94,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
     boolean initialized = spark != null;
     if (!initialized) {
       SparkConf sparkConf = conf();
-      SparkRDDWriteClient.registerClasses(sparkConf);
+      HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
       SparkRDDReadClient.addHoodieSupport(sparkConf);
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();
@@ -128,7 +129,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
   }
 
   @AfterAll
-  public static synchronized void resetSpark() {
+  public static synchronized void resetSpark() throws IOException {
     if (spark != null) {
       spark.close();
       spark = null;
@@ -136,13 +137,13 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
   }
 
   private void cleanUpDanglingDataFilesInFS() {
-    FileSystem fs = metaClient.getFs();
+    HoodieStorage storage = metaClient.getStorage();
     DANGLING_DATA_FILE_LIST.forEach(
         relativeFilePath -> {
-          Path path = new Path(basePath, relativeFilePath);
+          StoragePath path = new StoragePath(basePath, relativeFilePath);
           try {
-            if (fs.exists(path)) {
-              fs.delete(path, false);
+            if (storage.exists(path)) {
+              storage.deleteFile(path);
             }
           } catch (IOException e) {
             throw new HoodieIOException("Unable to delete file: " + path);
@@ -152,8 +153,8 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
   }
 
   private void cleanUpBackupTempDir() throws IOException {
-    FileSystem fs = metaClient.getFs();
-    fs.delete(new Path(backupTempDir.toAbsolutePath().toString()), true);
+    HoodieStorage storage = metaClient.getStorage();
+    storage.deleteDirectory(new StoragePath(backupTempDir.toAbsolutePath().toString()));
   }
 
   private static void initDanglingDataFileList() {
@@ -193,10 +194,14 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
     SecureRandom random = new SecureRandom();
     long randomLong = random.nextLong();
     String emptyBackupPath = "/tmp/empty_backup_" + randomLong;
-    FSUtils.createPathIfNotExists(metaClient.getFs(), new Path(emptyBackupPath));
+    FSUtils.createPathIfNotExists(metaClient.getStorage(),
+        new StoragePath(emptyBackupPath));
     String nonEmptyBackupPath = "/tmp/nonempty_backup_" + randomLong;
-    FSUtils.createPathIfNotExists(metaClient.getFs(), new Path(nonEmptyBackupPath));
-    FSUtils.createPathIfNotExists(metaClient.getFs(), new Path(nonEmptyBackupPath, ".hoodie"));
+    FSUtils.createPathIfNotExists(metaClient.getStorage(),
+        new StoragePath(nonEmptyBackupPath));
+    FSUtils.createPathIfNotExists(metaClient.getStorage(),
+        new StoragePath(nonEmptyBackupPath,
+            ".hoodie"));
     Object[][] data = new Object[][] {
         {null, basePath, 0}, {"/tmp/backup", basePath, 0},
         {emptyBackupPath, basePath, 0}, {basePath + "/backup", basePath, -1},
@@ -303,7 +308,7 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
   @Test
   public void testUndoWithNonExistentBackupPath() throws IOException {
     String backupPath = backupTempDir.toAbsolutePath().toString();
-    metaClient.getFs().delete(new Path(backupPath), true);
+    metaClient.getStorage().deleteDirectory(new StoragePath(backupPath));
 
     testRepairToolWithMode(
         Option.empty(), Option.empty(), HoodieRepairTool.Mode.UNDO.toString(),
@@ -342,7 +347,6 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
     HoodieRepairTool.Config config = new HoodieRepairTool.Config();
     config.backupPath = backupPath;
     config.basePath = basePath;
-    config.assumeDatePartitioning = true;
     if (startingInstantOption.isPresent()) {
       config.startingInstantTime = startingInstantOption.get();
     }
@@ -357,33 +361,34 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
 
   private void verifyFilesInFS(
       List<String> existFilePathList, List<String> nonExistFilePathList) throws IOException {
-    FileSystem fs = metaClient.getFs();
+    HoodieStorage storage = metaClient.getStorage();
 
     for (String filePath : existFilePathList) {
-      assertTrue(fs.exists(new Path(filePath)),
+      assertTrue(storage.exists(new StoragePath(filePath)),
           String.format("File %s should exist but it's not in the file system", filePath));
     }
 
     for (String filePath : nonExistFilePathList) {
-      assertFalse(fs.exists(new Path(filePath)),
+      assertFalse(storage.exists(new StoragePath(filePath)),
           String.format("File %s should not exist but it's in the file system", filePath));
     }
   }
 
   private List<String> createDanglingDataFilesInFS(String parentPath) {
-    FileSystem fs = metaClient.getFs();
-    return DANGLING_DATA_FILE_LIST.stream().map(relativeFilePath -> {
-      Path path = new Path(parentPath, relativeFilePath);
-      try {
-        fs.mkdirs(path.getParent());
-        if (!fs.exists(path)) {
-          fs.create(path, false);
-        }
-      } catch (IOException e) {
-        LOG.error("Error creating file: " + path);
-      }
-      return path.toString();
-    })
+    HoodieStorage storage = metaClient.getStorage();
+    return DANGLING_DATA_FILE_LIST.stream()
+        .map(relativeFilePath -> {
+          StoragePath path = new StoragePath(parentPath, relativeFilePath);
+          try {
+            storage.createDirectory(path.getParent());
+            if (!storage.exists(path)) {
+              storage.create(path, false);
+            }
+          } catch (IOException e) {
+            LOG.error("Error creating file: " + path);
+          }
+          return path.toString();
+        })
         .collect(Collectors.toList());
   }
 

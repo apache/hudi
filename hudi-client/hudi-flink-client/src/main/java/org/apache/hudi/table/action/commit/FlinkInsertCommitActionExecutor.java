@@ -21,29 +21,30 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import java.util.Iterator;
 import java.util.List;
 
 /**
  * Flink insert commit action executor.
  */
-public class FlinkInsertCommitActionExecutor<T extends HoodieRecordPayload<T>> extends BaseFlinkCommitActionExecutor<T> {
+public class FlinkInsertCommitActionExecutor<T> extends BaseFlinkCommitActionExecutor<T> {
 
-  private List<HoodieRecord<T>> inputRecords;
+  private final Iterator<HoodieRecord<T>> inputRecords;
 
   public FlinkInsertCommitActionExecutor(HoodieEngineContext context,
                                          HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+                                         BucketInfo bucketInfo,
                                          HoodieWriteConfig config,
                                          HoodieTable table,
                                          String instantTime,
-                                         List<HoodieRecord<T>> inputRecords) {
-    super(context, writeHandle, config, table, instantTime, WriteOperationType.INSERT);
+                                         Iterator<HoodieRecord<T>> inputRecords) {
+    super(context, writeHandle, bucketInfo, config, table, instantTime, WriteOperationType.INSERT);
     this.inputRecords = inputRecords;
   }
 

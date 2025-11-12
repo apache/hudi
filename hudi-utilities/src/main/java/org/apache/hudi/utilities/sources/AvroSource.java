@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.avro.generic.GenericRecord;
@@ -31,5 +32,10 @@ public abstract class AvroSource extends Source<JavaRDD<GenericRecord>> {
   public AvroSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider, SourceType.AVRO);
+  }
+
+  @Override
+  protected final InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
+    throw new UnsupportedOperationException("AvroSource#fetchNewData should not be called");
   }
 }

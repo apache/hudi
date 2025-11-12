@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utilities.sources.helpers.gcs;
 
+import org.apache.hudi.utilities.config.GCSEventsSourceConfig;
+
 /**
  * Config keys and defaults for GCS Ingestion
  */
@@ -27,13 +29,15 @@ public class GcsIngestionConfig {
    * The GCP Project Id where the Pubsub Subscription to ingest from resides. Needed to connect
    * to the Pubsub subscription
    */
-  public static final String GOOGLE_PROJECT_ID = "hoodie.deltastreamer.source.gcs.project.id";
+  @Deprecated
+  public static final String GOOGLE_PROJECT_ID = GCSEventsSourceConfig.GOOGLE_PROJECT_ID.key();
 
   /**
    * The GCP Pubsub subscription id for the GCS Notifications. Needed to connect to the Pubsub
    * subscription.
    */
-  public static final String PUBSUB_SUBSCRIPTION_ID = "hoodie.deltastreamer.source.gcs.subscription.id";
+  @Deprecated
+  public static final String PUBSUB_SUBSCRIPTION_ID = GCSEventsSourceConfig.PUBSUB_SUBSCRIPTION_ID.key();
 
   // Size of inbound messages when pulling data, in bytes
   public static final int DEFAULT_MAX_INBOUND_MESSAGE_SIZE = 20 * 1024 * 1024; // bytes

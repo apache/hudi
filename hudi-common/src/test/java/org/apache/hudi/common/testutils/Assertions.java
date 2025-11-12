@@ -20,6 +20,7 @@
 package org.apache.hudi.common.testutils;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,5 +38,14 @@ public class Assertions {
       assertEquals(iter1.next(), iter2.next(), message);
     }
     assertTrue(!iter1.hasNext() && !iter2.hasNext(), message);
+  }
+
+  public static void assertListEquals(List<?> expected, List<?> actual) {
+    Iterator<?> iter1 = expected.iterator();
+    Iterator<?> iter2 = actual.iterator();
+    while (iter1.hasNext() && iter2.hasNext()) {
+      assertEquals(iter1.next(), iter2.next());
+    }
+    assertTrue(!iter1.hasNext() && !iter2.hasNext());
   }
 }

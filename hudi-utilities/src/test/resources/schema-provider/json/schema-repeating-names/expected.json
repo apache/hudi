@@ -1,0 +1,153 @@
+{
+  "type": "record",
+  "name": "schema_repeating_names",
+  "doc": "",
+  "fields": [
+    {
+      "name": "op",
+      "type": [
+        "null",
+        "string"
+      ],
+      "doc": "",
+      "default": null
+    },
+    {
+      "name": "before",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "ValueSchema",
+          "fields": [
+            {
+              "name": "fileName",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "",
+              "default": null
+            },
+            {
+              "name": "functionCode",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "",
+              "default": null
+            }
+          ]
+        }
+      ],
+      "doc": "",
+      "default": null
+    },
+    {
+      "name": "after",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "ValueSchema1",
+          "fields": [
+            {
+              "name": "fileName",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "",
+              "default": null
+            },
+            {
+              "name": "functionCode",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "",
+              "default": null
+            }
+          ]
+        }
+      ],
+      "doc": "",
+      "default": null
+    },
+    {
+      "name": "source",
+      "type": {
+        "type": "record",
+        "name": "io.debezium.connector.mysql.Source",
+        "fields": [
+          {
+            "name": "query",
+            "type": [
+              "null",
+              "string"
+            ],
+            "doc": "",
+            "default": null
+          },
+          {
+            "name": "thread",
+            "type": [
+              "null",
+              "long"
+            ],
+            "doc": "",
+            "default": null
+          },
+          {
+            "name": "version",
+            "type": [
+              "null",
+              "string"
+            ],
+            "doc": "",
+            "default": null
+          },
+          {
+            "name": "pos",
+            "type": [
+              "null",
+              "long"
+            ],
+            "doc": "",
+            "default": null
+          },
+          {
+            "name": "ts_ms",
+            "type": [
+              "null",
+              "long"
+            ],
+            "doc": "",
+            "default": null
+          }
+        ]
+      },
+      "doc": ""
+    },
+    {
+      "name": "program",
+      "type": [
+        "null",
+        "string"
+      ],
+      "doc": "",
+      "default": null
+    },
+    {
+      "name": "ts_ms",
+      "type": [
+        "null",
+        "long"
+      ],
+      "doc": "",
+      "default": null
+    }
+  ]
+}

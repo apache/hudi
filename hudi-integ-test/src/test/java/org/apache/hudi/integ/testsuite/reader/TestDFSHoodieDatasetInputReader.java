@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.Schema;
@@ -38,6 +39,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 
@@ -51,18 +53,18 @@ public class TestDFSHoodieDatasetInputReader extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(false, false);
+    UtilitiesTestBase.initTestServices(true, false, false);
   }
 
   @AfterAll
-  public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
+  public static void cleanupClass() throws IOException {
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
-    HoodieTestUtils.init(jsc.hadoopConfiguration(), dfsBasePath);
+    HoodieTestUtils.init(HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()), basePath);
   }
 
   @AfterEach
@@ -117,7 +119,7 @@ public class TestDFSHoodieDatasetInputReader extends UtilitiesTestBase {
 
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() throws Exception {
     // Prepare the AvroParquetIO
-    return HoodieWriteConfig.newBuilder().withPath(dfsBasePath)
+    return HoodieWriteConfig.newBuilder().withPath(basePath)
         .withParallelism(2, 2)
         .withDeleteParallelism(2)
         .withSchema(HoodieTestDataGenerator

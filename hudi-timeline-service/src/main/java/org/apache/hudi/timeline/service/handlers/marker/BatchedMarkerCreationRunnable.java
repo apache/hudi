@@ -20,8 +20,8 @@ package org.apache.hudi.timeline.service.handlers.marker;
 
 import org.apache.hudi.common.util.HoodieTimer;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -29,7 +29,7 @@ import java.util.List;
  * A runnable for batch processing marker creation requests.
  */
 public class BatchedMarkerCreationRunnable implements Runnable {
-  private static final Logger LOG = LogManager.getLogger(BatchedMarkerCreationRunnable.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BatchedMarkerCreationRunnable.class);
 
   private final List<BatchedMarkerCreationContext> requestContextList;
 
@@ -40,12 +40,12 @@ public class BatchedMarkerCreationRunnable implements Runnable {
   @Override
   public void run() {
     LOG.debug("Start processing create marker requests");
-    HoodieTimer timer = new HoodieTimer().startTimer();
+    HoodieTimer timer = HoodieTimer.start();
 
     for (BatchedMarkerCreationContext requestContext : requestContextList) {
       requestContext.getMarkerDirState().processMarkerCreationRequests(
           requestContext.getFutures(), requestContext.getFileIndex());
     }
-    LOG.debug("Finish batch processing of create marker requests in " + timer.endTimer() + " ms");
+    LOG.debug("Finish batch processing of create marker requests in {} ms", timer.endTimer());
   }
 }

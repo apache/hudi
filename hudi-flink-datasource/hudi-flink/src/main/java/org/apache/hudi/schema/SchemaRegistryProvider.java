@@ -18,9 +18,9 @@
 
 package org.apache.hudi.schema;
 
+import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.util.StreamerUtil;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,11 +30,16 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static org.apache.hudi.common.util.ConfigUtils.OLD_SCHEMAPROVIDER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.SCHEMAPROVIDER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Obtains latest schema from the Confluent/Kafka schema-registry.
@@ -45,15 +50,21 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   private final TypedProperties config;
 
-
   /**
    * Configs supported.
    */
   public static class Config {
+    private static final ConfigProperty<String> SRC_SCHEMA_REGISTRY_URL = ConfigProperty
+        .key(SCHEMAPROVIDER_CONFIG_PREFIX + "registry.url")
+        .noDefaultValue()
+        .withAlternatives(OLD_SCHEMAPROVIDER_CONFIG_PREFIX + "registry.url")
+        .withDocumentation("The schema of the source you are reading from e.g. https://foo:bar@schemaregistry.org");
 
-    private static final String SRC_SCHEMA_REGISTRY_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.url";
-    private static final String TARGET_SCHEMA_REGISTRY_URL_PROP =
-        "hoodie.deltastreamer.schemaprovider.registry.targetUrl";
+    private static final ConfigProperty<String> TARGET_SCHEMA_REGISTRY_URL = ConfigProperty
+        .key(SCHEMAPROVIDER_CONFIG_PREFIX + "registry.targetUrl")
+        .noDefaultValue()
+        .withAlternatives(OLD_SCHEMAPROVIDER_CONFIG_PREFIX + "registry.targetUrl")
+        .withDocumentation("The schema of the target you are writing to e.g. https://foo:bar@schemaregistry.org");
   }
 
   /**
@@ -86,7 +97,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
   }
 
   protected void setAuthorizationHeader(String creds, HttpURLConnection connection) {
-    String encodedAuth = Base64.getEncoder().encodeToString(creds.getBytes(StandardCharsets.UTF_8));
+    String encodedAuth = Base64.getEncoder().encodeToString(getUTF8Bytes(creds));
     connection.setRequestProperty("Authorization", "Basic " + encodedAuth);
   }
 
@@ -96,7 +107,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   public SchemaRegistryProvider(TypedProperties props) {
     this.config = props;
-    StreamerUtil.checkRequiredProperties(props, Collections.singletonList(Config.SRC_SCHEMA_REGISTRY_URL_PROP));
+    checkRequiredConfigProperties(props, Collections.singletonList(Config.SRC_SCHEMA_REGISTRY_URL));
   }
 
   private Schema getSchema(String registryUrl) throws IOException {
@@ -105,7 +116,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   @Override
   public Schema getSourceSchema() {
-    String registryUrl = config.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
+    String registryUrl = getStringWithAltKeys(config, Config.SRC_SCHEMA_REGISTRY_URL);
     try {
       return getSchema(registryUrl);
     } catch (IOException ioe) {
@@ -115,8 +126,9 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   @Override
   public Schema getTargetSchema() {
-    String registryUrl = config.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
-    String targetRegistryUrl = config.getString(Config.TARGET_SCHEMA_REGISTRY_URL_PROP, registryUrl);
+    String registryUrl = getStringWithAltKeys(config, Config.SRC_SCHEMA_REGISTRY_URL);
+    String targetRegistryUrl = getStringWithAltKeys(
+        config, Config.TARGET_SCHEMA_REGISTRY_URL, registryUrl);
     try {
       return getSchema(targetRegistryUrl);
     } catch (IOException ioe) {

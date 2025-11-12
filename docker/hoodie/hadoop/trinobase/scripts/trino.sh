@@ -18,4 +18,8 @@
 # under the License.
 #
 
+# Copy the trino bundle at run time so that locally built bundle overrides the one that is present in the image
+echo "Copying trino bundle to ${TRINO_HOME}/plugin/hive/"
+cp ${HUDI_TRINO_BUNDLE} ${TRINO_HOME}/plugin/hive/
+
 /usr/local/trino/bin/launcher run

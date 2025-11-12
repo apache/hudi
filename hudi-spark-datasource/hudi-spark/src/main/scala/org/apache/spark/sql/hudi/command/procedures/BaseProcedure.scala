@@ -18,29 +18,22 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
-import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.model.HoodieRecordPayload
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.HoodieClusteringException
+import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.HoodieIndex.IndexType
+
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
 abstract class BaseProcedure extends Procedure {
-  val INVALID_ARG_INDEX: Int = -1
-
   val spark: SparkSession = SparkSession.active
   val jsc = new JavaSparkContext(spark.sparkContext)
 
   protected def sparkSession: SparkSession = spark
-
-  protected def createHoodieClient(jsc: JavaSparkContext, basePath: String): SparkRDDWriteClient[_ <: HoodieRecordPayload[_ <: AnyRef]] = {
-    val config = getWriteConfig(basePath)
-    new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), config)
-  }
 
   protected def getWriteConfig(basePath: String): HoodieWriteConfig = {
     HoodieWriteConfig.newBuilder
@@ -49,42 +42,43 @@ abstract class BaseProcedure extends Procedure {
       .build
   }
 
-  protected def checkArgs(target: Array[ProcedureParameter], args: ProcedureArgs): Unit = {
-    val internalRow = args.internalRow
-    for (i <- target.indices) {
-      if (target(i).required) {
-        var argsIndex: Integer = null
-        if (args.isNamedArgs) {
-          argsIndex = getArgsIndex(target(i).name, args)
-        } else {
-          argsIndex = getArgsIndex(i.toString, args)
-        }
-        assert(-1 != argsIndex && internalRow.get(argsIndex, target(i).dataType) != null,
-          s"Argument: ${target(i).name} is required")
-      }
+  protected def createMetaClient(jsc: JavaSparkContext, basePath: String): HoodieTableMetaClient = {
+    HoodieTableMetaClient.builder
+      .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
+      .setBasePath(basePath).build
+  }
+
+  protected def getParamKey(parameter: ProcedureParameter, isNamedArgs: Boolean): String = {
+    if (isNamedArgs) {
+      parameter.name
+    } else {
+      parameter.index.toString
     }
   }
 
-  protected def getArgsIndex(key: String, args: ProcedureArgs): Integer = {
-    args.map.getOrDefault(key, INVALID_ARG_INDEX)
+  protected def checkArgs(parameters: Array[ProcedureParameter], args: ProcedureArgs): Unit = {
+    for (parameter <- parameters) {
+      if (parameter.required) {
+        val paramKey = getParamKey(parameter, args.isNamedArgs)
+        assert(args.map.containsKey(paramKey) &&
+          args.internalRow.get(args.map.get(paramKey), parameter.dataType) != null,
+          s"Argument: ${parameter.name} is required")
+      }
+    }
   }
 
   protected def getArgValueOrDefault(args: ProcedureArgs, parameter: ProcedureParameter): Option[Any] = {
-    var argsIndex: Int = INVALID_ARG_INDEX
-    if (args.isNamedArgs) {
-      argsIndex = getArgsIndex(parameter.name, args)
+    val paramKey = getParamKey(parameter, args.isNamedArgs)
+    if (args.map.containsKey(paramKey)) {
+      Option.apply(getInternalRowValue(args.internalRow, args.map.get(paramKey), parameter.dataType))
     } else {
-      argsIndex = getArgsIndex(parameter.index.toString, args)
+      Option.apply(parameter.default)
     }
+  }
 
-    if (argsIndex.equals(INVALID_ARG_INDEX)) {
-      parameter.default match {
-        case option: Option[Any] => option
-        case _ => Option.apply(parameter.default)
-      }
-    } else {
-      Option.apply(getInternalRowValue(args.internalRow, argsIndex, parameter.dataType))
-    }
+  protected def isArgDefined(args: ProcedureArgs, parameter: ProcedureParameter): Boolean = {
+    val paramKey = getParamKey(parameter, args.isNamedArgs)
+    args.map.containsKey(paramKey)
   }
 
   protected def getInternalRowValue(row: InternalRow, index: Int, dataType: DataType): Any = {
@@ -111,8 +105,36 @@ abstract class BaseProcedure extends Procedure {
       t => HoodieCLIUtils.getHoodieCatalogTable(sparkSession, t.asInstanceOf[String]).tableLocation)
       .getOrElse(
         tablePath.map(p => p.asInstanceOf[String]).getOrElse(
-          throw new HoodieClusteringException("Table name or table path must be given one"))
+          throw new HoodieException("Table name or table path must be given one"))
       )
   }
 
+  protected def getDbAndTableName(tableName: String): (String, String) = {
+    val names = tableName.split("\\.")
+    if (names.length == 1) {
+      ("default", names(0))
+    } else if (names.length == 2) {
+      (names(0), names(1))
+    } else {
+      throw new HoodieException(s"Table name: $tableName is not valid")
+    }
+  }
+
+  protected def validateFilter(filter: String, schema: StructType): Unit = {
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.validateFilterExpression(filter, schema, sparkSession) match {
+        case Left(errorMessage) =>
+          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
+        case Right(_) => // Validation passed, continue
+      }
+    }
+  }
+
+  protected def applyFilter(results: Seq[Row], filter: String, schema: StructType): Seq[Row] = {
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.evaluateFilter(results, filter, schema, sparkSession)
+    } else {
+      results
+    }
+  }
 }

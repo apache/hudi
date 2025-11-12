@@ -14,7 +14,7 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-# RFC-40: Hudi Snowflake Integration
+# RFC-41: Hudi Snowflake Integration
 
 
 

@@ -18,65 +18,69 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.fs.inline.InLineFSUtils;
-import org.apache.hudi.common.fs.inline.InLineFileSystem;
-import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.avro.AvroSchemaCache;
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ParquetReaderIterator;
-import org.apache.hudi.io.storage.HoodieParquetConfig;
-import org.apache.hudi.io.storage.HoodieParquetStreamWriter;
-import org.apache.parquet.avro.AvroParquetReader;
-import org.apache.parquet.avro.AvroReadSupport;
-import org.apache.parquet.avro.AvroSchemaConverter;
-import org.apache.parquet.hadoop.ParquetReader;
-import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import org.apache.parquet.hadoop.util.HadoopInputFile;
-import org.apache.parquet.io.InputFile;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.inline.InLineFSUtils;
 
-import javax.annotation.Nonnull;
+import org.apache.avro.Schema;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
+
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION;
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED;
+import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
+import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 
 /**
  * HoodieParquetDataBlock contains a list of records serialized using Parquet.
  */
 public class HoodieParquetDataBlock extends HoodieDataBlock {
 
-  private final Option<CompressionCodecName> compressionCodecName;
+  protected final Option<String> compressionCodecName;
+  protected final Option<Double> expectedCompressionRatio;
+  protected final Option<Boolean> useDictionaryEncoding;
 
-  public HoodieParquetDataBlock(FSDataInputStream inputStream,
+  public HoodieParquetDataBlock(Supplier<SeekableDataInputStream> inputStreamSupplier,
                                 Option<byte[]> content,
                                 boolean readBlockLazily,
                                 HoodieLogBlockContentLocation logBlockContentLocation,
                                 Option<Schema> readerSchema,
                                 Map<HeaderMetadataType, String> header,
-                                Map<HeaderMetadataType, String> footer,
+                                Map<FooterMetadataType, String> footer,
                                 String keyField) {
-    super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
+    super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
 
     this.compressionCodecName = Option.empty();
+    this.expectedCompressionRatio = Option.empty();
+    this.useDictionaryEncoding = Option.empty();
   }
 
-  public HoodieParquetDataBlock(
-      @Nonnull List<IndexedRecord> records,
-      @Nonnull Map<HeaderMetadataType, String> header,
-      @Nonnull String keyField,
-      @Nonnull CompressionCodecName compressionCodecName
-  ) {
+  public HoodieParquetDataBlock(List<HoodieRecord> records,
+                                Map<HeaderMetadataType, String> header,
+                                String keyField,
+                                String compressionCodecName,
+                                double expectedCompressionRatio,
+                                boolean useDictionaryEncoding) {
     super(records, header, new HashMap<>(), keyField);
 
     this.compressionCodecName = Option.of(compressionCodecName);
+    this.expectedCompressionRatio = Option.of(expectedCompressionRatio);
+    this.useDictionaryEncoding = Option.of(useDictionaryEncoding);
   }
 
   @Override
@@ -85,50 +89,16 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected byte[] serializeRecords(List<IndexedRecord> records) throws IOException {
-    if (records.size() == 0) {
-      return new byte[0];
-    }
+  protected ByteArrayOutputStream serializeRecords(List<HoodieRecord> records, HoodieStorage storage) throws IOException {
+    Map<String, String> paramsMap = new HashMap<>();
+    paramsMap.put(PARQUET_COMPRESSION_CODEC_NAME.key(), compressionCodecName.get());
+    paramsMap.put(PARQUET_COMPRESSION_RATIO_FRACTION.key(), String.valueOf(expectedCompressionRatio.get()));
+    paramsMap.put(PARQUET_DICTIONARY_ENABLED.key(), String.valueOf(useDictionaryEncoding.get()));
+    Schema writerSchema = AvroSchemaCache.intern(new Schema.Parser().parse(
+        super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA)));
 
-    Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
-
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
-        new AvroSchemaConverter().convert(writerSchema), writerSchema, Option.empty());
-
-    HoodieParquetConfig<HoodieAvroWriteSupport> avroParquetConfig =
-        new HoodieParquetConfig<>(
-            writeSupport,
-            compressionCodecName.get(),
-            ParquetWriter.DEFAULT_BLOCK_SIZE,
-            ParquetWriter.DEFAULT_PAGE_SIZE,
-            1024 * 1024 * 1024,
-            new Configuration(),
-            Double.parseDouble(String.valueOf(0.1)));//HoodieStorageConfig.PARQUET_COMPRESSION_RATIO.defaultValue()));
-
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-
-    try (FSDataOutputStream outputStream = new FSDataOutputStream(baos)) {
-      try (HoodieParquetStreamWriter<IndexedRecord> parquetWriter = new HoodieParquetStreamWriter<>(outputStream, avroParquetConfig)) {
-        for (IndexedRecord record : records) {
-          String recordKey = getRecordKey(record).orElse(null);
-          parquetWriter.writeAvro(recordKey, record);
-        }
-        outputStream.flush();
-      }
-    }
-
-    return baos.toByteArray();
-  }
-
-  public static ClosableIterator<IndexedRecord> getProjectedParquetRecordsIterator(Configuration conf,
-                                                                                   Schema readerSchema,
-                                                                                   InputFile inputFile) throws IOException {
-    AvroReadSupport.setAvroReadSchema(conf, readerSchema);
-    AvroReadSupport.setRequestedProjection(conf, readerSchema);
-
-    ParquetReader<IndexedRecord> reader =
-        AvroParquetReader.<IndexedRecord>builder(inputFile).withConf(conf).build();
-    return new ParquetReaderIterator<>(reader);
+    return HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(PARQUET)
+        .serializeRecordsToLogBlock(storage, records, writerSchema, getSchema(), getKeyFieldName(), paramsMap);
   }
 
   /**
@@ -137,28 +107,78 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
    *       requested by the caller (providing projected Reader's schema)
    */
   @Override
-  protected ClosableIterator<IndexedRecord> readRecordsFromBlockPayload() throws IOException {
+  protected <T> ClosableIterator<HoodieRecord<T>> readRecordsFromBlockPayload(HoodieRecordType type) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
     //       is appropriately carried over
-    Configuration inlineConf = new Configuration(blockContentLoc.getHadoopConf());
-    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
-
-    Path inlineLogFilePath = InLineFSUtils.getInlineFilePath(
+    StorageConfiguration<?> inlineConf = blockContentLoc.getStorage().getConf().getInline();
+    StoragePath inlineLogFilePath = InLineFSUtils.getInlineFilePath(
         blockContentLoc.getLogFile().getPath(),
-        blockContentLoc.getLogFile().getPath().getFileSystem(inlineConf).getScheme(),
+        blockContentLoc.getLogFile().getPath().toUri().getScheme(),
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
 
-    return getProjectedParquetRecordsIterator(
-        inlineConf,
-        readerSchema,
-        HadoopInputFile.fromPath(inlineLogFilePath, inlineConf));
+    HoodieStorage inlineStorage = getBlockContentLocation().get().getStorage().newInstance(inlineLogFilePath, inlineConf);
+    Schema writerSchema = new Schema.Parser().parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+
+    ClosableIterator<HoodieRecord<T>> iterator = HoodieIOFactory.getIOFactory(inlineStorage)
+        .getReaderFactory(type)
+        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, inlineLogFilePath, PARQUET, Option.empty())
+        .getRecordIterator(writerSchema, readerSchema);
+    return iterator;
   }
 
   @Override
-  protected ClosableIterator<IndexedRecord> deserializeRecords(byte[] content) {
+  protected <T> ClosableIterator<T> readRecordsFromBlockPayload(HoodieReaderContext<T> readerContext) throws IOException {
+    HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
+
+    // NOTE: It's important to extend Hadoop configuration here to make sure configuration
+    //       is appropriately carried over
+    StorageConfiguration<?> inlineConf = blockContentLoc.getStorage().getConf().getInline();
+
+    StoragePath inlineLogFilePath = InLineFSUtils.getInlineFilePath(
+        blockContentLoc.getLogFile().getPath(),
+        blockContentLoc.getLogFile().getPath().toUri().getScheme(),
+        blockContentLoc.getContentPositionInLogFile(),
+        blockContentLoc.getBlockSize());
+    HoodieStorage inlineStorage = blockContentLoc.getStorage().newInstance(inlineLogFilePath, inlineConf);
+
+    Schema writerSchema =
+        new Schema.Parser().parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+
+    return readerContext.getFileRecordIterator(
+        inlineLogFilePath, 0, blockContentLoc.getBlockSize(),
+        writerSchema,
+        readerSchema,
+        inlineStorage);
+  }
+
+  @Override
+  protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException {
+    throw new UnsupportedOperationException("Should not be invoked");
+  }
+
+  /**
+   * Streaming deserialization of records.
+   *
+   * @param inputStream The input stream from which to read the records.
+   * @param contentLocation The location within the input stream where the content starts.
+   * @param bufferSize The size of the buffer to use for reading the records.
+   * @return A ClosableIterator over HoodieRecord<T>.
+   * @throws IOException If there is an error reading or deserializing the records.
+   */
+  protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(
+          SeekableDataInputStream inputStream,
+          HoodieLogBlockContentLocation contentLocation,
+          HoodieRecordType type,
+          int bufferSize
+  ) throws IOException {
+    throw new UnsupportedOperationException("Should not be invoked");
+  }
+
+  @Override
+  protected <T> ClosableIterator<T> deserializeRecords(HoodieReaderContext<T> readerContext, byte[] content) throws IOException {
     throw new UnsupportedOperationException("Should not be invoked");
   }
 }

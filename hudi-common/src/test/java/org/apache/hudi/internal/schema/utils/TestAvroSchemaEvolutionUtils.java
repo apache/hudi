@@ -18,21 +18,24 @@
 
 package org.apache.hudi.internal.schema.utils;
 
-import org.apache.avro.JsonProperties;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.exception.HoodieNullSchemaTypeException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.InternalSchemaBuilder;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.action.TableChanges;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
-import org.junit.jupiter.api.Test;
+
+import org.apache.avro.JsonProperties;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -44,16 +47,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * Tests {@link AvroSchemaEvolutionUtils}.
+ */
 public class TestAvroSchemaEvolutionUtils {
 
   String schemaStr = "{\"type\":\"record\",\"name\":\"newTableName\",\"fields\":[{\"name\":\"id\",\"type\":\"int\"},{\"name\":\"data\","
       + "\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"preferences\",\"type\":[\"null\","
-      + "{\"type\":\"record\",\"name\":\"newTableName_preferences\",\"fields\":[{\"name\":\"feature1\","
+      + "{\"type\":\"record\",\"name\":\"preferences\",\"namespace\":\"newTableName\",\"fields\":[{\"name\":\"feature1\","
       + "\"type\":\"boolean\"},{\"name\":\"feature2\",\"type\":[\"null\",\"boolean\"],\"default\":null}]}],"
       + "\"default\":null},{\"name\":\"locations\",\"type\":{\"type\":\"map\",\"values\":{\"type\":\"record\","
-      + "\"name\":\"newTableName_locations\",\"fields\":[{\"name\":\"lat\",\"type\":\"float\"},{\"name\":\"long\","
+      + "\"name\":\"locations\",\"namespace\":\"newTableName\",\"fields\":[{\"name\":\"lat\",\"type\":\"float\"},{\"name\":\"long\","
       + "\"type\":\"float\"}]}}},{\"name\":\"points\",\"type\":[\"null\",{\"type\":\"array\",\"items\":[\"null\","
-      + "{\"type\":\"record\",\"name\":\"newTableName_points\",\"fields\":[{\"name\":\"x\",\"type\":\"long\"},"
+      + "{\"type\":\"record\",\"name\":\"points\",\"namespace\":\"newTableName\",\"fields\":[{\"name\":\"x\",\"type\":\"long\"},"
       + "{\"name\":\"y\",\"type\":\"long\"}]}]}],\"default\":null},{\"name\":\"doubles\",\"type\":{\"type\":\"array\",\"items\":\"double\"}},"
       + "{\"name\":\"properties\",\"type\":[\"null\",{\"type\":\"map\",\"values\":[\"null\",\"string\"]}],\"default\":null}]}";
 
@@ -69,10 +78,10 @@ public class TestAvroSchemaEvolutionUtils {
         LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG)),
         LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG)),
         Schema.create(Schema.Type.STRING),
-        LogicalTypes.uuid().addToSchema(Schema.createFixed("uuid_fixed", null, null, 16)),
-        Schema.createFixed("fixed_12", null, null, 12),
+        LogicalTypes.uuid().addToSchema(Schema.createFixed("t1.fixed", null, null, 16)),
+        Schema.createFixed("t1.fixed", null, null, 12),
         Schema.create(Schema.Type.BYTES),
-        LogicalTypes.decimal(9, 4).addToSchema(Schema.createFixed("decimal_9_4", null, null, 4))};
+        LogicalTypes.decimal(9, 4).addToSchema(Schema.createFixed("t1.fixed", null, null, 4))};
 
     Type[] primitiveTypes = new Type[] {
         Types.BooleanType.get(),
@@ -126,11 +135,11 @@ public class TestAvroSchemaEvolutionUtils {
         new Schema.Field("time", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG))), null, JsonProperties.NULL_VALUE),
         new Schema.Field("timestamp", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))), null, JsonProperties.NULL_VALUE),
         new Schema.Field("string", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.STRING)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("uuid", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.uuid().addToSchema(Schema.createFixed("uuid_fixed", null, null, 16))), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("fixed", AvroInternalSchemaConverter.nullableSchema(Schema.createFixed("fixed_10", null, null, 10)), null, JsonProperties.NULL_VALUE),
+        new Schema.Field("uuid", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.uuid().addToSchema(Schema.createFixed("t1.uuid.fixed", null, null, 16))), null, JsonProperties.NULL_VALUE),
+        new Schema.Field("fixed", AvroInternalSchemaConverter.nullableSchema(Schema.createFixed("t1.fixed.fixed", null, null, 10)), null, JsonProperties.NULL_VALUE),
         new Schema.Field("binary", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.BYTES)), null, JsonProperties.NULL_VALUE),
         new Schema.Field("decimal", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.decimal(10, 2)
-            .addToSchema(Schema.createFixed("decimal_10_2", null, null, 5))), null, JsonProperties.NULL_VALUE));
+            .addToSchema(Schema.createFixed("t1.decimal.fixed", null, null, 5))), null, JsonProperties.NULL_VALUE));
     Schema convertedSchema = AvroInternalSchemaConverter.convert(record, "t1");
     Assertions.assertEquals(convertedSchema, schema);
     Types.RecordType convertedRecord = AvroInternalSchemaConverter.convert(schema).getRecord();
@@ -143,9 +152,9 @@ public class TestAvroSchemaEvolutionUtils {
 
   @Test
   public void testArrayType() {
-    Type arrayNestRecordType = Types.ArrayType.get(1, false,
-        Types.RecordType.get(Arrays.asList(Types.Field.get(2, false, "a", Types.FloatType.get()),
-            Types.Field.get(3, false, "b", Types.FloatType.get()))));
+    Type arrayNestRecordType = Types.ArrayType.get(0, false,
+        Types.RecordType.get(Arrays.asList(Types.Field.get(1, false, "a", Types.FloatType.get()),
+            Types.Field.get(2, false, "b", Types.FloatType.get()))));
 
     Schema schema = SchemaBuilder.array().items(create("t1",
         new Schema.Field("a", Schema.create(Schema.Type.FLOAT), null, null),
@@ -160,7 +169,7 @@ public class TestAvroSchemaEvolutionUtils {
   public void testComplexConvert() {
     Schema schema = new Schema.Parser().parse(schemaStr);
 
-    InternalSchema internalSchema = new InternalSchema(Types.Field.get(0, false, "id", Types.IntType.get()),
+    Types.RecordType recordType = Types.RecordType.get(Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "data", Types.StringType.get()),
         Types.Field.get(2, true, "preferences",
             Types.RecordType.get(Types.Field.get(7, false, "feature1",
@@ -169,13 +178,45 @@ public class TestAvroSchemaEvolutionUtils {
             Types.RecordType.get(Types.Field.get(11, false, "lat", Types.FloatType.get()), Types.Field.get(12, false, "long", Types.FloatType.get())), false)),
         Types.Field.get(4, true, "points", Types.ArrayType.get(13, true,
             Types.RecordType.get(Types.Field.get(14, false, "x", Types.LongType.get()), Types.Field.get(15, false, "y", Types.LongType.get())))),
-        Types.Field.get(5, false,"doubles", Types.ArrayType.get(16, false, Types.DoubleType.get())),
+        Types.Field.get(5, false, "doubles", Types.ArrayType.get(16, false, Types.DoubleType.get())),
         Types.Field.get(6, true, "properties", Types.MapType.get(17, 18, Types.StringType.get(), Types.StringType.get()))
     );
+    InternalSchema internalSchema = new InternalSchema(recordType);
 
     Type convertRecord = AvroInternalSchemaConverter.convert(schema).getRecord();
     Assertions.assertEquals(convertRecord, internalSchema.getRecord());
     Assertions.assertEquals(schema, AvroInternalSchemaConverter.convert(internalSchema, "newTableName"));
+  }
+
+  @Test
+  public void testNullFieldType() {
+    Schema schema = create("t1",
+        new Schema.Field("nullField", Schema.create(Schema.Type.NULL), null, JsonProperties.NULL_VALUE));
+    Throwable t = assertThrows(HoodieNullSchemaTypeException.class,
+        () -> AvroInternalSchemaConverter.convert(schema));
+    assertTrue(t.getMessage().contains("'t1.nullField'"));
+
+    Schema schemaArray = create("t2",
+        new Schema.Field("nullArray", Schema.createArray(Schema.create(Schema.Type.NULL)), null, null));
+    t = assertThrows(HoodieNullSchemaTypeException.class,
+        () -> AvroInternalSchemaConverter.convert(schemaArray));
+    assertTrue(t.getMessage().contains("'t2.nullArray.element'"));
+
+    Schema schemaMap = create("t3",
+        new Schema.Field("nullMap", Schema.createMap(Schema.create(Schema.Type.NULL)), null, null));
+    t = assertThrows(HoodieNullSchemaTypeException.class,
+        () -> AvroInternalSchemaConverter.convert(schemaMap));
+    assertTrue(t.getMessage().contains("'t3.nullMap.value'"));
+
+
+    Schema schemaComplex = create("t4",
+        new Schema.Field("complexField", Schema.createMap(
+            create("nestedStruct",
+                new Schema.Field("nestedArray", Schema.createArray(Schema.createMap(Schema.create(Schema.Type.NULL))),
+                    null, null))), null, null));
+    t = assertThrows(HoodieNullSchemaTypeException.class,
+        () -> AvroInternalSchemaConverter.convert(schemaComplex));
+    assertTrue(t.getMessage().contains("'t4.nestedStruct.nestedArray.element.value'"));
   }
 
   @Test
@@ -202,6 +243,24 @@ public class TestAvroSchemaEvolutionUtils {
     Assertions.assertEquals(newRecord, recordWithNewId);
   }
 
+  @Test
+  public void testFixNullOrdering() {
+    Schema schema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/nullWrong.avsc");
+    Schema expectedSchema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/nullRight.avsc");
+    Assertions.assertEquals(expectedSchema, AvroInternalSchemaConverter.fixNullOrdering(schema));
+    Assertions.assertEquals(expectedSchema, AvroInternalSchemaConverter.fixNullOrdering(expectedSchema));
+  }
+
+  @Test
+  public void testFixNullOrderingSameSchemaCheck() {
+    Schema schema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/source_evolved.avsc");
+    Assertions.assertEquals(schema, AvroInternalSchemaConverter.fixNullOrdering(schema));
+  }
+
+  public enum Enum {
+    ENUM1, ENUM2
+  }
+
   /**
    * test record data type changes.
    * int => long/float/double/string
@@ -211,9 +270,11 @@ public class TestAvroSchemaEvolutionUtils {
    * Decimal => Decimal/String
    * String => date/decimal
    * date => String
+   * enum => String
    */
   @Test
   public void testReWriteRecordWithTypeChanged() {
+    String enumSchema = "{\"type\":\"enum\",\"name\":\"Enum\",\"namespace\":\"org.apache.hudi.internal.schema.utils.TestAvroSchemaEvolutionUtils\",\"symbols\":[\"ENUM1\",\"ENUM2\"]}";
     Schema avroSchema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"h0_record\",\"namespace\":\"hoodie.h0\",\"fields\""
         + ":[{\"name\":\"id\",\"type\":[\"null\",\"int\"],\"default\":null},"
         + "{\"name\":\"comb\",\"type\":[\"null\",\"int\"],\"default\":null},"
@@ -235,7 +296,9 @@ public class TestAvroSchemaEvolutionUtils {
         + "{\"name\":\"col6\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null},"
         + "{\"name\":\"col7\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}],\"default\":null},"
         + "{\"name\":\"col8\",\"type\":[\"null\",\"boolean\"],\"default\":null},"
-        + "{\"name\":\"col9\",\"type\":[\"null\",\"bytes\"],\"default\":null},{\"name\":\"par\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null}]}");
+        + "{\"name\":\"col9\",\"type\":[\"null\",\"bytes\"],\"default\":null},{\"name\":\"par\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null},"
+        + "{\"name\":\"enum\",\"type\":[\"null\"," + enumSchema + "],\"default\":null}"
+        + "]}");
     // create a test record with avroSchema
     GenericData.Record avroRecord = new GenericData.Record(avroSchema);
     avroRecord.put("id", 1);
@@ -263,6 +326,7 @@ public class TestAvroSchemaEvolutionUtils {
     avroRecord.put("col8", false);
     ByteBuffer bb = ByteBuffer.wrap(new byte[] {97, 48, 53});
     avroRecord.put("col9", bb);
+    avroRecord.put("enum", new GenericData.EnumSymbol(new Schema.Parser().parse(enumSchema), Enum.ENUM1));
     Assertions.assertEquals(GenericData.get().validate(avroSchema, avroRecord), true);
     InternalSchema internalSchema = AvroInternalSchemaConverter.convert(avroSchema);
     // do change type operation
@@ -283,11 +347,13 @@ public class TestAvroSchemaEvolutionUtils {
         .updateColumnType("col41", Types.StringType.get())
         .updateColumnType("col5", Types.DateType.get())
         .updateColumnType("col51", Types.DecimalType.get(18, 9))
-        .updateColumnType("col6", Types.StringType.get());
+        .updateColumnType("col6", Types.StringType.get())
+        .updateColumnType("enum", Types.StringType.get());
     InternalSchema newSchema = SchemaChangeUtils.applyTableChanges2Schema(internalSchema, updateChange);
-    Schema newAvroSchema = AvroInternalSchemaConverter.convert(newSchema, avroSchema.getName());
+    Schema newAvroSchema = AvroInternalSchemaConverter.convert(newSchema, avroSchema.getFullName());
     GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newAvroSchema, Collections.emptyMap());
 
+    Assertions.assertEquals("ENUM1", newRecord.get("enum"));
     Assertions.assertEquals(GenericData.get().validate(newAvroSchema, newRecord), true);
   }
 
@@ -308,14 +374,14 @@ public class TestAvroSchemaEvolutionUtils {
     avroRecord.put("id", 2);
     avroRecord.put("data", "xs");
     // fill record type
-    GenericData.Record preferencesRecord = new GenericData.Record(AvroInternalSchemaConverter.convert(record.fieldType("preferences"), "test1_preferences"));
+    GenericData.Record preferencesRecord = new GenericData.Record(AvroInternalSchemaConverter.convert(record.fieldType("preferences"), "test1.preferences"));
     preferencesRecord.put("feature1", false);
     preferencesRecord.put("feature2", true);
-    Assertions.assertEquals(GenericData.get().validate(AvroInternalSchemaConverter.convert(record.fieldType("preferences"), "test1_preferences"), preferencesRecord), true);
+    Assertions.assertEquals(GenericData.get().validate(AvroInternalSchemaConverter.convert(record.fieldType("preferences"), "test1.preferences"), preferencesRecord), true);
     avroRecord.put("preferences", preferencesRecord);
     // fill mapType
     Map<String, GenericData.Record> locations = new HashMap<>();
-    Schema mapSchema = AvroInternalSchemaConverter.convert(((Types.MapType)record.field("locations").type()).valueType(), "test1_locations");
+    Schema mapSchema = AvroInternalSchemaConverter.convert(((Types.MapType)record.fieldByNameCaseInsensitive("locations").type()).valueType(), "test1.locations");
     GenericData.Record locationsValue = new GenericData.Record(mapSchema);
     locationsValue.put("lat", 1.2f);
     locationsValue.put("long", 1.4f);
@@ -332,7 +398,7 @@ public class TestAvroSchemaEvolutionUtils {
     avroRecord.put("doubles", doubles);
 
     // do check
-    Assertions.assertEquals(GenericData.get().validate(schema, avroRecord), true);
+    Assertions.assertTrue(GenericData.get().validate(schema, avroRecord));
     // create newSchema
     Types.RecordType newRecord = Types.RecordType.get(
         Types.Field.get(0, false, "id", Types.IntType.get()),
@@ -366,7 +432,7 @@ public class TestAvroSchemaEvolutionUtils {
         .renameColumn("preferences.feature2", "f2")
         .renameColumn("locations.value.lat", "lt");
     InternalSchema internalSchemaRename = SchemaChangeUtils.applyTableChanges2Schema(internalSchema, updateChange);
-    Schema avroSchemaRename = AvroInternalSchemaConverter.convert(internalSchemaRename, schema.getName());
+    Schema avroSchemaRename = AvroInternalSchemaConverter.convert(internalSchemaRename, schema.getFullName());
     Map<String, String> renameCols = InternalSchemaUtils.collectRenameCols(internalSchema, internalSchemaRename);
     GenericRecord avroRecordRename = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, avroSchemaRename, renameCols);
     // test the correctly of rewrite
@@ -390,7 +456,7 @@ public class TestAvroSchemaEvolutionUtils {
                 Types.Field.get(12, false, "long", Types.FloatType.get())), false)
         )
     );
-    InternalSchema oldSchema = new InternalSchema(oldRecord.fields());
+    InternalSchema oldSchema = new InternalSchema(oldRecord);
     Types.RecordType evolvedRecord = Types.RecordType.get(
         Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "data", Types.StringType.get()),
@@ -414,7 +480,7 @@ public class TestAvroSchemaEvolutionUtils {
     );
     evolvedRecord = (Types.RecordType)InternalSchemaBuilder.getBuilder().refreshNewId(evolvedRecord, new AtomicInteger(0));
     Schema evolvedAvroSchema = AvroInternalSchemaConverter.convert(evolvedRecord, "test1");
-    InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(evolvedAvroSchema, oldSchema);
+    InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(evolvedAvroSchema, oldSchema, false);
     Types.RecordType checkedRecord = Types.RecordType.get(
         Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "data", Types.StringType.get()),
@@ -459,16 +525,40 @@ public class TestAvroSchemaEvolutionUtils {
         new Schema.Field("d1", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT))), null, JsonProperties.NULL_VALUE),
         new Schema.Field("d2", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT))), null, JsonProperties.NULL_VALUE));
 
-    Schema simpleCheckSchema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"simpleReconcileSchema\",\"fields\":[{\"name\":\"a\",\"type\":[\"null\",\"boolean\"],\"default\":null},"
-        + "{\"name\":\"b\",\"type\":[\"null\",\"int\"],\"default\":null},{\"name\":\"a1\",\"type\":[\"null\",\"long\"],\"default\":null},"
+    Schema simpleCheckSchema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"simple\",\"fields\":[{\"name\":\"a\",\"type\":[\"null\",\"boolean\"],\"default\":null},"
+        + "{\"name\":\"b\",\"type\":[\"null\",\"int\"],\"default\":null},"
         + "{\"name\":\"c\",\"type\":[\"null\",\"long\"],\"default\":null},"
-        + "{\"name\":\"c1\",\"type\":[\"null\",\"long\"],\"default\":null},{\"name\":\"c2\",\"type\":[\"null\",\"long\"],\"default\":null},"
         + "{\"name\":\"d\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null},"
+        + "{\"name\":\"a1\",\"type\":[\"null\",\"long\"],\"default\":null},"
+        + "{\"name\":\"c1\",\"type\":[\"null\",\"long\"],\"default\":null},{\"name\":\"c2\",\"type\":[\"null\",\"long\"],\"default\":null},"
         + "{\"name\":\"d1\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null},"
         + "{\"name\":\"d2\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null}]}");
 
     Schema simpleReconcileSchema = AvroInternalSchemaConverter.convert(AvroSchemaEvolutionUtils
-        .reconcileSchema(incomingSchema, AvroInternalSchemaConverter.convert(schema)), "simpleReconcileSchema");
-    Assertions.assertEquals(simpleReconcileSchema, simpleCheckSchema);
+        .reconcileSchema(incomingSchema, AvroInternalSchemaConverter.convert(schema), false), "schemaNameFallback");
+    Assertions.assertEquals(simpleCheckSchema, simpleReconcileSchema);
+  }
+
+  @Test
+  public void testNotEvolveSchemaIfReconciledSchemaUnchanged() {
+    // a: boolean, c: long, c_1: long, d: date
+    Schema oldSchema = create("simple",
+        new Schema.Field("a", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.BOOLEAN)), null, JsonProperties.NULL_VALUE),
+        new Schema.Field("b", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.INT)), null, JsonProperties.NULL_VALUE),
+        new Schema.Field("c", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.LONG)), null, JsonProperties.NULL_VALUE),
+        new Schema.Field("d", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT))), null, JsonProperties.NULL_VALUE));
+    // incoming schema is part of old schema
+    // a: boolean, b: int, c: long
+    Schema incomingSchema = create("simple",
+        new Schema.Field("a", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.BOOLEAN)), null, JsonProperties.NULL_VALUE),
+        new Schema.Field("b", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.INT)), null, JsonProperties.NULL_VALUE),
+        new Schema.Field("c", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.LONG)), null, JsonProperties.NULL_VALUE));
+
+    InternalSchema oldInternalSchema = AvroInternalSchemaConverter.convert(oldSchema);
+    // set a non-default schema id for old table schema, e.g., 2.
+    oldInternalSchema.setSchemaId(2);
+    InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(incomingSchema, oldInternalSchema, false);
+    // the evolved schema should be the old table schema, since there is no type change at all.
+    Assertions.assertEquals(oldInternalSchema, evolvedSchema);
   }
 }

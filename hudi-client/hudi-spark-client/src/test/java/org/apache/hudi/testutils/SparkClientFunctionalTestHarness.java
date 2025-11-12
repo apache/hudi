@@ -19,46 +19,55 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.SerializableIndexedRecord;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.providers.HoodieMetaClientProvider;
 import org.apache.hudi.testutils.providers.HoodieWriteClientProvider;
 import org.apache.hudi.testutils.providers.SparkProvider;
 import org.apache.hudi.timeline.service.TimelineService;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -72,16 +81,19 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.apache.hudi.testutils.Assertions.assertFileSizesEqual;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -97,6 +109,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   private static transient JavaSparkContext jsc;
   private static transient HoodieSparkEngineContext context;
   private static transient TimelineService timelineService;
+  private HoodieStorage storage;
   private FileSystem fileSystem;
 
   /**
@@ -105,6 +118,13 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   protected boolean initialized = false;
   @TempDir
   protected java.nio.file.Path tempDir;
+
+  public static Map<String, String> getSparkSqlConf() {
+    Map<String, String> sqlConf = new HashMap<>();
+    sqlConf.put("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
+    sqlConf.put("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hudi.catalog.HoodieCatalog");
+    return sqlConf;
+  }
 
   public String basePath() {
     return tempDir.toAbsolutePath().toUri().toString();
@@ -125,13 +145,20 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     return jsc;
   }
 
-  public Configuration hadoopConf() {
-    return jsc.hadoopConfiguration();
+  public StorageConfiguration<Configuration> storageConf() {
+    return HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration());
+  }
+
+  public HoodieStorage hoodieStorage() {
+    if (storage == null) {
+      storage = HoodieStorageUtils.getStorage(basePath(), storageConf());
+    }
+    return storage;
   }
 
   public FileSystem fs() {
     if (fileSystem == null) {
-      fileSystem = FSUtils.getFs(basePath(), hadoopConf());
+      fileSystem = (FileSystem) hoodieStorage().getFileSystem();
     }
     return fileSystem;
   }
@@ -146,32 +173,46 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   }
 
   public HoodieTableMetaClient getHoodieMetaClient(HoodieTableType tableType, Properties props) throws IOException {
-    return getHoodieMetaClient(hadoopConf(), basePath(), tableType, props);
+    return getHoodieMetaClient(storageConf(), basePath(), tableType, props);
   }
 
-  public HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath, HoodieTableType tableType, Properties props) throws IOException {
-    props = HoodieTableMetaClient.withPropertyBuilder()
-        .setTableName(RAW_TRIPS_TEST_NAME)
-        .setTableType(tableType)
-        .setPayloadClass(HoodieAvroPayload.class)
-        .fromProperties(props)
-        .build();
-    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, props);
+  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType, Properties props) {
+    try {
+      return HoodieTableMetaClient.newTableBuilder()
+          .setTableName(RAW_TRIPS_TEST_NAME)
+          .setTableType(tableType)
+          .fromProperties(props)
+          .initTable(storageConf.newInstance(), basePath);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to create HoodieTableMetaClient for basePath: " + basePath, e);
+    }
   }
 
-  public HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath) throws IOException {
-    return getHoodieMetaClient(hadoopConf, basePath, getPropertiesForKeyGen(true));
+  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath) throws IOException {
+    return getHoodieMetaClient(storageConf, basePath, getPropertiesForKeyGen(true));
+  }
+
+  public HoodieTableMetaClient getHoodieMetaClientWithTableVersion(StorageConfiguration<?> storageConf, String basePath, String tableVersion) throws IOException {
+    Properties props = getPropertiesForKeyGen(true);
+    props.put(WRITE_TABLE_VERSION.key(), tableVersion);
+    return getHoodieMetaClient(storageConf, basePath, props);
   }
 
   @Override
-  public HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath, Properties props) throws IOException {
-    props = HoodieTableMetaClient.withPropertyBuilder()
+  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props) throws IOException {
+    return getHoodieMetaClient(storageConf, basePath, props, COPY_ON_WRITE);
+  }
+
+  @Override
+  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props,
+                                                   HoodieTableType tableType) throws IOException {
+    return HoodieTableMetaClient.newTableBuilder()
         .setTableName(RAW_TRIPS_TEST_NAME)
-        .setTableType(COPY_ON_WRITE)
+        .setTableType(tableType)
         .setPayloadClass(HoodieAvroPayload.class)
+        .setTableVersion(ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION))
         .fromProperties(props)
-        .build();
-    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, props);
+        .initTable(storageConf.newInstance(), basePath);
   }
 
   @Override
@@ -184,16 +225,18 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     initialized = spark != null;
     if (!initialized) {
       SparkConf sparkConf = conf();
-      SparkRDDWriteClient.registerClasses(sparkConf);
+      HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
       SparkRDDReadClient.addHoodieSupport(sparkConf);
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();
+      HoodieClientTestUtils.overrideSparkHadoopConfiguration(spark.sparkContext());
       jsc = new JavaSparkContext(spark.sparkContext());
       context = new HoodieSparkEngineContext(jsc);
       timelineService = HoodieClientTestUtils.initTimelineService(
           context, basePath(), incrementTimelineServicePortToUse());
       timelineServicePort = timelineService.getServerPort();
     }
+    spark.sparkContext().persistentRdds().foreach(rdd -> rdd._2.unpersist(false));
   }
 
   /**
@@ -203,7 +246,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
    * testcase may invoke this specifically to clean up in case of repeated test runs.
    */
   @AfterAll
-  public static synchronized void resetSpark() {
+  public static synchronized void resetSpark() throws IOException {
     if (spark != null) {
       spark.close();
       spark = null;
@@ -241,29 +284,33 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   protected Stream<HoodieBaseFile> insertRecordsToMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records,
                                                  SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime,
                                                            boolean doExplicitCommit) throws IOException {
-    HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
-
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
     JavaRDD<WriteStatus> statusesRdd = client.insert(writeRecords, commitTime);
     List<WriteStatus> statuses = statusesRdd.collect();
     assertNoWriteErrors(statuses);
-    if (doExplicitCommit) {
-      client.commit(commitTime, statusesRdd);
-    }
-    assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(reloadedMetaClient.getFs(), new Path(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
+    client.commit(commitTime, jsc().parallelize(statuses));
+
+    HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
+    assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(
+        reloadedMetaClient.getStorage(),
+        new StoragePath(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
 
     HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), reloadedMetaClient);
 
-    Option<HoodieInstant> deltaCommit = reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
+    Option<HoodieInstant> deltaCommit =
+        reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
     assertTrue(deltaCommit.isPresent());
-    assertEquals(commitTime, deltaCommit.get().getTimestamp(), "Delta commit should be specified value");
+    assertEquals(commitTime, deltaCommit.get().requestedTime(),
+        "Delta commit should be specified value");
 
-    Option<HoodieInstant> commit = reloadedMetaClient.getActiveTimeline().getCommitTimeline().lastInstant();
+    Option<HoodieInstant> commit =
+        reloadedMetaClient.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant();
     assertFalse(commit.isPresent());
 
-    FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
+    List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
     TableFileSystemView.BaseFileOnlyView roView =
-        getHoodieTableFileSystemView(reloadedMetaClient, reloadedMetaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
+        getHoodieTableFileSystemView(reloadedMetaClient,
+            reloadedMetaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
     Stream<HoodieBaseFile> dataFilesToRead = roView.getLatestBaseFiles();
     assertTrue(!dataFilesToRead.findAny().isPresent());
 
@@ -291,21 +338,23 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     List<WriteStatus> statuses = statusesRdd.collect();
     // Verify there are no errors
     assertNoWriteErrors(statuses);
-    if (doExplicitCommit) {
-      client.commit(commitTime, statusesRdd);
-    }
-    assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(reloadedMetaClient.getFs(), new Path(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
+    client.commit(commitTime, statusesRdd);
+    assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(
+        reloadedMetaClient.getStorage(),
+        new StoragePath(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
 
-    Option<HoodieInstant> deltaCommit = reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
+    Option<HoodieInstant> deltaCommit =
+        reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
     assertTrue(deltaCommit.isPresent());
-    assertEquals(commitTime, deltaCommit.get().getTimestamp(),
+    assertEquals(commitTime, deltaCommit.get().requestedTime(),
         "Latest Delta commit should match specified time");
 
-    Option<HoodieInstant> commit = reloadedMetaClient.getActiveTimeline().getCommitTimeline().firstInstant();
+    Option<HoodieInstant> commit =
+        reloadedMetaClient.getActiveTimeline().getCommitAndReplaceTimeline().firstInstant();
     assertFalse(commit.isPresent());
   }
 
-  protected FileStatus[] listAllBaseFilesInPath(HoodieTable table) throws IOException {
+  protected List<StoragePathInfo> listAllBaseFilesInPath(HoodieTable table) throws IOException {
     return HoodieTestTable.of(table.getMetaClient()).listAllBaseFiles(table.getBaseFileExtension());
   }
 
@@ -320,7 +369,6 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     properties.put("hoodie.datasource.write.partitionpath.field", "partition_path");
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
     properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
-    properties.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
     return properties;
   }
 
@@ -348,20 +396,19 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   }
 
   protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, long compactionSmallFileSize, HoodieClusteringConfig clusteringConfig) {
-    return getConfigBuilder(autoCommit, false, HoodieIndex.IndexType.BLOOM, compactionSmallFileSize, clusteringConfig, false);
+    return getConfigBuilder(autoCommit, false, HoodieIndex.IndexType.BLOOM, compactionSmallFileSize, clusteringConfig);
   }
 
   protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, Boolean rollbackUsingMarkers, HoodieIndex.IndexType indexType) {
-    return getConfigBuilder(autoCommit, rollbackUsingMarkers, indexType, 1024 * 1024 * 1024L, HoodieClusteringConfig.newBuilder().build(), false);
+    return getConfigBuilder(autoCommit, rollbackUsingMarkers, indexType, 1024 * 1024 * 1024L, HoodieClusteringConfig.newBuilder().build());
   }
 
   protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, Boolean rollbackUsingMarkers, HoodieIndex.IndexType indexType,
-      long compactionSmallFileSize, HoodieClusteringConfig clusteringConfig, boolean preserveCommitMetaForCompaction) {
+      long compactionSmallFileSize, HoodieClusteringConfig clusteringConfig) {
     return HoodieWriteConfig.newBuilder().withPath(basePath()).withSchema(TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withDeleteParallelism(2)
-        .withAutoCommit(autoCommit)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(compactionSmallFileSize)
-            .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).withPreserveCommitMetadata(preserveCommitMetaForCompaction).build())
+            .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024 * 1024).parquetMaxFileSize(1024 * 1024 * 1024).build())
         .withEmbeddedTimelineServerEnabled(true).forTable("test-trip-table")
         .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
@@ -369,19 +416,17 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
             .withEnableBackupForRemoteFileSystemView(false).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withClusteringConfig(clusteringConfig)
-        .withRollbackUsingMarkers(rollbackUsingMarkers);
+        .withRollbackUsingMarkers(rollbackUsingMarkers)
+        // Enable lock provider and concurrency control for functional tests to catch any potential deadlock issues
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(InProcessLockProvider.class)
+            .build());
   }
 
   protected Dataset<Row> toDataset(List<HoodieRecord> records, Schema schema) {
     List<GenericRecord> avroRecords = records.stream()
-        .map(r -> {
-          HoodieRecordPayload payload = (HoodieRecordPayload) r.getData();
-          try {
-            return (GenericRecord) payload.getInsertValue(schema).get();
-          } catch (IOException e) {
-            throw new HoodieIOException("Failed to extract Avro payload", e);
-          }
-        })
+        .map(r -> (GenericRecord) ((SerializableIndexedRecord) r.getData()).getData())
         .collect(Collectors.toList());
     JavaRDD<GenericRecord> jrdd = jsc.parallelize(avroRecords, 2);
     return AvroConversionUtils.createDataFrame(jrdd.rdd(), schema.toString(), spark);
@@ -392,5 +437,29 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     // to avoid port reuse causing failures
     timelineServicePort = (timelineServicePort + 1 - 1024) % (65536 - 1024) + 1024;
     return timelineServicePort;
+  }
+
+  /**
+   * Check if two dataframes are equal.
+   *
+   * @param expectedDf      expected dataframe
+   * @param actualDf        actual dataframe
+   * @param validateColumns columns to validate
+   * @return true if dataframes are equal, false otherwise
+   */
+  public static boolean areDataframesEqual(Dataset<Row> expectedDf,
+                                           Dataset<Row> actualDf,
+                                           Set<String> validateColumns) {
+    // Normalize schema order
+    String[] sortedColumnNames = Arrays.stream(expectedDf.columns())
+        .filter(validateColumns::contains).sorted().toArray(String[]::new);
+
+    // Reorder columns in both datasets
+    Dataset<Row> df1Normalized = expectedDf.selectExpr(sortedColumnNames);
+    Dataset<Row> df2Normalized = actualDf.selectExpr(sortedColumnNames);
+
+    // Check for differences
+    return df1Normalized.except(df2Normalized).isEmpty()
+        && df2Normalized.except(df1Normalized).isEmpty();
   }
 }

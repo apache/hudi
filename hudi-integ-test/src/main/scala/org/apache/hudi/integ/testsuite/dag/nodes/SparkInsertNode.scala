@@ -18,18 +18,20 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes
 
-import org.apache.avro.Schema
+import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.hudi.client.WriteStatus
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.collection.Pair
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkUtils}
-import org.apache.log4j.LogManager
+
+import org.apache.avro.Schema
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SaveMode
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 
@@ -40,7 +42,7 @@ import scala.collection.JavaConverters._
  */
 class SparkInsertNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
 
-  private val log = LogManager.getLogger(getClass)
+  private val log = LoggerFactory.getLogger(getClass)
   config = dagNodeConfig
 
   /**
@@ -66,11 +68,13 @@ class SparkInsertNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
       context.getWriterContext.getSparkSession)
 
     inputDF.write.format("hudi")
-      .options(DataSourceWriteOptions.translateSqlOptions(context.getWriterContext.getProps.asScala.toMap))
-      .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), "test_suite_source_ordering_field")
+      .options(DataSourceWriteOptions.mayBeDerivePartitionPath(context.getWriterContext.getProps.asScala.toMap))
+      .option(HoodieTableConfig.ORDERING_FIELDS.key(), "test_suite_source_ordering_field")
       .option(DataSourceWriteOptions.TABLE_NAME.key, context.getHoodieTestSuiteWriter.getCfg.targetTableName)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, context.getHoodieTestSuiteWriter.getCfg.tableType)
+      .option(HoodieIndexConfig.INDEX_TYPE.key, context.getHoodieTestSuiteWriter.getCfg.indexType)
       .option(DataSourceWriteOptions.OPERATION.key, getOperation())
+      .option(HoodieIndexConfig.INDEX_TYPE.key, context.getHoodieTestSuiteWriter.getCfg.indexType)
       .option(HoodieWriteConfig.TBL_NAME.key, context.getHoodieTestSuiteWriter.getCfg.targetTableName)
       .mode(SaveMode.Append)
       .save(context.getHoodieTestSuiteWriter.getWriteConfig.getBasePath)

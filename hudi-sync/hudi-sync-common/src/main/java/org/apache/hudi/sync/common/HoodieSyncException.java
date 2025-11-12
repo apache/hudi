@@ -37,6 +37,6 @@ public class HoodieSyncException extends RuntimeException {
   }
 
   protected static String format(String message, Object... args) {
-    return String.format(String.valueOf(message), (Object[]) args);
+    return String.format(String.valueOf(message), args);
   }
 }

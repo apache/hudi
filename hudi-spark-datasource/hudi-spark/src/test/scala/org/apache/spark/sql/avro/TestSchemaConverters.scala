@@ -18,9 +18,10 @@
 package org.apache.spark.sql.avro
 
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats
+
 import org.apache.spark.sql.avro.SchemaConverters.SchemaType
-import org.junit.Test
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 
 class TestSchemaConverters {
 
@@ -32,7 +33,7 @@ class TestSchemaConverters {
     val convertedAvroSchema = SchemaConverters.toAvroType(convertedStructType)
 
     // NOTE: Here we're validating that converting Avro -> Catalyst and Catalyst -> Avro are inverse
-    //       transformations, but since it's not an easy endeavor to match Avro scehams, we match
+    //       transformations, but since it's not an easy endeavor to match Avro schemas, we match
     //       derived Catalyst schemas instead
     assertEquals(convertedStructType, SchemaConverters.toSqlType(convertedAvroSchema).dataType)
   }

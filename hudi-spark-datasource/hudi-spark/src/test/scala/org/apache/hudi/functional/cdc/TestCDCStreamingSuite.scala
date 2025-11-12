@@ -17,21 +17,20 @@
 
 package org.apache.hudi.functional.cdc
 
-import org.apache.hudi.DataSourceReadOptions
-import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, SparkAdapterSupport}
+import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode
 import org.apache.hudi.config.HoodieWriteConfig
 
+import org.apache.spark.sql.{Dataset, Row, SaveMode}
 import org.apache.spark.sql.QueryTest.checkAnswer
-import org.apache.spark.sql.{Column, Dataset, Row, SaveMode}
 import org.apache.spark.sql.catalyst.expressions.{Add, If, Literal}
 import org.apache.spark.sql.execution.streaming.MemoryStream
 import org.apache.spark.sql.functions._
-
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.EnumSource
 
-class TestCDCStreamingSuite extends HoodieCDCTestBase {
+class TestCDCStreamingSuite extends HoodieCDCTestBase with SparkAdapterSupport {
 
   /**
    * Here we simulate a more complex streaming data ETL of a real scenario that uses CDC.
@@ -45,8 +44,8 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
    *     and write to country_to_population_tbl.
    */
   @ParameterizedTest
-  @CsvSource(Array("cdc_op_key", "cdc_data_before", "cdc_data_before_after"))
-  def cdcStreaming(cdcSupplementalLoggingMode: String): Unit = {
+  @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
+  def cdcStreaming(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
     val commonOptions = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -69,9 +68,9 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
     userToCountryDF.write.format("hudi")
       .options(commonOptions)
       .option(HoodieTableConfig.CDC_ENABLED.key, "true")
-      .option(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key, cdcSupplementalLoggingMode)
+      .option(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key, loggingMode.name())
       .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "userid")
-      .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+      .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
       .option(HoodieWriteConfig.TBL_NAME.key, "user_to_country")
       .save(userToCountryTblPath)
 
@@ -83,15 +82,11 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
     countryToPopulationDF.write.format("hudi")
       .options(commonOptions)
       .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "country")
-      .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+      .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
       .option(HoodieWriteConfig.TBL_NAME.key, "country_to_population")
       .save(countryToPopulationTblPath)
 
-    val hadoopConf = spark.sessionState.newHadoopConf()
-    val userToCountryMetaClient = HoodieTableMetaClient.builder()
-      .setBasePath(userToCountryTblPath)
-      .setConf(hadoopConf)
-      .build()
+    val userToCountryMetaClient = createMetaClient(spark, userToCountryTblPath)
 
     val inputData = new MemoryStream[(Int, String, String)](100, spark.sqlContext)
     val df = inputData.toDS().toDF("userid", "country", "ts")
@@ -103,7 +98,7 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
           .options(commonOptions)
           .option(HoodieTableConfig.CDC_ENABLED.key, "true")
           .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "userid")
-          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(HoodieWriteConfig.TBL_NAME.key, "user_to_country")
           .mode(SaveMode.Append)
           .save(userToCountryTblPath)
@@ -111,11 +106,11 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
       .start()
 
     // stream2: extract the change data from user_to_country_tbl and merge into country_to_population_tbl
-    val dec = typedLit(-1).expr
-    val inc = typedLit(1).expr
-    val zero = typedLit(0).expr
-    val beforeCntExpr = If(isnull(col("bcountry")).expr, zero, dec)
-    val afterCntExpr = If(isnull(col("acountry")).expr, zero, inc)
+    val dec = sparkAdapter.getExpressionFromColumn(typedLit(-1))
+    val inc = sparkAdapter.getExpressionFromColumn(typedLit(1))
+    val zero = sparkAdapter.getExpressionFromColumn(typedLit(0))
+    val beforeCntExpr = If(sparkAdapter.getExpressionFromColumn(isnull(col("bcountry"))), zero, dec)
+    val afterCntExpr = If(sparkAdapter.getExpressionFromColumn(isnull(col("acountry"))), zero, inc)
     val stream2 = spark.readStream.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.INCREMENTAL_FORMAT.key, DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
@@ -132,7 +127,8 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
             get_json_object(col("after"), "$.ts").as("ts")
           )
           // aggregate data by country, get the delta change about the population of a country.
-          .withColumn("bcnt", new Column(beforeCntExpr)).withColumn("acnt", new Column(afterCntExpr))
+          .withColumn("bcnt", sparkAdapter.createColumnFromExpression(beforeCntExpr))
+          .withColumn("acnt", sparkAdapter.createColumnFromExpression(afterCntExpr))
           .select(
             explode(array(Array(
               struct(col("bcountry").as("country"), col("bcnt").as("cnt"), col("ts")),
@@ -145,14 +141,15 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
           .join(current, Seq("country"), "left")
           .select(
             col("country"),
-            new Column(
-              Add(col("sum(cnt)").expr, If(isnull(col("population")).expr, Literal(0), col("population").expr))).as("population"),
+            sparkAdapter.createColumnFromExpression(
+              Add(sparkAdapter.getExpressionFromColumn(col("sum(cnt)")), If(sparkAdapter.getExpressionFromColumn(isnull(col("population"))),
+                Literal(0), sparkAdapter.getExpressionFromColumn(col("population"))))).as("population"),
             col("max(ts)").as("ts")
           )
           .write.format("hudi")
           .options(commonOptions)
           .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "country")
-          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(HoodieWriteConfig.TBL_NAME.key, "country_to_population")
           .mode(SaveMode.Append)
           .save(countryToPopulationTblPath)
@@ -167,7 +164,7 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
     // check the change data about user_to_country_tbl for batch1
     val detailOutput1 = spark.read.format("hudi").load(userToCountryTblPath)
     assert(detailOutput1.where("country = 'US'").count() == 5)
-    val ucTs1 = userToCountryMetaClient.reloadActiveTimeline().lastInstant.get.getTimestamp
+    val ucTs1 = userToCountryMetaClient.reloadActiveTimeline().lastInstant.get.requestedTime
     val ucDdcData1 = cdcDataFrame(userToCountryTblPath, (ucTs1.toLong - 1).toString, null)
     ucDdcData1.show(false)
     assertCDCOpCnt(ucDdcData1, 1, 2, 0)
@@ -190,7 +187,7 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
     stream2.processAllAvailable()
 
     // check the change data about user_to_country_tbl for batch2
-    val ts2 = userToCountryMetaClient.reloadActiveTimeline().lastInstant.get.getTimestamp
+    val ts2 = userToCountryMetaClient.reloadActiveTimeline().lastInstant.get.requestedTime
     val cdcData2 = cdcDataFrame(userToCountryTblPath, (ts2.toLong - 1).toString, null)
     cdcData2.show(false)
     assertCDCOpCnt(cdcData2, 2, 1, 0)

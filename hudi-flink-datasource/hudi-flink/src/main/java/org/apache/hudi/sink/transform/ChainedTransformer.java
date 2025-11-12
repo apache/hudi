@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
  */
 public class ChainedTransformer implements Transformer {
 
-  private List<Transformer> transformers;
+  private final List<Transformer> transformers;
 
   public ChainedTransformer(List<Transformer> transformers) {
     this.transformers = transformers;

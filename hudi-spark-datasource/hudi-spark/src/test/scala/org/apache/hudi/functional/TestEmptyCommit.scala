@@ -17,23 +17,25 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
+
 import org.apache.spark.sql.{SaveMode, SparkSession}
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-class TestEmptyCommit extends HoodieClientTestBase {
+class TestEmptyCommit extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
@@ -42,7 +44,7 @@ class TestEmptyCommit extends HoodieClientTestBase {
     initSparkContexts()
     spark = sqlContext.sparkSession
     initTestDataGenerator()
-    initFileSystem()
+    initHoodieStorage()
   }
 
   @AfterEach override def tearDown() = {
@@ -61,6 +63,6 @@ class TestEmptyCommit extends HoodieClientTestBase {
       .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), allowEmptyCommit.toString)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    assertEquals(allowEmptyCommit, HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+    assertEquals(allowEmptyCommit, HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
   }
 }

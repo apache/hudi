@@ -18,9 +18,8 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.{HoodieCLIUtils, SparkAdapterSupport}
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.ClusteringUtils
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
@@ -31,8 +30,8 @@ import scala.collection.JavaConverters._
 
 class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with SparkAdapterSupport with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.optional(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.optional(1, "path", DataTypes.StringType, None),
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
     ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 20),
     ProcedureParameter.optional(3, "show_involved_partition", DataTypes.BooleanType, false)
   )
@@ -57,26 +56,26 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
     val showInvolvedPartitions = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[Boolean]
 
     val basePath: String = getBasePath(tableName, tablePath)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
     val clusteringInstants = metaClient.getActiveTimeline.getInstants.iterator().asScala
-      .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION)
+      .filter(p => ClusteringUtils.isClusteringOrReplaceCommitAction(p.getAction))
       .toSeq
-      .sortBy(f => f.getTimestamp)
+      .sortBy(f => f.requestedTime)
       .reverse
       .take(limit)
 
     val clusteringPlans = clusteringInstants.map(instant =>
       ClusteringUtils.getClusteringPlan(metaClient, instant)
-    )
+    ).filter(clusteringPlan => clusteringPlan.isPresent)
 
     if (showInvolvedPartitions) {
       clusteringPlans.map { p =>
-        Row(p.get().getLeft.getTimestamp, p.get().getRight.getInputGroups.size(),
-          p.get().getLeft.getState.name(), HoodieCLIUtils.extractPartitions(p.get().getRight.getInputGroups.asScala))
+        Row(p.get().getLeft.requestedTime, p.get().getRight.getInputGroups.size(),
+          p.get().getLeft.getState.name(), HoodieCLIUtils.extractPartitions(p.get().getRight.getInputGroups.asScala.toSeq))
       }
     } else {
       clusteringPlans.map { p =>
-        Row(p.get().getLeft.getTimestamp, p.get().getRight.getInputGroups.size(),
+        Row(p.get().getLeft.requestedTime, p.get().getRight.getInputGroups.size(),
           p.get().getLeft.getState.name(), "*")
       }
     }

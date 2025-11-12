@@ -19,7 +19,7 @@
 package org.apache.hudi.sink.partitioner.profile;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -36,6 +36,7 @@ import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.core.fs.Path;
+import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,7 +80,7 @@ public class WriteProfile {
 
   /**
    * Total records to write for each bucket based on
-   * the config option {@link org.apache.hudi.config.HoodieStorageConfig#PARQUET_MAX_FILE_SIZE}.
+   * the config option {@link HoodieStorageConfig#PARQUET_MAX_FILE_SIZE}.
    */
   private long recordsPerBucket;
 
@@ -114,7 +115,8 @@ public class WriteProfile {
     this.basePath = new Path(config.getBasePath());
     this.smallFilesMap = new HashMap<>();
     this.recordsPerBucket = config.getCopyOnWriteInsertSplitSize();
-    this.metaClient = StreamerUtil.createMetaClient(config.getBasePath(), context.getHadoopConf().get());
+    this.metaClient = StreamerUtil.createMetaClient(
+        config.getBasePath(), context.getStorageConf().unwrapAs(Configuration.class));
     this.metadataCache = new HashMap<>();
     this.fsView = getFileSystemView();
     // profile the record statistics on construction
@@ -152,7 +154,7 @@ public class WriteProfile {
         HoodieInstant instant = instants.next();
         final HoodieCommitMetadata commitMetadata =
             this.metadataCache.computeIfAbsent(
-                instant.getTimestamp(),
+                instant.requestedTime(),
                 k -> WriteProfiles.getCommitMetadataSafely(config.getTableName(), basePath, instant, commitTimeline)
                     .orElse(null));
         if (commitMetadata == null) {
@@ -204,14 +206,13 @@ public class WriteProfile {
     if (!commitTimeline.empty()) { // if we have some commits
       HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
       List<HoodieBaseFile> allFiles = fsView
-          .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).collect(Collectors.toList());
+          .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.requestedTime()).collect(Collectors.toList());
 
       for (HoodieBaseFile file : allFiles) {
         // filter out the corrupted files.
         if (file.getFileSize() < config.getParquetSmallFileLimit() && file.getFileSize() > 0) {
-          String filename = file.getFileName();
           SmallFile sf = new SmallFile();
-          sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
+          sf.location = new HoodieRecordLocation(file.getCommitTime(), file.getFileId());
           sf.sizeBytes = file.getFileSize();
           smallFileLocations.add(sf);
         }
@@ -230,7 +231,7 @@ public class WriteProfile {
    * whose instant does not belong to the given instants {@code instants}.
    */
   private void cleanMetadataCache(Stream<HoodieInstant> instants) {
-    Set<String> timestampSet = instants.map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+    Set<String> timestampSet = instants.map(HoodieInstant::requestedTime).collect(Collectors.toSet());
     this.metadataCache.keySet().retainAll(timestampSet);
   }
 
@@ -262,7 +263,7 @@ public class WriteProfile {
     oldFsView.close();
 
     recordProfile();
-    cleanMetadataCache(this.metaClient.getCommitsTimeline().filterCompletedInstants().getInstants());
+    cleanMetadataCache(this.metaClient.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream());
     this.smallFilesMap.clear();
     this.reloadedCheckpointId = checkpointId;
   }

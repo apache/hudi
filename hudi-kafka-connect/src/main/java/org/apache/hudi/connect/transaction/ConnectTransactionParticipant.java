@@ -31,8 +31,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.LinkedList;
@@ -46,7 +46,7 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public class ConnectTransactionParticipant implements TransactionParticipant {
 
-  private static final Logger LOG = LogManager.getLogger(ConnectTransactionParticipant.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ConnectTransactionParticipant.class);
 
   private final LinkedList<SinkRecord> buffer;
   private final BlockingQueue<ControlMessage> controlEvents;
@@ -151,17 +151,17 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
       ongoingTransactionInfo = new TransactionInfo<>(currentCommitTime, writerProvider.getWriter(currentCommitTime));
       ongoingTransactionInfo.setExpectedKafkaOffset(committedKafkaOffset);
     } catch (Exception exception) {
-      LOG.warn("Error received while starting a new transaction", exception);
+      LOG.warn("Failed to start a new transaction", exception);
     }
   }
 
   private void handleEndCommit(ControlMessage message) {
     if (ongoingTransactionInfo == null) {
-      LOG.warn(String.format("END_COMMIT %s is received while we were NOT in active transaction", message.getCommitTime()));
+      LOG.warn("END_COMMIT {} is received while we were NOT in active transaction", message.getCommitTime());
       return;
     } else if (!ongoingTransactionInfo.getCommitTime().equals(message.getCommitTime())) {
-      LOG.error(String.format("Fatal error received END_COMMIT with commit time %s while local transaction commit time %s",
-          message.getCommitTime(), ongoingTransactionInfo.getCommitTime()));
+      LOG.error("Fatal error received END_COMMIT with commit time {} while local transaction commit time {}",
+          message.getCommitTime(), ongoingTransactionInfo.getCommitTime());
       // Recovery: A new END_COMMIT from leader caused interruption to an existing transaction,
       // explicitly reset Kafka commit offset to ensure no data loss
       cleanupOngoingTransaction();
@@ -219,25 +219,17 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
             ongoingTransactionInfo.getWriter().writeRecord(record);
             ongoingTransactionInfo.setExpectedKafkaOffset(record.kafkaOffset() + 1);
           } else if (record != null && record.kafkaOffset() > ongoingTransactionInfo.getExpectedKafkaOffset()) {
-            LOG.warn(String.format("Received a kafka record with offset %s above the next expected kafka offset %s for partition %s, "
-                    + "hence resetting the kafka offset to %s",
-                record.kafkaOffset(),
-                ongoingTransactionInfo.getExpectedKafkaOffset(),
-                partition,
-                ongoingTransactionInfo.getExpectedKafkaOffset()));
+            LOG.warn("Received a kafka record with offset {} above the next expected kafka offset {} for partition {}. "
+                + "Resetting the kafka offset to {}", record.kafkaOffset(), ongoingTransactionInfo.getExpectedKafkaOffset(), partition, ongoingTransactionInfo.getExpectedKafkaOffset());
             context.offset(partition, ongoingTransactionInfo.getExpectedKafkaOffset());
           } else if (record != null && record.kafkaOffset() < ongoingTransactionInfo.getExpectedKafkaOffset()) {
-            LOG.warn(String.format("Received a kafka record with offset %s below the next expected kafka offset %s for partition %s, "
-                    + "no action will be taken but this record will be ignored since its already written",
-                record.kafkaOffset(),
-                ongoingTransactionInfo.getExpectedKafkaOffset(),
-                partition));
+            LOG.info("Received a kafka record with offset {} below the next expected kafka offset {} for partition {}. "
+                + "No action will be taken but this record will be ignored since its already written", record.kafkaOffset(), ongoingTransactionInfo.getExpectedKafkaOffset(), partition);
           }
           buffer.poll();
         } catch (Exception exception) {
-          LOG.warn(String.format("Error received while writing records for transaction %s in partition %s",
-              ongoingTransactionInfo.getCommitTime(), partition.partition()),
-              exception);
+          LOG.warn("Failed to write records for transaction [{}] in partition [{}]",
+              ongoingTransactionInfo.getCommitTime(), partition.partition(), exception);
         }
       }
     }
@@ -249,7 +241,7 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
         ongoingTransactionInfo.getWriter().close();
         ongoingTransactionInfo = null;
       } catch (HoodieIOException exception) {
-        LOG.warn("Error received while trying to cleanup existing transaction", exception);
+        LOG.warn("Failed to cleanup existing transaction", exception);
       }
     }
   }
@@ -262,20 +254,15 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
       if (coordinatorCommittedKafkaOffset != null && coordinatorCommittedKafkaOffset >= 0) {
         // Debug only messages
         if (coordinatorCommittedKafkaOffset != committedKafkaOffset) {
-          LOG.warn(String.format("The coordinator offset for kafka partition %s is %d while the locally committed offset is %d, "
-                  + "hence resetting the local committed offset to the coordinator provided one to ensure consistency",
-              partition,
-              coordinatorCommittedKafkaOffset,
-              committedKafkaOffset));
+          LOG.warn("The coordinator offset for kafka partition {} is {} while the locally committed offset is {}. "
+              + "Resetting the local committed offset to the coordinator provided one to ensure consistency", partition, coordinatorCommittedKafkaOffset, committedKafkaOffset);
         }
         committedKafkaOffset = coordinatorCommittedKafkaOffset;
         return;
       }
     } else {
-      LOG.warn(String.format("The coordinator offset for kafka partition %s is not present while the locally committed offset is %d, "
-              + "hence resetting the local committed offset to 0 to avoid data loss",
-          partition,
-          committedKafkaOffset));
+      LOG.warn("The coordinator offset for kafka partition {} is not present while the locally committed offset is {}. "
+          + "Resetting the local committed offset to 0 to avoid data loss", partition, committedKafkaOffset);
     }
     // If the coordinator does not have a committed offset for this partition, reset to zero offset.
     committedKafkaOffset = 0;
