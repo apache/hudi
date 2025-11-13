@@ -4,13 +4,13 @@
 }
 .cardsWrapper {
   display: grid;
-  gap: 20px;
+  gap: 30px;
   grid-template-columns: auto auto auto auto;
   margin-top: 60px;
 }
 .whyHudiTitle {
   text-align: center;
-  margin-bottom: 15px;
+  margin-bottom: 10px;
 }
 
 .textWrapper {
@@ -21,6 +21,10 @@
 
 .textWrapper > div {
   max-width: 720px;
+  color: var(--ifm-blue-900);
+  font-weight: 400 !important;
+  font-size: 18px;
+  font-family: var(--ifm-heading-font-family);
 }
 
 @media screen and (max-width: 992px) {
@@ -31,5 +35,17 @@
 @media screen and (max-width: 600px) {
   .cardsWrapper {
     grid-template-columns: auto;
+  }
+}
+
+
+@media (max-width: 767px) {
+  .textWrapper > div {
+    font-size: 16px !important;
+  }
+
+  .wrapper {
+    width: 100%;
+    padding: 100px 20px;
   }
 }

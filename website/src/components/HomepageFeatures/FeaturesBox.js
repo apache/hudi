@@ -11,7 +11,7 @@ const FeaturesBox = ({ data }) => {
       <Link to={link}>
         {data.icon && <Icon />}
         <h4 className={styles.featuresTitle}>{title}</h4>
-        <p>{description}</p>
+        <p className={styles.featuresSubTitle}>{description}</p>
       </Link>
     </div>
   );

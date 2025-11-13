@@ -84,7 +84,7 @@ const HomepageFeatures = () => {
     <section className={styles.featuresWrapper}>
       <div className="container">
         <div className={styles.titleWrapper}>
-          <Title primaryText="Hudi" secondaryText="Features" />
+          <Title primaryText="Hudi Features"/>
         </div>
         <div className={styles.wrapperContainer}>
           {features.map((data, i) => (

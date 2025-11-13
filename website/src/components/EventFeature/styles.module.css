@@ -1,47 +1,68 @@
-.banner {
+.eventWrapper {
+  padding-bottom: 150px;
+}
+
+.eventContainer {
+  padding: 30px 40px;
+  border: 2px solid var(--ifmyellow-500);
+  border-radius: 20px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  background: linear-gradient(to right, #2F93EF 0%, #1E5FBD 100%);
-  color: white;
-  padding-bottom: 0px;
-  padding-top: 20px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  gap: 20px;
+  background: #fff;
+  background: #fff;
+  position: relative;
+  z-index: 10;
+  box-shadow: 0px 9px 18px 0px #082C541C;
 }
-.sideMicrophone {
-  margin-right: 10px;
-  height: 20px;
+.eventContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
 }
-.sideCalendar {
-  margin-right: 10px;
-  margin-left: 5px;
-  height: 20px;
+.upcomingEventTitle {
+  color: var(--ifm-blue-700);
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  font-family: var(--ifm-font-family-base);
 }
 
-.joinButton {
-  margin-bottom: 20px;
-}
-
-.registerbutton {
-  background-color: #ffffff;
-  color: #074D86; 
-  border: none; 
-  padding: 10px 30px;
-  border-radius: 10px; 
-  cursor: pointer; 
-  text-transform: uppercase; 
-  font-weight: bold; 
-  display: inline-block; 
+.textContainer {
+  display: flex;
+  flex-direction: column;
+  gap:6px;
+  align-items: center;
   text-align: center;
-  min-width: 140px
-}
-.flexContainer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
 }
 
-.flexParagraph {
+.title, .subTitle {
+  font-weight: 700;
+  color: var(--ifm-blue-800);
+  margin: 0;
+  font-family: var(--ifm-font-family-base);
+}
+
+.title {
+  font-size: 24px;
+}
+
+.subTitle {
+  font-size: 18px;
+}
+
+.timeText {
+  font-weight: 400;
+  color: var(--ifm-blue-900);
+  font-size: 16px;
+  margin: 0;
+  font-family: var(--ifm-heading-font-family);
+}
+
+.rsvpTodayBtn {
   display: flex;
   align-items: center;
+  justify-content: center;
 }

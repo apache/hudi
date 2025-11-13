@@ -156,9 +156,6 @@ function DocSearch({contextualSearch, externalUrlRegex, ...props}) {
           <div role="button" onTouchStart={importDocSearchModalIfNeeded} onFocus={importDocSearchModalIfNeeded}
                onMouseOver={importDocSearchModalIfNeeded} onClick={openModal} ref={searchButtonRef}
                className={styles.searchButton} aria-label={translations.button.buttonAriaLabel}>
-            <span className={styles.searchText}>
-                {translations.button.buttonText}
-            </span>
             <Search/>
           </div>
         </div>

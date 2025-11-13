@@ -41,9 +41,6 @@ const BlogCard = ({ blog }) => {
             </div>
             <div className={styles.cardTitleWrapper}>
               <h5 className={styles.blogTitle}>{title}</h5>
-              <div>
-                <ArrowRight />
-              </div>
             </div>
           </div>
         </div>

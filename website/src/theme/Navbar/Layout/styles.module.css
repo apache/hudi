@@ -19,8 +19,7 @@
 .navbarWrapper {
   padding-left: 80px !important;
   padding-right: 80px !important;
-  box-shadow: none;
-  background: var(--ifm-color-primary-light-grey);
+  box-shadow: 0px 2px 2px 0px #06376D14;
 }
 
 @media(min-width: 1300px) {

@@ -35,29 +35,33 @@ function addElement() {
 
 function HomepageHeader() {
   const { siteConfig } = useDocusaurusContext();
-  const [firstHalf, secondHaf] = siteConfig.title.split(" ");
+  const {
+    taglineConfig: { prefix }
+  } = siteConfig.customFields;
+  const [firstHalf, secondHaf] = prefix.split('™');
   return (
-    <header className={clsx("hero hero--primary", styles.heroBanner)}>
+    <header className={clsx("", styles.heroBanner)}>
       <div className="container">
         <div className={styles.contentWrapper}>
           <div className={styles.content}>
             <div className={styles.leftContent}>
               <h1 className={clsx("hero__title", styles.heroTitle)}>
-                <span>{firstHalf}</span> {secondHaf}
+                {firstHalf}
+                <sup className={styles.textTm}>TM</sup>
+                {secondHaf}
               </h1>
-              <FeatureRender />
+              <FeatureRender/>
               <div className={styles.buttons}>
                 <LinkButton to="/releases/release-1.0.2">
-                  Latest releases
+                  Get Started
                 </LinkButton>
                 <LinkButton type="secondary" to="/docs/quick-start-guide">
-                  Documentation
+                  Read Docs
                 </LinkButton>
               </div>
             </div>
             <div className={styles.videoWrapper}>
-              <div id={styles.ytContainer} onClick={addElement}></div>
-              <div><i>Clicking on and playing the video above will load and send data from and to Google.</i></div>
+              <img src={require("/assets/images/hudi-logo.png").default} alt={'hudi-logo'}/>
             </div>
           </div>
         </div>
