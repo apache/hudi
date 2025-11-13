@@ -7,20 +7,20 @@ import {
 } from '@docusaurus/plugin-content-docs/client';
 import styles from './styles.module.css';
 import clsx from 'clsx';
-import {useDocsSidebar} from '@docusaurus/plugin-content-docs/client';
+import {useLocation} from '@docusaurus/router';
 
 function getTargetPath(version, ctx) {
   return (ctx.alternateDocVersions?.[version.name] ?? version.mainDoc).path;
 }
 
 const SidebarVersions = ({docsPluginId = 'default'}) =>  {
-  const sidebar = useDocsSidebar();
+  const {pathname} = useLocation();
   const [open, setOpen] = useState(false);
   const versions = useVersions(docsPluginId);
   const ctx = useActiveDocContext(docsPluginId);
   const {savePreferredVersionName} = useDocsPreferredVersion(docsPluginId);
 
-  if (!versions?.length || sidebar.name !== 'docs') return null;
+  if (!versions?.length || !pathname.startsWith('/docs')) return null;
 
   const sorted = [...versions].sort((a, b) => (a.label < b.label ? 1 : -1));
   const headerLabel = `Version ${ctx.activeVersion?.label ?? sorted[0].label}`;
