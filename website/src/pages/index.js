@@ -20,7 +20,7 @@ export default function Home() {
       description="Description will go into a meta tag in <head />">
         <img src={require("/assets/images/home-background.png").default} alt={'bg-image'} className={'home_background_img'} />
         <HomepageHeader />
-         <Events />
+         {/*<Events />*/}
         <main>
           <DataLake />
           <Integrations/>
