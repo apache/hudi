@@ -75,11 +75,15 @@ public class HoodieBaseFile extends BaseFile {
   }
 
   private HoodieBaseFile(FileStatus fileStatus, String[] fileIdAndCommitTime, BaseFile bootstrapBaseFile) {
-    this(fileStatus, fileIdAndCommitTime[0], fileIdAndCommitTime[1], bootstrapBaseFile);
+    this(fileStatus, fileIdAndCommitTime[0], fileIdAndCommitTime[1], fileIdAndCommitTime[2], bootstrapBaseFile);
   }
 
   public HoodieBaseFile(FileStatus fileStatus, String fileId, String commitTime, BaseFile bootstrapBaseFile) {
-    super(maybeHandleExternallyGeneratedFileName(fileStatus, fileId));
+    this(fileStatus, fileId, commitTime, fileId, bootstrapBaseFile);
+  }
+
+  public HoodieBaseFile(FileStatus fileStatus, String fileId, String commitTime, String originalFileName, BaseFile bootstrapBaseFile) {
+    super(maybeHandleExternallyGeneratedFileName(fileStatus, originalFileName));
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
     this.fileId = fileId;
     this.commitTime = commitTime;
@@ -95,7 +99,7 @@ public class HoodieBaseFile extends BaseFile {
   }
 
   private static String[] handleHudiGeneratedFile(String fileName) {
-    String[] values = new String[2];
+    String[] values = new String[3];
     short underscoreCount = 0;
     short lastUnderscoreIndex = 0;
     for (int i = 0; i < fileName.length(); i++) {
@@ -115,16 +119,19 @@ public class HoodieBaseFile extends BaseFile {
     }
     // case where there is no '.' in file name (no file suffix like .parquet)
     values[1] = fileName.substring(lastUnderscoreIndex + 1);
+    values[2] = fileName;
     return values;
   }
 
   private static String[] handleExternallyGeneratedFile(String fileName) {
-    String[] values = new String[2];
+    String[] values = new String[3];
     // file name has format <originalFileName>_<commitTime>_hudiext and originalFileName is used as fileId
     int lastUnderscore = fileName.lastIndexOf(UNDERSCORE);
     int secondToLastUnderscore = fileName.lastIndexOf(UNDERSCORE, lastUnderscore - 1);
-    values[0] = fileName.substring(0, secondToLastUnderscore);
+    int firstUnderscore = fileName.indexOf(UNDERSCORE);
+    values[0] = fileName.substring(0, firstUnderscore);
     values[1] = fileName.substring(secondToLastUnderscore + 1, lastUnderscore);
+    values[2] = fileName.substring(0, secondToLastUnderscore);
     return values;
   }
 

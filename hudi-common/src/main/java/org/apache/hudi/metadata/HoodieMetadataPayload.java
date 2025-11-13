@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.io.storage.HoodieAvroHFileReader;
@@ -564,7 +565,27 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     if (filesystemMetadata != null) {
       validatePayload(type, filesystemMetadata);
 
+
+      Map<String, HoodieMetadataFileInfo> updatedFilesystemMetadata = new HashMap<>();
+
+      // To Do; Do this only for unified view table
       filesystemMetadata.forEach((key, fileInfo) -> {
+        List<String> originalFile = combinedFileInfo.keySet().stream()
+            .filter(oKey -> oKey.startsWith(key)).collect(Collectors.toList());
+
+        if (originalFile.size() > 1) {
+          throw new HoodieException("Unexpected behaviour");
+        }
+
+        if (originalFile.size() == 1) {
+          updatedFilesystemMetadata.put(originalFile.get(0), fileInfo);
+        } else {
+          updatedFilesystemMetadata.put(key, fileInfo);
+        }
+
+      });
+
+      updatedFilesystemMetadata.forEach((key, fileInfo) -> {
         combinedFileInfo.merge(key, fileInfo,
             // Combine previous record w/ the new one, new records taking precedence over
             // the old one
