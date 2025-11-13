@@ -92,7 +92,8 @@ public class SerializableMetadataIndexedRecord implements GenericRecord, KryoSer
 
   @Override
   public Object get(int i) {
-    if (i == CACHED_KEY_SCHEMA_MAP.get(schema).pos()) {
+    // CACHED_KEY_SCHEMA_MAP.get(schema).pos()
+    if (i == 5) {
       return key;
     }
     return getData().get(i);
@@ -121,8 +122,6 @@ public class SerializableMetadataIndexedRecord implements GenericRecord, KryoSer
   public IndexedRecord getData() {
     if (record == null) {
       try {
-        //GenericDatumReader<GenericRecord> datumReader = CACHED_DATUM_READER_MAP.computeIfAbsent(
-        //    schema, GenericDatumReader::new);
         record = HoodieAvroHFileReaderImplBase.deserialize(
             key, keyValueBytes, valueOffset, valueLength, datumReader,
             CACHED_KEY_SCHEMA_MAP.get(schema));
