@@ -876,5 +876,39 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
 
   }
+
+  test("Test Insert Non-Hudi Table With Hoodie Metadata Fields") {
+    withTable(generateTableName) { tableName =>
+      // Create a non-hudi table
+      // I just want to store these hoodie metadata information as backups
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  _hoodie_commit_time string,
+           |  _hoodie_commit_seqno string,
+           |  _hoodie_record_key string,
+           |  _hoodie_partition_path string,
+           |  _hoodie_file_name string
+           |) using parquet
+       """.stripMargin)
+
+      // Insert into non-hudi table
+      spark.sql(
+        s"""
+           | insert into table $tableName
+           | select 1 as id, 'a1' as name, '001' as _hoodie_commit_time, '0001' as _hoodie_commit_seqno, '1' as _hoodie_record_key, 'path1' as _hoodie_partition_path, 'file1' as _hoodie_file_name
+           | union
+           | select 2 as id, 'a2' as name, '002' as _hoodie_commit_time, '0002' as _hoodie_commit_seqno, '2' as _hoodie_record_key, 'path2' as _hoodie_partition_path, 'file2' as _hoodie_file_name
+       """.stripMargin)
+
+      checkAnswer(s"select id, name, _hoodie_commit_time, _hoodie_commit_seqno, _hoodie_record_key, _hoodie_partition_path, _hoodie_file_name from $tableName")(
+        Seq(1, "a1", "001", "0001", "1", "path1", "file1"),
+        Seq(2, "a2", "002", "0002", "2", "path2", "file2")
+      )
+    }
+  }
+
 }
 

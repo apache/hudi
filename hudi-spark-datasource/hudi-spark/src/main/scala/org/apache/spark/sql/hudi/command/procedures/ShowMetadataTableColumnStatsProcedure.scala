@@ -25,10 +25,8 @@ import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.TableSchemaResolver
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.metadata.HoodieTableMetadata
 
 import org.apache.avro.generic.IndexedRecord
 import org.apache.spark.internal.Logging
@@ -81,8 +79,9 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
       .build
     val metaClient = createMetaClient(jsc, basePath)
     val schemaUtil = new TableSchemaResolver(metaClient)
-    val schema = AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
+    val avroSchema = schemaUtil.getTableAvroSchema
+    val structSchema = AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, structSchema, avroSchema, metadataConfig, metaClient)
     val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = columnStatsIndex.loadColumnStatsIndexRecords(targetColumnsSeq, shouldReadInMemory = false)
     val engineCtx = new HoodieSparkEngineContext(jsc)
     val fsView = buildFileSystemView(table, engineCtx)

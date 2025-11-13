@@ -290,30 +290,34 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Create the HUDI Record Index within the Metadata Table for a partitioned dataset where a "
           + "pair of partition path and record key is unique across the entire table");
 
-  public static final ConfigProperty<Integer> RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP = ConfigProperty
-      .key(METADATA_PREFIX + ".record.index.min.filegroup.count")
+  public static final ConfigProperty<Integer> GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".global.record.level.index.min.filegroup.count")
       .defaultValue(10)
+      .withAlternatives(METADATA_PREFIX + ".record.index.min.filegroup.count")
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Minimum number of file groups to use for Record Index.");
 
-  public static final ConfigProperty<Integer> RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP = ConfigProperty
-      .key(METADATA_PREFIX + ".record.index.max.filegroup.count")
+  public static final ConfigProperty<Integer> GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".global.record.level.index.max.filegroup.count")
       .defaultValue(10000)
+      .withAlternatives(METADATA_PREFIX + ".record.index.max.filegroup.count")
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Maximum number of file groups to use for Record Index.");
 
-  public static final ConfigProperty<Integer> PARTITIONED_RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP = ConfigProperty
-      .key(METADATA_PREFIX + ".partitioned.record.index.min.filegroup.count")
+  public static final ConfigProperty<Integer> RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".record.level.index.min.filegroup.count")
       .defaultValue(1)
+      .withAlternatives(METADATA_PREFIX + ".partitioned.record.index.min.filegroup.count")
       .markAdvanced()
       .sinceVersion("1.1.0")
       .withDocumentation("Minimum number of file groups to use for Partitioned Record Index.");
 
-  public static final ConfigProperty<Integer> PARTITIONED_RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP = ConfigProperty
-      .key(METADATA_PREFIX + ".partitioned.record.index.max.filegroup.count")
+  public static final ConfigProperty<Integer> RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".record.level.index.max.filegroup.count")
       .defaultValue(10)
+      .withAlternatives(METADATA_PREFIX + ".partitioned.record.index.max.filegroup.count")
       .markAdvanced()
       .sinceVersion("1.1.0")
       .withDocumentation("Maximum number of file groups to use for Partitioned Record Index.");
@@ -684,20 +688,20 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getIntOrDefault(METADATA_MAX_NUM_DELTACOMMITS_WHEN_PENDING);
   }
 
-  public int getRecordIndexMinFileGroupCount() {
-    return getInt(RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP);
+  public int getGlobalRecordLevelIndexMinFileGroupCount() {
+    return getInt(GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP);
   }
 
-  public int getPartitionedRecordIndexMinFileGroupCount() {
-    return getInt(PARTITIONED_RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP);
+  public int getRecordLevelIndexMinFileGroupCount() {
+    return getInt(RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP);
   }
 
-  public int getRecordIndexMaxFileGroupCount() {
-    return getInt(RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP);
+  public int getGlobalRecordLevelIndexMaxFileGroupCount() {
+    return getInt(GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP);
   }
 
-  public int getPartitionedRecordIndexMaxFileGroupCount() {
-    return getInt(PARTITIONED_RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP);
+  public int getRecordLevelIndexMaxFileGroupCount() {
+    return getInt(RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP);
   }
 
   public float getRecordIndexGrowthFactor() {
@@ -1033,8 +1037,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     }
 
     public Builder withRecordIndexFileGroupCount(int minCount, int maxCount) {
-      metadataConfig.setValue(RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP, String.valueOf(minCount));
-      metadataConfig.setValue(RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP, String.valueOf(maxCount));
+      metadataConfig.setValue(GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP, String.valueOf(minCount));
+      metadataConfig.setValue(GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP, String.valueOf(maxCount));
       return this;
     }
 

@@ -673,8 +673,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     // Initialize the file groups - using the same estimation logic as that of record index
     final int fileGroupCount = HoodieTableMetadataUtil.estimateFileGroupCount(RECORD_INDEX, records::count,
-        RECORD_INDEX_AVERAGE_RECORD_SIZE, dataWriteConfig.getRecordIndexMinFileGroupCount(),
-        dataWriteConfig.getRecordIndexMaxFileGroupCount(), dataWriteConfig.getRecordIndexGrowthFactor(),
+        RECORD_INDEX_AVERAGE_RECORD_SIZE, dataWriteConfig.getGlobalRecordLevelIndexMinFileGroupCount(),
+        dataWriteConfig.getGlobalRecordLevelIndexMaxFileGroupCount(), dataWriteConfig.getRecordIndexGrowthFactor(),
         dataWriteConfig.getRecordIndexMaxFileGroupSizeBytes());
 
     return Pair.of(fileGroupCount, records);
@@ -811,11 +811,11 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     int minFileGroupCount;
     int maxFileGroupCount;
     if (dataWriteConfig.isRecordLevelIndexEnabled()) {
-      minFileGroupCount = dataWriteConfig.getPartitionedRecordIndexMinFileGroupCount();
-      maxFileGroupCount = dataWriteConfig.getPartitionedRecordIndexMaxFileGroupCount();
+      minFileGroupCount = dataWriteConfig.getRecordLevelIndexMinFileGroupCount();
+      maxFileGroupCount = dataWriteConfig.getRecordLevelIndexMaxFileGroupCount();
     } else {
-      minFileGroupCount = dataWriteConfig.getRecordIndexMinFileGroupCount();
-      maxFileGroupCount = dataWriteConfig.getRecordIndexMaxFileGroupCount();
+      minFileGroupCount = dataWriteConfig.getGlobalRecordLevelIndexMinFileGroupCount();
+      maxFileGroupCount = dataWriteConfig.getGlobalRecordLevelIndexMaxFileGroupCount();
     }
     Supplier<Long> recordCountSupplier = () -> {
       records.persist("MEMORY_AND_DISK_SER");
@@ -1429,7 +1429,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         for (String partitionToWrite : partitionsTouchedByInflightCommit) {
           // Always use the min file group count!
           initializeFileGroups(dataMetaClient, RECORD_INDEX, instantTime,
-              dataWriteConfig.getPartitionedRecordIndexMinFileGroupCount(),
+              dataWriteConfig.getRecordLevelIndexMinFileGroupCount(),
               RECORD_INDEX.getPartitionPath(), Option.of(partitionToWrite));
         }
         initMetadataReader();

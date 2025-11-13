@@ -24,7 +24,7 @@ import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.expressions.{ArrayTransform, Attribute, Cast, CreateNamedStruct, CreateStruct, Expression, GetStructField, LambdaFunction, Literal, MapEntries, MapFromEntries, NamedLambdaVariable, UnsafeProjection}
-import org.apache.spark.sql.types.{ArrayType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, MapType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampNTZType}
 
 object HoodieParquetFileFormatHelper {
 
@@ -57,6 +57,9 @@ object HoodieParquetFileFormatHelper {
 
   def isDataTypeEqual(requiredType: DataType, fileType: DataType): Boolean = (requiredType, fileType) match {
     case (requiredType, fileType) if requiredType == fileType => true
+
+    // prevent illegal cast
+    case (TimestampNTZType, LongType) => true
 
     case (ArrayType(rt, _), ArrayType(ft, _)) =>
       // Do not care about nullability as schema evolution require fields to be nullable
