@@ -247,19 +247,18 @@ class TestInsertTable2 extends HoodieSparkSqlTestBase {
                  | partitioned by (dt)
                  | location '${tmp.getCanonicalPath}/$tableName'
          """.stripMargin)
-            withSQLConf("hoodie.datasource.write.insert.drop.duplicates" -> "false") {
-
+            withSQLConf(
+              "hoodie.datasource.write.insert.drop.duplicates" -> "false",
               // Enable the bulk insert
-              withSQLConf("hoodie.sql.bulk.insert.enable" -> "true") {
-                spark.sql(s"insert into $tableName values(1, 'a1', 10, '2021-07-18')")
+              "hoodie.sql.bulk.insert.enable" -> "true") {
+              spark.sql(s"insert into $tableName values(1, 'a1', 10, '2021-07-18')")
 
-                assertResult(WriteOperationType.BULK_INSERT) {
-                  getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName").getOperationType
-                }
-                checkAnswer(s"select id, name, price, dt from $tableName")(
-                  Seq(1, "a1", 10.0, "2021-07-18")
-                )
+              assertResult(WriteOperationType.BULK_INSERT) {
+                getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName").getOperationType
               }
+              checkAnswer(s"select id, name, price, dt from $tableName")(
+                Seq(1, "a1", 10.0, "2021-07-18")
+              )
             }
             // Disable the bulk insert
             withSQLConf("hoodie.sql.bulk.insert.enable" -> "false") {
