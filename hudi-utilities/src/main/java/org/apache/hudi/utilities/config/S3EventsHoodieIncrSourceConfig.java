@@ -40,36 +40,46 @@ import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
         + "meta information from Hudi table as a source in Hudi Streamer.")
 public class S3EventsHoodieIncrSourceConfig extends HoodieConfig {
 
+  private static final String S3_INCR_PREFIX = "source.s3incr.";
+  private static final String STREAMER_S3_INCR_PREFIX = STREAMER_CONFIG_PREFIX + S3_INCR_PREFIX;
+  private static final String DELTA_STREAMER_S3_INCR_PREFIX = DELTA_STREAMER_CONFIG_PREFIX + S3_INCR_PREFIX;
+
   public static final ConfigProperty<Boolean> S3_INCR_ENABLE_EXISTS_CHECK = ConfigProperty
-      .key(STREAMER_CONFIG_PREFIX + "source.s3incr.check.file.exists")
+      .key(STREAMER_S3_INCR_PREFIX + "check.file.exists")
       .defaultValue(false)
-      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.s3incr.check.file.exists")
+      .withAlternatives(DELTA_STREAMER_S3_INCR_PREFIX + "check.file.exists")
       .markAdvanced()
       .withDocumentation("Control whether we do existence check for files before consuming them");
 
   @Deprecated
   // Use {@link CloudSourceConfig.SELECT_RELATIVE_PATH_PREFIX}
   public static final ConfigProperty<String> S3_KEY_PREFIX = ConfigProperty
-      .key(STREAMER_CONFIG_PREFIX + "source.s3incr.key.prefix")
+      .key(STREAMER_S3_INCR_PREFIX + "key.prefix")
       .noDefaultValue()
-      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.s3incr.key.prefix")
+      .withAlternatives(DELTA_STREAMER_S3_INCR_PREFIX + "key.prefix")
       .markAdvanced()
       .deprecatedAfter("0.15.0")
       .withDocumentation("Control whether to filter the s3 objects starting with this prefix");
 
   public static final ConfigProperty<String> S3_FS_PREFIX = ConfigProperty
-      .key(STREAMER_CONFIG_PREFIX + "source.s3incr.fs.prefix")
+      .key(STREAMER_S3_INCR_PREFIX + "fs.prefix")
       .defaultValue("s3")
-      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.s3incr.fs.prefix")
+      .withAlternatives(DELTA_STREAMER_S3_INCR_PREFIX + "fs.prefix")
       .markAdvanced()
       .withDocumentation("The file system prefix.");
+
+  public static final ConfigProperty<Boolean> S3_INCR_INCLUDE_SOURCE_PATH_FIELD = ConfigProperty
+      .key(STREAMER_S3_INCR_PREFIX + "include.source.path.field")
+      .defaultValue(false)
+      .markAdvanced()
+      .withDocumentation("When enabled, adds a column containing source file path of each record");
 
   @Deprecated
   // Use {@link CloudSourceConfig.IGNORE_RELATIVE_PATH_PREFIX}
   public static final ConfigProperty<String> S3_IGNORE_KEY_PREFIX = ConfigProperty
-      .key(STREAMER_CONFIG_PREFIX + "source.s3incr.ignore.key.prefix")
+      .key(STREAMER_S3_INCR_PREFIX + "ignore.key.prefix")
       .noDefaultValue()
-      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.s3incr.ignore.key.prefix")
+      .withAlternatives(DELTA_STREAMER_S3_INCR_PREFIX + "ignore.key.prefix")
       .markAdvanced()
       .deprecatedAfter("0.15.0")
       .withDocumentation("Control whether to ignore the s3 objects starting with this prefix");
@@ -77,17 +87,17 @@ public class S3EventsHoodieIncrSourceConfig extends HoodieConfig {
   @Deprecated
   // Use {@link CloudSourceConfig.IGNORE_RELATIVE_PATH_SUBSTR}
   public static final ConfigProperty<String> S3_IGNORE_KEY_SUBSTRING = ConfigProperty
-      .key(STREAMER_CONFIG_PREFIX + "source.s3incr.ignore.key.substring")
+      .key(STREAMER_S3_INCR_PREFIX + "ignore.key.substring")
       .noDefaultValue()
-      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.s3incr.ignore.key.substring")
+      .withAlternatives(DELTA_STREAMER_S3_INCR_PREFIX + "ignore.key.substring")
       .markAdvanced()
       .deprecatedAfter("0.15.0")
       .withDocumentation("Control whether to ignore the s3 objects with this substring");
 
   public static final ConfigProperty<String> SPARK_DATASOURCE_OPTIONS = ConfigProperty
-      .key(STREAMER_CONFIG_PREFIX + "source.s3incr.spark.datasource.options")
+      .key(STREAMER_S3_INCR_PREFIX + "spark.datasource.options")
       .noDefaultValue()
-      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.s3incr.spark.datasource.options")
+      .withAlternatives(DELTA_STREAMER_S3_INCR_PREFIX + "spark.datasource.options")
       .markAdvanced()
       .withDocumentation("Json string, passed to the reader while loading dataset. Example Hudi Streamer conf "
           + "`--hoodie-conf hoodie.streamer.source.s3incr.spark.datasource.options={\"header\":\"true\",\"encoding\":\"UTF-8\"}`");
