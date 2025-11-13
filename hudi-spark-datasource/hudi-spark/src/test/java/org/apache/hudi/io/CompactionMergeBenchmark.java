@@ -221,7 +221,7 @@ public class CompactionMergeBenchmark extends BaseTestHandle {
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withEnableRecordIndex(true)
+            .withEnableGlobalRecordLevelIndex(true)
             .withStreamingWriteEnabled(true)
             .withSecondaryIndexEnabled(true)
             .withSecondaryIndexName("sec-rider")
