@@ -76,6 +76,8 @@ Once a lock is acquired, a dedicated heartbeat task periodically calls renewLock
 - Clock drift: we allow for a maximum of 500ms of clock drift between nodes. A requirement of this lock provider is that all writers competing for the same lock must be writing from the same cloud provider (AWS/Azure/GCP).
   - This will not be configurable at this time. If a storage-specific implementation needs to customize this the config can be added at that time but it should never go below 500ms.
 
+See rfc-91-2.md for detailed edge case handling of conditional write retries
+
 ### New Hudi configs
 
 - `hoodie.write.lock.storage.heartbeat.poll.secs`: default 30 sec, how often to renew each lock.
@@ -130,28 +132,8 @@ We can use the same logic for preconditions with overwrite operations using the 
 
 ## Test Plan
 
-We can write normal junit tests using testcontainers with GCS and S3 to simulate edge cases and general contention. Further adhoc testing will include the following scenarios:
+We can write normal junit tests using testcontainers with GCS and S3 to simulate edge cases and general contention.
 
 ### Unit tests
 
 We will add some high contention, high usage unit tests that create hundreds of threads to try and acquire locks simultaneously on the testcontainers to simulate load and contention. We can also use thread-unsafe structures like Arraylists to ensure concurrent modifications do not occur.
-
-### High-Frequency Commit and Table Service Test
-
-Run a long-running streaming ingestion process that continuously performs inserts, updates, and deletes. Ensure that frequent commits occur while table services like compaction and clustering operate concurrently. This test will help verify that the lock provider can handle overlapping operations without causing excessive delays or lock contention.
-
-### Concurrent SQL and Spark Operations Test
-
-While the streaming ingestion is active, execute multiple Spark jobs and SQL operations (including inserts, updates, and deletes) against the same Hudi table. This scenario is designed to simulate a mixed workload and to confirm that the lock provider maintains a stable baseline commit latency, prevents deadlocks, and handles high levels of concurrency without impacting overall performance.
-
-### Long-Running Stream Stability Test
-
-Initiate one or more continuous streaming processes that run for an extended period (few days). Monitor these processes for issues such as connection leaks, resource exhaustion, or performance degradation over time. Periodic consistency checks during this test will ensure that the data remains intact and that commit operations continue to perform reliably.
-
-### Data Integrity and Consistency Verification
-
-After running the above tests, perform validation queries to verify that key fields and preCombine values remain consistent throughout the ingestion process. This step ensures that the lock provider does not introduce any data discrepancies, even under heavy commit loads and concurrent operations.
-
-### Monitoring and Metrics Analysis
-
-Throughout all tests, track key performance metrics such as commit latency, throughput, and lock wait times. Monitoring resource utilization (CPU, memory, and network usage) is also essential to determine if the lock provider introduces any significant overhead or bottlenecks.
