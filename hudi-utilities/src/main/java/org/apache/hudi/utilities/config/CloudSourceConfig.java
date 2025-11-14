@@ -78,9 +78,9 @@ public class CloudSourceConfig extends HoodieConfig {
           + "In Prod this should always be true. In case of Cloud Pubsub, not acknowledging means Pubsub will keep redelivering the same messages.");
 
   public static final ConfigProperty<Boolean> ENABLE_EXISTS_CHECK = ConfigProperty
-      .key(STREAMER_CLOUD_SOURCE_PREFIX + "check.file.exists")
+      .key(STREAMER_CLOUD_SOURCE_PREFIX + "data.check.file.exists")
       .defaultValue(false)
-      .withAlternatives(DELTA_STREAMER_CLOUD_SOURCE_PREFIX + "check.file.exists")
+      .withAlternatives(DELTA_STREAMER_CLOUD_SOURCE_PREFIX + "data.check.file.exists")
       .markAdvanced()
       .withDocumentation("If true, checks whether file exists before attempting to pull it");
 
