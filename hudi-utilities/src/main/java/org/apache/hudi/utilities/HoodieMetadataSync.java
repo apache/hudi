@@ -25,6 +25,9 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -37,15 +40,23 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.FileSystemViewStorageType;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieSparkTable;
 
 import com.beust.jcommander.JCommander;
@@ -57,10 +68,13 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.StorageType;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.swing.filechooser.FileSystemView;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -74,6 +88,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
@@ -268,8 +284,9 @@ public class HoodieMetadataSync implements Serializable {
         } else if (instant.getAction().equals(HoodieTimeline.CLEAN_ACTION)) {
           HoodieCleanMetadata srcCleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(
               sourceTableMetaClient.getCommitsTimeline().getInstantDetails(instant).get());
-
-          HoodieCleanMetadata tgtCleanMetadata = buildHoodieCleanMetadata(srcCleanMetadata, commitTime);
+          HoodieCleanMetadata tgtCleanMetadata = reconstructHoodieCleanCommitMetadata(srcCleanMetadata,
+              writeConfig, hoodieSparkEngineContext, targetTableMetaClient);
+          //HoodieCleanMetadata tgtCleanMetadata = buildHoodieCleanMetadata(srcCleanMetadata, commitTime);
           try (HoodieTableMetadataWriter hoodieTableMetadataWriter =
                    (HoodieTableMetadataWriter) sparkTable.getMetadataWriter(commitTime).get()) {
             hoodieTableMetadataWriter.update(tgtCleanMetadata, commitTime);
@@ -283,6 +300,102 @@ public class HoodieMetadataSync implements Serializable {
             .saveAsComplete(new HoodieInstant(true, instant.getAction(), commitTime), commitMetadataInBytes);
       }
     }
+  }
+
+  private HoodieCleanMetadata reconstructHoodieCleanCommitMetadata(HoodieCleanMetadata originalCleanMetadata, HoodieWriteConfig config, HoodieSparkEngineContext engineContext,
+                                                                   HoodieTableMetaClient metaClient) {
+    HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata();
+    HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, config.getMetadataConfig(), metaClient.getBasePathV2().toString(), true);
+    //HoodieTableFileSystemView fsv = getFSV(config, FileSystemViewStorageType.MEMORY, engineContext, metaClient);
+    try {
+      originalCleanMetadata.getPartitionMetadata().entrySet().forEach(entry -> {
+        String partitionPath = entry.getKey();
+        System.out.println("Processing partition path " + partitionPath);
+        HoodieCleanPartitionMetadata cleanPartitionMetadata = entry.getValue();
+        List<String> deletePathPatterns = cleanPartitionMetadata.getDeletePathPatterns();
+        boolean isPartitionDeleted = cleanPartitionMetadata.getIsPartitionDeleted();
+
+        Map<String, List<Pair<String, String>>> fileIdsToDeletedFiles = new HashMap<>();
+        deletePathPatterns.forEach(deletePathPattern -> {
+          String fileId = FSUtils.getFileId(deletePathPattern);
+          String baseInstantTime = FSUtils.getCommitTime(deletePathPattern);
+          fileIdsToDeletedFiles.computeIfAbsent(fileId, s -> new ArrayList<>());
+          fileIdsToDeletedFiles.get(fileId).add(Pair.of(deletePathPattern, baseInstantTime));
+        });
+        Set<String> fileIds = fileIdsToDeletedFiles.keySet();
+      /*fsv.getAllFileGroups(partitionPath).filter(fileGroup -> fileIds.contains(fileGroup.getFileGroupId().getFileId())).forEach(fileGroup -> {
+        // found matched file group.
+        // find file slice matching base instant time.
+        String fileId = fileGroup.getFileGroupId().getFileId();
+        List<Pair<String, String>> fileNameAndBaseInstantTimePair = fileIdsToDeletedFiles.get(fileId);
+        Map<String, String> baseInstantTimeToSrcFileNameMap = fileNameAndBaseInstantTimePair.stream()
+            .map(pair -> Pair.of(pair.getValue(), pair.getKey()))
+            .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+
+       Map<String, FileSlice> srcBaseInstantTimeToFileSlice = fileGroup.getAllFileSlices().map(fileSlice -> {
+          String baseFileName = fileSlice.getBaseFile().get().getFileName();
+          String srcBaseInstantTime = FSUtils.getCommitTime(baseFileName);
+          return Pair.of(srcBaseInstantTime, fileSlice);
+        }).filter(pair -> baseInstantTimeToSrcFileNameMap.containsKey(pair.getKey())).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+
+       srcBaseInstantTimeToFileSlice.entrySet().forEach(entry1 -> {
+         String baseInstantTime = entry1.getKey();
+         FileSlice fileSlice = entry1.getValue();
+         String originalFile = baseInstantTimeToSrcFileNameMap.get(baseInstantTime);
+         System.out.println("  "+ fileId + " :: original file " + originalFile + ", file path from target table " + fileSlice.getBaseFile().get().getPath());
+       });
+      });*/
+
+        List<String> allFilesInPartition = ((HoodieBackedTableMetadata) tableMetadata).getRecordByKey(partitionPath, MetadataPartitionType.FILES.getPartitionPath()).get().getData().getFilenames();
+
+        Map<String, Map<String, String>> fileIdToBaseInstantTimeToFileName = new HashMap<>();
+        allFilesInPartition.forEach(fileName -> {
+          String fileId = FSUtils.getFileId(fileName);
+          String baseInstantTime = FSUtils.getCommitTime(fileName);
+          fileIdToBaseInstantTimeToFileName.computeIfAbsent(fileId, s -> new HashMap<>());
+          fileIdToBaseInstantTimeToFileName.get(fileId).put(baseInstantTime, fileName);
+        });
+
+        List<String> deletePathPatternsFromTarget = new ArrayList<>();
+        fileIdsToDeletedFiles.forEach((k, v) -> {
+          String fileId = k;
+          List<Pair<String, String>> fileNameAndBaseInstantTime = v;
+          fileNameAndBaseInstantTime.forEach(pair -> {
+            if (fileIdToBaseInstantTimeToFileName.get(fileId) != null && fileIdToBaseInstantTimeToFileName.get(fileId).containsKey(pair.getValue())) {
+              //System.out.println("Source file id " + k + ", base instant time " + pair.getRight() + ", file name " + pair.getLeft() + " => target table file Name " + fileIdToBaseInstantTimeToFileName.get(fileId).get(pair.getRight()));
+              deletePathPatternsFromTarget.add(fileIdToBaseInstantTimeToFileName.get(fileId).get(pair.getRight()));
+            } else {
+              //System.out.println("Source file id " + k + ", base instant time " + pair.getRight() + ", file name " + pair.getLeft() + " => No matching file found in target table XXXXXXX ");
+            }
+          });
+        });
+        if (cleanPartitionMetadata.getDeletePathPatterns().size() == deletePathPatternsFromTarget.size()) {
+          cleanPartitionMetadata.setDeletePathPatterns(deletePathPatternsFromTarget);
+        } else {
+          throw new HoodieException("Failed to find matching file from target table");
+        }
+      });
+
+      return originalCleanMetadata;
+    } finally {
+      if (tableMetadata != null) {
+        try {
+          tableMetadata.close();
+        } catch (Exception e) {
+          throw new HoodieException("Failed to close Table Metadata", e);
+        }
+      }
+    }
+  }
+
+  private HoodieTableFileSystemView getFSV(HoodieWriteConfig config, FileSystemViewStorageType storageType, HoodieSparkEngineContext context, HoodieTableMetaClient metaClient) {
+    FileSystemViewStorageConfig viewStorageConfig = FileSystemViewStorageConfig.newBuilder().fromProperties(config.getProps())
+        .withStorageType(storageType).build();
+    return (HoodieTableFileSystemView) FileSystemViewManager
+        .createViewManager(context, config.getMetadataConfig(), viewStorageConfig, config.getCommonConfig(),
+            (SerializableFunctionUnchecked<HoodieTableMetaClient, HoodieTableMetadata>) v1 ->
+                HoodieTableMetadata.create(context, config.getMetadataConfig(), metaClient.getBasePathV2().toString(), true))
+        .getFileSystemView(config.getBasePath());
   }
 
   private SyncMetadata getTableSyncExtraMetadata(Option<HoodieInstant> targetTableLastInstant, HoodieTableMetaClient metaClient, String sourceIdentifier,

@@ -354,7 +354,15 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
       HoodieMetadataPayload metadataPayload = record.getData();
       checkForSpuriousDeletes(metadataPayload, recordKey);
       try {
-        return metadataPayload.getFileStatuses(getHadoopConf(), partitionPath);
+
+        Path partitionPathToUseForDataFiles;
+        if (enableBasePathForPartitions) {
+          partitionPathToUseForDataFiles = new Path(metadataPayload.getBasePathForPartition(), relativePartitionPath);
+        } else {
+          partitionPathToUseForDataFiles = partitionPath;
+        }
+
+        return metadataPayload.getFileStatuses(getHadoopConf(), partitionPathToUseForDataFiles);
       } catch (IOException e) {
         throw new HoodieIOException("Failed to extract file-statuses from the payload", e);
       }
@@ -420,7 +428,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     }
   }
 
-  protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
+  public abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
 
   protected abstract Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys, String partitionName);
 
