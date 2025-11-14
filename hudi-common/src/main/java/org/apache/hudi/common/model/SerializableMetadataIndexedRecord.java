@@ -52,19 +52,19 @@ public class SerializableMetadataIndexedRecord implements GenericRecord, KryoSer
   private Schema schema;
   // TODO(yihua): need to have a better way of referencing this reader
   private GenericDatumReader<GenericRecord> datumReader;
-  String key;
+  String recordKey;
   private byte[] keyValueBytes;
   int valueOffset;
   int valueLength;
 
   private SerializableMetadataIndexedRecord(Schema schema,
                                             GenericDatumReader<GenericRecord> datumReader,
-                                            String key,
+                                            String recordKey,
                                             byte[] keyValueBytes,
                                             int valueOffset,
                                             int valueLength) {
     this.datumReader = datumReader;
-    this.key = key;
+    this.recordKey = recordKey;
     this.keyValueBytes = keyValueBytes;
     this.valueOffset = valueOffset;
     this.valueLength = valueLength;
@@ -94,7 +94,7 @@ public class SerializableMetadataIndexedRecord implements GenericRecord, KryoSer
   public Object get(int i) {
     // CACHED_KEY_SCHEMA_MAP.get(schema).pos()
     if (i == 5) {
-      return key;
+      return recordKey;
     }
     return getData().get(i);
   }
@@ -123,7 +123,7 @@ public class SerializableMetadataIndexedRecord implements GenericRecord, KryoSer
     if (record == null) {
       try {
         record = HoodieAvroHFileReaderImplBase.deserialize(
-            key, keyValueBytes, valueOffset, valueLength, datumReader,
+            recordKey, keyValueBytes, valueOffset, valueLength, datumReader,
             CACHED_KEY_SCHEMA_MAP.get(schema));
         keyValueBytes = null;
         schema = null;
@@ -170,7 +170,7 @@ public class SerializableMetadataIndexedRecord implements GenericRecord, KryoSer
   @Override
   public Object get(String key) {
     if (KEY_FIELD_NAME.equals(key)) {
-      return this.key;
+      return recordKey;
     }
     getData();
     Schema.Field field = record.getSchema().getField(key);
