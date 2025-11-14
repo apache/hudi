@@ -170,7 +170,7 @@ public class SerializableMetadataIndexedRecord implements GenericRecord, KryoSer
   @Override
   public Object get(String key) {
     if (KEY_FIELD_NAME.equals(key)) {
-      return key;
+      return this.key;
     }
     getData();
     Schema.Field field = record.getSchema().getField(key);
