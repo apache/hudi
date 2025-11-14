@@ -92,8 +92,8 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
-  protected void bulkCommit(String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records, int fileGroupCount) {
-    commitInternal(instantTime, Collections.singletonMap(partitionType, records), true, Option.of(new JavaHoodieMetadataBulkInsertPartitioner()));
+  public void bulkCommit(String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records, int fileGroupCount, boolean isInitializing) {
+    commitInternal(instantTime, Collections.singletonMap(partitionType, records), isInitializing, Option.of(new JavaHoodieMetadataBulkInsertPartitioner()));
   }
 
   @Override

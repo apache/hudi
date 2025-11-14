@@ -105,8 +105,8 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void bulkCommit(String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records, int fileGroupCount) {
-    commitInternal(instantTime, Collections.singletonMap(partitionType, records), true, Option.empty());
+  public void bulkCommit(String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records, int fileGroupCount, boolean isInitializing) {
+    commitInternal(instantTime, Collections.singletonMap(partitionType, records), isInitializing, Option.empty());
   }
 
   @Override

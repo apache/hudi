@@ -442,7 +442,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
       // Perform the commit using bulkCommit
       HoodieData<HoodieRecord> records = fileGroupCountAndRecordsPair.getValue();
-      bulkCommit(commitTimeForPartition, partitionType, records, fileGroupCount);
+      bulkCommit(commitTimeForPartition, partitionType, records, fileGroupCount, true);
       metadataMetaClient.reloadActiveTimeline();
       dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionType, true);
       // initialize the metadata reader again so the MDT partition can be read after initialization
@@ -639,7 +639,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @param initializationTime Files which have a timestamp after this are neglected
    * @return List consisting of {@code DirectoryInfo} for each partition found.
    */
-  private List<DirectoryInfo> listAllPartitionsFromFilesystem(String initializationTime) {
+  public List<DirectoryInfo> listAllPartitionsFromFilesystem(String initializationTime) {
     List<SerializablePath> pathsToList = new LinkedList<>();
     pathsToList.add(new SerializablePath(new CachingPath(dataWriteConfig.getBasePath())));
 
@@ -1165,9 +1165,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @param records        - records to be bulk inserted
    * @param fileGroupCount - The maximum number of file groups to which the records will be written.
    */
-  protected abstract void bulkCommit(
+  public abstract void bulkCommit(
       String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records,
-      int fileGroupCount);
+      int fileGroupCount, boolean isInitializing);
 
   /**
    * Tag each record with the location in the given partition.
@@ -1539,7 +1539,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * required for initializing the metadata table. Saving limited properties reduces the total memory footprint when
    * a very large number of files are present in the dataset being initialized.
    */
-  static class DirectoryInfo implements Serializable {
+  public static class DirectoryInfo implements Serializable {
     // Relative path of the directory (relative to the base directory)
     private final String relativePath;
     // Map of filenames within this partition to their respective sizes
@@ -1575,24 +1575,24 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       }
     }
 
-    String getRelativePath() {
+    public String getRelativePath() {
       return relativePath;
     }
 
-    int getTotalFiles() {
+    public int getTotalFiles() {
       return filenameToSizeMap.size();
     }
 
-    boolean isHoodiePartition() {
+    public boolean isHoodiePartition() {
       return isHoodiePartition;
     }
 
-    List<Path> getSubDirectories() {
+    public List<Path> getSubDirectories() {
       return subDirectories;
     }
 
     // Returns a map of filenames mapped to their lengths
-    Map<String, Long> getFileNameToSizeMap() {
+    public Map<String, Long> getFileNameToSizeMap() {
       return filenameToSizeMap;
     }
   }

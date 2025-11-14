@@ -123,11 +123,11 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void bulkCommit(
+  public void bulkCommit(
       String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records,
-      int fileGroupCount) {
+      int fileGroupCount, boolean isInitializing) {
     SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(fileGroupCount);
-    commitInternal(instantTime, Collections.singletonMap(partitionType, records), true, Option.of(partitioner));
+    commitInternal(instantTime, Collections.singletonMap(partitionType, records), isInitializing, Option.of(partitioner));
   }
 
   @Override
