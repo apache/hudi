@@ -332,6 +332,6 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
   }
 
   private void includeSourcePathFieldProp(TypedProperties properties) {
-    properties.put("hoodie.streamer.source.s3incr.include.source.path.field", "true");
+    properties.put("hoodie.streamer.source.cloud.data.include.source.path.field", "true");
   }
 }

@@ -345,8 +345,8 @@ public class CloudObjectsSelectorCommon {
       }
     }
 
-    // add source file path to dataset if S3_INCR_INCLUDE_SOURCE_PATH config is enabled
-    if (getBooleanWithAltKeys(properties, S3EventsHoodieIncrSourceConfig.S3_INCR_INCLUDE_SOURCE_PATH_FIELD)) {
+    // add source file path to dataset if INCLUDE_SOURCE_PATH_FIELD config is enabled
+    if (getBooleanWithAltKeys(properties, CloudSourceConfig.INCLUDE_SOURCE_PATH_FIELD)) {
       boolean sourcePathColumnExists = Arrays.stream(dataset.schema().fieldNames())
           .anyMatch(name -> name.equalsIgnoreCase(SOURCE_PATH_COLUMN));
       if (sourcePathColumnExists) {
