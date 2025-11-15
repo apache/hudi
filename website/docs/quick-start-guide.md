@@ -462,39 +462,16 @@ values={[
 
 ```scala
 // spark-shell
-val adjustedFareDF = spark.read.format("hudi").
-  load(basePath).limit(2).
-  withColumn("fare", col("fare") * 10)
-
-adjustedFareDF.write.format("hudi").
-  option("hoodie.datasource.write.payload.class","com.payloads.CustomMergeIntoConnector").
-  mode(Append).
-  save(basePath)
-// Notice Fare column has been updated but all other columns remain intact.
-spark.read.format("hudi").load(basePath).show()
+Feel free to use "upsert" operation as showed under "Update data" section. Or leverage MergeInto with Spark sql writes.
 ```
-The `com.payloads.CustomMergeIntoConnector` adds adjusted fare values to the original table and preserves all other fields. 
-Refer [here](https://gist.github.com/bhasudha/7ea07f2bb9abc5c6eb86dbd914eec4c6) for sample implementation of `com.payloads.CustomMergeIntoConnector`.
-
 </TabItem>
 
 <TabItem value="python">
 
 ```python
 # pyspark
-adjustedFareDF = spark.read.format("hudi").load(basePath). \
-    limit(2).withColumn("fare", col("fare") * 100)
-adjustedFareDF.write.format("hudi"). \
-option("hoodie.datasource.write.payload.class","com.payloads.CustomMergeIntoConnector"). \
-mode("append"). \
-save(basePath)
-# Notice Fare column has been updated but all other columns remain intact.
-spark.read.format("hudi").load(basePath).show()
+Feel free to use "upsert" operation as showed under "Update data" section. Or leverage MergeInto with Spark sql writes.
 ```
-
-The `com.payloads.CustomMergeIntoConnector` adds adjusted fare values to the original table and preserves all other fields.
-Refer [here](https://gist.github.com/bhasudha/7ea07f2bb9abc5c6eb86dbd914eec4c6) for sample implementation of `com.payloads.CustomMergeIntoConnector`.
-
 </TabItem>
 
 <TabItem value="sparksql">
@@ -519,29 +496,16 @@ WHEN NOT MATCHED THEN INSERT *
 
 ```
 
+Partial updates only write updated columns instead of full update record. This is useful when you have hundreds of columns 
+and only a few columns are updated. It reduces the write costs as well as storage costs. Note that when the condition is 
+matched, we only update fare column. 
+
 :::info Key requirements
 1. For a Hudi table with user defined primary record [keys](#keys), the join condition is expected to contain the primary keys of the table.
 For a Hudi table with Hudi generated primary keys, the join condition can be on any arbitrary data columns. 
 :::
 </TabItem>
 </Tabs>
-
-## Merging Data (Partial Updates) {#merge-partial-update}
-
-Partial updates only write updated columns instead of full update record. This is useful when you have hundreds of
-columns and only a few columns are updated. It reduces the write costs as well as storage costs. 
-`MERGE INTO` statement above can be modified to use partial updates as shown below.
-
-```sql
-MERGE INTO hudi_table AS target
-USING fare_adjustment AS source
-ON target.uuid = source.uuid
-WHEN MATCHED THEN UPDATE SET fare = source.fare
-WHEN NOT MATCHED THEN INSERT *
-;
-```
-
-Notice, instead of `UPDATE SET *`, we are updating only the `fare` column.
 
 ## Delete data {#deletes}
 
