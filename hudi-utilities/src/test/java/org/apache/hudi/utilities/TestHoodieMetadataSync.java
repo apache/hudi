@@ -855,7 +855,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     cfg.targetTableName = TABLE_NAME;
     cfg.sparkMaster = "local[2]";
     cfg.sparkMemory = "1g";
-    cfg.boostrap = false;
+    cfg.boostrap = true;
     HoodieMetadataSync metadataSync = new HoodieMetadataSync(jsc(), cfg);
     metadataSync.run();
 
@@ -887,7 +887,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     cfg.targetTableName = TABLE_NAME;
     cfg.sparkMaster = "local[2]";
     cfg.sparkMemory = "1g";
-    cfg.boostrap = false;
+    cfg.boostrap = true;
     metadataSync = new HoodieMetadataSync(jsc(), cfg);
     metadataSync.run();
 
