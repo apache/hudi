@@ -326,6 +326,14 @@ it may silently ingest duplicate records.
 Avoid upgrading any existing table to 0.14.1 and 0.15.0 from any prior version if you are using ComplexKeyGenerator with single field as record key and multiple partition fields.
 :::
 
+The Hudi 0.15.0 release introduces a regression related to ingestion of timestamp logical types using HoodieDeltaStreamer/HoodieStreamer. This issue was also present in version 0.14.1.
+For timestamp-millis type it will be labeled as timestamp-micros in the parquet and table schemas. For local-timestamp-millis and local-timestamp-micros
+they will just be longs with no logical type label.
+
+:::tip
+Avoid upgrading any existing table to 0.14.1 and 0.15.0 from any prior version if you are using HoodieDeltaStreamer/HoodieStreamer and your table has timestamp-miliis, local-timestamp-millis, or local-timestamp-micros
+:::
+
 ## Raw Release Notes
 
 The raw release notes are

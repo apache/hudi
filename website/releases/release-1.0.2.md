@@ -40,6 +40,12 @@ We have a ComplexKeyGenerator related regression reported [here](release-0.14.1#
 Avoid upgrading any existing table to 1.0.2 if you are using ComplexKeyGenerator with single record key configured.
 :::
 
+We have a HoodieStreamer timestamp logical types related regression reported [here](release-0.14.1#known-regressions). Please refrain from migrating, if you ingest with HoodieDeltaStreamer/HoodieStreamer and your table has timestamp-miliis, local-timestamp-millis, or local-timestamp-micros.
+
+:::tip
+Avoid upgrading any existing table to 1.0.2 if you ingest with HoodieDeltaStreamer/HoodieStreamer and your table has timestamp-miliis, local-timestamp-millis, or local-timestamp-micros.
+:::
+
 ## Raw Release Notes
 
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12355558)
