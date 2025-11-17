@@ -138,6 +138,24 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
   }
 
   @Override
+  public void loadCompactionDetailsInMemory(int limit) {
+    loadInstantsWithLimit(limit, HoodieArchivedTimeline.LoadMode.PLAN,
+        record -> record.get(ACTION_ARCHIVED_META_FIELD).toString().equals(COMMIT_ACTION)
+            && record.get(PLAN_ARCHIVED_META_FIELD) != null
+    );
+  }
+
+  @Override
+  public void loadCompletedInstantDetailsInMemory(String startTs, String endTs) {
+    loadInstants(new HoodieArchivedTimeline.TimeRangeFilter(startTs, endTs), HoodieArchivedTimeline.LoadMode.METADATA);
+  }
+
+  @Override
+  public void loadCompletedInstantDetailsInMemory(int limit) {
+    loadInstantsWithLimit(limit, HoodieArchivedTimeline.LoadMode.METADATA, r -> true);
+  }
+
+  @Override
   public void clearInstantDetailsFromMemory(String instantTime) {
     this.readCommits.remove(instantTime);
   }
@@ -240,6 +258,47 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     List<HoodieInstant> result = new ArrayList<>(instantsInRange.values());
     Collections.sort(result);
     return result;
+  }
+
+  /**
+   * Loads instants with a limit on the number of instants to load.
+   * This is used for limit-based loading where we only want to load the N most recent instants.
+   */
+  private void loadInstantsWithLimit(int limit, HoodieArchivedTimeline.LoadMode loadMode,
+      Function<GenericRecord, Boolean> commitsFilter) {
+    InstantsLoaderWithLimit loader = new InstantsLoaderWithLimit(limit, loadMode);
+    timelineLoader.loadInstants(metaClient, null, loadMode, commitsFilter, loader);
+  }
+
+  /**
+   * Callback to read instant details with a limit on the number of instants to load.
+   * Extends BiConsumer to be used as a callback in the timeline loader.
+   * The BiConsumer interface allows it to be passed as a lambda/function that accepts
+   * (instantTime, GenericRecord) pairs during the loading process.
+   */
+  private class InstantsLoaderWithLimit implements BiConsumer<String, GenericRecord> {
+    private final int limit;
+    private final HoodieArchivedTimeline.LoadMode loadMode;
+    private volatile int loadedCount = 0;
+
+    private InstantsLoaderWithLimit(int limit, HoodieArchivedTimeline.LoadMode loadMode) {
+      this.limit = limit;
+      this.loadMode = loadMode;
+    }
+
+    @Override
+    public void accept(String instantTime, GenericRecord record) {
+      if (loadedCount >= limit) {
+        return;
+      }
+      Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer = Option.ofNullable(getInstantDetailsFunc(loadMode));
+      readCommit(instantTime, record, instantDetailsConsumer);
+      synchronized (this) {
+        if (loadedCount < limit) {
+          loadedCount++;
+        }
+      }
+    }
   }
 
   @Override
