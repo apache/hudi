@@ -213,8 +213,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             filesystemMetadata.put(k, new HoodieMetadataFileInfo((Long) v.get("size"), (Boolean) v.get("isDeleted")));
           });
         }
-        if (record.hasField(SCHEMA_FIELD_ID_BASEPATH_PARTITION)) {
-          basePathForPartition = (String) record.get(SCHEMA_FIELD_ID_BASEPATH_PARTITION);
+        if (record.hasField(SCHEMA_FIELD_ID_BASEPATH_PARTITION) && record.get(SCHEMA_FIELD_ID_BASEPATH_PARTITION) != null) {
+          basePathForPartition = record.get(SCHEMA_FIELD_ID_BASEPATH_PARTITION).toString();
         }
       } else if (type == METADATA_TYPE_BLOOM_FILTER) {
         GenericRecord bloomFilterRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_BLOOM_FILTER);

@@ -88,7 +88,7 @@ public class HoodieBootstrapMetadataSync implements Serializable {
     this.sourceTableMetaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(sourceBasePath).build();
     this.schema = sourceSchema;
 
-    this.metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig, HoodieFailedWritesCleaningPolicy.NEVER);
+    this.metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig, HoodieFailedWritesCleaningPolicy.EAGER);
   }
 
   private void initMetadataReader() {
@@ -150,7 +150,9 @@ public class HoodieBootstrapMetadataSync implements Serializable {
       HoodieData<HoodieRecord> records = fileGroupCountAndRecordsPair.getValue();
       try (HoodieBackedTableMetadataWriter hoodieTableMetadataWriter =
                (HoodieBackedTableMetadataWriter) sparkTable.getMetadataWriter(commitTime).get()) {
-        hoodieTableMetadataWriter.bulkCommit(commitTime, MetadataPartitionType.FILES, records, fileGroupCountAndRecordsPair.getKey(), !filesPartitionAvailable);
+        // perform tables services on metadata table
+        hoodieTableMetadataWriter.performTableServices(Option.of(commitTime));
+        hoodieTableMetadataWriter.bulkCommit(commitTime, MetadataPartitionType.FILES, records, fileGroupCountAndRecordsPair.getKey());
         targetTableMetaClient.reloadActiveTimeline();
         targetTableMetaClient.getTableConfig().setMetadataPartitionState(targetTableMetaClient, MetadataPartitionType.FILES, true);
       }

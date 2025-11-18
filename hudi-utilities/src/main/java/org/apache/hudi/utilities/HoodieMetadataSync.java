@@ -21,14 +21,14 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
+import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.function.SerializableFunctionUnchecked;
-import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -40,15 +40,11 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.table.view.FileSystemViewManager;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
-import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -57,6 +53,7 @@ import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metadata.SparkHoodieBackedMetadataSyncMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
 
 import com.beust.jcommander.JCommander;
@@ -68,28 +65,21 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.StorageType;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.swing.filechooser.FileSystemView;
-
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
@@ -118,7 +108,9 @@ public class HoodieMetadataSync implements Serializable {
   public HoodieMetadataSync(JavaSparkContext jsc, Config cfg) {
     this.jsc = jsc;
     this.cfg = cfg;
-    this.props = UtilHelpers.buildProperties(cfg.configs);
+    this.props = StringUtils.isNullOrEmpty(cfg.propsFilePath)
+        ? UtilHelpers.buildProperties(cfg.configs)
+        : readConfigFromFileSystem(jsc, cfg);
   }
 
   /**
@@ -128,7 +120,7 @@ public class HoodieMetadataSync implements Serializable {
    * @param cfg {@link TableSizeStats.Config} instance.
    * @return the {@link TypedProperties} instance.
    */
-  private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, TableSizeStats.Config cfg) {
+  private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
     return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs)
         .getProps(true);
   }
@@ -160,6 +152,14 @@ public class HoodieMetadataSync implements Serializable {
     @Parameter(names = {"--boostrap"}, description = "boostraps metadata table",
         splitter = IdentitySplitter.class)
     public Boolean boostrap = false;
+
+    @Parameter(names = {"--boostrap"}, description = "performs table maintenance",
+        splitter = IdentitySplitter.class)
+    public Boolean performTableMaintenance = false;
+
+    @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
+        + "hoodie client for clustering")
+    public String propsFilePath = null;
 
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
@@ -225,6 +225,9 @@ public class HoodieMetadataSync implements Serializable {
         .build();
 
     Path targetTablePath = new Path(cfg.targetBasePath);
+    this.props = StringUtils.isNullOrEmpty(cfg.propsFilePath)
+        ? UtilHelpers.buildProperties(cfg.configs)
+        : readConfigFromFileSystem(jsc, cfg);
     boolean targetTableExists = fs.exists(targetTablePath);
     if (!targetTableExists) {
       LOG.info("Initializing target table for first time", cfg.targetBasePath);
@@ -245,90 +248,166 @@ public class HoodieMetadataSync implements Serializable {
   }
 
   private void runMetadataSync(HoodieTableMetaClient sourceTableMetaClient, HoodieTableMetaClient targetTableMetaClient, Schema schema) throws Exception {
-    HoodieWriteConfig writeConfig = getWriteConfig(schema, targetTableMetaClient, cfg.sourceBasePath);
+    HoodieWriteConfig writeConfig = getWriteConfig(schema, targetTableMetaClient, cfg.sourceBasePath, cfg.boostrap);
+    HoodieSparkEngineContext hoodieSparkEngineContext = new HoodieSparkEngineContext(jsc);
+    TransactionManager txnManager = new TransactionManager(writeConfig, FSUtils.getFs(writeConfig.getBasePath(), hoodieSparkEngineContext.getHadoopConf().get()));
 
-    if (cfg.boostrap) {
-      HoodieBootstrapMetadataSync bootstrapMetadataSync = new HoodieBootstrapMetadataSync(writeConfig, jsc, cfg.sourceBasePath, cfg.targetBasePath, schema);
-      bootstrapMetadataSync.run();
+    HoodieSparkTable sparkTable = HoodieSparkTable.create(writeConfig, hoodieSparkEngineContext, targetTableMetaClient);
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(hoodieSparkEngineContext, writeConfig)) {
+      if (cfg.boostrap) {
+        runBootstrapSync(sparkTable, sourceTableMetaClient, targetTableMetaClient, writeClient, schema, txnManager);
+      } else {
+        List<HoodieInstant> instantsToSync = getInstantsToSync(cfg.sourceBasePath, targetTableMetaClient, sourceTableMetaClient);
+        for (HoodieInstant instant : instantsToSync) {
+          String commitTime = writeClient.startCommit(instant.getAction(), targetTableMetaClient); // single writer. will rollback any pending commits from previous round.
+          targetTableMetaClient
+              .reloadActiveTimeline()
+              .transitionRequestedToInflight(
+                  instant.getAction(),
+                  commitTime);
+
+          Option<byte[]> commitMetadataInBytes = Option.empty();
+          List<String> pendingInstants = getPendingInstants(sourceTableMetaClient.getActiveTimeline(), instant);
+          SyncMetadata syncMetadata = getTableSyncExtraMetadata(targetTableMetaClient.reloadActiveTimeline().getWriteTimeline().filterCompletedInstants().lastInstant(),
+              targetTableMetaClient, cfg.sourceBasePath, instant.getTimestamp(), pendingInstants);
+
+          try {
+            txnManager.beginTransaction(Option.of(instant), Option.empty());
+            HoodieTableMetadataWriter hoodieTableMetadataWriter =
+                (HoodieTableMetadataWriter) sparkTable.getMetadataWriter(commitTime).get();
+            // perform table services if required on metadata table
+            hoodieTableMetadataWriter.performTableServices(Option.of(commitTime));
+            switch (instant.getAction()) {
+              case HoodieTimeline.COMMIT_ACTION:
+                HoodieCommitMetadata sourceCommitMetadata = getHoodieCommitMetadata(instant.getTimestamp(), sourceTableMetaClient);
+                HoodieCommitMetadata tgtCommitMetadata = buildHoodieCommitMetadata(sourceCommitMetadata, commitTime);
+                hoodieTableMetadataWriter.update(tgtCommitMetadata, hoodieSparkEngineContext.emptyHoodieData(), commitTime);
+
+                // add metadata sync checkpoint info
+                tgtCommitMetadata.addMetadata(SyncMetadata.TABLE_SYNC_METADATA, syncMetadata.toJson());
+                commitMetadataInBytes = Option.of(tgtCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+                break;
+              case HoodieTimeline.REPLACE_COMMIT_ACTION:
+
+                HoodieReplaceCommitMetadata srcReplaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(
+                    sourceTableMetaClient.getCommitsTimeline().getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+                HoodieReplaceCommitMetadata tgtReplaceCommitMetadata = buildReplaceCommitMetadata(srcReplaceCommitMetadata, commitTime);
+                hoodieTableMetadataWriter.update(tgtReplaceCommitMetadata, hoodieSparkEngineContext.emptyHoodieData(), commitTime);
+
+                // add metadata sync checkpoint info
+                tgtReplaceCommitMetadata.addMetadata(SyncMetadata.TABLE_SYNC_METADATA, syncMetadata.toJson());
+                commitMetadataInBytes = Option.of(tgtReplaceCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+                break;
+              case HoodieTimeline.CLEAN_ACTION:
+                HoodieCleanMetadata srcCleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(
+                    sourceTableMetaClient.getCommitsTimeline().getInstantDetails(instant).get());
+                HoodieCleanMetadata tgtCleanMetadata = reconstructHoodieCleanCommitMetadata(srcCleanMetadata,
+                    writeConfig, hoodieSparkEngineContext, targetTableMetaClient);
+                //HoodieCleanMetadata tgtCleanMetadata = buildHoodieCleanMetadata(srcCleanMetadata, commitTime);
+                hoodieTableMetadataWriter.update(tgtCleanMetadata, commitTime);
+
+                commitMetadataInBytes = TimelineMetadataUtils.serializeCleanMetadata(tgtCleanMetadata);
+                break;
+            }
+
+          } finally {
+            txnManager.endTransaction(Option.of(instant));
+          }
+          targetTableMetaClient
+              .reloadActiveTimeline()
+              .saveAsComplete(new HoodieInstant(true, instant.getAction(), commitTime), commitMetadataInBytes);
+        }
+        if (cfg.performTableMaintenance) {
+          runArchiver(sparkTable, writeClient.getConfig(), hoodieSparkEngineContext);
+        }
+      }
+    }
+  }
+
+  private void runBootstrapSync(HoodieSparkTable sparkTable, HoodieTableMetaClient sourceTableMetaClient,
+                                HoodieTableMetaClient targetTableMetaClient, SparkRDDWriteClient writeClient, Schema schema, TransactionManager txnManager) throws Exception {
+    Option<HoodieInstant> sourceLastInstant = sourceTableMetaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants().lastInstant();
+    if (!sourceLastInstant.isPresent()) {
       return;
     }
 
-    List<HoodieInstant> instantsToSync = getInstantsToSync(cfg.sourceBasePath, targetTableMetaClient, sourceTableMetaClient);
-    HoodieSparkEngineContext hoodieSparkEngineContext = new HoodieSparkEngineContext(jsc);
-    for (HoodieInstant instant : instantsToSync) {
-      try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(hoodieSparkEngineContext, writeConfig)) {
-        String commitTime = writeClient.startCommit(instant.getAction(), targetTableMetaClient); // single writer. will rollback any pending commits from previous round.
-        targetTableMetaClient
-            .reloadActiveTimeline()
-            .transitionRequestedToInflight(
-                instant.getAction(),
-                commitTime);
+    String commitTime = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, targetTableMetaClient); // single writer. will rollback any pending commits from previous round.
+    targetTableMetaClient
+        .reloadActiveTimeline()
+        .transitionRequestedToInflight(
+            HoodieTimeline.REPLACE_COMMIT_ACTION,
+            commitTime);
 
-        Option<byte[]> commitMetadataInBytes = Option.empty();
-        List<String> pendingInstants = getPendingInstants(sourceTableMetaClient.getActiveTimeline(), instant);
-        SyncMetadata syncMetadata = getTableSyncExtraMetadata(targetTableMetaClient.reloadActiveTimeline().getWriteTimeline().filterCompletedInstants().lastInstant(),
-            targetTableMetaClient, sourceTableMetaClient.getBasePathV2().toString(), instant.getTimestamp(), pendingInstants);
+    HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime);
+    try {
+      txnManager.beginTransaction(Option.of(instant), Option.empty());
+      SparkHoodieBackedMetadataSyncMetadataWriter metadataWriter =
+          (SparkHoodieBackedMetadataSyncMetadataWriter) sparkTable.getMetadataWriter(commitTime).get();
+      metadataWriter.bootstrap(sourceLastInstant.map(HoodieInstant::getTimestamp));
+    } finally {
+      txnManager.endTransaction(Option.of(instant));
+    }
+      Option<HoodieInstant> targetTableLastInstant = targetTableMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
+      SyncMetadata syncMetadata = getTableSyncExtraMetadata(targetTableLastInstant, targetTableMetaClient,
+          cfg.sourceBasePath, sourceLastInstant.get().getTimestamp(), getPendingInstants(sourceTableMetaClient.getActiveTimeline(), sourceLastInstant.get()));
+      HoodieReplaceCommitMetadata replaceCommitMetadata = buildComprehensiveReplaceCommitMetadata(sourceTableMetaClient, schema);
+      replaceCommitMetadata.addMetadata(SyncMetadata.TABLE_SYNC_METADATA, syncMetadata.toJson());
+      targetTableMetaClient
+          .reloadActiveTimeline()
+          .saveAsComplete(new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime),
+              Option.of(replaceCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+  }
 
+  private HoodieReplaceCommitMetadata buildComprehensiveReplaceCommitMetadata(HoodieTableMetaClient sourceTableMetaClient, Schema schema) {
+    List<HoodieInstant> replaceCommits =  sourceTableMetaClient.getActiveTimeline().filterCompletedInstants().getInstants().stream()
+        .filter(instant -> instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)).collect(Collectors.toList());
 
-        HoodieSparkTable sparkTable = HoodieSparkTable.create(writeConfig, hoodieSparkEngineContext, targetTableMetaClient);
-        if (instant.getAction().equals(HoodieTimeline.COMMIT_ACTION)) {
-          HoodieCommitMetadata sourceCommitMetadata = getHoodieCommitMetadata(instant.getTimestamp(), sourceTableMetaClient);
-          HoodieCommitMetadata tgtCommitMetadata = buildHoodieCommitMetadata(sourceCommitMetadata, commitTime);
-
-          try (HoodieTableMetadataWriter hoodieTableMetadataWriter =
-                   (HoodieTableMetadataWriter) sparkTable.getMetadataWriter(commitTime).get()) {
-            hoodieTableMetadataWriter.update(tgtCommitMetadata, hoodieSparkEngineContext.emptyHoodieData(), commitTime);
-          }
-
-          // add metadata sync checkpoint info
-          tgtCommitMetadata.addMetadata(SyncMetadata.TABLE_SYNC_METADATA, syncMetadata.toJson());
-          commitMetadataInBytes = Option.of(tgtCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
-        } else if (instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
-
-          HoodieReplaceCommitMetadata srcReplaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(
-              sourceTableMetaClient.getCommitsTimeline().getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
-          HoodieReplaceCommitMetadata tgtReplaceCommitMetadata = buildReplaceCommitMetadata(srcReplaceCommitMetadata, commitTime);
-
-          try (HoodieTableMetadataWriter hoodieTableMetadataWriter =
-                   (HoodieTableMetadataWriter) sparkTable.getMetadataWriter(commitTime).get()) {
-            hoodieTableMetadataWriter.update(tgtReplaceCommitMetadata, hoodieSparkEngineContext.emptyHoodieData(), commitTime);
-          }
-          // add metadata sync checkpoint info
-          tgtReplaceCommitMetadata.addMetadata(SyncMetadata.TABLE_SYNC_METADATA, syncMetadata.toJson());
-          commitMetadataInBytes = Option.of(tgtReplaceCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
-        } else if (instant.getAction().equals(HoodieTimeline.CLEAN_ACTION)) {
-          HoodieCleanMetadata srcCleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(
-              sourceTableMetaClient.getCommitsTimeline().getInstantDetails(instant).get());
-          HoodieCleanMetadata tgtCleanMetadata = reconstructHoodieCleanCommitMetadata(srcCleanMetadata,
-              writeConfig, hoodieSparkEngineContext, targetTableMetaClient);
-          //HoodieCleanMetadata tgtCleanMetadata = buildHoodieCleanMetadata(srcCleanMetadata, commitTime);
-          try (HoodieTableMetadataWriter hoodieTableMetadataWriter =
-                   (HoodieTableMetadataWriter) sparkTable.getMetadataWriter(commitTime).get()) {
-            hoodieTableMetadataWriter.update(tgtCleanMetadata, commitTime);
-          }
-
-          commitMetadataInBytes = TimelineMetadataUtils.serializeCleanMetadata(tgtCleanMetadata);
+    HoodieReplaceCommitMetadata replaceCommitMetadata = new HoodieReplaceCommitMetadata();
+    Map<String, List<String>> totalPartitionToReplacedFiles = new HashMap<>();
+    replaceCommits.forEach(replaceCommit -> {
+      try {
+        HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
+            sourceTableMetaClient.getCommitsTimeline().getInstantDetails(replaceCommit).get(), HoodieReplaceCommitMetadata.class);
+        Map<String, List<String>> partitionsToReplacedFileGroups = commitMetadata.getPartitionToReplaceFileIds();
+        for (Map.Entry<String, List<String>> entry : partitionsToReplacedFileGroups.entrySet()) {
+          String partition = entry.getKey();
+          List<String> replacedFiles = entry.getValue();
+          totalPartitionToReplacedFiles.computeIfAbsent(partition, k -> new ArrayList<>());
+          totalPartitionToReplacedFiles.get(partition).addAll(replacedFiles);
         }
-
-        targetTableMetaClient
-            .reloadActiveTimeline()
-            .saveAsComplete(new HoodieInstant(true, instant.getAction(), commitTime), commitMetadataInBytes);
+      } catch (IOException e) {
+        throw new HoodieException("Failed to deserialize instant " + replaceCommit.getTimestamp(), e);
       }
+    });
+
+    replaceCommitMetadata.setPartitionToReplaceFileIds(totalPartitionToReplacedFiles);
+
+    replaceCommitMetadata.addMetadata("schema", schema.toString());
+    replaceCommitMetadata.setOperationType(WriteOperationType.BOOTSTRAP);
+    replaceCommitMetadata.setCompacted(false);
+    return replaceCommitMetadata;
+  }
+
+  private void runArchiver(
+      HoodieSparkTable<?> table, HoodieWriteConfig config, HoodieEngineContext engineContext) {
+    // trigger archiver manually
+    try {
+      HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
+      archiver.archiveIfRequired(engineContext, true);
+    } catch (IOException ex) {
+      throw new HoodieException("Unable to archive Hudi timeline", ex);
     }
   }
 
   private HoodieCleanMetadata reconstructHoodieCleanCommitMetadata(HoodieCleanMetadata originalCleanMetadata, HoodieWriteConfig config, HoodieSparkEngineContext engineContext,
                                                                    HoodieTableMetaClient metaClient) {
-    HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata();
     HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, config.getMetadataConfig(), metaClient.getBasePathV2().toString(), true);
-    //HoodieTableFileSystemView fsv = getFSV(config, FileSystemViewStorageType.MEMORY, engineContext, metaClient);
     try {
       originalCleanMetadata.getPartitionMetadata().entrySet().forEach(entry -> {
         String partitionPath = entry.getKey();
         System.out.println("Processing partition path " + partitionPath);
         HoodieCleanPartitionMetadata cleanPartitionMetadata = entry.getValue();
         List<String> deletePathPatterns = cleanPartitionMetadata.getDeletePathPatterns();
-        boolean isPartitionDeleted = cleanPartitionMetadata.getIsPartitionDeleted();
 
         Map<String, List<Pair<String, String>>> fileIdsToDeletedFiles = new HashMap<>();
         deletePathPatterns.forEach(deletePathPattern -> {
@@ -337,29 +416,6 @@ public class HoodieMetadataSync implements Serializable {
           fileIdsToDeletedFiles.computeIfAbsent(fileId, s -> new ArrayList<>());
           fileIdsToDeletedFiles.get(fileId).add(Pair.of(deletePathPattern, baseInstantTime));
         });
-        Set<String> fileIds = fileIdsToDeletedFiles.keySet();
-      /*fsv.getAllFileGroups(partitionPath).filter(fileGroup -> fileIds.contains(fileGroup.getFileGroupId().getFileId())).forEach(fileGroup -> {
-        // found matched file group.
-        // find file slice matching base instant time.
-        String fileId = fileGroup.getFileGroupId().getFileId();
-        List<Pair<String, String>> fileNameAndBaseInstantTimePair = fileIdsToDeletedFiles.get(fileId);
-        Map<String, String> baseInstantTimeToSrcFileNameMap = fileNameAndBaseInstantTimePair.stream()
-            .map(pair -> Pair.of(pair.getValue(), pair.getKey()))
-            .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-
-       Map<String, FileSlice> srcBaseInstantTimeToFileSlice = fileGroup.getAllFileSlices().map(fileSlice -> {
-          String baseFileName = fileSlice.getBaseFile().get().getFileName();
-          String srcBaseInstantTime = FSUtils.getCommitTime(baseFileName);
-          return Pair.of(srcBaseInstantTime, fileSlice);
-        }).filter(pair -> baseInstantTimeToSrcFileNameMap.containsKey(pair.getKey())).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-
-       srcBaseInstantTimeToFileSlice.entrySet().forEach(entry1 -> {
-         String baseInstantTime = entry1.getKey();
-         FileSlice fileSlice = entry1.getValue();
-         String originalFile = baseInstantTimeToSrcFileNameMap.get(baseInstantTime);
-         System.out.println("  "+ fileId + " :: original file " + originalFile + ", file path from target table " + fileSlice.getBaseFile().get().getPath());
-       });
-      });*/
 
         List<String> allFilesInPartition = ((HoodieBackedTableMetadata) tableMetadata).getRecordByKey(partitionPath, MetadataPartitionType.FILES.getPartitionPath()).get().getData().getFilenames();
 
@@ -401,16 +457,6 @@ public class HoodieMetadataSync implements Serializable {
         }
       }
     }
-  }
-
-  private HoodieTableFileSystemView getFSV(HoodieWriteConfig config, FileSystemViewStorageType storageType, HoodieSparkEngineContext context, HoodieTableMetaClient metaClient) {
-    FileSystemViewStorageConfig viewStorageConfig = FileSystemViewStorageConfig.newBuilder().fromProperties(config.getProps())
-        .withStorageType(storageType).build();
-    return (HoodieTableFileSystemView) FileSystemViewManager
-        .createViewManager(context, config.getMetadataConfig(), viewStorageConfig, config.getCommonConfig(),
-            (SerializableFunctionUnchecked<HoodieTableMetaClient, HoodieTableMetadata>) v1 ->
-                HoodieTableMetadata.create(context, config.getMetadataConfig(), metaClient.getBasePathV2().toString(), true))
-        .getFileSystemView(config.getBasePath());
   }
 
   private List<HoodieInstant> getInstantsToSync(String sourceIdentifier, HoodieTableMetaClient targetTableMetaClient, HoodieTableMetaClient sourceTableMetaClient) throws IOException {
@@ -482,21 +528,11 @@ public class HoodieMetadataSync implements Serializable {
   private HoodieWriteConfig getWriteConfig(
       Schema schema,
       HoodieTableMetaClient metaClient,
-      String basePathOverride) {
-    return getWriteConfig(schema, Integer.parseInt(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.defaultValue()),
-        HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.defaultValue(), 120, metaClient,
-        basePathOverride);
-  }
-
-  private HoodieWriteConfig getWriteConfig(
-      Schema schema,
-      int numCommitsToKeep,
-      int maxNumDeltaCommitsBeforeCompaction,
-      int timelineRetentionInHours,
-      HoodieTableMetaClient metaClient,
-      String basePathOverride) {
+      String basePathOverride,
+      boolean enableBoostrapSync) {
     Properties properties = new Properties();
     properties.setProperty(HoodieMetadataConfig.AUTO_INITIALIZE.key(), "false");
+    properties.putAll(this.props);
     return HoodieWriteConfig.newBuilder()
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
         .withPath(metaClient.getBasePathV2().toString())
@@ -505,23 +541,15 @@ public class HoodieMetadataSync implements Serializable {
         .withSchema(schema == null ? "" : schema.toString())
         .withArchivalConfig(
             HoodieArchivalConfig.newBuilder()
-                .archiveCommitsWith(
-                    Math.max(0, numCommitsToKeep - 1), Math.max(1, numCommitsToKeep))
-                .withAutoArchive(false)
-                .build())
-        .withCleanConfig(
-            HoodieCleanConfig.newBuilder()
-                .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS)
-                .cleanerNumHoursRetained(timelineRetentionInHours)
-                .withAutoClean(false)
+                .fromProperties(props)
                 .build())
         .withMetadataConfig(
             HoodieMetadataConfig.newBuilder()
                 .enable(true)
                 .withProperties(properties)
                 .withMetadataIndexColumnStats(false)
-                .withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltaCommitsBeforeCompaction)
                 .withEnableBasePathForPartitions(true)
+                .withEnableBootstrapMetadataSync(enableBoostrapSync)
                 .withBasePathOverride(basePathOverride)
                 .build())
         .build();

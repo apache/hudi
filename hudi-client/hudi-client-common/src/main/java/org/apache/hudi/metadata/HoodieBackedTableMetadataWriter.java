@@ -385,7 +385,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     } else {
       // if auto initialization is enabled, then we need to list all partitions from the file system
       if (dataWriteConfig.getMetadataConfig().shouldAutoInitialize()) {
-        partitionInfoList = listAllPartitionsFromFilesystem(initializationTime);
+        partitionInfoList = listAllPartitionsFromFilesystem(initializationTime, dataWriteConfig.getBasePath());
       } else {
         // if auto initialization is disabled, we can return an empty list
         partitionInfoList = Collections.emptyList();
@@ -442,7 +442,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
       // Perform the commit using bulkCommit
       HoodieData<HoodieRecord> records = fileGroupCountAndRecordsPair.getValue();
-      bulkCommit(commitTimeForPartition, partitionType, records, fileGroupCount, true);
+      bulkCommit(commitTimeForPartition, partitionType, records, fileGroupCount);
       metadataMetaClient.reloadActiveTimeline();
       dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionType, true);
       // initialize the metadata reader again so the MDT partition can be read after initialization
@@ -570,7 +570,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     });
   }
 
-  private Pair<Integer, HoodieData<HoodieRecord>> initializeFilesPartition(List<DirectoryInfo> partitionInfoList) {
+  protected Pair<Integer, HoodieData<HoodieRecord>> initializeFilesPartition(List<DirectoryInfo> partitionInfoList) {
     // FILES partition uses a single file group
     final int fileGroupCount = 1;
 
@@ -589,7 +589,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // Records which save the file listing of each partition
     engineContext.setJobStatus(this.getClass().getSimpleName(), "Creating records for metadata FILES partition");
     boolean enableBasePathForPartitions = dataWriteConfig.shouldEnableBasePathForPartitions();
-    String basePath = dataMetaClient.getBasePath();
 
     HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
       Map<String, Long> fileNameToSizeMap = partitionInfo.getFileNameToSizeMap();
@@ -620,7 +619,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return false;
   }
 
-  private HoodieTableMetaClient initializeMetaClient() throws IOException {
+  protected HoodieTableMetaClient initializeMetaClient() throws IOException {
     return HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ)
         .setTableName(dataWriteConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX)
@@ -639,15 +638,15 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @param initializationTime Files which have a timestamp after this are neglected
    * @return List consisting of {@code DirectoryInfo} for each partition found.
    */
-  public List<DirectoryInfo> listAllPartitionsFromFilesystem(String initializationTime) {
+  protected List<DirectoryInfo> listAllPartitionsFromFilesystem(String initializationTime, String basePath) {
     List<SerializablePath> pathsToList = new LinkedList<>();
-    pathsToList.add(new SerializablePath(new CachingPath(dataWriteConfig.getBasePath())));
+    pathsToList.add(new SerializablePath(new CachingPath(basePath)));
 
     List<DirectoryInfo> partitionsToBootstrap = new LinkedList<>();
     final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
     SerializableConfiguration conf = new SerializableConfiguration(dataMetaClient.getHadoopConf());
     final String dirFilterRegex = dataWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
-    final String datasetBasePath = dataMetaClient.getBasePath();
+    final String datasetBasePath = basePath;
     SerializablePath serializableBasePath = new SerializablePath(new CachingPath(datasetBasePath));
 
     while (!pathsToList.isEmpty()) {
@@ -716,7 +715,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * File groups will be named as :
    * record-index-bucket-0000, .... -> ..., record-index-bucket-0009
    */
-  private void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime,
+  protected void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime,
                                     int fileGroupCount) throws IOException {
     // Remove all existing file groups or leftover files in the partition
     final Path partitionPath = new Path(metadataWriteConfig.getBasePath(), metadataPartition.getPartitionPath());
@@ -976,7 +975,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     // Restore requires the existing pipelines to be shutdown. So we can safely scan the dataset to find the current
     // list of files in the filesystem.
-    List<DirectoryInfo> dirInfoList = listAllPartitionsFromFilesystem(instantTime);
+    List<DirectoryInfo> dirInfoList = listAllPartitionsFromFilesystem(instantTime, dataWriteConfig.getBasePath());
     Map<String, DirectoryInfo> dirInfoMap = dirInfoList.stream().collect(Collectors.toMap(DirectoryInfo::getRelativePath, Function.identity()));
     dirInfoList.clear();
 
@@ -1167,7 +1166,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    */
   public abstract void bulkCommit(
       String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records,
-      int fileGroupCount, boolean isInitializing);
+      int fileGroupCount);
 
   /**
    * Tag each record with the location in the given partition.

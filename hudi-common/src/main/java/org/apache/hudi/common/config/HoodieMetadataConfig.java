@@ -327,6 +327,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Adds absolute paths for partitions during metadata writes");
 
+  public static final ConfigProperty<Boolean> ENABLE_BOOTSTRAP_METADATA_SYNC = ConfigProperty
+      .key(METADATA_PREFIX + ".enable.boostrap.for.metadata.sync")
+      .defaultValue(false)
+      .sinceVersion("0.14.1")
+      .markAdvanced()
+      .withDocumentation("Enables boostrap sync for table metadata sync");
+
   public static final ConfigProperty<String> BASE_PATH_OVERRIDE = ConfigProperty
       .key(METADATA_PREFIX + ".base.path.override")
       .defaultValue("")
@@ -468,6 +475,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean shouldEnableBasePathForPartitions() {
     return getBoolean(ENABLE_BASE_PATH_FOR_PARTITONS);
+  }
+
+  public boolean shouldEnableBootstrapMetadataSync() {
+    return getBoolean(ENABLE_BOOTSTRAP_METADATA_SYNC);
   }
 
   public String getBasePathOverride() {
@@ -654,6 +665,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withEnableBasePathForPartitions(boolean enabled) {
       metadataConfig.setValue(ENABLE_BASE_PATH_FOR_PARTITONS, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder withEnableBootstrapMetadataSync(boolean enabled) {
+      metadataConfig.setValue(ENABLE_BOOTSTRAP_METADATA_SYNC, String.valueOf(enabled));
       return this;
     }
 

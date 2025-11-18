@@ -1933,6 +1933,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getMetadataConfig().shouldEnableBasePathForPartitions();
   }
 
+  public boolean shouldEnableBootstrapMetadataSync() {
+    return getMetadataConfig().shouldEnableBootstrapMetadataSync();
+  }
+
   public int getIndexingCheckTimeoutSeconds() {
     return getMetadataConfig().getIndexingCheckTimeoutSeconds();
   }
