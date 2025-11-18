@@ -47,6 +47,7 @@ import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLE
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.HoodieFormatTrait
 import org.apache.spark.sql.hudi.SparkAdapter
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
@@ -185,5 +186,9 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     org.apache.spark.sql.classic.Dataset.ofRows(sqlContext.sparkSession.asInstanceOf[org.apache.spark.sql.classic.SparkSession],
       applyFiltersToPlan(logicalRelation, requiredSchema, resolvedSchema,
         relation.fileFormat.asInstanceOf[HoodieFormatTrait].getRequiredFilters))
+  }
+
+  override def enableParquetFilterPushDownStringPredicate(conf: SQLConf): Boolean = {
+    conf.parquetFilterPushDownStringPredicate
   }
 }
