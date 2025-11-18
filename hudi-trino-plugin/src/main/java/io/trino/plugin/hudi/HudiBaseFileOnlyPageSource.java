@@ -19,6 +19,7 @@ import io.trino.plugin.hudi.util.SynthesizedColumnHandler;
 import io.trino.spi.Page;
 import io.trino.spi.block.Block;
 import io.trino.spi.connector.ConnectorPageSource;
+import io.trino.spi.connector.SourcePage;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -84,9 +85,10 @@ public class HudiBaseFileOnlyPageSource
     }
 
     @Override
-    public Page getNextPage()
+    public SourcePage getNextSourcePage()
     {
-        Page physicalSourcePage = dataPageSource.getNextPage();
+        //TODO hudi can have it's own lazy loading Implementation for further optimization of data scan
+        SourcePage physicalSourcePage = dataPageSource.getNextSourcePage();
         if (physicalSourcePage == null) {
             return null;
         }
@@ -108,7 +110,7 @@ public class HudiBaseFileOnlyPageSource
                 outputBlocks[i] = synthesizedColumnHandler.createRleSynthesizedBlock(outputColumn, positionCount);
             }
         }
-        return new Page(outputBlocks);
+        return SourcePage.create(new Page(outputBlocks));
     }
 
     @Override

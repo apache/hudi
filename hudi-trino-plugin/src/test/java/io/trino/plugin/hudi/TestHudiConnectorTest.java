@@ -20,6 +20,7 @@ import io.trino.testing.TestingConnectorBehavior;
 import org.junit.jupiter.api.Test;
 
 import static io.trino.plugin.hudi.testing.HudiTestUtils.COLUMNS_TO_HIDE;
+import static io.trino.testing.TestingConnectorBehavior.SUPPORTS_LIMIT_PUSHDOWN;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class TestHudiConnectorTest
@@ -49,6 +50,7 @@ public class TestHudiConnectorTest
                  SUPPORTS_DELETE,
                  SUPPORTS_DEREFERENCE_PUSHDOWN,
                  SUPPORTS_INSERT,
+                 SUPPORTS_LIMIT_PUSHDOWN,
                  SUPPORTS_MERGE,
                  SUPPORTS_RENAME_COLUMN,
                  SUPPORTS_RENAME_TABLE,
