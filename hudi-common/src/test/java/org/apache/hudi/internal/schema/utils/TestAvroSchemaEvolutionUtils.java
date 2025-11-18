@@ -502,4 +502,27 @@ public class TestAvroSchemaEvolutionUtils {
         .reconcileSchema(incomingSchema, AvroInternalSchemaConverter.convert(schema)), "schemaNameFallback");
     Assertions.assertEquals(simpleReconcileSchema, simpleCheckSchema);
   }
+
+  @Test
+  public void testNotEvolveSchemaIfReconciledSchemaUnchanged() {
+    // a: boolean, c: long, c_1: long, d: date
+    Schema oldSchema = create("simple",
+        new Schema.Field("a", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.BOOLEAN)), null, JsonProperties.NULL_VALUE),
+        new Schema.Field("b", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.INT)), null, JsonProperties.NULL_VALUE),
+        new Schema.Field("c", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.LONG)), null, JsonProperties.NULL_VALUE),
+        new Schema.Field("d", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT))), null, JsonProperties.NULL_VALUE));
+    // incoming schema is part of old schema
+    // a: boolean, b: int, c: long
+    Schema incomingSchema = create("simple",
+        new Schema.Field("a", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.BOOLEAN)), null, JsonProperties.NULL_VALUE),
+        new Schema.Field("b", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.INT)), null, JsonProperties.NULL_VALUE),
+        new Schema.Field("c", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.LONG)), null, JsonProperties.NULL_VALUE));
+
+    InternalSchema oldInternalSchema = AvroInternalSchemaConverter.convert(oldSchema);
+    // set a non-default schema id for old table schema, e.g., 2.
+    oldInternalSchema.setSchemaId(2);
+    InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(incomingSchema, oldInternalSchema, false);
+    // the evolved schema should be the old table schema, since there is no type change at all.
+    Assertions.assertEquals(oldInternalSchema, evolvedSchema);
+  }
 }

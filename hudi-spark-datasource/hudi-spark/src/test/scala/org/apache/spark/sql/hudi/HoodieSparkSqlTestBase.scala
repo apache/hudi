@@ -17,22 +17,28 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.HoodieSparkRecordMerger
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.config.HoodieStorageConfig
-import org.apache.hudi.common.model.HoodieAvroRecordMerger
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
+import org.apache.hudi.common.engine.HoodieLocalEngineContext
+import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecord}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils
+import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
+import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.checkMessageContains
 import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.types.StructField
 import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone
 import org.scalactic.source
@@ -228,6 +234,13 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
       HoodieRecordType.AVRO
     }
   }
+
+  protected def validateTableSchema(tableName: String,
+                          expectedStructFields: List[StructField]): Unit = {
+    assertResult(expectedStructFields)(
+      spark.sql(s"select * from $tableName").schema.fields
+        .filter(e => !HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(e.name)))
+  }
 }
 
 object HoodieSparkSqlTestBase {
@@ -255,4 +268,32 @@ object HoodieSparkSqlTestBase {
   private def checkMessageContains(e: Throwable, text: String): Boolean =
     e.getMessage.trim.contains(text.trim)
 
+  def getMetaClientAndFileSystemView(basePath: String): (HoodieTableMetaClient, SyncableFileSystemView) = {
+    val storageConf = HoodieTestUtils.getDefaultHadoopConf
+    val metaClient: HoodieTableMetaClient =
+      HoodieTableMetaClient.builder.setConf(storageConf).setBasePath(basePath).build
+    val metadataConfig = HoodieMetadataConfig.newBuilder.build
+    val engineContext = new HoodieLocalEngineContext(storageConf)
+    val viewManager: FileSystemViewManager = FileSystemViewManager.createViewManager(
+      engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder.build,
+      HoodieCommonConfig.newBuilder.build,
+      (_: HoodieTableMetaClient) => {
+        HoodieTableMetadata.create(
+          engineContext, metadataConfig, metaClient.getBasePath.toString)
+      }
+    )
+    val fsView: SyncableFileSystemView = viewManager.getFileSystemView(metaClient)
+    (metaClient, fsView)
+  }
+
+  /**
+   * Replaces the existing file with an empty file which is meant to be corrupted
+   * in a Hudi table.
+   */
+  def replaceWithEmptyFile(filePath: Path): Unit = {
+    val conf = new Configuration
+    val fs = FileSystem.get(conf)
+    fs.delete(filePath, true)
+    fs.create(filePath, true)
+  }
 }
