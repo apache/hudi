@@ -1,6 +1,5 @@
 ---
 title: "Release 1.1.0"
-sidebar_position: 1
 layout: releases
 toc: true
 ---
