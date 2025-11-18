@@ -3,7 +3,6 @@ title: Download
 sidebar_position: 1
 keywords: [ hudi, download ]
 toc: true
-last_modified_at: 2025-11-18T15:59:57-04:00
 ---
 
 ## Release 1.1.0
