@@ -28,7 +28,7 @@ Apache Hudi 1.1.0 is a major release that brings significant performance improve
 
 Hudi 1.1.0 introduces a new Pluggable Table Format framework that enables native integration of multiple table formats within the system. This foundation includes a base interface for pluggable table formats, designed to simplify extension and allow seamless interoperability across different storage backends. The Metadata Table (MDT) integration has been enhanced to support pluggability, ensuring modularity and unified metadata management across all supported table formats.
 
-**Configuration**: `hoodie.table.format`
+This release brings native Apache Hudi integration through the new framework, allowing users to leverage Hudi's advanced capabilities directly while maintaining consistent semantics and performance. The configuration `hoodie.table.format` is set to `native` by default, which works as the Hudi table format. **No configuration changes are required** for existing and new Hudi tables. As additional table formats are supported in future releases, users will be able to set this configuration to work natively with other formats.
 
 #### Table Version 9 with Index Versioning
 
