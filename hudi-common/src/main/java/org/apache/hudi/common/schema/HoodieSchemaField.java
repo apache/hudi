@@ -88,13 +88,28 @@ public class HoodieSchemaField implements Serializable {
    * @return new HoodieSchemaField instance
    */
   public static HoodieSchemaField of(String name, HoodieSchema schema, String doc, Object defaultVal) {
+    return of(name, schema, doc, defaultVal, HoodieFieldOrder.ASCENDING);
+  }
+
+  /**
+   * Creates a new HoodieSchemaField with the specified properties, including field order.
+   *
+   * @param name       the name of the field
+   * @param schema     the schema of the field
+   * @param doc        the documentation string, can be null
+   * @param defaultVal the default value, can be null
+   * @param order      the field order for sorting
+   * @return new HoodieSchemaField instance
+   */
+  public static HoodieSchemaField of(String name, HoodieSchema schema, String doc, Object defaultVal, HoodieFieldOrder order) {
     ValidationUtils.checkArgument(name != null && !name.isEmpty(), "Field name cannot be null or empty");
     ValidationUtils.checkArgument(schema != null, "Field schema cannot be null");
+    ValidationUtils.checkArgument(order != null, "Field order cannot be null");
 
     Schema avroSchema = schema.getAvroSchema();
     ValidationUtils.checkState(avroSchema != null, "Schema's Avro schema cannot be null");
 
-    Schema.Field avroField = new Schema.Field(name, avroSchema, doc, defaultVal);
+    Schema.Field avroField = new Schema.Field(name, avroSchema, doc, defaultVal, order.toAvroOrder());
     return new HoodieSchemaField(avroField);
   }
 
@@ -174,6 +189,15 @@ public class HoodieSchemaField implements Serializable {
       return Option.of(avroField.defaultVal());
     }
     return Option.empty();
+  }
+
+  /**
+   * Returns the sort order for this field.
+   *
+   * @return the field order
+   */
+  public HoodieFieldOrder order() {
+    return HoodieFieldOrder.fromAvroOrder(avroField.order());
   }
 
   /**
@@ -297,6 +321,7 @@ public class HoodieSchemaField implements Serializable {
         + "name='" + name() + '\''
         + ", type=" + schema().getType()
         + ", hasDefault=" + hasDefaultValue()
+        + ", order=" + order()
         + '}';
   }
 

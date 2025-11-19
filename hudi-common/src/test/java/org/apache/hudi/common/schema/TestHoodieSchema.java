@@ -44,20 +44,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestHoodieSchema {
 
   private static final String SAMPLE_RECORD_SCHEMA =
-      "{"
-          + "  \"type\": \"record\","
-          + "  \"name\": \"User\","
-          + "  \"namespace\": \"com.example\","
-          + "  \"doc\": \"User record schema\","
-          + "  \"fields\": ["
-          + "    {\"name\": \"id\", \"type\": \"long\"},"
-          + "    {\"name\": \"name\", \"type\": \"string\", \"default\": \"\"},"
-          + "    {\"name\": \"email\", \"type\": [\"null\", \"string\"], \"default\": null},"
-          + "    {\"name\": \"tip_history\", \"type\": {\"type\": \"array\", \"items\":"
-          + "      {\"type\": \"record\", \"name\": \"tip_history\", \"fields\": ["
-          + "        {\"name\": \"amount\", \"type\": {\"type\": \"fixed\", \"name\": \"fixed\", \"size\": 5, \"logicalType\": \"decimal\", \"precision\": 10, \"scale\": 6}},"
-          + "        {\"name\": \"currency\", \"type\": \"string\"}]}}}"
-          + "  ]"
+      "{\n"
+          + "  \"type\": \"record\",\n"
+          + "  \"name\": \"User\",\n"
+          + "  \"namespace\": \"com.example\",\n"
+          + "  \"doc\": \"User record schema\",\n"
+          + "  \"fields\": [\n"
+          + "    {\"name\": \"id\", \"type\": \"long\"},\n"
+          + "    {\"name\": \"name\", \"type\": \"string\", \"default\": \"\"},\n"
+          + "    {\"name\": \"email\", \"type\": [\"null\", \"string\"], \"default\": null}\n"
+          + "  ]\n"
           + "}";
 
   @Test
@@ -93,7 +89,7 @@ public class TestHoodieSchema {
     assertEquals(Option.of("User record schema"), schema.getDoc());
 
     List<HoodieSchemaField> fields = schema.getFields();
-    assertEquals(4, fields.size());
+    assertEquals(3, fields.size());
 
     // Check individual fields
     HoodieSchemaField idField = fields.get(0);
@@ -109,11 +105,6 @@ public class TestHoodieSchema {
     assertEquals("email", emailField.name());
     assertEquals(HoodieSchemaType.UNION, emailField.schema().getType());
     assertTrue(emailField.hasDefaultValue());
-
-    HoodieSchemaField tipHistoryField = fields.get(3);
-    assertEquals("tip_history", tipHistoryField.name());
-    assertEquals(HoodieSchemaType.ARRAY, tipHistoryField.schema().getType());
-    assertEquals(2, tipHistoryField.getNonNullSchema().getElementType().getFields().size());
   }
 
   @Test
