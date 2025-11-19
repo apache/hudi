@@ -25,7 +25,12 @@ import java.io.IOException;
 
 /**
  * Abstraction to assist in writing {@link InternalRow}s to be used in datasource implementation.
+ *
+ * @deprecated Use {@link org.apache.hudi.io.storage.HoodieSparkFileWriter} instead.
+ *             This interface is deprecated and will be removed in a future release.
+ *             HoodieSparkFileWriter provides the same functionality with built-in metadata population support.
  */
+@Deprecated
 public interface HoodieInternalRowFileWriter {
 
   /**

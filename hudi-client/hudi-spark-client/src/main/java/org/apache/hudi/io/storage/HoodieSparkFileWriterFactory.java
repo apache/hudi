@@ -52,22 +52,10 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
       String instantTime, StoragePath path, HoodieConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
-    String compressionCodecName = config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
-    // Support PARQUET_COMPRESSION_CODEC_NAME is ""
-    if (compressionCodecName.isEmpty()) {
-      compressionCodecName = null;
-    }
     HoodieRowParquetWriteSupport writeSupport = getHoodieRowParquetWriteSupport(storage.getConf(), schema,
         config, enableBloomFilter(populateMetaFields, config));
-    HoodieRowParquetConfig parquetConfig = new HoodieRowParquetConfig(writeSupport,
-        CompressionCodecName.fromConf(compressionCodecName),
-        config.getIntOrDefault(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
-        config.getIntOrDefault(HoodieStorageConfig.PARQUET_PAGE_SIZE),
-        config.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
-        storage.getConf().unwrapAs(Configuration.class),
-        config.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
-        config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
-    parquetConfig.getHadoopConf().addResource(writeSupport.getHadoopConf());
+    HoodieRowParquetConfig parquetConfig = buildParquetConfig(writeSupport, config,
+        storage.getConf().unwrapAs(Configuration.class));
 
     return new HoodieSparkParquetWriter(path, parquetConfig, instantTime, taskContextSupplier, populateMetaFields);
   }
@@ -76,20 +64,41 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
                                                   Schema schema) throws IOException {
     boolean enableBloomFilter = false;
     HoodieRowParquetWriteSupport writeSupport = getHoodieRowParquetWriteSupport(storage.getConf(), schema, config, enableBloomFilter);
-    String compressionCodecName = config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
-    // Support PARQUET_COMPRESSION_CODEC_NAME is ""
-    if (compressionCodecName.isEmpty()) {
-      compressionCodecName = null;
-    }
-    HoodieRowParquetConfig parquetConfig = new HoodieRowParquetConfig(writeSupport,
-        CompressionCodecName.fromConf(compressionCodecName),
-        config.getInt(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
-        config.getInt(HoodieStorageConfig.PARQUET_PAGE_SIZE),
-        config.getLong(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
-        writeSupport.getHadoopConf(), config.getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
-        config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
-    parquetConfig.getHadoopConf().addResource(writeSupport.getHadoopConf());
+    HoodieRowParquetConfig parquetConfig = buildParquetConfig(writeSupport, config, writeSupport.getHadoopConf());
     return new HoodieSparkParquetStreamWriter(new FSDataOutputStream(outputStream, null), parquetConfig);
+  }
+
+  /**
+   * Creates a HoodieSparkFileWriter for bulk insert scenarios with StructType directly.
+   *
+   * @param path Path to write the file
+   * @param storageConf Storage configuration
+   * @param config Hoodie configuration
+   * @param structType Spark StructType schema
+   * @param instantTime Instant time for the write
+   * @param taskPartitionId Task partition ID for sequence generation
+   * @return HoodieSparkFileWriter instance
+   * @throws IOException if writer creation fails
+   */
+  public static HoodieSparkFileWriter newParquetFileWriter(
+          StoragePath path,
+          StorageConfiguration<?> storageConf,
+          HoodieConfig config,
+          StructType structType,
+          String instantTime,
+          int taskPartitionId) throws IOException {
+    boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    Option<BloomFilter> bloomFilterOpt = populateMetaFields && enableBloomFilter(populateMetaFields, config)
+            ? Option.of(createBloomFilter(config))
+            : Option.empty();
+
+    HoodieRowParquetWriteSupport writeSupport = HoodieRowParquetWriteSupport
+            .getHoodieRowParquetWriteSupport(storageConf.unwrapAs(Configuration.class), structType, bloomFilterOpt, config);
+
+    HoodieRowParquetConfig parquetConfig = buildParquetConfig(writeSupport, config,
+            storageConf.unwrapAs(Configuration.class));
+
+    return new HoodieSparkParquetWriter(path, parquetConfig, instantTime, taskPartitionId, populateMetaFields);
   }
 
   @Override
@@ -109,5 +118,33 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
     Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
     StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
     return HoodieRowParquetWriteSupport.getHoodieRowParquetWriteSupport(conf.unwrapAs(Configuration.class), structType, filter, config);
+  }
+
+  /**
+   * Helper method to build HoodieRowParquetConfig from writeSupport and config.
+   * Centralizes the common logic for creating parquet configurations.
+   */
+  private static HoodieRowParquetConfig buildParquetConfig(
+      HoodieRowParquetWriteSupport writeSupport,
+      HoodieConfig config,
+      Configuration hadoopConf) {
+    String compressionCodecName = config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
+    // Support PARQUET_COMPRESSION_CODEC_NAME is ""
+    if (compressionCodecName.isEmpty()) {
+      compressionCodecName = null;
+    }
+
+    HoodieRowParquetConfig parquetConfig = new HoodieRowParquetConfig(
+        writeSupport,
+        CompressionCodecName.fromConf(compressionCodecName),
+        config.getIntOrDefault(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
+        config.getIntOrDefault(HoodieStorageConfig.PARQUET_PAGE_SIZE),
+        config.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
+        hadoopConf,
+        config.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
+        config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
+    parquetConfig.getHadoopConf().addResource(writeSupport.getHadoopConf());
+
+    return parquetConfig;
   }
 }
