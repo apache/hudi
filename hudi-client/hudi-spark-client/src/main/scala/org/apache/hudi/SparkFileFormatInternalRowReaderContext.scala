@@ -26,6 +26,7 @@ import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -33,7 +34,6 @@ import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
-
 import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter
 import org.apache.spark.sql.HoodieInternalRowUtils
@@ -130,34 +130,34 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
    * @return iterator that concatenates the skeletonFileIterator and dataFileIterator
    */
   override def mergeBootstrapReaders(skeletonFileIterator: ClosableIterator[InternalRow],
-                                     skeletonRequiredSchema: Schema,
+                                     skeletonRequiredSchema: HoodieSchema,
                                      dataFileIterator: ClosableIterator[InternalRow],
-                                     dataRequiredSchema: Schema,
+                                     dataRequiredSchema: HoodieSchema,
                                      partitionFieldAndValues: java.util.List[HPair[String, Object]]): ClosableIterator[InternalRow] = {
     doBootstrapMerge(skeletonFileIterator.asInstanceOf[ClosableIterator[Any]], skeletonRequiredSchema,
       dataFileIterator.asInstanceOf[ClosableIterator[Any]], dataRequiredSchema, partitionFieldAndValues)
   }
 
   private def doBootstrapMerge(skeletonFileIterator: ClosableIterator[Any],
-                               skeletonRequiredSchema: Schema,
+                               skeletonRequiredSchema: HoodieSchema,
                                dataFileIterator: ClosableIterator[Any],
-                               dataRequiredSchema: Schema,
+                               dataRequiredSchema: HoodieSchema,
                                partitionFieldAndValues: java.util.List[HPair[String, Object]]): ClosableIterator[InternalRow] = {
     if (getRecordContext.supportsParquetRowIndex()) {
-      assert(AvroSchemaUtils.containsFieldInSchema(skeletonRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
-      assert(AvroSchemaUtils.containsFieldInSchema(dataRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
+      assert(AvroSchemaUtils.containsFieldInSchema(skeletonRequiredSchema.toAvroSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
+      assert(AvroSchemaUtils.containsFieldInSchema(dataRequiredSchema.toAvroSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
       val rowIndexColumn = new java.util.HashSet[String]()
       rowIndexColumn.add(ROW_INDEX_TEMPORARY_COLUMN_NAME)
       //always remove the row index column from the skeleton because the data file will also have the same column
-      val skeletonProjection = recordContext.projectRecord(skeletonRequiredSchema,
-        HoodieAvroUtils.removeFields(skeletonRequiredSchema, rowIndexColumn))
+      val skeletonProjection = recordContext.projectRecord(skeletonRequiredSchema.toAvroSchema,
+        HoodieAvroUtils.removeFields(skeletonRequiredSchema.toAvroSchema, rowIndexColumn))
 
       //If we need to do position based merging with log files we will leave the row index column at the end
       val dataProjection = if (getShouldMergeUseRecordPosition) {
-        getBootstrapProjection(dataRequiredSchema, dataRequiredSchema, partitionFieldAndValues)
+        getBootstrapProjection(dataRequiredSchema.toAvroSchema, dataRequiredSchema.toAvroSchema, partitionFieldAndValues)
       } else {
-        getBootstrapProjection(dataRequiredSchema,
-          HoodieAvroUtils.removeFields(dataRequiredSchema, rowIndexColumn), partitionFieldAndValues)
+        getBootstrapProjection(dataRequiredSchema.toAvroSchema,
+          HoodieAvroUtils.removeFields(dataRequiredSchema.toAvroSchema, rowIndexColumn), partitionFieldAndValues)
       }
 
       //row index will always be the last column
@@ -211,7 +211,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
         }
       }
     } else {
-      val dataProjection = getBootstrapProjection(dataRequiredSchema, dataRequiredSchema, partitionFieldAndValues)
+      val dataProjection = getBootstrapProjection(dataRequiredSchema.toAvroSchema, dataRequiredSchema.toAvroSchema, partitionFieldAndValues)
       new ClosableIterator[Any] {
         val combinedRow = new JoinedRow()
 

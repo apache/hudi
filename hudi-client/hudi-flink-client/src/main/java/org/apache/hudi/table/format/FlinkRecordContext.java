@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
@@ -77,9 +78,9 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
-  public Object getValue(RowData record, Schema schema, String fieldName) {
+  public Object getValue(RowData record, HoodieSchema schema, String fieldName) {
     RowDataAvroQueryContexts.FieldQueryContext fieldQueryContext =
-        RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).getFieldQueryContext(fieldName);
+        RowDataAvroQueryContexts.fromAvroSchema(schema.toAvroSchema(), utcTimezone).getFieldQueryContext(fieldName);
     if (fieldQueryContext == null) {
       return null;
     } else {
@@ -157,7 +158,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
       if (updateValues.containsKey(pos)) {
         genericRowData.setField(pos, updateValues.get(pos));
       } else {
-        genericRowData.setField(pos, getValue(baseRecord.getRecord(), schema, field.name()));
+        genericRowData.setField(pos, getValue(baseRecord.getRecord(), HoodieSchema.fromAvroSchema(schema), field.name()));
       }
     }
     return genericRowData;
@@ -172,11 +173,11 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
-  public RowData toBinaryRow(Schema avroSchema, RowData record) {
+  public RowData toBinaryRow(HoodieSchema schema, RowData record) {
     if (record instanceof BinaryRowData) {
       return record;
     }
-    RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(avroSchema);
+    RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(schema.toAvroSchema());
     return rowDataSerializer.toBinaryRow(record);
   }
 

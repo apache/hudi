@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.AvroJavaTypeConverter;
@@ -91,7 +92,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public Object getValue(IndexedRecord record, Schema schema, String fieldName) {
+  public Object getValue(IndexedRecord record, HoodieSchema schema, String fieldName) {
     return getFieldValueFromIndexedRecord(record, fieldName);
   }
 
@@ -177,7 +178,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public IndexedRecord toBinaryRow(Schema avroSchema, IndexedRecord record) {
+  public IndexedRecord toBinaryRow(HoodieSchema schema, IndexedRecord record) {
     return record;
   }
 

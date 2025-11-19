@@ -19,6 +19,7 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
@@ -80,7 +81,7 @@ class TestHiveHoodieReaderContext {
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
     ArrayWritable row = new ArrayWritable(Writable.class, new Writable[]{new Text("value1"), new Text("value2"), new ArrayWritable(new String[]{"value3"})});
 
-    assertEquals("value3", avroReaderContext.getRecordContext().getValue(row, getBaseSchema(), "field_3.nested_field").toString());
+    assertEquals("value3", avroReaderContext.getRecordContext().getValue(row, HoodieSchema.fromAvroSchema(getBaseSchema()), "field_3.nested_field").toString());
   }
 
   @Test

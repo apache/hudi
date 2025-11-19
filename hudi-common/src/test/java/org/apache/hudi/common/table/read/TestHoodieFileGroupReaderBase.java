@@ -39,6 +39,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.SerializableIndexedRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -940,12 +941,12 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   private List<HoodieTestDataGenerator.RecordIdentifier> convertEngineRecords(List<T> records, Schema schema, HoodieReaderContext<T> readerContext, List<String> preCombineFields) {
     return records.stream()
         .map(record -> new HoodieTestDataGenerator.RecordIdentifier(
-            readerContext.getRecordContext().getValue(record, schema, KEY_FIELD_NAME).toString(),
-            readerContext.getRecordContext().getValue(record, schema, PARTITION_FIELD_NAME).toString(),
+            readerContext.getRecordContext().getValue(record, HoodieSchema.fromAvroSchema(schema), KEY_FIELD_NAME).toString(),
+            readerContext.getRecordContext().getValue(record, HoodieSchema.fromAvroSchema(schema), PARTITION_FIELD_NAME).toString(),
             OrderingValues.create(preCombineFields,
-                    field -> (Comparable) readerContext.getRecordContext().getValue(record, schema, field))
+                    field -> (Comparable) readerContext.getRecordContext().getValue(record, HoodieSchema.fromAvroSchema(schema), field))
                 .toString(),
-            readerContext.getRecordContext().getValue(record, schema, RIDER_FIELD_NAME).toString()))
+            readerContext.getRecordContext().getValue(record, HoodieSchema.fromAvroSchema(schema), RIDER_FIELD_NAME).toString()))
         .collect(Collectors.toList());
   }
 
@@ -960,7 +961,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
               record.getRecordKey(),
               removeHiveStylePartition(record.getPartitionPath()),
               record.getOrderingValue(schema, props, orderingFields.toArray(new String[0])).toString(),
-              readerContext.getRecordContext().getValue(data, schema, RIDER_FIELD_NAME).toString());
+              readerContext.getRecordContext().getValue(data, HoodieSchema.fromAvroSchema(schema), RIDER_FIELD_NAME).toString());
         })
         .collect(Collectors.toList());
   }

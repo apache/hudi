@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -912,8 +913,8 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     @Override
-    public Object getValue(InternalRow record, Schema schema, String fieldName) {
-      return getFieldValueFromInternalRow(record, schema, fieldName);
+    public Object getValue(InternalRow record, HoodieSchema schema, String fieldName) {
+      return getFieldValueFromInternalRow(record, schema.toAvroSchema(), fieldName);
     }
 
     @Override
@@ -952,7 +953,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         if (updateValues.containsKey(pos)) {
           values[pos] = updateValues.get(pos);
         } else {
-          values[pos] = getValue(baseRecord.getRecord(), schema, field.name());
+          values[pos] = getValue(baseRecord.getRecord(), HoodieSchema.fromAvroSchema(schema), field.name());
         }
       }
       return new GenericInternalRow(values);
@@ -974,7 +975,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     @Override
-    public InternalRow toBinaryRow(Schema avroSchema, InternalRow record) {
+    public InternalRow toBinaryRow(HoodieSchema schema, InternalRow record) {
       return null;
     }
 
@@ -1014,9 +1015,9 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     @Override
     public ClosableIterator<InternalRow> mergeBootstrapReaders(
         ClosableIterator<InternalRow> skeletonFileIterator,
-        Schema skeletonRequiredSchema,
+        HoodieSchema skeletonRequiredSchema,
         ClosableIterator<InternalRow> dataFileIterator,
-        Schema dataRequiredSchema,
+        HoodieSchema dataRequiredSchema,
         List<Pair<String, Object>> requiredPartitionFieldAndValues) {
       return null;
     }

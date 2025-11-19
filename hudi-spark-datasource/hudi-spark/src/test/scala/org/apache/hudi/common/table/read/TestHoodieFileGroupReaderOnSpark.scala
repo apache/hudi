@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderBase.hoodieRecordsToIndexedRecords
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFileCount
@@ -309,7 +310,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
                                    avroSchema: Schema,
                                    orderingColumn: String,
                                    expectedOrderingValue: Comparable[_]): Unit = {
-    assertEquals(expectedOrderingValue, sparkReaderContext.getRecordContext.getOrderingValue(row, avroSchema, Collections.singletonList(orderingColumn)))
+    assertEquals(expectedOrderingValue, sparkReaderContext.getRecordContext.getOrderingValue(row, HoodieSchema.fromAvroSchema(avroSchema), Collections.singletonList(orderingColumn)))
   }
 
   @Test
@@ -377,7 +378,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val schema: Schema = buildMultiLevelSchema
     val innerRow = InternalRow.fromSeq(Seq(UTF8String.fromString("nested_value"), UTF8String.fromString(""), null))
     val row = InternalRow.fromSeq(Seq(innerRow, UTF8String.fromString("value2")))
-    assertEquals("nested_value", sparkReaderContext.getRecordContext().getValue(row, schema, "outer1.field1").toString)
+    assertEquals("nested_value", sparkReaderContext.getRecordContext().getValue(row, HoodieSchema.fromAvroSchema(schema), "outer1.field1").toString)
   }
 
   private def buildMultiLevelSchema = {

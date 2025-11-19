@@ -23,6 +23,7 @@ import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
@@ -70,8 +71,8 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
   }
 
   @Override
-  public Object getValue(ArrayWritable record, Schema schema, String fieldName) {
-    return getHiveAvroSerializer(schema).getValue(record, fieldName);
+  public Object getValue(ArrayWritable record, HoodieSchema schema, String fieldName) {
+    return getHiveAvroSerializer(schema.toAvroSchema()).getValue(record, fieldName);
   }
 
   @Override
@@ -155,7 +156,7 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
   }
 
   @Override
-  public ArrayWritable toBinaryRow(Schema schema, ArrayWritable record) {
+  public ArrayWritable toBinaryRow(HoodieSchema schema, ArrayWritable record) {
     return record;
   }
 

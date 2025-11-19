@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
@@ -181,14 +182,14 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   @Override
   public ClosableIterator<ArrayWritable> mergeBootstrapReaders(ClosableIterator<ArrayWritable> skeletonFileIterator,
-                                                               Schema skeletonRequiredSchema,
+                                                               HoodieSchema skeletonRequiredSchema,
                                                                ClosableIterator<ArrayWritable> dataFileIterator,
-                                                               Schema dataRequiredSchema,
+                                                               HoodieSchema dataRequiredSchema,
                                                                List<Pair<String, Object>> partitionFieldsAndValues) {
-    int skeletonLen = skeletonRequiredSchema.getFields().size();
-    int dataLen = dataRequiredSchema.getFields().size();
+    int skeletonLen = skeletonRequiredSchema.toAvroSchema().getFields().size();
+    int dataLen = dataRequiredSchema.toAvroSchema().getFields().size();
     int[] partitionFieldPositions = partitionFieldsAndValues.stream()
-        .map(pair -> dataRequiredSchema.getField(pair.getKey()).pos()).mapToInt(Integer::intValue).toArray();
+        .map(pair -> dataRequiredSchema.toAvroSchema().getField(pair.getKey()).pos()).mapToInt(Integer::intValue).toArray();
     Writable[] convertedPartitionValues = partitionFieldsAndValues.stream().map(Pair::getValue).toArray(Writable[]::new);
     return new ClosableIterator<ArrayWritable>() {
 

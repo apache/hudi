@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.PartialUpdateMode;
 
 import org.apache.avro.Schema;
@@ -117,9 +118,9 @@ public class PartialUpdateHandler<T> implements Serializable {
       // The default value only from the top-level data type is validated. That means,
       // for nested columns, we do not check the leaf level data type defaults.
       Object defaultValue = toJavaDefaultValue(field);
-      Object newValue = recordContext.getValue(highOrderRecord.getRecord(), highOrderSchema, fieldName);
+      Object newValue = recordContext.getValue(highOrderRecord.getRecord(), HoodieSchema.fromAvroSchema(highOrderSchema), fieldName);
       if (defaultValue == newValue) {
-        fieldVals[idx++] = recordContext.getValue(lowOrderRecord.getRecord(), lowOrderSchema, fieldName);
+        fieldVals[idx++] = recordContext.getValue(lowOrderRecord.getRecord(), HoodieSchema.fromAvroSchema(lowOrderSchema), fieldName);
         updated = true;
       } else {
         fieldVals[idx++] = newValue;
@@ -161,11 +162,11 @@ public class PartialUpdateHandler<T> implements Serializable {
     // decide value for each field with customized mark value ignored.
     for (Schema.Field field: fields) {
       String fieldName = field.name();
-      Object newValue = recordContext.getValue(highOrderRecord.getRecord(), highOrderSchema, fieldName);
+      Object newValue = recordContext.getValue(highOrderRecord.getRecord(), HoodieSchema.fromAvroSchema(highOrderSchema), fieldName);
       if ((isStringTyped(field) || isBytesTyped(field))
           && null != partialUpdateCustomMarker
           && (partialUpdateCustomMarker.equals(recordContext.getTypeConverter().castToString(newValue)))) {
-        fieldVals[idx++] = recordContext.getValue(lowOrderRecord.getRecord(), lowOrderSchema, fieldName);
+        fieldVals[idx++] = recordContext.getValue(lowOrderRecord.getRecord(), HoodieSchema.fromAvroSchema(lowOrderSchema), fieldName);
         updated = true;
       } else {
         fieldVals[idx++] = newValue;

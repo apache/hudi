@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartitionPathParser;
@@ -201,8 +202,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         }
         return filterFieldsAndValues;
       }).orElseGet(Collections::emptyList);
-      return readerContext.mergeBootstrapReaders(skeletonFileIterator.get().getLeft(), skeletonFileIterator.get().getRight(),
-          dataFileIterator.get().getLeft(), dataFileIterator.get().getRight(), partitionPathFieldsAndValues);
+      return readerContext.mergeBootstrapReaders(skeletonFileIterator.get().getLeft(), HoodieSchema.fromAvroSchema(skeletonFileIterator.get().getRight()),
+          dataFileIterator.get().getLeft(), HoodieSchema.fromAvroSchema(dataFileIterator.get().getRight()), partitionPathFieldsAndValues);
     }
   }
 
