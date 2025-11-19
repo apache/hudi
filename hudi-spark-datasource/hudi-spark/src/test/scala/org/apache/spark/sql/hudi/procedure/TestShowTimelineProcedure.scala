@@ -364,7 +364,7 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
         // Check if compaction was scheduled successfully
         val timelineAfterScheduleDf = spark.sql(s"call show_timeline(table => '$tableName')")
         val timelineAfterSchedule = timelineAfterScheduleDf.collect()
-        val hasRequestedCompaction = timelineAfterSchedule.exists(row => 
+        val hasRequestedCompaction = timelineAfterSchedule.exists(row =>
           row.getString(1) == "compaction" && row.getString(2) == "REQUESTED"
         )
         println(s"Has REQUESTED compaction: $hasRequestedCompaction")
@@ -401,7 +401,7 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
         val actionsAfterCompaction = timelineResultAfterCompaction.map(_.getString(1)).distinct
         println(s"All actions in timeline after compaction: ${actionsAfterCompaction.mkString(", ")}")
         assert(actionsAfterCompaction.contains("deltacommit"), "Should have deltacommit actions in timeline")
-        
+
         // Only assert commit exists if compaction actually created one
         // Compaction might not create a commit if there's nothing to compact
         if (hasCommitAfterRun) {
@@ -409,7 +409,7 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
         } else {
           println("Warning: Compaction did not create a commit action. This might be expected if there was nothing to compact.")
           // Check if compaction events exist instead
-          val compactionEvents = timelineResultAfterCompaction.filter(row => 
+          val compactionEvents = timelineResultAfterCompaction.filter(row =>
             row.getString(1) == "compaction"
           )
           if (compactionEvents.nonEmpty) {
@@ -423,8 +423,8 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
           val archivedActions = archivedEntries.map(_.getString(1)).distinct
           // Compaction events (REQUESTED/INFLIGHT) should appear in archived timeline if archived
           // Note: Completed compaction becomes COMMIT_ACTION, so we check for "compaction" action
-          val compactionEvents = archivedEntries.filter(row => 
-            row.getString(1) == "compaction" && 
+          val compactionEvents = archivedEntries.filter(row =>
+            row.getString(1) == "compaction" &&
             (row.getString(2) == "REQUESTED" || row.getString(2) == "INFLIGHT")
           )
           // Compaction events may or may not be archived depending on timing
@@ -434,7 +434,7 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
             compactionEvents.foreach { row =>
               assert(row.getString(0) != null, "compaction instant_time should not be null")
               assert(row.getString(1) == "compaction", "action should be compaction")
-              assert(Set("REQUESTED", "INFLIGHT").contains(row.getString(2)), 
+              assert(Set("REQUESTED", "INFLIGHT").contains(row.getString(2)),
                 s"compaction state should be REQUESTED or INFLIGHT, got: ${row.getString(2)}")
             }
           }
@@ -498,7 +498,7 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
           assert(row.getString(1) != null, "action should not be null")
           assert(row.getString(2) != null, "state should not be null")
           assert(row.getString(6) != null, "timeline_type should not be null")
-          assert(Set("ACTIVE", "ARCHIVED").contains(row.getString(6)), 
+          assert(Set("ACTIVE", "ARCHIVED").contains(row.getString(6)),
             s"timeline_type should be ACTIVE or ARCHIVED, got: ${row.getString(6)}")
         }
       }

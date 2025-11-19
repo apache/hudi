@@ -304,10 +304,16 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
     def getModificationTime: Long = modificationTimeMs
   }
 
+  /**
+   * Builds a map of instant information (including modification times) from the active timeline.
+   * Note: This only scans the active timeline path (not archived timeline), so archived entries
+   * won't have modification times in this map. For archived entries, we use completion time
+   * from the instant itself in getFormattedDateForState.
+   */
   private def buildInstantInfoFromTimeline(metaClient: HoodieTableMetaClient): Map[String, Map[HoodieInstant.State, HoodieInstantWithModTime]] = {
     try {
       val storage = metaClient.getStorage
-      val timelinePath = metaClient.getTimelinePath
+      val timelinePath = metaClient.getTimelinePath  // Only scans active timeline path, not archive path
       val instantFileNameParser = metaClient.getInstantFileNameParser
       val instantGenerator = metaClient.getInstantGenerator
 
@@ -344,7 +350,8 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
   }
 
   private def getFormattedDateForState(instantTimestamp: String, state: HoodieInstant.State,
-                                       instantInfoMap: Map[String, Map[HoodieInstant.State, HoodieInstantWithModTime]]): String = {
+                                       instantInfoMap: Map[String, Map[HoodieInstant.State, HoodieInstantWithModTime]],
+                                       instant: Option[HoodieInstant] = None): String = {
     val stateMap = instantInfoMap.get(instantTimestamp)
     if (stateMap.isDefined) {
       val stateInfo = stateMap.get.get(state)
@@ -361,7 +368,34 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
         null
       }
     } else {
-      null
+      if (instant.isDefined) {
+        val timeToFormat = state match {
+          case HoodieInstant.State.REQUESTED =>
+            instant.get.requestedTime()
+          case HoodieInstant.State.INFLIGHT =>
+            instant.get.requestedTime()
+          case HoodieInstant.State.COMPLETED =>
+            val completionTime = instant.get.getCompletionTime
+            if (completionTime != null && completionTime.nonEmpty) {
+              completionTime
+            } else {
+              instant.get.requestedTime()
+            }
+          case _ =>
+            instant.get.getCompletionTime()
+        }
+
+        try {
+          val formatter = new java.text.SimpleDateFormat("yyyyMMddHHmmss")
+          val date = formatter.parse(timeToFormat)
+          val outputFormatter = new java.text.SimpleDateFormat("MM-dd HH:mm:ss")
+          outputFormatter.format(date)
+        } catch {
+          case _: Exception => null
+        }
+      } else {
+        null
+      }
     }
   }
 
@@ -375,9 +409,9 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
 
     val instantTimestamp = instant.requestedTime()
 
-    val requestedTime = getFormattedDateForState(instantTimestamp, HoodieInstant.State.REQUESTED, instantInfoMap)
-    val inFlightTime = getFormattedDateForState(instantTimestamp, HoodieInstant.State.INFLIGHT, instantInfoMap)
-    val completedTime = getFormattedDateForState(instantTimestamp, HoodieInstant.State.COMPLETED, instantInfoMap)
+    val requestedTime = getFormattedDateForState(instantTimestamp, HoodieInstant.State.REQUESTED, instantInfoMap, Option(instant))
+    val inFlightTime = getFormattedDateForState(instantTimestamp, HoodieInstant.State.INFLIGHT, instantInfoMap, Option(instant))
+    val completedTime = getFormattedDateForState(instantTimestamp, HoodieInstant.State.COMPLETED, instantInfoMap, Option(instant))
 
     Row(
       instant.requestedTime(),
