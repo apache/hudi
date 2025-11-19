@@ -263,7 +263,7 @@ This change applies to table services as well.
 
 ### INSERT INTO Behavior Change
 
-The default behavior of Spark SQL's `INSERT INTO` command has changed. Previously, it used "upsert" operation for tables with precombine/ordering fields, which caused deduplication. From 1.1.0, `INSERT INTO` now performs "insert" operation by default, ingesting records as-is without deduplication.
+The default behavior of Spark SQL's `INSERT INTO` command has changed. Previously, it used "upsert" operation for tables with ordering field(s), which caused deduplication. From 1.1.0, `INSERT INTO` now performs "insert" operation by default, ingesting records as-is without deduplication.
 
 **Example**:
 
@@ -298,10 +298,12 @@ Bucket index now supports only UPSERT operations and cannot be used with append 
 
 ### Default Merge Mode Changed
 
-The default record merging behavior has changed based on whether a precombine field is set:
+The default record merging behavior has changed based on whether an ordering field is set:
 
-- **No Precombine Field**: Defaults to `COMMIT_TIME_ORDERING` using `OverwriteWithLatestAvroPayload` (last-write-wins)
-- **Precombine Field Set**: Defaults to `EVENT_TIME_ORDERING` using `DefaultHoodieRecordPayload` (classic event-time based comparison)
+- **No Ordering Field**: Defaults to `COMMIT_TIME_ORDERING` using `OverwriteWithLatestAvroPayload` (last-write-wins)
+- **Ordering Field Set**: Defaults to `EVENT_TIME_ORDERING` using `DefaultHoodieRecordPayload` (classic event-time based comparison)
+
+Users should use `hoodie.table.ordering.fields` instead of `hoodie.datasource.write.precombine.field` (deprecated).
 
 The default value for `hoodie.datasource.write.precombine.field` (previously `ts`) has been removed.
 
@@ -315,8 +317,8 @@ The default value for `hoodie.datasource.write.precombine.field` (previously `ts
 
 **Validation Changes**: Configuration mismatches now log warnings instead of failing jobs:
 
-- Using `COMMIT_TIME_ORDERING` with a precombine field logs a warning that the field is ignored
-- Using `EVENT_TIME_ORDERING` without a precombine field logs a warning instead of failing
+- Using `COMMIT_TIME_ORDERING` with an ordering field logs a warning that the field is ignored
+- Using `EVENT_TIME_ORDERING` without an ordering field logs a warning instead of failing
 
 ### Incremental Query Fallback Behavior
 
