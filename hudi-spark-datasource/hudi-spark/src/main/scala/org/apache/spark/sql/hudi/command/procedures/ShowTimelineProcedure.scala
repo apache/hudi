@@ -143,6 +143,38 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
 
   override def build: Procedure = new ShowTimelineProcedure()
 
+  /**
+   * Retrieves timeline entries from both active and archived timelines based on the provided parameters.
+   *
+   * This is the main orchestration method that coordinates the retrieval of timeline entries. It:
+   * 1. Builds instant information map from the active timeline (for modification time lookups)
+   * 2. Loads rollback information for both active and archived timelines
+   * 3. Optionally loads archived timeline details if `showArchived` is true
+   * 4. Retrieves entries from active timeline
+   * 5. Optionally retrieves entries from archived timeline and combines them
+   * 6. Sorts combined entries by timestamp (descending) and state priority
+   * 7. Applies limit or time range filtering as appropriate
+   *
+   * @param metaClient The Hudi table metadata client for accessing timeline data
+   * @param limit Maximum number of entries to return (ignored if time range is specified)
+   * @param showArchived Whether to include archived timeline entries in the result
+   * @param startTime Optional start timestamp for filtering (format: yyyyMMddHHmmss). If empty, no start filtering is applied
+   * @param endTime Optional end timestamp for filtering (format: yyyyMMddHHmmss). If empty, no end filtering is applied
+   * @return Sequence of Row objects representing timeline entries, sorted by timestamp (descending) and state priority
+   *         (COMPLETED > INFLIGHT > REQUESTED)
+   *
+   * @note When `showArchived` is true, this method will:
+   *       - Reload the archived timeline to ensure it's up-to-date
+   *       - Load completed instant details and compaction details into memory for the specified time range or limit
+   *       - Combine active and archived entries, with archived entries marked with "ARCHIVED" timeline type
+   *
+   * @note The sorting logic prioritizes:
+   *       1. Timestamp (newer first)
+   *       2. State (COMPLETED > INFLIGHT > REQUESTED)
+   *
+   * @see [[getTimelineEntriesFromTimeline]] for extracting entries from a specific timeline
+   * @see [[buildInstantInfoFromTimeline]] for building the instant information map
+   */
   private def getTimelineEntries(metaClient: HoodieTableMetaClient,
                                  limit: Int,
                                  showArchived: Boolean,
@@ -205,6 +237,42 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
     finalEntries
   }
 
+  /**
+   * Extracts timeline entries from a specific timeline (active or archived) and converts them to Row objects.
+   *
+   * This method processes instants from the given timeline by:
+   * 1. Filtering instants by time range using timeline's built-in filtering methods if `startTime` or `endTime` are provided
+   * 2. Retrieving filtered instants from the timeline
+   * 3. Sorting filtered instants by timestamp in descending order (newest first)
+   * 4. Applying limit if time range is not specified (when time range is specified, all matching entries are returned)
+   * 5. Converting each instant to a Row using `createTimelineEntry`
+   *
+   * @param timeline The timeline to extract entries from (can be active or archived timeline)
+   * @param timelineType The type of timeline: "ACTIVE" or "ARCHIVED". This is used to mark entries in the output
+   * @param metaClient The Hudi table metadata client for accessing timeline metadata
+   * @param instantInfoMap Map of instant timestamps to their state information and modification times.
+   *                      Used for formatting dates in the output. Only contains active timeline entries.
+   * @param rollbackInfoMap Map of instant timestamps to list of rollback instants that rolled them back.
+   *                       Used for populating rollback information in the output
+   * @param limit Maximum number of entries to return. Only applied if time range is not specified
+   * @param startTime Optional start timestamp for filtering (format: yyyyMMddHHmmss).
+   *                 If non-empty, only instants with timestamp >= startTime are included
+   * @param endTime Optional end timestamp for filtering (format: yyyyMMddHHmmss).
+   *               If non-empty, only instants with timestamp <= endTime are included
+   * @return Sequence of Row objects representing timeline entries from the specified timeline,
+   *         sorted by timestamp (descending), limited if applicable
+   *
+   * @note Time range filtering is inclusive on both ends (startTime <= instantTime <= endTime)
+   * @note If both `startTime` and `endTime` are provided, uses `findInstantsInClosedRange`
+   * @note If only `startTime` is provided, uses `findInstantsAfterOrEquals`
+   * @note If only `endTime` is provided, uses `findInstantsBeforeOrEquals`
+   * @note If both `startTime` and `endTime` are provided, the limit is ignored and all matching entries are returned
+   * @note If neither `startTime` nor `endTime` are provided, the limit is applied to the sorted results
+   *
+   * @see [[createTimelineEntry]] for the conversion of HoodieInstant to Row
+   * @see [[getTimelineEntries]] for the main method that orchestrates timeline entry retrieval
+   * @see [[HoodieTimeline.findInstantsInClosedRange]] for range filtering implementation
+   */
   private def getTimelineEntriesFromTimeline(timeline: HoodieTimeline,
                                              timelineType: String,
                                              metaClient: HoodieTableMetaClient,
@@ -214,21 +282,31 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
                                              startTime: String,
                                              endTime: String): Seq[Row] = {
 
-    val instants = timeline.getInstants.iterator().asScala.toSeq
-
-    val filteredInstants = if (startTime.trim.nonEmpty || endTime.trim.nonEmpty) {
-      instants.filter { instant =>
-        val instantTime = instant.requestedTime()
-        val withinStartTime = if (startTime.trim.nonEmpty) instantTime >= startTime else true
-        val withinEndTime = if (endTime.trim.nonEmpty) instantTime <= endTime else true
-        withinStartTime && withinEndTime
+    // Use timeline's built-in filtering methods for better performance and consistency
+    val filteredTimeline = {
+      val startTimeTrimmed = startTime.trim
+      val endTimeTrimmed = endTime.trim
+      if (startTimeTrimmed.nonEmpty && endTimeTrimmed.nonEmpty) {
+        // Both start and end time provided: use closed range [startTime, endTime]
+        timeline.findInstantsInClosedRange(startTimeTrimmed, endTimeTrimmed)
+      } else if (startTimeTrimmed.nonEmpty) {
+        // Only start time provided: get instants >= startTime
+        timeline.findInstantsAfterOrEquals(startTimeTrimmed)
+      } else if (endTimeTrimmed.nonEmpty) {
+        // Only end time provided: get instants <= endTime
+        timeline.findInstantsBeforeOrEquals(endTimeTrimmed)
+      } else {
+        // No time filtering: use original timeline
+        timeline
       }
-    } else {
-      instants
     }
 
-    val sortedInstants = filteredInstants.sortWith((a, b) => a.requestedTime() > b.requestedTime())
+    val instants = filteredTimeline.getInstants.iterator().asScala.toSeq
 
+    // Sort by timestamp in descending order (newest first)
+    val sortedInstants = instants.sortWith((a, b) => a.requestedTime() > b.requestedTime())
+
+    // Apply limit only if time range is not fully specified
     val limitedInstants = if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
       sortedInstants
     } else {
@@ -305,10 +383,40 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
   }
 
   /**
-   * Builds a map of instant information (including modification times) from the active timeline.
-   * Note: This only scans the active timeline path (not archived timeline), so archived entries
-   * won't have modification times in this map. For archived entries, we use completion time
-   * from the instant itself in getFormattedDateForState.
+   * Builds a map of instant information (including modification times) by scanning the active timeline path.
+   *
+   * This method scans the active timeline directory and extracts instant information including:
+   * - Instant state (REQUESTED, INFLIGHT, COMPLETED)
+   * - Action type (commit, deltacommit, compaction, etc.)
+   * - Requested time
+   * - Completion time (if available)
+   * - File modification time (used for formatting dates in the output)
+   *
+   * The resulting map is structured as:
+   * - Key: Instant timestamp (requestedTime)
+   * - Value: Map of State -> HoodieInstantWithModTime
+   *
+   * This allows looking up modification times for active timeline entries to format dates accurately.
+   * For archived timeline entries, which are not included in this map, the `getFormattedDateForState`
+   * method falls back to using completion time or requested time directly from the instant object.
+   *
+   * @param metaClient The Hudi table metadata client for accessing storage and timeline paths
+   * @return Map from instant timestamp to a map of state -> instant information with modification time.
+   *         Returns empty map if scanning fails or no instants are found.
+   *
+   * @note This method only scans the active timeline path (not the archive path), so:
+   *       - Only active timeline entries will have modification times in the returned map
+   *       - Archived entries won't be present in this map
+   *       - For archived entries, date formatting uses completion time or requested time from the instant object
+   *
+   * @note Invalid files encountered during scanning are silently skipped
+   *
+   * @note The modification time is obtained from the file system metadata of the instant file,
+   *       which represents when the file was last modified (i.e., when the instant transitioned to that state)
+   *
+   * @see [[HoodieInstantWithModTime]] for the structure containing instant information
+   * @see [[getFormattedDateForState]] for how this map is used in date formatting
+   * @see [[getTimelineEntries]] for where this method is called
    */
   private def buildInstantInfoFromTimeline(metaClient: HoodieTableMetaClient): Map[String, Map[HoodieInstant.State, HoodieInstantWithModTime]] = {
     try {
