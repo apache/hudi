@@ -23,6 +23,7 @@ import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.DeleteContext;
@@ -189,11 +190,11 @@ public abstract class RecordContext<T> implements Serializable {
    * Gets the field value.
    *
    * @param record    The record in engine-specific type.
-   * @param schema    The Avro schema of the record.
+   * @param schema    The HoodieSchema of the record.
    * @param fieldName The field name. A dot separated string if a nested field.
    * @return The field value.
    */
-  public abstract Object getValue(T record, Schema schema, String fieldName);
+  public abstract Object getValue(T record, HoodieSchema schema, String fieldName);
 
   /**
    * Get value of metadata field in a more efficient way than #getValue.
@@ -245,6 +246,20 @@ public abstract class RecordContext<T> implements Serializable {
   public abstract GenericRecord convertToAvroRecord(T record, Schema schema);
 
   /**
+   * Converts the engine-specific record to an Avro GenericRecord using HoodieSchema.
+   * This method uses HoodieSchema for in-memory processing while maintaining
+   * compatibility with existing Avro-based serialization.
+   *
+   * @param record The engine-specific record.
+   * @param schema The HoodieSchema of the record.
+   * @return An Avro GenericRecord.
+   * @since 1.2.0
+   */
+  public GenericRecord convertToAvroRecord(T record, HoodieSchema schema) {
+    return convertToAvroRecord(record, schema.toAvroSchema());
+  }
+
+  /**
    * Fills an empty row with record key fields and returns.
    *
    * <p>When `emitDelete` is true for FileGroup reader and payload for DELETE record is empty,
@@ -270,7 +285,7 @@ public abstract class RecordContext<T> implements Serializable {
     if (!deleteContext.hasBuiltInDeleteField()) {
       return false;
     }
-    Object columnValue = getValue(record, deleteContext.getReaderSchema(), HOODIE_IS_DELETED_FIELD);
+    Object columnValue = getValue(record, HoodieSchema.fromAvroSchema(deleteContext.getReaderSchema()), HOODIE_IS_DELETED_FIELD);
     return columnValue != null && getTypeConverter().castToBoolean(columnValue);
   }
 
@@ -298,7 +313,7 @@ public abstract class RecordContext<T> implements Serializable {
       return false;
     }
     Pair<String, String> markerKeyValue = deleteContext.getCustomDeleteMarkerKeyValue().get();
-    Object deleteMarkerValue = getValue(record, deleteContext.getReaderSchema(), markerKeyValue.getLeft());
+    Object deleteMarkerValue = getValue(record, HoodieSchema.fromAvroSchema(deleteContext.getReaderSchema()), markerKeyValue.getLeft());
     return deleteMarkerValue != null
         && markerKeyValue.getRight().equals(deleteMarkerValue.toString());
   }
@@ -314,12 +329,11 @@ public abstract class RecordContext<T> implements Serializable {
   /**
    * Converts engine specific row into binary format.
    *
-   * @param avroSchema The avro schema of the row
-   * @param record     The engine row
-   *
+   * @param schema The HoodieSchema of the row
+   * @param record The engine row
    * @return row in binary format
    */
-  public abstract T toBinaryRow(Schema avroSchema, T record);
+  public abstract T toBinaryRow(HoodieSchema schema, T record);
 
   /**
    * Creates a function that will reorder records of schema "from" to schema of "to"
@@ -338,15 +352,35 @@ public abstract class RecordContext<T> implements Serializable {
   }
 
   /**
+   * Creates a function that will reorder records of schema "from" to schema of "to" using HoodieSchema.
+   * This method uses HoodieSchema for in-memory processing while maintaining
+   * compatibility with existing Avro-based operations.
+   *
+   * @param from           the HoodieSchema of records to be passed into UnaryOperator
+   * @param to             the HoodieSchema of records produced by UnaryOperator
+   * @param renamedColumns map of renamed columns where the key is the new name from the query and
+   *                       the value is the old name that exists in the file
+   * @return a function that takes in a record and returns the record with reordered columns
+   * @since 1.2.0
+   */
+  public UnaryOperator<T> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
+    return projectRecord(from.toAvroSchema(), to.toAvroSchema(), renamedColumns);
+  }
+
+  public final UnaryOperator<T> projectRecord(HoodieSchema from, HoodieSchema to) {
+    return projectRecord(from, to, Collections.emptyMap());
+  }
+
+  /**
    * Gets the ordering value in particular type.
    *
-   * @param record             An option of record.
-   * @param schema             The Avro schema of the record.
+   * @param record             The record in engine-specific type.
+   * @param schema             The HoodieSchema of the record.
    * @param orderingFieldNames name of the ordering field
    * @return The ordering value.
    */
   public Comparable getOrderingValue(T record,
-                                     Schema schema,
+                                     HoodieSchema schema,
                                      List<String> orderingFieldNames) {
     if (orderingFieldNames.isEmpty()) {
       return OrderingValues.getDefault();
@@ -388,13 +422,13 @@ public abstract class RecordContext<T> implements Serializable {
   /**
    * Gets the ordering value in particular type.
    *
-   * @param record             An option of record.
-   * @param schema             The Avro schema of the record.
+   * @param record             The record in engine-specific type.
+   * @param schema             The HoodieSchema of the record.
    * @param orderingFieldNames names of the ordering fields
    * @return The ordering value.
    */
   public Comparable getOrderingValue(T record,
-                                     Schema schema,
+                                     HoodieSchema schema,
                                      String[] orderingFieldNames) {
     if (orderingFieldNames == null || orderingFieldNames.length == 0) {
       return OrderingValues.getDefault();
@@ -410,9 +444,13 @@ public abstract class RecordContext<T> implements Serializable {
   /**
    * Extracts the record position value from the record itself.
    *
+   * @param record                   The record in engine-specific type.
+   * @param schema                   The HoodieSchema of the record.
+   * @param fieldName                The field name for the record position.
+   * @param providedPositionIfNeeded The position to use if parquet row index is not supported.
    * @return the record position in the base file.
    */
-  public long extractRecordPosition(T record, Schema schema, String fieldName, long providedPositionIfNeeded) {
+  public long extractRecordPosition(T record, HoodieSchema schema, String fieldName, long providedPositionIfNeeded) {
     if (supportsParquetRowIndex()) {
       Object position = getValue(record, schema, fieldName);
       if (position != null) {
@@ -429,7 +467,7 @@ public abstract class RecordContext<T> implements Serializable {
   }
 
   private SerializableBiFunction<T, Schema, String> metadataKeyExtractor() {
-    return (record, schema) -> getValue(record, schema, RECORD_KEY_METADATA_FIELD).toString();
+    return (record, schema) -> getValue(record, HoodieSchema.fromAvroSchema(schema), RECORD_KEY_METADATA_FIELD).toString();
   }
 
   private SerializableBiFunction<T, Schema, String> virtualKeyExtractor(String[] recordKeyFields) {
@@ -438,7 +476,7 @@ public abstract class RecordContext<T> implements Serializable {
       // currently the incoming records are using the keys from HoodieRecord which utilities the write config and by default encodes the field name with the value
       // while here the field names are ignored, this function would be used to extract record keys from old base file.
       return (record, schema) -> {
-        Object result = getValue(record, schema, recordKeyFields[0]);
+        Object result = getValue(record, HoodieSchema.fromAvroSchema(schema), recordKeyFields[0]);
         if (result == null) {
           throw new HoodieKeyException("recordKey cannot be null");
         }
@@ -446,8 +484,9 @@ public abstract class RecordContext<T> implements Serializable {
       };
     }
     return (record, schema) -> {
+      HoodieSchema hoodieSchema = HoodieSchema.fromAvroSchema(schema);
       BiFunction<String, Integer, String> valueFunction = (recordKeyField, index) -> {
-        Object result = getValue(record, schema, recordKeyField);
+        Object result = getValue(record, hoodieSchema, recordKeyField);
         return result != null ? result.toString() : null;
       };
       return KeyGenerator.constructRecordKey(recordKeyFields, valueFunction);

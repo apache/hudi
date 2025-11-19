@@ -141,6 +141,7 @@ class TestFileGroupRecordBuffer {
     props.setProperty(DELETE_KEY, customDeleteKey);
     props.setProperty(DELETE_MARKER, customDeleteValue);
     DeleteContext deleteContext = new DeleteContext(props, schema);
+    deleteContext.withReaderSchema(schema);
     when(recordContext.getValue(any(), any(), any())).thenReturn(null);
     assertFalse(recordContext.isDeleteRecord(record, deleteContext));
 

@@ -20,6 +20,7 @@
 package org.apache.hudi;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
@@ -154,7 +155,7 @@ class TestBaseSparkInternalRowReaderContext {
         }
 
         @Override
-        public Object getValue(InternalRow row, Schema schema, String fieldName) {
+        public Object getValue(InternalRow row, HoodieSchema schema, String fieldName) {
           if (fieldName.equals("id")) {
             if (row.isNullAt(0)) {
               return null;
@@ -174,7 +175,7 @@ class TestBaseSparkInternalRowReaderContext {
         }
 
         @Override
-        public InternalRow toBinaryRow(Schema schema, InternalRow internalRow) {
+        public InternalRow toBinaryRow(HoodieSchema schema, InternalRow internalRow) {
           return internalRow;
         }
       });
@@ -192,9 +193,9 @@ class TestBaseSparkInternalRowReaderContext {
 
     @Override
     public ClosableIterator<InternalRow> mergeBootstrapReaders(ClosableIterator<InternalRow> skeletonFileIterator,
-                                                               Schema skeletonRequiredSchema,
+                                                               HoodieSchema skeletonRequiredSchema,
                                                                ClosableIterator<InternalRow> dataFileIterator,
-                                                               Schema dataRequiredSchema,
+                                                               HoodieSchema dataRequiredSchema,
                                                                List<Pair<String, Object>> requiredPartitionFieldAndValues) {
       return null;
     }

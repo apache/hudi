@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
@@ -232,7 +233,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       return doHasNextFallbackBaseRecord(baseRecord);
     }
 
-    nextRecordPosition = readerContext.getRecordContext().extractRecordPosition(baseRecord, readerSchema,
+    nextRecordPosition = readerContext.getRecordContext().extractRecordPosition(baseRecord, HoodieSchema.fromAvroSchema(readerSchema),
         ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
     BufferedRecord<T> logRecordInfo = records.remove(nextRecordPosition++);
     return super.hasNextBaseRecord(baseRecord, logRecordInfo);
@@ -241,7 +242,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
   private boolean doHasNextFallbackBaseRecord(T baseRecord) throws IOException {
     if (needToDoHybridStrategy) {
       //see if there is a delete block with record positions
-      nextRecordPosition = readerContext.getRecordContext().extractRecordPosition(baseRecord, readerSchema,
+      nextRecordPosition = readerContext.getRecordContext().extractRecordPosition(baseRecord, HoodieSchema.fromAvroSchema(readerSchema),
           ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
       BufferedRecord<T> logRecordInfo  = records.remove(nextRecordPosition++);
       if (logRecordInfo != null) {

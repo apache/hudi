@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
@@ -212,8 +213,8 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
         .optionalLong("ts")
         .endRecord();
     GenericRowData rowData = GenericRowData.of(StringData.fromString("f1"), StringData.fromString("f2"), 1000L);
-    assertEquals(1000L, readerContext.getRecordContext().getOrderingValue(rowData, schema, Collections.singletonList("ts")));
-    assertEquals(OrderingValues.getDefault(), readerContext.getRecordContext().getOrderingValue(rowData, schema, Collections.singletonList("non_existent_col")));
+    assertEquals(1000L, readerContext.getRecordContext().getOrderingValue(rowData, HoodieSchema.fromAvroSchema(schema), Collections.singletonList("ts")));
+    assertEquals(OrderingValues.getDefault(), readerContext.getRecordContext().getOrderingValue(rowData, HoodieSchema.fromAvroSchema(schema), Collections.singletonList("non_existent_col")));
   }
 
   @Test

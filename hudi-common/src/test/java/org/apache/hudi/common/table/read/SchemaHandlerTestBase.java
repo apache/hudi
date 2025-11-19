@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -333,7 +334,7 @@ public abstract class SchemaHandlerTestBase {
         }
 
         @Override
-        public Object getValue(String record, Schema schema, String fieldName) {
+        public Object getValue(String record, HoodieSchema schema, String fieldName) {
           return null;
         }
 
@@ -363,7 +364,7 @@ public abstract class SchemaHandlerTestBase {
         }
 
         @Override
-        public String toBinaryRow(Schema avroSchema, String record) {
+        public String toBinaryRow(HoodieSchema avroSchema, String record) {
           return "";
         }
 
@@ -385,8 +386,8 @@ public abstract class SchemaHandlerTestBase {
     }
 
     @Override
-    public ClosableIterator<String> mergeBootstrapReaders(ClosableIterator<String> skeletonFileIterator, Schema skeletonRequiredSchema, ClosableIterator<String> dataFileIterator,
-                                                          Schema dataRequiredSchema, List<Pair<String, Object>> requiredPartitionFieldAndValues) {
+    public ClosableIterator<String> mergeBootstrapReaders(ClosableIterator<String> skeletonFileIterator, HoodieSchema skeletonRequiredSchema, ClosableIterator<String> dataFileIterator,
+                                                          HoodieSchema dataRequiredSchema, List<Pair<String, Object>> requiredPartitionFieldAndValues) {
       return null;
     }
   }

@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 
 import org.apache.avro.Schema;
 
@@ -56,13 +57,13 @@ public class BufferedRecords {
   public static <T> BufferedRecord<T> fromEngineRecord(
       T record, String recordKey, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, HoodieOperation hoodieOperation) {
     Integer schemaId = recordContext.encodeAvroSchema(schema);
-    Comparable orderingValue = recordContext.getOrderingValue(record, schema, orderingFieldNames);
+    Comparable orderingValue = recordContext.getOrderingValue(record, HoodieSchema.fromAvroSchema(schema), orderingFieldNames);
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, hoodieOperation);
   }
 
   public static <T> BufferedRecord<T> fromEngineRecord(T record, Schema schema, RecordContext<T> recordContext, String[] orderingFieldNames, String recordKey, boolean isDelete) {
     Integer schemaId = recordContext.encodeAvroSchema(schema);
-    Comparable orderingValue = recordContext.getOrderingValue(record, schema, orderingFieldNames);
+    Comparable orderingValue = recordContext.getOrderingValue(record, HoodieSchema.fromAvroSchema(schema), orderingFieldNames);
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete ? HoodieOperation.DELETE : null);
   }
 

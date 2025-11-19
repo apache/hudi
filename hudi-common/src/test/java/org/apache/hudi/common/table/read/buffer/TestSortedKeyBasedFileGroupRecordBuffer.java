@@ -197,6 +197,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     });
     when(mockReaderContext.getRecordContext().getRecordKey(any(), any())).thenAnswer(invocation -> ((TestRecord) invocation.getArgument(0)).getRecordKey());
     when(mockReaderContext.getRecordContext().getOrderingValue(any(), any(), anyList())).thenReturn(0);
+    when(mockReaderContext.getRecordContext().getSchemaFromBufferRecord(any())).thenReturn(HoodieTestDataGenerator.AVRO_SCHEMA);
     when(mockReaderContext.getRecordContext().toBinaryRow(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
     when(mockReaderContext.getRecordContext().seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);

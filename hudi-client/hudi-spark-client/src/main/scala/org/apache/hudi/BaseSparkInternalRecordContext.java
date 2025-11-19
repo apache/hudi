@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
@@ -104,8 +105,8 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   }
 
   @Override
-  public Object getValue(InternalRow row, Schema schema, String fieldName) {
-    return getFieldValueFromInternalRow(row, schema, fieldName);
+  public Object getValue(InternalRow row, HoodieSchema schema, String fieldName) {
+    return getFieldValueFromInternalRow(row, schema.toAvroSchema(), fieldName);
   }
 
   @Override
@@ -146,7 +147,7 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
       if (updateValues.containsKey(pos)) {
         values[pos] = updateValues.get(pos);
       } else {
-        values[pos] = getValue(baseRecord.getRecord(), schema, field.name());
+        values[pos] = getValue(baseRecord.getRecord(), HoodieSchema.fromAvroSchema(schema), field.name());
       }
     }
     return new GenericInternalRow(values);
@@ -210,11 +211,11 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   }
 
   @Override
-  public InternalRow toBinaryRow(Schema schema, InternalRow internalRow) {
+  public InternalRow toBinaryRow(HoodieSchema schema, InternalRow internalRow) {
     if (internalRow instanceof UnsafeRow) {
       return internalRow;
     }
-    final UnsafeProjection unsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema);
+    final UnsafeProjection unsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema.toAvroSchema());
     return unsafeProjection.apply(internalRow);
   }
 

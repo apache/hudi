@@ -268,11 +268,11 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public ClosableIterator<IndexedRecord> mergeBootstrapReaders(ClosableIterator<IndexedRecord> skeletonFileIterator,
-                                                               Schema skeletonRequiredSchema,
+                                                               HoodieSchema skeletonRequiredSchema,
                                                                ClosableIterator<IndexedRecord> dataFileIterator,
-                                                               Schema dataRequiredSchema,
+                                                               HoodieSchema dataRequiredSchema,
                                                                List<Pair<String, Object>> partitionFieldAndValues) {
-    return new BootstrapIterator(skeletonFileIterator, skeletonRequiredSchema, dataFileIterator, dataRequiredSchema, partitionFieldAndValues);
+    return new BootstrapIterator(skeletonFileIterator, skeletonRequiredSchema.toAvroSchema(), dataFileIterator, dataRequiredSchema.toAvroSchema(), partitionFieldAndValues);
   }
 
   /**

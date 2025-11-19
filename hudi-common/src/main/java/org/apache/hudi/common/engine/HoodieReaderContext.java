@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -273,6 +274,48 @@ public abstract class HoodieReaderContext<T> {
   }
 
   /**
+   * Gets the record iterator based on the type of engine-specific record representation from the
+   * file using HoodieSchema.
+   * This method uses HoodieSchema for in-memory processing while maintaining
+   * compatibility with existing Avro-based file reading.
+   *
+   * @param filePath       {@link StoragePath} instance of a file.
+   * @param start          Starting byte to start reading.
+   * @param length         Bytes to read.
+   * @param dataSchema     Schema of records in the file in {@link HoodieSchema}.
+   * @param requiredSchema Schema containing required fields to read in {@link HoodieSchema} for projection.
+   * @param storage        {@link HoodieStorage} for reading records.
+   * @return {@link ClosableIterator<T>} that can return all records through iteration.
+   * @since 1.2.0
+   */
+  public ClosableIterator<T> getFileRecordIterator(
+      StoragePath filePath, long start, long length, HoodieSchema dataSchema, HoodieSchema requiredSchema,
+      HoodieStorage storage) throws IOException {
+    return getFileRecordIterator(filePath, start, length, dataSchema.toAvroSchema(), requiredSchema.toAvroSchema(), storage);
+  }
+
+  /**
+   * Gets the record iterator based on the type of engine-specific record representation from the
+   * file using HoodieSchema.
+   * This method uses HoodieSchema for in-memory processing while maintaining
+   * compatibility with existing Avro-based file reading.
+   *
+   * @param storagePathInfo {@link StoragePathInfo} instance of a file.
+   * @param start           Starting byte to start reading.
+   * @param length          Bytes to read.
+   * @param dataSchema      Schema of records in the file in {@link HoodieSchema}.
+   * @param requiredSchema  Schema containing required fields to read in {@link HoodieSchema} for projection.
+   * @param storage         {@link HoodieStorage} for reading records.
+   * @return {@link ClosableIterator<T>} that can return all records through iteration.
+   * @since 1.2.0
+   */
+  public ClosableIterator<T> getFileRecordIterator(
+      StoragePathInfo storagePathInfo, long start, long length, HoodieSchema dataSchema, HoodieSchema requiredSchema,
+      HoodieStorage storage) throws IOException {
+    return getFileRecordIterator(storagePathInfo.getPath(), start, length, dataSchema.toAvroSchema(), requiredSchema.toAvroSchema(), storage);
+  }
+
+  /**
    * @param mergeMode        record merge mode
    * @param mergeStrategyId  record merge strategy ID
    * @param mergeImplClasses custom implementation classes for record merging
@@ -369,16 +412,16 @@ public abstract class HoodieReaderContext<T> {
    * skeleton file iterator, followed by all columns in the data file iterator
    *
    * @param skeletonFileIterator iterator over bootstrap skeleton files that contain hudi metadata columns
-   * @param skeletonRequiredSchema the schema of the skeleton file iterator
+   * @param skeletonRequiredSchema the HoodieSchema of the skeleton file iterator
    * @param dataFileIterator iterator over data files that were bootstrapped into the hudi table
-   * @param dataRequiredSchema the schema of the data file iterator
+   * @param dataRequiredSchema the HoodieSchema of the data file iterator
    * @param requiredPartitionFieldAndValues the partition field names and their values that are required by the query
    * @return iterator that concatenates the skeletonFileIterator and dataFileIterator
    */
   public abstract ClosableIterator<T> mergeBootstrapReaders(ClosableIterator<T> skeletonFileIterator,
-                                                            Schema skeletonRequiredSchema,
+                                                            HoodieSchema skeletonRequiredSchema,
                                                             ClosableIterator<T> dataFileIterator,
-                                                            Schema dataRequiredSchema,
+                                                            HoodieSchema dataRequiredSchema,
                                                             List<Pair<String, Object>> requiredPartitionFieldAndValues);
 
   public Option<Pair<String, String>> getPayloadClasses(TypedProperties props) {
