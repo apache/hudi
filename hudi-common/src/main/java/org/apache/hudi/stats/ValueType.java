@@ -20,12 +20,12 @@
 package org.apache.hudi.stats;
 
 import org.apache.hudi.ParquetAdapter;
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroWrapperUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.DateTimeUtils;
 
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
@@ -43,7 +43,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -244,77 +243,70 @@ public enum ValueType {
     }
   }
 
-  public static ValueType fromSchema(Schema schema) {
-    switch (schema.getType()) {
+  /**
+   * Infers ValueType from HoodieSchema for type inference in column statistics.
+   * Leverages specialized HoodieSchema subclasses to determine the appropriate ValueType.
+   *
+   * @param schema the HoodieSchema to infer type from
+   * @return the corresponding ValueType
+   * @throws IllegalArgumentException if the schema type is not supported
+   * @since 1.2.0
+   */
+  public static ValueType fromSchema(HoodieSchema schema) {
+    // Handle logical types first using instanceof checks on specialized classes
+    if (schema instanceof HoodieSchema.Decimal) {
+      return ValueType.DECIMAL;
+    }
+
+    if (schema instanceof HoodieSchema.Time) {
+      HoodieSchema.Time time = (HoodieSchema.Time) schema;
+      return time.getPrecision() == HoodieSchema.TimePrecision.MILLIS
+          ? ValueType.TIME_MILLIS
+          : ValueType.TIME_MICROS;
+    }
+
+    if (schema instanceof HoodieSchema.Timestamp) {
+      HoodieSchema.Timestamp timestamp = (HoodieSchema.Timestamp) schema;
+      if (timestamp.isUtcAdjusted()) {
+        return timestamp.getPrecision() == HoodieSchema.TimePrecision.MILLIS
+            ? ValueType.TIMESTAMP_MILLIS
+            : ValueType.TIMESTAMP_MICROS;
+      } else {
+        return timestamp.getPrecision() == HoodieSchema.TimePrecision.MILLIS
+            ? ValueType.LOCAL_TIMESTAMP_MILLIS
+            : ValueType.LOCAL_TIMESTAMP_MICROS;
+      }
+    }
+
+    // Handle primitive types and remaining logical types
+    HoodieSchemaType type = schema.getType();
+    switch (type) {
       case NULL:
-        if (schema.getLogicalType() == null) {
-          return ValueType.NULL;
-        }
-        throw new IllegalArgumentException("Unsupported logical type for Null: " + schema.getLogicalType());
+        return ValueType.NULL;
       case BOOLEAN:
-        if (schema.getLogicalType() == null) {
-          return ValueType.BOOLEAN;
-        }
-        throw new IllegalArgumentException("Unsupported logical type for Boolean: " + schema.getLogicalType());
+        return ValueType.BOOLEAN;
       case INT:
-        if (schema.getLogicalType() == null) {
-          return ValueType.INT;
-        } else if (schema.getLogicalType() instanceof LogicalTypes.Date) {
-          return ValueType.DATE;
-        } else if (schema.getLogicalType() instanceof LogicalTypes.TimeMillis) {
-          return ValueType.TIME_MILLIS;
-        }
-        throw new IllegalArgumentException("Unsupported logical type for Int: " + schema.getLogicalType());
+        return ValueType.INT;
       case LONG:
-        if (schema.getLogicalType() == null) {
-          return ValueType.LONG;
-        } else if (schema.getLogicalType() instanceof LogicalTypes.TimeMicros) {
-          return ValueType.TIME_MICROS;
-        } else if (schema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
-          return ValueType.TIMESTAMP_MILLIS;
-        } else if (schema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
-          return ValueType.TIMESTAMP_MICROS;
-        } else if (schema.getLogicalType() instanceof LogicalTypes.LocalTimestampMillis) {
-          return ValueType.LOCAL_TIMESTAMP_MILLIS;
-        } else if (schema.getLogicalType() instanceof LogicalTypes.LocalTimestampMicros) {
-          return ValueType.LOCAL_TIMESTAMP_MICROS;
-        }
-        throw new IllegalArgumentException("Unsupported logical type for Long: " + schema.getLogicalType());
+        return ValueType.LONG;
       case FLOAT:
-        if (schema.getLogicalType() == null) {
-          return ValueType.FLOAT;
-        }
-        throw new IllegalArgumentException("Unsupported logical type for Float: " + schema.getLogicalType());
+        return ValueType.FLOAT;
       case DOUBLE:
-        if (schema.getLogicalType() == null) {
-          return ValueType.DOUBLE;
-        }
-        throw new IllegalArgumentException("Unsupported logical type for Double: " + schema.getLogicalType());
+        return ValueType.DOUBLE;
       case BYTES:
-        if (schema.getLogicalType() == null) {
-          return ValueType.BYTES;
-        } else if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
-          return ValueType.DECIMAL;
-        }
-        throw new IllegalArgumentException("Unsupported logical type for Bytes: " + schema.getLogicalType());
+        return ValueType.BYTES;
       case STRING:
-        if (schema.getLogicalType() == null) {
-          return ValueType.STRING;
-        } else if (Objects.equals(schema.getLogicalType().getName(), LogicalTypes.uuid().getName())) {
-          return ValueType.UUID;
-        }
-        throw new IllegalArgumentException("Unsupported logical type for String: " + schema.getLogicalType());
+        return ValueType.STRING;
       case FIXED:
-        if (schema.getLogicalType() == null) {
-          return ValueType.FIXED;
-        } else if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
-          return ValueType.DECIMAL;
-        }
-        throw new IllegalArgumentException("Unsupported logical type for Fixed: " + schema.getLogicalType());
+        return ValueType.FIXED;
+      case DATE:
+        return ValueType.DATE;
+      case UUID:
+        return ValueType.UUID;
       case UNION:
-        return fromSchema(AvroSchemaUtils.getNonNullTypeFromUnion(schema));
+        return fromSchema(HoodieSchemaUtils.getNonNullTypeFromUnion(schema));
       default:
-        throw new IllegalArgumentException("Unsupported type: " + schema.getType());
+        throw new IllegalArgumentException("Unsupported type: " + type);
     }
   }
 

@@ -71,6 +71,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -287,7 +288,8 @@ public class HoodieTableMetadataUtil {
       targetFields.forEach(fieldNameFieldPair -> {
         String fieldName = fieldNameFieldPair.getKey();
         Schema fieldSchema = getNonNullTypeFromUnion(fieldNameFieldPair.getValue().schema());
-        ColumnStats colStats = allColumnStats.computeIfAbsent(fieldName, ignored -> new ColumnStats(getValueMetadata(fieldSchema, indexVersion)));
+        HoodieSchema hoodieFieldSchema = HoodieSchema.fromAvroSchema(fieldSchema);
+        ColumnStats colStats = allColumnStats.computeIfAbsent(fieldName, ignored -> new ColumnStats(getValueMetadata(hoodieFieldSchema, indexVersion)));
         Object fieldValue = collectColumnRangeFieldValue(record, colStats.valueMetadata, fieldName, fieldSchema, recordSchema, properties);
 
         colStats.valueCount++;
@@ -360,11 +362,12 @@ public class HoodieTableMetadataUtil {
   }
 
   private static HoodieColumnRangeMetadata<Comparable> colStatsToColRangeMetadataV1(String fieldName, Schema fieldSchema, ColumnStats colStats, String filePath) {
+    HoodieSchema hoodieSchema = HoodieSchema.fromAvroSchema(fieldSchema);
     return HoodieColumnRangeMetadata.<Comparable>create(
         filePath,
         fieldName,
-        coerceToComparable(fieldSchema, colStats.minValue),
-        coerceToComparable(fieldSchema, colStats.maxValue),
+        coerceToComparable(hoodieSchema, colStats.minValue),
+        coerceToComparable(hoodieSchema, colStats.maxValue),
         colStats.nullCount,
         colStats.valueCount,
         // NOTE: Size and compressed size statistics are set to 0 to make sure we're not
@@ -1882,13 +1885,21 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
-   * Given a schema, coerces provided value to instance of {@link Comparable<?>} such that
-   * it could subsequently be used in column stats
+   * Given a HoodieSchema, coerces provided value to instance of {@link Comparable<?>} such that
+   * it could subsequently be used in column stats. This method uses HoodieSchema for in-memory
+   * processing while maintaining compatibility with existing Avro-based serialization.
    *
    * NOTE: This method has to stay compatible with the semantic of
    *      {@link FileFormatUtils#readColumnStatsFromMetadata} as they are used in tandem
+   *
+   * @param hoodieSchema the HoodieSchema to use for type coercion
+   * @param val the value to coerce
+   * @return the coerced value as a Comparable
+   * @since 1.2.0
    */
-  public static Comparable<?> coerceToComparable(Schema schema, Object val) {
+  public static Comparable<?> coerceToComparable(HoodieSchema hoodieSchema, Object val) {
+    Schema schema = hoodieSchema.toAvroSchema();
+
     if (val == null) {
       return null;
     }
@@ -1896,7 +1907,7 @@ public class HoodieTableMetadataUtil {
     switch (schema.getType()) {
       case UNION:
         // TODO we need to handle unions in general case as well
-        return coerceToComparable(getNonNullTypeFromUnion(schema), val);
+        return coerceToComparable(hoodieSchema.getNonNullType(), val);
 
       case FIXED:
       case BYTES:
@@ -2643,13 +2654,17 @@ public class HoodieTableMetadataUtil {
                                                                       Map<String, Schema> colsToIndexSchemaMap,
                                                                       HoodieIndexVersion partitionStatsIndexVersion
   ) {
+    // Convert Avro Schema map to HoodieSchema map
+    Map<String, HoodieSchema> hoodieSchemaMap = colsToIndexSchemaMap.entrySet().stream()
+        .collect(Collectors.toMap(Map.Entry::getKey, entry -> HoodieSchema.fromAvroSchema(entry.getValue())));
+
     // Group by Column Name
     Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnMetadataMap =
         fileColumnMetadata.collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName, Collectors.toList()));
 
     // Aggregate Column Ranges
     Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = columnMetadataMap.entrySet().stream()
-        .map(entry -> FileFormatUtils.getColumnRangeInPartition(partitionPath, entry.getKey(), entry.getValue(), colsToIndexSchemaMap, partitionStatsIndexVersion));
+        .map(entry -> FileFormatUtils.getColumnRangeInPartition(partitionPath, entry.getKey(), entry.getValue(), hoodieSchemaMap, partitionStatsIndexVersion));
 
     // Create Partition Stats Records
     return HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, partitionStatsRangeMetadata.collect(Collectors.toList()), false, isTightBound, indexPartitionOpt);
