@@ -27,7 +27,7 @@ Apache Hudi 1.1.0 is a major release that brings significant performance improve
 
 Hudi 1.1.0 introduces a new Pluggable Table Format framework that enables native integration of multiple table formats within the system. This foundation includes a base interface for pluggable table formats, designed to simplify extension and allow seamless interoperability across different storage backends. The Metadata Table (MDT) integration has been enhanced to support pluggability, ensuring modularity and unified metadata management across all supported table formats.
 
-This release brings native Apache Hudi integration through the new framework, allowing users to leverage Hudi's advanced capabilities directly while maintaining consistent semantics and performance. The configuration `hoodie.table.format` is set to `native` by default, which works as the Hudi table format. **No configuration changes are required** for existing and new Hudi tables. As additional table formats are supported in future releases, users will be able to set this configuration to work natively with other formats.
+This release brings native Hudi integration through the new framework, allowing users to leverage Hudi's advanced capabilities directly while maintaining consistent semantics and performance. The configuration `hoodie.table.format` is set to `native` by default, which works as the Hudi table format. **No configuration changes are required** for existing and new Hudi tables. As additional table formats are supported in future releases, users will be able to set this configuration to work natively with other formats.
 
 #### Table Version 9 with Index Versioning
 
@@ -126,7 +126,7 @@ Hive readers can now handle schema evolution when schema-on-write is used.
 
 #### Spark 4.0 Support
 
-Apache Spark 4.0 is now supported with necessary compatibility and dependency changes. Available through the new `hudi-spark4.0-bundle_2.13` release artifact.
+Spark 4.0 is now supported with necessary compatibility and dependency changes. Available through the new `hudi-spark4.0-bundle_2.13` release artifact.
 
 #### Metadata Table Streaming Writes
 
@@ -166,9 +166,9 @@ Full support for Flink 2.0 including sink, read, catalog, and new bundle artifac
 
 ### Catalogs
 
-#### Apache Polaris Integration
+#### Polaris Integration
 
-Integration with Apache Polaris catalog by delegating table creation to the Polaris Spark client, allowing Hudi tables to be registered in the Polaris Catalog.
+Integration with Polaris catalog by delegating table creation to the Polaris Spark client, allowing Hudi tables to be registered in the Polaris Catalog.
 
 **Configuration**: `hoodie.datasource.polaris.catalog.class` (default: `org.apache.polaris.spark.SparkCatalog`)
 
@@ -351,11 +351,11 @@ Bucket index now supports only UPSERT operations and cannot be used with append 
 
 ---
 
-## Version Support
+## Hudi Version Support
 
-### End of Life for Versions Prior to 0.14.0
+### End of Life for Hudi Versions Prior to 0.14.0
 
-As of this release, Apache Hudi versions prior to 0.14.0 have reached end of life. Users on these older versions should plan to upgrade to 1.1.0 or later to receive ongoing support, bug fixes, and new features. The Hudi community will focus support efforts on versions 0.14.0 and later.
+As of this release, Hudi versions prior to 0.14.0 have reached end of life. Users on these older versions should plan to upgrade to 1.1.0 or later to receive ongoing support, bug fixes, and new features. The Hudi community will focus support efforts on versions 0.14.0 and later.
 
 For more details, see the [community discussion](https://github.com/apache/hudi/discussions/13847).
 
@@ -363,4 +363,4 @@ For more details, see the [community discussion](https://github.com/apache/hudi/
 
 ## Contributors
 
-Hudi 1.1.0 is the result of contributions from the entire Apache Hudi community. We thank all contributors who made this release possible.
+Hudi 1.1.0 is the result of contributions from the entire Hudi community. We thank all contributors who made this release possible.
