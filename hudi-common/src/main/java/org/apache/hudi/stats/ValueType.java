@@ -20,8 +20,10 @@
 package org.apache.hudi.stats;
 
 import org.apache.hudi.ParquetAdapter;
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroWrapperUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.DateTimeUtils;
 
 import org.apache.avro.LogicalTypes;
@@ -244,77 +246,90 @@ public enum ValueType {
     }
   }
 
-  public static ValueType fromSchema(Schema schema) {
-    switch (schema.getType()) {
+  /**
+   * Infers ValueType from HoodieSchema for type inference in column statistics.
+   * This method uses HoodieSchema for in-memory processing while maintaining
+   * compatibility with existing Avro-based serialization.
+   *
+   * @param schema the HoodieSchema to infer type from
+   * @return the corresponding ValueType
+   * @throws IllegalArgumentException if the schema type is not supported
+   * @since 1.2.0
+   */
+  public static ValueType fromSchema(HoodieSchema schema) {
+    Schema avroSchema = schema.toAvroSchema();
+    HoodieSchemaType schemaType = schema.getType();
+
+    switch (schemaType) {
       case NULL:
-        if (schema.getLogicalType() == null) {
+        if (avroSchema.getLogicalType() == null) {
           return ValueType.NULL;
         }
-        throw new IllegalArgumentException("Unsupported logical type for Null: " + schema.getLogicalType());
+        throw new IllegalArgumentException("Unsupported logical type for Null: " + avroSchema.getLogicalType());
       case BOOLEAN:
-        if (schema.getLogicalType() == null) {
+        if (avroSchema.getLogicalType() == null) {
           return ValueType.BOOLEAN;
         }
-        throw new IllegalArgumentException("Unsupported logical type for Boolean: " + schema.getLogicalType());
+        throw new IllegalArgumentException("Unsupported logical type for Boolean: " + avroSchema.getLogicalType());
       case INT:
-        if (schema.getLogicalType() == null) {
+        if (avroSchema.getLogicalType() == null) {
           return ValueType.INT;
-        } else if (schema.getLogicalType() instanceof LogicalTypes.Date) {
+        } else if (avroSchema.getLogicalType() instanceof LogicalTypes.Date) {
           return ValueType.DATE;
-        } else if (schema.getLogicalType() instanceof LogicalTypes.TimeMillis) {
+        } else if (avroSchema.getLogicalType() instanceof LogicalTypes.TimeMillis) {
           return ValueType.TIME_MILLIS;
         }
-        throw new IllegalArgumentException("Unsupported logical type for Int: " + schema.getLogicalType());
+        throw new IllegalArgumentException("Unsupported logical type for Int: " + avroSchema.getLogicalType());
       case LONG:
-        if (schema.getLogicalType() == null) {
+        if (avroSchema.getLogicalType() == null) {
           return ValueType.LONG;
-        } else if (schema.getLogicalType() instanceof LogicalTypes.TimeMicros) {
+        } else if (avroSchema.getLogicalType() instanceof LogicalTypes.TimeMicros) {
           return ValueType.TIME_MICROS;
-        } else if (schema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
+        } else if (avroSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
           return ValueType.TIMESTAMP_MILLIS;
-        } else if (schema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
+        } else if (avroSchema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
           return ValueType.TIMESTAMP_MICROS;
-        } else if (schema.getLogicalType() instanceof LogicalTypes.LocalTimestampMillis) {
+        } else if (avroSchema.getLogicalType() instanceof LogicalTypes.LocalTimestampMillis) {
           return ValueType.LOCAL_TIMESTAMP_MILLIS;
-        } else if (schema.getLogicalType() instanceof LogicalTypes.LocalTimestampMicros) {
+        } else if (avroSchema.getLogicalType() instanceof LogicalTypes.LocalTimestampMicros) {
           return ValueType.LOCAL_TIMESTAMP_MICROS;
         }
-        throw new IllegalArgumentException("Unsupported logical type for Long: " + schema.getLogicalType());
+        throw new IllegalArgumentException("Unsupported logical type for Long: " + avroSchema.getLogicalType());
       case FLOAT:
-        if (schema.getLogicalType() == null) {
+        if (avroSchema.getLogicalType() == null) {
           return ValueType.FLOAT;
         }
-        throw new IllegalArgumentException("Unsupported logical type for Float: " + schema.getLogicalType());
+        throw new IllegalArgumentException("Unsupported logical type for Float: " + avroSchema.getLogicalType());
       case DOUBLE:
-        if (schema.getLogicalType() == null) {
+        if (avroSchema.getLogicalType() == null) {
           return ValueType.DOUBLE;
         }
-        throw new IllegalArgumentException("Unsupported logical type for Double: " + schema.getLogicalType());
+        throw new IllegalArgumentException("Unsupported logical type for Double: " + avroSchema.getLogicalType());
       case BYTES:
-        if (schema.getLogicalType() == null) {
+        if (avroSchema.getLogicalType() == null) {
           return ValueType.BYTES;
-        } else if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
+        } else if (avroSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
           return ValueType.DECIMAL;
         }
-        throw new IllegalArgumentException("Unsupported logical type for Bytes: " + schema.getLogicalType());
+        throw new IllegalArgumentException("Unsupported logical type for Bytes: " + avroSchema.getLogicalType());
       case STRING:
-        if (schema.getLogicalType() == null) {
+        if (avroSchema.getLogicalType() == null) {
           return ValueType.STRING;
-        } else if (Objects.equals(schema.getLogicalType().getName(), LogicalTypes.uuid().getName())) {
+        } else if (Objects.equals(avroSchema.getLogicalType().getName(), LogicalTypes.uuid().getName())) {
           return ValueType.UUID;
         }
-        throw new IllegalArgumentException("Unsupported logical type for String: " + schema.getLogicalType());
+        throw new IllegalArgumentException("Unsupported logical type for String: " + avroSchema.getLogicalType());
       case FIXED:
-        if (schema.getLogicalType() == null) {
+        if (avroSchema.getLogicalType() == null) {
           return ValueType.FIXED;
-        } else if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
+        } else if (avroSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
           return ValueType.DECIMAL;
         }
-        throw new IllegalArgumentException("Unsupported logical type for Fixed: " + schema.getLogicalType());
+        throw new IllegalArgumentException("Unsupported logical type for Fixed: " + avroSchema.getLogicalType());
       case UNION:
-        return fromSchema(AvroSchemaUtils.getNonNullTypeFromUnion(schema));
+        return fromSchema(HoodieSchemaUtils.getNonNullTypeFromUnion(schema));
       default:
-        throw new IllegalArgumentException("Unsupported type: " + schema.getType());
+        throw new IllegalArgumentException("Unsupported type: " + schemaType);
     }
   }
 

@@ -21,6 +21,8 @@ package org.apache.hudi.stats;
 
 import org.apache.hudi.ParquetAdapter;
 import org.apache.hudi.avro.model.HoodieValueTypeInfo;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 
@@ -31,7 +33,6 @@ import org.apache.parquet.schema.PrimitiveType;
 
 import java.io.Serializable;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE_ADDITIONAL_INFO;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE_ORDINAL;
@@ -234,19 +235,32 @@ public class ValueMetadata implements Serializable {
     }
   }
 
-  public static ValueMetadata getValueMetadata(Schema fieldSchema, HoodieIndexVersion indexVersion) {
+  /**
+   * Creates ValueMetadata from HoodieSchema for column statistics type inference.
+   * This method uses HoodieSchema for in-memory processing while maintaining
+   * compatibility with existing Avro-based serialization.
+   *
+   * @param fieldSchema the HoodieSchema of the field
+   * @param indexVersion the index version to determine metadata format
+   * @return ValueMetadata instance for the given schema
+   * @throws IllegalArgumentException if schema is null or has unsupported logical type
+   * @since 1.2.0
+   */
+  public static ValueMetadata getValueMetadata(HoodieSchema fieldSchema, HoodieIndexVersion indexVersion) {
     if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
       return V1EmptyMetadata.get();
     }
     if (fieldSchema == null) {
       throw new IllegalArgumentException("Field schema cannot be null");
     }
-    Schema valueSchema = getNonNullTypeFromUnion(fieldSchema);
+    HoodieSchema valueSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(fieldSchema);
     ValueType valueType = ValueType.fromSchema(valueSchema);
     if (valueType == ValueType.V1) {
-      throw new IllegalArgumentException("Unsupported logical type for: " + valueSchema.getLogicalType());
+      Schema avroSchema = valueSchema.toAvroSchema();
+      throw new IllegalArgumentException("Unsupported logical type for: " + avroSchema.getLogicalType());
     } else if (valueType == ValueType.DECIMAL) {
-      return DecimalMetadata.create((LogicalTypes.Decimal) valueSchema.getLogicalType());
+      Schema avroSchema = valueSchema.toAvroSchema();
+      return DecimalMetadata.create((LogicalTypes.Decimal) avroSchema.getLogicalType());
     } else {
       return new ValueMetadata(valueType);
     }
