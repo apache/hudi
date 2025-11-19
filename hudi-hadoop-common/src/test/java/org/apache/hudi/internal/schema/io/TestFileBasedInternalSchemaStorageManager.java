@@ -94,6 +94,8 @@ public class TestFileBasedInternalSchemaStorageManager extends HoodieCommonTestH
     // now the residual file created by 3st persist should be removed.
     File f = new File(metaClient.getSchemaFolderName() + File.separator + "0002.schemacommit");
     assertTrue(!f.exists());
+    assertEquals(currentSchema, fm.getSchemaByKey("0").get());
+    assertEquals(secondSchema, fm.getSchemaByKey("1").get());
     assertEquals(lastSchema, fm.getSchemaByKey("3").get());
   }
 

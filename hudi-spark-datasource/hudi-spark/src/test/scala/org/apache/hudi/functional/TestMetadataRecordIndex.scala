@@ -48,7 +48,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
   var instantTime: AtomicInteger = _
   val metadataOpts = Map(
     HoodieMetadataConfig.ENABLE.key -> "true",
-    HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true"
+    HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true"
   )
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -206,8 +206,8 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
 
     assertEquals(rowArr.length, recordIndexMap.keySet.size)
     val estimatedFileGroupCount = HoodieTableMetadataUtil.estimateFileGroupCount(
-      MetadataPartitionType.RECORD_INDEX, rowArr.length, 48,
-      writeConfig.getRecordIndexMinFileGroupCount, writeConfig.getRecordIndexMaxFileGroupCount,
+      MetadataPartitionType.RECORD_INDEX, () => rowArr.length, 48,
+      writeConfig.getGlobalRecordLevelIndexMinFileGroupCount, writeConfig.getGlobalRecordLevelIndexMaxFileGroupCount,
       writeConfig.getRecordIndexGrowthFactor, writeConfig.getRecordIndexMaxFileGroupSizeBytes)
     assertEquals(estimatedFileGroupCount, getFileGroupCountForRecordIndex(writeConfig))
     val prevDf = mergedDfList.last.drop("tip_history")

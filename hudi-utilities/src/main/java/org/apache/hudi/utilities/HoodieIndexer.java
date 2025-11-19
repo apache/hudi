@@ -51,7 +51,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
@@ -185,7 +185,7 @@ public class HoodieIndexer {
         props.setProperty(ENABLE_METADATA_INDEX_BLOOM_FILTER.key(), "true");
       }
       if (PARTITION_NAME_RECORD_INDEX.equals(p)) {
-        props.setProperty(RECORD_INDEX_ENABLE_PROP.key(), "true");
+        props.setProperty(GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
       }
     });
 

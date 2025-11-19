@@ -18,9 +18,8 @@
 
 package org.apache.hudi.common.model
 
-import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
+import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport, SparkRowSerDe}
 import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, createInternalRowToAvroConverter}
-import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.TestHoodieRecordSerialization.{cloneUsingKryo, convertToAvroRecord, toUnsafeRow, OverwriteWithLatestAvroPayloadWithEquality}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
@@ -78,7 +77,7 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
       Timestamp.from(Instant.parse("2022-10-01T23:59:59.00Z")), Row(Decimal.apply(123, 3, 2)))
 
     val unsafeRow: UnsafeRow = toUnsafeRow(row, rowSchema)
-    val hoodieInternalRow = new HoodieInternalRow(new Array[UTF8String](5), unsafeRow, false)
+    val hoodieInternalRow = SparkAdapterSupport.sparkAdapter.createInternalRow(new Array[UTF8String](5), unsafeRow, false)
 
     Seq(
       (unsafeRow, rowSchema, 92),
@@ -94,6 +93,8 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
 
       if (cloned.isInstanceOf[HoodieAvroIndexedRecord]) {
         cloned.asInstanceOf[HoodieAvroIndexedRecord].toIndexedRecord(schema, new Properties())
+        // by default avro is not eagerly deserialized.
+        cloned.asInstanceOf[HoodieAvroIndexedRecord].getData.get(0)
       }
       assertEquals(expectedSize, originalBytes.length)
       assertEquals(record, cloned)
@@ -114,8 +115,8 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     val avroIndexedRecord = new HoodieAvroIndexedRecord(key, avroRecord)
     avroIndexedRecord.setIgnoreIndexUpdate(true)
 
-    val expectedLegacyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 539 else 533
-    val expectedAvroIndexedRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 57 else 54
+    val expectedLegacyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 169 else 166
+    val expectedAvroIndexedRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 58 else 55
 
     Seq(
       (legacyRecord, null, expectedLegacyRecordSize),
@@ -176,7 +177,7 @@ object TestHoodieRecordSerialization {
   }
 
   private def toUnsafeRow(row: Row, schema: StructType): UnsafeRow = {
-    val encoder = SparkAdapterSupport.sparkAdapter.createSparkRowSerDe(schema)
+    val encoder = new SparkRowSerDe(SparkAdapterSupport.sparkAdapter.getCatalystExpressionUtils.getEncoder(schema))
     val internalRow = encoder.serializeRow(row)
     internalRow.asInstanceOf[UnsafeRow]
   }
@@ -193,7 +194,7 @@ object TestHoodieRecordSerialization {
     override def equals(obj: Any): Boolean =
       obj match {
         case p: OverwriteWithLatestAvroPayloadWithEquality =>
-          Objects.equals(ByteBuffer.wrap(this.recordBytes), ByteBuffer.wrap(p.recordBytes)) &&
+          Objects.equals(ByteBuffer.wrap(this.getRecordBytes), ByteBuffer.wrap(p.getRecordBytes)) &&
             Objects.equals(this.orderingVal, p.orderingVal)
         case _ =>
           false

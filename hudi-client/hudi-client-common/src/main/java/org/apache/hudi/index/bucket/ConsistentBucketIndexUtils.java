@@ -209,9 +209,9 @@ public class ConsistentBucketIndexUtils {
         }
       } catch (IOException e2) {
         // ignore the exception and return false
-        LOG.warn("Failed to check the existence of bucket metadata file: " + fullPath, e2);
+        LOG.warn("Failed to check the existence of bucket metadata file: {}", fullPath, e2);
       }
-      LOG.warn("Failed to update bucket metadata: " + metadata, e1);
+      LOG.warn("Failed to update bucket metadata: {}", metadata, e1);
       return false;
     }
   }
@@ -239,7 +239,7 @@ public class ConsistentBucketIndexUtils {
       if (!storage.exists(fullPath)) {
         throw e;
       }
-      LOG.warn("Failed to create marker but " + fullPath + " exists", e);
+      LOG.warn("Failed to create marker but {} exists", fullPath, e);
     }
   }
 

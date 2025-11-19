@@ -159,6 +159,10 @@ public class RequestHandler {
     return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM, String.class).getOrThrow(e -> new HoodieException("MAX_INSTANT_PARAM is invalid"));
   }
 
+  private static String getCurrentInstantParamMandatory(Context ctx) {
+    return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.CURRENT_INSTANT_PARAM, String.class).getOrThrow(e -> new HoodieException("MAX_INSTANT_PARAM is invalid"));
+  }
+
   private static String getMaxInstantParamOptional(Context ctx) {
     return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM, String.class).getOrDefault("");
   }
@@ -379,6 +383,16 @@ public class RequestHandler {
       writeValueAsString(ctx, dtos);
     }, true));
 
+    app.get(RemoteHoodieTableFileSystemView.LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_INFLIGHT_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_INFLIGHT", 1);
+      List<FileSliceDTO> dtos = sliceHandler.getLatestMergedFileSlicesBeforeOrOnIncludingInflight(
+          getBasePathParam(ctx),
+          getPartitionParam(ctx),
+          getMaxInstantParamMandatory(ctx),
+          getCurrentInstantParamMandatory(ctx));
+      writeValueAsString(ctx, dtos);
+    }, true));
+
     app.get(RemoteHoodieTableFileSystemView.LATEST_SLICE_MERGED_BEFORE_ON_INSTANT_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("LATEST_SLICE_MERGED_BEFORE_ON_INSTANT", 1);
       List<FileSliceDTO> dtos = sliceHandler.getLatestMergedFileSliceBeforeOrOn(
@@ -570,7 +584,7 @@ public class RequestHandler {
       try {
         ugi = UserGroupInformation.getCurrentUser();
       } catch (Exception e) {
-        LOG.warn("Fail to get ugi", e);
+        LOG.error("Fail to get ugi", e);
         throw new HoodieException(e);
       }
     }
@@ -619,7 +633,7 @@ public class RequestHandler {
           if (re instanceof BadRequestResponse) {
             LOG.warn("Bad request response due to client view behind server view. {}", re.getMessage());
           } else {
-            LOG.error(String.format("Got runtime exception servicing request %s", context.queryString()), re);
+            LOG.error("Got runtime exception servicing request {}", context.queryString(), re);
           }
           throw re;
         } finally {

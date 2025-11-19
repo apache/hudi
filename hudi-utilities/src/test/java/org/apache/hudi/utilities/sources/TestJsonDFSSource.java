@@ -62,6 +62,13 @@ public class TestJsonDFSSource extends AbstractDFSSourceTestBase {
   }
 
   @Override
+  protected Option<TypedProperties> getSourceFormatAdapterProps() {
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES.key(), "true");
+    return Option.of(properties);
+  }
+
+  @Override
   public void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException {
     UtilitiesTestBase.Helpers.saveStringsToDFS(
         Helpers.jsonifyRecords(records), storage, path.toString());

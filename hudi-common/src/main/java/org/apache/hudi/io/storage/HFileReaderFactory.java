@@ -20,13 +20,17 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.hash.MurmurHash;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.hfile.CachingHFileReaderImpl;
 import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.HFileReaderImpl;
 import org.apache.hudi.storage.HoodieStorage;
@@ -42,20 +46,51 @@ public class HFileReaderFactory {
 
   private final HoodieStorage storage;
   private final HoodieMetadataConfig metadataConfig;
+  private final TypedProperties properties;
   private final Either<StoragePath, byte[]> fileSource;
+  private Option<Long> fileSizeOpt;
 
-  public HFileReaderFactory(HoodieStorage storage,
-                            TypedProperties properties,
-                            Either<StoragePath, byte[]> fileSource) {
+  private HFileReaderFactory(HoodieStorage storage,
+                             TypedProperties properties,
+                             Either<StoragePath, byte[]> fileSource,
+                             Option<Long> fileSizeOpt) {
     this.storage = storage;
     this.metadataConfig = HoodieMetadataConfig.newBuilder().withProperties(properties).build();
+    this.properties = properties;
     this.fileSource = fileSource;
+    this.fileSizeOpt = fileSizeOpt;
   }
 
   public HFileReader createHFileReader() throws IOException {
-    final long fileSize = determineFileSize();
+    if (fileSizeOpt.isEmpty()) {
+      fileSizeOpt = Option.of(determineFileSize());
+    }
+    final long fileSize = fileSizeOpt.get();
     final SeekableDataInputStream inputStream = createInputStream(fileSize);
+
+    if (shouldEnableBlockCaching()) {
+      int blockCacheSize = ConfigUtils.getIntWithAltKeys(
+          properties, HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE);
+      int cacheTtlMinutes = ConfigUtils.getIntWithAltKeys(
+          properties, HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES);
+      String filePath = getFilePath();
+      return new CachingHFileReaderImpl(inputStream, fileSize, filePath, blockCacheSize, cacheTtlMinutes);
+    }
+
     return new HFileReaderImpl(inputStream, fileSize);
+  }
+
+  private boolean shouldEnableBlockCaching() {
+    return ConfigUtils.getBooleanWithAltKeys(properties, HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED);
+  }
+
+  private String getFilePath() {
+    if (fileSource.isLeft()) {
+      return fileSource.asLeft().toString();
+    }
+    // For byte array content, use a hash-based identifier
+    int murmurHash = MurmurHash.getInstance().hash(fileSource.asRight());
+    return String.valueOf(murmurHash);
   }
 
   private long determineFileSize() throws IOException {
@@ -90,6 +125,7 @@ public class HFileReaderFactory {
     private HoodieStorage storage;
     private Option<TypedProperties> properties = Option.empty();
     private Either<StoragePath, byte[]> fileSource;
+    private Option<Long> fileSizeOpt = Option.empty();
 
     public Builder withStorage(HoodieStorage storage) {
       this.storage = storage;
@@ -113,11 +149,17 @@ public class HFileReaderFactory {
       return this;
     }
 
+    public Builder withFileSize(long fileSize) {
+      ValidationUtils.checkState(fileSize >= 0, "file size is invalid, should be greater than or equal to zero");
+      this.fileSizeOpt = Option.of(fileSize);
+      return this;
+    }
+
     public HFileReaderFactory build() {
       ValidationUtils.checkArgument(storage != null, "Storage cannot be null");
       ValidationUtils.checkArgument(fileSource != null, "HFile source cannot be null");
       TypedProperties props = properties.isPresent() ? properties.get() : new TypedProperties();
-      return new HFileReaderFactory(storage, props, fileSource);
+      return new HFileReaderFactory(storage, props, fileSource, fileSizeOpt);
     }
   }
 }

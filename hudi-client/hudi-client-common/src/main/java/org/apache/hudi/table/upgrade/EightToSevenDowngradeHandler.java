@@ -79,6 +79,8 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V1;
 import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V2;
+import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
+import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
@@ -101,6 +103,10 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(context.getStorageConf().newInstance()).setBasePath(config.getBasePath()).build();
+    if (config.enableComplexKeygenValidation()
+        && isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig())) {
+      throw new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage("downgrade"));
+    }
     // Handle timeline downgrade:
     //  - Rename instants in active timeline to old format for table version 6
     //  - Convert LSM timeline format to archived timeline for table version 6
@@ -222,9 +228,10 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
             flusher);
       }
     } catch (Exception e) {
-      LOG.warn("Failed to downgrade LSM timeline to old archived format");
       if (config.isFailOnTimelineArchivingEnabled()) {
         throw new HoodieException("Failed to downgrade LSM timeline to old archived format", e);
+      } else {
+        LOG.warn("Failed to downgrade LSM timeline to old archived format", e);
       }
     }
   }
@@ -238,6 +245,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     private final int batchSize;
     private final StoragePath archivePath;
     private final HoodieTableMetaClient metaClient;
+    private final Object lock = new Object();
 
     public ArchiveEntryFlusher(HoodieTableMetaClient metaClient, TimelineArchiverV1 archiverV1, int batchSize, StoragePath archivePath) {
       this.metaClient = metaClient;
@@ -249,24 +257,28 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
 
     @Override
     public void accept(String s, GenericRecord archiveEntry) {
-      if (buffer.size() >= batchSize) {
-        archiverV1.flushArchiveEntries(new ArrayList<>(buffer), archivePath);
-        buffer.clear();
-      } else {
-        try {
-          GenericRecord legacyArchiveEntry = MetadataConversionUtils.createMetaWrapper(metaClient, archiveEntry);
-          buffer.add(legacyArchiveEntry);
-        } catch (IOException e) {
-          throw new HoodieException("Convert lsm archive entry to legacy error", e);
+      synchronized (lock) {
+        if (buffer.size() >= batchSize) {
+          archiverV1.flushArchiveEntries(new ArrayList<>(buffer), archivePath);
+          buffer.clear();
+        } else {
+          try {
+            GenericRecord legacyArchiveEntry = MetadataConversionUtils.createMetaWrapper(metaClient, archiveEntry);
+            buffer.add(legacyArchiveEntry);
+          } catch (IOException e) {
+            throw new HoodieException("Convert lsm archive entry to legacy error", e);
+          }
         }
       }
     }
 
     @Override
     public void close() {
-      if (!buffer.isEmpty()) {
-        archiverV1.flushArchiveEntries(new ArrayList<>(buffer), this.archivePath);
-        buffer.clear();
+      synchronized (lock) {
+        if (!buffer.isEmpty()) {
+          archiverV1.flushArchiveEntries(new ArrayList<>(buffer), this.archivePath);
+          buffer.clear();
+        }
       }
     }
   }

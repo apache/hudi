@@ -48,6 +48,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
+
 /**
  * Utility methods to aid in testing MergeOnRead (workaround for HoodieReadClient for MOR).
  */
@@ -103,7 +105,7 @@ public class HoodieMergeOnReadTestUtils {
       fields = schema.getFields();
     }
     final Schema projectedSchema = Schema.createRecord(fields.stream()
-        .map(f -> new Field(f.name(), f.schema(), f.doc(), f.defaultVal()))
+        .map(HoodieAvroUtils::createNewSchemaField)
         .collect(Collectors.toList()));
 
     List<GenericRecord> records = new ArrayList<>();

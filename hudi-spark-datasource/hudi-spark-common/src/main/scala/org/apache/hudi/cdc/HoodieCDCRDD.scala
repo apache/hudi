@@ -357,7 +357,7 @@ class HoodieCDCRDD(
         val existingRecordOpt = beforeImageRecords.remove(key)
         if (existingRecordOpt.isEmpty) {
           // no real record is deleted, just ignore.
-          logWarning("can not get any record that have the same key with the deleting logRecord.")
+          logDebug(s"Cannot find any record corresponding to delete key [$key] in the log record.")
         } else {
           // there is a real record deleted.
           recordToLoad.update(0, CDCRelation.CDC_OPERATION_DELETE)

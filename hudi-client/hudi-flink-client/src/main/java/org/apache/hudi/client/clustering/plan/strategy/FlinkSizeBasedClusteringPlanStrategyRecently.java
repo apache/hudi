@@ -124,11 +124,11 @@ public class FlinkSizeBasedClusteringPlanStrategyRecently<T> extends FlinkSizeBa
         partitions.addAll(metadata.getWritePartitionPaths());
       } catch (IOException e) {
         // ignore Exception here
-        LOG.warn("Exception while get instant details from commit metadata.", e);
+        LOG.warn("Failed to get details from commit metadata for instant [{}].", instant, e);
       }
     });
 
-    LOG.info("Partitions related to active timeline: " + partitions);
+    LOG.info("Partitions related to active timeline: {}", partitions);
     return new ArrayList<>(partitions);
   }
 }

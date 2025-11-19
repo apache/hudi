@@ -18,7 +18,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, PARTITIONPATH_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
@@ -35,6 +35,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERA
 import org.apache.hudi.common.util.{ParquetUtils, StringUtils}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams, WrapperCreator}
+import org.apache.hudi.metadata.HoodieIndexVersion
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
@@ -50,7 +51,7 @@ import org.apache.spark.sql.types._
 import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
+import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource}
 
 import java.math.{BigDecimal => JBigDecimal}
 import java.nio.ByteBuffer
@@ -504,7 +505,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(value = Array("6", "8"))
+  @MethodSource(Array("testMORDeleteBlocksParams"))
   def testMORDeleteBlocks(tableVersion: Int): Unit = {
     val tableType: HoodieTableType = HoodieTableType.MERGE_ON_READ
     val partitionCol = "c8"
@@ -717,10 +718,11 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString
     ) ++ metadataOpts
 
-    val schema = StructType(StructField("c1", IntegerType, false) :: StructField("c2", StringType, true) :: Nil)
+    val structSchema = StructType(StructField("c1", IntegerType, false) :: StructField("c2", StringType, true) :: Nil)
+    val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(structSchema, "record", "")
     val inputDF = spark.createDataFrame(
       spark.sparkContext.parallelize(Seq(Row(1, "v1"), Row(2, "v2"), Row(3, null), Row(4, "v4"))),
-      schema)
+      structSchema)
 
     inputDF
       .sort("c1", "c2")
@@ -737,7 +739,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       .fromProperties(toProperties(metadataOpts))
       .build()
 
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, structSchema, avroSchema, metadataConfig, metaClient)
     columnStatsIndex.loadTransposed(Seq("c2"), false) { transposedDF =>
       val result = transposedDF.select("valueCount", "c2_nullCount")
         .collect().head
@@ -805,7 +807,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     )
     fsv.close()
 
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, sourceTableAvroSchema, metadataConfig, metaClient)
     val requestedColumns = Seq("c1")
     // get all file names
     val stringEncoder: Encoder[String] = org.apache.spark.sql.Encoders.STRING
@@ -898,7 +900,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       // These are NOT indexed
       val requestedColumns = Seq("c4")
 
-      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, sourceTableAvroSchema, metadataConfig, metaClient)
 
       columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { emptyTransposedColStatsDF =>
         assertEquals(0, emptyTransposedColStatsDF.collect().length)
@@ -946,7 +948,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       val manualUpdatedColStatsTableDF =
         buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema, sourceTableSchema)
 
-      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, sourceTableAvroSchema, metadataConfig, metaClient)
 
       // Nevertheless, the last update was written with a new schema (that is a subset of the original table schema),
       // we should be able to read CSI, which will be properly padded (with nulls) after transposition
@@ -1010,7 +1012,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
     // We have to include "c1", since we sort the expected outputs by this column
     val requestedColumns = Seq("c4", "c1")
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, sourceTableAvroSchema, metadataConfig, metaClient)
 
     ////////////////////////////////////////////////////////////////////////
     // Query filter #1: c1 > 1 and c4 > 'c4 filed value'
@@ -1073,7 +1075,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     val parquetFilePath = new StoragePath(
       fs.listStatus(path).filter(fs => fs.getPath.getName.endsWith(".parquet")).toSeq.head.getPath.toUri)
 
-    val ranges = utils.readColumnStatsFromMetadata(storage, parquetFilePath, Seq("c1", "c2", "c3a", "c3b", "c3c", "c4", "c5", "c6", "c7", "c8").asJava)
+    val ranges = utils.readColumnStatsFromMetadata(storage, parquetFilePath, Seq("c1", "c2", "c3a", "c3b", "c3c", "c4", "c5", "c6", "c7", "c8").asJava, HoodieIndexVersion.V1)
 
     ranges.asScala.foreach(r => {
       // NOTE: Unfortunately Parquet can't compute statistics for Timestamp column, hence we
@@ -1111,5 +1113,17 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     assertTrue(deserialized.isInstanceOf[JBigDecimal], "Deserialized value should be a java.math.BigDecimal")
     assertEquals(expected, deserialized.asInstanceOf[JBigDecimal],
       s"Decimal value from $description does not match")
+  }
+}
+
+object TestColumnStatsIndex {
+  def testMORDeleteBlocksParams: java.util.stream.Stream[Arguments] = {
+    val currentVersionCode = HoodieTableVersion.current().versionCode().toString
+    java.util.stream.Stream.of(Seq(
+      Arguments.arguments("6"),
+      Arguments.arguments("8"),
+      Arguments.arguments(currentVersionCode)
+    )
+      : _*)
   }
 }

@@ -28,10 +28,12 @@ import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
-import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -46,6 +48,7 @@ import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -53,9 +56,9 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -71,10 +74,11 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
@@ -83,6 +87,8 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMI
 public class UpgradeDowngradeUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(UpgradeDowngradeUtils.class);
+  static final String FALSE = "false";
+  static final String TRUE = "true";
 
   // Map of actions that were renamed in table version 8
   static final Map<String, String> SIX_TO_EIGHT_TIMELINE_ACTION_MAP = CollectionUtils.createImmutableMap(
@@ -98,36 +104,6 @@ public class UpgradeDowngradeUtils {
       OverwriteWithLatestAvroPayload.class.getName(),
       PartialUpdateAvroPayload.class.getName(),
       PostgresDebeziumAvroPayload.class.getName()));
-
-  /**
-   * Utility method to run compaction for MOR table as part of downgrade step.
-   *
-   * @Deprecated Use {@link UpgradeDowngradeUtils#rollbackFailedWritesAndCompact(HoodieTable, HoodieEngineContext, HoodieWriteConfig, SupportsUpgradeDowngrade, boolean, HoodieTableVersion)} instead.
-   */
-  public static void runCompaction(HoodieTable table, HoodieEngineContext context, HoodieWriteConfig config,
-                                   SupportsUpgradeDowngrade upgradeDowngradeHelper) {
-    try {
-      if (table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
-        // set required configs for scheduling compaction.
-        HoodieInstantTimeGenerator.setCommitTimeZone(table.getMetaClient().getTableConfig().getTimelineTimezone());
-        HoodieWriteConfig compactionConfig = HoodieWriteConfig.newBuilder().withProps(config.getProps()).build();
-        compactionConfig.setValue(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
-        compactionConfig.setValue(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1");
-        compactionConfig.setValue(HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY.key(), CompactionTriggerStrategy.NUM_COMMITS.name());
-        compactionConfig.setValue(HoodieCompactionConfig.COMPACTION_STRATEGY.key(), UnBoundedCompactionStrategy.class.getName());
-        compactionConfig.setValue(HoodieMetadataConfig.ENABLE.key(), "false");
-        try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(compactionConfig, context)) {
-          Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty());
-          if (compactionInstantOpt.isPresent()) {
-            HoodieWriteMetadata result = writeClient.compact(compactionInstantOpt.get());
-            writeClient.commitCompaction(compactionInstantOpt.get(), result, Option.of(table));
-          }
-        }
-      }
-    } catch (Exception e) {
-      throw new HoodieException(e);
-    }
-  }
 
   /**
    * See HUDI-6040.
@@ -208,6 +184,18 @@ public class UpgradeDowngradeUtils {
       properties.put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), NoopLockProvider.class.getName());
       // if auto adjust it not disabled, chances that InProcessLockProvider will get overridden for single writer use-cases.
       properties.put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "false");
+      // if downgrading from table version 9, disable non-blocking concurrency control for MDT
+      // as version 8 and below do not support streaming, NBCC for MDT
+      if (table.isMetadataTable() && tableVersion.equals(HoodieTableVersion.NINE)) {
+        properties.put(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.SINGLE_WRITER.name());
+      }
+
+      // Set properties based on existing and inflight metadata partitions.
+      Set<String> metadataPartitions = table.getMetaClient().getTableConfig().getMetadataPartitions();
+      metadataPartitions.addAll(table.getMetaClient().getTableConfig().getMetadataPartitionsInflight());
+      setPropertiesBasedOnMetadataPartitions(properties, metadataPartitions, table);
+
+      // Construct rollback config.
       HoodieWriteConfig rollbackWriteConfig = HoodieWriteConfig.newBuilder()
           .withProps(properties)
           .withWriteTableVersion(tableVersion.versionCode())
@@ -225,8 +213,8 @@ public class UpgradeDowngradeUtils {
       } else {
         rollbackWriteConfig.setValue(HoodieCompactionConfig.INLINE_COMPACT.key(), "false");
       }
-      rollbackWriteConfig.setValue(HoodieMetadataConfig.ENABLE.key(), "false");
 
+      // Do the rollback and compact.
       try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(rollbackWriteConfig, context)) {
         writeClient.rollbackFailedWrites(table.getMetaClient());
         if (shouldCompact) {
@@ -242,12 +230,61 @@ public class UpgradeDowngradeUtils {
     }
   }
 
+  @VisibleForTesting
+  public static void setPropertiesBasedOnMetadataPartitions(TypedProperties properties,
+                                                     Set<String> metadataPartitions,
+                                                     HoodieTable table) {
+    if (metadataPartitions.isEmpty()) {
+      properties.put(HoodieMetadataConfig.ENABLE.key(), FALSE);
+      return;
+    }
+    // Read index definitions if any.
+    Option<HoodieIndexMetadata> indexMetadataOpt = table.getMetaClient().getIndexMetadata();
+    Map<String, HoodieIndexDefinition> indexDefinitions = indexMetadataOpt.isEmpty()
+        ? Collections.emptyMap()
+        : indexMetadataOpt.get().getIndexDefinitions();
+    // Enable metadata table.
+    properties.put(HoodieMetadataConfig.ENABLE.key(), TRUE);
+    // Enable individual index.
+    for (String partition : metadataPartitions) {
+      switch (partition) {
+        case HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS:
+        case HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS:
+          properties.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), TRUE);
+          if (indexDefinitions.containsKey(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)) {
+            List<String> sourceFields = indexDefinitions.get(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS).getSourceFields();
+            if (!sourceFields.isEmpty()) {
+              properties.put(HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key(), String.join(",", sourceFields));
+            }
+          }
+          break;
+        case HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS:
+          properties.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER.key(), TRUE);
+          break;
+        case HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX:
+          if (indexDefinitions.containsKey(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)) {
+            Map<String, String> options = indexDefinitions.get(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX).getIndexOptions();
+            if (options.getOrDefault("isPartitioned", FALSE).equals(TRUE)) {
+              properties.put(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key(), TRUE);
+            } else {
+              properties.put(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), TRUE);
+            }
+          } else {
+            properties.put(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), TRUE);
+          }
+          break;
+        default:
+          // No op.
+      }
+    }
+  }
+
   // If the metadata table is enabled for the data table, and
   // existing metadata table is behind the data table, then delete it.
   static void checkAndHandleMetadataTable(HoodieEngineContext context,
-                                                 HoodieTable table,
-                                                 HoodieWriteConfig config,
-                                                 HoodieTableMetaClient metaClient, boolean checkforMetadataLagging) {
+                                          HoodieTable table,
+                                          HoodieWriteConfig config,
+                                          HoodieTableMetaClient metaClient, boolean checkforMetadataLagging) {
     if (!table.isMetadataTable()
         && config.isMetadataTableEnabled()
         && (!checkforMetadataLagging || isMetadataTableBehindDataTable(config, metaClient))) {
@@ -256,7 +293,7 @@ public class UpgradeDowngradeUtils {
   }
 
   static boolean isMetadataTableBehindDataTable(HoodieWriteConfig config,
-                                                       HoodieTableMetaClient metaClient) {
+                                                HoodieTableMetaClient metaClient) {
     // if metadata table does not exist, then it is not behind
     if (!metaClient.getTableConfig().isMetadataTableAvailable()) {
       return false;
@@ -285,24 +322,27 @@ public class UpgradeDowngradeUtils {
    * @param table         Hoodie table
    * @param operationType Type of operation (upgrade/downgrade)
    */
-  public static void dropNonV1SecondaryIndexPartitions(HoodieWriteConfig config, HoodieEngineContext context,
-                                                       HoodieTable table, SupportsUpgradeDowngrade upgradeDowngradeHelper, String operationType) {
+  public static void dropNonV1IndexPartitions(HoodieWriteConfig config, HoodieEngineContext context,
+                                              HoodieTable table, SupportsUpgradeDowngrade upgradeDowngradeHelper, String operationType) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
     try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(config, context)) {
-      List<String> mdtPartitions = metaClient.getTableConfig().getMetadataPartitions()
+      Set<String> metadataPartitions = metaClient.getTableConfig().getMetadataPartitions();
+      List<String> mdtPartitions = metadataPartitions
           .stream()
-          .filter(partition -> {
-            // Only drop secondary indexes that are not V1
-            return metaClient.getIndexForMetadataPartition(partition)
-                .map(indexDef -> {
-                  if (MetadataPartitionType.fromPartitionPath(indexDef.getIndexName()).equals(MetadataPartitionType.SECONDARY_INDEX)) {
-                    return HoodieIndexVersion.V1.lowerThan(indexDef.getVersion());
-                  }
-                  return false;
-                })
-                .orElse(false);
-          })
+          .filter(partition -> metaClient.getIndexForMetadataPartition(partition)
+              .map(indexDef -> HoodieIndexVersion.V1.lowerThan(indexDef.getVersion()))
+              .orElse(false))
           .collect(Collectors.toList());
+
+      // If col stats V2 is being deleted and partition stats exists, delete partition stats as well
+      // This handles the case where partition stats might not have an index definition in index.json
+      String colStatsPartition = MetadataPartitionType.COLUMN_STATS.getPartitionPath();
+      String partitionStatsPartition = MetadataPartitionType.PARTITION_STATS.getPartitionPath();
+      if (mdtPartitions.contains(colStatsPartition)
+          && metadataPartitions.contains(partitionStatsPartition)) {
+        mdtPartitions.add(partitionStatsPartition);
+      }
+
       LOG.info("Dropping from MDT partitions for {}: {}", operationType, mdtPartitions);
       if (!mdtPartitions.isEmpty()) {
         writeClient.dropIndex(mdtPartitions);

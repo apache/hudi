@@ -234,14 +234,13 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   private void initMergeClass() {
     readerContext = writeClient.getEngineContext().<RowData>getReaderContextFactory(metaClient).getContext();
     readerContext.initRecordMergerForIngestion(writeClient.getConfig().getProps());
-    orderingFieldNames = getOrderingFieldNames(readerContext.getMergeMode(), writeClient.getConfig().getProps(), metaClient);
+    orderingFieldNames = getOrderingFieldNames(readerContext.getMergeMode(), metaClient);
 
     recordMerger = BufferedRecordMergerFactory.create(
         readerContext,
         readerContext.getMergeMode(),
         false,
         readerContext.getRecordMerger(),
-        orderingFieldNames,
         new Schema.Parser().parse(writeClient.getConfig().getSchema()),
         readerContext.getPayloadClasses(writeClient.getConfig().getProps()),
         writeClient.getConfig().getProps(),
@@ -382,7 +381,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     return true;
   }
 
-  private void flushRemaining(boolean endInput) {
+  public void flushRemaining(boolean endInput) {
     writeMetrics.startDataFlush();
     this.currentInstant = instantToWrite(hasData());
     if (this.currentInstant == null) {

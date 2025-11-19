@@ -88,7 +88,7 @@ public class CopyOnWriteInsertHandler<T>
         return;
       }
     } catch (IOException e) {
-      LOG.warn("Writing record should be ignore " + record, e);
+      LOG.warn("Writing record should be ignore {}", record, e);
     }
     HoodieWriteHandle<?,?,?,?> handle = handles.get(partitionPath);
     if (handle == null) {

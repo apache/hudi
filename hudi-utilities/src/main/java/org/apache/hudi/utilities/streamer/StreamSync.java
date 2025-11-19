@@ -39,12 +39,16 @@ import org.apache.hudi.commit.HoodieStreamerDatasetBulkInsertCommitActionExecuto
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.model.debezium.DebeziumConstants;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -57,9 +61,11 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieErrorTableConfig;
@@ -71,6 +77,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetaSyncException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
@@ -116,7 +123,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.HoodieDataTypeUtils;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
@@ -157,6 +163,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
 import static org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName;
 import static org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException;
+import static org.apache.hudi.utilities.UtilHelpers.buildProperties;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
 import static org.apache.hudi.utilities.config.HoodieStreamerConfig.CHECKPOINT_FORCE_SKIP;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
@@ -382,7 +389,7 @@ public class StreamSync implements Serializable, Closeable {
         }
         return metaClient;
       } catch (HoodieIOException e) {
-        LOG.warn("Full exception msg " + e.getMessage());
+        LOG.warn("Full exception msg {}", e.getMessage());
         if (e.getMessage().contains("Could not load Hoodie properties") && e.getMessage().contains(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
           String basePathWithForwardSlash = cfg.targetBasePath.endsWith("/") ? cfg.targetBasePath :
               String.format("%s/", cfg.targetBasePath);
@@ -429,12 +436,27 @@ public class StreamSync implements Serializable, Closeable {
                             StorageConfiguration<?> storageConf) throws IOException {
     this.commitsTimelineOpt = Option.empty();
     this.allCommitsTimelineOpt = Option.empty();
+
+    RecordMergeMode mergeMode = cfg.recordMergeMode;
+    String mergeStrategyId = cfg.recordMergeStrategyId;
+    String payloadClass = cfg.payloadClassName;
+
+    // When at least one configs from cfg.configs are not null,
+    // we should try to use them since it overrides the default ones.
+    Option<Triple<RecordMergeMode, String, String>> overridingMergeConfigs =
+        parseOverridingMergeConfigs(cfg.configs);
+    if (overridingMergeConfigs.isPresent()) {
+      mergeMode = overridingMergeConfigs.get().getLeft();
+      payloadClass = overridingMergeConfigs.get().getMiddle();
+      mergeStrategyId = overridingMergeConfigs.get().getRight();
+    }
+
     return tableBuilder.setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
-        .setPayloadClassName(cfg.payloadClassName)
-        .setRecordMergeStrategyId(cfg.recordMergeStrategyId)
-        .setRecordMergeMode(cfg.recordMergeMode)
+        .setPayloadClassName(payloadClass)
+        .setRecordMergeStrategyId(mergeStrategyId)
+        .setRecordMergeMode(mergeMode)
         .setBaseFileFormat(cfg.baseFileFormat)
         .setPartitionFields(partitionColumns)
         .setTableVersion(ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION))
@@ -455,7 +477,26 @@ public class StreamSync implements Serializable, Closeable {
         .setUrlEncodePartitioning(props.getBoolean(URL_ENCODE_PARTITIONING.key(),
             Boolean.parseBoolean(URL_ENCODE_PARTITIONING.defaultValue())))
         .setTableFormat(props.getProperty(HoodieTableConfig.TABLE_FORMAT.key(), HoodieTableConfig.TABLE_FORMAT.defaultValue()))
+        .setRecordDeleteFieldAndMarker(props.getString(DefaultHoodieRecordPayload.DELETE_KEY, null),
+            props.getString(DefaultHoodieRecordPayload.DELETE_MARKER, null))
         .initTable(storageConf, cfg.targetBasePath);
+  }
+
+  static Option<Triple<RecordMergeMode, String, String>> parseOverridingMergeConfigs(List<String> configs) {
+    if (configs == null || configs.isEmpty()) {
+      return Option.empty();
+    }
+    TypedProperties overwrittenProps = buildProperties(configs);
+    if (overwrittenProps.containsKey(HoodieWriteConfig.RECORD_MERGE_MODE.key())
+        || overwrittenProps.containsKey(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key())
+        || overwrittenProps.containsKey(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key())) {
+      RecordMergeMode mergeMode = overwrittenProps.containsKey(HoodieWriteConfig.RECORD_MERGE_MODE.key())
+          ? RecordMergeMode.valueOf(overwrittenProps.getProperty(HoodieWriteConfig.RECORD_MERGE_MODE.key())) : null;
+      String mergeStrategyId = overwrittenProps.getString(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key(), null);
+      String payloadClass = overwrittenProps.getProperty(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), null);
+      return Option.of(Triple.of(mergeMode, payloadClass, mergeStrategyId));
+    }
+    return Option.empty();
   }
 
   /**
@@ -614,7 +655,7 @@ public class StreamSync implements Serializable, Closeable {
   boolean canUseRowWriter(Schema targetSchema) {
     // enable row writer only when operation is BULK_INSERT, and source is ROW type and if row writer is not explicitly disabled.
     boolean rowWriterEnabled = isRowWriterEnabled();
-    return rowWriterEnabled && targetSchema != null && HoodieDataTypeUtils.canUseRowWriter(targetSchema, conf);
+    return rowWriterEnabled && targetSchema != null;
   }
 
   @VisibleForTesting
@@ -772,9 +813,13 @@ public class StreamSync implements Serializable, Closeable {
   private HoodieWriteConfig prepareHoodieConfigForRowWriter(Schema writerSchema) {
     HoodieConfig hoodieConfig = new HoodieConfig(HoodieStreamer.Config.getProps(conf, cfg));
     hoodieConfig.setValue(DataSourceWriteOptions.TABLE_TYPE(), cfg.tableType);
-    hoodieConfig.setValue(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(), cfg.payloadClassName);
+    if (cfg.payloadClassName != null) {
+      hoodieConfig.setValue(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(), cfg.payloadClassName);
+    }
     hoodieConfig.setValue(DataSourceWriteOptions.RECORD_MERGE_MODE().key(), cfg.recordMergeMode.name());
-    hoodieConfig.setValue(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID().key(), cfg.recordMergeStrategyId);
+    if (cfg.recordMergeStrategyId != null) {
+      hoodieConfig.setValue(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID().key(), cfg.recordMergeStrategyId);
+    }
     hoodieConfig.setValue(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props));
     hoodieConfig.setValue("path", cfg.targetBasePath);
     return HoodieSparkSqlWriter.getBulkInsertRowConfig(writerSchema != InputBatch.NULL_SCHEMA ? Option.of(writerSchema) : Option.empty(),
@@ -800,20 +845,19 @@ public class StreamSync implements Serializable, Closeable {
     try {
       Option<String> scheduledCompactionInstant = Option.empty();
       // write to hudi and fetch result
-      WriteClientWriteResult writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
+      WriteClientWriteResult writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter, metaClient);
       Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
       JavaRDD<WriteStatus> writeStatusRDD = writeClientWriteResult.getWriteStatusRDD();
-      String errorTableInstantTime = instantTime;
       Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt = Option.empty();
       if (errorTableWriter.isPresent() && isErrorTableWriteUnificationEnabled) {
-        errorTableWriteStatusRDDOpt = errorTableWriter.map(w -> w.upsert(errorTableInstantTime, instantTime, getLatestCommittedInstant()));
+        errorTableWriteStatusRDDOpt = errorTableWriter.map(w -> w.upsert(instantTime, getLatestCommittedInstant()));
       }
 
       Map<String, String> checkpointCommitMetadata = extractCheckpointMetadata(inputBatch, props, writeClient.getConfig().getWriteVersion().versionCode(), cfg);
       AtomicLong totalSuccessfulRecords = new AtomicLong(0);
       Option<String> latestCommittedInstant = getLatestCommittedInstant();
       WriteStatusValidator writeStatusValidator = new HoodieStreamerWriteStatusValidator(cfg.commitOnErrors, instantTime,
-          cfg, errorTableWriter, errorTableWriteStatusRDDOpt, errorWriteFailureStrategy, isErrorTableWriteUnificationEnabled, errorTableInstantTime, writeClient, latestCommittedInstant,
+          cfg, errorTableWriter, errorTableWriteStatusRDDOpt, errorWriteFailureStrategy, isErrorTableWriteUnificationEnabled, writeClient, latestCommittedInstant,
           totalSuccessfulRecords);
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
 
@@ -901,18 +945,20 @@ public class StreamSync implements Serializable, Closeable {
     throw lastException;
   }
 
-  private WriteClientWriteResult writeToSink(InputBatch inputBatch, String instantTime, boolean useRowWriter) {
+  private WriteClientWriteResult writeToSink(InputBatch inputBatch, String instantTime, boolean useRowWriter, HoodieTableMetaClient metaClient) {
     WriteClientWriteResult writeClientWriteResult = null;
 
     if (useRowWriter) {
       Dataset<Row> df = (Dataset<Row>) inputBatch.getBatch().orElseGet(() -> hoodieSparkContext.getSqlContext().emptyDataFrame());
       HoodieWriteConfig hoodieWriteConfig = prepareHoodieConfigForRowWriter(inputBatch.getSchemaProvider().getTargetSchema());
-      BaseDatasetBulkInsertCommitActionExecutor executor = new HoodieStreamerDatasetBulkInsertCommitActionExecutor(hoodieWriteConfig, writeClient);
+      BaseDatasetBulkInsertCommitActionExecutor executor = new HoodieStreamerDatasetBulkInsertCommitActionExecutor(hoodieWriteConfig, writeClient, instantTime);
       writeClientWriteResult = new WriteClientWriteResult(executor.execute(df, !HoodieStreamerUtils.getPartitionColumns(props).isEmpty()).getWriteStatuses());
     } else {
-      HoodieRecordType recordType = createRecordMerger(props).getRecordType();
-      Option<JavaRDD<HoodieRecord>> recordsOption = HoodieStreamerUtils.createHoodieRecords(cfg, props, inputBatch.getBatch(), inputBatch.getSchemaProvider(),
-          recordType, autoGenerateRecordKeys, instantTime, errorTableWriter);
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      TypedProperties mergeProps = ConfigUtils.getMergeProps(props, metaClient.getTableConfig());
+      HoodieRecordType recordType = createRecordMerger(mergeProps).getRecordType();
+      Option<JavaRDD<HoodieRecord>> recordsOption = HoodieStreamerUtils.createHoodieRecords(cfg, mergeProps, inputBatch.getBatch(), inputBatch.getSchemaProvider(),
+          recordType, autoGenerateRecordKeys, instantTime, errorTableWriter, metaClient.getTableConfig());
       JavaRDD<HoodieRecord> records = recordsOption.orElseGet(() -> hoodieSparkContext.emptyRDD());
       // filter dupes if needed
       if (cfg.filterDupes) {
@@ -1099,16 +1145,35 @@ public class StreamSync implements Serializable, Closeable {
                     .withInlineCompaction(cfg.isInlineCompactionEnabled())
                     .build()
             )
-            .withPayloadConfig(
-                HoodiePayloadConfig.newBuilder()
-                    .withPayloadClass(cfg.payloadClassName)
-                    .withPayloadOrderingFields(cfg.sourceOrderingFields)
-                    .build())
             .withRecordMergeMode(cfg.recordMergeMode)
-            .withRecordMergeStrategyId(cfg.recordMergeStrategyId)
             .withRecordMergeImplClasses(cfg.recordMergeImplClasses)
             .forTable(cfg.targetTableName)
             .withProps(props);
+    // Merge strategy id can be NULL.
+    if (!StringUtils.isNullOrEmpty(cfg.recordMergeStrategyId)) {
+      builder.withRecordMergeStrategyId(cfg.recordMergeStrategyId);
+    }
+
+    if (metaClient != null) {
+      HoodieTableConfig tableConfig = metaClient.getTableConfig();
+      // After upgrade to table version 9 with MySqlDebeziumAvroPayload, ordering fields are changed from
+      // `_event_seq` to `_event_bin_file,_event_pos`. The logic here ensures that deltastreamer config is updated
+      // if it points to older ordering field `_event_seq`.
+      if (tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.NINE) && tableConfig.getLegacyPayloadClass().equals(MySqlDebeziumAvroPayload.class.getCanonicalName())
+          && cfg.sourceOrderingFields.equals(DebeziumConstants.ADDED_SEQ_COL_NAME)) {
+        cfg.sourceOrderingFields = MySqlDebeziumAvroPayload.ORDERING_FIELDS;
+      } else if (tableConfig.getOrderingFieldsStr().isPresent() && !StringUtils.isNullOrEmpty(cfg.sourceOrderingFields)
+          && !tableConfig.getOrderingFieldsStr().orElse("").equals(cfg.sourceOrderingFields)) {
+        throw new HoodieValidationException(String.format("Configured ordering fields: %s do not match table ordering fields: %s", cfg.sourceOrderingFields, tableConfig.getOrderingFields()));
+      }
+    }
+    HoodiePayloadConfig.Builder payloadConfigBuilder =
+        HoodiePayloadConfig.newBuilder().withPayloadOrderingFields(cfg.sourceOrderingFields);
+    // Payload class can be NULL.
+    if (!StringUtils.isNullOrEmpty(cfg.payloadClassName)) {
+      payloadConfigBuilder.withPayloadClass(cfg.payloadClassName);
+    }
+    builder.withPayloadConfig(payloadConfigBuilder.build());
 
     // If schema is required in the config, we need to handle the case where the target schema is null and should be fetched from previous commits
     final Schema returnSchema;
@@ -1311,7 +1376,6 @@ public class StreamSync implements Serializable, Closeable {
     private final Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt;
     private final HoodieErrorTableConfig.ErrorWriteFailureStrategy errorWriteFailureStrategy;
     private final boolean isErrorTableWriteUnificationEnabled;
-    private final String errorTableInstantTime;
     private final SparkRDDWriteClient writeClient;
     private final Option<String> latestCommittedInstant;
     private final AtomicLong totalSuccessfulRecords;
@@ -1323,7 +1387,6 @@ public class StreamSync implements Serializable, Closeable {
                                        Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt,
                                        HoodieErrorTableConfig.ErrorWriteFailureStrategy errorWriteFailureStrategy,
                                        boolean isErrorTableWriteUnificationEnabled,
-                                       String errorTableInstantTime,
                                        SparkRDDWriteClient writeClient,
                                        Option<String> latestCommittedInstant,
                                        AtomicLong totalSuccessfulRecords) {
@@ -1334,7 +1397,6 @@ public class StreamSync implements Serializable, Closeable {
       this.errorTableWriteStatusRDDOpt = errorTableWriteStatusRDDOpt;
       this.errorWriteFailureStrategy = errorWriteFailureStrategy;
       this.isErrorTableWriteUnificationEnabled = isErrorTableWriteUnificationEnabled;
-      this.errorTableInstantTime = errorTableInstantTime;
       this.writeClient = writeClient;
       this.latestCommittedInstant = latestCommittedInstant;
       this.totalSuccessfulRecords = totalSuccessfulRecords;
@@ -1359,8 +1421,8 @@ public class StreamSync implements Serializable, Closeable {
       boolean hasErrorRecords = totalErroredRecords > 0;
       if (!hasErrorRecords || commitOnErrors) {
         if (hasErrorRecords) {
-          LOG.warn("Some records failed to be merged but forcing commit since commitOnErrors set. Errors/Total="
-              + totalErroredRecords + "/" + totalRecords);
+          LOG.warn("Some records failed to be merged but forcing commit since commitOnErrors set. Errors/Total={}/{}",
+              totalErroredRecords, totalRecords);
         }
       }
 
@@ -1368,7 +1430,7 @@ public class StreamSync implements Serializable, Closeable {
         boolean errorTableSuccess = true;
         // Commit the error events triggered so far to the error table
         if (isErrorTableWriteUnificationEnabled && errorTableWriteStatusRDDOpt.isPresent()) {
-          errorTableSuccess = errorTableWriter.get().commit(errorTableInstantTime, errorTableWriteStatusRDDOpt.get());
+          errorTableSuccess = errorTableWriter.get().commit(errorTableWriteStatusRDDOpt.get());
         } else if (!isErrorTableWriteUnificationEnabled) {
           errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, latestCommittedInstant);
         }

@@ -409,7 +409,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
           String avroSchema = schemaUtil.getTableAvroSchema().toString();
           Option<InternalSchema> internalSchema = schemaUtil.getTableInternalSchemaFromCommitMetadata();
           if (internalSchema.isPresent()) {
-            LOG.info("Set internal and avro schema cache with path: " + path);
+            LOG.info("Set internal and avro schema cache with path: {}", path);
             job.set(SCHEMA_CACHE_KEY_PREFIX + "." + path, avroSchema);
             job.set(INTERNAL_SCHEMA_CACHE_KEY_PREFIX + "." + path, SerDeHelper.toJson(internalSchema.get()));
           } else {
@@ -419,11 +419,11 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
           }
         }
       } catch (Exception e) {
-        LOG.warn("Fail to set schema cache", e);
+        LOG.warn("Failed to set schema cache", e);
       }
     }
 
-    LOG.info("Number of all splits " + result.size());
+    LOG.info("Number of all splits {}", result.size());
     perfLogger.PerfLogEnd(CLASS_NAME, PerfLogger.GET_SPLITS);
     return result.toArray(new InputSplit[result.size()]);
   }

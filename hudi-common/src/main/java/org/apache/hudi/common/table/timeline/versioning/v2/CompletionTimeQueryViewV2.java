@@ -32,10 +32,8 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.Serializable;
-import java.time.Instant;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -55,8 +53,6 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THA
  */
 public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Serializable {
   private static final long serialVersionUID = 1L;
-
-  private static final long MILLI_SECONDS_IN_THREE_DAYS = 3 * 24 * 3600 * 1000;
 
   private static final long MILLI_SECONDS_IN_ONE_DAY = 24 * 3600 * 1000;
 
@@ -90,19 +86,9 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
    * @param metaClient The table meta client.
    */
   public CompletionTimeQueryViewV2(HoodieTableMetaClient metaClient) {
-    this(metaClient, HoodieInstantTimeGenerator.formatDate(new Date(Instant.now().minusMillis(MILLI_SECONDS_IN_THREE_DAYS).toEpochMilli())));
-  }
-
-  /**
-   * The constructor.
-   *
-   * @param metaClient       The table meta client.
-   * @param eagerLoadInstant The earliest instant time to eagerly load from, by default load last N days of completed instants.
-   */
-  public CompletionTimeQueryViewV2(HoodieTableMetaClient metaClient, String eagerLoadInstant) {
     this.metaClient = metaClient;
     this.instantTimeToCompletionTimeMap = new ConcurrentHashMap<>();
-    this.cursorInstant = InstantComparison.minInstant(eagerLoadInstant, metaClient.getActiveTimeline().firstInstant().map(HoodieInstant::requestedTime).orElse(""));
+    this.cursorInstant = metaClient.getActiveTimeline().firstInstant().map(HoodieInstant::requestedTime).orElse("");
     // Note: use getWriteTimeline() to keep sync with the fs view visibleCommitsAndCompactionTimeline, see AbstractTableFileSystemView.refreshTimeline.
     this.firstNonSavepointCommit = metaClient.getActiveTimeline().getWriteTimeline().getFirstNonSavepointCommit().map(HoodieInstant::requestedTime).orElse("");
     load();
@@ -283,6 +269,12 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
   //  Utilities
   // -------------------------------------------------------------------------
 
+  /**
+   * Loads the completion times incrementally from archived timeline, if required.
+   * If the provided startTime is greater than the cursorInstant,
+   * then the completion is already present in memory and no additional loading is required.
+   * @param startTime The start time of the instant.
+   */
   private void loadCompletionTimeIncrementally(String startTime) {
     // the 'startTime' should be out of the eager loading range, switch to a lazy loading.
     // This operation is resource costly.
@@ -300,21 +292,13 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
   }
 
   /**
-   * This is method to read instant completion time.
-   * This would also update 'startToCompletionInstantTimeMap' map with start time/completion time pairs.
-   * Only instants starts from 'startInstant' (inclusive) are considered.
+   * Reads the completion times from the active timeline.
    */
   private void load() {
     // load active instants first.
     this.metaClient.getActiveTimeline()
         .filterCompletedInstants().getInstantsAsStream()
         .forEach(instant -> setCompletionTime(instant.requestedTime(), instant.getCompletionTime()));
-    // then load the archived instants.
-    metaClient.getTableFormat().getTimelineFactory().createArchivedTimelineLoader().loadInstants(metaClient,
-        new HoodieArchivedTimeline.StartTsFilter(this.cursorInstant),
-        HoodieArchivedTimeline.LoadMode.TIME,
-        r -> true,
-        this::readCompletionTime);
   }
 
   private void readCompletionTime(String instantTime, GenericRecord record) {

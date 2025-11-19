@@ -38,6 +38,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.SerializableIndexedRecord;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -214,6 +215,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // Initial commit. rider column gets value of rider-002
       List<HoodieRecord> initialRecords = dataGen.generateInserts("002", 100);
+      long initialTs = (long) ((GenericRecord) initialRecords.get(0).getData()).get("timestamp");
       commitToTable(initialRecords, INSERT.value(), true, writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), true, 0, recordMergeMode,
@@ -222,7 +224,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       // The updates have rider values as rider-001 and the existing records have rider values as rider-002
       // timestamp is 0 for all records so will not be considered
       // All updates in this batch will be ignored as rider values are smaller and timestamp value is same
-      List<HoodieRecord> updates = dataGen.generateUniqueUpdates("001", 5);
+      List<HoodieRecord> updates = dataGen.generateUniqueUpdates("001", 5, initialTs);
       List<HoodieRecord> allRecords = initialRecords;
       List<HoodieRecord> unmergedRecords = CollectionUtils.combine(updates, allRecords);
       commitToTable(updates, UPSERT.value(), false, writeConfigs);
@@ -233,7 +235,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       // The updates have rider values as rider-003 and the existing records have rider values as rider-002
       // timestamp is 0 for all records so will not be considered
       // All updates in this batch will reflect in the final records
-      List<HoodieRecord> updates2 = dataGen.generateUniqueUpdates("003", 10);
+      List<HoodieRecord> updates2 = dataGen.generateUniqueUpdates("003", 10, initialTs);
       List<HoodieRecord> finalRecords = mergeRecordLists(updates2, allRecords);
       commitToTable(updates2, UPSERT.value(), false, writeConfigs);
       validateOutputFromFileGroupReader(
@@ -275,14 +277,20 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
   }
 
-  private static List<Pair<String, IndexedRecord>> hoodieRecordsToIndexedRecords(List<HoodieRecord> hoodieRecords, Schema schema) {
+  protected static List<Pair<String, IndexedRecord>> hoodieRecordsToIndexedRecords(List<HoodieRecord> hoodieRecords, Schema schema) {
     return hoodieRecords.stream().map(r -> {
       try {
-        return r.toIndexedRecord(schema, CollectionUtils.emptyProps());
+        Option<HoodieAvroIndexedRecord> avroIndexedRecordOption = r.toIndexedRecord(schema, CollectionUtils.emptyProps());
+        if (avroIndexedRecordOption.isPresent()) {
+          // eager deser
+          avroIndexedRecordOption.get().getData().get(0);
+        }
+        return avroIndexedRecordOption;
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
-    }).filter(Option::isPresent).map(Option::get).map(r -> Pair.of(r.getRecordKey(), r.getData())).collect(Collectors.toList());
+    }).filter(Option::isPresent).map(Option::get).map(r -> Pair.of(r.getRecordKey(), ((SerializableIndexedRecord) r.getData()).getData()))
+        .collect(Collectors.toList());
   }
 
   /**
@@ -579,7 +587,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   public void testSpillableMapUsage(ExternalSpillableMap.DiskMapType diskMapType) throws Exception {
     Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(RecordMergeMode.COMMIT_TIME_ORDERING, true));
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
-      commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), true, writeConfigs);
+      List<HoodieRecord> recordList = dataGen.generateInserts("001", 100);
+      long timestamp = (long) ((GenericRecord) recordList.get(0).getData()).get("timestamp");
+      commitToTable(recordList, INSERT.value(), true, writeConfigs);
       String baseMapPath = Files.createTempDirectory(null).toString();
       HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(getStorageConf(), getBasePath());
       Schema avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
@@ -616,8 +626,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             assertEquals(keyBased.getRecordKey(), recordKey);
             assertEquals(positionBased.getRecordKey(), recordKey);
             assertEquals(avroSchema, readerContext.getRecordContext().getSchemaFromBufferRecord(keyBased));
-            // generate field value is hardcoded as 0 for ordering field: timestamp, see HoodieTestDataGenerator#generateRandomValue
-            assertEquals(readerContext.getRecordContext().convertValueToEngineType(0L), positionBased.getOrderingValue());
+            assertEquals(readerContext.getRecordContext().convertValueToEngineType(timestamp), positionBased.getOrderingValue());
           }
         }
       }
@@ -628,7 +637,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     Map<String, String> configMapping = new HashMap<>();
     configMapping.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), KEY_FIELD_NAME);
     configMapping.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), PARTITION_FIELD_NAME);
-    configMapping.put(HoodieTableConfig.ORDERING_FIELDS.key(), ORDERING_FIELD_NAME);
+    configMapping.put(HoodieTableConfig.ORDERING_FIELDS.key(), recordMergeMode != RecordMergeMode.COMMIT_TIME_ORDERING ? ORDERING_FIELD_NAME : "");
     configMapping.put("hoodie.payload.ordering.field", ORDERING_FIELD_NAME);
     configMapping.put(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "hoodie_test");
     configMapping.put("hoodie.insert.shuffle.parallelism", "4");

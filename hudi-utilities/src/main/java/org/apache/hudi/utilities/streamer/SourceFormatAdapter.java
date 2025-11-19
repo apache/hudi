@@ -47,6 +47,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
@@ -77,6 +78,9 @@ public class SourceFormatAdapter implements Closeable {
   private  boolean wrapWithException = ROW_THROW_EXPLICIT_EXCEPTIONS.defaultValue();
   private String invalidCharMask = SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue();
 
+  private boolean useJava8api = (boolean) SQLConf.DATETIME_JAVA8API_ENABLED().defaultValue().get();
+
+
   private Option<BaseErrorTableWriter> errorTableWriter = Option.empty();
 
   public SourceFormatAdapter(Source source) {
@@ -90,6 +94,7 @@ public class SourceFormatAdapter implements Closeable {
       this.shouldSanitize = SanitizationUtils.shouldSanitize(props.get());
       this.invalidCharMask = SanitizationUtils.getInvalidCharMask(props.get());
       this.wrapWithException = ConfigUtils.getBooleanWithAltKeys(props.get(), ROW_THROW_EXPLICIT_EXCEPTIONS);
+      this.useJava8api = (boolean) getSource().getSparkSession().conf().get(SQLConf.DATETIME_JAVA8API_ENABLED());
     }
     if (this.shouldSanitize && source.getSourceType() == Source.SourceType.PROTO) {
       throw new IllegalArgumentException("PROTO cannot be sanitized");
@@ -110,6 +115,10 @@ public class SourceFormatAdapter implements Closeable {
    */
   private String getInvalidCharMask() {
     return invalidCharMask;
+  }
+
+  private boolean getUseJava8api() {
+    return useJava8api;
   }
 
   /**
@@ -134,7 +143,7 @@ public class SourceFormatAdapter implements Closeable {
 
   private JavaRDD<Row> transformJsonToRowRdd(InputBatch<JavaRDD<String>> inputBatch) {
     MercifulJsonConverter.clearCache(inputBatch.getSchemaProvider().getSourceSchema().getFullName());
-    RowConverter convertor = new RowConverter(inputBatch.getSchemaProvider().getSourceSchema(), isFieldNameSanitizingEnabled(), getInvalidCharMask());
+    RowConverter convertor = new RowConverter(inputBatch.getSchemaProvider().getSourceSchema(), isFieldNameSanitizingEnabled(), getInvalidCharMask(), getUseJava8api());
     return inputBatch.getBatch().map(rdd -> {
       if (errorTableWriter.isPresent()) {
         JavaRDD<Either<Row, String>> javaRDD = rdd.map(convertor::fromJsonToRowWithError);

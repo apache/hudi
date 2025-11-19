@@ -1,0 +1,282 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+services:
+  namenode:
+    image: apachehudi/hudi-hadoop_3.3.4-namenode:latest
+    platform: linux/amd64
+    hostname: namenode
+    container_name: namenode
+    environment:
+      - CLUSTER_NAME=hudi_hadoop334_hive313_spark353
+    ports:
+      - "8020:8020" # HDFS NameNode IPC
+      - "9000:9000" # HDFS NameNode Client
+      - "9870:9870" # HDFS NameNode Web UI
+      # JVM debugging port (will be mapped to a random port on host)
+      - "5005"
+    env_file:
+      - ./hadoop.env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://namenode:9870"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+  datanode1:
+    image: apachehudi/hudi-hadoop_3.3.4-datanode:latest
+    platform: linux/amd64
+    container_name: datanode1
+    hostname: datanode1
+    environment:
+      - CLUSTER_NAME=hudi_hadoop334_hive313_spark353
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "9864:9864"   # HDFS DataNode Web UI
+      - "50010:50010" # HDFS DataNode IPC
+      - "50020:50020" # HDFS DataNode HTTP
+      # JVM debugging port (will be mapped to a random port on host)
+      - "5005"
+    links:
+      - "namenode"
+      - "historyserver"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://datanode1:9864"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - namenode
+  historyserver:
+    image: apachehudi/hudi-hadoop_3.3.4-history:latest
+    platform: linux/amd64
+    hostname: historyserver
+    container_name: historyserver
+    environment:
+      - CLUSTER_NAME=hudi_hadoop334_hive313_spark353
+    depends_on:
+      - "namenode"
+    links:
+      - "namenode"
+    ports:
+      - "8188:8188" # MapReduce JobHistory Server Port
+      - "19888:19888" # MapReduce JobHistory Server's web UI
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://historyserver:8188"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    env_file:
+      - ./hadoop.env
+    volumes:
+      - historyserver:/hadoop/yarn/timeline
+  hive-metastore-postgresql:
+    image: bde2020/hive-metastore-postgresql:3.1.0
+    platform: linux/amd64
+    ports:
+      - "5432:5432" # PostgreSQL Port
+    volumes:
+      - hive-metastore-postgresql:/var/lib/postgresql
+    hostname: hive-metastore-postgresql
+    container_name: hive-metastore-postgresql
+  hivemetastore:
+    image: apachehudi/hudi-hadoop_3.3.4-hive_3.1.3:latest
+    platform: linux/amd64
+    hostname: hivemetastore
+    container_name: hivemetastore
+    links:
+      - "hive-metastore-postgresql"
+      - "namenode"
+    env_file:
+      - ./hadoop.env
+    command: /opt/hive/bin/hive --service metastore
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870 hive-metastore-postgresql:5432"
+    ports:
+      - "9083:9083" # Hive Metastore Thrift Port
+      # JVM debugging port (will be mapped to a random port on host)
+      - "5005"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "hivemetastore", "9083"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - "hive-metastore-postgresql"
+      - "namenode"
+  hiveserver:
+    image: apachehudi/hudi-hadoop_3.3.4-hive_3.1.3:latest
+    platform: linux/amd64
+    hostname: hiveserver
+    container_name: hiveserver
+    env_file:
+      - ./hadoop.env
+    environment:
+      SERVICE_PRECONDITION: "hivemetastore:9083"
+    ports:
+      - "10000:10000" # HiveServer2 Thrift Port
+      - "10002:10002" # HiveServer2 Beeline Port
+      # JVM debugging port (will be mapped to a random port on host)
+      - "5005"
+    depends_on:
+      - "hivemetastore"
+    links:
+      - "hivemetastore"
+      - "hive-metastore-postgresql"
+      - "namenode"
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
+  zookeeper:
+    image: 'bitnami/zookeeper:3.6.4'
+    platform: linux/amd64
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181" # Zookeeper Client Port
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+  kafka:
+    image: 'bitnami/kafka:3.4.1'
+    platform: linux/amd64
+    hostname: kafkabroker
+    container_name: kafkabroker
+    ports:
+      - "9092:9092" # Kafka Broker
+    environment:
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+  sparkmaster:
+    image: apachehudi/hudi-hadoop_3.3.4-hive_3.1.3-sparkmaster_3.5.3:latest
+    platform: linux/amd64
+    hostname: sparkmaster
+    container_name: sparkmaster
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "8080:8080" # Spark Master UI
+      - "7077:7077" # Spark Master Port
+      - "8888:8888" # Jupyter Notebook
+      # JVM debugging port (will be mapped to a random port on host)
+      - "5005"
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
+      - ./notebooks:/opt/workspace/notebooks
+    environment:
+      - INIT_DAEMON_STEP=setup_spark
+    links:
+      - "hivemetastore"
+      - "hiveserver"
+      - "hive-metastore-postgresql"
+      - "namenode"
+  spark-worker-1:
+    image: apachehudi/hudi-hadoop_3.3.4-hive_3.1.3-sparkworker_3.5.3:latest
+    platform: linux/amd64
+    hostname: spark-worker-1
+    container_name: spark-worker-1
+    env_file:
+      - ./hadoop.env
+    depends_on:
+      - sparkmaster
+    ports:
+      - "8081:8081" # Spark Worker UI
+      # JVM debugging port (will be mapped to a random port on host)
+      - "5005"
+    environment:
+      - "SPARK_MASTER=spark://sparkmaster:7077"
+    links:
+      - "hivemetastore"
+      - "hiveserver"
+      - "hive-metastore-postgresql"
+      - "namenode"
+  adhoc-1:
+    image: apachehudi/hudi-hadoop_3.3.4-hive_3.1.3-sparkadhoc_3.5.3:latest
+    platform: linux/amd64
+    hostname: adhoc-1
+    container_name: adhoc-1
+    env_file:
+      - ./hadoop.env
+    depends_on:
+      - sparkmaster
+    ports:
+      - '4040:4040' # Spark Application UI
+      # JVM debugging port (mapped to 5006 on the host)
+      - "5006:5005"
+    environment:
+      - "SPARK_MASTER=spark://sparkmaster:7077"
+    links:
+      - "hivemetastore"
+      - "hiveserver"
+      - "hive-metastore-postgresql"
+      - "namenode"
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
+  adhoc-2:
+    image: apachehudi/hudi-hadoop_3.3.4-hive_3.1.3-sparkadhoc_3.5.3:latest
+    platform: linux/amd64
+    hostname: adhoc-2
+    container_name: adhoc-2
+    env_file:
+      - ./hadoop.env
+    ports:
+      # JVM debugging port (mapped to 5005 on the host)
+      - "5005:5005"
+    depends_on:
+      - sparkmaster
+    environment:
+      - "SPARK_MASTER=spark://sparkmaster:7077"
+    links:
+      - "hivemetastore"
+      - "hiveserver"
+      - "hive-metastore-postgresql"
+      - "namenode"
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
+  minio:
+    image: 'minio/minio:latest'
+    platform: linux/amd64
+    hostname: minio
+    container_name: minio
+    ports:
+      - 9090:9090  # MinIO API port
+      - 9091:9091  # MinIO Console port
+    volumes:
+      - minio-data:/data
+    environment:
+      MINIO_ACCESS_KEY: minio
+      MINIO_SECRET_KEY: minio123
+      MINIO_DOMAIN: minio
+    command: server --address ":9090" --console-address ":9091" /data
+  mc:
+    image: minio/mc
+    platform: linux/amd64
+    container_name: mc
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set minio http://minio:9090 minio minio123 --api S3v4) do echo '...waiting...' && sleep 1; done;
+      /usr/bin/mc rm -r --force minio/warehouse;
+      /usr/bin/mc mb minio/warehouse;
+      /usr/bin/mc policy set public minio/warehouse;
+      tail -f /dev/null
+      "
+    depends_on:
+      - minio
+volumes:
+  namenode:
+  historyserver:
+  hive-metastore-postgresql:
+  minio-data:
+networks:
+  default:
+    name: hudi
+

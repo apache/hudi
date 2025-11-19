@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.bulk;
 
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -43,6 +44,7 @@ import java.util.List;
 
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.escapePathName;
+import static org.apache.hudi.keygen.KeyGenerator.DEFAULT_COLUMN_VALUE_SEPARATOR;
 
 /**
  * Key generator for {@link RowData}.
@@ -69,7 +71,7 @@ public class RowDataKeyGen implements Serializable {
   private final Option<TimestampBasedAvroKeyGenerator> keyGenOpt;
 
   // efficient code path
-  private boolean simpleRecordKey = false;
+  private SerializableFunctionUnchecked<RowData, String> simpleRecordKeyFunc;
   private RowData.FieldGetter recordKeyFieldGetter;
 
   private boolean simplePartitionPath = false;
@@ -84,7 +86,8 @@ public class RowDataKeyGen implements Serializable {
       boolean hiveStylePartitioning,
       boolean encodePartitionPath,
       boolean consistentLogicalTimestampEnabled,
-      Option<TimestampBasedAvroKeyGenerator> keyGenOpt) {
+      Option<TimestampBasedAvroKeyGenerator> keyGenOpt,
+      boolean useComplexKeygenNewEncoding) {
     this.partitionPathFields = partitionFields.split(DEFAULT_FIELD_SEPARATOR);
     this.hiveStylePartitioning = hiveStylePartitioning;
     this.encodePartitionPath = encodePartitionPath;
@@ -93,6 +96,8 @@ public class RowDataKeyGen implements Serializable {
     List<String> fieldNames = rowType.getFieldNames();
     List<LogicalType> fieldTypes = rowType.getChildren();
 
+    boolean simpleRecordKey = false;
+    boolean multiplePartitions = false;
     if (!recordKeys.isPresent()) {
       this.recordKeyFields = null;
       this.recordKeyProjection = null;
@@ -100,7 +105,7 @@ public class RowDataKeyGen implements Serializable {
       this.recordKeyFields = recordKeys.get().split(DEFAULT_FIELD_SEPARATOR);
       if (this.recordKeyFields.length == 1) {
         // efficient code path
-        this.simpleRecordKey = true;
+        simpleRecordKey = true;
         int recordKeyIdx = fieldNames.indexOf(this.recordKeyFields[0]);
         this.recordKeyFieldGetter = RowData.createFieldGetter(fieldTypes.get(recordKeyIdx), recordKeyIdx);
         this.recordKeyProjection = null;
@@ -121,6 +126,18 @@ public class RowDataKeyGen implements Serializable {
       this.partitionPathProjection = null;
     } else {
       this.partitionPathProjection = getProjection(this.partitionPathFields, fieldNames, fieldTypes);
+      multiplePartitions = true;
+    }
+    if (simpleRecordKey) {
+      if (multiplePartitions && !useComplexKeygenNewEncoding) {
+        // single record key with multiple partition fields
+        this.simpleRecordKeyFunc = rowData -> {
+          String oriKey = getRecordKey(recordKeyFieldGetter.getFieldOrNull(rowData), this.recordKeyFields[0], consistentLogicalTimestampEnabled);
+          return new StringBuilder(this.recordKeyFields[0]).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(oriKey).toString();
+        };
+      } else {
+        this.simpleRecordKeyFunc = rowData -> getRecordKey(recordKeyFieldGetter.getFieldOrNull(rowData), this.recordKeyFields[0], consistentLogicalTimestampEnabled);
+      }
     }
     this.keyGenOpt = keyGenOpt;
   }
@@ -137,7 +154,7 @@ public class RowDataKeyGen implements Serializable {
     boolean consistentLogicalTimestampEnabled = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
     return new RowDataKeyGen(Option.of(conf.get(FlinkOptions.RECORD_KEY_FIELD)), conf.get(FlinkOptions.PARTITION_PATH_FIELD),
         rowType, conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.get(FlinkOptions.URL_ENCODE_PARTITIONING),
-        consistentLogicalTimestampEnabled, keyGeneratorOpt);
+        consistentLogicalTimestampEnabled, keyGeneratorOpt, OptionsResolver.useComplexKeygenNewEncoding(conf));
   }
 
   public HoodieKey getHoodieKey(RowData rowData) {
@@ -145,8 +162,8 @@ public class RowDataKeyGen implements Serializable {
   }
 
   public String getRecordKey(RowData rowData) {
-    if (this.simpleRecordKey) {
-      return getRecordKey(recordKeyFieldGetter.getFieldOrNull(rowData), this.recordKeyFields[0], consistentLogicalTimestampEnabled);
+    if (this.simpleRecordKeyFunc != null) {
+      return this.simpleRecordKeyFunc.apply(rowData);
     } else {
       Object[] keyValues = this.recordKeyProjection.projectAsValues(rowData);
       return getRecordKey(keyValues, this.recordKeyFields, consistentLogicalTimestampEnabled);

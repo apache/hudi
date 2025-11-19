@@ -568,7 +568,7 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
             .enable(true)
             .withMetadataIndexColumnStats(true)
             .withMetadataIndexBloomFilter(true)
-            .withEnableRecordIndex(true).build())
+            .withEnableGlobalRecordLevelIndex(true).build())
         .build();
     for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues()) {
       metaClient.getTableConfig().setMetadataPartitionState(metaClient, partitionType.getPartitionPath(), true);

@@ -142,7 +142,7 @@ class TestS3StorageLockClient {
             (a,b) -> mockS3Client,
             mockLogger
     ));
-    assertTrue(ex.getMessage().contains("lock file path"));
+    assertTrue(ex.getMessage().contains("path"));
   }
 
   @Test
@@ -192,7 +192,7 @@ class TestS3StorageLockClient {
 
     assertEquals(LockUpsertResult.ACQUIRED_BY_OTHERS, result.getLeft());
     assertTrue(result.getRight().isEmpty());
-    verify(mockLogger).warn(contains("Lockfile modified by another process"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
+    verify(mockLogger).info(contains("Lockfile modified by another process"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
   }
 
   @Test
@@ -210,7 +210,7 @@ class TestS3StorageLockClient {
     // which is why the return result is UNKNOWN_ERROR
     assertEquals(UNKNOWN_ERROR, result.getLeft());
     assertTrue(result.getRight().isEmpty());
-    verify(mockLogger).warn(contains("Retriable conditional request conflict error"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
+    verify(mockLogger).info(contains("Retriable conditional request conflict error"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
   }
 
   @Test

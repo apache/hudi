@@ -75,7 +75,7 @@ public class TableStatisticsReader
                 .toList();
         Map<String, HoodieColumnRangeMetadata> columnStatsMap = getColumnStats(latestCommit, tableMetadata, fileSystemView, columnNames);
         if (columnStatsMap.isEmpty()) {
-            log.warn("Unable to get column stats from metadata table for table, returning empty table statistics: %s",
+            log.info("Unable to get column stats from metadata table for table, returning empty table statistics: %s",
                     metaClient.getBasePath());
             return TableStatistics.empty();
         }
@@ -87,7 +87,7 @@ public class TableStatisticsReader
         for (HiveColumnHandle columnHandle : columnHandles) {
             HoodieColumnRangeMetadata columnStats = columnStatsMap.get(columnHandle.getName());
             if (columnStats == null) {
-                log.warn("Unable to get column stats for column %s in table %s",
+                log.info("Unable to get column stats for column %s in table %s",
                         columnHandle.getName(), metaClient.getBasePath());
                 continue;
             }

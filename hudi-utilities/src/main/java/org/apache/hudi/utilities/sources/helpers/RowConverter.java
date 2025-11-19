@@ -43,17 +43,19 @@ public class RowConverter implements Serializable {
   private final String schemaStr;
   private final String invalidCharMask;
   private final boolean shouldSanitize;
+  private final boolean useJava8api;
 
   /**
    * To be lazily initialized on executors.
    */
   private transient MercifulJsonToRowConverter jsonConverter;
 
-  public RowConverter(Schema schema, boolean shouldSanitize, String invalidCharMask) {
+  public RowConverter(Schema schema, boolean shouldSanitize, String invalidCharMask, boolean useJava8api) {
     this.schemaStr = schema.toString();
     this.schema = schema;
     this.shouldSanitize = shouldSanitize;
     this.invalidCharMask = invalidCharMask;
+    this.useJava8api = useJava8api;
   }
 
   private void initSchema() {
@@ -65,7 +67,7 @@ public class RowConverter implements Serializable {
 
   private void initJsonConvertor() {
     if (jsonConverter == null) {
-      jsonConverter = new MercifulJsonToRowConverter(this.shouldSanitize, this.invalidCharMask);
+      jsonConverter = new MercifulJsonToRowConverter(this.shouldSanitize, this.invalidCharMask, this.useJava8api);
     }
   }
 

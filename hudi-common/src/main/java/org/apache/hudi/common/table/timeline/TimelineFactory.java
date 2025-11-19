@@ -40,6 +40,4 @@ public abstract class TimelineFactory implements Serializable {
   public abstract HoodieActiveTimeline createActiveTimeline(HoodieTableMetaClient metaClient, boolean applyLayoutFilter);
 
   public abstract CompletionTimeQueryView createCompletionTimeQueryView(HoodieTableMetaClient metaClient);
-
-  public abstract CompletionTimeQueryView createCompletionTimeQueryView(HoodieTableMetaClient metaClient, String eagerInstant);
 }
