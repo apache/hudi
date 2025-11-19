@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.avro.Schema;
 
 import java.io.Serializable;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -63,7 +64,7 @@ public class HoodieSchemaField implements Serializable {
   public HoodieSchemaField(Schema.Field avroField) {
     ValidationUtils.checkArgument(avroField != null, "Avro field cannot be null");
     this.avroField = avroField;
-    this.hoodieSchema = new HoodieSchema(avroField.schema());
+    this.hoodieSchema = HoodieSchema.fromAvroSchema(avroField.schema());
   }
 
   /**
@@ -222,7 +223,7 @@ public class HoodieSchemaField implements Serializable {
    *
    * @return map of custom properties
    */
-  public java.util.Map<String, Object> getObjectProps() {
+  public Map<String, Object> getObjectProps() {
     return avroField.getObjectProps();
   }
 

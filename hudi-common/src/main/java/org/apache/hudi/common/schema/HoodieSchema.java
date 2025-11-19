@@ -87,7 +87,7 @@ public class HoodieSchema implements Serializable {
    * @param avroSchema the Avro schema to wrap, cannot be null
    * @throws IllegalArgumentException if avroSchema is null
    */
-  public HoodieSchema(Schema avroSchema) {
+  private HoodieSchema(Schema avroSchema) {
     ValidationUtils.checkArgument(avroSchema != null, "Avro schema cannot be null");
     this.avroSchema = avroSchema;
     Schema.Type avroType = avroSchema.getType();
@@ -367,6 +367,19 @@ public class HoodieSchema implements Serializable {
     Schema avroSchema = schema.toAvroSchema();
     Schema resultAvro = HoodieAvroUtils.removeMetadataFields(avroSchema);
     return HoodieSchema.fromAvroSchema(resultAvro);
+  }
+
+  /**
+   * Creates a nullable union (null + specified type).
+   *
+   * @param type the non-null type
+   * @return new HoodieSchema representing a nullable union
+   */
+  public static HoodieSchema createNullableSchema(HoodieSchema type) {
+    ValidationUtils.checkArgument(type != null, "Type cannot be null");
+
+    HoodieSchema nullSchema = HoodieSchema.create(HoodieSchemaType.NULL);
+    return createUnion(nullSchema, type);
   }
 
   /**

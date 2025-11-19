@@ -103,40 +103,6 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Checks whether two schemas are compatible for read/write operations.
-   * This is equivalent to AvroSchemaUtils.isSchemaCompatible() but operates on HoodieSchemas.
-   *
-   * @param prevSchema previous version of the schema (writer schema)
-   * @param newSchema  new version of the schema (reader schema)
-   * @return true if schemas are compatible, false otherwise
-   * @throws IllegalArgumentException if either schema is null
-   */
-  public static boolean isSchemaCompatible(HoodieSchema prevSchema, HoodieSchema newSchema) {
-    return isSchemaCompatible(prevSchema, newSchema, true);
-  }
-
-  /**
-   * Checks whether two schemas are compatible for read/write operations.
-   * This is equivalent to AvroSchemaUtils.isSchemaCompatible() but operates on HoodieSchemas.
-   *
-   * @param prevSchema      previous version of the schema (writer schema)
-   * @param newSchema       new version of the schema (reader schema)
-   * @param allowProjection whether to allow column projection (dropping columns)
-   * @return true if schemas are compatible, false otherwise
-   * @throws IllegalArgumentException if either schema is null
-   */
-  public static boolean isSchemaCompatible(HoodieSchema prevSchema, HoodieSchema newSchema, boolean allowProjection) {
-    ValidationUtils.checkArgument(prevSchema != null, "Previous schema cannot be null");
-    ValidationUtils.checkArgument(newSchema != null, "New schema cannot be null");
-
-    // Delegate to AvroSchemaUtils
-    return AvroSchemaUtils.isSchemaCompatible(
-        prevSchema.toAvroSchema(),
-        newSchema.toAvroSchema(),
-        allowProjection);
-  }
-
-  /**
    * Merges two schemas, combining fields from both with conflict resolution.
    * This is equivalent to AvroSchemaUtils.mergeSchemas() but operates on HoodieSchemas.
    *

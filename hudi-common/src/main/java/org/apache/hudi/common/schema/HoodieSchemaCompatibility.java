@@ -59,10 +59,6 @@ public final class HoodieSchemaCompatibility {
     ValidationUtils.checkArgument(tableSchema != null, "Table schema cannot be null");
     ValidationUtils.checkArgument(writerSchema != null, "Writer schema cannot be null");
 
-    if (!shouldValidate) {
-      return;
-    }
-
     // Delegate to AvroSchemaUtils for the actual compatibility check
     AvroSchemaUtils.checkSchemaCompatible(
         tableSchema.toAvroSchema(),
@@ -110,7 +106,7 @@ public final class HoodieSchemaCompatibility {
    * @param incomingSchema the new schema being introduced
    * @param tableSchema    the existing table schema
    * @throws IllegalArgumentException                           if schemas are null
-   * @throws org.apache.hudi.exception.SchemaEvolutionException if evolution is invalid
+   * @throws org.apache.hudi.exception.SchemaCompatibilityException if evolution is invalid
    */
   public static void checkValidEvolution(HoodieSchema incomingSchema, HoodieSchema tableSchema) {
     ValidationUtils.checkArgument(incomingSchema != null, "Incoming schema cannot be null");
@@ -134,7 +130,7 @@ public final class HoodieSchemaCompatibility {
     ValidationUtils.checkArgument(writerSchema != null, "Writer schema cannot be null");
 
     // Use HoodieSchemaUtils delegation for consistency
-    return HoodieSchemaUtils.isSchemaCompatible(readerSchema, writerSchema);
+    return AvroSchemaUtils.isSchemaCompatible(readerSchema.toAvroSchema(), writerSchema.toAvroSchema());
   }
 
   /**
@@ -153,6 +149,58 @@ public final class HoodieSchemaCompatibility {
     ValidationUtils.checkArgument(writerSchema != null, "Writer schema cannot be null");
 
     // Use HoodieSchemaUtils delegation for consistency
-    return HoodieSchemaUtils.isSchemaCompatible(readerSchema, writerSchema, allowProjection);
+    return AvroSchemaUtils.isSchemaCompatible(readerSchema.toAvroSchema(), writerSchema.toAvroSchema(), allowProjection);
+  }
+
+  /**
+   * Validate whether the {@code targetSchema} is a "compatible" projection of {@code sourceSchema}.
+   * Only difference of this method from {@link #isStrictProjectionOf(HoodieSchema, HoodieSchema)} is
+   * the fact that it allows some legitimate type promotions (like {@code int -> long},
+   * {@code decimal(3, 2) -> decimal(5, 2)}, etc.) that allows projection to have a "wider"
+   * atomic type (whereas strict projection requires atomic type to be identical)
+   */
+  public static boolean isCompatibleProjectionOf(HoodieSchema sourceSchema, HoodieSchema targetSchema) {
+    if (sourceSchema == null || targetSchema == null) {
+      return false;
+    }
+    return AvroSchemaUtils.isCompatibleProjectionOf(sourceSchema.getAvroSchema(), targetSchema.getAvroSchema());
+  }
+
+  /**
+   * Validate whether the {@code targetSchema} is a strict projection of {@code sourceSchema}.
+   *
+   * Schema B is considered a strict projection of schema A iff
+   * <ol>
+   *   <li>Schemas A and B are equal, or</li>
+   *   <li>Schemas A and B are array schemas and element-type of B is a strict projection
+   *   of the element-type of A, or</li>
+   *   <li>Schemas A and B are map schemas and value-type of B is a strict projection
+   *   of the value-type of A, or</li>
+   *   <li>Schemas A and B are union schemas (of the same size) and every element-type of B
+   *   is a strict projection of the corresponding element-type of A, or</li>
+   *   <li>Schemas A and B are record schemas and every field of the record B has corresponding
+   *   counterpart (w/ the same name) in the schema A, such that the schema of the field of the schema
+   *   B is also a strict projection of the A field's schema</li>
+   * </ol>
+   */
+  public static boolean isStrictProjectionOf(HoodieSchema sourceSchema, HoodieSchema targetSchema) {
+    if (sourceSchema == null || targetSchema == null) {
+      return false;
+    }
+    return AvroSchemaUtils.isStrictProjectionOf(sourceSchema.getAvroSchema(), targetSchema.getAvroSchema());
+  }
+
+  /**
+   * If schemas are projection equivalent, then a record with schema1 does not need to be projected to schema2
+   * because the projection will be the identity.
+   *
+   *  Two schemas are considered projection equivalent if the field names and types are equivalent.
+   *  The names of records, namespaces, or docs do not need to match. Nullability is ignored.
+   */
+  public static boolean areSchemasProjectionEquivalent(HoodieSchema schema1, HoodieSchema schema2) {
+    if (schema1 == null || schema2 == null) {
+      return false;
+    }
+    return AvroSchemaUtils.areSchemasProjectionEquivalent(schema1.toAvroSchema(), schema2.toAvroSchema());
   }
 }

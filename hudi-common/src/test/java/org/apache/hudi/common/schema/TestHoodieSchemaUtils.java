@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.schema;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 
 import org.apache.avro.Schema;
@@ -37,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestHoodieSchemaUtils {
 
-  private static final String SIMPLE_SCHEMA = "{"
+  static final String SIMPLE_SCHEMA = "{"
       + "\"type\":\"record\","
       + "\"name\":\"TestRecord\","
       + "\"fields\":["
@@ -45,7 +44,7 @@ public class TestHoodieSchemaUtils {
       + "{\"name\":\"name\",\"type\":\"string\"}"
       + "]}";
 
-  private static final String EVOLVED_SCHEMA = "{"
+  static final String EVOLVED_SCHEMA = "{"
       + "\"type\":\"record\","
       + "\"name\":\"TestRecord\","
       + "\"fields\":["
@@ -64,7 +63,7 @@ public class TestHoodieSchemaUtils {
 
     // Should have original fields plus metadata fields
     List<HoodieSchemaField> fields = writeSchemaWithOp.getFields();
-    assertTrue(fields.size() > 2); // Original 2 fields + metadata fields
+    assertEquals(8, fields.size()); // Original 2 fields + metadata fields
 
     // Test without operation field
     HoodieSchema writeSchemaNoOp = HoodieSchemaUtils.createHoodieWriteSchema(SIMPLE_SCHEMA, false);
@@ -73,7 +72,7 @@ public class TestHoodieSchemaUtils {
     assertEquals(HoodieSchemaType.RECORD, writeSchemaNoOp.getType());
 
     // Should have different number of fields
-    assertNotNull(writeSchemaNoOp.getFields());
+    assertEquals(7, writeSchemaNoOp.getFields().size());
   }
 
   @Test
@@ -102,13 +101,13 @@ public class TestHoodieSchemaUtils {
     HoodieSchema schemaWithMeta = HoodieSchemaUtils.addMetadataFields(baseSchema, true);
 
     assertNotNull(schemaWithMeta);
-    assertTrue(schemaWithMeta.getFields().size() > baseSchema.getFields().size());
+    assertEquals(schemaWithMeta.getFields().size(), baseSchema.getFields().size() + 6);
 
     // Test adding metadata fields without operation field  
     HoodieSchema schemaWithMetaNoOp = HoodieSchemaUtils.addMetadataFields(baseSchema, false);
 
     assertNotNull(schemaWithMetaNoOp);
-    assertTrue(schemaWithMetaNoOp.getFields().size() > baseSchema.getFields().size());
+    assertEquals(schemaWithMetaNoOp.getFields().size(), baseSchema.getFields().size() + 5);
   }
 
   @Test
@@ -137,35 +136,6 @@ public class TestHoodieSchemaUtils {
     // Should throw on null schema
     assertThrows(IllegalArgumentException.class, () -> {
       HoodieSchemaUtils.removeMetadataFields(null);
-    });
-  }
-
-  @Test
-  public void testIsSchemaCompatible() {
-    HoodieSchema baseSchema = HoodieSchema.parse(SIMPLE_SCHEMA);
-    HoodieSchema evolvedSchema = HoodieSchema.parse(EVOLVED_SCHEMA);
-
-    // Test schema compatibility (evolved schema should be compatible for reading base schema data)
-    boolean compatible = HoodieSchemaUtils.isSchemaCompatible(baseSchema, evolvedSchema);
-    assertTrue(compatible);
-
-    // Test with projection allowed
-    boolean compatibleWithProjection = HoodieSchemaUtils.isSchemaCompatible(baseSchema, evolvedSchema, true);
-    assertTrue(compatibleWithProjection);
-  }
-
-  @Test
-  public void testIsSchemaCompatibleValidation() {
-    HoodieSchema schema = HoodieSchema.parse(SIMPLE_SCHEMA);
-
-    // Should throw on null previous schema
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchemaUtils.isSchemaCompatible(null, schema);
-    });
-
-    // Should throw on null new schema
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchemaUtils.isSchemaCompatible(schema, null);
     });
   }
 
@@ -330,21 +300,5 @@ public class TestHoodieSchemaUtils {
 
     // Should produce equivalent schemas
     assertEquals(avroResult.toString(), hoodieResult.toString());
-  }
-
-  @Test
-  public void testCompatibilityConsistency() {
-    // Test that compatibility checks are consistent between Avro and Hoodie utilities
-    HoodieSchema baseSchema = HoodieSchema.parse(SIMPLE_SCHEMA);
-    HoodieSchema evolvedSchema = HoodieSchema.parse(EVOLVED_SCHEMA);
-
-    Schema baseAvro = baseSchema.toAvroSchema();
-    Schema evolvedAvro = evolvedSchema.toAvroSchema();
-
-    // Results should be consistent
-    boolean avroCompatible = AvroSchemaUtils.isSchemaCompatible(baseAvro, evolvedAvro);
-    boolean hoodieCompatible = HoodieSchemaUtils.isSchemaCompatible(baseSchema, evolvedSchema);
-
-    assertEquals(avroCompatible, hoodieCompatible);
   }
 }

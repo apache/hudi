@@ -28,6 +28,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -72,7 +73,7 @@ public class TestHoodieSchema {
     }, "Should throw exception for null Avro schema");
 
     assertThrows(IllegalArgumentException.class, () -> {
-      new HoodieSchema(null);
+      HoodieSchema.fromAvroSchema(null);
     }, "Should throw exception for null Avro schema in constructor");
   }
 
@@ -191,7 +192,7 @@ public class TestHoodieSchema {
         Schema.create(Schema.Type.NULL),
         Schema.create(Schema.Type.STRING)
     ));
-    HoodieSchema existingUnion = new HoodieSchema(avroUnion);
+    HoodieSchema existingUnion = HoodieSchema.fromAvroSchema(avroUnion);
 
     // Making it nullable should return the same schema
     HoodieSchema nullableSchema = HoodieSchema.createNullable(existingUnion);
@@ -202,7 +203,7 @@ public class TestHoodieSchema {
         Schema.create(Schema.Type.STRING),
         Schema.create(Schema.Type.INT)
     ));
-    HoodieSchema unionWithoutNull = new HoodieSchema(avroUnionWithoutNull);
+    HoodieSchema unionWithoutNull = HoodieSchema.fromAvroSchema(avroUnionWithoutNull);
 
     // Making it nullable should add null
     HoodieSchema newNullableSchema = HoodieSchema.createNullable(unionWithoutNull);
@@ -319,7 +320,7 @@ public class TestHoodieSchema {
   @Test
   public void testFixedSchemaSize() {
     Schema avroFixed = Schema.createFixed("MD5", "MD5 hash", null, 16);
-    HoodieSchema fixedSchema = new HoodieSchema(avroFixed);
+    HoodieSchema fixedSchema = HoodieSchema.fromAvroSchema(avroFixed);
 
     assertEquals(HoodieSchemaType.FIXED, fixedSchema.getType());
     assertEquals(16, fixedSchema.getFixedSize());
@@ -334,7 +335,7 @@ public class TestHoodieSchema {
   @Test
   public void testEnumSchemaSymbols() {
     Schema avroEnum = Schema.createEnum("Color", "Color enum", null, Arrays.asList("RED", "GREEN", "BLUE"));
-    HoodieSchema enumSchema = new HoodieSchema(avroEnum);
+    HoodieSchema enumSchema = HoodieSchema.fromAvroSchema(avroEnum);
 
     assertEquals(HoodieSchemaType.ENUM, enumSchema.getType());
     List<String> symbols = enumSchema.getEnumSymbols();
@@ -368,7 +369,7 @@ public class TestHoodieSchema {
   public void testAvroCompatibility() {
     // Test round-trip compatibility
     Schema originalAvroSchema = new Schema.Parser().parse(SAMPLE_RECORD_SCHEMA);
-    HoodieSchema hoodieSchema = new HoodieSchema(originalAvroSchema);
+    HoodieSchema hoodieSchema = HoodieSchema.fromAvroSchema(originalAvroSchema);
     Schema retrievedAvroSchema = hoodieSchema.getAvroSchema();
 
     assertEquals(originalAvroSchema, retrievedAvroSchema);
@@ -420,7 +421,7 @@ public class TestHoodieSchema {
         Schema.create(Schema.Type.STRING),
         Schema.create(Schema.Type.INT)
     ));
-    HoodieSchema unionWithoutNull = new HoodieSchema(avroUnion);
+    HoodieSchema unionWithoutNull = HoodieSchema.fromAvroSchema(avroUnion);
     assertFalse(unionWithoutNull.isNullable());
   }
 
@@ -575,5 +576,217 @@ public class TestHoodieSchema {
     // Should throw on non-record schema operations
     assertThrows(IllegalStateException.class, () -> stringSchema.isError());
     assertThrows(IllegalStateException.class, () -> stringSchema.setFields(Arrays.asList()));
+  }
+
+  @Test
+  public void testCreateRecord() {
+    // Create fields
+    HoodieSchemaField idField = HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG));
+    HoodieSchemaField nameField = HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING));
+    List<HoodieSchemaField> fields = Arrays.asList(idField, nameField);
+
+    // Create record schema
+    HoodieSchema recordSchema = HoodieSchema.createRecord("User", null, null, fields);
+
+    assertNotNull(recordSchema);
+    assertEquals(HoodieSchemaType.RECORD, recordSchema.getType());
+    assertEquals(Option.of("User"), recordSchema.getName());
+    assertEquals(2, recordSchema.getFields().size());
+
+    // Verify fields
+    Option<HoodieSchemaField> retrievedIdField = recordSchema.getField("id");
+    assertTrue(retrievedIdField.isPresent());
+    assertEquals(HoodieSchemaType.LONG, retrievedIdField.get().schema().getType());
+
+    Option<HoodieSchemaField> retrievedNameField = recordSchema.getField("name");
+    assertTrue(retrievedNameField.isPresent());
+    assertEquals(HoodieSchemaType.STRING, retrievedNameField.get().schema().getType());
+  }
+
+  @Test
+  public void testCreateRecordWithNamespaceAndDoc() {
+    HoodieSchemaField field = HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.STRING));
+    List<HoodieSchemaField> fields = Collections.singletonList(field);
+
+    HoodieSchema recordSchema = HoodieSchema.createRecord("TestRecord", "com.example",
+        "Test record schema", fields);
+
+    assertNotNull(recordSchema);
+    assertEquals(HoodieSchemaType.RECORD, recordSchema.getType());
+    assertEquals(Option.of("TestRecord"), recordSchema.getName());
+    assertEquals(Option.of("com.example"), recordSchema.getNamespace());
+    assertEquals(Option.of("com.example.TestRecord"), recordSchema.getFullName());
+    assertEquals(Option.of("Test record schema"), recordSchema.getDoc());
+  }
+
+  @Test
+  public void testCreateRecordWithInvalidParameters() {
+    HoodieSchemaField field = HoodieSchemaField.of("test", HoodieSchema.create(HoodieSchemaType.STRING));
+    List<HoodieSchemaField> fields = Collections.singletonList(field);
+
+    // Test null record name
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieSchema.createRecord(null, null, null, fields);
+    }, "Should throw exception for null record name");
+
+    // Test empty record name
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieSchema.createRecord("", null, null, fields);
+    }, "Should throw exception for empty record name");
+
+    // Test null fields
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieSchema.createRecord("TestRecord", null, null, null);
+    }, "Should throw exception for null fields");
+
+    // Test empty fields
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieSchema.createRecord("TestRecord", null, null, Collections.emptyList());
+    }, "Should throw exception for empty fields list");
+  }
+
+  @Test
+  public void testCreateEnum() {
+    List<String> symbols = Arrays.asList("RED", "GREEN", "BLUE");
+    HoodieSchema enumSchema = HoodieSchema.createEnum("Color", null, null, symbols);
+
+    assertNotNull(enumSchema);
+    assertEquals(HoodieSchemaType.ENUM, enumSchema.getType());
+    assertEquals(Option.of("Color"), enumSchema.getName());
+    assertEquals(symbols, enumSchema.getEnumSymbols());
+  }
+
+  @Test
+  public void testCreateEnumWithInvalidParameters() {
+    List<String> symbols = Arrays.asList("A", "B", "C");
+
+    // Test null enum name
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieSchema.createEnum(null, null, null, symbols);
+    }, "Should throw exception for null enum name");
+
+    // Test empty enum name
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieSchema.createEnum("", null, null, symbols);
+    }, "Should throw exception for empty enum name");
+
+    // Test null symbols
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieSchema.createEnum("TestEnum", null, null, null);
+    }, "Should throw exception for null symbols");
+
+    // Test empty symbols
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieSchema.createEnum("TestEnum", null, null, Collections.emptyList());
+    }, "Should throw exception for empty symbols list");
+  }
+
+  @Test
+  public void testCreateFixed() {
+    HoodieSchema fixedSchema = HoodieSchema.createFixed("MD5Hash", null, null, 16);
+
+    assertNotNull(fixedSchema);
+    assertEquals(HoodieSchemaType.FIXED, fixedSchema.getType());
+    assertEquals(Option.of("MD5Hash"), fixedSchema.getName());
+    assertEquals(16, fixedSchema.getFixedSize());
+  }
+
+  @Test
+  public void testCreateFixedWithInvalidParameters() {
+    // Test null fixed name
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieSchema.createFixed(null, null, null, 16);
+    }, "Should throw exception for null fixed name");
+
+    // Test empty fixed name
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieSchema.createFixed("", null, null, 16);
+    }, "Should throw exception for empty fixed name");
+
+    // Test invalid size
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieSchema.createFixed("Test", null, null, 0);
+    }, "Should throw exception for zero size");
+
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieSchema.createFixed("Test", null, null, -1);
+    }, "Should throw exception for negative size");
+  }
+
+  @Test
+  public void testCreateUnion() {
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema intSchema = HoodieSchema.create(HoodieSchemaType.INT);
+
+    List<HoodieSchema> types = Arrays.asList(stringSchema, intSchema);
+    HoodieSchema unionSchema = HoodieSchema.createUnion(types);
+
+    assertNotNull(unionSchema);
+    assertEquals(HoodieSchemaType.UNION, unionSchema.getType());
+
+    List<HoodieSchema> unionTypes = unionSchema.getTypes();
+    assertEquals(2, unionTypes.size());
+    assertEquals(HoodieSchemaType.STRING, unionTypes.get(0).getType());
+    assertEquals(HoodieSchemaType.INT, unionTypes.get(1).getType());
+  }
+
+  @Test
+  public void testCreateUnionWithVarargs() {
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema intSchema = HoodieSchema.create(HoodieSchemaType.INT);
+
+    HoodieSchema unionSchema = HoodieSchema.createUnion(stringSchema, intSchema);
+
+    assertNotNull(unionSchema);
+    assertEquals(HoodieSchemaType.UNION, unionSchema.getType());
+    assertEquals(2, unionSchema.getTypes().size());
+  }
+
+  @Test
+  public void testCreateUnionWithInvalidParameters() {
+    // Test null types list
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieSchema.createUnion((List<HoodieSchema>) null);
+    }, "Should throw exception for null types list");
+
+    // Test empty types list
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieSchema.createUnion(Collections.emptyList());
+    }, "Should throw exception for empty types list");
+
+    // Test null varargs array
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieSchema.createUnion((HoodieSchema[]) null);
+    }, "Should throw exception for null varargs array");
+
+    // Test empty varargs array
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieSchema.createUnion();
+    }, "Should throw exception for empty varargs array");
+  }
+
+  @Test
+  public void testCreateNullableSchema() {
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema nullableSchema = HoodieSchema.createNullableSchema(stringSchema);
+
+    assertNotNull(nullableSchema);
+    assertEquals(HoodieSchemaType.UNION, nullableSchema.getType());
+    assertTrue(nullableSchema.isNullable());
+
+    List<HoodieSchema> types = nullableSchema.getTypes();
+    assertEquals(2, types.size());
+
+    // Should contain null and string types
+    boolean hasNull = types.stream().anyMatch(s -> s.getType() == HoodieSchemaType.NULL);
+    boolean hasString = types.stream().anyMatch(s -> s.getType() == HoodieSchemaType.STRING);
+    assertTrue(hasNull && hasString);
+  }
+
+  @Test
+  public void testCreateNullableSchemaWithInvalidParameters() {
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieSchema.createNullableSchema(null);
+    }, "Should throw exception for null type");
   }
 }
