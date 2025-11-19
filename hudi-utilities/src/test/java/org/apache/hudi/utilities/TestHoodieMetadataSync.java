@@ -267,7 +267,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     spark().read().format("hudi").load(sourcePath1).registerTempTable("srcTable1");
 
     spark().read().format("hudi").option("hoodie.metadata.enable","true")
-        .option("hoodie.metadata.enable.base.path.for.partitions","true").option("hoodie.metadata.num.partition.path.levels", 1).load(cfg.targetBasePath).registerTempTable("tgtTable1");
+        .option("hoodie.metadata.enable.base.path.for.partitions","true").load(cfg.targetBasePath).registerTempTable("tgtTable1");
 
     Dataset<Row> srcDf1 = spark().sql("select * from srcTable1").drop("city_to_state");
     srcDf1.cache();
@@ -360,7 +360,6 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     spark().read().format("hudi").option("hoodie.metadata.enable","true")
         .option("hoodie.metadata.enable.base.path.for.partitions","true")
-        .option("hoodie.metadata.num.partition.path.levels", 1)
         .load(cfg.targetBasePath).registerTempTable("tgtTable1");
 
     Dataset<Row> srcDf1 = spark().sql("select * from srcTable1").drop("city_to_state");
@@ -387,7 +386,6 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     spark().read().format("hudi").option("hoodie.metadata.enable","true")
         .option("hoodie.metadata.enable.base.path.for.partitions","true")
-        .option("hoodie.metadata.num.partition.path.levels", 1)
         .load(cfg.targetBasePath).registerTempTable("tgtTable2");
 
     Dataset<Row> tgtDf2 = spark().sql("select * from tgtTable2").drop("city_to_state");
@@ -460,7 +458,6 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     spark().read().format("hudi").option("hoodie.metadata.enable","true")
         .option("hoodie.metadata.enable.base.path.for.partitions","true")
-        .option("hoodie.metadata.num.partition.path.levels", 1)
         .load(cfg.targetBasePath).registerTempTable("tgtTable1");
 
     Dataset<Row> srcDf1 = spark().sql("select * from srcTable1").drop("city_to_state");
@@ -487,7 +484,6 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     spark().read().format("hudi").option("hoodie.metadata.enable","true")
         .option("hoodie.metadata.enable.base.path.for.partitions","true")
-        .option("hoodie.metadata.num.partition.path.levels", 1)
         .load(cfg.targetBasePath).registerTempTable("tgtTable2");
 
     Dataset<Row> tgtDf2 = spark().sql("select * from tgtTable2").drop("city_to_state");
@@ -569,7 +565,6 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     spark().read().format("hudi").option("hoodie.metadata.enable","true")
         .option("hoodie.metadata.enable.base.path.for.partitions","true")
-        .option("hoodie.metadata.num.partition.path.levels", 1)
         .load(cfg.targetBasePath).registerTempTable("tgtTable1");
 
     Dataset<Row> srcDf1 = spark().sql("select * from srcTable1").drop("city_to_state");
@@ -596,7 +591,6 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     spark().read().format("hudi").option("hoodie.metadata.enable","true")
         .option("hoodie.metadata.enable.base.path.for.partitions","true")
-        .option("hoodie.metadata.num.partition.path.levels", 1)
         .load(cfg.targetBasePath).registerTempTable("tgtTable2");
 
     Dataset<Row> tgtDf2 = spark().sql("select * from tgtTable2").drop("city_to_state");
@@ -669,7 +663,6 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     spark().read().format("hudi").option("hoodie.metadata.enable","true")
         .option("hoodie.metadata.enable.base.path.for.partitions","true")
-        .option("hoodie.metadata.num.partition.path.levels", 1)
         .load(cfg.targetBasePath).registerTempTable("tgtTable1");
 
     Dataset<Row> srcDf1 = spark().sql("select * from srcTable1").drop("city_to_state");
@@ -878,9 +871,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     spark().read().format("hudi").load(sourcePath1).registerTempTable("srcTable1");
 
     spark().read().format("hudi").option("hoodie.metadata.enable","true")
-        .option("hoodie.metadata.enable.base.path.for.partitions","true")
-        .option("hoodie.metadata.num.partition.path.levels", 1)
-        .option("hoodie.metadata.num.partition.path.levels", 1).load(cfg.targetBasePath).registerTempTable("tgtTable1");
+        .option("hoodie.metadata.enable.base.path.for.partitions","true").load(cfg.targetBasePath).registerTempTable("tgtTable1");
 
     Dataset<Row> srcDf1 = spark().sql("select * from srcTable1").drop("city_to_state");
     srcDf1.cache();
@@ -913,7 +904,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     Dataset<Row> srcDf2 = spark().sql("select * from srcTable2").drop("city_to_state");
 
     spark().read().format("hudi").option("hoodie.metadata.enable","true")
-        .option("hoodie.metadata.enable.base.path.for.partitions","true").option("hoodie.metadata.num.partition.path.levels", 1).load(cfg.targetBasePath).registerTempTable("tgtTable2");
+        .option("hoodie.metadata.enable.base.path.for.partitions","true").load(cfg.targetBasePath).registerTempTable("tgtTable2");
 
     Dataset<Row> tgtDf2 = spark().sql("select * from tgtTable2").drop("city_to_state");
 
@@ -1128,7 +1119,6 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     spark().read().format("hudi").option("hoodie.metadata.enable","true")
         .option("hoodie.metadata.enable.base.path.for.partitions","true")
-        .option("hoodie.metadata.num.partition.path.levels", 1)
         .load(cfg.targetBasePath).registerTempTable("tgtTable1");
 
     Dataset<Row> srcDf1 = spark().sql("select * from srcTable1").drop("city_to_state");

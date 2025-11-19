@@ -68,11 +68,6 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   private HoodieTimeline visibleActiveTimeline;
 
   protected IncrementalTimelineSyncFileSystemView(boolean enableIncrementalTimelineSync) {
-    this(enableIncrementalTimelineSync, Option.empty());
-  }
-
-  protected IncrementalTimelineSyncFileSystemView(boolean enableIncrementalTimelineSync, Option<Integer> numPartitionLevelsOpt) {
-    super(numPartitionLevelsOpt);
     this.incrementalTimelineSyncEnabled = enableIncrementalTimelineSync;
   }
 

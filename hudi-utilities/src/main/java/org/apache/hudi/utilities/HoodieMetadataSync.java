@@ -33,10 +33,8 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -78,15 +76,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Properties;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
 import static org.apache.hudi.utilities.MetadataSyncUtils.getHoodieCommitMetadata;
+import static org.apache.hudi.utilities.MetadataSyncUtils.getInstantsToSyncAndLastSyncCheckpoint;
 import static org.apache.hudi.utilities.MetadataSyncUtils.getPendingInstants;
 import static org.apache.hudi.utilities.MetadataSyncUtils.getTableSyncExtraMetadata;
-import static org.apache.hudi.utilities.MetadataSyncUtils.getTableSyncMetadataFromCommitMetadata;
 
 public class HoodieMetadataSync implements Serializable {
 
@@ -233,8 +231,6 @@ public class HoodieMetadataSync implements Serializable {
       LOG.info("Initializing target table for first time", cfg.targetBasePath);
       TypedProperties props = sourceTableMetaClient.getTableConfig().getProps();
       props.remove("hoodie.table.metadata.partitions");
-      props.setProperty(HoodieTableConfig.ALLOW_BASE_PATH_OVERRIDES_WITH_METADATA.key() ,"true");
-      props.setProperty(HoodieTableConfig.NUM_PARTITION_PATH_LEVELS.key(), "1");
       HoodieTableMetaClient.withPropertyBuilder()
           .fromProperties(props)
           .setTableName(cfg.targetTableName)
@@ -257,22 +253,35 @@ public class HoodieMetadataSync implements Serializable {
       if (cfg.boostrap) {
         runBootstrapSync(sparkTable, sourceTableMetaClient, targetTableMetaClient, writeClient, schema, txnManager);
       } else {
-        List<HoodieInstant> instantsToSync = getInstantsToSync(cfg.sourceBasePath, targetTableMetaClient, sourceTableMetaClient);
-        for (HoodieInstant instant : instantsToSync) {
-          String commitTime = writeClient.startCommit(instant.getAction(), targetTableMetaClient); // single writer. will rollback any pending commits from previous round.
-          targetTableMetaClient
-              .reloadActiveTimeline()
-              .transitionRequestedToInflight(
-                  instant.getAction(),
-                  commitTime);
+        Pair<TreeMap<HoodieInstant, Boolean>, Option<String>> instantsToSyncAndLastSyncCheckpointPair = getInstantsToSyncAndLastSyncCheckpoint(cfg.sourceBasePath, targetTableMetaClient, sourceTableMetaClient);
+        TreeMap<HoodieInstant, Boolean> instantsStatusMap = instantsToSyncAndLastSyncCheckpointPair.getLeft();
+        Option<String> lastSyncCheckpoint = instantsToSyncAndLastSyncCheckpointPair.getRight();
+        for (Map.Entry<HoodieInstant, Boolean> entry : instantsToSyncAndLastSyncCheckpointPair.getKey().entrySet()) {
+          HoodieInstant instant = entry.getKey();
+          boolean isCompleted = entry.getValue();
+          if(!isCompleted) {
+            // if instant is pending state, skip it
+            continue;
+          }
 
           Option<byte[]> commitMetadataInBytes = Option.empty();
-          List<String> pendingInstants = getPendingInstants(sourceTableMetaClient.getActiveTimeline(), instant);
           SyncMetadata syncMetadata = getTableSyncExtraMetadata(targetTableMetaClient.reloadActiveTimeline().getWriteTimeline().filterCompletedInstants().lastInstant(),
-              targetTableMetaClient, cfg.sourceBasePath, instant.getTimestamp(), pendingInstants);
+              targetTableMetaClient, cfg.sourceBasePath, instant.getTimestamp(), instantsStatusMap, lastSyncCheckpoint, instant);
 
           try {
             txnManager.beginTransaction(Option.of(instant), Option.empty());
+
+            if (!getPendingInstants(targetTableMetaClient.reloadActiveTimeline(), Option.empty()).isEmpty()) {
+              // rollback failing writes
+              writeClient.rollbackFailedWrites();
+            }
+
+            String commitTime = writeClient.startCommit(instant.getAction(), targetTableMetaClient); // single writer. will rollback any pending commits from previous round.
+            targetTableMetaClient
+                .reloadActiveTimeline()
+                .transitionRequestedToInflight(
+                    instant.getAction(),
+                    commitTime);
             HoodieTableMetadataWriter hoodieTableMetadataWriter =
                 (HoodieTableMetadataWriter) sparkTable.getMetadataWriter(commitTime).get();
             // perform table services if required on metadata table
@@ -310,15 +319,16 @@ public class HoodieMetadataSync implements Serializable {
                 break;
             }
 
+            targetTableMetaClient
+                .reloadActiveTimeline()
+                .saveAsComplete(new HoodieInstant(true, instant.getAction(), commitTime), commitMetadataInBytes);
+
+            if (cfg.performTableMaintenance) {
+              runArchiver(sparkTable, writeClient.getConfig(), hoodieSparkEngineContext);
+            }
           } finally {
             txnManager.endTransaction(Option.of(instant));
           }
-          targetTableMetaClient
-              .reloadActiveTimeline()
-              .saveAsComplete(new HoodieInstant(true, instant.getAction(), commitTime), commitMetadataInBytes);
-        }
-        if (cfg.performTableMaintenance) {
-          runArchiver(sparkTable, writeClient.getConfig(), hoodieSparkEngineContext);
         }
       }
     }
@@ -347,15 +357,16 @@ public class HoodieMetadataSync implements Serializable {
     } finally {
       txnManager.endTransaction(Option.of(instant));
     }
-      Option<HoodieInstant> targetTableLastInstant = targetTableMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
-      SyncMetadata syncMetadata = getTableSyncExtraMetadata(targetTableLastInstant, targetTableMetaClient,
-          cfg.sourceBasePath, sourceLastInstant.get().getTimestamp(), getPendingInstants(sourceTableMetaClient.getActiveTimeline(), sourceLastInstant.get()));
-      HoodieReplaceCommitMetadata replaceCommitMetadata = buildComprehensiveReplaceCommitMetadata(sourceTableMetaClient, schema);
-      replaceCommitMetadata.addMetadata(SyncMetadata.TABLE_SYNC_METADATA, syncMetadata.toJson());
-      targetTableMetaClient
-          .reloadActiveTimeline()
-          .saveAsComplete(new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime),
-              Option.of(replaceCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    Option<HoodieInstant> targetTableLastInstant = targetTableMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
+    List<String> pendingInstants = getPendingInstants(sourceTableMetaClient.getActiveTimeline(), sourceLastInstant).stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+    SyncMetadata syncMetadata = getTableSyncExtraMetadata(targetTableLastInstant, targetTableMetaClient,
+        cfg.sourceBasePath, sourceLastInstant.get().getTimestamp(), pendingInstants);
+    HoodieReplaceCommitMetadata replaceCommitMetadata = buildComprehensiveReplaceCommitMetadata(sourceTableMetaClient, schema);
+    replaceCommitMetadata.addMetadata(SyncMetadata.TABLE_SYNC_METADATA, syncMetadata.toJson());
+    targetTableMetaClient
+        .reloadActiveTimeline()
+        .saveAsComplete(new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime),
+            Option.of(replaceCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
   }
 
   private HoodieReplaceCommitMetadata buildComprehensiveReplaceCommitMetadata(HoodieTableMetaClient sourceTableMetaClient, Schema schema) {
@@ -459,36 +470,12 @@ public class HoodieMetadataSync implements Serializable {
     }
   }
 
-  private List<HoodieInstant> getInstantsToSync(String sourceIdentifier, HoodieTableMetaClient targetTableMetaClient, HoodieTableMetaClient sourceTableMetaClient) throws IOException {
-    Option<HoodieInstant> lastInstant = targetTableMetaClient.reloadActiveTimeline().getWriteTimeline().filterCompletedInstants().lastInstant();
-    if (lastInstant.isPresent()) {
-      SyncMetadata syncMetadata = getTableSyncMetadataFromCommitMetadata(lastInstant.get(), targetTableMetaClient);
-      Optional<TableCheckpointInfo> sourceTableSyncMetadata = syncMetadata.getTableCheckpointInfos().stream()
-          .filter(checkpointInfo -> checkpointInfo.getSourceIdentifier().equals(sourceIdentifier)).findFirst();
-
-      if (!sourceTableSyncMetadata.isPresent()) {
-        return sourceTableMetaClient.reloadActiveTimeline().getInstants();
-      }
-
-      String lastInstantSynced = sourceTableSyncMetadata.get().getLastInstantSynced();
-      HoodieActiveTimeline sourceActiveTimeline = sourceTableMetaClient.getActiveTimeline();
-      List<HoodieInstant> newInstantsToSync = sourceActiveTimeline.filterCompletedInstants().findInstantsAfter(lastInstantSynced).getInstants();
-      List<HoodieInstant> pendingInstantsFromLastSync = sourceTableSyncMetadata.get().getInstantsToConsiderForNextSync().stream().map(instant ->
-          sourceActiveTimeline.findInstantsAfterOrEquals(instant, 1).getInstants().stream().findFirst().orElse(null)
-      ).collect(Collectors.toList());
-      pendingInstantsFromLastSync.addAll(newInstantsToSync);
-      return pendingInstantsFromLastSync;
-    } else {
-      return sourceTableMetaClient.reloadActiveTimeline().getInstants();
-    }
-  }
-
   private HoodieCommitMetadata buildHoodieCommitMetadata(HoodieCommitMetadata sourceCommitMetadata, String commitTime) {
     HoodieCommitMetadata tgtTableCommitMetadata = new HoodieCommitMetadata();
 
     for (HoodieWriteStat writeStat : sourceCommitMetadata.getWriteStats()) {
       String partition = writeStat.getPartitionPath();
-      fixWriteStatusForExternalPaths(writeStat, commitTime);
+      fixWriteStatusForExternalPaths(writeStat, commitTime, partition);
       tgtTableCommitMetadata.addWriteStat(partition, writeStat);
     }
 
@@ -506,7 +493,7 @@ public class HoodieMetadataSync implements Serializable {
 
     for (HoodieWriteStat writeStat : srcReplaceMetadata.getWriteStats()) {
       String partition = writeStat.getPartitionPath();
-      fixWriteStatusForExternalPaths(writeStat, commitTime);
+      fixWriteStatusForExternalPaths(writeStat, commitTime, partition);
       tgtReplaceCommitMetadata.addWriteStat(partition, writeStat);
     }
 
@@ -520,9 +507,9 @@ public class HoodieMetadataSync implements Serializable {
     return tgtReplaceCommitMetadata;
   }
 
-  private void fixWriteStatusForExternalPaths(HoodieWriteStat writeStat, String commitTime) {
+  private void fixWriteStatusForExternalPaths(HoodieWriteStat writeStat, String commitTime, String partitionPath) {
     String originalPath = writeStat.getPath();
-    writeStat.setPath(ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker(originalPath, commitTime));
+    writeStat.setPath(ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker(originalPath, commitTime, partitionPath));
   }
 
   private HoodieWriteConfig getWriteConfig(

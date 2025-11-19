@@ -46,8 +46,6 @@ import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.validation.Valid;
-
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
@@ -106,19 +104,13 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected final WriteLock writeLock = globalLock.writeLock();
 
   private BootstrapIndex bootstrapIndex;
-  protected boolean allowBasePathOverrides = false;
-  protected Option<Integer> numPartitionPathLevels = Option.empty();
 
-  public AbstractTableFileSystemView(Option<Integer> numPartitionPathLevels) {
-    this.numPartitionPathLevels = numPartitionPathLevels;
-  }
   private String getPartitionPathFor(HoodieBaseFile baseFile) {
-    if (allowBasePathOverrides) {
-      ValidationUtils.checkState(numPartitionPathLevels.isPresent(), "number of partition levels config is required when base path override is set");
-      return FSUtils.getRelativePartitionPath(baseFile.getHadoopPath().getParent(), numPartitionPathLevels.get());
-    } else {
-      return FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), baseFile.getHadoopPath().getParent());
+    if (baseFile.getNumPartitionLevels().isPresent()) {
+      return FSUtils.getRelativePartitionPath(baseFile.getHadoopPath().getParent(), baseFile.getNumPartitionLevels().get());
     }
+
+    return FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), baseFile.getHadoopPath().getParent());
   }
 
   /**
@@ -126,10 +118,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
     this.metaClient = metaClient;
-    this.allowBasePathOverrides = metaClient.getTableConfig().shouldAllowBasePathOverridesWithMetadata();
-//    if (allowBasePathOverrides) {
-//      this.numPartitionPathLevels = Option.of(metaClient.getTableConfig().getNumPartitionPathLevels());
-//    }
     refreshTimeline(visibleActiveTimeline);
     resetFileGroupsReplaced(visibleCommitsAndCompactionTimeline);
     this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);
@@ -203,7 +191,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
     Map<Pair<String, String>, List<HoodieLogFile>> logFiles = logFileStream.collect(Collectors.groupingBy((logFile) -> {
       String partitionPathStr =
-          FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), logFile.getPath().getParent()); // to fix base path generation
+          FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), logFile.getPath().getParent());
       return Pair.of(partitionPathStr, logFile.getFileId());
     }));
 
