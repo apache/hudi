@@ -156,9 +156,10 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         ensureLastCommitIncludesProperSchema(tablePath)
 
         // trigger clean so that partition deletion kicks in.
-        spark.sql(s"set ${HoodieCleanConfig.CLEANER_POLICY.key}=${HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()}")
-        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
-          .collect()
+        withSQLConf(HoodieCleanConfig.CLEANER_POLICY.key() -> HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()) {
+          spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+            .collect()
+        }
         ensureLastCommitIncludesProperSchema(tablePath)
 
         val cleanMetadata: HoodieCleanMetadata = getLastCleanMetadata(spark, tablePath)
@@ -279,9 +280,10 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
     ensureLastCommitIncludesProperSchema(getTableStoragePath(tableName))
 
     // trigger clean so that partition deletion kicks in.
-    spark.sql(s"set ${HoodieCleanConfig.CLEANER_POLICY.key}=${HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()}")
-    spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
-      .collect()
+    withSQLConf(HoodieCleanConfig.CLEANER_POLICY.key() -> HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()) {
+      spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+        .collect()
+    }
 
     checkAnswer(s"select id, name, ts, dt from $tableName")(
       Seq(2, "l4", "v1", "2021-10-02"),
@@ -345,9 +347,10 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         ensureLastCommitIncludesProperSchema(tablePath, schemaFields)
 
         // trigger clean so that partition deletion kicks in.
-        spark.sql(s"set ${HoodieCleanConfig.CLEANER_POLICY.key}=${HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()}")
-        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
-          .collect()
+        withSQLConf(HoodieCleanConfig.CLEANER_POLICY.key() -> HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()) {
+          spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+            .collect()
+        }
         ensureLastCommitIncludesProperSchema(tablePath, schemaFields)
 
         val cleanMetadata: HoodieCleanMetadata = getLastCleanMetadata(spark, tablePath)
@@ -584,27 +587,27 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
            | location '$basePath'
            | """.stripMargin)
       // disable automatic inline compaction to test with pending compaction instants
-      spark.sql("set hoodie.compact.inline=false")
-      spark.sql("set hoodie.compact.schedule.inline=false")
-      // Create 5 deltacommits to ensure that it is >= default `hoodie.compact.inline.max.delta.commits`
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
-      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-      spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003)")
-      spark.sql(s"insert into $tableName values(5, 'a5', 10, 1004)")
-      val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
+      withSQLConf("hoodie.compact.inline" -> "false", "hoodie.compact.schedule.inline" -> "false") {
+        // Create 5 deltacommits to ensure that it is >= default `hoodie.compact.inline.max.delta.commits`
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
+        spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003)")
+        spark.sql(s"insert into $tableName values(5, 'a5', 10, 1004)")
+        val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
 
-      // Generate the first compaction plan
-      val firstScheduleInstant = client.scheduleCompaction(HOption.empty())
-      assertTrue(firstScheduleInstant.isPresent)
+        // Generate the first compaction plan
+        val firstScheduleInstant = client.scheduleCompaction(HOption.empty())
+        assertTrue(firstScheduleInstant.isPresent)
 
-      checkAnswer(s"call show_compaction('$tableName')")(
-        Seq(firstScheduleInstant.get(), 5, HoodieInstant.State.REQUESTED.name())
-      )
+        checkAnswer(s"call show_compaction('$tableName')")(
+          Seq(firstScheduleInstant.get(), 5, HoodieInstant.State.REQUESTED.name())
+        )
 
-      val partition = "ts=1002"
-      val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
-      checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
+        val partition = "ts=1002"
+        val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
+        checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
+      }
     }
   }
 
@@ -632,23 +635,23 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
            | location '$basePath'
            | """.stripMargin)
       // disable automatic inline compaction to test with pending compaction instants
-      spark.sql("set hoodie.compact.inline=false")
-      spark.sql("set hoodie.compact.schedule.inline=false")
-      // Create 5 deltacommits to ensure that it is >= default `hoodie.compact.inline.max.delta.commits`
-      // Write everything into the same FileGroup but into separate blocks
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
-      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
-      spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000)")
-      spark.sql(s"insert into $tableName values(5, 'a5', 10, 1000)")
-      val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
+      withSQLConf("hoodie.compact.inline" -> "false", "hoodie.compact.schedule.inline" -> "false") {
+        // Create 5 deltacommits to ensure that it is >= default `hoodie.compact.inline.max.delta.commits`
+        // Write everything into the same FileGroup but into separate blocks
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
+        spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000)")
+        spark.sql(s"insert into $tableName values(5, 'a5', 10, 1000)")
+        val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
 
-      // Generate the first log_compaction plan
-      assertTrue(client.scheduleLogCompaction(HOption.empty()).isPresent)
+        // Generate the first log_compaction plan
+        assertTrue(client.scheduleLogCompaction(HOption.empty()).isPresent)
 
-      val partition = "ts=1000"
-      val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
-      checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
+        val partition = "ts=1000"
+        val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
+        checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
+      }
     }
   }
 

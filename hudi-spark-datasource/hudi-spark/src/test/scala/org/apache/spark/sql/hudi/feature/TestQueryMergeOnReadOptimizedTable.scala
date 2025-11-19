@@ -45,37 +45,38 @@ class TestQueryMergeOnReadOptimizedTable extends HoodieSparkSqlTestBase {
            | )
        """.stripMargin)
       // insert data to table
-      spark.sql("set hoodie.parquet.max.file.size = 10000")
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 1000)")
-      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, 1000)")
-      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000, 1000)")
-      spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000, 1000)")
-      spark.sql(s"update $tableName set price = 11 where id = 1")
-      spark.sql(s"update $tableName set price = 21 where id = 2")
-      spark.sql(s"update $tableName set price = 31 where id = 3")
-      spark.sql(s"update $tableName set price = 41 where id = 4")
+      withSQLConf("hoodie.parquet.max.file.size" -> "10000") {
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, 1000)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000, 1000)")
+        spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000, 1000)")
+        spark.sql(s"update $tableName set price = 11 where id = 1")
+        spark.sql(s"update $tableName set price = 21 where id = 2")
+        spark.sql(s"update $tableName set price = 31 where id = 3")
+        spark.sql(s"update $tableName set price = 41 where id = 4")
 
-      // expect that all complete parquet files can be scanned
-      assertQueryResult(4, tablePath)
+        // expect that all complete parquet files can be scanned
+        assertQueryResult(4, tablePath)
 
-      // async schedule compaction job
-      spark.sql(s"call run_compaction(op => 'schedule', table => '$tableName')")
-        .collect()
+        // async schedule compaction job
+        spark.sql(s"call run_compaction(op => 'schedule', table => '$tableName')")
+          .collect()
 
-      // expect that all complete parquet files can be scanned with a pending compaction job
-      assertQueryResult(4, tablePath)
+        // expect that all complete parquet files can be scanned with a pending compaction job
+        assertQueryResult(4, tablePath)
 
-      spark.sql(s"insert into $tableName values(5, 'a5', 10, 1000, 1000)")
+        spark.sql(s"insert into $tableName values(5, 'a5', 10, 1000, 1000)")
 
-      // expect that all complete parquet files can be scanned with a pending compaction job
-      assertQueryResult(5, tablePath)
+        // expect that all complete parquet files can be scanned with a pending compaction job
+        assertQueryResult(5, tablePath)
 
-      // async run compaction job
-      spark.sql(s"call run_compaction(op => 'run', table => '$tableName')")
-        .collect()
+        // async run compaction job
+        spark.sql(s"call run_compaction(op => 'run', table => '$tableName')")
+          .collect()
 
-      // assert that all complete parquet files can be scanned after compaction
-      assertQueryResult(5, tablePath)
+        // assert that all complete parquet files can be scanned after compaction
+        assertQueryResult(5, tablePath)
+      }
     }
   }
 
