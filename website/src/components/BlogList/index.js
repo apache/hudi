@@ -109,9 +109,6 @@ export default function BlogList() {
                     <span className={styles.date}>{formattedDate}</span>
                   </div>
                   <h3 className={styles.title}>{title}</h3>
-                  {description && (
-                    <p className={styles.description}>{description}</p>
-                  )}
                 </div>
               </Link>
             </article>
