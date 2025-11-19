@@ -39,14 +39,14 @@ Hudi 1.1.0 introduces table version 9 with support for index versioning. Indexes
 
 In addition to the global Record Index introduced in 0.14.0, Hudi 1.1.0 adds a non-global variant that guarantees uniqueness for partition path and record key pairs. This index speeds up lookups in very large partitioned datasets.
 
-**Prior to 1.1.0**, only global Record Index was available, configured as:
+Prior to 1.1.0, only global Record Index was available, configured as:
 
 ```properties
 hoodie.metadata.record.index.enable=true
 hoodie.index.type=RECORD_INDEX
 ```
 
-**From 1.1.0 onwards**, both global and non-global variants are available:
+From 1.1.0 onwards, both global and non-global variants are available:
 
 For non-global Record Index:
 
@@ -62,7 +62,7 @@ For global Record Index:
 
 A new bucket index type that addresses bucket rescaling challenges. Users can set specific bucket numbers for different partitions through a rule engine (regex pattern matching). Existing Bucket Index tables can be upgraded smoothly and seamlessly.
 
-**Key Configurations**:
+Key Configurations:
 
 - `hoodie.bucket.index.partition.rule.type` - Rule parser for expressions (default: regex)
 - `hoodie.bucket.index.partition.expressions` - Expression and bucket number pairs
@@ -78,9 +78,9 @@ Hudi now includes a native HFile writer, eliminating dependencies on HBase while
 
 Multiple enhancements to speed up metadata table reads:
 
-- **HFile Block Cache** (enabled by default): Caches HFile data blocks on repeated reads within the same JVM, showing ~4x speedup in benchmarks. Configure with `hoodie.hfile.block.cache.enabled`
-- **HFile Prefetching**: For files under 50MB (configurable via `hoodie.metadata.file.cache.max.size.mb`), downloads entire HFile upfront rather than multiple RPC calls
-- **Bloom Filter Support**: Speeds up HFile lookups by avoiding unnecessary block downloads. Configure with `hoodie.metadata.bloom.filter.enable`
+- HFile Block Cache (enabled by default): Caches HFile data blocks on repeated reads within the same JVM, showing ~4x speedup in benchmarks. Configure with `hoodie.hfile.block.cache.enabled`
+- HFile Prefetching: For files under 50MB (configurable via `hoodie.metadata.file.cache.max.size.mb`), downloads entire HFile upfront rather than multiple RPC calls
+- Bloom Filter Support: Speeds up HFile lookups by avoiding unnecessary block downloads. Configure with `hoodie.metadata.bloom.filter.enable`
 
 #### Column Stats V2 with Enhanced Data Type Support
 
@@ -108,7 +108,7 @@ A new storage-based lock provider enables Hudi to manage multi-writer concurrenc
 
 Support for multiple ordering (pre-combine) fields using comma-separated lists. When records have the same key, Hudi compares the fields in order and keeps the record with the latest values.
 
-**Configuration**: `hoodie.table.ordering.fields = field1,field2,field3`
+Configuration: `hoodie.table.ordering.fields = field1,field2,field3`
 
 #### Efficient Streaming Reads for Data Blocks
 
@@ -134,13 +134,13 @@ Streaming writes to the metadata table enable more efficient metadata record gen
 
 #### SQL Procedures Enhancements
 
-**New CLEAN Procedures**:
+New CLEAN Procedures:
 
 - `show_cleans` - Displays completed cleaning operations with metadata
 - `show_clean_plans` - Shows clean operations in all states (REQUESTED, INFLIGHT, COMPLETED)
 - `show_cleans_metadata` - Provides partition-level cleaning details
 
-**Enhanced Capabilities**:
+Enhanced Capabilities:
 
 - Regex pattern support in `run_clustering` via `partition_regex_pattern` parameter
 - Base path and filter parameters for all non-action `SHOW` procedures with advanced predicate expressions
@@ -151,18 +151,18 @@ Streaming writes to the metadata table enable more efficient metadata record gen
 
 Full support for Flink 2.0 including sink, read, catalog, and new bundle artifact `hudi-flink2.0-bundle`. Includes compatibility fixes for legacy APIs and supports sinkV2 API by default.
 
-**Deprecation**: Removed support for Flink 1.14, 1.15, and 1.16
+Deprecation: Removed support for Flink 1.14, 1.15, and 1.16
 
 #### Performance Improvements
 
-- **Engine-native Record Support**: Eliminates Avro transformations, utilizing RowData directly for more efficient serialization/deserialization. Write/read performance improved by **2-3x on average**
-- **Async Instant Time Generation**: Significantly improves stability for high throughput workloads by avoiding blocking on instant time generation
-- **Meta Fields Control**: Support for `hoodie.populate.meta.fields` in append mode, showing 14% faster writes when disabled
+- Engine-native Record Support: Eliminates Avro transformations, utilizing RowData directly for more efficient serialization/deserialization. Write/read performance improved by **2-3x on average**
+- Async Instant Time Generation: Significantly improves stability for high throughput workloads by avoiding blocking on instant time generation
+- Meta Fields Control: Support for `hoodie.populate.meta.fields` in append mode, showing 14% faster writes when disabled
 
 #### New Capabilities
 
-- **In-memory Buffer Sort**: For pk-less tables, enables better compaction ratio for columnar formats (`write.buffer.sort.enabled`)
-- **Split-level Rate Limiting**: Configure maximum splits per instant check for streaming reads (`read.splits.limit`)
+- In-memory Buffer Sort: For pk-less tables, enables better compaction ratio for columnar formats (`write.buffer.sort.enabled`)
+- Split-level Rate Limiting: Configure maximum splits per instant check for streaming reads (`read.splits.limit`)
 
 ### Catalogs
 
@@ -170,7 +170,7 @@ Full support for Flink 2.0 including sink, read, catalog, and new bundle artifac
 
 Integration with Polaris catalog by delegating table creation to the Polaris Spark client, allowing Hudi tables to be registered in the Polaris Catalog.
 
-**Configuration**: `hoodie.datasource.polaris.catalog.class` (default: `org.apache.polaris.spark.SparkCatalog`)
+Configuration: `hoodie.datasource.polaris.catalog.class` (default: `org.apache.polaris.spark.SparkCatalog`)
 
 #### AWS Glue & DataHub Sync Enhancements
 
@@ -199,9 +199,9 @@ Payload classes are now **deprecated** in favor of merge modes and the merger AP
 
 **Migration Path**:
 
-- **Standard Use Cases**: Use merge mode configurations (`COMMIT_TIME_ORDERING` or `EVENT_TIME_ORDERING`)
-- **Custom Logic**: Implement `HoodieRecordMerger` interface instead of custom payloads
-- **Automatic Migration**: When upgrading to the latest table version, known payloads are automatically migrated to appropriate merge modes
+- Standard Use Cases: Use merge mode configurations (`COMMIT_TIME_ORDERING` or `EVENT_TIME_ORDERING`)
+- Custom Logic: Implement `HoodieRecordMerger` interface instead of custom payloads
+- Automatic Migration: When upgrading to the latest table version, known payloads are automatically migrated to appropriate merge modes
 
 The merge mode approach supports:
 
@@ -210,7 +210,7 @@ The merge mode approach supports:
 - Consistent merging semantics across engines
 - Performance optimizations
 
-**BufferedRecordMerger API**: The `HoodieRecordMerger` interface has been updated to leverage the new `BufferedRecord` class used during record merging.
+BufferedRecordMerger API: The `HoodieRecordMerger` interface has been updated to leverage the new `BufferedRecord` class used during record merging.
 
 For details, see [RFC-97](https://github.com/apache/hudi/pull/13499)
 
