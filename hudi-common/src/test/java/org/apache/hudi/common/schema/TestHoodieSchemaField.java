@@ -49,7 +49,6 @@ public class TestHoodieSchemaField {
     assertEquals(Option.of("Test documentation"), hoodieField.doc());
     assertEquals(Option.of("defaultValue"), hoodieField.defaultVal());
     assertTrue(hoodieField.hasDefaultValue());
-    assertEquals(HoodieFieldOrder.ASCENDING, hoodieField.order()); // Default order
     assertEquals(-1, hoodieField.pos()); // Field position when not in record
   }
 
@@ -246,35 +245,16 @@ public class TestHoodieSchemaField {
   }
 
   @Test
-  public void testFieldOrderHandling() {
-    Schema stringSchema = Schema.create(Schema.Type.STRING);
-
-    // Test different field orders
-    Schema.Field ascendingField = new Schema.Field("asc", stringSchema, null, null, Schema.Field.Order.ASCENDING);
-    Schema.Field descendingField = new Schema.Field("desc", stringSchema, null, null, Schema.Field.Order.DESCENDING);
-    Schema.Field ignoreField = new Schema.Field("ignore", stringSchema, null, null, Schema.Field.Order.IGNORE);
-
-    HoodieSchemaField hoodieAsc = new HoodieSchemaField(ascendingField);
-    HoodieSchemaField hoodieDesc = new HoodieSchemaField(descendingField);
-    HoodieSchemaField hoodieIgnore = new HoodieSchemaField(ignoreField);
-
-    assertEquals(HoodieFieldOrder.ASCENDING, hoodieAsc.order());
-    assertEquals(HoodieFieldOrder.DESCENDING, hoodieDesc.order());
-    assertEquals(HoodieFieldOrder.IGNORE, hoodieIgnore.order());
-  }
-
-  @Test
   public void testFieldCreationWithOrder() {
     HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
 
     // Test creation with explicit order
-    HoodieSchemaField field = HoodieSchemaField.of("sortField", stringSchema, "Sorted field", "default", HoodieFieldOrder.DESCENDING);
+    HoodieSchemaField field = HoodieSchemaField.of("sortField", stringSchema, "Sorted field", "default");
 
     assertEquals("sortField", field.name());
     assertEquals(HoodieSchemaType.STRING, field.schema().getType());
     assertEquals(Option.of("Sorted field"), field.doc());
     assertEquals(Option.of("default"), field.defaultVal());
-    assertEquals(HoodieFieldOrder.DESCENDING, field.order());
   }
 
   @Test
