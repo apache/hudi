@@ -31,22 +31,22 @@ This release brings native Apache Hudi integration through the new framework, al
 
 #### Table Version 9 with Index Versioning
 
-Hudi 1.1 introduces table version 9 with support for index versioning. Indexes in the Metadata Table (column stats, secondary index, expression index, etc) now have version tracking. In 1.1, these indexes use V2 layouts with enhanced capabilities including comprehensive logical data type support. Tables migrated from older versions will retain V1 index layouts, while new tables created with 1.1 use V2. Both versions remain backward compatible, and no action is required when upgrading to 1.1.
+Hudi 1.1.0 introduces table version 9 with support for index versioning. Indexes in the Metadata Table (column stats, secondary index, expression index, etc) now have version tracking. In 1.1.0, these indexes use V2 layouts with enhanced capabilities including comprehensive logical data type support. Tables migrated from older versions will retain V1 index layouts, while new tables created with 1.1.0 use V2. Both versions remain backward compatible, and no action is required when upgrading to 1.1.0.
 
 ### Indexing
 
 #### Non-Global Record Index
 
-In addition to the global Record Index introduced in 0.14.0, Hudi 1.1 adds a non-global variant that guarantees uniqueness for partition path and record key pairs. This index speeds up lookups in very large partitioned datasets.
+In addition to the global Record Index introduced in 0.14.0, Hudi 1.1.0 adds a non-global variant that guarantees uniqueness for partition path and record key pairs. This index speeds up lookups in very large partitioned datasets.
 
-**Prior to 1.1**, only global Record Index was available, configured as:
+**Prior to 1.1.0**, only global Record Index was available, configured as:
 
 ```properties
 hoodie.metadata.record.index.enable=true
 hoodie.index.type=RECORD_INDEX
 ```
 
-**From 1.1 onwards**, both global and non-global variants are available:
+**From 1.1.0 onwards**, both global and non-global variants are available:
 
 For non-global Record Index:
 
@@ -206,7 +206,7 @@ Payload classes are now **deprecated** in favor of merge modes and the merger AP
 The merge mode approach supports:
 
 - Commit time and event time ordering
-- Partial update strategies (replaces `OverwriteNonDefaultsWithLatestAvroPayload` and PostgresDebeziumAvroPayload toasted value handling)
+- Partial update strategies (replaces `OverwriteNonDefaultsWithLatestAvroPayload` and `PostgresDebeziumAvroPayload` toasted value handling)
 - Consistent merging semantics across engines
 - Performance optimizations
 
@@ -272,8 +272,8 @@ Commit1:
   Partition1, recordKey1, val1, orderingValue1
   Partition1, recordKey1, val2, orderingValue2
 
-Pre-1.1: Returns one record (based on ordering field)
-From 1.1: Returns both records
+Pre-1.1.0: Returns one record (based on ordering field)
+From 1.1.0: Returns both records
 ```
 
 **To Restore Previous Behavior**: Set `hoodie.spark.sql.insert.into.operation = upsert`
