@@ -253,7 +253,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     Option<HoodieInstant> latestInstant = activeTimeline.lastInstant();
 
     HoodieTableFileSystemView fileSystemView =
-        new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles);
+        new HoodieTableFileSystemView(metaClient, activeTimeline, Option.of(metadataConfig.getNumPartitionLevels()), allFiles);
 
     Option<String> queryInstant = specifiedQueryInstant.or(() -> latestInstant.map(HoodieInstant::getTimestamp));
 

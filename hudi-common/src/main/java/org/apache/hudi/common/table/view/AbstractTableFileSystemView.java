@@ -46,6 +46,8 @@ import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.validation.Valid;
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
@@ -105,11 +107,15 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   private BootstrapIndex bootstrapIndex;
   protected boolean allowBasePathOverrides = false;
-  protected int numPartitionPathLevels = 0;
+  protected Option<Integer> numPartitionPathLevels = Option.empty();
 
+  public AbstractTableFileSystemView(Option<Integer> numPartitionPathLevels) {
+    this.numPartitionPathLevels = numPartitionPathLevels;
+  }
   private String getPartitionPathFor(HoodieBaseFile baseFile) {
     if (allowBasePathOverrides) {
-      return FSUtils.getRelativePartitionPath(baseFile.getHadoopPath().getParent(), numPartitionPathLevels);
+      ValidationUtils.checkState(numPartitionPathLevels.isPresent(), "number of partition levels config is required when base path override is set");
+      return FSUtils.getRelativePartitionPath(baseFile.getHadoopPath().getParent(), numPartitionPathLevels.get());
     } else {
       return FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), baseFile.getHadoopPath().getParent());
     }
@@ -121,9 +127,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
     this.metaClient = metaClient;
     this.allowBasePathOverrides = metaClient.getTableConfig().shouldAllowBasePathOverridesWithMetadata();
-    if (allowBasePathOverrides) {
-      this.numPartitionPathLevels = metaClient.getTableConfig().getNumPartitionPathLevels();
-    }
+//    if (allowBasePathOverrides) {
+//      this.numPartitionPathLevels = Option.of(metaClient.getTableConfig().getNumPartitionPathLevels());
+//    }
     refreshTimeline(visibleActiveTimeline);
     resetFileGroupsReplaced(visibleCommitsAndCompactionTimeline);
     this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);

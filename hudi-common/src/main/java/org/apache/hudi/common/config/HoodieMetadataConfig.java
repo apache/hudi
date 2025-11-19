@@ -341,6 +341,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.14.1")
       .withDocumentation("Base path override for writes to metadata table.");
 
+  public static final ConfigProperty<Integer> NUM_PARTITION_PATH_LEVELS = ConfigProperty
+      .key(METADATA_PREFIX + ".num.partition.path.levels")
+      .defaultValue(0)
+      .markAdvanced()
+      .withDocumentation("Stores the levels for partition paths. 0 for non-partitioned table, 1 for simple string based partition path, and 3 for '2025/01/01'");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -483,6 +489,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public String getBasePathOverride() {
     return getString(BASE_PATH_OVERRIDE);
+  }
+
+  public Integer getNumPartitionLevels() {
+    return getInt(NUM_PARTITION_PATH_LEVELS);
   }
 
   public static class Builder {

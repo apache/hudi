@@ -105,7 +105,12 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
    */
   public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
       boolean enableIncrementalTimelineSync) {
-    super(enableIncrementalTimelineSync);
+    this(metaClient, visibleActiveTimeline, enableIncrementalTimelineSync, Option.empty());
+  }
+
+  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+                                   boolean enableIncrementalTimelineSync, Option<Integer> numPartitionLevels) {
+    super(enableIncrementalTimelineSync, numPartitionLevels);
     init(metaClient, visibleActiveTimeline);
   }
 
@@ -173,7 +178,12 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
    */
   public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
       FileStatus[] fileStatuses) {
-    this(metaClient, visibleActiveTimeline);
+    this(metaClient, visibleActiveTimeline, Option.empty(), fileStatuses);
+  }
+
+  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+                                   Option<Integer> numPartitionLevels, FileStatus[] fileStatuses) {
+    this(metaClient, visibleActiveTimeline, false, numPartitionLevels);
     addFilesToView(fileStatuses);
   }
 
