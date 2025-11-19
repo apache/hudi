@@ -504,4 +504,153 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test show_timeline procedure with startTime and endTime filtering") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tableLocation = tmp.getCanonicalPath
+      if (HoodieSparkUtils.isSpark3_4) {
+        spark.sql("set spark.sql.defaultColumn.enabled = false")
+      }
+      spark.sql(
+        s"""
+           |create table $tableName (
+           | id int,
+           | name string,
+           | price double,
+           | ts long
+           |) using hudi
+           | location '$tableLocation'
+           | tblproperties (
+           |   primaryKey = 'id',
+           |   type = 'cow',
+           |   preCombineField = 'ts'
+           | )
+           |""".stripMargin)
+
+      // Create multiple commits - we'll capture their timestamps
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      val timelineAfterFirst = spark.sql(s"call show_timeline(table => '$tableName')").collect()
+      val firstCommitTime = timelineAfterFirst.head.getString(0)
+
+      // Wait a bit to ensure different timestamps (if needed, add small delay)
+      Thread.sleep(100)
+
+      spark.sql(s"insert into $tableName values(2, 'a2', 20, 2000)")
+      val timelineAfterSecond = spark.sql(s"call show_timeline(table => '$tableName')").collect()
+      val secondCommitTime = timelineAfterSecond.head.getString(0)
+
+      Thread.sleep(100)
+
+      spark.sql(s"insert into $tableName values(3, 'a3', 30, 3000)")
+      val timelineAfterThird = spark.sql(s"call show_timeline(table => '$tableName')").collect()
+      val thirdCommitTime = timelineAfterThird.head.getString(0)
+
+      Thread.sleep(100)
+
+      spark.sql(s"insert into $tableName values(4, 'a4', 40, 4000)")
+      val timelineAfterFourth = spark.sql(s"call show_timeline(table => '$tableName')").collect()
+      val fourthCommitTime = timelineAfterFourth.head.getString(0)
+
+      Thread.sleep(100)
+
+      spark.sql(s"insert into $tableName values(5, 'a5', 50, 5000)")
+      val timelineAfterFifth = spark.sql(s"call show_timeline(table => '$tableName')").collect()
+      val fifthCommitTime = timelineAfterFifth.head.getString(0)
+
+      // Get all timeline entries without filtering
+      val allTimelineResult = spark.sql(s"call show_timeline(table => '$tableName')").collect()
+      assert(allTimelineResult.length == 5, "Should have 5 timeline entries")
+
+      // Test 1: Filter with both startTime and endTime (inclusive range)
+      // Use secondCommitTime as start and fourthCommitTime as end
+      val rangeFilteredResult = spark.sql(
+        s"call show_timeline(table => '$tableName', startTime => '$secondCommitTime', endTime => '$fourthCommitTime')"
+      ).collect()
+
+      // Should include second, third, and fourth commits (inclusive on both ends)
+      assert(rangeFilteredResult.length == 3,
+        s"Should have 3 timeline entries in range [$secondCommitTime, $fourthCommitTime], got: ${rangeFilteredResult.length}")
+
+      val rangeFilteredTimes = rangeFilteredResult.map(_.getString(0)).sorted.reverse
+      assert(rangeFilteredTimes.contains(secondCommitTime), "Should include second commit")
+      assert(rangeFilteredTimes.contains(thirdCommitTime), "Should include third commit")
+      assert(rangeFilteredTimes.contains(fourthCommitTime), "Should include fourth commit")
+      assert(!rangeFilteredTimes.contains(firstCommitTime), "Should not include first commit")
+      assert(!rangeFilteredTimes.contains(fifthCommitTime), "Should not include fifth commit")
+
+      // Verify all entries in range are within bounds
+      rangeFilteredResult.foreach { row =>
+        val instantTime = row.getString(0)
+        assert(instantTime >= secondCommitTime && instantTime <= fourthCommitTime,
+          s"Instant time $instantTime should be in range [$secondCommitTime, $fourthCommitTime]")
+      }
+
+      // Test 2: Filter with only startTime (should get all commits >= startTime)
+      val startTimeOnlyResult = spark.sql(
+        s"call show_timeline(table => '$tableName', startTime => '$thirdCommitTime')"
+      ).collect()
+
+      // Should include third, fourth, and fifth commits
+      assert(startTimeOnlyResult.length == 3,
+        s"Should have 3 timeline entries >= $thirdCommitTime, got: ${startTimeOnlyResult.length}")
+
+      val startTimeOnlyTimes = startTimeOnlyResult.map(_.getString(0)).sorted.reverse
+      assert(startTimeOnlyTimes.contains(thirdCommitTime), "Should include third commit")
+      assert(startTimeOnlyTimes.contains(fourthCommitTime), "Should include fourth commit")
+      assert(startTimeOnlyTimes.contains(fifthCommitTime), "Should include fifth commit")
+      assert(!startTimeOnlyTimes.contains(firstCommitTime), "Should not include first commit")
+      assert(!startTimeOnlyTimes.contains(secondCommitTime), "Should not include second commit")
+
+      // Verify all entries are >= startTime
+      startTimeOnlyResult.foreach { row =>
+        val instantTime = row.getString(0)
+        assert(instantTime >= thirdCommitTime,
+          s"Instant time $instantTime should be >= $thirdCommitTime")
+      }
+
+      // Test 3: Filter with only endTime (should get all commits <= endTime)
+      val endTimeOnlyResult = spark.sql(
+        s"call show_timeline(table => '$tableName', endTime => '$thirdCommitTime')"
+      ).collect()
+
+      // Should include first, second, and third commits
+      assert(endTimeOnlyResult.length == 3,
+        s"Should have 3 timeline entries <= $thirdCommitTime, got: ${endTimeOnlyResult.length}")
+
+      val endTimeOnlyTimes = endTimeOnlyResult.map(_.getString(0)).sorted.reverse
+      assert(endTimeOnlyTimes.contains(firstCommitTime), "Should include first commit")
+      assert(endTimeOnlyTimes.contains(secondCommitTime), "Should include second commit")
+      assert(endTimeOnlyTimes.contains(thirdCommitTime), "Should include third commit")
+      assert(!endTimeOnlyTimes.contains(fourthCommitTime), "Should not include fourth commit")
+      assert(!endTimeOnlyTimes.contains(fifthCommitTime), "Should not include fifth commit")
+
+      // Verify all entries are <= endTime
+      endTimeOnlyResult.foreach { row =>
+        val instantTime = row.getString(0)
+        assert(instantTime <= thirdCommitTime,
+          s"Instant time $instantTime should be <= $thirdCommitTime")
+      }
+
+      // Test 4: Filter with startTime and endTime where range has no results
+      // Use a range that doesn't include any commits (between commits)
+      val emptyRangeResult = spark.sql(
+        s"call show_timeline(table => '$tableName', startTime => '$fifthCommitTime', endTime => '$firstCommitTime')"
+      ).collect()
+
+      // Should return empty since startTime > endTime (invalid range)
+      assert(emptyRangeResult.length == 0,
+        s"Should have 0 timeline entries for invalid range [$fifthCommitTime, $firstCommitTime], got: ${emptyRangeResult.length}")
+
+      // Test 5: Filter with startTime and endTime being the same (should return that single commit)
+      val singleTimeResult = spark.sql(
+        s"call show_timeline(table => '$tableName', startTime => '$thirdCommitTime', endTime => '$thirdCommitTime')"
+      ).collect()
+
+      assert(singleTimeResult.length == 1,
+        s"Should have 1 timeline entry for single time point $thirdCommitTime, got: ${singleTimeResult.length}")
+      assert(singleTimeResult.head.getString(0) == thirdCommitTime,
+        s"Should return the commit with time $thirdCommitTime")
+    }
+  }
 }
