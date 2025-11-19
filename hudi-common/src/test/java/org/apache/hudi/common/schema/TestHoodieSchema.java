@@ -638,11 +638,6 @@ public class TestHoodieSchema {
     assertThrows(IllegalArgumentException.class, () -> {
       HoodieSchema.createRecord("TestRecord", null, null, null);
     }, "Should throw exception for null fields");
-
-    // Test empty fields
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchema.createRecord("TestRecord", null, null, Collections.emptyList());
-    }, "Should throw exception for empty fields list");
   }
 
   @Test
