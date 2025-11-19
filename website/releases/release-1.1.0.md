@@ -106,7 +106,7 @@ A new storage-based lock provider enables Hudi to manage multi-writer concurrenc
 
 #### Multiple Ordering Fields
 
-Support for multiple ordering (pre-combine) fields using comma-separated lists. When records have the same key, Hudi compares the fields in order and keeps the record with the latest values.
+Support for multiple ordering fields, a.k.a. precombine fields (deprecated name), using comma-separated lists. When records have the same key, Hudi compares the fields in order and keeps the record with the latest values.
 
 Configuration: `hoodie.table.ordering.fields = field1,field2,field3`
 
