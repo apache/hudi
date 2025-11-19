@@ -1,10 +1,14 @@
 ---
 title: Download
 sidebar_position: 1
-keywords: [ hudi, download]
+keywords: [ hudi, download ]
 toc: true
-last_modified_at: 2022-12-27T15:59:57-04:00
 ---
+
+## Release 1.1.0
+
+* Source Release : [Apache Hudi 1.1.0 Source Release](https://downloads.apache.org/hudi/1.1.0/hudi-1.1.0.src.tgz) ([asc](https://downloads.apache.org/hudi/1.1.0/hudi-1.1.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.1.0/hudi-1.1.0.src.tgz.sha512))
+* Release Note : ([Release Note for Apache Hudi 1.1.0](/releases/release-1.1.0))
 
 ## Release 1.0.2
 

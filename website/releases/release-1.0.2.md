@@ -1,6 +1,5 @@
 ---
 title: "Release 1.0.2"
-sidebar_position: 1
 layout: releases
 toc: true
 last_modified_at: 2024-05-02T18:00:00-08:00
