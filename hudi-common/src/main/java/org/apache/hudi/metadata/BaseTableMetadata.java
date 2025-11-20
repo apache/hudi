@@ -82,7 +82,6 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   protected boolean isMetadataTableInitialized;
   protected final boolean hiveStylePartitioningEnabled;
   protected final boolean urlEncodePartitioningEnabled;
-  private final boolean enableBasePathForPartitions;
 
   protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String dataBasePath) {
     super(engineContext, engineContext.getHadoopConf(), dataBasePath);
@@ -96,7 +95,6 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     this.urlEncodePartitioningEnabled = Boolean.parseBoolean(dataMetaClient.getTableConfig().getUrlEncodePartitioning());
     this.metadataConfig = metadataConfig;
     this.isMetadataTableInitialized = dataMetaClient.getTableConfig().isMetadataTableAvailable();
-    this.enableBasePathForPartitions = metadataConfig.shouldEnableBasePathForPartitions();
     if (metadataConfig.enableMetrics()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(Registry.getRegistry("HoodieMetadata")));
     } else {
@@ -354,14 +352,9 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
       HoodieMetadataPayload metadataPayload = record.getData();
       checkForSpuriousDeletes(metadataPayload, recordKey);
       try {
-
-        Path partitionPathToUseForDataFiles;
-        if (enableBasePathForPartitions) {
-          partitionPathToUseForDataFiles = new Path(metadataPayload.getBasePathForPartition(), relativePartitionPath);
-        } else {
-          partitionPathToUseForDataFiles = partitionPath;
-        }
-
+        Path partitionPathToUseForDataFiles =metadataPayload.getBasePathOverrideOpt()
+            .map(basePathOverride -> new Path(basePathOverride, relativePartitionPath))
+            .orElse(partitionPath);
         return metadataPayload.getFileStatuses(getHadoopConf(), partitionPathToUseForDataFiles);
       } catch (IOException e) {
         throw new HoodieIOException("Failed to extract file-statuses from the payload", e);
@@ -396,12 +389,9 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
           HoodieMetadataPayload metadataPayload = e.getValue().getData();
           checkForSpuriousDeletes(metadataPayload, partitionId);
 
-          Path partitionPath;
-          if (enableBasePathForPartitions) {
-            partitionPath = new Path(metadataPayload.getBasePathForPartition(), partitionId);
-          } else {
-           partitionPath = partitionIdToPathMap.get(partitionId);
-          }
+          Path partitionPath = metadataPayload.getBasePathOverrideOpt()
+              .map(basePathOverride -> new Path(basePathOverride, partitionId))
+              .orElse(partitionIdToPathMap.get(partitionId));
 
           FileStatus[] files = metadataPayload.getFileStatuses(fs, partitionPath);
           return Pair.of(partitionPath.toString(), files);

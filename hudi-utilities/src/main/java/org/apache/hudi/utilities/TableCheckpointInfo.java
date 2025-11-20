@@ -16,21 +16,33 @@ package org.apache.hudi.utilities;/*
  * limitations under the License.
  */
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-
 import java.util.List;
 
-@Getter
-@AllArgsConstructor
 public class TableCheckpointInfo {
   String lastInstantSynced;
   List<String> instantsToConsiderForNextSync;
   String sourceIdentifier;
 
-
   public TableCheckpointInfo() {
 
+  }
+
+  public TableCheckpointInfo(String lastInstantSynced, List<String> instantsToConsiderForNextSync, String sourceIdentifier) {
+    this.lastInstantSynced = lastInstantSynced;
+    this.instantsToConsiderForNextSync = instantsToConsiderForNextSync;
+    this.sourceIdentifier = sourceIdentifier;
+  }
+
+  public String getLastInstantSynced() {
+    return lastInstantSynced;
+  }
+
+  public List<String> getInstantsToConsiderForNextSync() {
+    return instantsToConsiderForNextSync;
+  }
+
+  public String getSourceIdentifier() {
+    return sourceIdentifier;
   }
 
   public static TableCheckpointInfo of(String lastInstantSynced, List<String> instantsToConsiderForNextSync, String sourceIdentifier) {

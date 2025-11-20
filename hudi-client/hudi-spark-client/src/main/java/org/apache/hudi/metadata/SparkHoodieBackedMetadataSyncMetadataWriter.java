@@ -78,6 +78,20 @@ public class SparkHoodieBackedMetadataSyncMetadataWriter extends SparkHoodieBack
     return true;
   }
 
+  /**
+   * Bootstraps the metadata table’s FILES partition up to the specified instant.
+   * <p>
+   * If no instant is provided, the method exits early. Otherwise, it loads the
+   * metadata clients if needed, scans the source table to collect partition/file
+   * info, and prepares the initial FILES partition records.
+   * <p>
+   * If the FILES partition is not yet created, the method initializes its file
+   * groups and performs a bulk commit. If it already exists, it simply commits
+   * the new records. Table services are executed before committing.
+   *
+   * @param boostrapUntilInstantOpt the instant up to which bootstrapping should be performed.
+   * @throws IOException if any step in initialization or commit fails.
+   */
   public void bootstrap(Option<String> boostrapUntilInstantOpt) throws IOException {
     if (!boostrapUntilInstantOpt.isPresent()) {
       return;
@@ -95,8 +109,8 @@ public class SparkHoodieBackedMetadataSyncMetadataWriter extends SparkHoodieBack
 
     // initialize metadata writer
     List<DirectoryInfo> partitionInfoList = listAllPartitionsFromFilesystem(lastInstantTimestamp, sourceBasePath);
-    // Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair = initializeFilesPartition(partitionInfoList);
-    Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair = initializeFilesPartition2(lastInstantTimestamp, partitionInfoList);
+
+    Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair = initializeFilesPartition(lastInstantTimestamp, partitionInfoList);
 
     try {
       if (!filesPartitionAvailable) {
@@ -106,7 +120,6 @@ public class SparkHoodieBackedMetadataSyncMetadataWriter extends SparkHoodieBack
       throw new HoodieException("Failed to bootstrap table " + sourceBasePath, e);
     }
 
-    // Perform the commit using bulkCommit
     HoodieData<HoodieRecord> records = fileGroupCountAndRecordsPair.getValue();
     // perform tables services on metadata table
     performTableServices(Option.of(inflightInstantTimestamp));
@@ -119,7 +132,28 @@ public class SparkHoodieBackedMetadataSyncMetadataWriter extends SparkHoodieBack
     }
   }
 
-  protected Pair<Integer, HoodieData<HoodieRecord>> initializeFilesPartition2(String lastInstantTimestamp, List<DirectoryInfo> partitionInfoList) {
+  /**
+   * Initializes the FILES metadata partition by generating:
+   *  1. A record containing the full list of partitions, and
+   *  2. A record for each partition that captures the latest base files
+   *     (before or on the given instant) along with their file sizes.
+   *
+   * This method uses a single file group for the FILES partition. It first
+   * parallelizes a record containing all partition identifiers. If there are
+   * no partitions, it returns this record directly.
+   *
+   * When partitions exist, it loads the source table’s active timeline and
+   * constructs a spillable file system view to fetch the latest base files
+   * for each partition. Each partition is mapped into a file-list record,
+   * including commit-time–appended filenames and optional base path overrides.
+   *
+   * @param lastInstantTimestamp the instant up to which base files should be considered.
+   * @param partitionInfoList    list of directory info objects describing each partition.
+   * @return a pair containing:
+   *         (1) the file group count (always 1), and
+   *         (2) HoodieData with the partition list record plus per-partition file records.
+   */
+  private Pair<Integer, HoodieData<HoodieRecord>> initializeFilesPartition(String lastInstantTimestamp, List<DirectoryInfo> partitionInfoList) {
     // FILES partition uses a single file group
     final int fileGroupCount = 1;
 
@@ -136,16 +170,16 @@ public class SparkHoodieBackedMetadataSyncMetadataWriter extends SparkHoodieBack
     }
 
     HoodieTableMetaClient sourceTableMetaClient = HoodieTableMetaClient.builder().setBasePath(sourceBasePath).setConf(hadoopConf.get()).build();
+
     FileSystemViewStorageConfig.Builder spillableConfBuilder = FileSystemViewStorageConfig.newBuilder();
-    spillableConfBuilder.withStorageType(FileSystemViewStorageType.SPILLABLE_DISK);
-    //.withBaseStoreDir(FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
-    //.withMemFractionForPendingCompaction(config.memFractionForCompactionPerTable);
+    spillableConfBuilder.withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).fromProperties(dataWriteConfig.getProps());
+
     HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().build();
     HoodieTimeline timeline = sourceTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     SpillableMapBasedFileSystemView fileSystemView = new SpillableMapBasedFileSystemView(sourceTableMetaClient, timeline, spillableConfBuilder.build(), commonConfig);
 
     engineContext.setJobStatus(this.getClass().getSimpleName(), "Creating records for metadata FILES partition");
-    boolean enableBasePathForPartitions = dataWriteConfig.shouldEnableBasePathForPartitions();
+    boolean enableBasePathOverride = dataWriteConfig.shouldEnableBasePathOverride();
 
     HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partition -> {
       Stream<HoodieBaseFile> latestBaseFiles = fileSystemView.getLatestBaseFilesBeforeOrOn(partition.getRelativePath(), lastInstantTimestamp);
@@ -153,10 +187,12 @@ public class SparkHoodieBackedMetadataSyncMetadataWriter extends SparkHoodieBack
           ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker(e.getFileName(), inflightInstantTimestamp, partition.getRelativePath()), HoodieBaseFile::getFileLen));
       return HoodieMetadataPayload.createPartitionFilesRecord(
           HoodieTableMetadataUtil.getPartitionIdentifier(partition.getRelativePath()), fileNameToSizeMap, Collections.emptyList(),
-          enableBasePathForPartitions, dataWriteConfig.getMetadataConfig().getBasePathOverride());
+          enableBasePathOverride, Option.of(dataWriteConfig.getMetadataConfig().getBasePathOverride()));
     });
     ValidationUtils.checkState(fileListRecords.count() == partitions.size());
-
+    // close file system view
+    fileSystemView.close();
     return Pair.of(fileGroupCount, allPartitionsRecord.union(fileListRecords));
+
   }
 }

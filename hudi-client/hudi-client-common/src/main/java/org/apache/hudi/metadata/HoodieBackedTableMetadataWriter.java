@@ -570,7 +570,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     });
   }
 
-  protected Pair<Integer, HoodieData<HoodieRecord>> initializeFilesPartition(List<DirectoryInfo> partitionInfoList) {
+  private Pair<Integer, HoodieData<HoodieRecord>> initializeFilesPartition(List<DirectoryInfo> partitionInfoList) {
     // FILES partition uses a single file group
     final int fileGroupCount = 1;
 
@@ -588,13 +588,13 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     // Records which save the file listing of each partition
     engineContext.setJobStatus(this.getClass().getSimpleName(), "Creating records for metadata FILES partition");
-    boolean enableBasePathForPartitions = dataWriteConfig.shouldEnableBasePathForPartitions();
+    boolean enableBasePathOverride = dataWriteConfig.shouldEnableBasePathOverride();
 
     HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
       Map<String, Long> fileNameToSizeMap = partitionInfo.getFileNameToSizeMap();
       return HoodieMetadataPayload.createPartitionFilesRecord(
           HoodieTableMetadataUtil.getPartitionIdentifier(partitionInfo.getRelativePath()), fileNameToSizeMap, Collections.emptyList(),
-          enableBasePathForPartitions, dataWriteConfig.getMetadataConfig().getBasePathOverride());
+          enableBasePathOverride, Option.of(dataWriteConfig.getMetadataConfig().getBasePathOverride()));
     });
     ValidationUtils.checkState(fileListRecords.count() == partitions.size());
 
@@ -832,7 +832,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         dataWriteConfig.getColumnStatsIndexParallelism(),
         dataWriteConfig.getColumnsEnabledForColumnStatsIndex(),
         dataWriteConfig.getColumnsEnabledForBloomFilterIndex(),
-        dataWriteConfig.shouldEnableBasePathForPartitions(),
+        dataWriteConfig.shouldEnableBasePathOverride(),
         dataWriteConfig.getMetadataConfig().getBasePathOverride());
   }
 
@@ -998,7 +998,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       String syncCommitTime = HoodieTableMetadataUtil.createRestoreTimestamp(HoodieActiveTimeline.createNewInstantTime());
       processAndCommit(syncCommitTime, () -> HoodieTableMetadataUtil.convertMissingPartitionRecords(engineContext,
           partitionsToDelete, partitionFilesToAdd, partitionFilesToDelete, syncCommitTime,
-          dataWriteConfig.shouldEnableBasePathForPartitions(), dataWriteConfig.getMetadataConfig().getBasePathOverride()));
+          dataWriteConfig.shouldEnableBasePathOverride(), Option.of(dataWriteConfig.getMetadataConfig().getBasePathOverride())));
       closeInternal();
     } catch (IOException e) {
       throw new HoodieMetadataException("IOException during MDT restore sync", e);
@@ -1036,7 +1036,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
       String rollbackInstantTime = createRollbackTimestamp(instantTime);
       processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, dataMetaClient, rollbackMetadata, instantTime,
-          dataWriteConfig.getMetadataConfig().shouldEnableBasePathForPartitions(), dataWriteConfig.getMetadataConfig().getBasePathOverride()));
+          dataWriteConfig.getMetadataConfig().shouldEnableBasePathOverride(), Option.of(dataWriteConfig.getMetadataConfig().getBasePathOverride())));
 
       if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
         LOG.info("Rolling back MDT deltacommit " + commitToRollbackInstantTime);
@@ -1164,7 +1164,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @param records        - records to be bulk inserted
    * @param fileGroupCount - The maximum number of file groups to which the records will be written.
    */
-  public abstract void bulkCommit(
+  protected abstract void bulkCommit(
       String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records,
       int fileGroupCount);
 
@@ -1574,24 +1574,24 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       }
     }
 
-    public String getRelativePath() {
+    String getRelativePath() {
       return relativePath;
     }
 
-    public int getTotalFiles() {
+    int getTotalFiles() {
       return filenameToSizeMap.size();
     }
 
-    public boolean isHoodiePartition() {
+    boolean isHoodiePartition() {
       return isHoodiePartition;
     }
 
-    public List<Path> getSubDirectories() {
+    List<Path> getSubDirectories() {
       return subDirectories;
     }
 
     // Returns a map of filenames mapped to their lengths
-    public Map<String, Long> getFileNameToSizeMap() {
+    Map<String, Long> getFileNameToSizeMap() {
       return filenameToSizeMap;
     }
   }

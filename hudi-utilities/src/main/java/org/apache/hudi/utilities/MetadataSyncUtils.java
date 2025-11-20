@@ -59,8 +59,6 @@ public class MetadataSyncUtils {
     return pendingHoodieInstants;
   }
 
-
-
   public static SyncMetadata getTableSyncExtraMetadata(Option<HoodieInstant> targetTableLastInstant, HoodieTableMetaClient targetTableMetaClient, String sourceIdentifier,
                                                        String sourceInstantSynced, TreeMap<HoodieInstant, Boolean> instantStatusMap, Option<String> lastSyncCheckpointOpt, HoodieInstant currentInstantToSync) {
     Pair<String, List<String>> pendingInstantsAndCheckpointPair = getPendingInstantsAndCheckpointForNextSync(instantStatusMap, lastSyncCheckpointOpt, currentInstantToSync);
@@ -69,7 +67,7 @@ public class MetadataSyncUtils {
       try {
         lastSyncMetadata = getTableSyncMetadataFromCommitMetadata(instant, targetTableMetaClient);
       } catch (IOException e) {
-        throw new HoodieException("Failed to get sync metadata");
+        throw new HoodieException("Failed to get sync metadata from instant " + instant.getTimestamp());
       }
 
       TableCheckpointInfo checkpointInfo = TableCheckpointInfo.of(pendingInstantsAndCheckpointPair.getLeft(), pendingInstantsAndCheckpointPair.getRight(), sourceIdentifier);

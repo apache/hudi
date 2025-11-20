@@ -320,7 +320,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Initializes the metadata table by reading from the file system when the table is first created. Enabled by default. "
           + "Warning: This should only be disabled when manually constructing the metadata table outside of typical Hudi writer flows.");
 
-  public static final ConfigProperty<Boolean> ENABLE_BASE_PATH_FOR_PARTITONS = ConfigProperty
+  public static final ConfigProperty<Boolean> ENABLE_BASE_PATH_OVERRIDE = ConfigProperty
       .key(METADATA_PREFIX + ".enable.base.path.for.partitions")
       .defaultValue(false)
       .sinceVersion("0.14.1")
@@ -338,7 +338,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".base.path.override")
       .defaultValue("")
       .markAdvanced()
-      .sinceVersion("0.14.1")
+      .sinceVersion("0.14.2")
       .withDocumentation("Base path override for writes to metadata table.");
 
   public static final ConfigProperty<Integer> NUM_PARTITION_PATH_LEVELS = ConfigProperty
@@ -479,8 +479,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(AUTO_INITIALIZE);
   }
 
-  public boolean shouldEnableBasePathForPartitions() {
-    return getBoolean(ENABLE_BASE_PATH_FOR_PARTITONS);
+  public boolean shouldEnableBasePathOverride() {
+    return getBoolean(ENABLE_BASE_PATH_OVERRIDE);
   }
 
   public boolean shouldEnableBootstrapMetadataSync() {
@@ -673,8 +673,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withEnableBasePathForPartitions(boolean enabled) {
-      metadataConfig.setValue(ENABLE_BASE_PATH_FOR_PARTITONS, String.valueOf(enabled));
+    public Builder withEnableBasePathOverride(boolean enabled) {
+      metadataConfig.setValue(ENABLE_BASE_PATH_OVERRIDE, String.valueOf(enabled));
       return this;
     }
 

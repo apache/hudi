@@ -46,7 +46,7 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
                                       HoodieTimeline visibleActiveTimeline,
                                       HoodieTableMetadata tableMetadata) {
     super(metaClient, visibleActiveTimeline);
-    this.tableMetadata = tableMetadata;;
+    this.tableMetadata = tableMetadata;
   }
 
   public HoodieMetadataFileSystemView(HoodieEngineContext engineContext,
@@ -79,7 +79,6 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
             pair -> pair.getRight().toString(),
             Function.identity()
         ));
-
     return tableMetadata.getAllFilesInPartitions(
             partitionPathList.stream().map(pair -> pair.getRight().toString()).collect(Collectors.toList()))
         .entrySet().stream().collect(Collectors.toMap(

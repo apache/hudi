@@ -263,18 +263,6 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("0.13.0")
       .withDocumentation("The metadata of secondary indexes");
 
-  public static final ConfigProperty<Boolean> ALLOW_BASE_PATH_OVERRIDES_WITH_METADATA = ConfigProperty
-      .key("hoodie.table.allow.base.path.overrides.with.metadatatable")
-      .defaultValue(false)
-      .markAdvanced()
-      .withDocumentation("When set to true, base path could be overriden based on reads from metadata table instead of original table's base path");
-
-  public static final ConfigProperty<Integer> NUM_PARTITION_PATH_LEVELS = ConfigProperty
-      .key("hoodie.table.num.partition.path.levels")
-      .defaultValue(0)
-      .markAdvanced()
-      .withDocumentation("Stores the levels for partition paths. 0 for non-partitioned table, 1 for simple string based partition path, and 3 for '2025/01/01'");
-
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
   // Number of retries while reading the properties file to deal with parallel updates
@@ -726,14 +714,6 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public Boolean shouldDropPartitionColumns() {
     return getBooleanOrDefault(DROP_PARTITION_COLUMNS);
-  }
-
-  public boolean shouldAllowBasePathOverridesWithMetadata() {
-    return Boolean.parseBoolean(getStringOrDefault(ALLOW_BASE_PATH_OVERRIDES_WITH_METADATA));
-  }
-
-  public Integer getNumPartitionPathLevels() {
-    return Integer.parseInt(getStringOrDefault(NUM_PARTITION_PATH_LEVELS));
   }
 
   /**

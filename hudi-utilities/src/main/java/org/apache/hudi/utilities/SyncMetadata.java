@@ -21,15 +21,11 @@ package org.apache.hudi.utilities;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.Value;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -40,8 +36,6 @@ import java.util.List;
  * table's properties and is used to track the status of previous sync operation.
  */
 
-@Getter
-@AllArgsConstructor
 public class SyncMetadata {
   private static final int CURRENT_VERSION = 0;
   private static final ObjectMapper MAPPER =
@@ -56,6 +50,12 @@ public class SyncMetadata {
 
   }
 
+  public SyncMetadata(Instant lastSyncInstant, List<TableCheckpointInfo> tableCheckpointInfos, int version) {
+    this.lastSyncInstant = lastSyncInstant;
+    this.tableCheckpointInfos = tableCheckpointInfos;
+    this.version = version;
+  }
+
   @JsonProperty
   Instant lastSyncInstant;
 
@@ -64,6 +64,18 @@ public class SyncMetadata {
 
   @JsonProperty
   int version;
+
+  public Instant getLastSyncInstant() {
+    return lastSyncInstant;
+  }
+
+  public List<TableCheckpointInfo> getTableCheckpointInfos() {
+    return tableCheckpointInfos;
+  }
+
+  public int getVersion() {
+    return version;
+  }
 
   public static SyncMetadata of(
       Instant lastInstantSynced, List<TableCheckpointInfo> tableCheckpointInfos) {

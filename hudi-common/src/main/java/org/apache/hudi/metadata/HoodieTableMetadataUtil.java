@@ -316,7 +316,7 @@ public class HoodieTableMetadataUtil {
       MetadataRecordsGenerationParams recordsGenerationParams) {
     final Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
     final HoodieData<HoodieRecord> filesPartitionRecordsRDD = context.parallelize(
-        convertMetadataToFilesPartitionRecords(commitMetadata, instantTime, recordsGenerationParams.shouldEnableBasePathForPartition(),
+        convertMetadataToFilesPartitionRecords(commitMetadata, instantTime, recordsGenerationParams.shouldEnableBasePathOverride(),
             recordsGenerationParams.getBasePathOverride()), 1);
     partitionToRecordsMap.put(MetadataPartitionType.FILES, filesPartitionRecordsRDD);
 
@@ -337,20 +337,20 @@ public class HoodieTableMetadataUtil {
    *
    * @param commitMetadata - Commit action metadata
    * @param instantTime    - Commit action instant time
-   * @param enableBasePathForPartitions true when base path for partitions need to be enabled.
+   * @param enableBasePathOverride true when base path for partitions need to be enabled.
    * @return List of metadata table records
    */
   public static List<HoodieRecord> convertMetadataToFilesPartitionRecords(HoodieCommitMetadata commitMetadata,
                                                                           String instantTime,
-                                                                          boolean enableBasePathForPartitions,
-                                                                          String basePath) {
+                                                                          boolean enableBasePathOverride,
+                                                                          Option<String> basePathOverride) {
     List<HoodieRecord> records = new ArrayList<>(commitMetadata.getPartitionToWriteStats().size());
 
     // Add record bearing added partitions list
     List<String> partitionsAdded = getPartitionsAdded(commitMetadata);
 
-    records.add(enableBasePathForPartitions ?
-        HoodieMetadataPayload.createPartitionListRecord(partitionsAdded, false, Option.of(basePath)) :
+    records.add(enableBasePathOverride ?
+        HoodieMetadataPayload.createPartitionListRecord(partitionsAdded, false, basePathOverride) :
         HoodieMetadataPayload.createPartitionListRecord(partitionsAdded));
 
     // Update files listing records for each individual partition
@@ -392,7 +392,7 @@ public class HoodieTableMetadataUtil {
 
               newFileCount.add(updatedFilesToSizesMapping.size());
               return HoodieMetadataPayload.createPartitionFilesRecord(partition, updatedFilesToSizesMapping,
-                  Collections.emptyList(), enableBasePathForPartitions, basePath);
+                  Collections.emptyList(), enableBasePathOverride, basePathOverride);
             })
             .collect(Collectors.toList());
 
@@ -486,7 +486,7 @@ public class HoodieTableMetadataUtil {
                                                                                               String instantTime) {
     final Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
     final HoodieData<HoodieRecord> filesPartitionRecordsRDD = engineContext.parallelize(
-        convertMetadataToFilesPartitionRecords(cleanMetadata, instantTime, recordsGenerationParams.shouldEnableBasePathForPartition(),
+        convertMetadataToFilesPartitionRecords(cleanMetadata, instantTime, recordsGenerationParams.shouldEnableBasePathOverride(),
             recordsGenerationParams.getBasePathOverride()), 1);
     partitionToRecordsMap.put(MetadataPartitionType.FILES, filesPartitionRecordsRDD);
 
@@ -514,8 +514,8 @@ public class HoodieTableMetadataUtil {
    */
   public static List<HoodieRecord> convertMetadataToFilesPartitionRecords(HoodieCleanMetadata cleanMetadata,
                                                                           String instantTime,
-                                                                          boolean enableBasePathForPartitions,
-                                                                          String basePath) {
+                                                                          boolean enableBasePathOverride,
+                                                                          Option<String> basePathOverride) {
     List<HoodieRecord> records = new LinkedList<>();
     int[] fileDeleteCount = {0};
     List<String> deletedPartitions = new ArrayList<>();
@@ -524,7 +524,7 @@ public class HoodieTableMetadataUtil {
       // Files deleted from a partition
       List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Collections.emptyMap(),
-          deletedFiles, enableBasePathForPartitions, basePath);
+          deletedFiles, enableBasePathOverride, basePathOverride);
       records.add(record);
       fileDeleteCount[0] += deletedFiles.size();
       boolean isPartitionDeleted = partitionMetadata.getIsPartitionDeleted();
@@ -545,7 +545,7 @@ public class HoodieTableMetadataUtil {
   public static Map<MetadataPartitionType, HoodieData<HoodieRecord>> convertMissingPartitionRecords(HoodieEngineContext engineContext,
                                                                                                     List<String> deletedPartitions, Map<String, Map<String, Long>> filesAdded,
                                                                                                     Map<String, List<String>> filesDeleted, String instantTime,
-                                                                                                    boolean enableBasePathForPartitions, String basePath) {
+                                                                                                    boolean enableBasePathOverride, Option<String> basePathOverride) {
     List<HoodieRecord> records = new LinkedList<>();
     int[] fileDeleteCount = {0};
     int[] filesAddedCount = {0};
@@ -554,7 +554,7 @@ public class HoodieTableMetadataUtil {
       filesAddedCount[0] += filesToAdd.size();
       List<String> filesToDelete = filesDeleted.getOrDefault(partition, Collections.emptyList());
       fileDeleteCount[0] += filesToDelete.size();
-      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, filesToAdd, filesToDelete, enableBasePathForPartitions, basePath);
+      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, filesToAdd, filesToDelete, enableBasePathOverride, basePathOverride);
       records.add(record);
     });
 
@@ -563,7 +563,7 @@ public class HoodieTableMetadataUtil {
       if (!filesAdded.containsKey(partition)) {
         fileDeleteCount[0] += filesToDelete.size();
         HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Collections.emptyMap(), filesToDelete,
-            enableBasePathForPartitions, basePath);
+            enableBasePathOverride, basePathOverride);
         records.add(record);
       }
     });
@@ -660,10 +660,10 @@ public class HoodieTableMetadataUtil {
    */
   public static Map<MetadataPartitionType, HoodieData<HoodieRecord>> convertMetadataToRecords(
       HoodieEngineContext engineContext, HoodieTableMetaClient dataTableMetaClient, HoodieRollbackMetadata rollbackMetadata, String instantTime,
-      boolean enableBasePathForPartitions, String basePathOverride) {
+      boolean enableBasePathOverride, Option<String> basePathOverride) {
 
     List<HoodieRecord> filesPartitionRecords = convertMetadataToRollbackRecords(rollbackMetadata, instantTime, dataTableMetaClient,
-        enableBasePathForPartitions, basePathOverride);
+        enableBasePathOverride, basePathOverride);
     final HoodieData<HoodieRecord> rollbackRecordsRDD = filesPartitionRecords.isEmpty() ? engineContext.emptyHoodieData()
         : engineContext.parallelize(filesPartitionRecords, filesPartitionRecords.size());
 
@@ -705,13 +705,13 @@ public class HoodieTableMetadataUtil {
   private static List<HoodieRecord> convertMetadataToRollbackRecords(HoodieRollbackMetadata rollbackMetadata,
                                                                      String instantTime,
                                                                      HoodieTableMetaClient dataTableMetaClient,
-                                                                     boolean enableBasePathForPartitions,
-                                                                     String basePathOverride) {
+                                                                     boolean enableBasePathOverride,
+                                                                     Option<String> basePathOverride) {
     Map<String, Map<String, Long>> partitionToAppendedFiles = new HashMap<>();
     processRollbackMetadata(rollbackMetadata, partitionToAppendedFiles);
     reAddLogFilesFromRollbackPlan(dataTableMetaClient, instantTime, partitionToAppendedFiles);
     return convertFilesToFilesPartitionRecords(Collections.emptyMap(), partitionToAppendedFiles, instantTime, "Rollback",
-        enableBasePathForPartitions, basePathOverride);
+        enableBasePathOverride, basePathOverride);
   }
 
   /**
@@ -757,8 +757,8 @@ public class HoodieTableMetadataUtil {
   protected static List<HoodieRecord> convertFilesToFilesPartitionRecords(Map<String, List<String>> partitionToDeletedFiles,
                                                                           Map<String, Map<String, Long>> partitionToAppendedFiles,
                                                                           String instantTime, String operation,
-                                                                          boolean enableBasePathForPartition,
-                                                                          String basePath) {
+                                                                          boolean enableBasePathOverride,
+                                                                          Option<String> basePathOverride) {
     List<HoodieRecord> records = new ArrayList<>(partitionToDeletedFiles.size() + partitionToAppendedFiles.size());
     int[] fileChangeCount = {0, 0}; // deletes, appends
 
@@ -772,7 +772,7 @@ public class HoodieTableMetadataUtil {
       }
 
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, filesAdded,
-          deletedFiles, enableBasePathForPartition, basePath);
+          deletedFiles, enableBasePathOverride, basePathOverride);
       records.add(record);
     });
 
@@ -787,7 +787,7 @@ public class HoodieTableMetadataUtil {
 
       // New files added to a partition
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, appendedFileMap,
-          Collections.emptyList(), enableBasePathForPartition, basePath);
+          Collections.emptyList(), enableBasePathOverride, basePathOverride);
       records.add(record);
     });
 

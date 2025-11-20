@@ -20,6 +20,7 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
 import java.util.List;
@@ -42,12 +43,12 @@ public class MetadataRecordsGenerationParams implements Serializable {
   private final int columnStatsIndexParallelism;
   private final List<String> targetColumnsForColumnStatsIndex;
   private final List<String> targetColumnsForBloomFilterIndex;
-  private final boolean enableBasePathForPartition;
-  private final String basePathOverride;
+  private final boolean enableBasePathOverride;
+  private final Option<String> basePathOverride;
 
   MetadataRecordsGenerationParams(HoodieTableMetaClient dataMetaClient, List<MetadataPartitionType> enabledPartitionTypes, String bloomFilterType, int bloomIndexParallelism,
                                   boolean isColumnStatsIndexEnabled, int columnStatsIndexParallelism, List<String> targetColumnsForColumnStatsIndex, List<String> targetColumnsForBloomFilterIndex,
-                                  boolean enableBasePathForPartition, String basePathOverride) {
+                                  boolean enableBasePathOverride, String basePathOverride) {
     this.dataMetaClient = dataMetaClient;
     this.enabledPartitionTypes = enabledPartitionTypes;
     this.bloomFilterType = bloomFilterType;
@@ -56,8 +57,8 @@ public class MetadataRecordsGenerationParams implements Serializable {
     this.columnStatsIndexParallelism = columnStatsIndexParallelism;
     this.targetColumnsForColumnStatsIndex = targetColumnsForColumnStatsIndex;
     this.targetColumnsForBloomFilterIndex = targetColumnsForBloomFilterIndex;
-    this.enableBasePathForPartition = enableBasePathForPartition;
-    this.basePathOverride = basePathOverride;
+    this.enableBasePathOverride = enableBasePathOverride;
+    this.basePathOverride = Option.of(basePathOverride);
   }
 
   public HoodieTableMetaClient getDataMetaClient() {
@@ -92,11 +93,11 @@ public class MetadataRecordsGenerationParams implements Serializable {
     return targetColumnsForBloomFilterIndex;
   }
 
-  public boolean shouldEnableBasePathForPartition() {
-    return enableBasePathForPartition;
+  public boolean shouldEnableBasePathOverride() {
+    return enableBasePathOverride;
   }
 
-  public String getBasePathOverride() {
+  public Option<String> getBasePathOverride() {
     return basePathOverride;
   }
 }

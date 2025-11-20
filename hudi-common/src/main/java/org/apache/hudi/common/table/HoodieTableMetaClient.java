@@ -1097,12 +1097,6 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.SECONDARY_INDEXES_METADATA)) {
         setSecondaryIndexesMetadata(hoodieConfig.getString(HoodieTableConfig.SECONDARY_INDEXES_METADATA));
       }
-      if (hoodieConfig.contains(HoodieTableConfig.ALLOW_BASE_PATH_OVERRIDES_WITH_METADATA)) {
-        setAllowBasePathOverrides(hoodieConfig.getBoolean(HoodieTableConfig.ALLOW_BASE_PATH_OVERRIDES_WITH_METADATA));
-      }
-      if (hoodieConfig.contains(HoodieTableConfig.NUM_PARTITION_PATH_LEVELS)) {
-        setNumPartitionPathLevels(hoodieConfig.getInt(HoodieTableConfig.NUM_PARTITION_PATH_LEVELS));
-      }
       return this;
     }
 
@@ -1204,12 +1198,6 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != secondaryIndexesMetadata) {
         tableConfig.setValue(HoodieTableConfig.SECONDARY_INDEXES_METADATA, secondaryIndexesMetadata);
-      }
-      if (null != allowBasePathOverridesWithMetadata) {
-        tableConfig.setValue(HoodieTableConfig.ALLOW_BASE_PATH_OVERRIDES_WITH_METADATA, Boolean.toString(allowBasePathOverridesWithMetadata));
-      }
-      if (null != numPartitionPathLevels) {
-        tableConfig.setValue(HoodieTableConfig.NUM_PARTITION_PATH_LEVELS, Integer.toString(numPartitionPathLevels));
       }
 
       return tableConfig.getProps();

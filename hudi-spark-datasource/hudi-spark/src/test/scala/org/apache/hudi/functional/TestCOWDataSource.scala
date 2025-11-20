@@ -541,8 +541,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .load(basePath + "/*/*/*/*")
     assertEquals(100, snapshotDF1.count())
 
-    spark.read.format("hudi").load()
-
     val records2 = deleteRecordsToStrings(dataGen.generateUniqueDeletes(20)).toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
 

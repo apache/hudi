@@ -1929,8 +1929,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getMetadataConfig().getColumnsEnabledForBloomFilterIndex();
   }
 
-  public boolean shouldEnableBasePathForPartitions() {
-    return getMetadataConfig().shouldEnableBasePathForPartitions();
+  public boolean shouldEnableBasePathOverride() {
+    return getMetadataConfig().shouldEnableBasePathOverride();
   }
 
   public boolean shouldEnableBootstrapMetadataSync() {
