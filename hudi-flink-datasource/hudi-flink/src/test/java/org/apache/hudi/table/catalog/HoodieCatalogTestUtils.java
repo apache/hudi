@@ -26,6 +26,11 @@ import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.hadoop.hive.conf.HiveConf;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.apache.hudi.table.catalog.CatalogOptions.CATALOG_PATH;
+import static org.apache.hudi.table.catalog.CatalogOptions.DEFAULT_DATABASE;
 
 /**
  * Test utils for Hoodie catalog.
@@ -35,6 +40,7 @@ public class HoodieCatalogTestUtils {
       "jdbc:derby:;databaseName=%s;create=true";
 
   private static final String TEST_CATALOG_NAME = "test_catalog";
+  private static final String TEST_DEFAULT_DATABASE = "default";
 
   private static final org.junit.rules.TemporaryFolder TEMPORARY_FOLDER = new org.junit.rules.TemporaryFolder();
 
@@ -77,6 +83,13 @@ public class HoodieCatalogTestUtils {
     } catch (IOException e) {
       throw new CatalogException("Failed to create test HiveConf to HiveCatalog.", e);
     }
+  }
+
+  public static HoodieCatalog createHoodieCatalog(String catalogPathStr) {
+    Map<String, String> catalogOptions = new HashMap<>();
+    catalogOptions.put(CATALOG_PATH.key(), catalogPathStr);
+    catalogOptions.put(DEFAULT_DATABASE.key(), TEST_DEFAULT_DATABASE);
+    return new HoodieCatalog("hudi", Configuration.fromMap(catalogOptions));
   }
 
   public static StorageConfiguration<?> createStorageConf() {

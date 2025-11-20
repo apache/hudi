@@ -48,6 +48,7 @@ import org.apache.hudi.utils.CatalogUtils;
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
 import org.apache.flink.table.catalog.CatalogDatabase;
@@ -439,6 +440,10 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       } else if (pkColumns != null) {
         builder.primaryKey(pkColumns);
       }
+      List<String> metaCols = TableOptionProperties.getMetadataColumns(parameters);
+      if (!metaCols.isEmpty()) {
+        metaCols.forEach(c -> builder.columnByMetadata(c, DataTypes.STRING(), null, true));
+      }
       schema = builder.build();
     } else {
       LOG.warn(" Table: {}, does not have a hoodie schema. Using hive table schema instead.", tablePath);
@@ -588,6 +593,12 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
     if (!properties.containsKey(FlinkOptions.PATH.key())) {
       properties.put(FlinkOptions.PATH.key(), location);
+    }
+
+    // check and persist metadata columns
+    List<String> metaCols = DataTypeUtils.getMetadataColumns(table.getUnresolvedSchema());
+    if (!metaCols.isEmpty()) {
+      properties.put(TableOptionProperties.METADATA_COLUMNS, String.join(",", metaCols));
     }
 
     //set sd
