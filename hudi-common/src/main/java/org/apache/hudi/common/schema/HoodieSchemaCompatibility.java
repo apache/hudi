@@ -56,13 +56,9 @@ public final class HoodieSchemaCompatibility {
    */
   public static void checkSchemaCompatible(HoodieSchema tableSchema, HoodieSchema writerSchema,
                                            boolean shouldValidate, boolean allowProjection) {
-    ValidationUtils.checkArgument(tableSchema != null, "Table schema cannot be null");
-    ValidationUtils.checkArgument(writerSchema != null, "Writer schema cannot be null");
-
-    // Delegate to AvroSchemaUtils for the actual compatibility check
-    AvroSchemaUtils.checkSchemaCompatible(
-        tableSchema.toAvroSchema(),
-        writerSchema.toAvroSchema(),
+    checkSchemaCompatible(
+        tableSchema,
+        writerSchema,
         shouldValidate,
         allowProjection,
         Collections.emptySet()); // Default to no partition columns

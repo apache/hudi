@@ -620,13 +620,11 @@ public class HoodieSchema implements Serializable {
       throw new IllegalStateException("Cannot get non-null type from non-union schema: " + type);
     }
 
-    List<Schema> types = avroSchema.getTypes();
-    Schema nonNullType = types.stream()
-        .filter(schema -> schema.getType() != Schema.Type.NULL)
-        .findFirst()
-        .orElseThrow(() -> new IllegalStateException("Union does not contain non-null type"));
-
-    return new HoodieSchema(nonNullType);
+    List<HoodieSchema> types = getTypes();
+    if (types.size() != 2) {
+      throw new IllegalStateException("Union schema has more than two types");
+    }
+    return types.get(0).getType() != HoodieSchemaType.NULL ? types.get(0) : types.get(1);
   }
 
   /**
@@ -725,7 +723,7 @@ public class HoodieSchema implements Serializable {
         Schema avroSchema = avroParser.parse(jsonSchema);
         return new HoodieSchema(avroSchema);
       } catch (Exception e) {
-        throw new HoodieAvroSchemaException("Failed to parse schema: " + jsonSchema + ". Error: " + e.getMessage());
+        throw new HoodieAvroSchemaException("Failed to parse schema: " + jsonSchema, e);
       }
     }
   }
