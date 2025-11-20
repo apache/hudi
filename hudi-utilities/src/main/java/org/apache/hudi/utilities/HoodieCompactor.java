@@ -222,13 +222,13 @@ public class HoodieCompactor {
     LOG.info("Step 1: Do schedule");
     Option<String> instantTime = doSchedule(jsc);
     if (!instantTime.isPresent()) {
-      LOG.warn("Couldn't do schedule");
+      LOG.error("Couldn't do schedule");
       return -1;
     } else {
       cfg.compactionInstantTime = instantTime.get();
     }
 
-    LOG.info("The schedule instant time is " + instantTime.get());
+    LOG.info("The schedule instant time is {}", instantTime.get());
     LOG.info("Step 2: Do compaction");
 
     return doCompact(jsc);

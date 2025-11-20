@@ -66,7 +66,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveUnionSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.isMetadataField;
 
@@ -83,7 +83,7 @@ public class HiveAvroSerializer {
   private static final Logger LOG = LoggerFactory.getLogger(HiveAvroSerializer.class);
 
   public HiveAvroSerializer(Schema schema) {
-    schema = AvroSchemaUtils.resolveNullableSchema(schema);
+    schema = AvroSchemaUtils.getNonNullTypeFromUnion(schema);
     if (schema.getType() != Schema.Type.RECORD) {
       throw new IllegalArgumentException("Expected record schema, but got: " + schema);
     }
@@ -195,7 +195,7 @@ public class HiveAvroSerializer {
 
     int fieldIdx = schemaField.pos();
     TypeInfo fieldTypeInfo = fieldTypes.get(fieldIdx);
-    Schema fieldSchema = resolveNullableSchema(schemaField.schema());
+    Schema fieldSchema = getNonNullTypeFromUnion(schemaField.schema());
 
     StructField structField = structObjectInspector.getStructFieldRef(fieldName);
     if (structField == null) {
@@ -289,7 +289,7 @@ public class HiveAvroSerializer {
       return null;
     }
 
-    schema = resolveNullableSchema(schema);
+    schema = getNonNullTypeFromUnion(schema);
 
     /* Because we use Hive's 'string' type when Avro calls for enum, we have to expressly check for enum-ness */
     if (Schema.Type.ENUM.equals(schema.getType())) {
@@ -430,7 +430,7 @@ public class HiveAvroSerializer {
     ObjectInspector listElementObjectInspector = fieldOI.getListElementObjectInspector();
     // NOTE: We have to resolve nullable schema, since Avro permits array elements
     //       to be null
-    Schema arrayNestedType = resolveNullableSchema(schema.getElementType());
+    Schema arrayNestedType = getNonNullTypeFromUnion(schema.getElementType());
     Schema elementType;
     if (listElementObjectInspector.getCategory() == ObjectInspector.Category.PRIMITIVE) {
       elementType = arrayNestedType;

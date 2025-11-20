@@ -41,7 +41,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
@@ -98,7 +97,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   protected final String orderingFields;
   private final TypedProperties payloadProps;
   // Log File Paths
-  protected final List<String> logFilePaths;
+  protected final List<HoodieLogFile> logFiles;
   // Reverse reader - Not implemented yet (NA -> Why do we need ?)
   // but present here for plumbing for future implementation
   private final boolean reverseReader;
@@ -139,7 +138,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
   // table version for compatibility
   private final HoodieTableVersion tableVersion;
 
-  protected BaseHoodieLogRecordReader(HoodieReaderContext<T> readerContext, HoodieTableMetaClient hoodieTableMetaClient, HoodieStorage storage, List<String> logFilePaths,
+  protected BaseHoodieLogRecordReader(HoodieReaderContext<T> readerContext, HoodieTableMetaClient hoodieTableMetaClient, HoodieStorage storage,
+                                      List<HoodieLogFile> logFiles,
                                       boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                       boolean withOperationField, boolean forceFullScan, Option<String> partitionNameOverride,
                                       Option<String> keyFieldOverride, boolean enableOptimizedLogBlocksScan, HoodieFileGroupRecordBuffer<T> recordBuffer,
@@ -158,8 +158,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
       props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, this.orderingFields);
     }
     this.payloadProps = props;
-    this.totalLogFiles.addAndGet(logFilePaths.size());
-    this.logFilePaths = logFilePaths;
+    this.totalLogFiles.addAndGet(logFiles.size());
+    this.logFiles = logFiles;
     this.reverseReader = reverseReader;
     this.storage = storage;
     this.bufferSize = bufferSize;
@@ -219,8 +219,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     HoodieLogFormatReader logFormatReaderWrapper = null;
     try {
       // Iterate over the paths
-      logFormatReaderWrapper = new HoodieLogFormatReader(storage,
-          logFilePaths.stream().map(logFile -> new HoodieLogFile(new StoragePath(logFile))).collect(Collectors.toList()),
+      logFormatReaderWrapper = new HoodieLogFormatReader(storage, logFiles,
           readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
@@ -511,8 +510,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     HoodieLogFormatReader logFormatReaderWrapper = null;
     try {
       // Iterate over the paths
-      logFormatReaderWrapper = new HoodieLogFormatReader(storage,
-          logFilePaths.stream().map(logFile -> new HoodieLogFile(new StoragePath(logFile))).collect(Collectors.toList()),
+      logFormatReaderWrapper = new HoodieLogFormatReader(storage, logFiles,
           readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 
       /**
@@ -745,7 +743,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
       }
     }
     // At this step the lastBlocks are consumed. We track approximate progress by number of log-files seen
-    progress = (float) (numLogFilesSeen - 1) / logFilePaths.size();
+    progress = (float) (numLogFilesSeen - 1) / logFiles.size();
   }
 
   private boolean shouldLookupRecords() {

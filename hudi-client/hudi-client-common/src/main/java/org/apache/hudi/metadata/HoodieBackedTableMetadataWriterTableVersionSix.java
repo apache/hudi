@@ -161,8 +161,8 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
     Option<HoodieInstant> pendingCompactionInstant =
         metadataMetaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
     if (pendingLogCompactionInstant.isPresent() || pendingCompactionInstant.isPresent()) {
-      LOG.warn(String.format("Not scheduling compaction or logCompaction, since a pending compaction instant %s or logCompaction %s instant is present",
-          pendingCompactionInstant, pendingLogCompactionInstant));
+      LOG.info("Not scheduling compaction or logCompaction, since a pending compaction instant {} or logCompaction {} instant is present",
+          pendingCompactionInstant, pendingLogCompactionInstant);
       return false;
     }
     return true;

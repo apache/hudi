@@ -266,7 +266,10 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
                                                             fieldNameTuples: Seq[(String, String, String)]): String = {
     val fieldNames = fieldNameTuples.sortBy(e => (e._1, e._2))
       .map(e => e._3).mkString("[", ", ", "]")
-    if (HoodieSparkUtils.gteqSpark3_5) {
+    if (HoodieSparkUtils.gteqSpark4_0) {
+      "[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column, variable, or function parameter with name " +
+        s"$columnName cannot be resolved. Did you mean one of the following? $fieldNames."
+    } else if (HoodieSparkUtils.gteqSpark3_5) {
       "[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name " +
         s"$columnName cannot be resolved. Did you mean one of the following? $fieldNames."
     } else {
@@ -308,6 +311,10 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     fs.exists(path)
   }
 
+  /**
+   * Please use this method to set SQL conf in a block and restore them after the block.
+   * WARN: Please don't set the SQL conf like `spark.sql("set xxx = yyy")`, replace it with this method.
+   */
   protected def withSQLConf[T](pairs: (String, String)*)(f: => T): T = {
     val conf = spark.sessionState.conf
     val currentValues = pairs.unzip._1.map { k =>
@@ -474,6 +481,26 @@ object HoodieSparkSqlTestBase {
     })
     nonExistentConfigs.foreach(e => assertFalse(
       tableConfig.contains(e), s"$e should not be present in the table config"))
+  }
+
+  def enableComplexKeygenValidation(spark: SparkSession,
+                                    tableName: String): Unit = {
+    setComplexKeygenValidation(spark, tableName, value = true)
+  }
+
+  def disableComplexKeygenValidation(spark: SparkSession,
+                                     tableName: String): Unit = {
+    setComplexKeygenValidation(spark, tableName, value = false)
+  }
+
+  private def setComplexKeygenValidation(spark: SparkSession,
+                                         tableName: String,
+                                         value: Boolean): Unit = {
+    spark.sql(
+      s"""
+         |ALTER TABLE $tableName
+         |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = '$value')
+         |""".stripMargin)
   }
 
   private def checkMessageContains(e: Throwable, text: String): Boolean =

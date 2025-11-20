@@ -47,12 +47,12 @@ class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuff
   private Queue<String> logRecordKeysSorted = null;
 
   SortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                             HoodieTableMetaClient hoodieTableMetaClient,
-                                             RecordMergeMode recordMergeMode,
-                                             Option<PartialUpdateMode> partialUpdateModeOpt,
-                                             TypedProperties props,
-                                             List<String> orderingFieldNames,
-                                             UpdateProcessor<T> updateProcessor) {
+                                      HoodieTableMetaClient hoodieTableMetaClient,
+                                      RecordMergeMode recordMergeMode,
+                                      Option<PartialUpdateMode> partialUpdateModeOpt,
+                                      TypedProperties props,
+                                      List<String> orderingFieldNames,
+                                      UpdateProcessor<T> updateProcessor) {
     super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
   }
 

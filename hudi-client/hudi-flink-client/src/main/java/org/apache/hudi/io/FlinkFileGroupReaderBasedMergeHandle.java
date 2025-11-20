@@ -68,6 +68,13 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O>
     }
   }
 
+  @Override
+  protected long getMaxMemoryForMerge() {
+    // the incoming records are already buffered on heap, and the underlying bytes are managed by memory pool
+    // in Flink write buffer, so there is no need to spill.
+    return Long.MAX_VALUE;
+  }
+
   /**
    * The flink checkpoints start in sequence and asynchronously, when one write task finish the checkpoint(A)
    * (thus the fs view got the written data files some of which may be invalid),
@@ -132,13 +139,14 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O>
     try {
       close();
     } catch (Throwable throwable) {
-      LOG.warn("Error while trying to dispose the MERGE handle", throwable);
+      LOG.error("Failed to close the MERGE handle", throwable);
       try {
         storage.deleteFile(newFilePath);
-        LOG.info("Deleting the intermediate MERGE data file: {} success!", newFilePath);
+        LOG.info("Successfully deleted the intermediate MERGE data file: {}", newFilePath);
       } catch (IOException e) {
         // logging a warning and ignore the exception.
-        LOG.warn("Deleting the intermediate MERGE data file: {} failed", newFilePath, e);
+        LOG.warn("Failed to delete the intermediate MERGE data file: {}", newFilePath, e);
+
       }
     }
   }

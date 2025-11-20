@@ -60,6 +60,7 @@ import org.apache.flink.table.catalog.CatalogDatabaseImpl;
 import org.apache.flink.table.catalog.CatalogPartitionSpec;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.Column;
+import org.apache.flink.table.catalog.DefaultCatalogTable;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.ResolvedCatalogTable;
 import org.apache.flink.table.catalog.ResolvedSchema;
@@ -454,6 +455,30 @@ public class TestHoodieCatalog {
     // drop non-exist table
     assertThrows(TableNotExistException.class,
         () -> catalog.dropTable(new ObjectPath(TEST_DEFAULT_DATABASE, "non_exist"), false));
+  }
+
+  @Test
+  public void testAlterTable() throws Exception {
+    ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb1");
+    // create table
+    catalog.createTable(tablePath, EXPECTED_CATALOG_TABLE, true);
+
+    DefaultCatalogTable oldTable = (DefaultCatalogTable) catalog.getTable(tablePath);
+    // same as old table
+    ResolvedCatalogTable newTable = new ResolvedCatalogTable(
+        CatalogUtils.createCatalogTable(
+            Schema.newBuilder().fromResolvedSchema(CREATE_TABLE_SCHEMA).build(),
+            oldTable.getPartitionKeys(),
+            oldTable.getOptions(),
+            "test"),
+        CREATE_TABLE_SCHEMA
+    );
+    catalog.alterTable(tablePath, newTable, true);
+
+    // validate primary key property is not missing
+    DefaultCatalogTable table = (DefaultCatalogTable) catalog.getTable(tablePath);
+    assertTrue(table.getUnresolvedSchema().getPrimaryKey().isPresent());
+    assertTrue(table.isPartitioned());
   }
 
   @Test

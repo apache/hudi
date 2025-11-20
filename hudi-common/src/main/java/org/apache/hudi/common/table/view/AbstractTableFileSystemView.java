@@ -114,6 +114,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected final WriteLock writeLock = globalLock.writeLock();
 
   private BootstrapIndex bootstrapIndex;
+  private HoodieTableVersion tableVersion;
 
   protected AbstractTableFileSystemView(HoodieTableMetadata tableMetadata) {
     this.tableMetadata = tableMetadata;
@@ -125,6 +126,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
     this.metaClient = metaClient;
     this.completionTimeQueryView = metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient);
+    this.tableVersion = metaClient.getTableConfig().getTableVersion();
     refreshTimeline(visibleActiveTimeline);
     resetFileGroupsReplaced(visibleCommitsAndCompactionTimeline);
     this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);
@@ -254,7 +256,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   private boolean tableVersion8AndAbove() {
-    HoodieTableVersion tableVersion = metaClient.getTableConfig().getTableVersion();
     return tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT);
   }
 
@@ -475,6 +476,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param pathInfoList List of StoragePathInfo
    */
   private Stream<HoodieBaseFile> convertFileStatusesToBaseFiles(List<StoragePathInfo> pathInfoList) {
+    String baseFileExtension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
+    boolean isMultipleBaseFileFormatsEnabled = metaClient.getTableConfig().isMultipleBaseFileFormatsEnabled();
     Predicate<StoragePathInfo> roFilePredicate = pathInfo -> {
       String pathName = pathInfo.getPath().getName();
       // Filter base files if:
@@ -482,12 +485,12 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       // 2. file is not .hoodie_partition_metadata
       if (pathName.startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
         return false;
-      } else if (metaClient.getTableConfig().isMultipleBaseFileFormatsEnabled()) {
+      } else if (isMultipleBaseFileFormatsEnabled) {
         return pathName.contains(HoodieFileFormat.PARQUET.getFileExtension())
             || pathName.contains(HoodieFileFormat.ORC.getFileExtension())
             || pathName.contains(HoodieFileFormat.HFILE.getFileExtension());
       } else {
-        return pathName.contains(metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
+        return pathName.contains(baseFileExtension);
       }
     };
     return pathInfoList.stream().filter(roFilePredicate).map(HoodieBaseFile::new);
@@ -499,10 +502,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param pathInfoList List of StoragePathInfo
    */
   private Stream<HoodieLogFile> convertFileStatusesToLogFiles(List<StoragePathInfo> pathInfoList) {
+    String logFileExtension = metaClient.getTableConfig().getLogFileFormat().getFileExtension();
     Predicate<StoragePathInfo> rtFilePredicate = pathInfo -> {
       String fileName = pathInfo.getPath().getName();
       Matcher matcher = FSUtils.LOG_FILE_PATTERN.matcher(fileName);
-      return matcher.find() && fileName.contains(metaClient.getTableConfig().getLogFileFormat().getFileExtension());
+      return matcher.matches() && fileName.contains(logFileExtension);
     };
     return pathInfoList.stream().filter(rtFilePredicate).map(HoodieLogFile::new);
   }
@@ -1039,22 +1043,35 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   @Override
   public final Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionStr, String maxInstantTime) {
+    return getLatestMergedFileSliceBeforeOrOnInternal(partitionStr, maxInstantTime, maxInstantTime, false);
+  }
+
+  @Override
+  public final Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOnIncludingInflight(String partitionStr, String maxInstantTime, String currentInstantTime) {
+    return getLatestMergedFileSliceBeforeOrOnInternal(partitionStr, maxInstantTime, currentInstantTime, true);
+  }
+
+  private Stream<FileSlice> getLatestMergedFileSliceBeforeOrOnInternal(String partitionStr,
+                                                                       String maxInstantTime,
+                                                                       String currentInstantTime,
+                                                                       boolean includeInflight) {
     try {
       readLock.lock();
       String partition = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partition);
-      return fetchAllStoredFileGroups(partition)
+      Stream<FileSlice> fileSliceStream = fetchAllStoredFileGroups(partition)
           .filter(fg -> !isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxInstantTime))
           .map(fileGroup -> {
             Option<FileSlice> fileSlice = fileGroup.getLatestFileSliceBeforeOrOn(maxInstantTime);
             // if the file-group is under construction, pick the latest before compaction instant time.
             if (fileSlice.isPresent()) {
-              fileSlice = Option.of(fetchMergedFileSlice(fileGroup, tableVersion8AndAbove()
-                      ? filterUncommittedLogs(fileSlice.get()) : fileSlice.get())
+              fileSlice = Option.of(fetchMergedFileSlice(fileGroup, (!includeInflight && tableVersion8AndAbove())
+                  ? filterUncommittedLogs(fileSlice.get()) : fileSlice.get(), currentInstantTime, includeInflight)
               );
             }
             return fileSlice;
           }).filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
+      return fileSliceStream;
     } finally {
       readLock.unlock();
     }
@@ -1548,13 +1565,27 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    *
    * @param fileGroup File Group for which the file slice belongs to
    * @param fileSlice File Slice which needs to be merged
+   * @param currentInstantTime Instant time of the current transaction
+   * @param includeBaseFileUnderInflightCompaction whether to include base file under inflight compaction
+   *                                               when merging file slices
    */
-  private FileSlice fetchMergedFileSlice(HoodieFileGroup fileGroup, FileSlice fileSlice) {
+  private FileSlice fetchMergedFileSlice(HoodieFileGroup fileGroup,
+                                         FileSlice fileSlice,
+                                         String currentInstantTime,
+                                         boolean includeBaseFileUnderInflightCompaction) {
     // if the file-group is under construction, pick the latest before compaction instant time.
     Option<Pair<String, CompactionOperation>> compactionOpWithInstant =
         getPendingCompactionOperationWithInstant(fileGroup.getFileGroupId());
     if (compactionOpWithInstant.isPresent()) {
       String compactionInstantTime = compactionOpWithInstant.get().getKey();
+      // Only if includeBaseFileUnderInflightCompaction is true, i.e., the base file from inflight
+      // compaction should be considered in the latest merged file slice, we check the file slice.
+      // The input file is directly returned if the maxInstantTime matches the inflight compaction
+      // and the base file is generated from the inflight compaction
+      if (includeBaseFileUnderInflightCompaction && compactionInstantTime.equals(currentInstantTime)
+          && fileSlice.getBaseFile().isPresent() && fileSlice.getBaseFile().get().getCommitTime().equals(compactionInstantTime)) {
+        return fileSlice;
+      }
       if (fileSlice.getBaseInstantTime().equals(compactionInstantTime)) {
         Option<FileSlice> prevFileSlice = fileGroup.getLatestFileSliceBefore(compactionInstantTime);
         if (prevFileSlice.isPresent()) {

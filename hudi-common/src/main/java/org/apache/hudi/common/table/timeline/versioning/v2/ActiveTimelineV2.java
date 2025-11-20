@@ -95,7 +95,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     this.metaClient = metaClient;
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
-    LOG.info("Loaded instants upto : {}", lastInstant());
+    LOG.debug("Loaded instants upto : {}", lastInstant());
   }
 
   public ActiveTimelineV2(HoodieTableMetaClient metaClient) {
@@ -234,7 +234,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
           throw new HoodieIOException("Could not delete instant " + instant + " with path " + commitFilePath);
         }
       } else {
-        LOG.warn("The commit {} to remove does not exist", commitFilePath);
+        LOG.info("The commit {} to remove does not exist", commitFilePath);
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not remove commit " + commitFilePath, e);

@@ -90,7 +90,7 @@ public class FlinkClusteringMetrics extends FlinkWriteMetrics {
         this.clusteringDelay = Duration.between(start, Instant.now()).getSeconds();
       }
     } catch (ParseException e) {
-      LOG.warn("Invalid input clustering instant" + firstPendingClusteringInstant);
+      LOG.warn("Invalid input clustering instant: {}", firstPendingClusteringInstant);
     }
   }
 

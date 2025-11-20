@@ -231,7 +231,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertTrue(metadataPartitionExists(basePath(), context(), RECORD_INDEX.getPartitionPath()));
 
     // Step 3: writer upsert with metadata enabled with RECORD_INDEX enabled
-    upsertToTable(metadataConfigBuilder.withEnableRecordIndex(true).build(), tableName);
+    upsertToTable(metadataConfigBuilder.withEnableGlobalRecordLevelIndex(true).build(), tableName);
 
     // Step 4: validate RECORD_INDEX partition is not deleted
     assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(RECORD_INDEX.getPartitionPath()));

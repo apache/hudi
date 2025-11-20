@@ -102,7 +102,7 @@ public class UpgradeDowngrade {
   public static boolean needsUpgrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieTableVersion toWriteVersion) {
     HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
     if (fromTableVersion.greaterThan(toWriteVersion)) {
-      LOG.warn("Table version {} is greater than write version {}. No upgrade needed", fromTableVersion, toWriteVersion);
+      LOG.info("Table version {} is greater than write version {}. No upgrade needed", fromTableVersion, toWriteVersion);
       return false;
     }
     if (fromTableVersion.equals(toWriteVersion)) {
@@ -269,7 +269,7 @@ public class UpgradeDowngrade {
 
       HoodieTable table = upgradeDowngradeHelper.getTable(updatedConfig, context);
       String newInstant = table.getMetaClient().createNewInstantTime(false);
-      Option<HoodieTableMetadataWriter> mdtWriterOpt = table.getMetadataWriter(newInstant);
+      Option<HoodieTableMetadataWriter> mdtWriterOpt = table.getMetadataWriter(newInstant, false, false);
       mdtWriterOpt.ifPresent(mdtWriter -> {
         HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
         commitMetadata.setOperationType(WriteOperationType.UPSERT);

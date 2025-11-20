@@ -21,7 +21,6 @@ package org.apache.hudi.functional.cdc
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
-import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode}
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY
@@ -174,6 +173,9 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     totalDeletedCnt += deletedCnt4
     allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
+    val cdcDataOrdered = cdcDataFrame((commitTime1.toLong - 1).toString).orderBy("ts_ms")
+    assertCDCOpCnt(cdcDataOrdered, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
+    assertEquals(allVisibleCDCData.collect().length, cdcDataOrdered.collect().length)
 
     val records5 = recordsToStrings(dataGen.generateInserts("005", 7)).asScala.toList
     val inputDF5 = spark.read.json(spark.sparkContext.parallelize(records5, 2))
@@ -363,6 +365,9 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     totalInsertedCnt += insertedCnt4
     allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
+    val cdcDataOrdered = cdcDataFrame((commitTime1.toLong - 1).toString).orderBy("ts_ms")
+    assertCDCOpCnt(cdcDataOrdered, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
+    assertEquals(allVisibleCDCData.collect().length, cdcDataOrdered.collect().length)
 
     // 5. Upsert Operation With Clustering Operation
     val records5 = recordsToStrings(dataGen.generateUniqueUpdates("004", 60)).asScala.toList
@@ -653,7 +658,6 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
       "hoodie.datasource.write.partitionpath.field" -> "",
       "hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.AWSDmsAvroPayload",
-      DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.CUSTOM.name(),
       "hoodie.table.cdc.enabled" -> "true",
       "hoodie.table.cdc.supplemental.logging.mode" -> "data_before_after"
     )
@@ -787,7 +791,6 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option("hoodie.datasource.write.operation", "upsert")
         .option("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.ComplexKeyGenerator")
         .option("hoodie.datasource.write.payload.class", "org.apache.hudi.common.model.AWSDmsAvroPayload")
-        .option(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
         .option("hoodie.table.cdc.enabled", "true")
         .option("hoodie.table.cdc.supplemental.logging.mode", loggingMode.name())
         .mode(SaveMode.Append).save(basePath)
@@ -808,7 +811,6 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option("hoodie.datasource.write.operation", "upsert")
         .option("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.ComplexKeyGenerator")
         .option("hoodie.datasource.write.payload.class", "org.apache.hudi.common.model.AWSDmsAvroPayload")
-        .option(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
         .option("hoodie.table.cdc.enabled", "true")
         .option("hoodie.table.cdc.supplemental.logging.mode", loggingMode.name())
         .mode(SaveMode.Append).save(basePath)

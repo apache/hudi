@@ -185,7 +185,7 @@ public class BootstrapExecutorUtils implements Serializable {
     } catch (Exception e) {
       Path basePath = new Path(cfg.basePath);
       if (fs.exists(basePath)) {
-        LOG.warn("deleted target base path " + cfg.basePath);
+        LOG.info("deleted target base path {}", cfg.basePath);
         fs.delete(basePath, true);
       }
       throw new HoodieException("Failed to bootstrap table", e);
@@ -219,7 +219,7 @@ public class BootstrapExecutorUtils implements Serializable {
     Path basePath = new Path(cfg.basePath);
     if (fs.exists(basePath)) {
       if (cfg.bootstrapOverwrite) {
-        LOG.warn("Target base path already exists, overwrite it");
+        LOG.info("Target base path already exists, overwrite it");
         fs.delete(basePath, true);
       } else {
         throw new HoodieException("target base path already exists at " + cfg.basePath

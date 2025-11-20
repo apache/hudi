@@ -398,8 +398,7 @@ public class StreamerUtil {
         getMergeMode(conf), payloadClassName, getMergeStrategyId(conf), OptionsResolver.getOrderingFieldsStr(conf), HoodieTableVersion.current());
     String mergeMode = mergeConf.get(HoodieTableConfig.RECORD_MERGE_MODE.key());
     String mergeStrategyId = mergeConf.get(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key());
-    ValidationUtils.checkArgument(mergeMode != null && mergeStrategyId != null,
-        "Both merge mode and merge strategy id should not be null");
+    ValidationUtils.checkArgument(mergeMode != null, "Merge mode should not be null");
     return Triple.of(RecordMergeMode.valueOf(mergeMode), payloadClassName, mergeStrategyId);
   }
 
@@ -623,7 +622,7 @@ public class StreamerUtil {
       HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(path, hadoopConf);
       return getTableAvroSchema(metaClient, false);
     } catch (Exception e) {
-      LOG.warn("Error while resolving the latest table schema", e);
+      LOG.error("Failed to resolve the latest table schema", e);
     }
     return null;
   }

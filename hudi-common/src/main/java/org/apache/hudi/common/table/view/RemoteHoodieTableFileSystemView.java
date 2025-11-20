@@ -75,6 +75,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String LATEST_PARTITION_UNCOMPACTED_SLICES_URL =  String.format("%s/%s", BASE_URL, "slices/uncompacted/partition/latest/");
   public static final String ALL_SLICES_URL = String.format("%s/%s", BASE_URL, "slices/all");
   public static final String LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_URL = String.format("%s/%s", BASE_URL, "slices/merged/beforeoron/latest/");
+  public static final String LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_INFLIGHT_URL = String.format("%s/%s", BASE_URL, "slices/merged/beforeoron/inflight/latest/");
   public static final String LATEST_SLICE_MERGED_BEFORE_ON_INSTANT_URL = String.format("%s/%s", BASE_URL, "slice/merged/beforeoron/latest/");
   public static final String LATEST_SLICES_RANGE_INSTANT_URL = String.format("%s/%s", BASE_URL, "slices/range/latest/");
   public static final String LATEST_SLICES_BEFORE_ON_INSTANT_URL = String.format("%s/%s", BASE_URL, "slices/beforeoron/latest/");
@@ -116,6 +117,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String BASEPATH_PARAM = "basepath";
   public static final String INSTANT_PARAM = "instant";
   public static final String MAX_INSTANT_PARAM = "maxinstant";
+  public static final String CURRENT_INSTANT_PARAM = "currentinstant";
   public static final String MIN_INSTANT_PARAM = "mininstant";
   public static final String INSTANTS_PARAM = "instants";
   public static final String FILEID_PARAM = "fileid";
@@ -354,6 +356,13 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime) {
     Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, MAX_INSTANT_PARAM, maxInstantTime);
     return getLatestFileSlicesStreamFromParams(LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_URL, paramsMap);
+  }
+
+  @Override
+  public Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOnIncludingInflight(String partitionPath, String maxInstantTime, String currentInstantTime) {
+    Map<String, String> paramsMap = getParamsWithAdditionalParams(partitionPath,
+        new String[] {MAX_INSTANT_PARAM, CURRENT_INSTANT_PARAM}, new String[] {maxInstantTime, currentInstantTime});
+    return getLatestFileSlicesStreamFromParams(LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_INFLIGHT_URL, paramsMap);
   }
 
   @Override

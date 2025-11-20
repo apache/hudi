@@ -62,9 +62,9 @@ public class HadoopConfigUtils {
     for (String alternative : configProperty.getAlternatives()) {
       String altValue = conf.get(alternative);
       if (altValue != null) {
-        LOG.warn(String.format("The configuration key '%s' has been deprecated "
-                + "and may be removed in the future. Please use the new key '%s' instead.",
-            alternative, configProperty.key()));
+        LOG.warn("The configuration key '{}' has been deprecated "
+            + "and may be removed in the future. Please use the new key '{}' instead.",
+            alternative, configProperty.key());
         return Option.of(altValue);
       }
     }

@@ -18,14 +18,20 @@
 
 package org.apache.parquet.avro;
 
+import org.apache.hudi.common.util.Option;
+
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.parquet.conf.ParquetConfiguration;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
+import org.apache.parquet.schema.SchemaRepair;
 import org.apache.parquet.schema.Type;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -36,11 +42,15 @@ import java.util.Map;
  */
 public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
 
-  public HoodieAvroReadSupport(GenericData model) {
+  private Option<MessageType> tableSchema;
+
+  public HoodieAvroReadSupport(GenericData model, Option<MessageType> tableSchema) {
     super(model);
+    this.tableSchema = tableSchema;
   }
 
   public HoodieAvroReadSupport() {
+    tableSchema = Option.empty();
   }
 
   @Override
@@ -48,6 +58,50 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
     boolean legacyMode = checkLegacyMode(fileSchema.getFields());
     adjustConfToReadWithFileProduceMode(legacyMode, configuration);
     ReadContext readContext = super.init(configuration, keyValueMetaData, fileSchema);
+    MessageType requestedSchema = SchemaRepair.repairLogicalTypes(readContext.getRequestedSchema(), tableSchema);
+    // support non-legacy map. Convert non-legacy map to legacy map
+    // Because there is no AvroWriteSupport.WRITE_OLD_MAP_STRUCTURE
+    // according to AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE
+    if (!legacyMode) {
+      requestedSchema = new MessageType(requestedSchema.getName(), convertLegacyMap(requestedSchema.getFields()));
+    }
+    return new ReadContext(requestedSchema, readContext.getReadSupportMetadata());
+  }
+
+  /**
+   * Initializes the Avro read support for Parquet files using {@link ParquetConfiguration} (Avro 1.12.x+).
+   * This method overrides {@code AvroReadSupport#init} to handle legacy list structure compatibility
+   * and projection schema configuration.
+   *
+   * @param configuration    The Parquet configuration containing read settings and projection schema
+   * @param keyValueMetaData Key-value metadata from the Parquet file footer
+   * @param fileSchema       The schema of the Parquet file being read
+   * @return A {@link ReadContext} containing the projection schema and read support metadata
+   */
+  public ReadContext init(ParquetConfiguration configuration, Map<String, String> keyValueMetaData, MessageType fileSchema) {
+    boolean legacyMode = checkLegacyMode(fileSchema.getFields());
+    configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, String.valueOf(legacyMode));
+    MessageType projection = SchemaRepair.repairLogicalTypes(fileSchema, tableSchema);
+    Map<String, String> metadata = new LinkedHashMap<String, String>();
+
+    String requestedProjectionString = configuration.get(AVRO_REQUESTED_PROJECTION);
+    if (requestedProjectionString != null) {
+      Schema avroRequestedProjection = new Schema.Parser().parse(requestedProjectionString);
+      Configuration conf = new Configuration();
+      configuration.forEach(entry -> conf.set(entry.getKey(), entry.getValue()));
+      projection = new AvroSchemaConverter(conf).convert(avroRequestedProjection);
+    }
+
+    String avroReadSchema = configuration.get("parquet.avro.read.schema");
+    if (avroReadSchema != null) {
+      metadata.put("avro.read.schema", avroReadSchema);
+    }
+
+    if (configuration.getBoolean(AVRO_COMPATIBILITY, AVRO_DEFAULT_COMPATIBILITY)) {
+      metadata.put(AVRO_COMPATIBILITY, "true");
+    }
+
+    ReadContext readContext = new ReadContext(projection, metadata);
     MessageType requestedSchema = readContext.getRequestedSchema();
     // support non-legacy map. Convert non-legacy map to legacy map
     // Because there is no AvroWriteSupport.WRITE_OLD_MAP_STRUCTURE

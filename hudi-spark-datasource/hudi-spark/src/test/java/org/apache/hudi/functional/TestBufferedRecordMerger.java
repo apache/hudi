@@ -22,11 +22,13 @@ package org.apache.hudi.functional;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DefaultSparkRecordMerger;
 import org.apache.hudi.OverwriteWithLatestSparkRecordMerger;
+import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -34,23 +36,28 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.expression.Predicate;
+import org.apache.hudi.io.CustomMerger;
+import org.apache.hudi.io.CustomPayload;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -63,10 +70,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -75,8 +82,8 @@ import java.util.stream.Stream;
 import static org.apache.hudi.BaseSparkInternalRecordContext.getFieldValueFromInternalRow;
 import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
-import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.ORDERING_FIELDS;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -586,6 +593,107 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     assertEquals(newRecord, result.getRecord());
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testCustomMerging(boolean usePayload) throws IOException {
+    // create a simple schema with _hoodie_is_delete field to track delete records
+    Schema customSchema = Schema.createRecord("CustomRecord", null, null, false);
+    Option<HoodieRecordMerger> recordMerger;
+    Option<String> payloadClassName;
+    if (usePayload) {
+      recordMerger = Option.of(new HoodieAvroRecordMerger());
+      payloadClassName = Option.of(CustomPayload.class.getName());
+    } else {
+      recordMerger = Option.of(new CustomMerger());
+      payloadClassName = Option.empty();
+    }
+    customSchema.setFields(Arrays.asList(new Schema.Field("id", Schema.create(Schema.Type.STRING), null, null),
+        new Schema.Field("name", Schema.create(Schema.Type.STRING), null, null),
+        new Schema.Field("timestamp", Schema.create(Schema.Type.LONG), null, null),
+        new Schema.Field(HoodieRecord.HOODIE_IS_DELETED_FIELD, Schema.create(Schema.Type.BOOLEAN))));
+    // Configure reader context with custom schema
+    props.setProperty(ORDERING_FIELDS.key(), "timestamp");
+    HoodieAvroReaderContext avroReaderContext = new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
+    avroReaderContext.setHasLogFiles(false);
+    avroReaderContext.setHasBootstrapBaseFile(false);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    avroReaderContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(avroReaderContext, customSchema, customSchema, Option.empty(), props, metaClient));
+    avroReaderContext.getRecordContext().encodeAvroSchema(customSchema);
+
+    BufferedRecordMerger<IndexedRecord> merger = BufferedRecordMergerFactory.create(
+        avroReaderContext,
+        RecordMergeMode.CUSTOM,
+        false,
+        recordMerger,
+        payloadClassName,
+        customSchema,
+        props,
+        Option.empty());
+
+    GenericRecord record1 = createCustomRecord(customSchema, "1", "Alice", 1000L, false);
+    BufferedRecord<IndexedRecord> bufferedRecord1 = new BufferedRecord<>("1", 1000L, record1, 0, null);
+    GenericRecord record2 = createCustomRecord(customSchema, "1", "Bob", 2000L, false);
+    BufferedRecord<IndexedRecord> bufferedRecord2 = new BufferedRecord<>("1", 2000L, record2, 0, null);
+    GenericRecord record3 = createCustomRecord(customSchema, "1", "Charlie", 3000L, true);
+    BufferedRecord<IndexedRecord> bufferedRecord3 = new BufferedRecord<>("1", 3000L, record3, 0, HoodieOperation.DELETE);
+    GenericRecord record4 = createCustomRecord(customSchema, "1", "Dexter", 4000L, false);
+    BufferedRecord<IndexedRecord> bufferedRecord4 = new BufferedRecord<>("1", 4000L, record4, 0, null);
+
+    // Custom merger applies a reverse ordering so the earliest record is kept
+    BufferedRecord<IndexedRecord> result = merger.finalMerge(bufferedRecord1, bufferedRecord2);
+    assertEquals(bufferedRecord1, result);
+    assertFalse(result.isDelete());
+    result = merger.finalMerge(bufferedRecord2, bufferedRecord3);
+    assertEquals(bufferedRecord2, result);
+    assertFalse(result.isDelete());
+    result = merger.finalMerge(bufferedRecord3, bufferedRecord4);
+    assertEquals(bufferedRecord3, result);
+    assertTrue(result.isDelete());
+    // flip ordering with delete to ensure behavior is consistent
+    result = merger.finalMerge(bufferedRecord4, bufferedRecord3);
+    assertEquals(bufferedRecord3, result);
+    assertTrue(result.isDelete());
+
+    // Validate delta merge
+    Option<BufferedRecord<IndexedRecord>> deltaMergeResult = merger.deltaMerge(bufferedRecord1, bufferedRecord2);
+    assertTrue(deltaMergeResult.isPresent());
+    assertEquals(bufferedRecord1, deltaMergeResult.get());
+    assertFalse(deltaMergeResult.get().isDelete());
+    deltaMergeResult = merger.deltaMerge(bufferedRecord2, bufferedRecord3);
+    assertTrue(deltaMergeResult.isPresent());
+    assertEquals(bufferedRecord2, deltaMergeResult.get());
+    assertFalse(deltaMergeResult.get().isDelete());
+    deltaMergeResult = merger.deltaMerge(bufferedRecord3, bufferedRecord4);
+    assertTrue(deltaMergeResult.isPresent());
+    assertEquals(bufferedRecord3, deltaMergeResult.get());
+    assertTrue(deltaMergeResult.get().isDelete());
+    // flip ordering and expect empty option
+    assertTrue(merger.deltaMerge(bufferedRecord4, bufferedRecord3).isEmpty());
+    assertTrue(merger.deltaMerge(bufferedRecord3, bufferedRecord2).isEmpty());
+    assertTrue(merger.deltaMerge(bufferedRecord2, bufferedRecord1).isEmpty());
+
+    // Validate merge with delete records
+    DeleteRecord deleteRecordWithHigherOrderValue = DeleteRecord.create("1", "anyPath", 5000L);
+    DeleteRecord deleteRecordWithLowerOrderValue = DeleteRecord.create("1", "anyPath", 1000L);
+    Option<DeleteRecord> deleteResult = merger.deltaMerge(deleteRecordWithHigherOrderValue, bufferedRecord2);
+    // delete is skipped because custom merger prefers lower ordering value
+    assertFalse(deleteResult.isPresent());
+    deleteResult = merger.deltaMerge(deleteRecordWithLowerOrderValue, bufferedRecord2);
+    // delete is applied because lower ordering value is preferred
+    assertTrue(deleteResult.isPresent());
+    assertEquals(deleteRecordWithLowerOrderValue, deleteResult.get());
+  }
+
+  private static GenericRecord createCustomRecord(Schema customSchema, String id, String name, long timestamp, boolean isDelete) {
+    GenericRecord record = new GenericData.Record(customSchema);
+    record.put("id", id);
+    record.put("name", name);
+    record.put("timestamp", timestamp);
+    record.put("_hoodie_is_deleted", isDelete);
+    return record;
+  }
+
   // ============================================================================
   // Helper methods or class to create records for the parameterized test
   // ============================================================================
@@ -669,7 +777,6 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         mergeMode == EVENT_TIME_ORDERING
             ? Option.of(new DefaultSparkRecordMerger())
             : Option.of(new OverwriteWithLatestSparkRecordMerger()),
-        Collections.emptyList(), // orderingFieldNames
         Option.empty(), // payloadClass
         READER_SCHEMA, // readerSchema
         props, // props
@@ -686,7 +793,6 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         mergeMode == EVENT_TIME_ORDERING
             ? Option.of(new DefaultSparkRecordMerger())
             : Option.of(new OverwriteWithLatestSparkRecordMerger()),
-        Collections.emptyList(), // orderingFieldNames
         Option.empty(), // payloadClass
         READER_SCHEMA, // readerSchema
         props, // props

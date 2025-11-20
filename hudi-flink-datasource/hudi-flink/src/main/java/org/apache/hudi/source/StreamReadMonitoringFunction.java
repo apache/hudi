@@ -247,7 +247,7 @@ public class StreamReadMonitoringFunction
 
     if (result.isEmpty() && StringUtils.isNullOrEmpty(result.getEndInstant())) {
       // no new instants, returns early
-      LOG.warn("No new instants to read for current run.");
+      LOG.info("No new instants to read for current run.");
       return;
     }
 
@@ -274,7 +274,7 @@ public class StreamReadMonitoringFunction
             + "------------------------------------------------------------",
         conf.get(FlinkOptions.TABLE_NAME), this.issuedInstant, sentSplits, totalSplits, sentPercentage);
     if (result.isEmpty()) {
-      LOG.warn("No new files to read for current run.");
+      LOG.info("No new files to read for current run.");
     }
   }
 

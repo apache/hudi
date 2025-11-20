@@ -21,14 +21,14 @@ package org.apache.spark.sql.hudi.feature.index
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.data.{HoodieListData, HoodiePairData}
+import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.engine.EngineType
 import org.apache.hudi.common.model.HoodieRecordLocation
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.util.HoodieDataUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.data.{HoodieJavaPairRDD, HoodieJavaRDD}
+import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
 
@@ -70,8 +70,8 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
        |  hoodie.metadata.record.index.enable = 'true',
        |  hoodie.metadata.index.column.stats.enable = 'true',
        |  hoodie.metadata.index.secondary.enable = 'true',
-       |  hoodie.metadata.record.index.min.filegroup.count = '${getNumFileIndexGroup}',
-       |  hoodie.metadata.record.index.max.filegroup.count = '${getNumFileIndexGroup}',
+       |  hoodie.metadata.global.record.level.index.min.filegroup.count = '${getNumFileIndexGroup}',
+       |  hoodie.metadata.global.record.level.index.max.filegroup.count = '${getNumFileIndexGroup}',
        |  hoodie.write.table.version = '${getTableVersion}',
        |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'
        | )
@@ -124,6 +124,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     tmpDir = Utils.createTempDir()
 
     spark.sql("set hoodie.parquet.small.file.limit=0")
+    spark.sql("set hoodie.write.lock.provider = org.apache.hudi.client.transaction.lock.InProcessLockProvider")
     // Setup shared test data
     setupSharedTestData()
   }
@@ -205,29 +206,32 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     )
 
     // Create secondary indexes on name and price columns
-    spark.sql(s"set hoodie.write.table.version = ${getTableVersion}")
-    spark.sql(s"set hoodie.metadata.record.index.min.filegroup.count = ${getNumFileIndexGroup}")
-    spark.sql(s"set hoodie.metadata.record.index.max.filegroup.count = ${getNumFileIndexGroup}")
-    spark.sql(s"create index idx_name on $tableName (name)")
-    spark.sql(s"create index idx_price on $tableName (price)")
+    withSQLConf(
+      "hoodie.write.table.version" -> getTableVersion,
+      "hoodie.metadata.global.record.level.index.min.filegroup.count" -> getNumFileIndexGroup,
+      "set hoodie.metadata.global.record.level.index.max.filegroup.count" -> getNumFileIndexGroup
+    ) {
+      spark.sql(s"create index idx_name on $tableName (name)")
+      spark.sql(s"create index idx_price on $tableName (price)")
 
-    checkAnswer(s"show indexes from $tableName")(
-      Seq("column_stats", "column_stats", ""),
-      Seq("secondary_index_idx_name", "secondary_index", "name"),
-      Seq("secondary_index_idx_price", "secondary_index", "price"),
-      Seq("record_index", "record_index", "")
-    )
+      checkAnswer(s"show indexes from $tableName")(
+        Seq("column_stats", "column_stats", ""),
+        Seq("secondary_index_idx_name", "secondary_index", "name"),
+        Seq("secondary_index_idx_price", "secondary_index", "price"),
+        Seq("record_index", "record_index", "")
+      )
 
-    // Verify the data in the table matches expected data
-    checkAnswer(s"select id, name, price, ts from $tableName")(testData: _*)
+      // Verify the data in the table matches expected data
+      checkAnswer(s"select id, name, price, ts from $tableName")(testData: _*)
 
-    // Verify the table version
-    metaClient.reload()
-    jsc = new JavaSparkContext(spark.sparkContext)
-    val sqlContext = new SQLContext(spark)
-    context = new HoodieSparkEngineContext(jsc, sqlContext)
-    hoodieBackedTableMetadata = new HoodieBackedTableMetadata(
-      context, metaClient.getStorage, writeConfig.getMetadataConfig, basePath, true)
+      // Verify the table version
+      metaClient.reload()
+      jsc = new JavaSparkContext(spark.sparkContext)
+      val sqlContext = SQLContext.getOrCreate(jsc)
+      context = new HoodieSparkEngineContext(jsc, sqlContext)
+      hoodieBackedTableMetadata = new HoodieBackedTableMetadata(
+        context, metaClient.getStorage, writeConfig.getMetadataConfig, basePath, true)
+    }
   }
 
   /**
@@ -320,7 +324,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
 
     // Case 6: Use parallelized RDD
     jsc = new JavaSparkContext(spark.sparkContext)
-    context = new HoodieSparkEngineContext(jsc, new SQLContext(spark))
+    context = new HoodieSparkEngineContext(jsc, SQLContext.getOrCreate(jsc))
     val rddKeys = HoodieJavaRDD.of(List("a1", "a2", "a$").asJava, context, 2)
     val rddResult = hoodieBackedTableMetadata.readRecordIndexLocationsWithKeys(rddKeys)
     val rddResultKeys = rddResult.map(_.getKey()).collectAsList().asScala.toSet

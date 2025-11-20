@@ -20,16 +20,17 @@
 package org.apache.hudi.common.table.read
 
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
-import org.apache.hudi.DataSourceWriteOptions.{OPERATION, ORDERING_FIELDS, RECORDKEY_FIELD, TABLE_TYPE}
+import org.apache.hudi.DataSourceWriteOptions.{OPERATION, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderBase.hoodieRecordsToIndexedRecords
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFileCount
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
-import org.apache.hudi.common.util.{CollectionUtils, Option => HOption, OrderingValues}
+import org.apache.hudi.common.util.{Option => HOption, OrderingValues}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
@@ -55,6 +56,7 @@ import org.mockito.Mockito.when
 
 import java.util
 import java.util.Collections
+import java.util.stream.Collectors
 
 import scala.collection.JavaConverters._
 
@@ -116,8 +118,9 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
                              options: util.Map[String, String],
                              schemaStr: String): Unit = {
     val schema = new Schema.Parser().parse(schemaStr)
-    val genericRecords = spark.sparkContext.parallelize(recordList.asScala.map(_.toIndexedRecord(schema, CollectionUtils.emptyProps))
-      .filter(r => r.isPresent).map(r => r.get.getData.asInstanceOf[GenericRecord]).toSeq, 2)
+    val genericRecords = spark.sparkContext.parallelize((hoodieRecordsToIndexedRecords(recordList, schema)
+      .stream().map[GenericRecord](entry => entry.getValue.asInstanceOf[GenericRecord])
+      .collect(Collectors.toList[GenericRecord])).asScala.toSeq, 2)
     val inputDF: Dataset[Row] = AvroConversionUtils.createDataFrame(genericRecords, schemaStr, spark);
 
     inputDF.write.format("hudi")
@@ -188,10 +191,10 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
         + "{\"name\": \"col1\", \"type\": \"string\" },"
         + "{\"name\": \"col2\", \"type\": \"long\" },"
         + "{ \"name\": \"col3\", \"type\": [\"null\", \"string\"], \"default\": null}]}")
-    val row = InternalRow("item", 1000L, "blue")
+    val row = InternalRow("item", 1000L, UTF8String.fromString("blue"))
     testGetOrderingValue(sparkReaderContext, row, avroSchema, orderingFieldName, 1000L)
     testGetOrderingValue(
-      sparkReaderContext, row, avroSchema, "col3", UTF8String.fromString("blue"))
+      sparkReaderContext, row, avroSchema, "col3", sparkAdapter.getUTF8StringFactory.wrapUTF8String(UTF8String.fromString("blue")))
     testGetOrderingValue(
       sparkReaderContext, row, avroSchema, "non_existent_col", OrderingValues.getDefault)
   }

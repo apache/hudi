@@ -19,7 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
 import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
@@ -38,13 +38,14 @@ import scala.util.Using
 class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
   val metadataOpts: Map[String, String] = Map(
     HoodieMetadataConfig.ENABLE.key -> "true",
-    HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true",
+    HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true",
     HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
   )
   def commonOpts: Map[String, String] = Map(
     PARTITIONPATH_FIELD.key -> "partition",
     HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
-    HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "15"
+    HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "15",
+    HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key() -> "200"
   ) ++ baseOpts ++ metadataOpts
 
   val secondaryIndexOpts: Map[String, String] = Map(
@@ -124,10 +125,10 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
   }
 
   protected def validateDataAndRecordIndices(hudiOpts: Map[String, String],
-                                           deletedDf: DataFrame = sparkSession.emptyDataFrame): Unit = {
+                                             deletedDf: DataFrame = sparkSession.emptyDataFrame): Unit = {
     val writeConfig = getWriteConfig(hudiOpts)
     val metadata = metadataWriter(writeConfig).getTableMetadata
-    val readDf = spark.read.format("hudi").load(basePath)
+    val readDf = spark.read.options(hudiOpts).format("hudi").load(basePath)
     readDf.cache()
     val rowArr = readDf.collect()
     val recordIndexMap = HoodieDataUtils.dedupeAndCollectAsMap(metadata.readRecordIndexLocationsWithKeys(
@@ -150,8 +151,8 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     assertEquals(0, recordIndexMapForDeletedRows.size(), "deleted records should not present in RLI")
 
     assertEquals(rowArr.length, recordIndexMap.keySet.size)
-    val estimatedFileGroupCount = HoodieTableMetadataUtil.estimateFileGroupCount(MetadataPartitionType.RECORD_INDEX, rowArr.length, 48,
-      writeConfig.getRecordIndexMinFileGroupCount, writeConfig.getRecordIndexMaxFileGroupCount,
+    val estimatedFileGroupCount = HoodieTableMetadataUtil.estimateFileGroupCount(MetadataPartitionType.RECORD_INDEX, () => rowArr.length, 48,
+      writeConfig.getGlobalRecordLevelIndexMinFileGroupCount, writeConfig.getGlobalRecordLevelIndexMaxFileGroupCount,
       writeConfig.getRecordIndexGrowthFactor, writeConfig.getRecordIndexMaxFileGroupSizeBytes)
     assertEquals(estimatedFileGroupCount, getFileGroupCountForRecordIndex(writeConfig))
     val prevDf = mergedDfList.last.drop("tip_history", "_hoodie_is_deleted")

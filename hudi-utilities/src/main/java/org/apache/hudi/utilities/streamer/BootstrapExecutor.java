@@ -189,7 +189,7 @@ public class BootstrapExecutor implements Serializable {
     Path basePath = new Path(cfg.targetBasePath);
     if (fs.exists(basePath)) {
       if (cfg.bootstrapOverwrite) {
-        LOG.warn("Target base path already exists, overwrite it");
+        LOG.info("Target base path already exists, overwrite it");
         fs.delete(basePath, true);
       } else {
         throw new HoodieException("target base path already exists at " + cfg.targetBasePath

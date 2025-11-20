@@ -111,7 +111,7 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
       if (rollbackInstantOpt.isPresent()) {
         instantsToRollback.add(rollbackInstantOpt.get());
       } else {
-        LOG.warn("Ignoring already rolledback instant " + instantInfo.toString());
+        LOG.info("Ignoring already rolledback instant {}", instantInfo.toString());
       }
     }
     return instantsToRollback;

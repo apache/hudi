@@ -30,7 +30,7 @@ import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, Pa
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
-object HoodieSpark34CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
+object HoodieSpark34CatalystPlanUtils extends BaseHoodieCatalystPlanUtils {
 
   def unapplyResolvedTable(plan: LogicalPlan): Option[(TableCatalog, Identifier, Table)] =
     plan match {
@@ -79,6 +79,12 @@ object HoodieSpark34CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
       messageParameters = Map(
         "sqlExpr" -> a.sql,
         "cols" -> cols))
+  }
+
+  override def failTableNotFound(tableName: String): Unit = {
+    throw new AnalysisException(
+      errorClass = "TABLE_OR_VIEW_NOT_FOUND",
+      messageParameters = Map("relationName" -> s"`$tableName`"))
   }
 
   override def unapplyCreateIndex(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])] = {

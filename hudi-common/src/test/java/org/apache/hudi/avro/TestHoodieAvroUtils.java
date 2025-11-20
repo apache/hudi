@@ -24,6 +24,34 @@ import org.apache.hudi.avro.model.DateWrapper;
 import org.apache.hudi.avro.model.DecimalWrapper;
 import org.apache.hudi.avro.model.DoubleWrapper;
 import org.apache.hudi.avro.model.FloatWrapper;
+import org.apache.hudi.avro.model.HoodieActionInstant;
+import org.apache.hudi.avro.model.HoodieBootstrapFilePartitionInfo;
+import org.apache.hudi.avro.model.HoodieBootstrapIndexInfo;
+import org.apache.hudi.avro.model.HoodieBootstrapPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieCleanFileInfo;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieCommitMetadata;
+import org.apache.hudi.avro.model.HoodieCompactionOperation;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieCompactionStrategy;
+import org.apache.hudi.avro.model.HoodieDeleteRecordList;
+import org.apache.hudi.avro.model.HoodieFSPermission;
+import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.HoodieIndexPlan;
+import org.apache.hudi.avro.model.HoodieMergeArchiveFilePlan;
+import org.apache.hudi.avro.model.HoodiePath;
+import org.apache.hudi.avro.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRestorePlan;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieWriteStat;
 import org.apache.hudi.avro.model.IntWrapper;
 import org.apache.hudi.avro.model.LocalDateWrapper;
 import org.apache.hudi.avro.model.LongWrapper;
@@ -53,6 +81,9 @@ import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.specific.SpecificData;
+import org.apache.avro.specific.SpecificRecord;
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.avro.util.Utf8;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -60,8 +91,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -84,7 +113,7 @@ import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.sanitizeName;
 import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
@@ -102,8 +131,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests hoodie avro utilities.
  */
 public class TestHoodieAvroUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieAvroUtils.class);
 
   private static final String EVOLVED_SCHEMA = "{\"type\": \"record\",\"name\": \"testrec1\",\"fields\": [ "
       + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
@@ -124,6 +151,17 @@ public class TestHoodieAvroUtils {
       + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
       + "{\"name\": \"pii_col\", \"type\": \"string\", \"column_category\": \"user_profile\"}], "
       + "\"custom_schema_property\": \"custom_schema_property_value\"}";
+
+  private static final String EXAMPLE_SCHEMA_WITH_META_FIELDS = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
+      + "{\"name\": \"_hoodie_commit_time\",\"type\": \"string\"},"
+      + "{\"name\": \"_hoodie_commit_seqno\",\"type\": \"string\"},"
+      + "{\"name\": \"_hoodie_record_key\",\"type\": \"string\"},"
+      + "{\"name\": \"_hoodie_partition_path\",\"type\": \"string\"},"
+      + "{\"name\": \"_hoodie_file_name\",\"type\": \"string\"},"
+      + "{\"name\": \"timestamp\",\"type\": \"double\"},"
+      + "{\"name\": \"_row_key\", \"type\": \"string\"},"
+      + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
+      + "{\"name\": \"pii_col\", \"type\": \"string\", \"column_category\": \"user_profile\"}]}";
 
   private static final int NUM_FIELDS_IN_EXAMPLE_SCHEMA = 4;
 
@@ -228,6 +266,20 @@ public class TestHoodieAvroUtils {
   public static Schema SCHEMA_WITH_NESTED_FIELD_LARGE = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_LARGE_STR);
 
   @Test
+  void testAddMetaFields() {
+    // validate null schema does not throw errors
+    assertNull(HoodieAvroUtils.addMetadataFields(null));
+    Schema nullSchema = Schema.create(Schema.Type.NULL);
+    assertEquals(nullSchema, HoodieAvroUtils.addMetadataFields(nullSchema));
+    // test with non-null schema
+    Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(EXAMPLE_SCHEMA));
+    assertEquals(NUM_FIELDS_IN_EXAMPLE_SCHEMA + HoodieRecord.HOODIE_META_COLUMNS.size(), schema.getFields().size());
+    for (String metaCol : HoodieRecord.HOODIE_META_COLUMNS) {
+      assertNotNull(schema.getField(metaCol));
+    }
+  }
+
+  @Test
   public void testPropsPresent() {
     Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(EXAMPLE_SCHEMA));
     boolean piiPresent = false;
@@ -289,6 +341,46 @@ public class TestHoodieAvroUtils {
     assertNull(rec1.get("_hoodie_commit_time"));
     assertNull(rec1.get("nullable_field"));
     assertNull(rec1.get("nullable_field_wo_default"));
+  }
+
+  @Test
+  public void testJoinedGenericRecord() {
+    GenericRecord rec = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
+    rec.put("_row_key", "key1");
+    rec.put("non_pii_col", "val1");
+    rec.put("pii_col", "val2");
+    rec.put("timestamp", 3.5);
+
+    GenericRecord rec1 = new JoinedGenericRecord(rec, 5, new Schema.Parser().parse(EXAMPLE_SCHEMA_WITH_META_FIELDS));
+    assertNull(rec1.get("_hoodie_commit_time"));
+    assertNull(rec1.get("_hoodie_record_key"));
+
+    assertEquals(rec.get("_row_key"), rec1.get("_row_key"));
+    assertEquals(rec.get("_row_key"), rec1.get(6));
+    assertEquals(rec.get("non_pii_col"), rec1.get("non_pii_col"));
+    assertEquals(rec.get("non_pii_col"), rec1.get(7));
+    assertEquals(rec.get("pii_col"), rec1.get("pii_col"));
+    assertEquals(rec.get("pii_col"), rec1.get(8));
+    assertEquals(rec.get("timestamp"), rec1.get("timestamp"));
+    assertEquals(rec.get("timestamp"), rec1.get(5));
+
+    // lets add meta field values and validate
+    rec1.put(0, "commitTime1");
+    rec1.put(1, "commitSecNo1");
+    rec1.put(2, "recKey1");
+    rec1.put(3, "pPath1");
+    rec1.put(4, "fileName");
+
+    assertEquals("commitTime1", rec1.get(0));
+    assertEquals("commitTime1", rec1.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+    assertEquals("commitSecNo1", rec1.get(1));
+    assertEquals("commitSecNo1", rec1.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD));
+    assertEquals("recKey1", rec1.get(2));
+    assertEquals("recKey1", rec1.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+    assertEquals("pPath1", rec1.get(3));
+    assertEquals("pPath1", rec1.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+    assertEquals("fileName", rec1.get(4));
+    assertEquals("fileName", rec1.get(HoodieRecord.FILENAME_METADATA_FIELD));
   }
 
   @Test
@@ -984,7 +1076,7 @@ public class TestHoodieAvroUtils {
   public void testGetSchemaForFieldNested(String colName, Schema.Type schemaType) {
     Pair<String, Schema.Field> actualColNameAndSchemaFile = HoodieAvroUtils.getSchemaForField(SCHEMA_WITH_NESTED_FIELD_LARGE, colName);
     assertEquals(colName, actualColNameAndSchemaFile.getKey());
-    assertEquals(schemaType, resolveNullableSchema(actualColNameAndSchemaFile.getValue().schema()).getType());
+    assertEquals(schemaType, getNonNullTypeFromUnion(actualColNameAndSchemaFile.getValue().schema()).getType());
   }
 
   public static Stream<Arguments> getExpectedSchemaForFields() {
@@ -1179,5 +1271,156 @@ public class TestHoodieAvroUtils {
   void recordNeedsRewriteForExtendedAvroTypePromotion(Schema writerSchema, Schema readerSchema, boolean expected) {
     boolean result = HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(writerSchema, readerSchema);
     assertEquals(expected, result);
+  }
+
+  /**
+   * Utility class for generating random GenericRecord instances.
+   */
+  private static class AvroTestUtils {
+    private static final Random RANDOM = new Random(42);
+
+    /**
+     * Generate a list of random GenericRecord instances
+     */
+    public static List<GenericRecord> generateRandomRecords(Schema schema, int count) {
+      List<GenericRecord> records = new ArrayList<>();
+      for (int i = 0; i < count; i++) {
+        records.add(generateRandomRecord(schema));
+      }
+      return records;
+    }
+
+    /**
+     * Generate a random GenericRecord for the given schema
+     */
+    public static GenericRecord generateRandomRecord(Schema schema) {
+      GenericRecord record = new GenericData.Record(schema);
+      for (Schema.Field field : schema.getFields()) {
+        Object value = generateRandomValue(field.schema(), field.defaultVal());
+        record.put(field.pos(), value);
+      }
+      return record;
+    }
+
+    /**
+     * Generate a random value for the given schema type
+     */
+    private static Object generateRandomValue(Schema schema, Object defaultValue) {
+      // CASE 1: Handle default value
+      if (defaultValue != null
+          && !(defaultValue instanceof JsonProperties.Null)
+          && RANDOM.nextBoolean()) {
+        return defaultValue;
+      }
+      // Handle Union type.
+      Schema actualSchema = schema;
+      try {
+        actualSchema = getNonNullTypeFromUnion(schema);
+      } catch (Exception e) {
+        // If we can't resolve the schema, just use the original
+        // Op.
+      }
+      // CASE 2: Handle different types
+      switch (actualSchema.getType()) {
+        case NULL:
+          return null;
+        case BOOLEAN:
+          return RANDOM.nextBoolean();
+        case INT:
+          return RANDOM.nextInt(1000);
+        case LONG:
+          return RANDOM.nextLong() % 1000000L;
+        case FLOAT:
+          return RANDOM.nextFloat() * 100f;
+        case DOUBLE:
+          return RANDOM.nextDouble() * 1000.0;
+        case STRING:
+          return "test_string_" + RANDOM.nextInt(1000);
+        case BYTES:
+          byte[] bytes = new byte[RANDOM.nextInt(10) + 1];
+          RANDOM.nextBytes(bytes);
+          return ByteBuffer.wrap(bytes);
+        case RECORD:
+          return generateRandomRecord(actualSchema);
+        case ENUM:
+          List<String> symbols = actualSchema.getEnumSymbols();
+          return new GenericData.EnumSymbol(actualSchema, symbols.get(RANDOM.nextInt(symbols.size())));
+        case ARRAY:
+          List<Object> array = new ArrayList<>();
+          int arraySize = RANDOM.nextInt(3) + 1;
+          for (int i = 0; i < arraySize; i++) {
+            array.add(generateRandomValue(actualSchema.getElementType(), null));
+          }
+          return array;
+        case MAP:
+          Map<String, Object> map = new HashMap<>();
+          int mapSize = RANDOM.nextInt(3) + 1;
+          for (int i = 0; i < mapSize; i++) {
+            map.put("key_" + i, generateRandomValue(actualSchema.getValueType(), null));
+          }
+          return map;
+        case FIXED:
+          byte[] fixedBytes = new byte[actualSchema.getFixedSize()];
+          RANDOM.nextBytes(fixedBytes);
+          return new GenericData.Fixed(actualSchema, fixedBytes);
+        default:
+          return null;
+      }
+    }
+  }
+
+  /**
+   * Test convertToSpecificRecord with multiple random records for each type
+   */
+  @ParameterizedTest
+  @MethodSource("provideAvroModelClasses")
+  void testConvertToSpecificRecordMultipleRecords(Class<? extends SpecificRecord> recordClass) {
+    Schema schema = SpecificData.get().getSchema(recordClass);
+    List<GenericRecord> genericRecords = AvroTestUtils.generateRandomRecords(schema, 3);
+    for (GenericRecord genericRecord : genericRecords) {
+      Class<? extends SpecificRecordBase> specificRecordBaseClass
+          = (Class<? extends SpecificRecordBase>) recordClass;
+      SpecificRecord specificRecord =
+          HoodieAvroUtils.convertToSpecificRecord(specificRecordBaseClass, genericRecord);
+      assertEquals(recordClass, specificRecord.getClass());
+      GenericRecord copied = (GenericRecord) GenericData.get().deepCopy(schema, specificRecord);
+      assertEquals(genericRecord, copied);
+    }
+  }
+
+  /**
+   * Provide all the Avro model classes to test
+   */
+  static Stream<Arguments> provideAvroModelClasses() {
+    return Stream.of(
+        Arguments.of(HoodieRollbackPartitionMetadata.class),
+        Arguments.of(HoodieSavepointPartitionMetadata.class),
+        Arguments.of(HoodieWriteStat.class),
+        Arguments.of(HoodieCleanPartitionMetadata.class),
+        Arguments.of(HoodieCleanFileInfo.class),
+        Arguments.of(HoodieActionInstant.class),
+        Arguments.of(HoodieCompactionStrategy.class),
+        Arguments.of(HoodieCompactionOperation.class),
+        Arguments.of(HoodieFSPermission.class),
+        Arguments.of(HoodiePath.class),
+        Arguments.of(HoodieFileStatus.class),
+        Arguments.of(HoodieBootstrapFilePartitionInfo.class),
+        Arguments.of(HoodieCompactionPlan.class),
+        Arguments.of(HoodieCleanerPlan.class),
+        Arguments.of(HoodieCleanMetadata.class),
+        Arguments.of(HoodieReplaceCommitMetadata.class),
+        Arguments.of(HoodieSavepointMetadata.class),
+        Arguments.of(HoodieMergeArchiveFilePlan.class),
+        Arguments.of(HoodieRollbackMetadata.class),
+        Arguments.of(HoodieBootstrapPartitionMetadata.class),
+        Arguments.of(HoodieBootstrapIndexInfo.class),
+        Arguments.of(HoodieIndexPlan.class),
+        Arguments.of(HoodieRequestedReplaceMetadata.class),
+        Arguments.of(HoodieRestoreMetadata.class),
+        Arguments.of(HoodieRestorePlan.class),
+        Arguments.of(HoodieRollbackPlan.class),
+        Arguments.of(HoodieDeleteRecordList.class),
+        Arguments.of(HoodieCommitMetadata.class)
+    );
   }
 }

@@ -94,7 +94,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
   protected void doWrite(HoodieRecord record, Schema schema, TypedProperties props) {
     Option<Map<String, String>> recordMetadata = getRecordMetadata(record, schema, props);
     try {
-      if (!HoodieOperation.isDelete(record.getOperation()) && !record.isDelete(schema, config.getProps())) {
+      if (!HoodieOperation.isDelete(record.getOperation()) && !record.isDelete(deleteContext, config.getProps())) {
         if (record.shouldIgnore(schema, config.getProps())) {
           return;
         }
@@ -151,14 +151,14 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
       if (isSecondaryIndexStatsStreamingWritesEnabled) {
         SecondaryIndexStreamingTracker.trackSecondaryIndexStats(populatedRecord, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, config);
       }
-      fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
+      fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields, config.getProps());
     } else {
       // rewrite the record to include metadata fields in schema, and the values will be set later.
       record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
       if (isSecondaryIndexStatsStreamingWritesEnabled) {
         SecondaryIndexStreamingTracker.trackSecondaryIndexStats(record, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, config);
       }
-      fileWriter.writeWithMetadata(record.getKey(), record, writeSchemaWithMetaFields);
+      fileWriter.writeWithMetadata(record.getKey(), record, writeSchemaWithMetaFields, config.getProps());
     }
   }
 

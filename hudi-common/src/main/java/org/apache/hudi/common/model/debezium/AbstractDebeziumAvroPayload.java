@@ -78,8 +78,7 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
     // Step 1: If the time occurrence of the current record in storage is higher than the time occurrence of the
     // insert record (including a delete record), pick the current record.
-    Option<IndexedRecord> insertValue = (recordBytes.length == 0)
-        ? Option.empty() : Option.of((IndexedRecord) HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+    Option<IndexedRecord> insertValue = getRecord(schema);
     if (!insertValue.isPresent()) {
       return Option.empty();
     }

@@ -41,7 +41,6 @@ import org.apache.hudi.expression.PartialBindVisitor;
 import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -87,13 +86,6 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
         Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
     this.urlEncodePartitioningEnabled =
         Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning());
-  }
-
-  public HoodieStorage getStorage() {
-    if (storage == null) {
-      storage = HoodieStorageUtils.getStorage(dataBasePath, storageConf);
-    }
-    return storage;
   }
 
   @Override

@@ -60,7 +60,7 @@ class TestMetadataTableSupport extends HoodieSparkClientTestBase {
     HoodieWriteConfig config = getConfigBuilder()
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withEnableRecordIndex(true).build())
+            .withEnableGlobalRecordLevelIndex(true).build())
         .build();
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {

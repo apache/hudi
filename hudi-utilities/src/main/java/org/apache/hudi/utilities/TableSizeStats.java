@@ -237,9 +237,9 @@ public class TableSizeStats implements Serializable {
       TableSizeStats tableSizeStats = new TableSizeStats(jsc, cfg);
       tableSizeStats.run();
     } catch (TableNotFoundException e) {
-      LOG.warn(String.format("The Hudi data table is not found: [%s].", cfg.basePath), e);
+      LOG.warn("The Hudi data table is not found: [{}].", cfg.basePath, e);
     } catch (Throwable throwable) {
-      LOG.error("Failed to get table size stats for " + cfg, throwable);
+      LOG.error("Failed to get table size stats for {}", cfg, throwable);
     } finally {
       jsc.stop();
     }
@@ -272,7 +272,7 @@ public class TableSizeStats implements Serializable {
 
   private void logTableStats(String basePath, LocalDate[] dateInterval) throws IOException {
 
-    LOG.warn("Processing table " + basePath);
+    LOG.info("Processing table {}", basePath);
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(isMetadataEnabled(basePath, jsc))
         .build();

@@ -75,7 +75,7 @@ class UpgradeOrDowngradeProcedure extends BaseProcedure with ProcedureBuilder wi
         logInfo(s"Table at $basePath upgraded / downgraded to version $toVersion.")
         true
       case Failure(e) =>
-        logWarning(s"Failed: Could not upgrade/downgrade table at $basePath to version $toVersion.", e)
+        logError(s"Failed: Could not upgrade/downgrade table at $basePath to version $toVersion.", e)
         false
     }
 

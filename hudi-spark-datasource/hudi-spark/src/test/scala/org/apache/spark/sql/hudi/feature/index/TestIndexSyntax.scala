@@ -32,6 +32,10 @@ import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
 
 class TestIndexSyntax extends HoodieSparkSqlTestBase {
 
+  override protected def beforeAll(): Unit = {
+    spark.sql("set hoodie.write.lock.provider = org.apache.hudi.client.transaction.lock.InProcessLockProvider")
+  }
+
   test("Test Create/Drop/Show/Refresh Index") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
@@ -73,7 +77,7 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
         assertResult(false)(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].ignoreIfExists)
         assertResult(Map("block_size" -> "1024"))(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].options)
 
-        logicalPlan = sqlParser.parsePlan(s"create index if not exists idx_price on $tableName using lucene (price options(order='desc')) options(block_size=512)")
+        logicalPlan = sqlParser.parsePlan(s"create index if not exists idx_price on $tableName using lucene (price options(`order`='desc')) options(block_size=512)")
         resolvedLogicalPlan = analyzer.execute(logicalPlan)
         assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].table, databaseName, tableName)
         assertResult("idx_price")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexName)

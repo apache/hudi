@@ -71,8 +71,8 @@ public class HoodieArrayWritableAvroUtils {
     if (writable == null) {
       return null;
     }
-    Schema oldSchema = AvroSchemaUtils.resolveNullableSchema(oldAvroSchema);
-    Schema newSchema = AvroSchemaUtils.resolveNullableSchema(newAvroSchema);
+    Schema oldSchema = AvroSchemaUtils.getNonNullTypeFromUnion(oldAvroSchema);
+    Schema newSchema = AvroSchemaUtils.getNonNullTypeFromUnion(newAvroSchema);
     if (areSchemasProjectionEquivalent(oldSchema, newSchema)) {
       return writable;
     }
@@ -107,7 +107,7 @@ public class HoodieArrayWritableAvroUtils {
           } else if (!isNullable(newField.schema()) && newField.defaultVal() == null) {
             throw new SchemaCompatibilityException("Field " + createFullName(fieldNames) + " has no default value and is non-nullable");
           } else if (newField.defaultVal() != null) {
-            switch (AvroSchemaUtils.resolveNullableSchema(newField.schema()).getType()) {
+            switch (AvroSchemaUtils.getNonNullTypeFromUnion(newField.schema()).getType()) {
               case BOOLEAN:
                 values[i] = new BooleanWritable((Boolean) newField.defaultVal());
                 break;
