@@ -151,6 +151,13 @@ public class HoodieMetadataSync implements Serializable {
         splitter = IdentitySplitter.class)
     public Boolean boostrap = false;
 
+    @Parameter(names = {"--restore"}, description = "restore target table",
+        splitter = IdentitySplitter.class)
+    public Boolean doRestore = false;
+
+    @Parameter(names = {"--commit-to-restore", "-ctr"}, description = "Commit to restore to", required = false)
+    public String commitToRestore = null;
+
     @Parameter(names = {"--boostrap"}, description = "performs table maintenance",
         splitter = IdentitySplitter.class)
     public Boolean performTableMaintenance = false;
@@ -252,7 +259,13 @@ public class HoodieMetadataSync implements Serializable {
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(hoodieSparkEngineContext, writeConfig)) {
       if (cfg.boostrap) {
         runBootstrapSync(sparkTable, sourceTableMetaClient, targetTableMetaClient, writeClient, schema, txnManager);
-      } else {
+      } else if (cfg.doRestore) {
+        writeClient.savepoint(cfg.commitToRestore, "user1","comment1");
+
+        // restore.
+        writeClient.restoreToSavepoint(cfg.commitToRestore);
+      }
+      {
         Pair<TreeMap<HoodieInstant, Boolean>, Option<String>> instantsToSyncAndLastSyncCheckpointPair = getInstantsToSyncAndLastSyncCheckpoint(cfg.sourceBasePath, targetTableMetaClient, sourceTableMetaClient);
         TreeMap<HoodieInstant, Boolean> instantsStatusMap = instantsToSyncAndLastSyncCheckpointPair.getLeft();
         Option<String> lastSyncCheckpoint = instantsToSyncAndLastSyncCheckpointPair.getRight();

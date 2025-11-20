@@ -53,6 +53,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_COMMITS_RETAINED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness implements SparkProvider {
@@ -824,38 +825,111 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
 
     HoodieWriteConfig writeConfig1 = getHoodieWriteConfig(sourcePath1);
-    try(SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig1)) {
-      for (int i = 0; i < 5; i++) {
-        String instant = writeClient.startCommit();
-        HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH_1});
-        List<HoodieRecord> records = dataGen.generateInserts(instant, 10);
-        JavaRDD<HoodieRecord> dataset = jsc().parallelize(records);
-        writeClient.insert(dataset, instant);
-      }
-    }
+    triggerNCommitsToSource(writeConfig1, PARTITION_PATH_1, 5);
 
-    HoodieWriteConfig cleanConfig = getHoodieCleanConfig(sourcePath1);
-    try(SparkRDDWriteClient cleanClient = getHoodieWriteClient(cleanConfig)) {
-      cleanClient.clean();
-    }
+    HoodieWriteConfig cleanConfig1 = getHoodieCleanConfig(sourcePath1);
+    triggerCleanToSource(cleanConfig1);
 
     sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
 
     HoodieWriteConfig writeConfig2 = getHoodieWriteConfig(sourcePath2);
-    try(SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig2)) {
-      for (int i = 0; i < 2; i++) {
+    triggerNCommitsToSource(writeConfig2, PARTITION_PATH_2, 5);
+
+    HoodieWriteConfig cleanConfig2 = getHoodieCleanConfig(sourcePath2);
+    triggerCleanToSource(cleanConfig2);
+
+    syncMetadata(sourcePath1, sourceMetaClient1);
+    assertDataFromSourcesToTarget(Collections.singletonList(sourcePath1), targetPath, true);
+
+    syncMetadata(sourcePath2, sourceMetaClient2);
+    assertDataFromSourcesToTarget(Arrays.asList(sourcePath1, sourcePath2), targetPath, true);
+  }
+
+  private void syncMetadata(String sourcePath, HoodieTableMetaClient sourceMetaClient) throws Exception {
+    HoodieMetadataSync.Config cfg = new HoodieMetadataSync.Config();
+    cfg.sourceBasePath = sourcePath;
+    cfg.targetBasePath = targetPath;
+    String latestCommit = sourceMetaClient.reloadActiveTimeline().lastInstant().get().getTimestamp();
+    cfg.commitToSync = latestCommit;
+    cfg.targetTableName = TABLE_NAME;
+    cfg.sparkMaster = "local[2]";
+    cfg.sparkMemory = "1g";
+    HoodieMetadataSync metadataSync = new HoodieMetadataSync(jsc(), cfg);
+    metadataSync.run();
+  }
+
+  private void triggerNCommitsToSource(HoodieWriteConfig writeConfig, String partitionPath, int numCommits) throws IOException {
+    try(SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
+      for (int i = 0; i < numCommits; i++) {
         String instant = writeClient.startCommit();
-        HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH_2});
+        HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {partitionPath});
         List<HoodieRecord> records = dataGen.generateInserts(instant, 10);
         JavaRDD<HoodieRecord> dataset = jsc().parallelize(records);
         writeClient.insert(dataset, instant);
       }
     }
+  }
 
-    cleanConfig = getHoodieCleanConfig(sourcePath2);
-    try(SparkRDDWriteClient cleanClient = getHoodieWriteClient(cleanConfig)) {
+  private void triggerCleanToSource(HoodieWriteConfig writeConfig) throws IOException {
+    try(SparkRDDWriteClient cleanClient = getHoodieWriteClient(writeConfig)) {
       cleanClient.clean();
     }
+  }
+
+  private void assertDataFromSourcesToTarget(List<String> sourcePaths, String targetPath, boolean doMatch) {
+    spark().sqlContext().clearCache();
+    for (int i = 0;i < sourcePaths.size(); i++) {
+      spark().read().format("hudi").load(sourcePaths.get(i)).registerTempTable("srcTable" + (i+1));
+    }
+    spark().read().format("hudi").option("hoodie.metadata.enable","true")
+        .option("hoodie.metadata.enable.base.path.for.partitions","true").load(targetPath).registerTempTable("tgtTable1");
+
+    Dataset<Row> tempSrcDf = spark().sql("select * from srcTable1").drop("city_to_state");
+    tempSrcDf.cache();
+    Dataset<Row> srcDf = tempSrcDf;
+    if (sourcePaths.size() > 1) {
+      for (int i = 1; i < sourcePaths.size(); i++) {
+        Dataset<Row> tempSrcDf1 = spark().sql("select * from srcTable" + (i + 1)).drop("city_to_state");
+        tempSrcDf1.cache();
+        srcDf = srcDf.union(tempSrcDf1);
+      }
+    }
+    Dataset<Row> tgtDf = spark().sql("select * from tgtTable1").drop("city_to_state");
+    assertEquals(srcDf.schema(), tgtDf.schema());
+    if (doMatch) {
+      assertTrue(srcDf.except(tgtDf).isEmpty() && tgtDf.except(srcDf).isEmpty());
+    } else {
+      assertFalse(srcDf.except(tgtDf).isEmpty() && tgtDf.except(srcDf).isEmpty());
+    }
+  }
+
+  @Test
+  void testHoodieMetadataSyncWithRestore() throws Exception {
+    sourcePath1 = Paths.get(basePath(), "source1").toString();
+    sourcePath2 = Paths.get(basePath(), "source2").toString();
+
+    Properties props = HoodieTableMetaClient.withPropertyBuilder()
+        .setTableName(RAW_TRIPS_TEST_NAME)
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .fromProperties(new Properties())
+        .build();
+    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
+
+    HoodieWriteConfig writeConfig1 = getHoodieWriteConfig(sourcePath1);
+    triggerNCommitsToSource(writeConfig1, PARTITION_PATH_1, 5);
+
+    syncMetadata(sourcePath1, sourceMetaClient1);
+
+    assertDataFromSourcesToTarget(Collections.singletonList(sourcePath1), targetPath, true);
+
+    metaClient = HoodieTableMetaClient.builder().setBasePath(targetPath).setConf(jsc().hadoopConfiguration()).build();
+    List<String> completedTargetInstants = metaClient.reloadActiveTimeline()
+        .filterCompletedInstants().getInstants().stream().map(instant -> instant.getTimestamp()).collect(Collectors.toList());
+    int totalCommits = completedTargetInstants.size();
+
+    List<String> completedCommitsItSource1 = sourceMetaClient1.reloadActiveTimeline().getWriteTimeline()
+        .filterCompletedInstants().getInstants().stream().map(instant -> instant.getTimestamp()).collect(Collectors.toList());
 
     HoodieMetadataSync.Config cfg = new HoodieMetadataSync.Config();
     cfg.sourceBasePath = sourcePath1;
@@ -865,61 +939,27 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     cfg.targetTableName = TABLE_NAME;
     cfg.sparkMaster = "local[2]";
     cfg.sparkMemory = "1g";
+    cfg.doRestore = true;
+    cfg.commitToRestore = completedTargetInstants.get(3);
     HoodieMetadataSync metadataSync = new HoodieMetadataSync(jsc(), cfg);
     metadataSync.run();
 
-    spark().read().format("hudi").load(sourcePath1).registerTempTable("srcTable1");
+    assertDataFromSourcesToTarget(Arrays.asList(sourcePath1, sourcePath2), targetPath, false);
+
+    spark().sqlContext().clearCache();
+    spark().read().format("hudi").option("as.of.instant",completedCommitsItSource1.get(3)).load(sourcePath1).registerTempTable("srcTable1");
 
     spark().read().format("hudi").option("hoodie.metadata.enable","true")
-        .option("hoodie.metadata.enable.base.path.for.partitions","true").load(cfg.targetBasePath).registerTempTable("tgtTable1");
+        .option("hoodie.metadata.enable.base.path.for.partitions","true").load(targetPath).registerTempTable("tgtTable1");
 
-    Dataset<Row> srcDf1 = spark().sql("select * from srcTable1").drop("city_to_state");
-    srcDf1.cache();
+    Dataset<Row> tempSrcDf = spark().sql("select * from srcTable1").drop("city_to_state");
+    tempSrcDf.cache();
+    Dataset<Row> srcDf = tempSrcDf;
     Dataset<Row> tgtDf = spark().sql("select * from tgtTable1").drop("city_to_state");
-
-    spark().read().format("hudi").load(sourcePath1 + "/.hoodie/metadata").registerTempTable("srcMetadata1");
-    Dataset<Row> srcMdtDf = spark().sql("select key, filesystemMetadata from srcMetadata1 where type=2");
-
-    spark().read().format("hudi").load(targetPath + "/.hoodie/metadata").registerTempTable("tgtMetadata");
-    Dataset<Row> tgtMdtDf = spark().sql("select filesystemMetadata from tgtMetadata where type=2");
-
-    srcMdtDf.show();
-    tgtMdtDf.show();
-    assertEquals(srcDf1.schema(), tgtDf.schema());
-    assertTrue(srcDf1.except(tgtDf).isEmpty() && tgtDf.except(srcDf1).isEmpty());
-
-    cfg = new HoodieMetadataSync.Config();
-    cfg.sourceBasePath = sourcePath2;
-    cfg.targetBasePath = targetPath;
-    latestCommit = sourceMetaClient2.reloadActiveTimeline().lastInstant().get().getTimestamp();
-    cfg.commitToSync = latestCommit;
-    cfg.targetTableName = TABLE_NAME;
-    cfg.sparkMaster = "local[2]";
-    cfg.sparkMemory = "1g";
-    metadataSync = new HoodieMetadataSync(jsc(), cfg);
-    metadataSync.run();
-
-    spark().read().format("hudi").load(sourcePath2).registerTempTable("srcTable2");
-
-    Dataset<Row> srcDf2 = spark().sql("select * from srcTable2").drop("city_to_state");
-
-    spark().read().format("hudi").option("hoodie.metadata.enable","true")
-        .option("hoodie.metadata.enable.base.path.for.partitions","true").load(cfg.targetBasePath).registerTempTable("tgtTable2");
-
-    Dataset<Row> tgtDf2 = spark().sql("select * from tgtTable2").drop("city_to_state");
-
-    spark().read().format("hudi").load(sourcePath2 + "/.hoodie/metadata").registerTempTable("srcMetadata2");
-    Dataset<Row> srcMdtDf2 = spark().sql("select key, filesystemMetadata from srcMetadata2 where type=2");
-
-    spark().read().format("hudi").load(targetPath + "/.hoodie/metadata").registerTempTable("tgtMetadata2");
-    Dataset<Row> tgtMdtDf2 = spark().sql("select key, filesystemMetadata from tgtMetadata2 where type=2");
-
-    srcMdtDf2.show();
-    tgtMdtDf2.show();
-    assertEquals(srcDf2.schema(), tgtDf2.schema());
-    assertTrue(srcDf1.union(srcDf2).except(tgtDf2).isEmpty() && tgtDf2.except(srcDf1.union(srcDf2)).isEmpty());
-    System.out.println("Done");
+    assertTrue(srcDf.except(tgtDf).isEmpty() && tgtDf.except(srcDf).isEmpty());
+    System.out.println("adfasd");
   }
+
 
   @Test
   void testHoodieMetadataSyncWithMDTTableServices() throws Exception {
@@ -979,6 +1019,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     assertEquals(srcDf1.schema(), tgtDf.schema());
     assertTrue(srcDf1.except(tgtDf).isEmpty() && tgtDf.except(srcDf1).isEmpty());
   }
+
 
   @Test
   void testHoodieMetadataSync_ClusteringCommitIsNotArchived() throws Exception {
