@@ -140,7 +140,7 @@
     <httpcore.version>4.4.16</httpcore.version>
     <httpclient.version>4.5.14</httpclient.version>
     <spark.version>${spark3.version}</spark.version>
-    <spark3.version>3.5.1</spark3.version>
+    <spark3.version>${spark35.version}</spark3.version>
     <spark4.version>4.0.0</spark4.version>
     <sparkbundle.version></sparkbundle.version>
     <flink2.0.version>2.0.0</flink2.0.version>
