@@ -72,6 +72,7 @@ import org.apache.hudi.table.lookup.HoodieLookupFunction;
 import org.apache.hudi.table.lookup.HoodieLookupTableReader;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.ChangelogModes;
+import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.ExpressionUtils;
 import org.apache.hudi.util.InputFormats;
 import org.apache.hudi.util.SerializableSchema;
@@ -97,6 +98,7 @@ import org.apache.flink.table.connector.source.ScanTableSource;
 import org.apache.flink.table.connector.source.abilities.SupportsFilterPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsLimitPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsProjectionPushDown;
+import org.apache.flink.table.connector.source.abilities.SupportsReadingMetadata;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.runtime.types.TypeInfoDataTypeConverter;
@@ -114,6 +116,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -135,6 +138,7 @@ public class HoodieTableSource implements
     SupportsLimitPushDown,
     SupportsFilterPushDown,
     LookupTableSource,
+    SupportsReadingMetadata,
     Serializable {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableSource.class);
@@ -160,6 +164,8 @@ public class HoodieTableSource implements
   private PartitionPruners.PartitionPruner partitionPruner;
   private Option<Function<Integer, Integer>> dataBucketFunc; // numBuckets -> bucketId
   private transient FileIndex fileIndex;
+  private transient TableSchemaResolver tableSchemaResolver;
+  private transient Map<String, DataType> readableMetaData;
 
   public HoodieTableSource(
       SerializableSchema schema,
@@ -646,13 +652,19 @@ public class HoodieTableSource implements
   @VisibleForTesting
   public Schema getTableAvroSchema() {
     try {
-      TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-      return schemaResolver.getTableAvroSchema();
+      return getTableSchemaResolver().getTableAvroSchema();
     } catch (Throwable e) {
       // table exists but has no written data
       LOG.warn("Unable to resolve schema from table, using schema from the DDL", e);
       return inferSchemaFromDdl();
     }
+  }
+
+  private TableSchemaResolver getTableSchemaResolver() {
+    if (this.tableSchemaResolver == null) {
+      this.tableSchemaResolver = new TableSchemaResolver(metaClient);
+    }
+    return this.tableSchemaResolver;
   }
 
   @VisibleForTesting
@@ -714,5 +726,24 @@ public class HoodieTableSource implements
   @VisibleForTesting
   public Option<Function<Integer, Integer>> getDataBucketFunc() {
     return dataBucketFunc;
+  }
+
+  @Override
+  public Map<String, DataType> listReadableMetadata() {
+    // flink planner would call this method multiple times, cache the result to avoid redundant costs
+    if (readableMetaData == null) {
+      if (metaClient != null && metaClient.getTableConfig().populateMetaFields()) {
+        readableMetaData = getTableSchemaResolver().hasOperationField()
+            ? DataTypeUtils.METADATA_COLUMNS_WITH_OPERATION : DataTypeUtils.METADATA_COLUMNS;
+      } else {
+        readableMetaData = Collections.emptyMap();
+      }
+    }
+    return readableMetaData;
+  }
+
+  @Override
+  public void applyReadableMetadata(List<String> metadataCols, DataType producedDataType) {
+    this.requiredPos = DataTypeUtils.projectOrdinals(tableRowType, (RowType) producedDataType.getLogicalType());
   }
 }
