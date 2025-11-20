@@ -24,6 +24,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -58,10 +59,10 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
 
   @Override
   protected HoodieFileWriter newParquetFileWriter(
-      String instantTime, StoragePath path, HoodieConfig config, Schema schema,
+      String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
-    HoodieAvroWriteSupport writeSupport = getHoodieAvroWriteSupport(schema, config, enableBloomFilter(populateMetaFields, config));
+    HoodieAvroWriteSupport writeSupport = getHoodieAvroWriteSupport(schema.getAvroSchema(), config, enableBloomFilter(populateMetaFields, config));
 
     String compressionCodecName = config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
     // Support PARQUET_COMPRESSION_CODEC_NAME is ""

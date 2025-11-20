@@ -107,6 +107,27 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
+   * Converts an Option<Schema> to Option<HoodieSchema>.
+   *
+   * @param schemaOption the optional Avro schema
+   * @return Option containing HoodieSchema, or empty if input was empty
+   */
+  public static Option<HoodieSchema> fromAvroSchemaOption(Option<Schema> schemaOption) {
+    return schemaOption.map(HoodieSchema::fromAvroSchema);
+  }
+
+  /**
+   * Converts an Option<HoodieSchema> to Option<Schema>.
+   *
+   * @param hoodieSchemaOption the optional HoodieSchema
+   * @return Option containing Avro Schema, or empty if input was empty
+   */
+  public static Option<Schema> toAvroSchemaOption(Option<HoodieSchema>
+                                                          hoodieSchemaOption) {
+    return hoodieSchemaOption.map(HoodieSchema::toAvroSchema);
+  }
+
+  /**
    * Parses a JSON schema string and returns the corresponding HoodieSchema.
    *
    * @param jsonSchema the JSON schema string to parse

@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -428,10 +429,11 @@ public class ParquetUtils extends FileFormatUtils {
     config.setValue("hoodie.avro.schema", writerSchema.toString());
     HoodieRecord.HoodieRecordType recordType = records.iterator().next().getRecordType();
     try (HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(
-        HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType)) {
+        //TODO boundary to revisit in follow up to use HoodieSchema directly
+        HoodieFileFormat.PARQUET, outputStream, storage, config, HoodieSchema.fromAvroSchema(writerSchema), recordType)) {
       for (HoodieRecord<?> record : records) {
         String recordKey = record.getRecordKey(readerSchema, keyFieldName);
-        parquetWriter.write(recordKey, record, writerSchema);
+        parquetWriter.write(recordKey, record, HoodieSchema.fromAvroSchema(writerSchema));
       }
       outputStream.flush();
     }
@@ -454,11 +456,11 @@ public class ParquetUtils extends FileFormatUtils {
     config.setValue(PARQUET_MAX_FILE_SIZE.key(), String.valueOf(1024 * 1024 * 1024));
 
     HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(
-        HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType);
+        HoodieFileFormat.PARQUET, outputStream, storage, config, HoodieSchema.fromAvroSchema(writerSchema), recordType);
     while (recordItr.hasNext()) {
       HoodieRecord record = recordItr.next();
       String recordKey = record.getRecordKey(readerSchema, keyFieldName);
-      parquetWriter.write(recordKey, record, writerSchema);
+      parquetWriter.write(recordKey, record, HoodieSchema.fromAvroSchema(writerSchema));
     }
     outputStream.flush();
     parquetWriter.close();

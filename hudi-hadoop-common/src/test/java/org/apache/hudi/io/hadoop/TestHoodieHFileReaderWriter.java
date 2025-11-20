@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -164,7 +165,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     when(partitionSupplier.get()).thenReturn(10);
 
     return (HoodieAvroHFileWriter) HoodieFileWriterFactory.getFileWriter(
-        instantTime, getFilePath(), storage, HoodieStorageConfig.newBuilder().fromProperties(props).build(), avroSchema,
+        instantTime, getFilePath(), storage, HoodieStorageConfig.newBuilder().fromProperties(props).build(), HoodieSchema.fromAvroSchema(avroSchema),
         mockTaskContextSupplier, HoodieRecord.HoodieRecordType.AVRO);
   }
 
@@ -276,7 +277,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
       assertEquals(NUM_RECORDS, hfileReader.getTotalRecords());
-      verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
+      verifySimpleRecords(hfileReader.getRecordIterator(HoodieSchema.fromAvroSchema(avroSchema)));
     }
   }
 
@@ -308,25 +309,25 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       reader.getRecordIterator();
       verify(hfileReader, never()).getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
 
-      reader.getRecordIterator(schema);
+      reader.getRecordIterator(HoodieSchema.fromAvroSchema(schema));
       verify(hfileReader, never()).getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
 
-      reader.getRecordIterator(schema, schema);
+      reader.getRecordIterator(HoodieSchema.fromAvroSchema(schema), HoodieSchema.fromAvroSchema(schema));
       verify(hfileReader, never()).getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
 
       reader.getRecordKeyIterator();
       verify(hfileReader, never()).getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
 
-      reader.getIndexedRecordIterator(schema, schema);
+      reader.getIndexedRecordIterator(HoodieSchema.fromAvroSchema(schema), HoodieSchema.fromAvroSchema(schema));
       verify(hfileReader, never()).getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
 
       reader.getRecordsByKeyPrefixIterator(filterKeys);
       verify(hfileReader, never()).getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
 
-      reader.getRecordsByKeyPrefixIterator(filterKeys, schema);
+      reader.getRecordsByKeyPrefixIterator(filterKeys, HoodieSchema.fromAvroSchema(schema));
       verify(hfileReader, never()).getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
 
-      reader.getIndexedRecordsByKeyPrefixIterator(filterKeys, schema);
+      reader.getIndexedRecordsByKeyPrefixIterator(filterKeys, HoodieSchema.fromAvroSchema(schema));
       verify(hfileReader, never()).getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
 
       // Only iterators filtering full keys should use bloom filters for filtering
@@ -334,11 +335,11 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       verify(hfileReader, useBloomFilter ? times(1) : never())
           .getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
 
-      reader.getRecordsByKeysIterator(filterKeys, schema);
+      reader.getRecordsByKeysIterator(filterKeys, HoodieSchema.fromAvroSchema(schema));
       verify(hfileReader, useBloomFilter ? times(2) : never())
           .getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
 
-      reader.getIndexedRecordsByKeysIterator(filterKeys, schema);
+      reader.getIndexedRecordsByKeysIterator(filterKeys, HoodieSchema.fromAvroSchema(schema));
       verify(hfileReader, useBloomFilter ? times(3) : never())
           .getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
     }
@@ -356,7 +357,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
       Iterator<HoodieRecord<IndexedRecord>> iterator =
-          hfileReader.getRecordsByKeysIterator(keys, avroSchema);
+          hfileReader.getRecordsByKeysIterator(keys, HoodieSchema.fromAvroSchema(avroSchema));
 
       List<Integer> expectedIds =
           IntStream.concat(IntStream.range(10, 20), IntStream.range(40, NUM_RECORDS))
@@ -383,7 +384,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
              createReader(HoodieTestUtils.getStorage(getFilePath()), useBloomFilter)) {
       List<String> keys = Collections.singletonList("key");
       Iterator<IndexedRecord> iterator =
-          hfileReader.getIndexedRecordsByKeysIterator(keys, avroSchema);
+          hfileReader.getIndexedRecordsByKeysIterator(keys, HoodieSchema.fromAvroSchema(avroSchema));
 
       List<GenericRecord> recordsByKeys =
           toStream(iterator).map(r -> (GenericRecord) r).collect(Collectors.toList());
@@ -395,7 +396,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       assertEquals(Collections.emptyList(), recordsByKeys);
 
       iterator =
-          hfileReader.getEngineRecordsByKeysIterator(keys, avroSchema);
+          hfileReader.getEngineRecordsByKeysIterator(keys, HoodieSchema.fromAvroSchema(avroSchema));
 
       recordsByKeys =
           toStream(iterator).map(r -> (GenericRecord) r).collect(Collectors.toList());
@@ -417,7 +418,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       iterator =
           hfileReader.getIndexedRecordsByKeysIterator(
               Arrays.asList("key00001", "key05", "key12", "key24", "key31", "key49", "key61", "key50"),
-              avroSchema);
+              HoodieSchema.fromAvroSchema(avroSchema));
       recordsByKeys =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
@@ -427,7 +428,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       iterator =
           hfileReader.getEngineRecordsByKeysIterator(
               Arrays.asList("key00001", "key05", "key12", "key24", "key31", "key49", "key61", "key50"),
-              avroSchema);
+              HoodieSchema.fromAvroSchema(avroSchema));
       recordsByKeys =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
@@ -440,7 +441,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       Iterator<IndexedRecord> iterator = hfileReader.getIndexedRecordsByKeysIterator(
           Arrays.asList("key000000", "key000066-abcdefghij", "key001424-aa", "key001424-aaa",
               "key004958-abcdefghij", "key010769", "key019889-abcdefghij", "key030000"),
-          avroSchema);
+          HoodieSchema.fromAvroSchema(avroSchema));
       List<GenericRecord> actual =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
@@ -454,7 +455,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       iterator = hfileReader.getEngineRecordsByKeysIterator(
           Arrays.asList("key000000", "key000066-abcdefghij", "key001424-aa", "key001424-aaa",
               "key004958-abcdefghij", "key010769", "key019889-abcdefghij", "key030000"),
-          avroSchema);
+          HoodieSchema.fromAvroSchema(avroSchema));
       actual =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
@@ -473,7 +474,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
              createReader(HoodieTestUtils.getStorage(getFilePath()), useBloomFilter)) {
       List<String> keyPrefixes = Collections.singletonList("key");
       Iterator<IndexedRecord> iterator =
-          hfileReader.getIndexedRecordsByKeyPrefixIterator(keyPrefixes, avroSchema);
+          hfileReader.getIndexedRecordsByKeyPrefixIterator(keyPrefixes, HoodieSchema.fromAvroSchema(avroSchema));
 
       List<GenericRecord> recordsByPrefix =
           toStream(iterator).map(r -> (GenericRecord) r).collect(Collectors.toList());
@@ -484,7 +485,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       assertEquals(allRecords, recordsByPrefix);
 
       // test getEngineRecordsByKeyPrefix
-      iterator = hfileReader.getEngineRecordsByKeyPrefixIterator(keyPrefixes, avroSchema);
+      iterator = hfileReader.getEngineRecordsByKeyPrefixIterator(keyPrefixes, HoodieSchema.fromAvroSchema(avroSchema));
       recordsByPrefix =
           toStream(iterator).map(r -> (GenericRecord) r).collect(Collectors.toList());
       assertEquals(allRecords, recordsByPrefix);
@@ -495,7 +496,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
               .collect(Collectors.toList());
       iterator =
           hfileReader.getIndexedRecordsByKeyPrefixIterator(Collections.singletonList("key1"),
-              avroSchema);
+              HoodieSchema.fromAvroSchema(avroSchema));
       recordsByPrefix =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED),
                   false)
@@ -506,7 +507,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       // test getEngineRecordsByKeyPrefix
       iterator =
           hfileReader.getEngineRecordsByKeyPrefixIterator(Collections.singletonList("key1"),
-              avroSchema);
+              HoodieSchema.fromAvroSchema(avroSchema));
       recordsByPrefix =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED),
                   false)
@@ -519,7 +520,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
           allRecords.stream().filter(entry -> (entry.get("_row_key").toString()).contains("key25"))
               .collect(Collectors.toList());
       iterator =
-          hfileReader.getIndexedRecordsByKeyPrefixIterator(Collections.singletonList("key25"), avroSchema);
+          hfileReader.getIndexedRecordsByKeyPrefixIterator(Collections.singletonList("key25"), HoodieSchema.fromAvroSchema(avroSchema));
       recordsByPrefix =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
@@ -527,7 +528,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       assertEquals(expectedKey25, recordsByPrefix);
 
       iterator =
-          hfileReader.getEngineRecordsByKeyPrefixIterator(Collections.singletonList("key25"), avroSchema);
+          hfileReader.getEngineRecordsByKeyPrefixIterator(Collections.singletonList("key25"), HoodieSchema.fromAvroSchema(avroSchema));
       recordsByPrefix =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
@@ -536,7 +537,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
 
       // no match. key prefix is beyond entries in file.
       iterator =
-          hfileReader.getIndexedRecordsByKeyPrefixIterator(Collections.singletonList("key99"), avroSchema);
+          hfileReader.getIndexedRecordsByKeyPrefixIterator(Collections.singletonList("key99"), HoodieSchema.fromAvroSchema(avroSchema));
       recordsByPrefix =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
@@ -544,7 +545,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       assertEquals(Collections.emptyList(), recordsByPrefix);
 
       iterator =
-          hfileReader.getEngineRecordsByKeyPrefixIterator(Collections.singletonList("key99"), avroSchema);
+          hfileReader.getEngineRecordsByKeyPrefixIterator(Collections.singletonList("key99"), HoodieSchema.fromAvroSchema(avroSchema));
       recordsByPrefix =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
@@ -553,14 +554,14 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
 
       // no match. but keyPrefix is in between the entries found in file.
       iterator =
-          hfileReader.getIndexedRecordsByKeyPrefixIterator(Collections.singletonList("key1234"), avroSchema);
+          hfileReader.getIndexedRecordsByKeyPrefixIterator(Collections.singletonList("key1234"), HoodieSchema.fromAvroSchema(avroSchema));
       recordsByPrefix =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
               .collect(Collectors.toList());
       assertEquals(Collections.emptyList(), recordsByPrefix);
       iterator =
-          hfileReader.getEngineRecordsByKeysIterator(Collections.singletonList("key1234"), avroSchema);
+          hfileReader.getEngineRecordsByKeysIterator(Collections.singletonList("key1234"), HoodieSchema.fromAvroSchema(avroSchema));
       recordsByPrefix =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
@@ -572,7 +573,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
           allRecords.stream().filter(entry -> (entry.get("_row_key").toString()).contains("key1")
               || (entry.get("_row_key").toString()).contains("key30")).collect(Collectors.toList());
       iterator =
-          hfileReader.getIndexedRecordsByKeyPrefixIterator(Arrays.asList("key1", "key30", "key6"), avroSchema);
+          hfileReader.getIndexedRecordsByKeyPrefixIterator(Arrays.asList("key1", "key30", "key6"), HoodieSchema.fromAvroSchema(avroSchema));
       recordsByPrefix =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
@@ -580,7 +581,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       assertEquals(expectedKey50and1s, recordsByPrefix);
 
       iterator =
-          hfileReader.getEngineRecordsByKeyPrefixIterator(Arrays.asList("key1", "key30", "key6"), avroSchema);
+          hfileReader.getEngineRecordsByKeyPrefixIterator(Arrays.asList("key1", "key30", "key6"), HoodieSchema.fromAvroSchema(avroSchema));
       recordsByPrefix =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
@@ -592,14 +593,14 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
           allRecords.stream().filter(entry -> (entry.get("_row_key").toString()).contains("key0")
               || (entry.get("_row_key").toString()).contains("key50")).collect(Collectors.toList());
       iterator =
-          hfileReader.getIndexedRecordsByKeyPrefixIterator(Arrays.asList("key0", "key50"), avroSchema);
+          hfileReader.getIndexedRecordsByKeyPrefixIterator(Arrays.asList("key0", "key50"), HoodieSchema.fromAvroSchema(avroSchema));
       recordsByPrefix =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
               .collect(Collectors.toList());
       assertEquals(expectedKey50and0s, recordsByPrefix);
       iterator =
-          hfileReader.getEngineRecordsByKeyPrefixIterator(Arrays.asList("key0", "key50"), avroSchema);
+          hfileReader.getEngineRecordsByKeyPrefixIterator(Arrays.asList("key0", "key50"), HoodieSchema.fromAvroSchema(avroSchema));
       recordsByPrefix =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
@@ -612,7 +613,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
               || (entry.get("_row_key").toString()).contains("key0"))
           .collect(Collectors.toList());
       iterator =
-          hfileReader.getIndexedRecordsByKeyPrefixIterator(Arrays.asList("key0", "key1"), avroSchema);
+          hfileReader.getIndexedRecordsByKeyPrefixIterator(Arrays.asList("key0", "key1"), HoodieSchema.fromAvroSchema(avroSchema));
       recordsByPrefix =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
@@ -626,7 +627,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       assertEquals(expectedKey1sand0s, recordsByPrefix);
 
       iterator =
-          hfileReader.getEngineRecordsByKeyPrefixIterator(Arrays.asList("key0", "key1"), avroSchema);
+          hfileReader.getEngineRecordsByKeyPrefixIterator(Arrays.asList("key0", "key1"), HoodieSchema.fromAvroSchema(avroSchema));
       recordsByPrefix =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
@@ -642,7 +643,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       // We expect the keys to be looked up in sorted order. If not, matching entries may not be returned.
       // key1 should have matching entries, but not key0.
       iterator =
-          hfileReader.getIndexedRecordsByKeyPrefixIterator(Arrays.asList("key1", "key0"), avroSchema);
+          hfileReader.getIndexedRecordsByKeyPrefixIterator(Arrays.asList("key1", "key0"), HoodieSchema.fromAvroSchema(avroSchema));
       recordsByPrefix =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
@@ -656,7 +657,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       assertEquals(expectedKey1s, recordsByPrefix);
 
       iterator =
-          hfileReader.getEngineRecordsByKeyPrefixIterator(Arrays.asList("key1", "key0"), avroSchema);
+          hfileReader.getEngineRecordsByKeyPrefixIterator(Arrays.asList("key1", "key0"), HoodieSchema.fromAvroSchema(avroSchema));
       recordsByPrefix =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
@@ -674,7 +675,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       Iterator<IndexedRecord> iterator = hfileReader.getIndexedRecordsByKeyPrefixIterator(
           Arrays.asList("key000000", "key000066-abcdefghij", "key001424-aa", "key001424-aaa",
               "key004958", "key010769", "key01988", "key030000"),
-          avroSchema);
+          HoodieSchema.fromAvroSchema(avroSchema));
       List<GenericRecord> actual =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
@@ -690,7 +691,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       iterator = hfileReader.getEngineRecordsByKeyPrefixIterator(
           Arrays.asList("key000000", "key000066-abcdefghij", "key001424-aa", "key001424-aaa",
               "key004958", "key010769", "key01988", "key030000"),
-          avroSchema);
+          HoodieSchema.fromAvroSchema(avroSchema));
       actual =
           StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
               .map(r -> (GenericRecord) r)
@@ -715,7 +716,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       try (ClosableIterator<IndexedRecord> iterator =
                hfileReader.getIndexedRecordsByKeysIterator(
                    Arrays.asList("key00001", "key05", "key24", "key16", "key31", "key61"),
-                   avroSchema)) {
+                   HoodieSchema.fromAvroSchema(avroSchema))) {
         assertThrows(
             IllegalStateException.class,
             () -> StreamSupport.stream(
@@ -726,7 +727,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       try (ClosableIterator<IndexedRecord> iterator =
                hfileReader.getEngineRecordsByKeysIterator(
                    Arrays.asList("key00001", "key05", "key24", "key16", "key31", "key61"),
-                   avroSchema)) {
+                   HoodieSchema.fromAvroSchema(avroSchema))) {
         assertThrows(
             IllegalStateException.class,
             () -> StreamSupport.stream(
@@ -762,7 +763,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
       assertEquals(NUM_RECORDS_FIXTURE, hfileReader.getTotalRecords());
-      verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
+      verifySimpleRecords(hfileReader.getRecordIterator(HoodieSchema.fromAvroSchema(avroSchema)));
     }
 
     content = readHFileFromResources(complexHFile);
@@ -772,7 +773,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithUDT.avsc");
       assertEquals(NUM_RECORDS_FIXTURE, hfileReader.getTotalRecords());
-      verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
+      verifySimpleRecords(hfileReader.getRecordIterator(HoodieSchema.fromAvroSchema(avroSchema)));
     }
 
     content = readHFileFromResources(bootstrapIndexFile);

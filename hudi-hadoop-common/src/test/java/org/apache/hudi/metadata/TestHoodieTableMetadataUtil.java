@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -333,12 +334,14 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         path,
         metaClient.getStorage(),
         metaClient.getTableConfig(),
-        HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS,
+        HoodieSchema.fromAvroSchema(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS),
         engineContext.getTaskContextSupplier(),
         HoodieRecord.HoodieRecordType.AVRO);
     for (HoodieRecord record : records) {
       writer.writeWithMetadata(record.getKey(),
-          record.rewriteRecordWithNewSchema(AVRO_SCHEMA, CollectionUtils.emptyProps(), AVRO_SCHEMA_WITH_METADATA_FIELDS), HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS);
+              //TODO boundary to revisit in follow up to use HoodieSchema directly
+              record.rewriteRecordWithNewSchema(AVRO_SCHEMA, CollectionUtils.emptyProps(), AVRO_SCHEMA_WITH_METADATA_FIELDS),
+              HoodieSchema.fromAvroSchema(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS));
     }
     writer.close();
   }
