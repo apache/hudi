@@ -114,15 +114,7 @@ public class HoodieSchema implements Serializable {
    * @throws HoodieAvroSchemaException if the schema string is invalid
    */
   public static HoodieSchema parse(String jsonSchema) {
-    ValidationUtils.checkArgument(jsonSchema != null && !jsonSchema.trim().isEmpty(),
-        "Schema string cannot be null or empty");
-
-    try {
-      Schema avroSchema = new Schema.Parser().parse(jsonSchema);
-      return new HoodieSchema(avroSchema);
-    } catch (Exception e) {
-      throw new HoodieAvroSchemaException("Failed to parse schema: " + jsonSchema + ". Error: " + e.getMessage());
-    }
+    return new HoodieSchema.Parser().parse(jsonSchema);
   }
 
   /**
