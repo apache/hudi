@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -64,12 +65,13 @@ public abstract class HoodieBootstrapRecordIterator<T> implements ClosableIterat
     HoodieRecord<T> dataRecord = dataFileIterator.next();
     HoodieRecord<T> skeletonRecord = skeletonIterator.next();
     //TODO boundary to revisit in later pr to use HoodieSchema
-    HoodieRecord<T> ret = dataRecord.prependMetaFields(schema.getAvroSchema(), schema.getAvroSchema(),
-        new MetadataValues().setCommitTime(skeletonRecord.getRecordKey(schema.getAvroSchema(), HoodieRecord.COMMIT_TIME_METADATA_FIELD))
-            .setCommitSeqno(skeletonRecord.getRecordKey(schema.getAvroSchema(), HoodieRecord.COMMIT_SEQNO_METADATA_FIELD))
-            .setRecordKey(skeletonRecord.getRecordKey(schema.getAvroSchema(), HoodieRecord.RECORD_KEY_METADATA_FIELD))
-            .setPartitionPath(skeletonRecord.getRecordKey(schema.getAvroSchema(), HoodieRecord.PARTITION_PATH_METADATA_FIELD))
-            .setFileName(skeletonRecord.getRecordKey(schema.getAvroSchema(), HoodieRecord.FILENAME_METADATA_FIELD)), null);
+    Schema avroSchema = schema.getAvroSchema();
+    HoodieRecord<T> ret = dataRecord.prependMetaFields(avroSchema, avroSchema,
+        new MetadataValues().setCommitTime(skeletonRecord.getRecordKey(avroSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD))
+            .setCommitSeqno(skeletonRecord.getRecordKey(avroSchema, HoodieRecord.COMMIT_SEQNO_METADATA_FIELD))
+            .setRecordKey(skeletonRecord.getRecordKey(avroSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD))
+            .setPartitionPath(skeletonRecord.getRecordKey(avroSchema, HoodieRecord.PARTITION_PATH_METADATA_FIELD))
+            .setFileName(skeletonRecord.getRecordKey(avroSchema, HoodieRecord.FILENAME_METADATA_FIELD)), null);
     if (partitionFields.isPresent()) {
       for (int i = 0; i < partitionValues.length; i++) {
         int position = schema.getField(partitionFields.get()[i]).get().pos();

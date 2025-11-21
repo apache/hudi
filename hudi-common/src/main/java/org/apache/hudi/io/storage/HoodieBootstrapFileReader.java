@@ -18,11 +18,11 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -64,9 +64,7 @@ public abstract class HoodieBootstrapFileReader<T> implements HoodieFileReader<T
   public ClosableIterator<HoodieRecord<T>> getRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema) throws IOException {
     ClosableIterator<HoodieRecord<T>> skeletonIterator = skeletonFileReader.getRecordIterator(readerSchema, requestedSchema);
     // TODO boundary for now to revisit HoodieAvroUtils in later pr to use HoodieSchema
-    Schema avroReaderSchema = readerSchema.getAvroSchema();
-    Schema dataReaderFields = HoodieAvroUtils.removeMetadataFields(avroReaderSchema);
-    ClosableIterator<HoodieRecord<T>> dataFileIterator = dataFileReader.getRecordIterator(HoodieSchema.fromAvroSchema(dataReaderFields), requestedSchema);
+    ClosableIterator<HoodieRecord<T>> dataFileIterator = dataFileReader.getRecordIterator(HoodieSchema.removeMetadataFields(readerSchema), requestedSchema);
     return new HoodieBootstrapRecordIterator<T>(skeletonIterator, dataFileIterator, readerSchema, partitionFields, partitionValues) {
       @Override
       protected void setPartitionPathField(int position, Object fieldValue, T row) {
@@ -118,8 +116,7 @@ public abstract class HoodieBootstrapFileReader<T> implements HoodieFileReader<T
   public HoodieSchema getSchema() {
     // return merged schema (meta fields + data file schema)
     // TODO boundary for now to revisit HoodieAvroUtils in later pr to use HoodieSchema
-    Schema avroReaderSchema = dataFileReader.getSchema().getAvroSchema();
-    return HoodieSchema.fromAvroSchema(HoodieAvroUtils.addMetadataFields(avroReaderSchema));
+    return HoodieSchemaUtils.addMetadataFields(dataFileReader.getSchema(), false);
   }
 
   @Override
