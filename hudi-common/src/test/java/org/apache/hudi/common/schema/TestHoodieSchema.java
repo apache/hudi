@@ -34,6 +34,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -72,13 +73,7 @@ public class TestHoodieSchema {
 
   @Test
   public void testSchemaCreationWithNullAvroSchema() {
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchema.fromAvroSchema(null);
-    }, "Should throw exception for null Avro schema");
-
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchema.fromAvroSchema(null);
-    }, "Should throw exception for null Avro schema in constructor");
+    assertNull(HoodieSchema.fromAvroSchema(null))ct;
   }
 
   @Test
