@@ -43,7 +43,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.metadata.HoodieTableMetadata
@@ -172,7 +172,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     val (name, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableName)
     val avroSchema = internalSchemaOpt.map { is =>
-      AvroInternalSchemaConverter.convert(is, namespace + "." + name)
+      InternalSchemaConverter.convert(is, namespace + "." + name)
     } orElse {
       specifiedQueryTimestamp.map(schemaResolver.getTableAvroSchema)
     } orElse {
@@ -801,7 +801,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
       case Right(internalSchema) =>
         checkState(!internalSchema.isEmptySchema)
         val prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchema, requiredColumns.toList.asJava)
-        val requiredAvroSchema = AvroInternalSchemaConverter.convert(prunedInternalSchema, "schema")
+        val requiredAvroSchema = InternalSchemaConverter.convert(prunedInternalSchema, "schema").toAvroSchema
         val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
 
         (requiredAvroSchema, requiredStructSchema, prunedInternalSchema)
