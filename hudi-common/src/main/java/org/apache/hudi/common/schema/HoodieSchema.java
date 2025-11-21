@@ -103,6 +103,9 @@ public class HoodieSchema implements Serializable {
    * @throws IllegalArgumentException if avroSchema is null
    */
   public static HoodieSchema fromAvroSchema(Schema avroSchema) {
+    if (avroSchema == null) {
+      return null;
+    }
     return new HoodieSchema(avroSchema);
   }
 
