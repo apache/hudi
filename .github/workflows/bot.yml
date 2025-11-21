@@ -1225,7 +1225,7 @@ jobs:
           SPARK_ARCHIVE_BASENAME=$(basename $SPARK_ARCHIVE)
           export SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE_BASENAME%.*}
           rm -f $GITHUB_WORKSPACE/$SPARK_ARCHIVE
-          docker system prune --all --force
+          docker system prune --all --force --volumes
           mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS
 
   build-spark-java17:
