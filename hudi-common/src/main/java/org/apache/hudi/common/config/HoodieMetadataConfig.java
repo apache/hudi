@@ -320,6 +320,33 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Initializes the metadata table by reading from the file system when the table is first created. Enabled by default. "
           + "Warning: This should only be disabled when manually constructing the metadata table outside of typical Hudi writer flows.");
 
+  public static final ConfigProperty<Boolean> ENABLE_BASE_PATH_OVERRIDE = ConfigProperty
+      .key(METADATA_PREFIX + ".enable.base.path.for.partitions")
+      .defaultValue(false)
+      .sinceVersion("0.14.1")
+      .markAdvanced()
+      .withDocumentation("Adds absolute paths for partitions during metadata writes");
+
+  public static final ConfigProperty<Boolean> ENABLE_BOOTSTRAP_METADATA_SYNC = ConfigProperty
+      .key(METADATA_PREFIX + ".enable.boostrap.for.metadata.sync")
+      .defaultValue(false)
+      .sinceVersion("0.14.1")
+      .markAdvanced()
+      .withDocumentation("Enables boostrap sync for table metadata sync");
+
+  public static final ConfigProperty<String> BASE_PATH_OVERRIDE = ConfigProperty
+      .key(METADATA_PREFIX + ".base.path.override")
+      .defaultValue("")
+      .markAdvanced()
+      .sinceVersion("0.14.2")
+      .withDocumentation("Base path override for writes to metadata table.");
+
+  public static final ConfigProperty<Integer> NUM_PARTITION_PATH_LEVELS = ConfigProperty
+      .key(METADATA_PREFIX + ".num.partition.path.levels")
+      .defaultValue(0)
+      .markAdvanced()
+      .withDocumentation("Stores the levels for partition paths. 0 for non-partitioned table, 1 for simple string based partition path, and 3 for '2025/01/01'");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -450,6 +477,22 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean shouldAutoInitialize() {
     return getBoolean(AUTO_INITIALIZE);
+  }
+
+  public boolean shouldEnableBasePathOverride() {
+    return getBoolean(ENABLE_BASE_PATH_OVERRIDE);
+  }
+
+  public boolean shouldEnableBootstrapMetadataSync() {
+    return getBoolean(ENABLE_BOOTSTRAP_METADATA_SYNC);
+  }
+
+  public String getBasePathOverride() {
+    return getString(BASE_PATH_OVERRIDE);
+  }
+
+  public Integer getNumPartitionLevels() {
+    return getInt(NUM_PARTITION_PATH_LEVELS);
   }
 
   public static class Builder {
@@ -627,6 +670,21 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withMaxLogFileSizeBytes(long sizeInBytes) {
       metadataConfig.setValue(MAX_LOG_FILE_SIZE_BYTES_PROP, String.valueOf(sizeInBytes));
+      return this;
+    }
+
+    public Builder withEnableBasePathOverride(boolean enabled) {
+      metadataConfig.setValue(ENABLE_BASE_PATH_OVERRIDE, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder withEnableBootstrapMetadataSync(boolean enabled) {
+      metadataConfig.setValue(ENABLE_BOOTSTRAP_METADATA_SYNC, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder withBasePathOverride(String basePathOverride) {
+      metadataConfig.setValue(BASE_PATH_OVERRIDE, basePathOverride);
       return this;
     }
 

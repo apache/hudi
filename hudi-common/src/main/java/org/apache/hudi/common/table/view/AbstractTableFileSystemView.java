@@ -106,6 +106,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   private BootstrapIndex bootstrapIndex;
 
   private String getPartitionPathFor(HoodieBaseFile baseFile) {
+    if (baseFile.getNumPartitionLevels().isPresent()) {
+      return FSUtils.getRelativePartitionPath(baseFile.getHadoopPath().getParent(), baseFile.getNumPartitionLevels().get());
+    }
+
     return FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), baseFile.getHadoopPath().getParent());
   }
 

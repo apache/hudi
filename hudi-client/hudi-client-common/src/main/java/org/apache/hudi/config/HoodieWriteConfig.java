@@ -1929,6 +1929,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getMetadataConfig().getColumnsEnabledForBloomFilterIndex();
   }
 
+  public boolean shouldEnableBasePathOverride() {
+    return getMetadataConfig().shouldEnableBasePathOverride();
+  }
+
+  public boolean shouldEnableBootstrapMetadataSync() {
+    return getMetadataConfig().shouldEnableBootstrapMetadataSync();
+  }
+
   public int getIndexingCheckTimeoutSeconds() {
     return getMetadataConfig().getIndexingCheckTimeoutSeconds();
   }

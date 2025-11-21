@@ -141,7 +141,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  protected Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName) {
+  public Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName) {
     Map<String, HoodieRecord<HoodieMetadataPayload>> recordsByKeys = getRecordsByKeys(Collections.singletonList(key), partitionName);
     return Option.ofNullable(recordsByKeys.get(key));
   }
