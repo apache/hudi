@@ -124,4 +124,8 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
     case OFF_HEAP => "OFF_HEAP"
     case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
   }
+
+  override def isTimestampNTZType(dataType: DataType): Boolean = {
+    dataType.getClass.getSimpleName.startsWith("TimestampNTZType")
+  }
 }

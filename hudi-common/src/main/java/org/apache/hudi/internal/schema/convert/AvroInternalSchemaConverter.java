@@ -260,15 +260,18 @@ public class AvroInternalSchemaConverter {
       } else if (logical instanceof LogicalTypes.Date) {
         return Types.DateType.get();
 
-      } else if (
-              logical instanceof LogicalTypes.TimeMillis
-                      || logical instanceof LogicalTypes.TimeMicros) {
+      } else if (logical instanceof LogicalTypes.TimeMillis) {
+        return Types.TimeMillisType.get();
+      } else if (logical instanceof LogicalTypes.TimeMicros) {
         return Types.TimeType.get();
-
-      } else if (
-              logical instanceof LogicalTypes.TimestampMillis
-                      || logical instanceof LogicalTypes.TimestampMicros) {
+      } else if (logical instanceof LogicalTypes.TimestampMillis) {
+        return Types.TimestampMillisType.get();
+      } else if (logical instanceof LogicalTypes.TimestampMicros) {
         return Types.TimestampType.get();
+      } else if (logical instanceof LogicalTypes.LocalTimestampMillis) {
+        return Types.LocalTimestampMillisType.get();
+      } else if (logical instanceof LogicalTypes.LocalTimestampMicros) {
+        return Types.LocalTimestampMicrosType.get();
       } else if (LogicalTypes.uuid().getName().equals(name)) {
         return Types.UUIDType.get();
       }
@@ -457,8 +460,20 @@ public class AvroInternalSchemaConverter {
       case TIME:
         return LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG));
 
+      case TIME_MILLIS:
+        return LogicalTypes.timeMillis().addToSchema(Schema.create(Schema.Type.INT));
+
       case TIMESTAMP:
         return LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
+
+      case TIMESTAMP_MILLIS:
+        return LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
+
+      case LOCAL_TIMESTAMP_MICROS:
+        return LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
+
+      case LOCAL_TIMESTAMP_MILLIS:
+        return LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
 
       case STRING:
         return Schema.create(Schema.Type.STRING);

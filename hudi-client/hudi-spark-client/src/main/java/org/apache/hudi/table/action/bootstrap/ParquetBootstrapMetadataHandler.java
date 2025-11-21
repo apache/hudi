@@ -41,7 +41,6 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
@@ -58,6 +57,7 @@ import java.util.function.Function;
 
 import static org.apache.hudi.io.HoodieBootstrapHandle.METADATA_BOOTSTRAP_RECORD_SCHEMA;
 import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFactory;
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
 
@@ -71,7 +71,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
         (Configuration) table.getStorageConf().unwrap(), new Path(sourceFilePath.toUri()),
         ParquetMetadataConverter.NO_FILTER);
     MessageType parquetSchema = readFooter.getFileMetaData().getSchema();
-    return new AvroSchemaConverter().convert(parquetSchema);
+    return getAvroSchemaConverter((Configuration) table.getStorageConf().unwrap()).convert(parquetSchema);
   }
 
   @Override
