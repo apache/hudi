@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -1040,11 +1041,32 @@ public class HoodieAvroUtils {
         case NULL:
         case BOOLEAN:
         case INT:
-        case LONG:
         case FLOAT:
         case DOUBLE:
         case BYTES:
         case STRING:
+          return oldValue;
+        case LONG:
+          if (oldSchema.getLogicalType() != newSchema.getLogicalType()) {
+            if (oldSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
+              if (newSchema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
+                return DateTimeUtils.millisToMicros((Long) oldValue);
+              }
+            } else if (oldSchema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
+              if (newSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
+                return DateTimeUtils.microsToMillis((Long) oldValue);
+              }
+            } else if (oldSchema.getLogicalType() instanceof LogicalTypes.LocalTimestampMillis) {
+              if (newSchema.getLogicalType() instanceof LogicalTypes.LocalTimestampMicros) {
+                return DateTimeUtils.millisToMicros((Long) oldValue);
+              }
+            } else if (oldSchema.getLogicalType() instanceof LogicalTypes.LocalTimestampMicros) {
+              if (newSchema.getLogicalType() instanceof LogicalTypes.LocalTimestampMillis) {
+                return DateTimeUtils.microsToMillis((Long) oldValue);
+              }
+            }
+            throw new HoodieAvroSchemaException("Long type logical change from " + oldSchema.getLogicalType() + " to " + newSchema.getLogicalType() + " is not supported");
+          }
           return oldValue;
         case FIXED:
           if (oldSchema.getFixedSize() != newSchema.getFixedSize()) {
