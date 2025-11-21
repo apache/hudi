@@ -18,6 +18,8 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.InvalidUnionTypeException;
 import org.apache.hudi.exception.MissingSchemaFieldException;
@@ -202,6 +204,25 @@ public class AvroSchemaUtils {
     }
 
     return atomicTypeEqualityPredicate.apply(sourceSchema, targetSchema);
+  }
+
+  public static Option<Schema> findNestedFieldSchema(Schema schema, String fieldName) {
+    if (StringUtils.isNullOrEmpty(fieldName)) {
+      return Option.empty();
+    }
+    String[] parts = fieldName.split("\\.");
+    for (String part : parts) {
+      Schema.Field foundField = resolveNullableSchema(schema).getField(part);
+      if (foundField == null) {
+        throw new HoodieAvroSchemaException(fieldName + " not a field in " + schema);
+      }
+      schema = foundField.schema();
+    }
+    return Option.of(resolveNullableSchema(schema));
+  }
+
+  public static Option<Schema.Type> findNestedFieldType(Schema schema, String fieldName) {
+    return findNestedFieldSchema(schema, fieldName).map(Schema::getType);
   }
 
   /**

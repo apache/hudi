@@ -57,6 +57,8 @@ trait SparkAdapter extends Serializable {
    */
   def isColumnarBatchRow(r: InternalRow): Boolean
 
+  def isTimestampNTZType(dataType: DataType): Boolean
+
   /**
    * Creates Catalyst [[Metadata]] for Hudi's meta-fields (designating these w/
    * [[METADATA_COL_ATTR_KEY]] if available (available in Spark >= 3.2)

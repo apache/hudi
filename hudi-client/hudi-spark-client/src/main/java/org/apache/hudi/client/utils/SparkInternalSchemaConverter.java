@@ -57,6 +57,7 @@ import org.apache.spark.sql.types.StringType$;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.StructType$;
+import org.apache.spark.sql.types.TimestampNTZType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.sql.types.TimestampType$;
 import org.apache.spark.sql.types.UserDefinedType;
@@ -267,10 +268,14 @@ public class SparkInternalSchemaConverter {
       case DATE:
         return DateType$.MODULE$;
       case TIME:
+      case TIME_MILLIS:
         throw new UnsupportedOperationException(String.format("cannot convert %s type to Spark", type));
       case TIMESTAMP:
-        // todo support TimeStampNTZ
+      case TIMESTAMP_MILLIS:
         return TimestampType$.MODULE$;
+      case LOCAL_TIMESTAMP_MILLIS:
+      case LOCAL_TIMESTAMP_MICROS:
+        return TimestampNTZType$.MODULE$;
       case STRING:
         return StringType$.MODULE$;
       case UUID:
