@@ -330,6 +330,9 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     // if they are actually written to the file, then it is ok to read them from the file
     tableSchema.getFields().forEach(f -> partitionColumns.remove(f.name().toLowerCase(Locale.ROOT)));
     return HoodieAvroUtils.generateProjectionSchema(tableSchema,
-        Arrays.stream(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR).split(",")).filter(c -> !partitionColumns.contains(c)).collect(Collectors.toList()));
+        // The READ_COLUMN_NAMES_CONF_STR includes all columns from the query, including those used in the WHERE clause,
+        // so any column referenced in the filter (non-partition) will appear twice if already present in the project schema,
+        // here distinct() is used here to deduplicate the read columns.
+        Arrays.stream(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR).split(",")).filter(c -> !partitionColumns.contains(c)).distinct().collect(Collectors.toList()));
   }
 }
