@@ -422,7 +422,7 @@ public class TestAvroSchemaEvolutionUtils {
         )
     );
 
-    Schema newAvroSchema = InternalSchemaConverter.convert(newRecord, schema.getName().get()).toAvroSchema();
+    Schema newAvroSchema = InternalSchemaConverter.convert(newRecord, schema.getName()).toAvroSchema();
     GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newAvroSchema, Collections.emptyMap());
     // test the correctly of rewrite
     Assertions.assertEquals(GenericData.get().validate(newAvroSchema, newAvroRecord), true);

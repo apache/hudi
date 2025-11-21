@@ -385,12 +385,12 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
-   * Returns the name of this schema, if it has one.
+   * Returns the name of the schema if a record, otherwise it returns the name of the type.
    *
-   * @return Option containing the schema name, or Option.empty() if none
+   * @return the schema name
    */
-  public Option<String> getName() {
-    return Option.ofNullable(avroSchema.getName());
+  public String getName() {
+    return avroSchema.getName();
   }
 
   /**
