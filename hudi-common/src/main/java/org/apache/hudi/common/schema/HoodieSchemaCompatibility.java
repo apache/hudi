@@ -122,11 +122,7 @@ public final class HoodieSchemaCompatibility {
    * @throws IllegalArgumentException if schemas are null
    */
   public static boolean isSchemaCompatible(HoodieSchema readerSchema, HoodieSchema writerSchema) {
-    ValidationUtils.checkArgument(readerSchema != null, "Reader schema cannot be null");
-    ValidationUtils.checkArgument(writerSchema != null, "Writer schema cannot be null");
-
-    // Use HoodieSchemaUtils delegation for consistency
-    return AvroSchemaUtils.isSchemaCompatible(readerSchema.toAvroSchema(), writerSchema.toAvroSchema());
+    return isSchemaCompatible(readerSchema, writerSchema, true);
   }
 
   /**
