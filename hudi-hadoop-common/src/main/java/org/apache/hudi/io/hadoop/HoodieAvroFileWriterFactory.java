@@ -93,7 +93,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
   }
 
   protected HoodieFileWriter newHFileFileWriter(
-      String instantTime, StoragePath path, HoodieConfig config, Schema schema,
+      String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     BloomFilter filter = createBloomFilter(config);
     HoodieHFileConfig hfileConfig = new HoodieHFileConfig(
@@ -103,11 +103,11 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         config.getInt(HoodieStorageConfig.HFILE_BLOCK_SIZE),
         config.getLong(HoodieStorageConfig.HFILE_MAX_FILE_SIZE),
         HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME, filter);
-    return new HoodieAvroHFileWriter(instantTime, path, hfileConfig, schema, taskContextSupplier, config.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS));
+    return new HoodieAvroHFileWriter(instantTime, path, hfileConfig, schema.getAvroSchema(), taskContextSupplier, config.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS));
   }
 
   protected HoodieFileWriter newOrcFileWriter(
-      String instantTime, StoragePath path, HoodieConfig config, Schema schema,
+      String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     BloomFilter filter = createBloomFilter(config);
     HoodieOrcConfig orcConfig = new HoodieOrcConfig(storage.getConf(),
@@ -115,7 +115,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
         config.getInt(HoodieStorageConfig.ORC_STRIPE_SIZE),
         config.getInt(HoodieStorageConfig.ORC_BLOCK_SIZE),
         config.getLong(HoodieStorageConfig.ORC_FILE_MAX_SIZE), filter);
-    return new HoodieAvroOrcWriter(instantTime, path, orcConfig, schema, taskContextSupplier);
+    return new HoodieAvroOrcWriter(instantTime, path, orcConfig, schema.getAvroSchema(), taskContextSupplier);
   }
 
   private HoodieAvroWriteSupport getHoodieAvroWriteSupport(Schema schema,
