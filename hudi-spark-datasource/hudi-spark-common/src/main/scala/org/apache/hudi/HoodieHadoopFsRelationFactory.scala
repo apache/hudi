@@ -141,8 +141,8 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     }
 
     val (name, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableName)
-    val avroSchema = internalSchemaOpt.map { is =>
-      InternalSchemaConverter.convert(is, namespace + "." + name)
+    val avroSchema: Schema = internalSchemaOpt.map { is =>
+      InternalSchemaConverter.convert(is, namespace + "." + name).toAvroSchema
     } orElse {
       specifiedQueryTimestamp.map(schemaResolver.getTableAvroSchema)
     } orElse {
