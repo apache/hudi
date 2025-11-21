@@ -157,14 +157,14 @@ public class HoodieSchema implements Serializable {
       }
 
       // Add null to existing union
-      List<Schema> newUnionTypes = new ArrayList<>();
+      List<Schema> newUnionTypes = new ArrayList<>(unionTypes.size() + 1);
       newUnionTypes.add(Schema.create(Schema.Type.NULL));
       newUnionTypes.addAll(unionTypes);
       Schema nullableSchema = Schema.createUnion(newUnionTypes);
       return new HoodieSchema(nullableSchema);
     } else {
       // Create new union with null
-      List<Schema> unionTypes = new ArrayList<>();
+      List<Schema> unionTypes = new ArrayList<>(2);
       unionTypes.add(Schema.create(Schema.Type.NULL));
       unionTypes.add(inputAvroSchema);
       Schema nullableSchema = Schema.createUnion(unionTypes);
