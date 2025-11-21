@@ -24,6 +24,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 
 import org.apache.avro.JsonProperties;
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 
 import java.io.Serializable;
@@ -92,7 +94,7 @@ public class HoodieSchema implements Serializable {
     this.avroSchema = avroSchema;
     Schema.Type avroType = avroSchema.getType();
     ValidationUtils.checkState(avroType != null, "Avro schema type cannot be null");
-    this.type = HoodieSchemaType.fromAvroType(avroType);
+    this.type = HoodieSchemaType.fromAvro(avroSchema);
   }
 
   /**
@@ -301,6 +303,69 @@ public class HoodieSchema implements Serializable {
 
     Schema fixedSchema = Schema.createFixed(name, doc, namespace, size);
     return new HoodieSchema(fixedSchema);
+  }
+
+  public static HoodieSchema createDecimal(String name, String namespace, String doc, int precision, int scale, int fixedSize) {
+    ValidationUtils.checkArgument(name != null && !name.isEmpty(), "Decimal name cannot be null or empty");
+    ValidationUtils.checkArgument(precision > 0, () -> "Decimal precision must be positive: " + precision);
+    ValidationUtils.checkArgument(scale >= 0, () -> "Decimal scale cannot be negative: " + scale);
+    ValidationUtils.checkArgument(scale <= precision, () -> "Decimal scale cannot be greater than precision: " + scale + " > " + precision);
+
+    Schema decimalSchema = Schema.createFixed(name, doc, namespace, fixedSize);
+    LogicalTypes.decimal(precision, scale).addToSchema(decimalSchema);
+    return new HoodieSchema.Decimal(decimalSchema);
+  }
+
+  public static HoodieSchema createDecimal(int precision, int scale) {
+    ValidationUtils.checkArgument(precision > 0, () -> "Decimal precision must be positive: " + precision);
+    ValidationUtils.checkArgument(scale >= 0, () -> "Decimal scale cannot be negative: " + scale);
+    ValidationUtils.checkArgument(scale <= precision, () -> "Decimal scale cannot be greater than precision: " + scale + " > " + precision);
+
+    Schema decimalSchema = Schema.create(Schema.Type.BYTES);
+    LogicalTypes.decimal(precision, scale).addToSchema(decimalSchema);
+    return new HoodieSchema.Decimal(decimalSchema);
+  }
+
+  public static HoodieSchema createTimestampMillis() {
+    Schema timestampSchema = Schema.create(Schema.Type.LONG);
+    LogicalTypes.timestampMillis().addToSchema(timestampSchema);
+    return new HoodieSchema.Timestamp(timestampSchema);
+  }
+
+  public static HoodieSchema createTimestampMicros() {
+    Schema timestampSchema = Schema.create(Schema.Type.LONG);
+    LogicalTypes.timestampMicros().addToSchema(timestampSchema);
+    return new HoodieSchema.Timestamp(timestampSchema);
+  }
+
+  public static HoodieSchema createLocalTimestampMillis() {
+    Schema localTimestampSchema = Schema.create(Schema.Type.LONG);
+    LogicalTypes.localTimestampMillis().addToSchema(localTimestampSchema);
+    return new HoodieSchema.Timestamp(localTimestampSchema);
+  }
+
+  public static HoodieSchema createLocalTimestampMicros() {
+    Schema localTimestampSchema = Schema.create(Schema.Type.LONG);
+    LogicalTypes.localTimestampMicros().addToSchema(localTimestampSchema);
+    return new HoodieSchema.Timestamp(localTimestampSchema);
+  }
+
+  public static HoodieSchema createTimeMillis() {
+    Schema timeSchema = Schema.create(Schema.Type.INT);
+    LogicalTypes.timeMillis().addToSchema(timeSchema);
+    return new HoodieSchema.Time(timeSchema);
+  }
+
+  public static HoodieSchema createTimeMicros() {
+    Schema timeSchema = Schema.create(Schema.Type.LONG);
+    LogicalTypes.timeMicros().addToSchema(timeSchema);
+    return new HoodieSchema.Time(timeSchema);
+  }
+
+  public static HoodieSchema createDate() {
+    Schema dateSchema = Schema.create(Schema.Type.INT);
+    LogicalTypes.date().addToSchema(dateSchema);
+    return new HoodieSchema(dateSchema);
   }
 
   /**
@@ -930,5 +995,174 @@ public class HoodieSchema implements Serializable {
 
       return new HoodieSchema(avroSchema);
     }
+  }
+
+  public static class Decimal extends HoodieSchema {
+    private final int precision;
+    private final int scale;
+    private final Option<Integer> fixedSize;
+
+    /**
+     * Creates a new HoodieSchema wrapping the given Avro schema.
+     *
+     * @param avroSchema the Avro schema to wrap, cannot be null
+     * @throws IllegalArgumentException if avroSchema is null or does not have a valid decimal logical type
+     */
+    private Decimal(Schema avroSchema) {
+      super(avroSchema);
+      LogicalType logicalType = avroSchema.getLogicalType();
+      if (!(logicalType instanceof LogicalTypes.Decimal)) {
+        throw new IllegalArgumentException("Decimal schema does not have a decimal logical type: " + avroSchema);
+      }
+      this.precision = ((LogicalTypes.Decimal) logicalType).getPrecision();
+      this.scale = ((LogicalTypes.Decimal) logicalType).getScale();
+      if (avroSchema.getType() == Schema.Type.FIXED) {
+        this.fixedSize = Option.of(avroSchema.getFixedSize());
+      } else {
+        this.fixedSize = Option.empty();
+      }
+    }
+
+    public int getPrecision() {
+      return precision;
+    }
+
+    public int getScale() {
+      return scale;
+    }
+
+    @Override
+    public int getFixedSize() {
+      if (fixedSize.isPresent()) {
+        return fixedSize.get();
+      } else {
+        throw new IllegalStateException("Cannot get fixed size from non-fixed decimal schema");
+      }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      if (!super.equals(o)) {
+        return false;
+      }
+      Decimal decimal = (Decimal) o;
+      return precision == decimal.precision && scale == decimal.scale && Objects.equals(fixedSize, decimal.fixedSize);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(super.hashCode(), precision, scale, fixedSize);
+    }
+  }
+
+  public static class Timestamp extends HoodieSchema {
+    private final boolean isUtcAdjusted;
+    private final TimePrecision precision;
+
+    /**
+     * Creates a new HoodieSchema wrapping the given Avro schema.
+     *
+     * @param avroSchema the Avro schema to wrap, cannot be null
+     * @throws IllegalArgumentException if avroSchema is null or does not have a valid timestamp logical type
+     */
+    private Timestamp(Schema avroSchema) {
+      super(avroSchema);
+      LogicalType logicalType = avroSchema.getLogicalType();
+      if (logicalType == null) {
+        throw new IllegalArgumentException("Timestamp schema does not have a logical type: " + avroSchema);
+      } else if (logicalType instanceof LogicalTypes.TimestampMillis) {
+        this.precision = TimePrecision.MILLIS;
+        this.isUtcAdjusted = true;
+      } else if (logicalType instanceof LogicalTypes.TimestampMicros) {
+        this.precision = TimePrecision.MICROS;
+        this.isUtcAdjusted = true;
+      } else if (logicalType instanceof LogicalTypes.LocalTimestampMillis) {
+        this.precision = TimePrecision.MILLIS;
+        this.isUtcAdjusted = false;
+      } else if (logicalType instanceof LogicalTypes.LocalTimestampMicros) {
+        this.precision = TimePrecision.MICROS;
+        this.isUtcAdjusted = false;
+      } else {
+        throw new IllegalArgumentException("Unsupported timestamp logical type: " + logicalType);
+      }
+    }
+
+    public TimePrecision getPrecision() {
+      return precision;
+    }
+
+    public boolean isUtcAdjusted() {
+      return isUtcAdjusted;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      if (!super.equals(o)) {
+        return false;
+      }
+      Timestamp timestamp = (Timestamp) o;
+      return isUtcAdjusted == timestamp.isUtcAdjusted && precision == timestamp.precision;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(super.hashCode(), isUtcAdjusted, precision);
+    }
+  }
+
+  public static class Time extends HoodieSchema {
+    private final TimePrecision precision;
+
+    /**
+     * Creates a new HoodieSchema wrapping the given Avro schema.
+     *
+     * @param avroSchema the Avro schema to wrap, cannot be null
+     * @throws IllegalArgumentException if avroSchema is null or does not have a valid time logical type
+     */
+    private Time(Schema avroSchema) {
+      super(avroSchema);
+      LogicalType logicalType = avroSchema.getLogicalType();
+      if (logicalType == null) {
+        throw new IllegalArgumentException("Time schema does not have a logical type: " + avroSchema);
+      } else if (logicalType instanceof LogicalTypes.TimeMillis) {
+        this.precision = TimePrecision.MILLIS;
+      } else if (logicalType instanceof LogicalTypes.TimeMicros) {
+        this.precision = TimePrecision.MICROS;
+      } else {
+        throw new IllegalArgumentException("Unsupported time logical type: " + logicalType);
+      }
+    }
+
+    public TimePrecision getPrecision() {
+      return precision;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      if (!super.equals(o)) {
+        return false;
+      }
+      Time time = (Time) o;
+      return precision == time.precision;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(super.hashCode(), precision);
+    }
+  }
+
+  public enum TimePrecision {
+    MILLIS,
+    MICROS
   }
 }
