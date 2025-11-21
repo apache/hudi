@@ -41,6 +41,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -182,17 +183,17 @@ public class SparkHoodieBackedMetadataSyncMetadataWriter extends SparkHoodieBack
     boolean enableBasePathOverride = dataWriteConfig.shouldEnableBasePathOverride();
 
     HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partition -> {
+      // ToDo : fileSystemView object being shared across executors, might be too large
       Stream<HoodieBaseFile> latestBaseFiles = fileSystemView.getLatestBaseFilesBeforeOrOn(partition.getRelativePath(), lastInstantTimestamp);
       Map<String, Long> fileNameToSizeMap = latestBaseFiles.collect(Collectors.toMap(e ->
           ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker(e.getFileName(), inflightInstantTimestamp, partition.getRelativePath()), HoodieBaseFile::getFileLen));
+
+      fileSystemView.close();
       return HoodieMetadataPayload.createPartitionFilesRecord(
           HoodieTableMetadataUtil.getPartitionIdentifier(partition.getRelativePath()), fileNameToSizeMap, Collections.emptyList(),
           enableBasePathOverride, Option.of(dataWriteConfig.getMetadataConfig().getBasePathOverride()));
     });
     ValidationUtils.checkState(fileListRecords.count() == partitions.size());
-    // close file system view
-    fileSystemView.close();
     return Pair.of(fileGroupCount, allPartitionsRecord.union(fileListRecords));
-
   }
 }

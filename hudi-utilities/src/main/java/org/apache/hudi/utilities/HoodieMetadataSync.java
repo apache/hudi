@@ -25,6 +25,7 @@ import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -44,6 +45,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
@@ -321,7 +323,6 @@ public class HoodieMetadataSync implements Serializable {
                   sourceTableMetaClient.getCommitsTimeline().getInstantDetails(instant).get());
               HoodieCleanMetadata tgtCleanMetadata = reconstructHoodieCleanCommitMetadata(srcCleanMetadata,
                   writeConfig, hoodieSparkEngineContext, targetTableMetaClient);
-              //HoodieCleanMetadata tgtCleanMetadata = buildHoodieCleanMetadata(srcCleanMetadata, commitTime);
               hoodieTableMetadataWriter.update(tgtCleanMetadata, commitTime);
 
               commitMetadataInBytes = TimelineMetadataUtils.serializeCleanMetadata(tgtCleanMetadata);
@@ -334,6 +335,10 @@ public class HoodieMetadataSync implements Serializable {
 
           if (cfg.performTableMaintenance) {
             runArchiver(sparkTable, writeClient.getConfig(), hoodieSparkEngineContext);
+          }
+
+          if (!lastSyncCheckpoint.isPresent() || instant.getTimestamp().compareTo(lastSyncCheckpoint.get()) > 0) {
+            lastSyncCheckpoint = Option.of(instant.getTimestamp());
           }
         }
       }
@@ -355,9 +360,9 @@ public class HoodieMetadataSync implements Serializable {
             HoodieTimeline.REPLACE_COMMIT_ACTION,
             commitTime);
 
-      SparkHoodieBackedMetadataSyncMetadataWriter metadataWriter =
-          (SparkHoodieBackedMetadataSyncMetadataWriter) sparkTable.getMetadataWriter(commitTime).get();
-      metadataWriter.bootstrap(sourceLastInstant.map(HoodieInstant::getTimestamp));
+    SparkHoodieBackedMetadataSyncMetadataWriter metadataWriter =
+        (SparkHoodieBackedMetadataSyncMetadataWriter) sparkTable.getMetadataWriter(commitTime).get();
+    metadataWriter.bootstrap(sourceLastInstant.map(HoodieInstant::getTimestamp));
     Option<HoodieInstant> targetTableLastInstant = targetTableMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
     List<String> pendingInstants = getPendingInstants(sourceTableMetaClient.getActiveTimeline(), sourceLastInstant).stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     SyncMetadata syncMetadata = getTableSyncExtraMetadata(targetTableLastInstant, targetTableMetaClient,
@@ -522,6 +527,10 @@ public class HoodieMetadataSync implements Serializable {
     properties.setProperty(HoodieMetadataConfig.AUTO_INITIALIZE.key(), "false");
     properties.putAll(this.props);
     return HoodieWriteConfig.newBuilder()
+        .withLockConfig(
+            HoodieLockConfig.newBuilder()
+                .withLockProvider(InProcessLockProvider.class)
+                .build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
         .withPath(metaClient.getBasePathV2().toString())
         .withPopulateMetaFields(metaClient.getTableConfig().populateMetaFields())

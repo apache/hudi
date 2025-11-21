@@ -84,7 +84,7 @@ public class MetadataSyncUtils {
   public static SyncMetadata getTableSyncExtraMetadata(Option<HoodieInstant> targetTableLastInstant, HoodieTableMetaClient targetTableMetaClient, String sourceIdentifier,
                                                        String sourceInstantSynced, List<String> pendingInstants) {
     return targetTableLastInstant.map(instant -> {
-      SyncMetadata lastSyncMetadata = null;
+      SyncMetadata lastSyncMetadata;
       try {
         lastSyncMetadata = getTableSyncMetadataFromCommitMetadata(instant, targetTableMetaClient);
       } catch (IOException e) {
@@ -160,8 +160,7 @@ public class MetadataSyncUtils {
     }
   }
 
-  public static Pair<TreeMap<HoodieInstant, Boolean>, Option<String>>
-  getInstantsToSyncAndLastSyncCheckpoint(
+  public static Pair<TreeMap<HoodieInstant, Boolean>, Option<String>> getInstantsToSyncAndLastSyncCheckpoint(
       String sourceIdentifier,
       HoodieTableMetaClient targetTableMetaClient,
       HoodieTableMetaClient sourceTableMetaClient
@@ -218,9 +217,14 @@ public class MetadataSyncUtils {
             .collect(Collectors.toList());
 
     // pending carried-over
+    pendingFromLastSync.forEach(instant ->
+        instantSyncMap.put(instant, !currentPending.contains(instant))
+    );
+
+    // pending that got completed
     pendingFromLastSync.stream()
-        .filter(currentPending::contains)
-        .forEach(i -> instantSyncMap.put(i, false));
+        .filter(instant -> !currentPending.contains(instant))
+        .forEach(i -> instantSyncMap.put(i, true));
 
     // all current pending
     currentPending.forEach(i -> instantSyncMap.put(i, false));
