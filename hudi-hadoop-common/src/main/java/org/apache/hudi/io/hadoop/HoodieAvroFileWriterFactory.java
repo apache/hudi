@@ -80,8 +80,8 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
   }
 
   protected HoodieFileWriter newParquetFileWriter(
-      OutputStream outputStream, HoodieConfig config, Schema schema) throws IOException {
-    HoodieAvroWriteSupport writeSupport = getHoodieAvroWriteSupport(schema, config, false);
+      OutputStream outputStream, HoodieConfig config, HoodieSchema schema) throws IOException {
+    HoodieAvroWriteSupport writeSupport = getHoodieAvroWriteSupport(schema.getAvroSchema(), config, false);
     HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig = new HoodieParquetConfig<>(writeSupport,
         CompressionCodecName.fromConf(config.getString(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME)),
         config.getInt(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
