@@ -73,7 +73,7 @@ public class TestHoodieSchema {
 
   @Test
   public void testSchemaCreationWithNullAvroSchema() {
-    assertNull(HoodieSchema.fromAvroSchema(null))ct;
+    assertNull(HoodieSchema.fromAvroSchema(null));
   }
 
   @Test
