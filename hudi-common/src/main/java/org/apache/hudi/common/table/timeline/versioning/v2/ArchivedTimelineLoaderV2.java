@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.LSMTimeline;
+import org.apache.hudi.common.table.timeline.StoppableRecordConsumer;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
@@ -36,6 +37,8 @@ import org.apache.avro.generic.IndexedRecord;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -56,29 +59,58 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
       // List all files
       List<String> fileNames = LSMTimeline.latestSnapshotManifest(metaClient, metaClient.getArchivePath()).getFileNames();
 
+      // Check if consumer supports early termination
+      StoppableRecordConsumer stoppable = recordConsumer instanceof StoppableRecordConsumer
+          ? (StoppableRecordConsumer) recordConsumer
+          : null;
+
+      // Filter files by time range
+      List<String> filteredFiles = new ArrayList<>();
+      for (String fileName : fileNames) {
+        if (filter == null || LSMTimeline.isFileInRange(filter, fileName)) {
+          filteredFiles.add(fileName);
+        }
+      }
+
+      // Sort files in reverse chronological order if needed (newest first for limit queries)
+      if (stoppable != null && stoppable.needsReverseOrder()) {
+        filteredFiles.sort(Comparator.comparing((String fileName) -> {
+          try {
+            return LSMTimeline.getMaxInstantTime(fileName);
+          } catch (Exception e) {
+            return "";
+          }
+        }).reversed());
+      }
+
       Schema readSchema = LSMTimeline.getReadSchema(loadMode);
-      fileNames.stream()
-          .filter(fileName -> filter == null || LSMTimeline.isFileInRange(filter, fileName))
-          .parallel().forEach(fileName -> {
-            // Read the archived file
-            try (HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(metaClient.getStorage())
-                .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-                .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, new StoragePath(metaClient.getArchivePath(), fileName))) {
-              try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieLSMTimelineInstant.getClassSchema(), readSchema)) {
-                while (iterator.hasNext()) {
-                  GenericRecord record = (GenericRecord) iterator.next();
-                  String instantTime = record.get(INSTANT_TIME_ARCHIVED_META_FIELD).toString();
-                  if ((filter == null || filter.isInRange(instantTime))
-                      && commitsFilter.apply(record)) {
-                    recordConsumer.accept(instantTime, record);
-                  }
-                }
+      filteredFiles.parallelStream().forEach(fileName -> {
+        if (stoppable != null && stoppable.shouldStop()) {
+          return;
+        }
+        // Read the archived file
+        try (HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(metaClient.getStorage())
+            .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+            .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, new StoragePath(metaClient.getArchivePath(), fileName))) {
+          try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieLSMTimelineInstant.getClassSchema(), readSchema)) {
+            while (iterator.hasNext()) {
+              // accept() is thread-safe (uses volatile + synchronized)
+              if (stoppable != null && stoppable.shouldStop()) {
+                break; // Stop reading this file
               }
-            } catch (IOException ioException) {
-              throw new HoodieIOException("Error open file reader for path: "
-                  + new StoragePath(metaClient.getArchivePath(), fileName));
+              GenericRecord record = (GenericRecord) iterator.next();
+              String instantTime = record.get(INSTANT_TIME_ARCHIVED_META_FIELD).toString();
+              if ((filter == null || filter.isInRange(instantTime))
+                  && commitsFilter.apply(record)) {
+                recordConsumer.accept(instantTime, record);
+              }
             }
-          });
+          }
+        } catch (IOException ioException) {
+          throw new HoodieIOException("Error open file reader for path: "
+              + new StoragePath(metaClient.getArchivePath(), fileName));
+        }
+      });
     } catch (IOException e) {
       throw new HoodieIOException(
           "Could not load archived commit timeline from path " + metaClient.getArchivePath(), e);

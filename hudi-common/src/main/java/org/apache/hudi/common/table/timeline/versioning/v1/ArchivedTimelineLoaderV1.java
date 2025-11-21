@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
+import org.apache.hudi.common.table.timeline.StoppableRecordConsumer;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -81,7 +82,11 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
                            HoodieArchivedTimeline.LoadMode loadMode,
                            Function<GenericRecord, Boolean> commitsFilter,
                            BiConsumer<String, GenericRecord> recordConsumer) {
-    Set<String> instantsInRange = new HashSet<>();
+    Set<String> instantsInRange = new HashSet<>();    
+    StoppableRecordConsumer stoppable = recordConsumer instanceof StoppableRecordConsumer
+        ? (StoppableRecordConsumer) recordConsumer
+        : null;
+    
     try {
       // List all files
       List<StoragePathInfo> entryList = metaClient.getStorage().globEntries(
@@ -91,6 +96,10 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
       entryList.sort(new ArchiveFileVersionComparator());
 
       for (StoragePathInfo fs : entryList) {
+        if (stoppable != null && stoppable.shouldStop()) {
+          break;
+        }
+        
         if (logFileFilter.isPresent() && !logFileFilter.get().shouldLoadFile(fs)) {
           continue;
         }
@@ -100,6 +109,9 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
           int instantsInPreviousFile = instantsInRange.size();
           // Read the avro blocks
           while (reader.hasNext()) {
+            if (stoppable != null && stoppable.shouldStop()) {
+              break;
+            }
             HoodieLogBlock block = reader.next();
             if (block instanceof HoodieAvroDataBlock) {
               HoodieAvroDataBlock avroBlock = (HoodieAvroDataBlock) block;
@@ -111,6 +123,9 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
                     .map(r -> (GenericRecord) r.getData())
                     .filter(commitsFilter::apply)
                     .forEach(r -> {
+                      if (stoppable != null && stoppable.shouldStop()) {
+                        return;
+                      }
                       String instantTime = r.get(HoodieTableMetaClient.COMMIT_TIME_KEY).toString();
                       if (filter == null || filter.isInRange(instantTime)) {
                         instantsInRange.add(instantTime);
@@ -182,3 +197,5 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
     }
   }
 }
+
+

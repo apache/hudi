@@ -267,7 +267,7 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
 
         // Test show_timeline with showArchived=true (should use ArchivedTimelineV2)
-        val timelineResultDf = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true)")
+        val timelineResultDf = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, limit => 100)")
         timelineResultDf.show(false)
         val timelineResult = timelineResultDf.collect()
 
@@ -334,7 +334,7 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
 
         // Test show_timeline with showArchived=true (should use ArchivedTimelineV1)
-        val timelineResultDf = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true)")
+        val timelineResultDf = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, limit => 100)")
         timelineResultDf.show(false)
         val timelineResult = timelineResultDf.collect()
 
@@ -477,7 +477,7 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
 
         // Test with V2 (current version) first
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
-        val v2TimelineResult = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true)").collect()
+        val v2TimelineResult = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, limit => 100)").collect()
 
         // Downgrade to V1
         spark.sql(s"call downgrade_table(table => '$tableName', to_version => 'SEVEN')")
@@ -486,7 +486,7 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
 
         // Test with V1
-        val v1TimelineResult = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true)").collect()
+        val v1TimelineResult = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, limit => 100)").collect()
 
         // Both should work and return timeline entries
         assert(v1TimelineResult.length > 0, "V1 timeline should return entries")

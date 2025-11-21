@@ -184,18 +184,48 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
     val instantInfoMap = buildInstantInfoFromTimeline(metaClient)
 
     val activeRollbackInfoMap = getRolledBackInstantInfo(metaClient.getActiveTimeline, metaClient)
-    val archivedRollbackInfoMap = if (showArchived) {
-      val archivedTimeline = metaClient.getArchivedTimeline.reload()
-      if (startTime.nonEmpty && endTime.nonEmpty) {
-        archivedTimeline.loadCompletedInstantDetailsInMemory(startTime, endTime)
-        archivedTimeline.loadCompactionDetailsInMemory(startTime, endTime)
-      } else {
-        archivedTimeline.loadCompletedInstantDetailsInMemory(limit)
-        archivedTimeline.loadCompactionDetailsInMemory(limit)
+
+    // Create archived timeline starting from the maximum instant time in active timeline
+    // This way, if all archived instants are older than the active timeline's max instant,
+    // the archived timeline will be empty and won't load anything, avoiding unnecessary loading.
+    // Instead of getArchivedTimeline() which loads with LoadMode.ACTION, we use the startTs
+    // constructor which loads with LoadMode.METADATA, and then load specific details (PLAN for compactions).
+    val (archivedTimeline, archivedRollbackInfoMap) = if (showArchived) {
+      // Get the maximum instant time from active timeline
+      val maxActiveInstantTime = {
+        val lastInstantOpt = metaClient.getActiveTimeline
+          .filterCompletedInstants()
+          .lastInstant()
+        if (lastInstantOpt.isPresent) {
+          lastInstantOpt.get().requestedTime()
+        } else {
+          ""
+        }
       }
-      getRolledBackInstantInfo(archivedTimeline, metaClient)
+      // Create archived timeline starting from max active instant time
+      // This will be empty if all archived instants are older than active timeline
+      val timeline = if (maxActiveInstantTime.nonEmpty) {
+        metaClient.getTableFormat().getTimelineFactory()
+          .createArchivedTimeline(metaClient, maxActiveInstantTime)
+//        metaClient.getArchivedTimeline()
+      } else {
+        // If no active instants, create empty timeline
+        metaClient.getArchivedTimeline()
+      }
+      // Load the required details with appropriate LoadMode (METADATA for commits, PLAN for compactions)
+      // Note: loadCompletedInstantDetailsInMemory may have already loaded METADATA via constructor,
+      // but we call it again to ensure we have the data for the specified time range or limit.
+      if (startTime.nonEmpty && endTime.nonEmpty) {
+        timeline.loadCompletedInstantDetailsInMemory(startTime, endTime)
+        timeline.loadCompactionDetailsInMemory(startTime, endTime)
+      } else {
+        timeline.loadCompletedInstantDetailsInMemory(limit)
+        timeline.loadCompactionDetailsInMemory(limit)
+      }
+      val rollbackInfoMap = getRolledBackInstantInfo(timeline, metaClient)
+      (timeline, rollbackInfoMap)
     } else {
-      Map.empty[String, List[String]]
+      (null, Map.empty[String, List[String]])
     }
 
     val activeEntries = getTimelineEntriesFromTimeline(
@@ -204,7 +234,7 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
 
     val finalEntries = if (showArchived) {
       val archivedEntries = getTimelineEntriesFromTimeline(
-        metaClient.getArchivedTimeline, "ARCHIVED", metaClient, instantInfoMap, archivedRollbackInfoMap, limit, startTime, endTime
+        archivedTimeline, "ARCHIVED", metaClient, instantInfoMap, archivedRollbackInfoMap, limit, startTime, endTime
       )
       val combinedEntries = (activeEntries ++ archivedEntries)
         .sortWith((a, b) => {
