@@ -19,9 +19,9 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
@@ -29,7 +29,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -61,6 +60,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -112,9 +113,9 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.apache.hudi.common.util.StringUtils.toStringWithThreshold;
 import static org.apache.hudi.common.util.TestStringUtils.generateRandomString;
+import static org.apache.hudi.utilities.HoodieMetadataTableValidator.computeDiffSummary;
 import static org.apache.spark.sql.types.DataTypes.IntegerType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
-import static org.apache.hudi.utilities.HoodieMetadataTableValidator.computeDiffSummary;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -158,13 +159,13 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   @Test
   public void testAggregateColumnStats() {
     HoodieColumnRangeMetadata<Comparable> fileColumn1Range1 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", "col1", 1, 5, 0, 10, 100, 200);
+        "path/to/file1", "col1", 1, 5, 0, 10, 100, 200, ValueMetadata.V1EmptyMetadata.get());
     HoodieColumnRangeMetadata<Comparable> fileColumn1Range2 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", "col1", 1, 10, 5, 10, 100, 200);
+        "path/to/file1", "col1", 1, 10, 5, 10, 100, 200, ValueMetadata.V1EmptyMetadata.get());
     HoodieColumnRangeMetadata<Comparable> fileColumn2Range1 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", "col2", 3, 8, 1, 15, 120, 250);
+        "path/to/file1", "col2", 3, 8, 1, 15, 120, 250, ValueMetadata.V1EmptyMetadata.get());
     HoodieColumnRangeMetadata<Comparable> fileColumn2Range2 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", "col2", 5, 9, 4, 5, 80, 150);
+        "path/to/file1", "col2", 5, 9, 4, 5, 80, 150, ValueMetadata.V1EmptyMetadata.get());
     List<HoodieColumnRangeMetadata<Comparable>> colStats = new ArrayList<>();
     colStats.add(fileColumn1Range1);
     colStats.add(fileColumn1Range2);
@@ -209,18 +210,18 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     Dataset<Row> inserts = makeInsertDf("000", 5).cache();
     inserts.write().format("hudi").options(writeOptions)
         .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
-        .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
-        .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
-        .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
         .mode(SaveMode.Overwrite)
         .save(basePath);
     inserts.unpersist(true);
     Dataset<Row> updates = makeUpdateDf("001", 5).cache();
     updates.write().format("hudi").options(writeOptions)
         .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.UPSERT.value())
-        .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
-        .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
-        .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
         .mode(SaveMode.Append)
         .save(basePath);
     updates.unpersist(true);
@@ -268,9 +269,9 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     Dataset<Row> inserts = makeInsertDf("000", 5).cache();
     inserts.write().format("hudi").options(writeOptions)
         .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
-        .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
-        .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
-        .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
         .mode(SaveMode.Overwrite)
         .save(basePath);
     inserts.unpersist(true);
@@ -283,9 +284,9 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     Dataset<Row> updates = makeUpdateDf("001", 5).cache();
     updates.write().format("hudi").options(writeOptions)
         .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.UPSERT.value())
-        .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
-        .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
-        .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
+        .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
         .mode(SaveMode.Append)
         .save(basePath);
     updates.unpersist(true);
@@ -312,6 +313,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       // To overwrite the table properties created during test setup
       storage.deleteDirectory(metaClient.getBasePath());
 
+      sparkSession.sql("set hoodie.write.lock.provider = org.apache.hudi.client.transaction.lock.InProcessLockProvider");
       sparkSession.sql(
           "create table tbl ("
               + "ts bigint, "
@@ -354,6 +356,8 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
       // validate MDT partition stats
       validateSecondaryIndex();
+
+      sparkSession.sql("set hoodie.write.lock.provider=");
     });
   }
 
@@ -468,7 +472,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       Dataset<Row> inserts = makeInsertDf("000", 5);
       inserts.write().format("hudi").options(writeOptions)
           .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
-          .option(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true")
           .mode(SaveMode.Overwrite)
           .save(basePath);
       // validate MDT partition stats
@@ -477,7 +480,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       Dataset<Row> updates = makeUpdateDf("001", 5);
       updates.write().format("hudi").options(writeOptions)
           .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.UPSERT.value())
-          .option(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true")
           .mode(SaveMode.Append)
           .save(basePath);
 
@@ -1230,34 +1232,34 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         HoodieColumnRangeMetadata<Integer> intMetadata = HoodieColumnRangeMetadata.create(
             generateRandomString(30), generateRandomString(5),
             RANDOM.nextInt() % 30, RANDOM.nextInt() % 1000_000_000 + 30,
-            count / 3L, count, size, size / 8L);
+            count / 3L, count, size, size / 8L, ValueMetadata.V1EmptyMetadata.get());
         return Pair.of(intMetadata,
             HoodieColumnRangeMetadata.create(
                 new String(intMetadata.getFilePath()), new String(intMetadata.getColumnName()),
                 (int) intMetadata.getMinValue(), (int) intMetadata.getMaxValue(),
-                count / 3L, count, size, size / 8L));
+                count / 3L, count, size, size / 8L, ValueMetadata.V1EmptyMetadata.get()));
       case 1:
         HoodieColumnRangeMetadata<Long> longMetadata = HoodieColumnRangeMetadata.create(
             generateRandomString(30), generateRandomString(5),
             RANDOM.nextLong() % 30L, RANDOM.nextInt() % 1000_000_000_000_000L + 30L,
-            count / 3L, count, size, size / 8L);
+            count / 3L, count, size, size / 8L, ValueMetadata.V1EmptyMetadata.get());
         return Pair.of(longMetadata,
             HoodieColumnRangeMetadata.create(
                 new String(longMetadata.getFilePath()), new String(longMetadata.getColumnName()),
                 (long) longMetadata.getMinValue(), (long) longMetadata.getMaxValue(),
-                count / 3L, count, size, size / 8L));
+                count / 3L, count, size, size / 8L, ValueMetadata.V1EmptyMetadata.get()));
       default:
         String stringValue1 = generateRandomString(20);
         String stringValue2 = generateRandomString(20);
         HoodieColumnRangeMetadata<String> stringMetadata = HoodieColumnRangeMetadata.create(
             generateRandomString(30), generateRandomString(5),
             stringValue1, stringValue2,
-            count / 3L, count, size, size / 8L);
+            count / 3L, count, size, size / 8L, ValueMetadata.V1EmptyMetadata.get());
         return Pair.of(stringMetadata,
             HoodieColumnRangeMetadata.create(
                 new String(stringMetadata.getFilePath()), new String(stringMetadata.getColumnName()),
                 new String(stringValue1), new String(stringValue2),
-                count / 3L, count, size, size / 8L));
+                count / 3L, count, size, size / 8L, ValueMetadata.V1EmptyMetadata.get()));
     }
   }
 
@@ -1294,7 +1296,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
     writeOptions.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
     writeOptions.put(DataSourceWriteOptions.OPERATION().key(),"bulk_insert");
-    writeOptions.put(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true");
+    writeOptions.put(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
 
     Dataset<Row> inserts = makeInsertDf("000", 50).cache();
     inserts.write().format("hudi").options(writeOptions)
@@ -1395,18 +1397,18 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       Dataset<Row> inserts = makeInsertDf("000", 5).cache();
       inserts.write().format("hudi").options(writeOptions)
           .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
-          .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
-          .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
-          .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
+          .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true")
+          .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
+          .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
           .mode(SaveMode.Overwrite)
           .save(basePath);
       inserts.unpersist(true);
       Dataset<Row> updates = makeUpdateDf("001", 5).cache();
       updates.write().format("hudi").options(writeOptions)
           .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.UPSERT.value())
-          .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
-          .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
-          .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
+          .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true")
+          .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
+          .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
           .mode(SaveMode.Append)
           .save(basePath);
       updates.unpersist(true);
@@ -1414,9 +1416,9 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       Dataset<Row> inserts2 = makeInsertDf("002", 5).cache();
       inserts2.write().format("hudi").options(writeOptions)
           .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
-          .option(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true")
-          .option(HoodieMetadataConfig.RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
-          .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
+          .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true")
+          .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "1")
+          .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
           .mode(SaveMode.Append)
           .save(basePath);
       inserts2.unpersist(true);

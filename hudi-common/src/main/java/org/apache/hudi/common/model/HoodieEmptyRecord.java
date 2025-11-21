@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -124,7 +125,7 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
-  protected boolean checkIsDelete(Schema recordSchema, Properties props) {
+  protected boolean checkIsDelete(DeleteContext deleteContext, Properties props) {
     return true;
   }
 

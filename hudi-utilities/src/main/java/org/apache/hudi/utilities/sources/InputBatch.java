@@ -63,7 +63,12 @@ public class InputBatch<T> {
 
   public SchemaProvider getSchemaProvider() {
     if (batch.isPresent() && schemaProvider == null) {
-      throw new HoodieException("Please provide a valid schema provider class!");
+      throw new HoodieException(
+          "Schema provider is required for this operation and for the source of interest. "
+              + "Please set '--schemaprovider-class' in the top level HoodieStreamer config for the source of interest. "
+              + "Based on the schema provider class chosen, additional configs might be required. "
+              + "For eg, if you choose 'org.apache.hudi.utilities.schema.SchemaRegistryProvider', "
+              + "you may need to set configs like 'hoodie.streamer.schemaprovider.registry.url'.");
     }
     return Option.ofNullable(schemaProvider).orElseGet(NullSchemaProvider::getInstance);
   }

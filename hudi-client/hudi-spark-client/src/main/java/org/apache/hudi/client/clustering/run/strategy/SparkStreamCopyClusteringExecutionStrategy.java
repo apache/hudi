@@ -59,7 +59,7 @@ public class SparkStreamCopyClusteringExecutionStrategy<T>
                                         Map<String, String> strategyParams) {
     // Check if table type is Copy-on-Write
     if (getHoodieTable().getMetaClient().getTableType() != COPY_ON_WRITE) {
-      LOG.warn("Only support CoW table. Will fall back to common clustering execution strategy.");
+      LOG.warn("SparkStreamCopyClusteringExecutionStrategy is only supported for COW tables. Will fall back to common clustering execution strategy.");
       return false;
     }
     
@@ -69,13 +69,13 @@ public class SparkStreamCopyClusteringExecutionStrategy<T>
             .map(listStr -> listStr.split(","));
     
     if (orderByColumnsOpt.isPresent()) {
-      LOG.warn("Not support to sort input records. Will fall back to common clustering execution strategy.");
+      LOG.warn("SparkStreamCopyClusteringExecutionStrategy does not support sort by columns. Will fall back to common clustering execution strategy.");
       return false;
     }
     
     // Check if base file format is Parquet
     if (!getHoodieTable().getMetaClient().getTableConfig().getBaseFileFormat().equals(PARQUET)) {
-      LOG.warn("Binary Copy only support parquet as base file format for now.");
+      LOG.warn("SparkStreamCopyClusteringExecutionStrategy only supports parquet base files. Will fall back to common clustering execution strategy.");
       return false;
     }
     

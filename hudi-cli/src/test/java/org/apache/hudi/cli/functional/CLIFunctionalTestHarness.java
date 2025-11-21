@@ -39,6 +39,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Paths;
 
 public class CLIFunctionalTestHarness implements SparkProvider {
@@ -118,7 +119,7 @@ public class CLIFunctionalTestHarness implements SparkProvider {
   }
 
   @AfterAll
-  public static synchronized void cleanUpAfterAll() {
+  public static synchronized void cleanUpAfterAll() throws IOException {
     if (spark != null) {
       spark.close();
       spark = null;

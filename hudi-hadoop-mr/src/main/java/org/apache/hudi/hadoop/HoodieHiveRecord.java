@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
@@ -38,7 +39,6 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
 import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
@@ -70,8 +70,9 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
     isDelete = data == null;
   }
 
-  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HiveAvroSerializer avroSerializer, HoodieOperation hoodieOperation, boolean isDelete) {
+  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HiveAvroSerializer avroSerializer, HoodieOperation hoodieOperation, Comparable orderingValue, boolean isDelete) {
     super(key, data, hoodieOperation, isDelete, Option.empty());
+    this.orderingValue = orderingValue;
     this.avroSerializer = avroSerializer;
     this.schema = schema;
     this.copy = false;
@@ -186,15 +187,12 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public boolean checkIsDelete(Schema recordSchema, Properties props) throws IOException {
-    if (null == data) {
+  public boolean checkIsDelete(DeleteContext deleteContext, Properties props) {
+    if (null == data || HoodieOperation.isDelete(getOperation())) {
       return true;
     }
-    if (recordSchema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) == null) {
-      return false;
-    }
-    Object deleteMarker = getValue(HoodieRecord.HOODIE_IS_DELETED_FIELD);
-    return deleteMarker instanceof BooleanWritable && ((BooleanWritable) deleteMarker).get();
+
+    return HiveRecordContext.getFieldAccessorInstance().isDeleteRecord(data, deleteContext);
   }
 
   @Override

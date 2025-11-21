@@ -27,14 +27,33 @@ import org.apache.hudi.common.util.ValidationUtils;
 public class BucketIndexUtil {
 
   /**
-   * This method is used to get the partition index calculation function of a bucket.
-   * "partition.hashCode() / (parallelism / bucketNum) * bucketNum" divides the parallelism into
-   * sub-intervals of length bucket_num, different partitions will be mapped to different sub-interval,
-   * ensure that the data across multiple partitions is evenly distributed.
+   * Gets a function that calculates the target partition index for a specific bucket.
    *
-   * @param bucketNum   Bucket number per partition
-   * @param parallelism Parallelism of the task
-   * @return The partition index of this bucket.
+   * <p>The returned function implements a round-robin distribution of buckets from a single
+   * data partition (e.g., country=US) across the available task parallelisms.
+   *
+   * <p>The calculation logic is equivalent to:
+   * {@code ((partition.hashCode() & Integer.MAX_VALUE) % parallelism * bucketNum + curBucket) % parallelism}
+   *
+   * <p>This logic works as follows:
+   * <ol>
+   * <li><b>Calculate a base task for the partition:</b>
+   * {@code (partition.hashCode() & Integer.MAX_VALUE) % parallelism}. This maps the
+   * partition string to a starting task.
+   * <li><b>Calculate a global bucket index:</b> The "base" task is multiplied by
+   * {@code bucketNum} to get a starting index for that partition's buckets. The
+   * {@code curBucket} (from 0 to bucketNum-1) is added to get the unique global
+   * index for this specific bucket.
+   * <li><b>Map to final partition:</b> The global index is mapped back to a final
+   * task ID using {@code % parallelism}.
+   * </ol>
+   *
+   * This strategy ensures that the {@code bucketNum} buckets from a single partition are
+   * spread evenly across different downstream tasks, rather than all landing on the same task.
+   *
+   * @param parallelism Parallelism of the task (the total number of target partitions)
+   * @return A function that takes (bucketNum, partition, curBucket) and returns the calculated
+   * partition index (from 0 to parallelism-1).
    */
   public static Functions.Function3<Integer, String, Integer, Integer> getPartitionIndexFunc(int parallelism) {
     return (bucketNum, partition, curBucket) -> {

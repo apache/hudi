@@ -70,7 +70,7 @@ class DeleteMarkerProcedure extends BaseProcedure with ProcedureBuilder with Log
         logInfo(s"Marker $instantTime deleted.")
         true
       case Failure(e) =>
-        logWarning(s"Failed: Could not clean marker instantTime: $currentInstant.", e)
+        logWarning(s"Could not clean marker instantTime: $currentInstant.", e)
         false
     }
 

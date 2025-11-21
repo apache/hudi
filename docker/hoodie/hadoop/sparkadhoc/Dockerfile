@@ -15,8 +15,8 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG HADOOP_VERSION=2.8.4
-ARG HIVE_VERSION=2.3.3
+ARG HADOOP_VERSION=3.3.4
+ARG HIVE_VERSION=3.1.3
 ARG SPARK_VERSION=3.5.3
 FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}-sparkbase_${SPARK_VERSION}
 
@@ -31,16 +31,15 @@ ENV PRESTO_VERSION ${PRESTO_VERSION}
 ENV TRINO_VERSION ${TRINO_VERSION}
 ENV BASE_URL=https://repo1.maven.org/maven2
 
+ENV SPARK_BUNDLE_JAR=/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-spark-bundle.jar
+
 RUN apt-get update
 RUN apt-get install -y \
     curl \
     tar \
     sudo \
     rsync \
-    python \
     wget \
-    python3-pip \
-    python-dev \
     build-essential \
     uuid-runtime \
     less
@@ -53,4 +52,7 @@ RUN set -x \
     ## trino-cli
     && wget -q -O /usr/local/bin/trino ${BASE_URL}/io/trino/trino-cli/${TRINO_VERSION}/trino-cli-${TRINO_VERSION}-executable.jar \
     && chmod +x /usr/local/bin/trino
+
+RUN cp /opt/hive/lib/calcite-core*.jar $HADOOP_HOME/share/hadoop/common/lib/
+RUN cp /opt/hive/lib/libfb*.jar $HADOOP_HOME/share/hadoop/common/lib/
 CMD ["/bin/bash", "/opt/spark/adhoc.sh"]

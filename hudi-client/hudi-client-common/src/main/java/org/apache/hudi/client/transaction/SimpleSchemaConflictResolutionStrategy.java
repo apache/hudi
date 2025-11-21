@@ -62,8 +62,8 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
 
     // Guard against unrecognized cases where writers do not come with a writer schema.
     if (StringUtils.isNullOrEmpty(config.getWriteSchema())) {
-      LOG.warn(StringUtils.join("Writer config does not come with a valid writer schema. Writer config: ",
-          config.toString(), ". Owner instant: ", currTxnOwnerInstant.get().toString()));
+      LOG.warn("Writer config does not come with a valid writer schema. Writer config: {}. Owner instant: {}",
+          config, currTxnOwnerInstant.get().toString());
       return Option.empty();
     }
 

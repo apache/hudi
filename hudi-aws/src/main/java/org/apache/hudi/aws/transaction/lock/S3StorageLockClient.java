@@ -31,7 +31,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieLockException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +45,7 @@ import software.amazon.awssdk.services.s3.model.GetBucketLocationRequest;
 import software.amazon.awssdk.services.s3.model.GetBucketLocationResponse;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 import software.amazon.awssdk.services.s3.model.S3Exception;
@@ -54,8 +54,6 @@ import javax.annotation.concurrent.ThreadSafe;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.time.Duration;
 import java.util.Properties;
 
@@ -94,34 +92,22 @@ public class S3StorageLockClient implements StorageLockClient {
 
   @VisibleForTesting
   S3StorageLockClient(String ownerId, String lockFileUri, Properties props, Functions.Function2<String, Properties, S3Client> s3ClientSupplier, Logger logger) {
-    try {
-      // This logic can likely be extended to other lock client implementations.
-      // Consider creating base class with utilities, incl error handling.
-      URI uri = new URI(lockFileUri);
-      this.bucketName = uri.getHost();
-      this.lockFilePath = uri.getPath().replaceFirst("/", "");
-      this.s3Client = s3ClientSupplier.apply(bucketName, props);
+    Pair<String, String> bucketAndPath = StorageLockClient.parseBucketAndPath(lockFileUri);
+    this.bucketName = bucketAndPath.getLeft();
+    this.lockFilePath = bucketAndPath.getRight();
 
-      if (StringUtils.isNullOrEmpty(this.bucketName)) {
-        throw new IllegalArgumentException("LockFileUri does not contain a valid bucket name.");
-      }
-      if (StringUtils.isNullOrEmpty(this.lockFilePath)) {
-        throw new IllegalArgumentException("LockFileUri does not contain a valid lock file path.");
-      }
-      this.ownerId = ownerId;
-      this.logger = logger;
-    } catch (URISyntaxException e) {
-      throw new HoodieLockException(e);
-    }
+    this.s3Client = s3ClientSupplier.apply(bucketName, props);
+    this.ownerId = ownerId;
+    this.logger = logger;
   }
 
   @Override
   public Pair<LockGetResult, Option<StorageLockFile>> readCurrentLockFile() {
     try (ResponseInputStream<GetObjectResponse> in = s3Client.getObject(
-            GetObjectRequest.builder()
-                    .bucket(bucketName)
-                    .key(lockFilePath)
-                    .build())) {
+        GetObjectRequest.builder()
+            .bucket(bucketName)
+            .key(lockFilePath)
+            .build())) {
       String eTag = in.response().eTag();
       return Pair.of(LockGetResult.SUCCESS, Option.of(StorageLockFile.createFromStream(in, eTag)));
     } catch (S3Exception e) {
@@ -157,7 +143,7 @@ public class S3StorageLockClient implements StorageLockClient {
     } catch (S3Exception e) {
       result = handleUpsertS3Exception(e);
     } catch (AwsServiceException | SdkClientException e) {
-      logger.warn("OwnerId: {}, Unexpected SDK error while writing lock file: {}", ownerId, lockFilePath, e);
+      logger.error("OwnerId: {}, Unexpected SDK error while writing lock file: {}", ownerId, lockFilePath, e);
       if (!isLockRenewal) {
         // We should always throw errors early when we are creating the lock file.
         // This is likely indicative of a larger issue that should bubble up sooner.
@@ -202,16 +188,16 @@ public class S3StorageLockClient implements StorageLockClient {
   private LockUpsertResult handleUpsertS3Exception(S3Exception e) {
     int status = e.statusCode();
     if (status == PRECONDITION_FAILURE_ERROR_CODE) {
-      logger.warn("OwnerId: {}, Lockfile modified by another process: {}", ownerId, lockFilePath);
+      logger.info("OwnerId: {}, Lockfile modified by another process: {}", ownerId, lockFilePath);
       return LockUpsertResult.ACQUIRED_BY_OTHERS;
     } else if (status == CONDITIONAL_REQUEST_CONFLICT_ERROR_CODE) {
-      logger.warn("OwnerId: {}, Retriable conditional request conflict error: {}", ownerId, lockFilePath);
+      logger.info("OwnerId: {}, Retriable conditional request conflict error: {}", ownerId, lockFilePath);
     } else if (status == RATE_LIMIT_ERROR_CODE) {
       logger.warn("OwnerId: {}, Rate limit exceeded for: {}", ownerId, lockFilePath);
     } else if (status >= INTERNAL_SERVER_ERROR_CODE_MIN) {
       logger.warn("OwnerId: {}, internal server error for: {}", ownerId, lockFilePath, e);
     } else {
-      logger.error("OwnerId: {}, Error writing lock file: {}", ownerId, lockFilePath, e);
+      logger.warn("OwnerId: {}, Error writing lock file: {}", ownerId, lockFilePath, e);
     }
 
     return LockUpsertResult.UNKNOWN_ERROR;
@@ -241,16 +227,16 @@ public class S3StorageLockClient implements StorageLockClient {
       S3Client s3Client = createS3Client(region, s3CallTimeoutSecs, props);
       if (requiredFallbackRegion) {
         GetBucketLocationResponse bucketLocationResponse = s3Client.getBucketLocation(
-                GetBucketLocationRequest.builder().bucket(bucketName).build());
+            GetBucketLocationRequest.builder().bucket(bucketName).build());
         // This is null when the region is US_EAST_1, so we do not need to worry about duplicate logic.
         String regionString = bucketLocationResponse.locationConstraintAsString();
         if (!StringUtils.isNullOrEmpty(regionString)) {
           // Close existing client and create another.
           s3Client.close();
           return createS3Client(
-                  Region.of(regionString),
-                  s3CallTimeoutSecs,
-                  props);
+              Region.of(regionString),
+              s3CallTimeoutSecs,
+              props);
         }
       }
 
@@ -261,10 +247,80 @@ public class S3StorageLockClient implements StorageLockClient {
   private static S3Client createS3Client(Region region, long timeoutSecs, Properties props) {
     // Set the timeout, credentials, and region
     return S3Client.builder()
-            .overrideConfiguration(
-                    b -> b.apiCallTimeout(Duration.ofSeconds(timeoutSecs)))
-            .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props))
-            .region(region).build();
+        .overrideConfiguration(
+            b -> b.apiCallTimeout(Duration.ofSeconds(timeoutSecs)))
+        .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props))
+        .region(region).build();
+  }
+
+  @Override
+  public Option<String> readObject(String filePath, boolean checkExistsFirst) {
+    try {
+      // Parse the file path to get bucket and key
+      Pair<String, String> bucketAndKey = StorageLockClient.parseBucketAndPath(filePath);
+      String bucket = bucketAndKey.getLeft();
+      String key = bucketAndKey.getRight();
+
+      if (checkExistsFirst) {
+        // First check if the file exists (lightweight HEAD request)
+        try {
+          s3Client.headObject(HeadObjectRequest.builder()
+              .bucket(bucket)
+              .key(key)
+              .build());
+        } catch (S3Exception e) {
+          if (e.statusCode() == NOT_FOUND_ERROR_CODE) {
+            // File doesn't exist - this is the common case for optional configs
+            logger.debug("JSON config file not found: {}", filePath);
+            return Option.empty();
+          }
+          throw e; // Re-throw other errors
+        }
+      }
+
+      // Read the file (either after existence check or directly)
+      String content = s3Client.getObjectAsBytes(
+          GetObjectRequest.builder()
+              .bucket(bucket)
+              .key(key)
+              .build()).asUtf8String();
+
+      return Option.of(content);
+    } catch (S3Exception e) {
+      if (e.statusCode() == NOT_FOUND_ERROR_CODE) {
+        logger.debug("JSON config file not found: {}", filePath);
+        return Option.empty();
+      }
+      logger.error("Error reading JSON config file: {}", filePath, e);
+      return Option.empty();
+    } catch (Exception e) {
+      logger.error("Error reading JSON config file: {}", filePath, e);
+      return Option.empty();
+    }
+  }
+
+  @Override
+  public boolean writeObject(String filePath, String content) {
+    try {
+      // Parse the file path to get bucket and key
+      Pair<String, String> bucketAndPath = StorageLockClient.parseBucketAndPath(filePath);
+      String bucket = bucketAndPath.getLeft();
+      String key = bucketAndPath.getRight();
+
+      // Write the content to S3
+      s3Client.putObject(
+          PutObjectRequest.builder()
+              .bucket(bucket)
+              .key(key)
+              .build(),
+          RequestBody.fromString(content));
+
+      logger.debug("Successfully wrote object to: {}", filePath);
+      return true;
+    } catch (Exception e) {
+      logger.error("Error writing object to: {}", filePath, e);
+      return false;
+    }
   }
 
   @Override

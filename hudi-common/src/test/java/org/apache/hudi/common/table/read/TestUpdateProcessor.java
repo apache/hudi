@@ -18,12 +18,12 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.BaseAvroPayload;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.SerializableIndexedRecord;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
@@ -154,11 +154,13 @@ class TestUpdateProcessor {
 
     // mock record creation
     when(recordContext.decodeAvroSchema(merged.getSchemaId())).thenReturn(SCHEMA);
-    when(recordContext.convertToAvroRecord(merged.getRecord(), SCHEMA)).thenReturn((GenericRecord) merged.getRecord());
+    when(recordContext.convertToAvroRecord(merged.getRecord(), SCHEMA))
+        .thenReturn((GenericRecord) ((SerializableIndexedRecord) merged.getRecord()).getData());
     if (shouldIgnore) {
       when(recordContext.convertToAvroRecord(merged.getRecord(), SCHEMA)).thenReturn(SENTINEL);
     } else {
-      when(recordContext.convertToAvroRecord(merged.getRecord(), SCHEMA)).thenReturn((GenericRecord) merged.getRecord());
+      when(recordContext.convertToAvroRecord(merged.getRecord(), SCHEMA))
+          .thenReturn((GenericRecord) ((SerializableIndexedRecord) merged.getRecord()).getData());
       when(readerContext.getSchemaHandler().getRequestedSchema()).thenReturn(SCHEMA);
       when(recordContext.convertAvroRecord(any())).thenAnswer(invocationOnMock -> invocationOnMock.getArgument(0));
     }
@@ -230,7 +232,7 @@ class TestUpdateProcessor {
     GenericRecord record = new GenericData.Record(SCHEMA);
     record.put("key", KEY);
     record.put("value", value);
-    return new BufferedRecord<>(KEY, 1, record, 0, operation);
+    return new BufferedRecord<>(KEY, 1, SerializableIndexedRecord.createInstance(record), 0, operation);
   }
 
   public static class DummyPayload extends BaseAvroPayload implements HoodieRecordPayload<DummyPayload> {
@@ -261,7 +263,7 @@ class TestUpdateProcessor {
       if (isSentinel) {
         return Option.of(SENTINEL);
       }
-      return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+      return getRecord(schema);
     }
   }
 }

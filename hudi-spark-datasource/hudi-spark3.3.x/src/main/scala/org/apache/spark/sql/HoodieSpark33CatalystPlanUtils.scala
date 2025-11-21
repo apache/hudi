@@ -29,7 +29,7 @@ import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRela
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
 import org.apache.spark.sql.types.StructType
 
-object HoodieSpark33CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
+object HoodieSpark33CatalystPlanUtils extends BaseHoodieCatalystPlanUtils {
 
   def unapplyResolvedTable(plan: LogicalPlan): Option[(TableCatalog, Identifier, Table)] =
     plan match {
@@ -74,6 +74,10 @@ object HoodieSpark33CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
 
   override def failAnalysisForMIT(a: Attribute, cols: String): Unit = {
     a.failAnalysis(s"cannot resolve ${a.sql} in MERGE command given columns [$cols]")
+  }
+
+  override def failTableNotFound(tableName: String): Unit = {
+    throw new AnalysisException(s"Table or view not found: $tableName")
   }
 
   override def unapplyCreateIndex(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])] = {

@@ -35,8 +35,8 @@ import java.util.Map;
 public class DatasetBulkInsertOverwriteTableCommitActionExecutor extends DatasetBulkInsertOverwriteCommitActionExecutor {
 
   public DatasetBulkInsertOverwriteTableCommitActionExecutor(HoodieWriteConfig config,
-                                                             SparkRDDWriteClient writeClient) {
-    super(config, writeClient);
+                                                             SparkRDDWriteClient writeClient, String instantTime) {
+    super(config, writeClient, instantTime);
   }
 
   @Override

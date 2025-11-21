@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -112,10 +112,10 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     assertTrue(nArchivedInstants >= 3)
 
     //Anything less than 2 is a valid commit in the sense no cleanup has been done for those commit files
-    val startUnarchivedCompletionTs = completedCommits.nthInstant(1).get().getCompletionTime //C5 completion
+    val startUnarchivedCompletionTs = completedCommits.nthInstant(0).get().getCompletionTime //C5 completion
     val endUnarchivedCompletionTs = completedCommits.nthInstant(1).get().getCompletionTime //C5 completion
 
-    val startArchivedCompletionTs = archivedInstants(1).asInstanceOf[HoodieInstant].getCompletionTime //C1 completion
+    val startArchivedCompletionTs = archivedInstants(0).asInstanceOf[HoodieInstant].getCompletionTime //C1 completion
     val endArchivedCompletionTs = archivedInstants(1).asInstanceOf[HoodieInstant].getCompletionTime //C1 completion
 
     val instant = Instant.now()
@@ -128,7 +128,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     // Test both start and end commits are archived
     runIncrementalQueryAndCompare(startArchivedCompletionTs, endArchivedCompletionTs, 1, true)
     // Test start commit is archived, end commit is not archived
-    shouldThrowIfFallbackIsFalse(
+    shouldThrowSparkExceptionIfFallbackIsFalse(
       () => runIncrementalQueryAndCompare(startArchivedCompletionTs, endUnarchivedCompletionTs, nArchivedInstants + 1, false))
     runIncrementalQueryAndCompare(startArchivedCompletionTs, endUnarchivedCompletionTs, nArchivedInstants + 1, true)
 
@@ -152,7 +152,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
 
     // Test both start commit and end commits is not archived and not cleaned
     val reversedCommits = completedCommits.getReverseOrderedInstants.toArray
-    val startUncleanedCompletionTs = reversedCommits.apply(0).asInstanceOf[HoodieInstant].getCompletionTime
+    val startUncleanedCompletionTs = reversedCommits.apply(1).asInstanceOf[HoodieInstant].getCompletionTime
     val endUncleanedCompletionTs = reversedCommits.apply(0).asInstanceOf[HoodieInstant].getCompletionTime
     runIncrementalQueryAndCompare(startUncleanedCompletionTs, endUncleanedCompletionTs, 1, true)
     runIncrementalQueryAndCompare(startUncleanedCompletionTs, endUncleanedCompletionTs, 1, false)
@@ -188,17 +188,11 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
         fn()
       }
     }, msg)
-    assertTrue(exp.getMessage.contains("FileNotFoundException"))
-  }
-
-  private def shouldThrowIfFallbackIsFalse(fn: () => Unit): Unit = {
-    val msg = "Should fail with Path does not exist"
-    val exp = assertThrows(classOf[SparkException], new Executable {
-      override def execute(): Unit = {
-        fn()
-      }
-    }, msg)
-    assertTrue(exp.getMessage.contains("FileNotFoundException"),
-      "Expected to fail with 'FileNotFoundException' but the message was: " + exp.getMessage)
+    val expected = if (HoodieSparkUtils.gteqSpark4_0)
+      "[FAILED_READ_FILE.FILE_NOT_EXIST]"
+    else
+      "FileNotFoundException"
+    assertTrue(exp.getMessage.contains(expected),
+      "Expected to contain: " + expected + ", but got: " + exp.getMessage)
   }
 }

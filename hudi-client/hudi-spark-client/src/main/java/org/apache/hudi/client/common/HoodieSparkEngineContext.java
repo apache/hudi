@@ -260,7 +260,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   public ReaderContextFactory<?> getReaderContextFactory(HoodieTableMetaClient metaClient) {
     // metadata table are only supported by the AvroReaderContext.
     if (metaClient.isMetadataTable()) {
-      return new AvroReaderContextFactory(metaClient);
+      return new AvroReaderContextFactory(metaClient, new TypedProperties());
     }
     return getEngineReaderContextFactory(metaClient);
   }

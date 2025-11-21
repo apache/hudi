@@ -47,6 +47,7 @@ import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
+import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
@@ -83,7 +84,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     bufferedReaderContext
   }
 
-  private lazy val orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode, props, metaClient)
+  private lazy val orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode, metaClient)
   private lazy val payloadClass: Option[String] = if (recordMerger.getMergingStrategy == PAYLOAD_BASED_MERGE_STRATEGY_UUID) {
     Option.of(metaClient.getTableConfig.getPayloadClass)
   } else {
@@ -93,7 +94,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   private var isPartialMergeEnabled = false
   private var bufferedRecordMerger = getBufferedRecordMerger
   private def getBufferedRecordMerger: BufferedRecordMerger[InternalRow] = BufferedRecordMergerFactory.create(readerContext,
-    readerContext.getMergeMode, isPartialMergeEnabled, Option.of(recordMerger), orderingFieldNames,
+    readerContext.getMergeMode, isPartialMergeEnabled, Option.of(recordMerger),
     payloadClass, avroSchema, props, partialUpdateModeOpt)
 
   private lazy val storage = metaClient.getStorage
@@ -138,6 +139,14 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
   private lazy val sparkPartitionedFileUtils = sparkAdapter.getSparkPartitionedFileUtils
 
+  private lazy val tableSchemaOpt = if (avroSchema != null) {
+    val hadoopConf = storage.getConf.unwrapAs(classOf[Configuration])
+    val parquetSchema = getAvroSchemaConverter(hadoopConf).convert(avroSchema)
+    org.apache.hudi.common.util.Option.of(parquetSchema)
+  } else {
+    org.apache.hudi.common.util.Option.empty[org.apache.parquet.schema.MessageType]()
+  }
+
   /**
    * The deserializer used to convert the CDC GenericRecord to Spark InternalRow.
    */
@@ -180,6 +189,8 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
    * The next record need to be returned when call next().
    */
   protected var recordToLoad: InternalRow = _
+
+  private var nextRecordLoaded: Boolean = false
 
   /**
    * The list of files to which 'beforeImageRecords' belong.
@@ -250,9 +261,16 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     }
   }
 
-  override def hasNext: Boolean = hasNextInternal
+  override def hasNext: Boolean = {
+    if (nextRecordLoaded) {
+      true
+    } else {
+      hasNextInternal
+    }
+  }
 
   override final def next(): InternalRow = {
+    nextRecordLoaded = false
     projection(recordToLoad)
   }
 
@@ -316,6 +334,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
         recordToLoad.update(2, convertBufferedRecordToJsonString(originRecord))
         loaded = true
     }
+    nextRecordLoaded = loaded
     loaded
   }
 
@@ -390,7 +409,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
           val pf = sparkPartitionedFileUtils.createPartitionedFile(
             InternalRow.empty, absCDCPath, 0, fileStatus.getLength)
           recordIter = baseFileReader.read(pf, originTableSchema.structTypeSchema, new StructType(),
-            toJavaOption(originTableSchema.internalSchema), Seq.empty, conf)
+            toJavaOption(originTableSchema.internalSchema), Seq.empty, conf, tableSchemaOpt)
             .map(record => BufferedRecords.fromEngineRecord(record, avroSchema, readerContext.getRecordContext, orderingFieldNames, false))
         case BASE_FILE_DELETE =>
           assert(currentCDCFileSplit.getBeforeFileSlice.isPresent)

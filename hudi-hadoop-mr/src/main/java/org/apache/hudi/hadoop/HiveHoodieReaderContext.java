@@ -57,6 +57,7 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.schema.AvroSchemaRepair;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -127,8 +128,8 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     // mdt file schema irregular and does not work with this logic. Also, log file evolution is handled inside the log block
     boolean isParquetOrOrc = filePath.getFileExtension().equals(HoodieFileFormat.PARQUET.getFileExtension())
         || filePath.getFileExtension().equals(HoodieFileFormat.ORC.getFileExtension());
-    Schema avroFileSchema = isParquetOrOrc ? HoodieIOFactory.getIOFactory(storage)
-        .getFileFormatUtils(filePath).readAvroSchema(storage, filePath) : dataSchema;
+    Schema avroFileSchema = AvroSchemaRepair.repairLogicalTypes(isParquetOrOrc ? HoodieIOFactory.getIOFactory(storage)
+        .getFileFormatUtils(filePath).readAvroSchema(storage, filePath) : dataSchema, dataSchema);
     Schema actualRequiredSchema = isParquetOrOrc ? AvroSchemaUtils.pruneDataSchema(avroFileSchema, requiredSchema, Collections.emptySet()) : requiredSchema;
     JobConf jobConfCopy = new JobConf(storage.getConf().unwrapAs(Configuration.class));
     if (getNeedsBootstrapMerge()) {
@@ -146,7 +147,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
         partitionCols.stream().filter(c -> avroFileSchema.getField(c) != null)).collect(Collectors.toList()));
     setSchemas(jobConfCopy, modifiedDataSchema, actualRequiredSchema);
     InputSplit inputSplit = new FileSplit(new Path(filePath.toString()), start, length, hosts);
-    RecordReader<NullWritable, ArrayWritable> recordReader = readerCreator.getRecordReader(inputSplit, jobConfCopy);
+    RecordReader<NullWritable, ArrayWritable> recordReader = readerCreator.getRecordReader(inputSplit, jobConfCopy, modifiedDataSchema);
     if (firstRecordReader == null) {
       firstRecordReader = recordReader;
     }
@@ -229,7 +230,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     if (firstRecordReader != null) {
       return firstRecordReader.getPos();
     }
-    throw new IllegalStateException("getPos() should not be called before a record reader has been initialized");
+    throw new IllegalStateException("getProgress() should not be called before a record reader has been initialized");
   }
 
   public float getProgress() throws IOException {

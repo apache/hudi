@@ -61,13 +61,13 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
   protected HoodieTable table;
 
   public BaseDatasetBulkInsertCommitActionExecutor(HoodieWriteConfig config,
-                                                   SparkRDDWriteClient writeClient) {
+                                                   SparkRDDWriteClient writeClient, String instantTime) {
     this.writeConfig = config;
     this.writeClient = writeClient;
+    this.instantTime = instantTime;
   }
 
   protected void preExecute() {
-    instantTime = writeClient.startCommit(getCommitActionType());
     table = writeClient.initTable(getWriteOperationType(), Option.ofNullable(instantTime));
     table.validateInsertSchema();
     writeClient.preWrite(instantTime, getWriteOperationType(), table.getMetaClient());

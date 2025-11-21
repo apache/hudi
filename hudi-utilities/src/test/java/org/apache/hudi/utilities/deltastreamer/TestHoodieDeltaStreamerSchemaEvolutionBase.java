@@ -30,6 +30,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -214,7 +215,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
           transformerClassNames, PROPS_FILENAME_TEST_AVRO_KAFKA, false,  useSchemaProvider, 100000, false, null, tableType, "timestamp", null);
     } else {
       prepareParquetDFSSource(false, hasTransformer, sourceSchemaFile, targetSchemaFile, PROPS_FILENAME_TEST_PARQUET,
-          PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps, false);
+          PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps, false, false);
       cfg = TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
           transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
           useSchemaProvider, dfsSourceLimitBytes, false, null, tableType, "timestamp", null);
@@ -352,6 +353,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
     public static List<JavaRDD> errorEvents = new ArrayList<>();
     public static Map<String,Option<JavaRDD>> commited = new HashMap<>();
+    // This instant time is only used for separate upsert and commit calls
+    // to maintain the instant time for the error table
+    private Option<String> errorTableInstantTime = Option.empty();
 
     public TestErrorTable(HoodieStreamer.Config cfg, SparkSession sparkSession, TypedProperties props, HoodieSparkEngineContext hoodieSparkContext,
                           FileSystem fileSystem) {
@@ -364,18 +368,25 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     }
 
     @Override
-    public boolean commit(String errorTableInstantTime, JavaRDD writeStatuses) {
+    public boolean commit(JavaRDD writeStatuses) {
       if (writeStatuses == null) {
         throw new IllegalArgumentException("writeStatuses cannot be null");
       }
+      if (this.errorTableInstantTime.isEmpty()) {
+        return false;
+      }
       commited.clear();
-      commited.put(errorTableInstantTime, Option.of(writeStatuses));
+      commited.put(errorTableInstantTime.get(), Option.of(writeStatuses));
       return true;
     }
 
     @Override
     public JavaRDD<WriteStatus> upsert(String baseTableInstantTime, Option commitedInstantTime) {
       if (errorEvents.size() > 0) {
+        if (errorTableInstantTime.isPresent()) {
+          throw new IllegalStateException("Error table instant time should be empty before calling upsert");
+        }
+        errorTableInstantTime = Option.of(InProcessTimeGenerator.createNewInstantTime());
         JavaRDD errorsCombined = errorEvents.get(0);
         for (int i = 1; i < errorEvents.size(); i++) {
           errorsCombined = errorsCombined.union(errorEvents.get(i));

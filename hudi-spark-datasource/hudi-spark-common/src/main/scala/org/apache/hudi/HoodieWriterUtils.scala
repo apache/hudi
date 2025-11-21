@@ -22,10 +22,12 @@ import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
+import org.apache.hudi.common.config.RecordMergeMode.CUSTOM
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.{RECORD_MERGE_MODE, SPARK_SQL_MERGE_INTO_PREPPED_KEY}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
@@ -172,15 +174,15 @@ object HoodieWriterUtils {
       || key.equals(RECORD_MERGE_MODE.key())
       || key.equals(RECORD_MERGE_STRATEGY_ID.key())))
 
-    ignoreConfig = ignoreConfig || (key.equals(PAYLOAD_CLASS_NAME.key()) && shouldIgnorePayloadValidation(value, params, tableConfig))
+    ignoreConfig = ignoreConfig || (key.equals(PAYLOAD_CLASS_NAME.key()) && shouldIgnorePayloadValidation(value, tableConfig))
     // If hoodie.database.name is empty, ignore validation.
     ignoreConfig = ignoreConfig || (key.equals(HoodieTableConfig.DATABASE_NAME.key()) && isNullOrEmpty(getStringFromTableConfigWithAlternatives(tableConfig, key)))
     ignoreConfig
   }
 
-  def shouldIgnorePayloadValidation(value: String, params: Map[String, String], tableConfig: HoodieConfig): Boolean = {
+  def shouldIgnorePayloadValidation(incomingPayloadClass: String, tableConfig: HoodieConfig): Boolean = {
     //don't validate the payload only in the case that insert into is using fallback to some legacy configs
-    val ignoreConfig = value.equals(VALIDATE_DUPLICATE_KEY_PAYLOAD_CLASS_NAME)
+    val ignoreConfig = incomingPayloadClass.equals(VALIDATE_DUPLICATE_KEY_PAYLOAD_CLASS_NAME)
     if (ignoreConfig) {
        ignoreConfig
     } else {
@@ -200,9 +202,17 @@ object HoodieWriterUtils {
           HoodieTableVersion.current()
         }
 
+        val recordMergeMode = tableConfig.getStringOrDefault(HoodieTableConfig.RECORD_MERGE_MODE.key(), "")
         if (tableVersion == HoodieTableVersion.EIGHT && initTableVersion.lesserThan(HoodieTableVersion.EIGHT)
-          && value.equals(classOf[OverwriteWithLatestAvroPayload].getName)
+          && incomingPayloadClass.equals(classOf[OverwriteWithLatestAvroPayload].getName)
           && tableConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()).equals(classOf[DefaultHoodieRecordPayload].getName)) {
+          true
+        } else if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE) && !recordMergeMode.equals(CUSTOM.name)) {
+          // When table version >= v9, if the merge mode is not CUSTOM, we can safely skip payload class check
+          // since the payload class is ignored during these writes. Meanwhile, we should give a warning about this behavior.
+          if (!StringUtils.isNullOrEmpty(incomingPayloadClass)) {
+            log.warn(s"Payload class '$incomingPayloadClass' is ignored since merge behavior is determined by merge mode: $recordMergeMode")
+          }
           true
         } else {
           ignoreConfig
@@ -217,28 +227,28 @@ object HoodieWriterUtils {
   }
 
   /**
-   * This function adds specific rules to choose the right config key for payload class for version 9 tables.
-   *
-   * RULE 1: When
-   *   1. table version is 9,
-   *   2. writer key is a payload class key, and
-   *   3. table config has legacy payload class configured,
-   * then
-   *   return legacy payload class key.
-   *
-   * Basic rule:
-   *   return writer key.
+   * For table version >= 9, this function finds the corresponding key in `HoodieTableConfig`
+   * for a key in `HoodieWriteConfig`, including configs related to payload class, record merge mode, merge strategy id.
    */
-  def getPayloadClassConfigKeyFromTableConfig(key: String, tableConfig: HoodieConfig): String = {
-    if (tableConfig == null) {
+  def getKeyInTableConfig(key: String, tableConfig: HoodieConfig): String = {
+    if (tableConfig == null || tableConfig.getInt(HoodieTableConfig.VERSION) < HoodieTableVersion.NINE.versionCode()) {
       key
     } else {
-      if (tableConfig.getInt(HoodieTableConfig.VERSION) == HoodieTableVersion.NINE.versionCode()
-        && !StringUtils.isNullOrEmpty(tableConfig.getStringOrDefault(
-        HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, StringUtils.EMPTY_STRING).trim)) {
-        HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key
-      } else {
-        key
+      key match {
+        case k if k == HoodieTableConfig.PAYLOAD_CLASS_NAME.key || k == PAYLOAD_CLASS_NAME.key =>
+          val legacyPayload = tableConfig.getStringOrDefault(
+            HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, StringUtils.EMPTY_STRING
+          ).trim
+          if (!StringUtils.isNullOrEmpty(legacyPayload)) {
+            HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key
+          } else {
+            HoodieTableConfig.PAYLOAD_CLASS_NAME.key
+          }
+        case k if k == HoodieWriteConfig.RECORD_MERGE_MODE.key =>
+          HoodieTableConfig.RECORD_MERGE_MODE.key
+        case k if k == HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key =>
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key
+        case _ => key
       }
     }
   }
@@ -254,11 +264,7 @@ object HoodieWriterUtils {
       val diffConfigs = StringBuilder.newBuilder
       params.foreach { case (key, value) =>
         if (!shouldIgnoreConfig(key, value, params, tableConfig)) {
-          val keyInTableConfig = if (key.equals(HoodieTableConfig.PAYLOAD_CLASS_NAME.key))  {
-            getPayloadClassConfigKeyFromTableConfig(key, tableConfig)
-          } else {
-            key
-          }
+          val keyInTableConfig = getKeyInTableConfig(key, tableConfig)
           val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, keyInTableConfig)
           if (null != existingValue && !resolver(existingValue, value)) {
             diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(keyInTableConfig)}\n")
@@ -316,6 +322,21 @@ object HoodieWriterUtils {
         if (null != datasourcePartitionFields && null != tableConfigPartitionFields
           && currentPartitionFields != tableConfigPartitionFields) {
           diffConfigs.append(s"PartitionPath:\t$currentPartitionFields\t$tableConfigPartitionFields\n")
+        }
+        // The value of `HoodieTableConfig.RECORD_MERGE_STRATEGY_ID` can be NULL or non-NULL.
+        // The non-NULL value has been validated above in the regular code path.
+        // Here we check the NULL case since if the value is NULL, the check is skipped above.
+        // So here we check if the write config contains non-null merge strategy id. If so, throw.
+        // Here are two exclusions:
+        // CASE 1: For < v9 tables, we skip check completely for backward compatibility.
+        // CASE 2: For >= v9 tables, merge-into queries.
+        if (tableConfig.getInt(HoodieTableConfig.VERSION) >= HoodieTableVersion.NINE.versionCode()
+          && !params.getOrElse(PAYLOAD_CLASS_NAME.key(), "").equals(EXPRESSION_PAYLOAD_CLASS_NAME)
+          && StringUtils.isNullOrEmpty(tableConfig.getStringOrDefault(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key, null))) {
+          val mergeStrategyId = params.getOrElse(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key(), null)
+          if (!StringUtils.isNullOrEmpty(mergeStrategyId)) {
+            diffConfigs.append(s"${HoodieTableConfig.RECORD_MERGE_STRATEGY_ID}:\t$mergeStrategyId\tnull\n")
+          }
         }
       }
 

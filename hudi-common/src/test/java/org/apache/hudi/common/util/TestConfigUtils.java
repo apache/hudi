@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -389,8 +390,10 @@ public class TestConfigUtils {
     TypedProperties tableProps = new TypedProperties();
     tableProps.put(RECORD_MERGE_PROPERTY_PREFIX + "strategy", "overwrite");
     tableProps.put(RECORD_MERGE_PROPERTY_PREFIX + "field", "col1");
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.getProps().putAll(tableProps);
 
-    TypedProperties props = ConfigUtils.getMergeProps(new TypedProperties(), tableProps);
+    TypedProperties props = ConfigUtils.getMergeProps(new TypedProperties(), tableConfig);
     props.put("unrelated.key", "value");
 
     assertEquals("overwrite", props.get("strategy"));
@@ -400,11 +403,11 @@ public class TestConfigUtils {
 
   @Test
   void testParseRecordMergePropertiesWithNoPrefixedProperties() {
-    TypedProperties tableProps = new TypedProperties();
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
 
     TypedProperties props = new TypedProperties();
     props.put("normal.key", "val");
-    props = ConfigUtils.getMergeProps(props, tableProps);
+    props = ConfigUtils.getMergeProps(props, tableConfig);
 
     assertEquals(1, props.size());
     assertEquals("val", props.get("normal.key"));
@@ -414,12 +417,41 @@ public class TestConfigUtils {
   void testParseRecordMergePropertiesWithOverwrite() {
     TypedProperties tableProps = new TypedProperties();
     tableProps.put(RECORD_MERGE_PROPERTY_PREFIX + "strategy", "overwrite");
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.getProps().putAll(tableProps);
 
     TypedProperties props = new TypedProperties();
     props.put("strategy", "keep");
-    props = ConfigUtils.getMergeProps(props, tableProps);
+    props = ConfigUtils.getMergeProps(props, tableConfig);
 
     assertEquals(1, props.size());
     assertEquals("overwrite", props.get("strategy"));
+  }
+
+  @Test
+  void testIsPropertiesInvalid() {
+    TypedProperties props = new TypedProperties();
+    // Case-1 : Empty properties - should be invalid
+    assertTrue(ConfigUtils.isPropertiesInvalid(props));
+
+    // Case-2 : Valid properties with valid checksum
+    props.setProperty(HoodieTableConfig.NAME.key(), "test_db.test_table");
+    props.setProperty(HoodieTableConfig.TYPE.key(), "COPY_ON_WRITE");
+    props.setProperty(HoodieTableConfig.VERSION.key(), "6");
+    props.setProperty(HoodieTableConfig.TABLE_CHECKSUM.key(), String.valueOf(HoodieTableConfig.generateChecksum(props)));
+
+    assertFalse(ConfigUtils.isPropertiesInvalid(props));
+
+    // Case-3 : Invalid checksum
+    props.setProperty(HoodieTableConfig.TABLE_CHECKSUM.key(), "0");
+    assertTrue(ConfigUtils.isPropertiesInvalid(props));
+
+    // Case-4: without checksum property, valid properties
+    props.remove(HoodieTableConfig.TABLE_CHECKSUM.key());
+    assertFalse(ConfigUtils.isPropertiesInvalid(props));
+
+    // Case-5: without checksum property, invalid properties
+    props.remove(HoodieTableConfig.NAME.key());
+    assertTrue(ConfigUtils.isPropertiesInvalid(props));
   }
 }

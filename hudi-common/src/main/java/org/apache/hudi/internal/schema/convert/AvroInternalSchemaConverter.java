@@ -109,7 +109,7 @@ public class AvroInternalSchemaConverter {
         return;
 
       case UNION:
-        collectColNamesFromAvroSchema(AvroSchemaUtils.resolveNullableSchema(schema), visited, resultSet);
+        collectColNamesFromAvroSchema(AvroSchemaUtils.getNonNullTypeFromUnion(schema), visited, resultSet);
         return;
 
       case ARRAY:
@@ -132,7 +132,7 @@ public class AvroInternalSchemaConverter {
   }
 
   private static void addFullNameIfLeafNode(Schema schema, String name, Deque<String> visited, List<String> resultSet) {
-    addFullNameIfLeafNode(AvroSchemaUtils.resolveNullableSchema(schema).getType(), name, visited, resultSet);
+    addFullNameIfLeafNode(AvroSchemaUtils.getNonNullTypeFromUnion(schema).getType(), name, visited, resultSet);
   }
 
   private static void addFullNameIfLeafNode(Schema.Type type, String name, Deque<String> visited, List<String> resultSet) {
@@ -338,22 +338,30 @@ public class AvroInternalSchemaConverter {
     if (logical != null) {
       String name = logical.getName();
       if (logical instanceof LogicalTypes.Decimal) {
-        return Types.DecimalType.get(
-                ((LogicalTypes.Decimal) logical).getPrecision(),
-                ((LogicalTypes.Decimal) logical).getScale());
-
+        if (primitive.getType() == Schema.Type.FIXED) {
+          return Types.DecimalTypeFixed.get(((LogicalTypes.Decimal) logical).getPrecision(),
+                  ((LogicalTypes.Decimal) logical).getScale(), primitive.getFixedSize());
+        } else if (primitive.getType() == Schema.Type.BYTES) {
+          return Types.DecimalTypeBytes.get(
+              ((LogicalTypes.Decimal) logical).getPrecision(),
+              ((LogicalTypes.Decimal) logical).getScale());
+        } else {
+          throw new IllegalArgumentException("Unsupported primitive type for Decimal: " + primitive.getType().getName());
+        }
       } else if (logical instanceof LogicalTypes.Date) {
         return Types.DateType.get();
-
-      } else if (
-              logical instanceof LogicalTypes.TimeMillis
-                      || logical instanceof LogicalTypes.TimeMicros) {
+      } else if (logical instanceof LogicalTypes.TimeMillis) {
+        return Types.TimeMillisType.get();
+      } else if (logical instanceof LogicalTypes.TimeMicros) {
         return Types.TimeType.get();
-
-      } else if (
-              logical instanceof LogicalTypes.TimestampMillis
-                      || logical instanceof LogicalTypes.TimestampMicros) {
+      } else if (logical instanceof LogicalTypes.TimestampMillis) {
+        return Types.TimestampMillisType.get();
+      } else if (logical instanceof LogicalTypes.TimestampMicros) {
         return Types.TimestampType.get();
+      } else if (logical instanceof LogicalTypes.LocalTimestampMillis) {
+        return Types.LocalTimestampMillisType.get();
+      } else if (logical instanceof LogicalTypes.LocalTimestampMicros) {
+        return Types.LocalTimestampMicrosType.get();
       } else if (LogicalTypes.uuid().getName().equals(name)) {
         return Types.UUIDType.get();
       }
@@ -542,8 +550,20 @@ public class AvroInternalSchemaConverter {
       case TIME:
         return LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG));
 
+      case TIME_MILLIS:
+        return LogicalTypes.timeMillis().addToSchema(Schema.create(Schema.Type.INT));
+
       case TIMESTAMP:
         return LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
+
+      case TIMESTAMP_MILLIS:
+        return LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
+
+      case LOCAL_TIMESTAMP_MICROS:
+        return LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
+
+      case LOCAL_TIMESTAMP_MILLIS:
+        return LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
 
       case STRING:
         return Schema.create(Schema.Type.STRING);
@@ -567,32 +587,27 @@ public class AvroInternalSchemaConverter {
         return Schema.createFixed(name, null, null, fixed.getFixedSize());
       }
 
-      case DECIMAL: {
-        Types.DecimalType decimal = (Types.DecimalType) primitive;
+      case DECIMAL:
+      case DECIMAL_FIXED: {
+        Types.DecimalTypeFixed decimal = (Types.DecimalTypeFixed) primitive;
         // NOTE: All schemas corresponding to Avro's type [[FIXED]] are generated
         //       with the "fixed" name to stay compatible w/ [[SchemaConverters]]
         String name = recordName + AVRO_NAME_DELIMITER + "fixed";
         Schema fixedSchema = Schema.createFixed(name,
-            null, null, computeMinBytesForPrecision(decimal.precision()));
+            null, null, decimal.getFixedSize());
         return LogicalTypes.decimal(decimal.precision(), decimal.scale())
             .addToSchema(fixedSchema);
+      }
+
+      case DECIMAL_BYTES: {
+        Types.DecimalTypeBytes decimal = (Types.DecimalTypeBytes) primitive;
+        return LogicalTypes.decimal(decimal.precision(), decimal.scale())
+            .addToSchema(Schema.create(Schema.Type.BYTES));
       }
 
       default:
         throw new UnsupportedOperationException(
                 "Unsupported type ID: " + primitive.typeId());
     }
-  }
-
-  /**
-   * Return the minimum number of bytes needed to store a decimal with a give 'precision'.
-   * reference from Spark release 3.1 .
-   */
-  private static int computeMinBytesForPrecision(int precision) {
-    int numBytes = 1;
-    while (Math.pow(2.0, 8 * numBytes - 1) < Math.pow(10.0, precision)) {
-      numBytes += 1;
-    }
-    return numBytes;
   }
 }

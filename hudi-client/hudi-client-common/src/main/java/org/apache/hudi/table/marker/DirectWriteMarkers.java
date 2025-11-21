@@ -190,7 +190,7 @@ public class DirectWriteMarkers extends WriteMarkers {
     HoodieTimer timer = HoodieTimer.start();
     try {
       if (checkIfExists && storage.exists(markerPath)) {
-        LOG.warn("Marker Path={} already exists, cancel creation", markerPath);
+        LOG.info("Marker Path={} already exists, cancel creation", markerPath);
         return Option.empty();
       }
       LOG.debug("Creating Marker Path={}", markerPath);

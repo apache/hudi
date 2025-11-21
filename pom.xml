@@ -29,7 +29,7 @@
   <groupId>org.apache.hudi</groupId>
   <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
-  <version>1.1.0-SNAPSHOT</version>
+  <version>1.2.0-SNAPSHOT</version>
   <description>Apache Hudi brings stream style processing on big data</description>
   <url>https://github.com/apache/hudi</url>
   <name>Hudi</name>
@@ -87,7 +87,7 @@
     <maven-failsafe-plugin.version>2.22.2</maven-failsafe-plugin.version>
     <maven-shade-plugin.version>3.5.1</maven-shade-plugin.version>
     <maven-javadoc-plugin.version>3.1.1</maven-javadoc-plugin.version>
-    <maven-compiler-plugin.version>3.8.0</maven-compiler-plugin.version>
+    <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
     <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version>
     <genjavadoc-plugin.version>0.18_2.13.10</genjavadoc-plugin.version>
     <build-helper-maven-plugin.version>1.7</build-helper-maven-plugin.version>
@@ -97,6 +97,7 @@
     <java.version>8</java.version>
     <kryo.shaded.version>4.0.2</kryo.shaded.version>
     <fasterxml.spark3.version>2.10.0</fasterxml.spark3.version>
+    <fasterxml.spark4.version>2.17.1</fasterxml.spark4.version>
     <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
     <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
     <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
@@ -139,7 +140,8 @@
     <httpcore.version>4.4.16</httpcore.version>
     <httpclient.version>4.5.14</httpclient.version>
     <spark.version>${spark3.version}</spark.version>
-    <spark3.version>3.5.1</spark3.version>
+    <spark3.version>${spark35.version}</spark3.version>
+    <spark4.version>4.0.0</spark4.version>
     <sparkbundle.version></sparkbundle.version>
     <flink2.0.version>2.0.0</flink2.0.version>
     <flink1.20.version>1.20.1</flink1.20.version>
@@ -168,7 +170,9 @@
     <spark33.version>3.3.4</spark33.version>
     <spark34.version>3.4.3</spark34.version>
     <spark35.version>3.5.5</spark35.version>
+    <spark40.version>4.0.1</spark40.version>
     <hudi.spark.module>hudi-spark3.5.x</hudi.spark.module>
+    <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
     <avro.version>1.11.4</avro.version>
     <bijection-avro.version>0.9.8</bijection-avro.version>
     <caffeine.version>2.9.1</caffeine.version>
@@ -181,6 +185,8 @@
     <apache-rat-plugin.version>0.16.1</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
+    <!-- TODO (HUDI-9401): Need to upgrade to 3.2.18+ after removing deprecated FunSuite -->
+    <scalatest.spark4.version>3.1.4</scalatest.spark4.version>
     <scalatest.version>${scalatest.spark3.version}</scalatest.version>
     <surefire-log4j.file>log4j2-surefire.properties</surefire-log4j.file>
     <thrift.version>0.13.0</thrift.version>
@@ -194,6 +200,7 @@
     <skipFTs>${skipTests}</skipFTs>
     <skipITs>${skipTests}</skipITs>
     <skip.hudi-spark3.unit.tests>${skipTests}</skip.hudi-spark3.unit.tests>
+    <skip.hudi-spark4.unit.tests>${skipTests}</skip.hudi-spark4.unit.tests>
     <skipDocker>${skipTests}</skipDocker>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <main.basedir>${project.basedir}</main.basedir>
@@ -205,6 +212,9 @@
     <jacoco.version>0.8.12</jacoco.version>
     <presto.bundle.bootstrap.scope>compile</presto.bundle.bootstrap.scope>
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
+    <presto.commons-lang3.version>3.18.0</presto.commons-lang3.version>
+    <presto.parquet.version>1.15.2</presto.parquet.version>
+    <trino.parquet.version>1.15.1</trino.parquet.version>
     <trino.bundle.bootstrap.scope>compile</trino.bundle.bootstrap.scope>
     <trino.bundle.bootstrap.shade.prefix>org.apache.hudi.</trino.bundle.bootstrap.shade.prefix>
     <twitter.chill.version>0.10.0</twitter.chill.version>
@@ -415,9 +425,9 @@
                     <exclude>log4j:log4j</exclude>
                     <exclude>ch.qos.logback:logback-classic</exclude>
                     <!-- NOTE: We're banning any HBase deps -->
-                    <exclude>org.apache.hbase:hbase-common:*</exclude>
-                    <exclude>org.apache.hbase:hbase-client:*</exclude>
-                    <exclude>org.apache.hbase:hbase-server:*</exclude>
+                    <exclude>org.apache.hbase:hbase-common:*:*:compile</exclude>
+                    <exclude>org.apache.hbase:hbase-client:*:*:compile</exclude>
+                    <exclude>org.apache.hbase:hbase-server:*:*:compile</exclude>
                     <!--To upgrade snappy because pre 1.1.8.2 does not work on m1 mac-->
                     <exclude>org.xerial.snappy:snappy-java:*</exclude>
                   </excludes>
@@ -607,6 +617,7 @@
               <!-- local files not in version control -->
               <exclude>**/*.iml</exclude>
               <exclude>.mvn/**</exclude>
+              <exclude>hudi-trino-plugin/**</exclude>
             </excludes>
           </configuration>
           <executions>
@@ -1144,6 +1155,10 @@
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1191,6 +1206,10 @@
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>io.netty</groupId>
+            <artifactId>*</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1699,6 +1718,11 @@
         <groupId>javax.xml.bind</groupId>
         <artifactId>jaxb-api</artifactId>
         <version>2.3.1</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jamesmurty.utils</groupId>
+        <artifactId>java-xmlbuilder</artifactId>
+        <version>1.2</version>
       </dependency>
 
       <!--  Spring Boot  -->
@@ -2436,6 +2460,7 @@
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.3.x</module>
+        <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <activation>
         <property>
@@ -2478,6 +2503,7 @@
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.4.x</module>
+        <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <dependencies>
         <dependency>
@@ -2528,6 +2554,7 @@
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.5.x</module>
+        <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <dependencies>
         <dependency>
@@ -2546,6 +2573,67 @@
         <activeByDefault>true</activeByDefault>
         <property>
           <name>spark3.5</name>
+        </property>
+      </activation>
+    </profile>
+
+    <profile>
+      <id>spark4.0</id>
+      <properties>
+        <spark4.version>${spark40.version}</spark4.version>
+        <spark.version>${spark4.version}</spark.version>
+        <sparkbundle.version>4.0</sparkbundle.version>
+        <scala13.version>2.13.14</scala13.version>
+        <scala.version>${scala13.version}</scala.version>
+        <scala.binary.version>2.13</scala.binary.version>
+        <hudi.spark.module>hudi-spark4.0.x</hudi.spark.module>
+        <!-- This glob has to include hudi-spark4-common -->
+        <hudi.spark.common.module>hudi-spark4-common</hudi.spark.common.module>
+        <scalatest.version>${scalatest.spark4.version}</scalatest.version>
+        <hadoop.version>3.4.0</hadoop.version>
+        <kafka.version>3.8.0</kafka.version>
+        <hive.storage.version>2.8.1</hive.storage.version>
+        <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
+                   hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
+                   bringing these file-formats as dependencies as well, we need to make sure that versions are
+                   synchronized to avoid classpath ambiguity -->
+        <parquet.version>1.15.2</parquet.version>
+        <orc.spark.version>2.1.2</orc.spark.version>
+        <avro.version>1.12.0</avro.version>
+        <antlr.version>4.13.1</antlr.version>
+        <fasterxml.spark4.version>2.18.2</fasterxml.spark4.version>
+        <fasterxml.version>${fasterxml.spark4.version}</fasterxml.version>
+        <fasterxml.jackson.databind.version>${fasterxml.spark4.version}</fasterxml.jackson.databind.version>
+        <fasterxml.jackson.module.scala.version>${fasterxml.spark4.version}</fasterxml.jackson.module.scala.version>
+        <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark4.version}
+        </fasterxml.jackson.dataformat.yaml.version>
+        <pulsar.spark.version>${pulsar.spark.scala13.version}</pulsar.spark.version>
+        <glassfish.version>3.0.12</glassfish.version>
+        <log4j2.version>2.20.0</log4j2.version>
+        <slf4j.version>2.0.7</slf4j.version>
+        <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
+        <skipITs>true</skipITs>
+      </properties>
+      <modules>
+        <module>hudi-spark-datasource/hudi-spark4.0.x</module>
+        <module>hudi-spark-datasource/hudi-spark4-common</module>
+      </modules>
+      <dependencies>
+        <dependency>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-log4j12</artifactId>
+          <version>${slf4j.version}</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>${hive.groupid}</groupId>
+          <artifactId>hive-storage-api</artifactId>
+          <version>${hive.storage.version}</version>
+        </dependency>
+      </dependencies>
+      <activation>
+        <property>
+          <name>spark4.0</name>
         </property>
       </activation>
     </profile>

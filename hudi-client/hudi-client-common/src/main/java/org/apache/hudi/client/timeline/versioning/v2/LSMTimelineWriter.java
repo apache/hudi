@@ -128,7 +128,7 @@ public class LSMTimelineWriter {
         // 2. the file was in complete state but the archiving fails during the deletion of active metadata files.
         if (isFileCommitted(filePath.getName())) {
           // case2: the last archiving succeeded for committing to the archive timeline, just returns early.
-          LOG.warn("Skip archiving for the redundant file: {}", filePath);
+          LOG.info("Skip archiving for the redundant file: {}", filePath);
           return;
         } else {
           // case1: delete the corrupt file and retry.
