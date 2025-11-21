@@ -82,10 +82,6 @@ public final class HoodieSchemaCompatibility {
     ValidationUtils.checkArgument(tableSchema != null, "Table schema cannot be null");
     ValidationUtils.checkArgument(writerSchema != null, "Writer schema cannot be null");
 
-    if (!shouldValidate) {
-      return;
-    }
-
     // Delegate to AvroSchemaUtils for the actual compatibility check
     AvroSchemaUtils.checkSchemaCompatible(
         tableSchema.toAvroSchema(),
