@@ -326,7 +326,6 @@ public abstract class BaseHoodieLogRecordReader<T> {
       }
       // merge the last read block when all the blocks are done reading
       if (!currentInstantLogBlocks.isEmpty()) {
-        // if there are no dups, we can take currentInstantLogBlocks as is
         LOG.info("Merging the final data blocks");
         processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
       }
