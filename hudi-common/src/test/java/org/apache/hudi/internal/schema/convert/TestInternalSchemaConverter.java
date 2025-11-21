@@ -19,62 +19,64 @@
 
 package org.apache.hudi.internal.schema.convert;
 
-import org.apache.hudi.avro.AvroSchemaTestUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 
-import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
 
-import static org.apache.hudi.avro.AvroSchemaTestUtils.createArrayField;
-import static org.apache.hudi.avro.AvroSchemaTestUtils.createMapField;
-import static org.apache.hudi.avro.AvroSchemaTestUtils.createNullablePrimitiveField;
-import static org.apache.hudi.avro.AvroSchemaTestUtils.createNullableRecord;
-import static org.apache.hudi.avro.AvroSchemaTestUtils.createPrimitiveField;
-import static org.apache.hudi.avro.AvroSchemaTestUtils.createRecord;
+import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createArrayField;
+import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createMapField;
+import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createNestedField;
+import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createNullablePrimitiveField;
+import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createNullableRecord;
+import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createPrimitiveField;
+import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestAvroInternalSchemaConverter {
+public class TestInternalSchemaConverter {
 
-  public static Schema getSimpleSchema() {
+  public static HoodieSchema getSimpleSchema() {
     return createRecord("simpleSchema",
-        createPrimitiveField("field1", Schema.Type.INT),
-        createPrimitiveField("field2", Schema.Type.STRING));
+        createPrimitiveField("field1", HoodieSchemaType.INT),
+        createPrimitiveField("field2", HoodieSchemaType.STRING));
   }
 
   public static List<String> getSimpleSchemaExpectedColumnNames() {
     return Arrays.asList("field1", "field2");
   }
 
-  public static Schema getSimpleSchemaWithNullable() {
+  public static HoodieSchema getSimpleSchemaWithNullable() {
     return createRecord("simpleSchemaWithNullable",
-        createNullablePrimitiveField("field1", Schema.Type.INT),
-        createPrimitiveField("field2", Schema.Type.STRING));
+        createNullablePrimitiveField("field1", HoodieSchemaType.INT),
+        createPrimitiveField("field2", HoodieSchemaType.STRING));
   }
 
-  public static Schema getComplexSchemaSingleLevel() {
+  public static HoodieSchema getComplexSchemaSingleLevel() {
     return createRecord("complexSchemaSingleLevel",
-        AvroSchemaTestUtils.createNestedField("field1", Schema.Type.INT),
-        createArrayField("field2", Schema.Type.STRING),
-        createMapField("field3", Schema.Type.DOUBLE));
+        createNestedField("field1", HoodieSchemaType.INT),
+        createArrayField("field2", HoodieSchemaType.STRING),
+        createMapField("field3", HoodieSchemaType.DOUBLE));
   }
 
   public static List<String> getComplexSchemaSingleLevelExpectedColumnNames() {
     return Arrays.asList("field1.nested", "field2.element", "field3.key", "field3.value");
   }
 
-  public static Schema getDeeplyNestedFieldSchema() {
+  public static HoodieSchema getDeeplyNestedFieldSchema() {
     return createRecord("deeplyNestedFieldSchema",
-        createPrimitiveField("field1", Schema.Type.INT),
-        new Schema.Field("field2",
+        createPrimitiveField("field1", HoodieSchemaType.INT),
+        HoodieSchemaField.of("field2",
             createRecord("field2nest",
                 createArrayField("field2nestarray",
                     createNullableRecord("field2nestarraynest",
-                        createNullablePrimitiveField("field21", Schema.Type.INT),
-                        createNullablePrimitiveField("field22", Schema.Type.INT)))), null, null),
-        createNullablePrimitiveField("field3", Schema.Type.INT));
+                        createNullablePrimitiveField("field21", HoodieSchemaType.INT),
+                        createNullablePrimitiveField("field22", HoodieSchemaType.INT)))), null, null),
+        createNullablePrimitiveField("field3", HoodieSchemaType.INT));
   }
 
   public static List<String> getDeeplyNestedFieldSchemaExpectedColumnNames() {
@@ -84,27 +86,27 @@ public class TestAvroInternalSchemaConverter {
 
   @Test
   public void testCollectColumnNames() {
-    Schema simpleSchema =  getSimpleSchema();
-    List<String> fieldNames =  AvroInternalSchemaConverter.collectColNamesFromSchema(simpleSchema);
+    HoodieSchema simpleSchema =  getSimpleSchema();
+    List<String> fieldNames =  InternalSchemaConverter.collectColNamesFromSchema(simpleSchema);
     List<String> expectedOutput = getSimpleSchemaExpectedColumnNames();
     assertEquals(expectedOutput.size(), fieldNames.size());
     assertTrue(fieldNames.containsAll(expectedOutput));
 
 
-    Schema simpleSchemaWithNullable = getSimpleSchemaWithNullable();
-    fieldNames =  AvroInternalSchemaConverter.collectColNamesFromSchema(simpleSchemaWithNullable);
+    HoodieSchema simpleSchemaWithNullable = getSimpleSchemaWithNullable();
+    fieldNames =  InternalSchemaConverter.collectColNamesFromSchema(simpleSchemaWithNullable);
     expectedOutput = getSimpleSchemaExpectedColumnNames();
     assertEquals(expectedOutput.size(), fieldNames.size());
     assertTrue(fieldNames.containsAll(expectedOutput));
 
-    Schema complexSchemaSingleLevel = getComplexSchemaSingleLevel();
-    fieldNames =  AvroInternalSchemaConverter.collectColNamesFromSchema(complexSchemaSingleLevel);
+    HoodieSchema complexSchemaSingleLevel = getComplexSchemaSingleLevel();
+    fieldNames =  InternalSchemaConverter.collectColNamesFromSchema(complexSchemaSingleLevel);
     expectedOutput = getComplexSchemaSingleLevelExpectedColumnNames();
     assertEquals(expectedOutput.size(), fieldNames.size());
     assertTrue(fieldNames.containsAll(expectedOutput));
 
-    Schema deeplyNestedFieldSchema = getDeeplyNestedFieldSchema();
-    fieldNames =  AvroInternalSchemaConverter.collectColNamesFromSchema(deeplyNestedFieldSchema);
+    HoodieSchema deeplyNestedFieldSchema = getDeeplyNestedFieldSchema();
+    fieldNames =  InternalSchemaConverter.collectColNamesFromSchema(deeplyNestedFieldSchema);
     expectedOutput = getDeeplyNestedFieldSchemaExpectedColumnNames();
     assertEquals(expectedOutput.size(), fieldNames.size());
     assertTrue(fieldNames.containsAll(expectedOutput));

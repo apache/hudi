@@ -25,12 +25,13 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.removeMetadataFields
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileSchemaRequirements
 
@@ -113,13 +114,14 @@ object HoodieSchemaUtils {
                          opts: Map[String, String]): Schema = {
     latestTableSchemaOpt match {
       // If table schema is empty, then we use the source schema as a writer's schema.
-      case None => AvroInternalSchemaConverter.fixNullOrdering(sourceSchema)
+      case None => InternalSchemaConverter.fixNullOrdering(HoodieSchema.fromAvroSchema(sourceSchema)).toAvroSchema
       // Otherwise, we need to make sure we reconcile incoming and latest table schemas
       case Some(latestTableSchemaWithMetaFields) =>
         // NOTE: Meta-fields will be unconditionally injected by Hudi writing handles, for the sake of deducing proper writer schema
         //       we're stripping them to make sure we can perform proper analysis
         // add call to fix null ordering to ensure backwards compatibility
-        val latestTableSchema = AvroInternalSchemaConverter.fixNullOrdering(removeMetadataFields(latestTableSchemaWithMetaFields))
+        val latestTableSchema = InternalSchemaConverter.fixNullOrdering(HoodieSchema.fromAvroSchema(
+          removeMetadataFields(latestTableSchemaWithMetaFields))).toAvroSchema
 
         // Before validating whether schemas are compatible, we need to "canonicalize" source's schema
         // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
@@ -132,7 +134,7 @@ object HoodieSchemaUtils {
         val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
           canonicalizeSchema(sourceSchema, latestTableSchema, opts, !shouldReconcileSchema)
         } else {
-          AvroInternalSchemaConverter.fixNullOrdering(sourceSchema)
+          InternalSchemaConverter.fixNullOrdering(HoodieSchema.fromAvroSchema(sourceSchema)).toAvroSchema
         }
 
         if (shouldReconcileSchema) {
@@ -200,7 +202,7 @@ object HoodieSchemaUtils {
         val setNullForMissingColumns = opts.getOrElse(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
           HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.defaultValue()).toBoolean
         val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, internalSchema, setNullForMissingColumns)
-        val evolvedSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName)
+        val evolvedSchema = InternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName).toAvroSchema
         val shouldRemoveMetaDataFromInternalSchema = sourceSchema.getFields().asScala.filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
         if (shouldRemoveMetaDataFromInternalSchema) HoodieAvroUtils.removeMetadataFields(evolvedSchema) else evolvedSchema
       case None =>

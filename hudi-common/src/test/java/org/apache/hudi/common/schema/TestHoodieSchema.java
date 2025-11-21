@@ -783,7 +783,7 @@ public class TestHoodieSchema {
   @Test
   public void testCreateNullableSchema() {
     HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
-    HoodieSchema nullableSchema = HoodieSchema.createNullableSchema(stringSchema);
+    HoodieSchema nullableSchema = HoodieSchema.createNullable(stringSchema);
 
     assertNotNull(nullableSchema);
     assertEquals(HoodieSchemaType.UNION, nullableSchema.getType());
@@ -801,7 +801,7 @@ public class TestHoodieSchema {
   @Test
   public void testCreateNullableSchemaWithInvalidParameters() {
     assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchema.createNullableSchema(null);
+      HoodieSchema.createNullable(null);
     }, "Should throw exception for null type");
   }
 }
