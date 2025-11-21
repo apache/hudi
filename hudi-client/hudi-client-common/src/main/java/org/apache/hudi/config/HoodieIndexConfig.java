@@ -39,9 +39,7 @@ import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_DYNAMIC_MAX_ENTRIES;
 import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_FPP_VALUE;
@@ -767,17 +765,10 @@ public class HoodieIndexConfig extends HoodieConfig {
     private void validateBucketIndexConfig() {
       if (hoodieIndexConfig.getString(INDEX_TYPE).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.toString())) {
         // check the bucket index hash field
+        // TODO: How to diable this validation only for append-only streams?
         if (StringUtils.isNullOrEmpty(hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD))) {
           hoodieIndexConfig.setValue(BUCKET_INDEX_HASH_FIELD,
               hoodieIndexConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
-        } else {
-          boolean valid = Arrays
-              .stream(hoodieIndexConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME).split(","))
-              .collect(Collectors.toSet())
-              .containsAll(Arrays.asList(hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD).split(",")));
-          if (!valid) {
-            throw new HoodieIndexException("Bucket index key (if configured) must be subset of record key.");
-          }
         }
         // check the bucket num
         if (hoodieIndexConfig.getIntOrDefault(BUCKET_INDEX_NUM_BUCKETS) <= 0) {
