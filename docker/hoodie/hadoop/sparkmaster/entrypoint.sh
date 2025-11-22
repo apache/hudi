@@ -1,3 +1,4 @@
+#!/bin/bash
 
 #  Licensed to the Apache Software Foundation (ASF) under one
 #  or more contributor license agreements.  See the NOTICE file
@@ -15,23 +16,11 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG HADOOP_VERSION=3.3.4
-ARG HIVE_VERSION=3.1.3
-ARG SPARK_VERSION=3.5.3
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}-sparkbase_${SPARK_VERSION}
+# This script is used to start the Spark Master and JupyterLab services inside a container.
 
-COPY *.sh /opt/spark
-RUN chmod +x /opt/spark/*.sh
+# Start the spark master in the background
+/opt/spark/master.sh &
 
-ENV SPARK_MASTER_PORT 7077
-ENV SPARK_MASTER_WEBUI_PORT 8080
-ENV SPARK_MASTER_LOG /opt/spark/logs
-ENV SPARK_JUPYTER_WEBUI_PORT 8888
+# Start the jupyterlab
+/opt/spark/jupyter.sh
 
-RUN pip install --upgrade pip && pip install jupyterlab findspark pandas
-
-EXPOSE 8080 7077 6066 8888
-
-WORKDIR /opt/workspace
-
-CMD ["/opt/spark/entrypoint.sh"]
