@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
+import org.apache.hudi.common.table.timeline.StoppableRecordConsumer;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 
@@ -44,6 +45,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.getInputStreamOptionLegacy;
@@ -135,6 +137,24 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
         record -> record.get(ACTION_ARCHIVED_META_FIELD).toString().equals(COMMIT_ACTION)
             && record.get(PLAN_ARCHIVED_META_FIELD) != null
     );
+  }
+
+  @Override
+  public void loadCompactionDetailsInMemory(int limit) {
+    loadInstantsWithLimit(limit, HoodieArchivedTimeline.LoadMode.PLAN,
+        record -> record.get(ACTION_ARCHIVED_META_FIELD).toString().equals(COMMIT_ACTION)
+            && record.get(PLAN_ARCHIVED_META_FIELD) != null
+    );
+  }
+
+  @Override
+  public void loadCompletedInstantDetailsInMemory(String startTs, String endTs) {
+    loadInstants(new HoodieArchivedTimeline.TimeRangeFilter(startTs, endTs), HoodieArchivedTimeline.LoadMode.METADATA);
+  }
+
+  @Override
+  public void loadCompletedInstantDetailsInMemory(int limit) {
+    loadInstantsWithLimit(limit, HoodieArchivedTimeline.LoadMode.METADATA, r -> true);
   }
 
   @Override
@@ -240,6 +260,66 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     List<HoodieInstant> result = new ArrayList<>(instantsInRange.values());
     Collections.sort(result);
     return result;
+  }
+
+  /**
+   * Loads instants with a limit on the number of instants to load.
+   * This is used for limit-based loading where we only want to load the N most recent instants.
+   */
+  private void loadInstantsWithLimit(int limit, HoodieArchivedTimeline.LoadMode loadMode,
+      Function<GenericRecord, Boolean> commitsFilter) {
+    InstantsLoaderWithLimit loader = new InstantsLoaderWithLimit(limit, loadMode);
+    timelineLoader.loadInstants(metaClient, null, loadMode, commitsFilter, loader);
+    List<HoodieInstant> collectedInstants = loader.getCollectedInstants();
+    List<HoodieInstant> newInstants = collectedInstants.stream()
+        .filter(instant -> !getInstants().contains(instant))
+        .collect(Collectors.toList());
+    if (!newInstants.isEmpty()) {
+      appendInstants(newInstants);
+    }
+  }
+
+  /**
+   * Callback to read instant details with a limit on the number of instants to load.
+   * Implements StoppableRecordConsumer to enable early termination and file sorting optimization.
+   */
+  private class InstantsLoaderWithLimit implements StoppableRecordConsumer {
+    private final int limit;
+    private final HoodieArchivedTimeline.LoadMode loadMode;
+    private volatile int loadedCount = 0;
+    private final Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();
+
+    private InstantsLoaderWithLimit(int limit, HoodieArchivedTimeline.LoadMode loadMode) {
+      this.limit = limit;
+      this.loadMode = loadMode;
+    }
+
+    @Override
+    public boolean shouldStop() {
+      return loadedCount >= limit;
+    }
+
+    @Override
+    public void accept(String instantTime, GenericRecord record) {
+      if (shouldStop()) {
+        return;
+      }
+      Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer = Option.ofNullable(getInstantDetailsFunc(loadMode));
+      HoodieInstant instant = readCommit(instantTime, record, instantDetailsConsumer);
+      synchronized (this) {
+        if (loadedCount < limit) {
+          instantsInRange.putIfAbsent(instantTime, instant);
+          loadedCount++;
+        }
+      }
+    }
+
+    public List<HoodieInstant> getCollectedInstants() {
+      // V2 stores one instant per timestamp (typically COMPLETED).
+      List<HoodieInstant> result = new ArrayList<>(instantsInRange.values());
+      Collections.sort(result);
+      return result;
+    }
   }
 
   @Override
