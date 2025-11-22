@@ -30,6 +30,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
@@ -451,7 +452,11 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     Map<String, Schema> colsToIndexSchemaMap = new HashMap<>();
     colsToIndexSchemaMap.put(colName, Schema.create(schemaType));
 
-    HoodieColumnRangeMetadata actualColumnRange = FileFormatUtils.getColumnRangeInPartition(relativePartitionPath, colName, fileColumnRanges, colsToIndexSchemaMap, V1);
+    // Convert Avro Schema map to HoodieSchema map
+    Map<String, HoodieSchema> hoodieSchemaMap = colsToIndexSchemaMap.entrySet().stream()
+        .collect(Collectors.toMap(Map.Entry::getKey, entry -> HoodieSchema.fromAvroSchema(entry.getValue())));
+
+    HoodieColumnRangeMetadata actualColumnRange = FileFormatUtils.getColumnRangeInPartition(relativePartitionPath, colName, fileColumnRanges, hoodieSchemaMap, V1);
 
     validateColumnRangeMetadata(actualColumnRange, relativePartitionPath, colName, nullCount, totalSize, totalUncompressedSize);
     return actualColumnRange;
