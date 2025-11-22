@@ -19,6 +19,10 @@
 package org.apache.hudi.internal.schema.utils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.schema.HoodieJsonProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.exception.HoodieNullSchemaTypeException;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -26,12 +30,10 @@ import org.apache.hudi.internal.schema.InternalSchemaBuilder;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.action.TableChanges;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 
-import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Assertions;
@@ -68,20 +70,20 @@ public class TestAvroSchemaEvolutionUtils {
 
   @Test
   public void testPrimitiveTypes() {
-    Schema[] avroPrimitives = new Schema[] {
-        Schema.create(Schema.Type.BOOLEAN),
-        Schema.create(Schema.Type.INT),
-        Schema.create(Schema.Type.LONG),
-        Schema.create(Schema.Type.FLOAT),
-        Schema.create(Schema.Type.DOUBLE),
-        LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT)),
-        LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG)),
-        LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG)),
-        Schema.create(Schema.Type.STRING),
-        LogicalTypes.uuid().addToSchema(Schema.createFixed("t1.fixed", null, null, 16)),
-        Schema.createFixed("t1.fixed", null, null, 12),
-        Schema.create(Schema.Type.BYTES),
-        LogicalTypes.decimal(9, 4).addToSchema(Schema.createFixed("t1.fixed", null, null, 4))};
+    HoodieSchema[] schemaPrimitives = new HoodieSchema[] {
+        HoodieSchema.create(HoodieSchemaType.BOOLEAN),
+        HoodieSchema.create(HoodieSchemaType.INT),
+        HoodieSchema.create(HoodieSchemaType.LONG),
+        HoodieSchema.create(HoodieSchemaType.FLOAT),
+        HoodieSchema.create(HoodieSchemaType.DOUBLE),
+        HoodieSchema.fromAvroSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT))),
+        HoodieSchema.fromAvroSchema(LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG))),
+        HoodieSchema.fromAvroSchema(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))),
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        HoodieSchema.fromAvroSchema(LogicalTypes.uuid().addToSchema(Schema.createFixed("t1.fixed", null, null, 16))),
+        HoodieSchema.createFixed("t1.fixed", null, null, 12),
+        HoodieSchema.create(HoodieSchemaType.BYTES),
+        HoodieSchema.fromAvroSchema(LogicalTypes.decimal(9, 4).addToSchema(Schema.createFixed("t1.fixed", null, null, 4)))};
 
     Type[] primitiveTypes = new Type[] {
         Types.BooleanType.get(),
@@ -100,10 +102,10 @@ public class TestAvroSchemaEvolutionUtils {
     };
 
     for (int i = 0; i < primitiveTypes.length; i++) {
-      Type convertPrimitiveResult = AvroInternalSchemaConverter.convertToField(avroPrimitives[i]);
+      Type convertPrimitiveResult = InternalSchemaConverter.convertToField(schemaPrimitives[i]);
       Assertions.assertEquals(convertPrimitiveResult, primitiveTypes[i]);
-      Schema convertResult = AvroInternalSchemaConverter.convert(primitiveTypes[i], "t1");
-      Assertions.assertEquals(convertResult, avroPrimitives[i]);
+      HoodieSchema convertResult = InternalSchemaConverter.convert(primitiveTypes[i], "t1");
+      Assertions.assertEquals(convertResult, schemaPrimitives[i]);
     }
   }
 
@@ -125,29 +127,33 @@ public class TestAvroSchemaEvolutionUtils {
         Types.Field.get(12, "decimal", Types.DecimalType.get(10, 2))
     }));
 
-    Schema schema = create("t1",
-        new Schema.Field("bool", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.BOOLEAN)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("int", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.INT)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("long", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.LONG)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("float", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.FLOAT)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("double", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.DOUBLE)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("date", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT))), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("time", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG))), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("timestamp", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("string", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.STRING)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("uuid", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.uuid().addToSchema(Schema.createFixed("t1.uuid.fixed", null, null, 16))), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("fixed", AvroInternalSchemaConverter.nullableSchema(Schema.createFixed("t1.fixed.fixed", null, null, 10)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("binary", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.BYTES)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("decimal", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.decimal(10, 2)
-            .addToSchema(Schema.createFixed("t1.decimal.fixed", null, null, 5))), null, JsonProperties.NULL_VALUE));
-    Schema convertedSchema = AvroInternalSchemaConverter.convert(record, "t1");
+    HoodieSchema schema = create("t1",
+        HoodieSchemaField.of("bool", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.BOOLEAN)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("int", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.INT)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("long", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.LONG)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("float", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.FLOAT)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("double", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.DOUBLE)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("date", HoodieSchema.createNullable(HoodieSchema.fromAvroSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT)))),
+            null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("time", HoodieSchema.createNullable(HoodieSchema.fromAvroSchema(LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG)))),
+            null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("timestamp", HoodieSchema.createNullable(HoodieSchema.fromAvroSchema(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG)))),
+            null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("string", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("uuid", HoodieSchema.createNullable(HoodieSchema.fromAvroSchema(LogicalTypes.uuid().addToSchema(
+            Schema.createFixed("t1.uuid.fixed", null, null, 16)))), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("fixed", HoodieSchema.createNullable(HoodieSchema.createFixed("t1.fixed.fixed", null, null, 10)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("binary", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.BYTES)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("decimal", HoodieSchema.createNullable(HoodieSchema.fromAvroSchema(LogicalTypes.decimal(10, 2)
+            .addToSchema(Schema.createFixed("t1.decimal.fixed", null, null, 5)))), null, HoodieJsonProperties.NULL_VALUE));
+    HoodieSchema convertedSchema = InternalSchemaConverter.convert(record, "t1");
     Assertions.assertEquals(convertedSchema, schema);
-    Types.RecordType convertedRecord = AvroInternalSchemaConverter.convert(schema).getRecord();
+    Types.RecordType convertedRecord = InternalSchemaConverter.convert(schema).getRecord();
     Assertions.assertEquals(convertedRecord, record);
   }
 
-  private Schema create(String name, Schema.Field... fields) {
-    return Schema.createRecord(name, null, null, false, Arrays.asList(fields));
+  private HoodieSchema create(String name, HoodieSchemaField... fields) {
+    return HoodieSchema.createRecord(name, null, null, false, Arrays.asList(fields));
   }
 
   @Test
@@ -156,18 +162,18 @@ public class TestAvroSchemaEvolutionUtils {
         Types.RecordType.get(Arrays.asList(Types.Field.get(1, false, "a", Types.FloatType.get()),
             Types.Field.get(2, false, "b", Types.FloatType.get()))));
 
-    Schema schema = SchemaBuilder.array().items(create("t1",
-        new Schema.Field("a", Schema.create(Schema.Type.FLOAT), null, null),
-        new Schema.Field("b", Schema.create(Schema.Type.FLOAT), null, null)));
-    Schema convertedSchema = AvroInternalSchemaConverter.convert(arrayNestRecordType, "t1");
+    HoodieSchema schema = HoodieSchema.createArray(create("t1",
+        HoodieSchemaField.of("a", HoodieSchema.create(HoodieSchemaType.FLOAT), null, null),
+        HoodieSchemaField.of("b", HoodieSchema.create(HoodieSchemaType.FLOAT), null, null)));
+    HoodieSchema convertedSchema = InternalSchemaConverter.convert(arrayNestRecordType, "t1");
     Assertions.assertEquals(convertedSchema, schema);
-    Types.ArrayType convertedRecord = (Types.ArrayType) AvroInternalSchemaConverter.convertToField(schema);
+    Types.ArrayType convertedRecord = (Types.ArrayType) InternalSchemaConverter.convertToField(schema);
     Assertions.assertEquals(convertedRecord, arrayNestRecordType);
   }
 
   @Test
   public void testComplexConvert() {
-    Schema schema = new Schema.Parser().parse(schemaStr);
+    HoodieSchema schema = HoodieSchema.parse(schemaStr);
 
     Types.RecordType recordType = Types.RecordType.get(Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "data", Types.StringType.get()),
@@ -183,39 +189,39 @@ public class TestAvroSchemaEvolutionUtils {
     );
     InternalSchema internalSchema = new InternalSchema(recordType);
 
-    Type convertRecord = AvroInternalSchemaConverter.convert(schema).getRecord();
+    Type convertRecord = InternalSchemaConverter.convert(schema).getRecord();
     Assertions.assertEquals(convertRecord, internalSchema.getRecord());
-    Assertions.assertEquals(schema, AvroInternalSchemaConverter.convert(internalSchema, "newTableName"));
+    Assertions.assertEquals(schema, InternalSchemaConverter.convert(internalSchema, "newTableName"));
   }
 
   @Test
   public void testNullFieldType() {
-    Schema schema = create("t1",
-        new Schema.Field("nullField", Schema.create(Schema.Type.NULL), null, JsonProperties.NULL_VALUE));
+    HoodieSchema schema = create("t1",
+        HoodieSchemaField.of("nullField", HoodieSchema.create(HoodieSchemaType.NULL), null, HoodieJsonProperties.NULL_VALUE));
     Throwable t = assertThrows(HoodieNullSchemaTypeException.class,
-        () -> AvroInternalSchemaConverter.convert(schema));
+        () -> InternalSchemaConverter.convert(schema));
     assertTrue(t.getMessage().contains("'t1.nullField'"));
 
-    Schema schemaArray = create("t2",
-        new Schema.Field("nullArray", Schema.createArray(Schema.create(Schema.Type.NULL)), null, null));
+    HoodieSchema schemaArray = create("t2",
+        HoodieSchemaField.of("nullArray", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.NULL)), null, null));
     t = assertThrows(HoodieNullSchemaTypeException.class,
-        () -> AvroInternalSchemaConverter.convert(schemaArray));
+        () -> InternalSchemaConverter.convert(schemaArray));
     assertTrue(t.getMessage().contains("'t2.nullArray.element'"));
 
-    Schema schemaMap = create("t3",
-        new Schema.Field("nullMap", Schema.createMap(Schema.create(Schema.Type.NULL)), null, null));
+    HoodieSchema schemaMap = create("t3",
+        HoodieSchemaField.of("nullMap", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.NULL)), null, null));
     t = assertThrows(HoodieNullSchemaTypeException.class,
-        () -> AvroInternalSchemaConverter.convert(schemaMap));
+        () -> InternalSchemaConverter.convert(schemaMap));
     assertTrue(t.getMessage().contains("'t3.nullMap.value'"));
 
 
-    Schema schemaComplex = create("t4",
-        new Schema.Field("complexField", Schema.createMap(
+    HoodieSchema schemaComplex = create("t4",
+        HoodieSchemaField.of("complexField", HoodieSchema.createMap(
             create("nestedStruct",
-                new Schema.Field("nestedArray", Schema.createArray(Schema.createMap(Schema.create(Schema.Type.NULL))),
+                HoodieSchemaField.of("nestedArray", HoodieSchema.createArray(HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.NULL))),
                     null, null))), null, null));
     t = assertThrows(HoodieNullSchemaTypeException.class,
-        () -> AvroInternalSchemaConverter.convert(schemaComplex));
+        () -> InternalSchemaConverter.convert(schemaComplex));
     assertTrue(t.getMessage().contains("'t4.nestedStruct.nestedArray.element.value'"));
   }
 
@@ -245,16 +251,16 @@ public class TestAvroSchemaEvolutionUtils {
 
   @Test
   public void testFixNullOrdering() {
-    Schema schema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/nullWrong.avsc");
-    Schema expectedSchema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/nullRight.avsc");
-    Assertions.assertEquals(expectedSchema, AvroInternalSchemaConverter.fixNullOrdering(schema));
-    Assertions.assertEquals(expectedSchema, AvroInternalSchemaConverter.fixNullOrdering(expectedSchema));
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/nullWrong.avsc"));
+    HoodieSchema expectedSchema = HoodieSchema.fromAvroSchema(SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/nullRight.avsc"));
+    Assertions.assertEquals(expectedSchema, InternalSchemaConverter.fixNullOrdering(schema));
+    Assertions.assertEquals(expectedSchema, InternalSchemaConverter.fixNullOrdering(expectedSchema));
   }
 
   @Test
   public void testFixNullOrderingSameSchemaCheck() {
-    Schema schema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/source_evolved.avsc");
-    Assertions.assertEquals(schema, AvroInternalSchemaConverter.fixNullOrdering(schema));
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/source_evolved.avsc"));
+    Assertions.assertEquals(schema, InternalSchemaConverter.fixNullOrdering(schema));
   }
 
   public enum Enum {
@@ -275,7 +281,7 @@ public class TestAvroSchemaEvolutionUtils {
   @Test
   public void testReWriteRecordWithTypeChanged() {
     String enumSchema = "{\"type\":\"enum\",\"name\":\"Enum\",\"namespace\":\"org.apache.hudi.internal.schema.utils.TestAvroSchemaEvolutionUtils\",\"symbols\":[\"ENUM1\",\"ENUM2\"]}";
-    Schema avroSchema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"h0_record\",\"namespace\":\"hoodie.h0\",\"fields\""
+    HoodieSchema hoodieSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"h0_record\",\"namespace\":\"hoodie.h0\",\"fields\""
         + ":[{\"name\":\"id\",\"type\":[\"null\",\"int\"],\"default\":null},"
         + "{\"name\":\"comb\",\"type\":[\"null\",\"int\"],\"default\":null},"
         + "{\"name\":\"com1\",\"type\":[\"null\",\"int\"],\"default\":null},"
@@ -300,7 +306,7 @@ public class TestAvroSchemaEvolutionUtils {
         + "{\"name\":\"enum\",\"type\":[\"null\"," + enumSchema + "],\"default\":null}"
         + "]}");
     // create a test record with avroSchema
-    GenericData.Record avroRecord = new GenericData.Record(avroSchema);
+    GenericData.Record avroRecord = new GenericData.Record(hoodieSchema.toAvroSchema());
     avroRecord.put("id", 1);
     avroRecord.put("comb", 100);
     avroRecord.put("com1", -100);
@@ -312,10 +318,10 @@ public class TestAvroSchemaEvolutionUtils {
     avroRecord.put("col21", 5.001f);
     avroRecord.put("col3", 12.999d);
     avroRecord.put("col31", 9999.999d);
-    Schema currentDecimalType = avroSchema.getField("col4").schema().getTypes().get(1);
+    Schema currentDecimalType = hoodieSchema.getField("col4").get().getAvroField().schema().getTypes().get(1);
     BigDecimal bd = new BigDecimal("123.456").setScale(((LogicalTypes.Decimal) currentDecimalType.getLogicalType()).getScale());
     avroRecord.put("col4", HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(bd, currentDecimalType, currentDecimalType.getLogicalType()));
-    Schema currentDecimalType1 = avroSchema.getField("col41").schema().getTypes().get(1);
+    Schema currentDecimalType1 = hoodieSchema.getField("col41").get().getAvroField().schema().getTypes().get(1);
     BigDecimal bd1 = new BigDecimal("7890.456").setScale(((LogicalTypes.Decimal) currentDecimalType1.getLogicalType()).getScale());
     avroRecord.put("col41", HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(bd1, currentDecimalType1, currentDecimalType1.getLogicalType()));
 
@@ -327,8 +333,8 @@ public class TestAvroSchemaEvolutionUtils {
     ByteBuffer bb = ByteBuffer.wrap(new byte[] {97, 48, 53});
     avroRecord.put("col9", bb);
     avroRecord.put("enum", new GenericData.EnumSymbol(new Schema.Parser().parse(enumSchema), Enum.ENUM1));
-    Assertions.assertEquals(GenericData.get().validate(avroSchema, avroRecord), true);
-    InternalSchema internalSchema = AvroInternalSchemaConverter.convert(avroSchema);
+    Assertions.assertEquals(GenericData.get().validate(hoodieSchema.toAvroSchema(), avroRecord), true);
+    InternalSchema internalSchema = InternalSchemaConverter.convert(hoodieSchema);
     // do change type operation
     TableChanges.ColumnUpdateChange updateChange = TableChanges.ColumnUpdateChange.get(internalSchema);
     updateChange
@@ -350,11 +356,11 @@ public class TestAvroSchemaEvolutionUtils {
         .updateColumnType("col6", Types.StringType.get())
         .updateColumnType("enum", Types.StringType.get());
     InternalSchema newSchema = SchemaChangeUtils.applyTableChanges2Schema(internalSchema, updateChange);
-    Schema newAvroSchema = AvroInternalSchemaConverter.convert(newSchema, avroSchema.getFullName());
-    GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newAvroSchema, Collections.emptyMap());
+    HoodieSchema newHoodieSchema = InternalSchemaConverter.convert(newSchema, hoodieSchema.getFullName());
+    GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newHoodieSchema.toAvroSchema(), Collections.emptyMap());
 
     Assertions.assertEquals("ENUM1", newRecord.get("enum"));
-    Assertions.assertEquals(GenericData.get().validate(newAvroSchema, newRecord), true);
+    Assertions.assertEquals(GenericData.get().validate(newHoodieSchema.toAvroSchema(), newRecord), true);
   }
 
   @Test
@@ -368,20 +374,20 @@ public class TestAvroSchemaEvolutionUtils {
         Types.Field.get(4, false, "locations", Types.MapType.get(8, 9, Types.StringType.get(),
             Types.RecordType.get(Types.Field.get(10, false, "lat", Types.FloatType.get()), Types.Field.get(11, false, "long", Types.FloatType.get())), false))
     );
-    Schema schema = AvroInternalSchemaConverter.convert(record, "test1");
-    GenericData.Record avroRecord = new GenericData.Record(schema);
-    GenericData.get().validate(schema, avroRecord);
+    HoodieSchema schema = InternalSchemaConverter.convert(record, "test1");
+    GenericData.Record avroRecord = new GenericData.Record(schema.toAvroSchema());
+    GenericData.get().validate(schema.toAvroSchema(), avroRecord);
     avroRecord.put("id", 2);
     avroRecord.put("data", "xs");
     // fill record type
-    GenericData.Record preferencesRecord = new GenericData.Record(AvroInternalSchemaConverter.convert(record.fieldType("preferences"), "test1.preferences"));
+    GenericData.Record preferencesRecord = new GenericData.Record(InternalSchemaConverter.convert(record.fieldType("preferences"), "test1.preferences").toAvroSchema());
     preferencesRecord.put("feature1", false);
     preferencesRecord.put("feature2", true);
-    Assertions.assertEquals(GenericData.get().validate(AvroInternalSchemaConverter.convert(record.fieldType("preferences"), "test1.preferences"), preferencesRecord), true);
+    Assertions.assertEquals(GenericData.get().validate(InternalSchemaConverter.convert(record.fieldType("preferences"), "test1.preferences").toAvroSchema(), preferencesRecord), true);
     avroRecord.put("preferences", preferencesRecord);
     // fill mapType
     Map<String, GenericData.Record> locations = new HashMap<>();
-    Schema mapSchema = AvroInternalSchemaConverter.convert(((Types.MapType)record.fieldByNameCaseInsensitive("locations").type()).valueType(), "test1.locations");
+    Schema mapSchema = InternalSchemaConverter.convert(((Types.MapType)record.fieldByNameCaseInsensitive("locations").type()).valueType(), "test1.locations").toAvroSchema();
     GenericData.Record locationsValue = new GenericData.Record(mapSchema);
     locationsValue.put("lat", 1.2f);
     locationsValue.put("long", 1.4f);
@@ -398,7 +404,7 @@ public class TestAvroSchemaEvolutionUtils {
     avroRecord.put("doubles", doubles);
 
     // do check
-    Assertions.assertTrue(GenericData.get().validate(schema, avroRecord));
+    Assertions.assertTrue(GenericData.get().validate(schema.toAvroSchema(), avroRecord));
     // create newSchema
     Types.RecordType newRecord = Types.RecordType.get(
         Types.Field.get(0, false, "id", Types.IntType.get()),
@@ -416,13 +422,13 @@ public class TestAvroSchemaEvolutionUtils {
         )
     );
 
-    Schema newAvroSchema = AvroInternalSchemaConverter.convert(newRecord, schema.getName());
+    Schema newAvroSchema = InternalSchemaConverter.convert(newRecord, schema.getName()).toAvroSchema();
     GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newAvroSchema, Collections.emptyMap());
     // test the correctly of rewrite
     Assertions.assertEquals(GenericData.get().validate(newAvroSchema, newAvroRecord), true);
 
     // test rewrite with rename
-    InternalSchema internalSchema = AvroInternalSchemaConverter.convert(schema);
+    InternalSchema internalSchema = InternalSchemaConverter.convert(schema);
     // do change rename operation
     TableChanges.ColumnUpdateChange updateChange = TableChanges.ColumnUpdateChange.get(internalSchema);
     updateChange
@@ -432,11 +438,11 @@ public class TestAvroSchemaEvolutionUtils {
         .renameColumn("preferences.feature2", "f2")
         .renameColumn("locations.value.lat", "lt");
     InternalSchema internalSchemaRename = SchemaChangeUtils.applyTableChanges2Schema(internalSchema, updateChange);
-    Schema avroSchemaRename = AvroInternalSchemaConverter.convert(internalSchemaRename, schema.getFullName());
+    HoodieSchema hoodieSchemaRename = InternalSchemaConverter.convert(internalSchemaRename, schema.getFullName());
     Map<String, String> renameCols = InternalSchemaUtils.collectRenameCols(internalSchema, internalSchemaRename);
-    GenericRecord avroRecordRename = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, avroSchemaRename, renameCols);
+    GenericRecord avroRecordRename = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, hoodieSchemaRename.toAvroSchema(), renameCols);
     // test the correctly of rewrite
-    Assertions.assertEquals(GenericData.get().validate(avroSchemaRename, avroRecordRename), true);
+    assertTrue(GenericData.get().validate(hoodieSchemaRename.toAvroSchema(), avroRecordRename));
   }
 
   @Test
@@ -479,8 +485,8 @@ public class TestAvroSchemaEvolutionUtils {
                 Types.Field.get(5, true, "nest2", Types.BooleanType.get())))
     );
     evolvedRecord = (Types.RecordType)InternalSchemaBuilder.getBuilder().refreshNewId(evolvedRecord, new AtomicInteger(0));
-    Schema evolvedAvroSchema = AvroInternalSchemaConverter.convert(evolvedRecord, "test1");
-    InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(evolvedAvroSchema, oldSchema, false);
+    HoodieSchema evolvedSchema = InternalSchemaConverter.convert(evolvedRecord, "test1");
+    InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(evolvedSchema.getAvroSchema(), oldSchema, false);
     Types.RecordType checkedRecord = Types.RecordType.get(
         Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "data", Types.StringType.get()),
@@ -509,23 +515,23 @@ public class TestAvroSchemaEvolutionUtils {
   public void testReconcileSchema() {
     // simple schema test
     // a: boolean, b: int, c: long, d: date
-    Schema schema = create("simple",
-        new Schema.Field("a", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.BOOLEAN)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("b", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.INT)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("c", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.LONG)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("d", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT))), null, JsonProperties.NULL_VALUE));
+    HoodieSchema schema = create("simple",
+        HoodieSchemaField.of("a", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.BOOLEAN)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("b", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.INT)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("c", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.LONG)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("d", HoodieSchema.createNullable(HoodieSchema.fromAvroSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT)))), null, HoodieJsonProperties.NULL_VALUE));
     // a: boolean, c: long, c_1: long, d: date
-    Schema incomingSchema = create("simpleIncoming",
-        new Schema.Field("a", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.BOOLEAN)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("a1", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.LONG)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("c", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.LONG)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("c1", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.LONG)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("c2", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.LONG)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("d", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT))), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("d1", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT))), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("d2", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT))), null, JsonProperties.NULL_VALUE));
+    HoodieSchema incomingSchema = create("simpleIncoming",
+        HoodieSchemaField.of("a", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.BOOLEAN)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("a1", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.LONG)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("c", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.LONG)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("c1", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.LONG)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("c2", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.LONG)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("d", HoodieSchema.createNullable(HoodieSchema.fromAvroSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT)))), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("d1", HoodieSchema.createNullable(HoodieSchema.fromAvroSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT)))), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("d2", HoodieSchema.createNullable(HoodieSchema.fromAvroSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT)))), null, HoodieJsonProperties.NULL_VALUE));
 
-    Schema simpleCheckSchema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"simple\",\"fields\":[{\"name\":\"a\",\"type\":[\"null\",\"boolean\"],\"default\":null},"
+    HoodieSchema simpleCheckSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"simple\",\"fields\":[{\"name\":\"a\",\"type\":[\"null\",\"boolean\"],\"default\":null},"
         + "{\"name\":\"b\",\"type\":[\"null\",\"int\"],\"default\":null},"
         + "{\"name\":\"c\",\"type\":[\"null\",\"long\"],\"default\":null},"
         + "{\"name\":\"d\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null},"
@@ -534,30 +540,30 @@ public class TestAvroSchemaEvolutionUtils {
         + "{\"name\":\"d1\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null},"
         + "{\"name\":\"d2\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null}]}");
 
-    Schema simpleReconcileSchema = AvroInternalSchemaConverter.convert(AvroSchemaEvolutionUtils
-        .reconcileSchema(incomingSchema, AvroInternalSchemaConverter.convert(schema), false), "schemaNameFallback");
+    HoodieSchema simpleReconcileSchema = InternalSchemaConverter.convert(AvroSchemaEvolutionUtils
+        .reconcileSchema(incomingSchema.getAvroSchema(), InternalSchemaConverter.convert(schema), false), "schemaNameFallback");
     Assertions.assertEquals(simpleCheckSchema, simpleReconcileSchema);
   }
 
   @Test
   public void testNotEvolveSchemaIfReconciledSchemaUnchanged() {
     // a: boolean, c: long, c_1: long, d: date
-    Schema oldSchema = create("simple",
-        new Schema.Field("a", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.BOOLEAN)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("b", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.INT)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("c", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.LONG)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("d", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT))), null, JsonProperties.NULL_VALUE));
+    HoodieSchema oldSchema = create("simple",
+        HoodieSchemaField.of("a", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.BOOLEAN)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("b", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.INT)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("c", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.LONG)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("d", HoodieSchema.createNullable(HoodieSchema.fromAvroSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT)))), null, HoodieJsonProperties.NULL_VALUE));
     // incoming schema is part of old schema
     // a: boolean, b: int, c: long
-    Schema incomingSchema = create("simple",
-        new Schema.Field("a", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.BOOLEAN)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("b", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.INT)), null, JsonProperties.NULL_VALUE),
-        new Schema.Field("c", AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.LONG)), null, JsonProperties.NULL_VALUE));
+    HoodieSchema incomingSchema = create("simple",
+        HoodieSchemaField.of("a", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.BOOLEAN)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("b", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.INT)), null, HoodieJsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("c", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.LONG)), null, HoodieJsonProperties.NULL_VALUE));
 
-    InternalSchema oldInternalSchema = AvroInternalSchemaConverter.convert(oldSchema);
+    InternalSchema oldInternalSchema = InternalSchemaConverter.convert(oldSchema);
     // set a non-default schema id for old table schema, e.g., 2.
     oldInternalSchema.setSchemaId(2);
-    InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(incomingSchema, oldInternalSchema, false);
+    InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(incomingSchema.getAvroSchema(), oldInternalSchema, false);
     // the evolved schema should be the old table schema, since there is no type change at all.
     Assertions.assertEquals(oldInternalSchema, evolvedSchema);
   }

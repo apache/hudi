@@ -34,6 +34,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -72,13 +73,7 @@ public class TestHoodieSchema {
 
   @Test
   public void testSchemaCreationWithNullAvroSchema() {
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchema.fromAvroSchema(null);
-    }, "Should throw exception for null Avro schema");
-
-    assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchema.fromAvroSchema(null);
-    }, "Should throw exception for null Avro schema in constructor");
+    assertNull(HoodieSchema.fromAvroSchema(null));
   }
 
   @Test
@@ -87,9 +82,9 @@ public class TestHoodieSchema {
 
     assertNotNull(schema);
     assertEquals(HoodieSchemaType.RECORD, schema.getType());
-    assertEquals(Option.of("User"), schema.getName());
+    assertEquals("User", schema.getName());
     assertEquals(Option.of("com.example"), schema.getNamespace());
-    assertEquals(Option.of("com.example.User"), schema.getFullName());
+    assertEquals("com.example.User", schema.getFullName());
     assertEquals(Option.of("User record schema"), schema.getDoc());
 
     List<HoodieSchemaField> fields = schema.getFields();
@@ -173,7 +168,7 @@ public class TestHoodieSchema {
 
     assertNotNull(fixedSchema);
     assertEquals(HoodieSchemaType.FIXED, fixedSchema.getType());
-    assertEquals("FixedField", fixedSchema.getName().get());
+    assertEquals("FixedField", fixedSchema.getName());
     assertEquals(16, fixedSchema.getFixedSize());
   }
 
@@ -361,16 +356,16 @@ public class TestHoodieSchema {
   public void testSchemaProperties() {
     HoodieSchema schema = HoodieSchema.parse(SAMPLE_RECORD_SCHEMA);
 
-    assertEquals(Option.of("User"), schema.getName());
+    assertEquals("User", schema.getName());
     assertEquals(Option.of("com.example"), schema.getNamespace());
-    assertEquals(Option.of("com.example.User"), schema.getFullName());
+    assertEquals("com.example.User", schema.getFullName());
     assertEquals(Option.of("User record schema"), schema.getDoc());
 
     // Test schema without these properties (primitive types have their type name as name but no namespace)
     HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
-    assertEquals(Option.of("string"), stringSchema.getName()); // Primitive types use type name
+    assertEquals("string", stringSchema.getName()); // Primitive types use type name
     // Note: Don't test getNamespace() on primitive types as Avro throws exception
-    assertEquals(Option.of("string"), stringSchema.getFullName()); // Same as name for primitives
+    assertEquals("string", stringSchema.getFullName()); // Same as name for primitives
     assertEquals(Option.empty(), stringSchema.getDoc());
   }
 
@@ -451,7 +446,7 @@ public class TestHoodieSchema {
 
     assertNotNull(recordSchema);
     assertEquals(HoodieSchemaType.RECORD, recordSchema.getType());
-    assertEquals(Option.of("User"), recordSchema.getName());
+    assertEquals("User", recordSchema.getName());
     assertEquals(Option.of("com.example"), recordSchema.getNamespace());
     assertEquals(Option.of("User record schema"), recordSchema.getDoc());
     assertEquals(2, recordSchema.getFields().size());
@@ -467,7 +462,7 @@ public class TestHoodieSchema {
 
     HoodieSchema recordSchema = HoodieSchema.createRecord("User", "com.example", "User record", fields);
     assertEquals(HoodieSchemaType.RECORD, recordSchema.getType());
-    assertEquals(Option.of("User"), recordSchema.getName());
+    assertEquals("User", recordSchema.getName());
 
     // Test createUnion (varargs version)
     HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
@@ -480,13 +475,13 @@ public class TestHoodieSchema {
     List<String> symbols = Arrays.asList("RED", "GREEN", "BLUE");
     HoodieSchema enumSchema = HoodieSchema.createEnum("Color", "com.example", "Color enum", symbols);
     assertEquals(HoodieSchemaType.ENUM, enumSchema.getType());
-    assertEquals(Option.of("Color"), enumSchema.getName());
+    assertEquals("Color", enumSchema.getName());
     assertEquals(symbols, enumSchema.getEnumSymbols());
 
     // Test createFixed
     HoodieSchema fixedSchema = HoodieSchema.createFixed("MD5", "com.example", "MD5 hash", 16);
     assertEquals(HoodieSchemaType.FIXED, fixedSchema.getType());
-    assertEquals(Option.of("MD5"), fixedSchema.getName());
+    assertEquals("MD5", fixedSchema.getName());
     assertEquals(16, fixedSchema.getFixedSize());
   }
 
@@ -532,7 +527,7 @@ public class TestHoodieSchema {
 
     assertNotNull(schema);
     assertEquals(HoodieSchemaType.RECORD, schema.getType());
-    assertEquals("Test", schema.getName().get());
+    assertEquals("Test", schema.getName());
     assertEquals(2, schema.getFields().size());
   }
 
@@ -547,7 +542,7 @@ public class TestHoodieSchema {
 
     assertNotNull(recordSchema);
     assertEquals(HoodieSchemaType.RECORD, recordSchema.getType());
-    assertEquals("ErrorRecord", recordSchema.getName().get());
+    assertEquals("ErrorRecord", recordSchema.getName());
     assertEquals("com.example", recordSchema.getNamespace().get());
     assertTrue(recordSchema.isError());
     assertEquals(2, recordSchema.getFields().size());
@@ -599,7 +594,7 @@ public class TestHoodieSchema {
 
     assertNotNull(recordSchema);
     assertEquals(HoodieSchemaType.RECORD, recordSchema.getType());
-    assertEquals(Option.of("User"), recordSchema.getName());
+    assertEquals("User", recordSchema.getName());
     assertEquals(2, recordSchema.getFields().size());
 
     // Verify fields
@@ -622,9 +617,9 @@ public class TestHoodieSchema {
 
     assertNotNull(recordSchema);
     assertEquals(HoodieSchemaType.RECORD, recordSchema.getType());
-    assertEquals(Option.of("TestRecord"), recordSchema.getName());
+    assertEquals("TestRecord", recordSchema.getName());
     assertEquals(Option.of("com.example"), recordSchema.getNamespace());
-    assertEquals(Option.of("com.example.TestRecord"), recordSchema.getFullName());
+    assertEquals("com.example.TestRecord", recordSchema.getFullName());
     assertEquals(Option.of("Test record schema"), recordSchema.getDoc());
   }
 
@@ -656,7 +651,7 @@ public class TestHoodieSchema {
 
     assertNotNull(recordSchema);
     assertEquals(HoodieSchemaType.RECORD, recordSchema.getType());
-    assertEquals(Option.of("EmptyRecord"), recordSchema.getName());
+    assertEquals("EmptyRecord", recordSchema.getName());
     assertEquals(0, recordSchema.getFields().size());
   }
 
@@ -667,7 +662,7 @@ public class TestHoodieSchema {
 
     assertNotNull(enumSchema);
     assertEquals(HoodieSchemaType.ENUM, enumSchema.getType());
-    assertEquals(Option.of("Color"), enumSchema.getName());
+    assertEquals("Color", enumSchema.getName());
     assertEquals(symbols, enumSchema.getEnumSymbols());
   }
 
@@ -702,7 +697,7 @@ public class TestHoodieSchema {
 
     assertNotNull(fixedSchema);
     assertEquals(HoodieSchemaType.FIXED, fixedSchema.getType());
-    assertEquals(Option.of("MD5Hash"), fixedSchema.getName());
+    assertEquals("MD5Hash", fixedSchema.getName());
     assertEquals(16, fixedSchema.getFixedSize());
   }
 
@@ -783,7 +778,7 @@ public class TestHoodieSchema {
   @Test
   public void testCreateNullableSchema() {
     HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
-    HoodieSchema nullableSchema = HoodieSchema.createNullableSchema(stringSchema);
+    HoodieSchema nullableSchema = HoodieSchema.createNullable(stringSchema);
 
     assertNotNull(nullableSchema);
     assertEquals(HoodieSchemaType.UNION, nullableSchema.getType());
@@ -801,7 +796,7 @@ public class TestHoodieSchema {
   @Test
   public void testCreateNullableSchemaWithInvalidParameters() {
     assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchema.createNullableSchema(null);
+      HoodieSchema.createNullable(null);
     }, "Should throw exception for null type");
   }
 }

@@ -21,18 +21,18 @@ package org.apache.hudi.util
 
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter.collectColNamesFromSparkStruct
-import org.apache.hudi.internal.schema.convert.TestAvroInternalSchemaConverter._
+import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.internal.schema.convert.TestInternalSchemaConverter._
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness
 
-import org.apache.avro.Schema
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
 class TestSparkInternalSchemaConverter extends HoodieSparkClientTestHarness with SparkAdapterSupport {
 
-  private def getStructType(schema: Schema): DataType = {
-    sparkAdapter.getAvroSchemaConverters.toSqlType(schema)._1
+  private def getStructType(schema: HoodieSchema): DataType = {
+    sparkAdapter.getAvroSchemaConverters.toSqlType(schema.toAvroSchema)._1
   }
 
   @Test

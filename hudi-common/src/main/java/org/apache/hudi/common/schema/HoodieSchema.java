@@ -103,6 +103,9 @@ public class HoodieSchema implements Serializable {
    * @throws IllegalArgumentException if avroSchema is null
    */
   public static HoodieSchema fromAvroSchema(Schema avroSchema) {
+    if (avroSchema == null) {
+      return null;
+    }
     return new HoodieSchema(avroSchema);
   }
 
@@ -157,14 +160,14 @@ public class HoodieSchema implements Serializable {
       }
 
       // Add null to existing union
-      List<Schema> newUnionTypes = new ArrayList<>();
+      List<Schema> newUnionTypes = new ArrayList<>(unionTypes.size() + 1);
       newUnionTypes.add(Schema.create(Schema.Type.NULL));
       newUnionTypes.addAll(unionTypes);
       Schema nullableSchema = Schema.createUnion(newUnionTypes);
       return new HoodieSchema(nullableSchema);
     } else {
       // Create new union with null
-      List<Schema> unionTypes = new ArrayList<>();
+      List<Schema> unionTypes = new ArrayList<>(2);
       unionTypes.add(Schema.create(Schema.Type.NULL));
       unionTypes.add(inputAvroSchema);
       Schema nullableSchema = Schema.createUnion(unionTypes);
@@ -362,19 +365,6 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
-   * Creates a nullable union (null + specified type).
-   *
-   * @param type the non-null type
-   * @return new HoodieSchema representing a nullable union
-   */
-  public static HoodieSchema createNullableSchema(HoodieSchema type) {
-    ValidationUtils.checkArgument(type != null, "Type cannot be null");
-
-    HoodieSchema nullSchema = HoodieSchema.create(HoodieSchemaType.NULL);
-    return createUnion(nullSchema, type);
-  }
-
-  /**
    * Returns the type of this schema.
    *
    * @return the schema type
@@ -384,12 +374,26 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
-   * Returns the name of this schema, if it has one.
-   *
-   * @return Option containing the schema name, or Option.empty() if none
+   * If this is a union schema representing a null, it returns the underlying non-null type.
+   * @return the underlying non-null HoodieSchema
    */
-  public Option<String> getName() {
-    return Option.ofNullable(avroSchema.getName());
+  public HoodieSchema getUnderlyingType() {
+    if (HoodieSchemaType.UNION == type) {
+      return getTypes().stream()
+          .filter(schema -> schema.getType() != HoodieSchemaType.NULL)
+          .findFirst()
+          .orElseThrow(() -> new IllegalArgumentException("No non-null type found in Union"));
+    }
+    return this;
+  }
+
+  /**
+   * Returns the name of the schema if a record, otherwise it returns the name of the type.
+   *
+   * @return the schema name
+   */
+  public String getName() {
+    return avroSchema.getName();
   }
 
   /**
@@ -402,12 +406,12 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
-   * Returns the full name of this schema (namespace + name).
+   * Returns the full name of this schema (namespace + name) if a record, or the type name otherwise.
    *
-   * @return Option containing the full schema name, or Option.empty() if none
+   * @return The full schema name, or name of the type if not a record
    */
-  public Option<String> getFullName() {
-    return Option.ofNullable(avroSchema.getFullName());
+  public String getFullName() {
+    return avroSchema.getFullName();
   }
 
   /**
