@@ -422,7 +422,7 @@ public class HadoopFSUtils {
     if (isLogFile(filePath)) {
       return getFileIdFromLogPath(filePath);
     }
-    return FSUtils.getFileId(filePath.getName());
+    return FSUtils.getFileIdFromFileName(filePath.getName());
   }
 
   public static boolean isBaseFile(Path path) {

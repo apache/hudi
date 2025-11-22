@@ -263,7 +263,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
         if (partition == row.getString(3)) {
           count += 1
           assertEquals(row.getString(3), loc.getPartitionPath)
-          assertEquals(FSUtils.getFileId(row.getString(4)), loc.getFileId)
+          assertEquals(FSUtils.getFileIdFromFileName(row.getString(4)), loc.getFileId)
         }
       }
     }

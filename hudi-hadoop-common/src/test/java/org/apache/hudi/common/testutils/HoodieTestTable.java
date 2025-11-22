@@ -1582,7 +1582,7 @@ public class HoodieTestTable implements AutoCloseable {
       List<Pair<String, Integer[]>> fileInfos = new ArrayList<>();
       for (int i = 0; i < versionsAndLengths.size(); i++) {
         Pair<Integer, Integer> versionAndLength = versionsAndLengths.get(i);
-        String fileId = FSUtils.getFileId(commitsToPartitionToBaseFileInfoStats.get(commitTime).get(partitionPath).get(i).getLeft());
+        String fileId = FSUtils.getFileIdFromFileName(commitsToPartitionToBaseFileInfoStats.get(commitTime).get(partitionPath).get(i).getLeft());
         fileInfos.add(Pair.of(fileId, new Integer[] {versionAndLength.getLeft(), versionAndLength.getRight()}));
       }
       this.commitsToPartitionToLogFileInfoStats.get(commitTime).get(partitionPath).addAll(fileInfos);
