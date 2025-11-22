@@ -44,8 +44,8 @@ public class RowDataToHoodieFunctionWithRateLimit<I extends RowData, O extends H
    */
   private transient RateLimiter rateLimiter;
 
-  public RowDataToHoodieFunctionWithRateLimit(RowType rowType, Configuration config) {
-    super(rowType, config);
+  public RowDataToHoodieFunctionWithRateLimit(RowType recordRowType, RowType writerRowType, Configuration config) {
+    super(recordRowType, writerRowType, config);
     this.totalLimit = config.get(FlinkOptions.WRITE_RATE_LIMIT);
   }
 

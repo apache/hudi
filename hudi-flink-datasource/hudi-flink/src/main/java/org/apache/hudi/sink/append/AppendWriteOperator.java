@@ -31,11 +31,11 @@ import org.apache.flink.table.types.logical.RowType;
  */
 public class AppendWriteOperator<I> extends AbstractWriteOperator<I> {
 
-  public AppendWriteOperator(Configuration conf, RowType rowType) {
-    super(AppendWriteFunctions.create(conf, rowType));
+  public AppendWriteOperator(Configuration conf, RowType recordRowType, RowType writerRowType) {
+    super(AppendWriteFunctions.create(conf, recordRowType, writerRowType));
   }
 
-  public static <I> WriteOperatorFactory<I> getFactory(Configuration conf, RowType rowType) {
-    return WriteOperatorFactory.instance(conf, new AppendWriteOperator<>(conf, rowType));
+  public static <I> WriteOperatorFactory<I> getFactory(Configuration conf, RowType recordRowType, RowType writerRowType) {
+    return WriteOperatorFactory.instance(conf, new AppendWriteOperator<>(conf, recordRowType, writerRowType));
   }
 }

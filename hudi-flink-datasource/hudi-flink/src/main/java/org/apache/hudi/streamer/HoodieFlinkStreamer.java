@@ -32,6 +32,7 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.StreamerUtils;
 
 import com.beust.jcommander.JCommander;
+import org.apache.avro.Schema;
 import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.StateBackendOptions;
@@ -89,14 +90,19 @@ public class HoodieFlinkStreamer {
 
     OptionsInference.setupSinkTasks(conf, env.getParallelism());
     OptionsInference.setupClientId(conf);
+    Schema writerSchema = StreamerUtil.deduceWriterSchema(conf);
+    // setup write avro schema
+    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, writerSchema.toString());
+
+    RowType writerRowType = (RowType) AvroSchemaConverter.convertToDataType(writerSchema).getLogicalType();
     DataStream<RowData> pipeline;
     // Append mode
     if (OptionsResolver.isAppendMode(conf)) {
       // append mode should not compaction operator
       conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
-      pipeline = Pipelines.append(conf, rowType, dataStream);
+      pipeline = Pipelines.append(conf, rowType, writerRowType, dataStream);
       if (OptionsResolver.needsAsyncClustering(conf)) {
-        Pipelines.cluster(conf, rowType, pipeline);
+        Pipelines.cluster(conf, writerRowType, pipeline);
       } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
         // add clean function to rollback failed writes for lazy failed writes cleaning policy
         Pipelines.clean(conf, pipeline);
@@ -104,8 +110,8 @@ public class HoodieFlinkStreamer {
         Pipelines.dummySink(pipeline);
       }
     } else {
-      DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
-      pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
+      DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, writerRowType, dataStream);
+      pipeline = Pipelines.hoodieStreamWrite(conf, writerRowType, hoodieRecordDataStream);
       if (OptionsResolver.needsAsyncCompaction(conf)) {
         Pipelines.compact(conf, pipeline);
       } else {

@@ -22,32 +22,41 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.io.storage.row.parquet.ParquetSchemaConverter;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 import org.apache.hudi.table.format.cow.ParquetSplitReaderUtil;
 import org.apache.hudi.util.RowDataProjection;
+import org.apache.hudi.util.RowProjection;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.filter.UnboundRecordFilter;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.BadConfigurationException;
+import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.hadoop.util.ConfigurationUtil;
 import org.apache.parquet.hadoop.util.SerializationUtil;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.apache.parquet.filter2.predicate.FilterApi.and;
+import static org.apache.parquet.format.converter.ParquetMetadataConverter.range;
+import static org.apache.parquet.hadoop.ParquetFileReader.readFooter;
 import static org.apache.parquet.hadoop.ParquetInputFormat.FILTER_PREDICATE;
 import static org.apache.parquet.hadoop.ParquetInputFormat.UNBOUND_RECORD_FILTER;
 
@@ -113,9 +122,39 @@ public abstract class RecordIterators {
     }
     UnboundRecordFilter recordFilter = getUnboundRecordFilterInstance(conf);
 
-    InternalSchema mergeSchema = internalSchemaManager.getMergeSchema(getFileName(path));
-    if (mergeSchema.isEmptySchema()) {
-      return new ParquetSplitRecordIterator(
+    ParquetMetadata footer = readFooter(conf, new org.apache.hadoop.fs.Path(path.toUri()), range(splitStart, splitStart + splitLength));
+    // schema on read is disabled
+    if (internalSchemaManager.getQuerySchema().isEmptySchema())  {
+      RowType fileRowType = ParquetSchemaConverter.convertToRowType(footer.getFileMetaData().getSchema());
+      DataType[] mergedFiledTypes = getMergedFieldTypes(fileRowType, fieldTypes, fieldNames);
+      RowProjection recordTransform = createRecordTransform(mergedFiledTypes, fieldTypes, fieldNames, selectedFields);
+      ClosableIterator<RowData> itr = new ParquetSplitRecordIterator(
+          ParquetSplitReaderUtil.genPartColumnarRowReader(
+              utcTimestamp,
+              caseSensitive,
+              conf,
+              fieldNames,
+              mergedFiledTypes,
+              partitionSpec,
+              selectedFields,
+              batchSize,
+              path,
+              footer,
+              filterPredicate,
+              recordFilter));
+      return recordTransform == RowProjection.IDENTITY ? itr : new SchemaEvolvedRecordIterator(itr, recordTransform);
+    } else  {
+      InternalSchema mergeSchema = internalSchemaManager.getMergeSchema(getFileName(path));
+      Option<RowDataProjection> castProjection =  Option.empty();
+      if (!mergeSchema.isEmptySchema()) {
+        CastMap castMap = internalSchemaManager.getCastMap(mergeSchema, fieldNames, fieldTypes, selectedFields);
+        castProjection = castMap.toRowDataProjection(selectedFields);
+        // the reconciled field names
+        fieldNames = internalSchemaManager.getMergeFieldNames(mergeSchema, fieldNames);
+        // the reconciled field types
+        fieldTypes = castMap.getFileFieldTypes();
+      }
+      ClosableIterator<RowData> itr = new ParquetSplitRecordIterator(
           ParquetSplitReaderUtil.genPartColumnarRowReader(
               utcTimestamp,
               caseSensitive,
@@ -126,34 +165,37 @@ public abstract class RecordIterators {
               selectedFields,
               batchSize,
               path,
-              splitStart,
-              splitLength,
+              footer,
               filterPredicate,
               recordFilter));
-    } else {
-      CastMap castMap = internalSchemaManager.getCastMap(mergeSchema, fieldNames, fieldTypes, selectedFields);
-      Option<RowDataProjection> castProjection = castMap.toRowDataProjection(selectedFields);
-      ClosableIterator<RowData> itr = new ParquetSplitRecordIterator(
-          ParquetSplitReaderUtil.genPartColumnarRowReader(
-              utcTimestamp,
-              caseSensitive,
-              conf,
-              internalSchemaManager.getMergeFieldNames(mergeSchema, fieldNames), // the reconciled field names
-              castMap.getFileFieldTypes(),                                     // the reconciled field types
-              partitionSpec,
-              selectedFields,
-              batchSize,
-              path,
-              splitStart,
-              splitLength,
-              filterPredicate,
-              recordFilter));
-      if (castProjection.isPresent()) {
-        return new SchemaEvolvedRecordIterator(itr, castProjection.get());
+      return castProjection.isPresent() ? new SchemaEvolvedRecordIterator(itr, castProjection.get()) : itr;
+    }
+  }
+
+  /**
+   * Create a record transform to support read file with history schema which is different with current table schema.
+   */
+  private static RowProjection createRecordTransform(DataType[] fileFieldTypes, DataType[] tableFieldTypes, String[] fieldNames, int[] selectedFields) {
+    String[] selectFieldNames = Arrays.stream(selectedFields).mapToObj(idx -> fieldNames[idx]).toArray(String[]::new);
+    LogicalType[] selectFileFieldTypes = Arrays.stream(selectedFields).mapToObj(idx -> fileFieldTypes[idx].getLogicalType()).toArray(LogicalType[]::new);
+    LogicalType[] selectFieldTypes = Arrays.stream(selectedFields).mapToObj(idx -> tableFieldTypes[idx].getLogicalType()).toArray(LogicalType[]::new);
+    return StreamerUtil.createRecordTransform(RowType.of(selectFileFieldTypes, selectFieldNames), RowType.of(selectFieldTypes, selectFieldNames));
+  }
+
+  /**
+   * Attempts to merge the file and query data types to produce merged data types, prioritising the use of file row types.
+   */
+  private static DataType[] getMergedFieldTypes(RowType fileRowType, DataType[] fieldTypes, String[] fieldNames) {
+    DataType[] mergedTypes = new DataType[fieldTypes.length];
+    for (int i = 0; i < fieldTypes.length; i++) {
+      int idx = fileRowType.getFieldIndex(fieldNames[i]);
+      if (idx > -1) {
+        mergedTypes[i] = DataTypes.of(fileRowType.getTypeAt(idx));
       } else {
-        return itr;
+        mergedTypes[i] = fieldTypes[i];
       }
     }
+    return mergedTypes;
   }
 
   private static String getFileName(Path path) {

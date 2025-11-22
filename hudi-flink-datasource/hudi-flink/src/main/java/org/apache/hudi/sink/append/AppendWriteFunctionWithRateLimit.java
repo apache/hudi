@@ -44,8 +44,8 @@ public class AppendWriteFunctionWithRateLimit<I>
    */
   private transient RateLimiter rateLimiter;
 
-  public AppendWriteFunctionWithRateLimit(RowType rowType, Configuration config) {
-    super(config, rowType);
+  public AppendWriteFunctionWithRateLimit(Configuration config,  RowType recordRowType, RowType writerRowType) {
+    super(config, recordRowType, writerRowType);
     this.totalLimit = config.get(FlinkOptions.WRITE_RATE_LIMIT);
   }
 

@@ -62,7 +62,7 @@ import org.apache.hudi.storage.HoodieStorage
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.SyncUtilHelpers
 import org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException
-import org.apache.hudi.util.{SparkConfigUtils, SparkKeyGenUtils}
+import org.apache.hudi.util.{HoodieSchemaUtil, SparkConfigUtils, SparkKeyGenUtils}
 import org.apache.hudi.util.SparkConfigUtils.getStringWithAltKeys
 
 import org.apache.avro.Schema
@@ -368,7 +368,7 @@ class HoodieSparkSqlWriterInternal {
         .getOrElse(getAvroRecordNameAndNamespace(tblName))
 
       val sourceSchema = convertStructTypeToAvroSchema(df.schema, avroRecordName, avroRecordNamespace)
-      val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient).orElse {
+      val internalSchemaOpt = toScalaOption(HoodieSchemaUtil.getLatestTableInternalSchema(hoodieConfig, tableMetaClient)).orElse {
         // In case we need to reconcile the schema and schema evolution is enabled,
         // we will force-apply schema evolution to the writer's schema
         if (shouldReconcileSchema && hoodieConfig.getBooleanOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
@@ -402,7 +402,7 @@ class HoodieSparkSqlWriterInternal {
             }
 
             // Create a HoodieWriteClient & issue the delete.
-            val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient)
+            val internalSchemaOpt = toScalaOption(HoodieSchemaUtil.getLatestTableInternalSchema(hoodieConfig, tableMetaClient))
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
                 null, path, tblName,
                 addSchemaEvolutionParameters(parameters, internalSchemaOpt).asJava))

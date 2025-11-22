@@ -26,6 +26,7 @@ import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.util.RowProjection;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
@@ -70,14 +71,17 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
    */
   protected FlinkStreamWriteMetrics writeMetrics;
 
+  protected final RowProjection recordTransform;
+
   /**
    * Constructs an AppendWriteFunction.
    *
    * @param config The config options
    */
-  public AppendWriteFunction(Configuration config, RowType rowType) {
+  public AppendWriteFunction(Configuration config, RowType recordRowType, RowType writerRowType) {
     super(config);
-    this.rowType = rowType;
+    this.rowType = writerRowType;
+    this.recordTransform = StreamerUtil.createRecordTransform(recordRowType, writerRowType);
   }
 
   @Override
@@ -98,7 +102,7 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     if (this.writerHelper == null) {
       initWriterHelper();
     }
-    this.writerHelper.write((RowData) value);
+    this.writerHelper.write(recordTransform.project((RowData) value));
   }
 
   /**

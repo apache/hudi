@@ -691,6 +691,11 @@ public class TestData {
     assertThat(rowsString, is(expected));
   }
 
+  public static void assertRowDataEquals(List<RowData> rows, String expected, DataType dataType) {
+    String rowsString = rowDataToString(rows, dataType);
+    assertThat(rowsString, is(expected));
+  }
+
   /**
    * Sort the {@code rows} using field at index 0 and asserts
    * it equals with the expected row data list {@code expected}.

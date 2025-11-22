@@ -124,7 +124,8 @@ public class ParquetSchemaConverter {
             LogicalTypeAnnotation.TimestampLogicalTypeAnnotation timestampType =
                 (LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) logicalType;
             int precision = timestampType.getUnit().equals(LogicalTypeAnnotation.TimeUnit.MILLIS) ? 3 : 6;
-            dataType = DataTypes.of(new TimestampType(precision));
+            dataType = timestampType.isAdjustedToUTC()
+                ? DataTypes.of(new TimestampType(precision)) : DataTypes.of(new LocalZonedTimestampType(precision));
           } else {
             dataType = DataTypes.BIGINT();
           }
