@@ -189,7 +189,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
   protected void verifySchema(HoodieStorage storage, String schemaPath) throws IOException {
     try (HoodieAvroFileReader reader = createReader(storage)) {
       assertEquals(
-          getSchemaFromResource(TestHoodieHFileReaderWriter.class, schemaPath),
+          getHoodieSchemaFromResource(TestHoodieHFileReaderWriter.class, schemaPath),
           reader.getSchema());
     } catch (Exception e) {
       throw new RuntimeException(e);

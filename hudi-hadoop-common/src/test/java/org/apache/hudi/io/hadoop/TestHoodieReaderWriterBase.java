@@ -57,6 +57,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.testutils.SchemaTestUtil.getHoodieSchemaFromResource;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -95,7 +96,7 @@ public abstract class TestHoodieReaderWriterBase {
 
   @Test
   public void testWriteReadMetadata() throws Exception {
-    Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
+    HoodieSchema hoodieSchema = getHoodieSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
     writeFileWithSimpleSchema();
 
     HoodieStorage storage = HoodieTestUtils.getStorage(getFilePath());
@@ -108,7 +109,7 @@ public abstract class TestHoodieReaderWriterBase {
         assertTrue(filter.mightContain(key));
       }
       assertFalse(filter.mightContain("non-existent-key"));
-      assertEquals(avroSchema, hoodieReader.getSchema());
+      assertEquals(hoodieSchema, hoodieReader.getSchema());
       assertEquals(NUM_RECORDS, hoodieReader.getTotalRecords());
       String[] minMaxRecordKeys = hoodieReader.readMinMaxRecordKeys();
       assertEquals(2, minMaxRecordKeys.length);

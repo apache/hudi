@@ -75,9 +75,9 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
   }
 
   protected HoodieFileWriter newParquetFileWriter(OutputStream outputStream, HoodieConfig config,
-                                                  Schema schema) throws IOException {
+                                                  HoodieSchema schema) throws IOException {
     boolean enableBloomFilter = false;
-    HoodieRowParquetWriteSupport writeSupport = getHoodieRowParquetWriteSupport(storage.getConf(), schema, config, enableBloomFilter);
+    HoodieRowParquetWriteSupport writeSupport = getHoodieRowParquetWriteSupport(storage.getConf(), schema.getAvroSchema(), config, enableBloomFilter);
     String compressionCodecName = config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
     // Support PARQUET_COMPRESSION_CODEC_NAME is ""
     if (compressionCodecName.isEmpty()) {
