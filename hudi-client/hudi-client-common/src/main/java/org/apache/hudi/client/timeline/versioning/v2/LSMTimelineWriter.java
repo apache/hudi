@@ -304,11 +304,12 @@ public class LSMTimelineWriter {
             .getFileReader(config, new StoragePath(archivePath, fileName))) {
           // Read the meta entry
           //TODO boundary to revisit in later pr to use HoodieSchema directly
-          try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema()),
-                  HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema()))) {
+          HoodieSchema schema = HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema());
+          try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(schema,
+                  schema)) {
             while (iterator.hasNext()) {
               IndexedRecord record = iterator.next();
-              writer.write(record.get(0).toString(), new HoodieAvroIndexedRecord(record), HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema()));
+              writer.write(record.get(0).toString(), new HoodieAvroIndexedRecord(record), schema);
             }
           }
         }
