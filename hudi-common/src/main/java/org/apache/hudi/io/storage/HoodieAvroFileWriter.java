@@ -22,9 +22,9 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -40,14 +40,14 @@ public interface HoodieAvroFileWriter extends HoodieFileWriter {
   void writeAvro(String recordKey, IndexedRecord record) throws IOException;
 
   @Override
-  default void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema, Properties props) throws IOException {
-    IndexedRecord avroPayload = record.toIndexedRecord(schema, props).get().getData();
+  default void writeWithMetadata(HoodieKey key, HoodieRecord record, HoodieSchema schema, Properties props) throws IOException {
+    IndexedRecord avroPayload = record.toIndexedRecord(schema.getAvroSchema(), props).get().getData();
     writeAvroWithMetadata(key, avroPayload);
   }
 
   @Override
-  default void write(String recordKey, HoodieRecord record, Schema schema, Properties props) throws IOException {
-    IndexedRecord avroPayload = record.toIndexedRecord(schema, props).get().getData();
+  default void write(String recordKey, HoodieRecord record, HoodieSchema schema, Properties props) throws IOException {
+    IndexedRecord avroPayload = record.toIndexedRecord(schema.getAvroSchema(), props).get().getData();
     writeAvro(recordKey, avroPayload);
   }
 

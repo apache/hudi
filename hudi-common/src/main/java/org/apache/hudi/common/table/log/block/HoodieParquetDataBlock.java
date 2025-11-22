@@ -22,6 +22,7 @@ import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.io.SeekableDataInputStream;
@@ -125,7 +126,8 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     ClosableIterator<HoodieRecord<T>> iterator = HoodieIOFactory.getIOFactory(inlineStorage)
         .getReaderFactory(type)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, inlineLogFilePath, PARQUET, Option.empty())
-        .getRecordIterator(writerSchema, readerSchema);
+        //TODO boundary to revisit in later pr to use HoodieSchema directly
+        .getRecordIterator(HoodieSchema.fromAvroSchema(writerSchema), HoodieSchema.fromAvroSchema(readerSchema));
     return iterator;
   }
 

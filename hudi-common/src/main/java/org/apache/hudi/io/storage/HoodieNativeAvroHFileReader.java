@@ -24,6 +24,8 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -40,7 +42,6 @@ import org.apache.hudi.io.hfile.UTF8StringKey;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -79,14 +80,14 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   private final StoragePath path;
   // In-memory cache for meta info
   private final Map<String, byte[]> metaInfoMap;
-  private final Lazy<Schema> schema;
+  private final Lazy<HoodieSchema> schema;
   private final boolean useBloomFilter;
   private boolean isMetaInfoLoaded = false;
   private long numKeyValueEntries = -1L;
 
   private HoodieNativeAvroHFileReader(HFileReaderFactory readerFactory,
                                       StoragePath path,
-                                      Option<Schema> schemaOption,
+                                      Option<HoodieSchema> schemaOption,
                                       boolean useBloomFilter) {
     this.readerFactory = readerFactory;
     this.path = path;
@@ -96,8 +97,8 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   }
 
   @Override
-  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema,
-                                                                  Schema requestedSchema,
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema,
+                                                                  HoodieSchema requestedSchema,
                                                                   Map<String, String> renamedColumns)
       throws IOException {
     if (!Objects.equals(readerSchema, requestedSchema) || !renamedColumns.isEmpty()) {
@@ -185,7 +186,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   }
 
   @Override
-  public Schema getSchema() {
+  public HoodieSchema getSchema() {
     return schema.get();
   }
 
@@ -209,7 +210,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   @Override
   public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeysIterator(
-      List<String> sortedKeys, Schema schema) throws IOException {
+      List<String> sortedKeys, HoodieSchema schema) throws IOException {
     ClosableIterator<IndexedRecord> iterator =
         getEngineRecordsByKeysIterator(sortedKeys, schema);
     return new CloseableMappingIterator<>(
@@ -218,14 +219,14 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   @Override
   public ClosableIterator<IndexedRecord> getEngineRecordsByKeysIterator(
-      List<String> sortedKeys, Schema schema) throws IOException {
+      List<String> sortedKeys, HoodieSchema schema) throws IOException {
     HFileReader reader = readerFactory.createHFileReader();
     return new RecordByKeyIterator(reader, sortedKeys, getSchema(), schema, useBloomFilter);
   }
 
   @Override
   public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeyPrefixIterator(
-      List<String> sortedKeyPrefixes, Schema schema) throws IOException {
+      List<String> sortedKeyPrefixes, HoodieSchema schema) throws IOException {
     ClosableIterator<IndexedRecord> iterator =
         getEngineRecordsByKeyPrefixIterator(sortedKeyPrefixes, schema);
     return new CloseableMappingIterator<>(
@@ -234,7 +235,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   @Override
   public ClosableIterator<IndexedRecord> getEngineRecordsByKeyPrefixIterator(
-      List<String> sortedKeyPrefixes, Schema schema) throws IOException {
+      List<String> sortedKeyPrefixes, HoodieSchema schema) throws IOException {
     HFileReader reader = readerFactory.createHFileReader();
     return new RecordByKeyPrefixIterator(reader, sortedKeyPrefixes, getSchema(), schema);
   }
@@ -272,9 +273,9 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     return keyPrefixes;
   }
 
-  private Schema fetchSchema() {
+  private HoodieSchema fetchSchema() {
     try {
-      return new Schema.Parser().parse(
+      return new HoodieSchema.Parser().parse(
           fromUTF8Bytes(getHFileMetaInfoFromCache(SCHEMA_KEY)));
     } catch (IOException e) {
       throw new HoodieIOException("Unable to read schema from HFile", e);
@@ -283,7 +284,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   private static GenericRecord getRecordFromKeyValue(KeyValue keyValue,
                                                      GenericDatumReader<GenericRecord> datumReader,
-                                                     Schema.Field keyFieldSchema) throws IOException {
+                                                     HoodieSchemaField keyFieldSchema) throws IOException {
     byte[] bytes = keyValue.getBytes();
     return deserialize(
         bytes, keyValue.getKeyContentOffset(), keyValue.getKeyContentLength(),
@@ -321,14 +322,14 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   }
 
   public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> sortedKeys,
-                                                                         Schema readerSchema) throws IOException {
+                                                                         HoodieSchema readerSchema) throws IOException {
     HFileReader reader = readerFactory.createHFileReader();
     return new RecordByKeyIterator(reader, sortedKeys, getSchema(), readerSchema, useBloomFilter);
   }
 
   @Override
   public ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes,
-                                                                              Schema readerSchema) throws IOException {
+                                                                              HoodieSchema readerSchema) throws IOException {
     HFileReader reader = readerFactory.createHFileReader();
     return new RecordByKeyPrefixIterator(reader, sortedKeyPrefixes, getSchema(), readerSchema);
   }
@@ -346,14 +347,14 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {
     private final HFileReader reader;
     private final GenericDatumReader<GenericRecord> datumReader;
-    private final Schema.Field keyFieldSchema;
+    private final HoodieSchemaField keyFieldSchema;
 
     private IndexedRecord next = null;
     private boolean eof = false;
 
-    RecordIterator(HFileReader reader, Schema writerSchema, Schema readerSchema) {
+    RecordIterator(HFileReader reader, HoodieSchema writerSchema, HoodieSchema readerSchema) {
       this.reader = reader;
-      this.datumReader = new GenericDatumReader<>(writerSchema, readerSchema);
+      this.datumReader = new GenericDatumReader<>(writerSchema.getAvroSchema(), readerSchema.getAvroSchema());
       this.keyFieldSchema = getKeySchema(readerSchema).orElse(null);
     }
 
@@ -410,12 +411,12 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     private final HFileReader reader;
     private final Option<BloomFilter> bloomFilterOption;
     private final GenericDatumReader<GenericRecord> datumReader;
-    private final Schema.Field keyFieldSchema;
+    private final HoodieSchemaField keyFieldSchema;
 
     private IndexedRecord next = null;
 
-    RecordByKeyIterator(HFileReader reader, List<String> sortedKeys, Schema writerSchema,
-                        Schema readerSchema, boolean useBloomFilter) throws IOException {
+    RecordByKeyIterator(HFileReader reader, List<String> sortedKeys, HoodieSchema writerSchema,
+                        HoodieSchema readerSchema, boolean useBloomFilter) throws IOException {
       this.sortedKeyIterator = sortedKeys.iterator();
       this.reader = reader;
       this.reader.seekTo(); // position at the beginning of the file
@@ -429,7 +430,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
         }
       }
       this.bloomFilterOption = Option.ofNullable(bloomFilter);
-      this.datumReader = new GenericDatumReader<>(writerSchema, readerSchema);
+      this.datumReader = new GenericDatumReader<>(writerSchema.getAvroSchema(), readerSchema.getAvroSchema());
       this.keyFieldSchema = getKeySchema(readerSchema).orElse(null);
     }
 
@@ -488,14 +489,14 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
     private final HFileReader reader;
 
-    private final Schema writerSchema;
-    private final Schema readerSchema;
+    private final HoodieSchema writerSchema;
+    private final HoodieSchema readerSchema;
 
     private IndexedRecord next = null;
     private boolean isFirstKeyPrefix = true;
 
     RecordByKeyPrefixIterator(HFileReader reader, List<String> sortedKeyPrefixes,
-                              Schema writerSchema, Schema readerSchema) throws IOException {
+                              HoodieSchema writerSchema, HoodieSchema readerSchema) throws IOException {
       this.sortedKeyPrefixesIterator = sortedKeyPrefixes.iterator();
       this.reader = reader;
       this.reader.seekTo(); // position at the beginning of the file
@@ -546,8 +547,8 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     private static Iterator<IndexedRecord> getRecordByKeyPrefixIteratorInternal(HFileReader reader,
                                                                                 boolean isFirstKeyPrefix,
                                                                                 String keyPrefix,
-                                                                                Schema writerSchema,
-                                                                                Schema readerSchema)
+                                                                                HoodieSchema writerSchema,
+                                                                                HoodieSchema readerSchema)
         throws IOException {
       UTF8StringKey lookUpKeyPrefix = new UTF8StringKey(keyPrefix);
       if (!isFirstKeyPrefix) {
@@ -585,8 +586,8 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
           }
         }
       }
-      GenericDatumReader<GenericRecord> datumReader = new GenericDatumReader<>(writerSchema, readerSchema);
-      Schema.Field keyFieldSchema = getKeySchema(readerSchema).orElse(null);
+      GenericDatumReader<GenericRecord> datumReader = new GenericDatumReader<>(writerSchema.getAvroSchema(), readerSchema.getAvroSchema());
+      HoodieSchemaField keyFieldSchema = getKeySchema(readerSchema).orElse(null);
 
       class KeyPrefixIterator implements Iterator<IndexedRecord> {
         private IndexedRecord next = null;
@@ -641,7 +642,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   public static class Builder {
     private HFileReaderFactory readerFactory;
     private StoragePath path;
-    private Option<Schema> schemaOption = Option.empty();
+    private Option<HoodieSchema> schemaOption = Option.empty();
     private boolean useBloomFilter;
 
     public Builder readerFactory(HFileReaderFactory readerFactory) {
@@ -654,7 +655,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
       return this;
     }
 
-    public Builder schema(Option<Schema> schemaOption) {
+    public Builder schema(Option<HoodieSchema> schemaOption) {
       this.schemaOption = schemaOption;
       return this;
     }

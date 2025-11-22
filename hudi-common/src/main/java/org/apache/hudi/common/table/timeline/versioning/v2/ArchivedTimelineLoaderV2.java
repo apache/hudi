@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.timeline.versioning.v2;
 
 import org.apache.hudi.avro.model.HoodieLSMTimelineInstant;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -64,7 +65,9 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
             try (HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(metaClient.getStorage())
                 .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
                 .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, new StoragePath(metaClient.getArchivePath(), fileName))) {
-              try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieLSMTimelineInstant.getClassSchema(), readSchema)) {
+              //TODO boundary to revisit in later pr to use HoodieSchema directly
+              try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema()),
+                      HoodieSchema.fromAvroSchema(readSchema))) {
                 while (iterator.hasNext()) {
                   GenericRecord record = (GenericRecord) iterator.next();
                   String instantTime = record.get(INSTANT_TIME_ARCHIVED_META_FIELD).toString();

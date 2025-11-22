@@ -19,10 +19,12 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -55,7 +57,7 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
    */
   public static List<IndexedRecord> readAllRecords(HoodieAvroFileReader reader)
       throws IOException {
-    Schema schema = reader.getSchema();
+    HoodieSchema schema = reader.getSchema();
     try (ClosableIterator<IndexedRecord> indexedRecordIterator = reader.getIndexedRecordIterator(schema)) {
       return toStream(indexedRecordIterator).collect(Collectors.toList());
     }
@@ -64,7 +66,7 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
   /**
    * NOTE: THIS SHOULD ONLY BE USED FOR TESTING, RECORDS ARE MATERIALIZED EAGERLY
    * <p>
-   * Reads all the records with given schema and filtering keys.
+   * Reads all the records with given HoodieSchema and filtering keys.
    */
   public static List<IndexedRecord> readRecords(HoodieAvroHFileReaderImplBase reader,
                                                 List<String> keys) throws IOException {
@@ -74,11 +76,11 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
   /**
    * NOTE: THIS SHOULD ONLY BE USED FOR TESTING, RECORDS ARE MATERIALIZED EAGERLY
    * <p>
-   * Reads all the records with given schema and filtering keys.
+   * Reads all the records with given HoodieSchema and filtering keys.
    */
   public static List<IndexedRecord> readRecords(HoodieAvroHFileReaderImplBase reader,
                                                 List<String> keys,
-                                                Schema schema) throws IOException {
+                                                HoodieSchema schema) throws IOException {
     Collections.sort(keys);
     try (ClosableIterator<IndexedRecord> indexedRecordsByKeysIterator = reader.getIndexedRecordsByKeysIterator(keys, schema)) {
       return toStream(indexedRecordsByKeysIterator).collect(Collectors.toList());
@@ -88,7 +90,7 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
   protected static GenericRecord deserialize(final byte[] keyBytes, int keyOffset, int keyLength,
                                              final byte[] valueBytes, int valueOffset, int valueLength,
                                              GenericDatumReader<GenericRecord> datumReader,
-                                             Schema.Field keyFieldSchema) throws IOException {
+                                             HoodieSchemaField keyFieldSchema) throws IOException {
     BinaryDecoder binaryDecoder = getBinaryDecoder(valueBytes, valueOffset, valueLength);
     GenericRecord avroRecord = datumReader.read(null, binaryDecoder);
     if (keyFieldSchema == null) {
@@ -101,7 +103,7 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
     return avroRecord;
   }
 
-  static Option<Schema.Field> getKeySchema(Schema schema) {
-    return schema.getType() != Schema.Type.RECORD ? Option.empty() : Option.ofNullable(schema.getField(KEY_FIELD_NAME));
+  static Option<HoodieSchemaField> getKeySchema(HoodieSchema schema) {
+    return schema.getType() != HoodieSchemaType.RECORD ? Option.empty() : schema.getField(KEY_FIELD_NAME);
   }
 }

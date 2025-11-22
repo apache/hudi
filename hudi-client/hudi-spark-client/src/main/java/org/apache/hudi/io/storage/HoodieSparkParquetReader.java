@@ -25,6 +25,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
@@ -109,13 +110,14 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   }
 
   @Override
-  public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+  public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema) throws IOException {
     return getRecordIterator(requestedSchema);
   }
 
   @Override
-  public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema schema) throws IOException {
-    ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator(schema);
+  public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(HoodieSchema schema) throws IOException {
+    //TODO boundary to revisit in later pr to use HoodieSchema directly
+    ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator(schema.getAvroSchema());
     return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieSparkRecord(data)));
   }
 
@@ -204,7 +206,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   }
 
   @Override
-  public Schema getSchema() {
+  public HoodieSchema getSchema() {
     if (schemaOption.isEmpty()) {
       // Some types in avro are not compatible with parquet.
       // Avro only supports representing Decimals as fixed byte array
@@ -215,7 +217,8 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
           .getAvroSchemaConverters()
           .toAvroType(structType, true, messageType.getName(), StringUtils.EMPTY_STRING));
     }
-    return schemaOption.get();
+    //TODO boundary to revisit using HoodieSchema directly
+    return HoodieSchema.fromAvroSchema(schemaOption.get());
   }
 
   private ParquetMetadata getParquetMetadataWithoutRowGroup() {

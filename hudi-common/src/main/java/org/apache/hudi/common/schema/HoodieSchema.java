@@ -718,6 +718,25 @@ public class HoodieSchema implements Serializable {
         throw new HoodieAvroSchemaException("Failed to parse schema: " + jsonSchema, e);
       }
     }
+
+    /**
+     * Parses a schema from an InputStream.
+     *
+     * @param inputStream the InputStream containing the JSON schema
+     * @return parsed HoodieSchema
+     * @throws java.io.IOException if reading from the stream fails
+     * @throws HoodieAvroSchemaException if the schema is invalid
+     */
+    public HoodieSchema parse(java.io.InputStream inputStream) throws java.io.IOException {
+      ValidationUtils.checkArgument(inputStream != null, "InputStream cannot be null");
+
+      try {
+        Schema avroSchema = avroParser.parse(inputStream);
+        return new HoodieSchema(avroSchema);
+      } catch (Exception e) {
+        throw new HoodieAvroSchemaException("Failed to parse schema from InputStream", e);
+      }
+    }
   }
 
   /**

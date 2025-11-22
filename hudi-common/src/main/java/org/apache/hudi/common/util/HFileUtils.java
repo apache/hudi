@@ -159,7 +159,8 @@ public class HFileUtils extends FileFormatUtils {
                  .getFileReader(
                      ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER,
                      filePath)) {
-      return fileReader.getSchema();
+      //TODO boundary to revisit in later pr to use HoodieSchema directly
+      return fileReader.getSchema().toAvroSchema();
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read schema from HFile", e);
     }

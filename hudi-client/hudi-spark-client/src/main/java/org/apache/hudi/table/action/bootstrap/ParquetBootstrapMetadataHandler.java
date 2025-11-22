@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
@@ -94,7 +95,8 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
             //       it since these records will be inserted into the queue later.
             .copy();
       };
-      ClosableIterator<HoodieRecord> recordIterator = reader.getRecordIterator(schema);
+      //TODO boundary to reivisit in later pr to use HoodieSchema directly
+      ClosableIterator<HoodieRecord> recordIterator = reader.getRecordIterator(HoodieSchema.fromAvroSchema(schema));
       executor = ExecutorFactory.create(config, recordIterator,
           new BootstrapRecordConsumer(bootstrapHandle), transformer, table.getPreExecuteRunnable());
       executor.execute();

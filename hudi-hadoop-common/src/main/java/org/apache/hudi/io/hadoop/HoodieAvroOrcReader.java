@@ -22,6 +22,8 @@ package org.apache.hudi.io.hadoop;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -83,7 +85,7 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReader {
   }
 
   @Override
-  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema, Map<String, String> renamedColumns) {
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema, Map<String, String> renamedColumns) {
     if (!Objects.equals(readerSchema, requestedSchema)) {
       throw new UnsupportedOperationException("Schema projections are not supported in HFile reader");
     }
@@ -95,14 +97,16 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReader {
       Set<String> existingFields = fileSchema.getFields().stream()
           .map(Schema.Field::name)
           .collect(Collectors.toSet());
-      Schema prunedFileSchema = HoodieAvroUtils.projectSchema(fileSchema, requestedSchema.getFields().stream().map(Schema.Field::name).filter(existingFields::contains).collect(Collectors.toList()));
+      Schema prunedFileSchema = HoodieAvroUtils.projectSchema(fileSchema, requestedSchema.getFields().stream().map(HoodieSchemaField::name)
+              .filter(existingFields::contains).collect(Collectors.toList()));
       TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(prunedFileSchema);
       RecordReader recordReader = reader.rows(new Options(hadoopConf).schema(orcSchema));
       ClosableIterator<IndexedRecord> recordIterator = new OrcReaderIterator<>(recordReader, prunedFileSchema, orcSchema);
       if (renamedColumns.isEmpty() && readerSchema.equals(fileSchema)) {
         return recordIterator;
       } else {
-        return new CloseableMappingIterator<>(recordIterator, data -> HoodieAvroUtils.rewriteRecordWithNewSchema(data, requestedSchema, renamedColumns));
+        //TODO boundary for now to revisit HoodieAvroUtils in later pr to use HoodieSchema
+        return new CloseableMappingIterator<>(recordIterator, data -> HoodieAvroUtils.rewriteRecordWithNewSchema(data, requestedSchema.getAvroSchema(), renamedColumns));
       }
     } catch (IOException io) {
       throw new HoodieIOException("Unable to create an ORC reader.", io);
@@ -130,8 +134,9 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReader {
   }
 
   @Override
-  public Schema getSchema() {
-    return orcUtils.readAvroSchema(storage, path);
+  public HoodieSchema getSchema() {
+    //TODO boundary for now to revisit in later pr to directly use HoodieSchema
+    return HoodieSchema.fromAvroSchema(orcUtils.readAvroSchema(storage, path));
   }
 
   @Override
@@ -145,13 +150,13 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReader {
 
   @Override
   public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> sortedKeys,
-                                                                         Schema readerSchema) {
+                                                                         HoodieSchema readerSchema) {
     throw new UnsupportedOperationException("Not supported operation: getIndexedRecordsByKeysIterator");
   }
 
   @Override
   public ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes,
-                                                                              Schema readerSchema) {
+                                                                              HoodieSchema readerSchema) {
     throw new UnsupportedOperationException("Not supported operation: getIndexedRecordsByKeyPrefixIterator");
   }
 }
