@@ -10,12 +10,9 @@ const CommunityCard = ({ media }) => {
       className={styles.communityCard}
       onClick={() => window.open(url, "_blank")}
     >
-      <Icon />
+      <Icon className={styles.socialLogo} />
       <div className={styles.mediaTitle}>
         <p className={styles.title}>{title}</p>
-        <p className={styles.linkText}>
-          {linkText} <ArrowRight />
-        </p>
       </div>
     </div>
   );

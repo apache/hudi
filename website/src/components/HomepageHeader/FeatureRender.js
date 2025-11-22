@@ -7,11 +7,10 @@ import styles from "./styles.module.css";
 const FeatureRender = () => {
   const { siteConfig } = useDocusaurusContext();
   const {
-    taglineConfig: { prefix, suffix, content },
+    taglineConfig: { suffix, content }
   } = siteConfig.customFields;
   return (
     <div className={styles.headlineWrapper}>
-      <div>{prefix}</div>&nbsp;
       <TypeAnimation
           sequence={[
             content[0],
@@ -26,7 +25,7 @@ const FeatureRender = () => {
           repeat={Infinity}
           className={styles.typingText}
       />
-      &nbsp;<div>{suffix}</div>
+      <div>{suffix}</div>
     </div>
   );
 };

@@ -41,10 +41,10 @@ const WhyHudi = () => {
       <div className={styles.wrapper}>
         <div className={styles.title}>
           <div className={styles.whyHudiTitle}>
-            <Title primaryText="Why" secondaryText="Hudi" />
+            <Title primaryText="Why Hudi" />
           </div>
           <div className={styles.textWrapper}>
-            <div className="text--center text--semibold">
+            <div className="text--center">
               The most innovative and completely open data lakehouse platform in the industry!
             </div>
           </div>

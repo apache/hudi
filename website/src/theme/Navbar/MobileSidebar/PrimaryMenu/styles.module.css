@@ -1,15 +1,3 @@
-@media(max-width:1820px){
-  .navbarFontSize{
-    font-size:90% !important;
-  }
-}
-@media(max-width:1602px){
-  .navbarFontSize{
-    font-size:80% !important;
-  }
-}
-@media(max-width:1440px){
-  .navbarFontSize{
-    font-size:70% !important;
-  }
+.navbarFontSize{
+    font-size: 14px !important;
 }

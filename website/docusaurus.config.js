@@ -30,8 +30,8 @@ module.exports = {
     tagline:
       "Hudi brings transactions, record-level updates/deletes and change streams to data lakes!",
     taglineConfig: {
-      prefix: "Hudi brings ",
-      suffix: " to data lakes!",
+      prefix: "Apache Hudi™ brings",
+      suffix: " to data lakes",
       content: [
         "transactions",
         "row-level updates/deletes",
@@ -261,8 +261,24 @@ module.exports = {
               to: "/community/team",
             },
             {
-              label: 'Join Our Slack Space',
+              label: 'Github',
+              href: 'https://github.com/apache/hudi',
+            },
+            {
+              label: 'Slack',
               href: slackUrl,
+            },
+            {
+              label: 'Linkdin',
+              href: 'https://www.linkedin.com/company/apache-hudi/?viewAsMember=true',
+            },
+            {
+              label: 'Youtube',
+              href: 'https://www.youtube.com/channel/UCs7AhE0BWaEPZSChrBR-Muw',
+            },
+            {
+              label: 'X',
+              href: 'https://x.com/ApacheHudi',
             },
           ],
         },
@@ -270,42 +286,6 @@ module.exports = {
         { to: "/powered-by", label: "Who's Using", position: "left" },
         { to: "/roadmap", label: "Roadmap", position: "left" },
         { to: "/releases/download", label: "Download", position: "left" },
-        // right
-        {
-          type: "docsVersionDropdown",
-          position: "right",
-          dropdownActiveClassDisabled: true,
-        },
-        {
-          href: "https://github.com/apache/hudi",
-          position: "right",
-          className: "header-github-link",
-          "aria-label": "GitHub repository",
-        },
-        {
-          href: "https://x.com/ApacheHudi",
-          position: "right",
-          className: "header-twitter-link",
-          "aria-label": "Hudi Twitter Handle",
-        },
-        {
-          href: slackUrl,
-          position: "right",
-          className: "header-slack-link",
-          "aria-label": "Hudi Slack Channel",
-        },
-        {
-          href: "https://www.youtube.com/channel/UCs7AhE0BWaEPZSChrBR-Muw",
-          position: "right",
-          className: "header-youtube-link",
-          "aria-label": "Hudi YouTube Channel",
-        },
-        {
-          href: "https://www.linkedin.com/company/apache-hudi/?viewAsMember=true",
-          position: "right",
-          className: "header-linkedin-link",
-          "aria-label": "Hudi Linkedin Page",
-        },
       ],
     },
     footer: {
@@ -475,11 +455,11 @@ module.exports = {
       ],
       logo: {
         alt: "Apache Hudi™",
-        src: "/assets/images/logo-big.png",
+        src: "/assets/images/hudi.png",
         href: "https://hudi.apache.org/",
       },
       copyright:
-        'Copyright © 2021 <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>. <br />Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation.<img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=8f594acf-9b77-44fb-9475-3e82ead1910c" /><img referrerpolicy="no-referrer-when-downgrade" src="https://analytics.apache.org/matomo.php?idsite=47&amp;rec=1" />',
+        'Copyright © 2021 <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>. Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation.<img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=8f594acf-9b77-44fb-9475-3e82ead1910c" /><img referrerpolicy="no-referrer-when-downgrade" src="https://analytics.apache.org/matomo.php?idsite=47&amp;rec=1" />',
     },
     prism: {
       theme: themes.dracula,
@@ -574,7 +554,7 @@ module.exports = {
       "data-button-text": "Ask AI",
       "data-consent-required": "true",
       "data-consent-screen-title": "Help us improve our AI assistant",
-      "data-consent-screen-disclaimer" : "By clicking &quot;Allow tracking&quot;, you consent to the use of the AI assistant in accordance with kapa.ai's [Privacy Policy](https://www.kapa.ai/content/privacy-policy). This service uses reCAPTCHA, which requires your consent to Google's [Privacy Policy](https://policies.google.com/privacy) and [Terms of Service](https://policies.google.com/terms). By proceeding, you explicitly agree to both kapa.ai's and Google's privacy policies.", 
+      "data-consent-screen-disclaimer" : "By clicking &quot;Allow tracking&quot;, you consent to the use of the AI assistant in accordance with kapa.ai's [Privacy Policy](https://www.kapa.ai/content/privacy-policy). This service uses reCAPTCHA, which requires your consent to Google's [Privacy Policy](https://policies.google.com/privacy) and [Terms of Service](https://policies.google.com/terms). By proceeding, you explicitly agree to both kapa.ai's and Google's privacy policies.",
       "data-consent-screen-accept-button-text": "Allow tracking",
       "data-modal-disclaimer-font-size" : "0.80rem",
       "data-query-input-placeholder-text-color": "#29557a",
@@ -607,5 +587,7 @@ module.exports = {
   stylesheets: [
     "https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro",
     "https://at-ui.github.io/feather-font/css/iconfont.css",
+    "https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap",
+    "https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&family=Zalando+Sans:ital,wght@0,200..900;1,200..900&display=swap"
   ],
 };
