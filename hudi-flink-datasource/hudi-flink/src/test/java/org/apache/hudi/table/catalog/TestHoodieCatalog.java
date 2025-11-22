@@ -54,6 +54,7 @@ import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
+import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
 import org.apache.flink.table.catalog.CatalogDatabase;
 import org.apache.flink.table.catalog.CatalogDatabaseImpl;
@@ -104,9 +105,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test cases for {@link HoodieCatalog}.
  */
-public class TestHoodieCatalog {
+public class TestHoodieCatalog extends BaseTestHoodieCatalog {
 
-  private static final String TEST_DEFAULT_DATABASE = "test_db";
   private static final String NONE_EXIST_DATABASE = "none_exist_database";
   private static final List<Column> CREATE_COLUMNS = Arrays.asList(
       Column.physical("uuid", DataTypes.VARCHAR(20)),
@@ -115,7 +115,7 @@ public class TestHoodieCatalog {
       Column.physical("tss", DataTypes.TIMESTAMP(3)),
       Column.physical("partition", DataTypes.VARCHAR(10))
   );
-  private static final UniqueConstraint CONSTRAINTS = UniqueConstraint.primaryKey("uuid", Arrays.asList("uuid"));
+
   private static final ResolvedSchema CREATE_TABLE_SCHEMA =
       new ResolvedSchema(
           CREATE_COLUMNS,
@@ -150,14 +150,6 @@ public class TestHoodieCatalog {
           .collect(Collectors.toList());
   private static final ResolvedSchema EXPECTED_TABLE_SCHEMA =
       new ResolvedSchema(EXPECTED_TABLE_COLUMNS, Collections.emptyList(), CONSTRAINTS);
-
-  private static final Map<String, String> EXPECTED_OPTIONS = new HashMap<>();
-
-  static {
-    EXPECTED_OPTIONS.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
-    EXPECTED_OPTIONS.put(FlinkOptions.INDEX_GLOBAL_ENABLED.key(), "false");
-    EXPECTED_OPTIONS.put(FlinkOptions.PRE_COMBINE.key(), "true");
-  }
 
   private static final ResolvedCatalogTable EXPECTED_CATALOG_TABLE = new ResolvedCatalogTable(
       CatalogUtils.createCatalogTable(
@@ -514,5 +506,10 @@ public class TestHoodieCatalog {
     HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) commitMetadata;
     assertThat(replaceCommitMetadata.getPartitionToReplaceFileIds().size(), is(1));
     assertFalse(catalog.partitionExists(tablePath, partitionSpec));
+  }
+
+  @Override
+  AbstractCatalog getCatalog() {
+    return catalog;
   }
 }

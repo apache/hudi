@@ -21,6 +21,7 @@ package org.apache.hudi.util;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.utils.DataTypeUtils;
@@ -45,7 +46,7 @@ public class SerializableSchema implements Serializable {
 
   public static SerializableSchema create(ResolvedSchema resolvedSchema) {
     List<Column> columns = resolvedSchema.getColumns().stream()
-        .filter(org.apache.flink.table.catalog.Column::isPhysical)
+        .filter(c -> c.isPhysical() || c instanceof org.apache.flink.table.catalog.Column.MetadataColumn)
         .map(column -> Column.create(column.getName(), column.getDataType()))
         .collect(Collectors.toList());
     return new SerializableSchema(columns);

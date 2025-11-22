@@ -78,8 +78,9 @@ public class TableOptionProperties {
   public static final String PK_COLUMNS = "pk.columns";
   public static final String COMMENT = "comment";
   public static final String PARTITION_COLUMNS = "partition.columns";
+  public static final String METADATA_COLUMNS = "metadata.columns";
 
-  public static final List<String> NON_OPTION_KEYS = Arrays.asList(PK_CONSTRAINT_NAME, PK_COLUMNS, COMMENT, PARTITION_COLUMNS);
+  public static final List<String> NON_OPTION_KEYS = Arrays.asList(PK_CONSTRAINT_NAME, PK_COLUMNS, COMMENT, PARTITION_COLUMNS, METADATA_COLUMNS);
 
   static {
     VALUE_MAPPING.put("mor", HoodieTableType.MERGE_ON_READ.name());
@@ -176,6 +177,14 @@ public class TableOptionProperties {
   public static List<String> getPartitionColumns(Map<String, String> options) {
     if (options.containsKey(PARTITION_COLUMNS)) {
       return Arrays.stream(options.get(PARTITION_COLUMNS).split(",")).collect(Collectors.toList());
+    } else {
+      return Collections.emptyList();
+    }
+  }
+
+  public static List<String> getMetadataColumns(Map<String, String> options) {
+    if (options.containsKey(METADATA_COLUMNS)) {
+      return Arrays.stream(options.get(METADATA_COLUMNS).split(",")).collect(Collectors.toList());
     } else {
       return Collections.emptyList();
     }

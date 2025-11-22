@@ -37,6 +37,7 @@ import org.apache.hudi.utils.CatalogUtils;
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
@@ -273,6 +274,10 @@ public class HoodieCatalog extends AbstractCatalog {
       } else if (!CollectionUtils.isNullOrEmpty(pkColumns)) {
         builder.primaryKey(pkColumns);
       }
+      List<String> metaCols = TableOptionProperties.getMetadataColumns(options);
+      if (!metaCols.isEmpty()) {
+        metaCols.forEach(c -> builder.columnByMetadata(c, DataTypes.STRING(), null, true));
+      }
       final org.apache.flink.table.api.Schema schema = builder.build();
       return CatalogUtils.createCatalogTable(
           schema,
@@ -351,6 +356,13 @@ public class HoodieCatalog extends AbstractCatalog {
     } else {
       conf.setString(FlinkOptions.KEYGEN_CLASS_NAME.key(), NonpartitionedAvroKeyGenerator.class.getName());
     }
+
+    // check and persist metadata columns
+    List<String> metaCols = DataTypeUtils.getMetadataColumns(resolvedTable.getUnresolvedSchema());
+    if (!metaCols.isEmpty()) {
+      options.put(TableOptionProperties.METADATA_COLUMNS, String.join(",", metaCols));
+    }
+
     conf.set(FlinkOptions.TABLE_NAME, tablePath.getObjectName());
     try {
       HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(conf);
@@ -605,11 +617,12 @@ public class HoodieCatalog extends AbstractCatalog {
   private void refreshTableProperties(ObjectPath tablePath, CatalogBaseTable newCatalogTable) {
     Map<String, String> options = newCatalogTable.getOptions();
     ResolvedCatalogTable resolvedTable =  (ResolvedCatalogTable) newCatalogTable;
+    ResolvedSchema resolvedSchema = resolvedTable.getResolvedSchema();
     final String avroSchema = AvroSchemaConverter.convertToSchema(
-        resolvedTable.getResolvedSchema().toPhysicalRowDataType().getLogicalType(),
+        resolvedSchema.toPhysicalRowDataType().getLogicalType(),
         AvroSchemaUtils.getAvroRecordQualifiedName(tablePath.getObjectName())).toString();
     options.put(FlinkOptions.SOURCE_AVRO_SCHEMA.key(), avroSchema);
-    java.util.Optional<UniqueConstraint> pkConstraintOpt = resolvedTable.getResolvedSchema().getPrimaryKey();
+    java.util.Optional<UniqueConstraint> pkConstraintOpt = resolvedSchema.getPrimaryKey();
     if (pkConstraintOpt.isPresent()) {
       options.put(TableOptionProperties.PK_COLUMNS, String.join(",", pkConstraintOpt.get().getColumns()));
       options.put(TableOptionProperties.PK_CONSTRAINT_NAME, pkConstraintOpt.get().getName());
@@ -617,6 +630,10 @@ public class HoodieCatalog extends AbstractCatalog {
     if (resolvedTable.isPartitioned()) {
       final String partitions = String.join(",", resolvedTable.getPartitionKeys());
       options.put(TableOptionProperties.PARTITION_COLUMNS, partitions);
+    }
+    List<String> metaCols = DataTypeUtils.getMetadataColumns(resolvedTable.getUnresolvedSchema());
+    if (!metaCols.isEmpty()) {
+      options.put(TableOptionProperties.METADATA_COLUMNS, String.join(",", metaCols));
     }
     String tablePathStr = inferTablePath(catalogPathStr, tablePath);
     try {
