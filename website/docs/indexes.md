@@ -124,7 +124,7 @@ files themselves (e.g. bloom filters stored in parquet file footers) or intellig
 Currently, Hudi supports the following index types. Default is SIMPLE on Spark engine, and INMEMORY on Flink and Java
 engines. Writers can pick one of these options using `hoodie.index.type` config option.
 
-- **SIMPLE (default for Spark engines)**: This is the standard index type for the Spark engine. It executes an efficient join of incoming records with keys retrieved from the table stored on disk. It requires keys to be partition-level unique so it can function correctly.
+- **SIMPLE (default for Spark & Java engines)**: This is the standard index type for the Spark engine. It executes an efficient join of incoming records with keys retrieved from the table stored on disk. It requires keys to be partition-level unique so it can function correctly.
 
 - **RECORD_INDEX** : Use the record index from section above as the writer side index.
 
@@ -136,12 +136,17 @@ engines. Writers can pick one of these options using `hoodie.index.type` config 
 
 - **HBASE**: Mangages the index mapping through an external table in Apache HBase.
 
-- **INMEMORY (default for Flink and Java)**: Uses in-memory hashmap in Spark and Java engine and Flink in-memory state in Flink for indexing.
+- **INMEMORY**: Uses in-memory hashmap in Spark and Java engine and Flink in-memory state in Flink for indexing. Note that this is an alias for `FLINK_STATE` when used for Flink writers.
 
-- **BUCKET**: Utilizes bucket hashing to identify the file group that houses the records, which proves to be particularly advantageous on a large scale. To select the type of bucket engine—that is, the method by which buckets are created—use the `hoodie.index.bucket.engine` configuration option.
-  - **SIMPLE(default)**: This index employs a fixed number of buckets for file groups within each partition, which do not have the capacity to decrease or increase in size. It is applicable to both COW and MOR tables. Due to the unchangeable number of buckets and the design principle of mapping each bucket to a single file group, this indexing method may not be ideal for partitions with significant data skew.
+- **FLINK_STATE (default for Flink)**: Uses the Flink state backend to store the index data: mappings of record keys to their residing file group's file IDs.
 
-  - **CONSISTENT_HASHING**: This index accommodates a dynamic number of buckets, with the capability for bucket resizing to ensure each bucket is sized appropriately. This addresses the issue of data skew in partitions with a high volume of data by allowing these partitions to be dynamically resized. As a result, partitions can have multiple reasonably sized buckets, unlike the fixed bucket count per partition seen in the SIMPLE bucket engine type. This feature is exclusively compatible with MOR tables.
+- **BUCKET**: Utilizes bucket hashing to identify the file group that houses the records, which proves to be particularly advantageous on a large scale. The bucket index has three variants based on how buckets are configured and managed:
+
+  - **Simple Bucket Index (default)**: Employs a fixed number of buckets across all partitions. The bucket count is immutable once set and cannot increase or decrease. Applicable to both COW and MOR tables. Set via `hoodie.index.bucket.engine=SIMPLE` and `hoodie.bucket.index.num.buckets`. Due to the uniform bucket count across all partitions, this may not be ideal for tables with varying partition sizes or data skew.
+
+  - **Partition-Level Bucket Index**: Allows different fixed bucket counts for different partitions based on regex pattern matching. Existing simple bucket index tables can be upgraded to partition-level using the Spark `partition_bucket_index_manager` procedure, which rescales affected partitions. After upgrade, writers (Flink/Spark) automatically load partition-specific bucket configurations from table metadata. This addresses the limitation of uniform bucket counts while maintaining immutable buckets per partition. Applicable to both COW and MOR tables. Configure via `hoodie.index.bucket.engine=SIMPLE`, `hoodie.bucket.index.partition.expressions`, and `hoodie.bucket.index.partition.rule.type=regex`.
+
+  - **Consistent Hashing Bucket Index**: Accommodates a dynamic number of buckets with automatic resizing capability via clustering. Starts with an initial bucket count and can grow or shrink within configured min/max bounds based on file sizes. This addresses data skew in high-volume partitions by allowing dynamic resizing. Flink can schedule clustering plans, but execution currently requires Spark. Exclusively compatible with MOR tables. Configure via `hoodie.index.bucket.engine=CONSISTENT_HASHING`, `hoodie.bucket.index.num.buckets` (initial count), `hoodie.bucket.index.min.num.buckets`, and `hoodie.bucket.index.max.num.buckets`.
 
 - **Bring your own implementation:** You can extend this [public API](https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/index/HoodieIndex.java)
   and supply a subclass of `SparkHoodieIndex` (for Apache Spark writers) using `hoodie.index.class` to implement custom indexing.
@@ -183,17 +188,13 @@ for more details. All these, support the index types mentioned [above](#index-ty
 
 #### Flink based configs
 
-For Flink DataStream and Flink SQL only support Bucket Index and internal Flink state store backed in memory index.
-Following are the basic configs that control the indexing behavior. Please refer [here](https://hudi.apache.org/docs/next/configurations#Flink-Options-advanced-configs)
-for advanced configs.
+For Flink DataStream and Flink SQL, Bucket index and Flink state index are supported.
+Following are the basic configs that control the indexing behavior. Please refer [the configurations here](configurations#Flink-Options-advanced-configs) for advanced configs.
 
 | Config Name                                                                       | Default                                                                                         | Description                                                                                                                                                                                                                                                                            |
 | ----------------------------------------------------------------------------------| ----------------------------------------------------------------------------------------------- |----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | index.type                                                                        | FLINK_STATE (Optional)                  | Index type of Flink write job, default is using state backed index. Possible values:<br /> <ul><li>FLINK_STATE</li><li>BUCKET</li></ul><br />  `Config Param: INDEX_TYPE`                                                                                                              |
 | hoodie.index.bucket.engine                                                        | SIMPLE (Optional)                                                                               | org.apache.hudi.index.HoodieIndex$BucketIndexEngineType: Determines the type of bucketing or hashing to use when `hoodie.index.type` is set to `BUCKET`.    Possible Values: <br /> <ul><li>SIMPLE</li><li>CONSISTENT_HASHING</li></ul>|
-
-
-
 
 ### Picking Indexing Strategies
 
