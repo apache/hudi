@@ -586,8 +586,6 @@ module.exports = {
   ],
   stylesheets: [
     "https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro",
-    "https://at-ui.github.io/feather-font/css/iconfont.css",
-    "https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap",
-    "https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&family=Zalando+Sans:ital,wght@0,200..900;1,200..900&display=swap"
+    "https://at-ui.github.io/feather-font/css/iconfont.css"
   ],
 };
