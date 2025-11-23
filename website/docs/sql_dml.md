@@ -487,7 +487,7 @@ This is done to ensure that the compaction and cleaning services are not execute
 
 ### Consistent hashing index (Experimental)
 
-We have introduced the Consistent Hashing Index since [0.13.0 release](/releases/release-0.13.0#consistent-hashing-index). In comparison to the static hashing index ([Bucket Index](/releases/release-0.11.0#bucket-index)), the consistent hashing index offers dynamic scalability of data buckets for the writer. 
+We have introduced the Consistent Hashing Bucket Index since [0.13.0 release](/releases/release-0.13.0#consistent-hashing-index). This is one of three [bucket index](indexes#additional-writer-side-indexes) variants available in Hudi. The consistent hashing bucket index offers dynamic scalability of data buckets for the writer. 
 You can find the [RFC](https://github.com/apache/hudi/blob/master/rfc/rfc-42/rfc-42.md) for the design of this feature.
 In the 0.13.X release, the Consistent Hashing Index is supported only for Spark engine. And since [release 0.14.0](/releases/release-0.14.0#consistent-hashing-index-support), the index is supported for Flink engine.
 

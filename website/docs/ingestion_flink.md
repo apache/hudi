@@ -44,7 +44,7 @@ rolls over to a new file handle.) Finally, the number of files ≥ [`write.bucke
 ### Options
 
 | Option Name                       | Required | Default  | Remarks                                                                                                                                                        |
-| --------------------------------- | -------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|-----------------------------------|----------|----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `write.operation`                 | `true`   | `upsert` | Set to `bulk_insert` to enable this function                                                                                                                   |
 | `write.tasks`                     | `false`  | `4`      | The parallelism of `bulk_insert`; the number of files ≥ [`write.bucket_assign.tasks`](configurations#writebucket_assigntasks)                                  |
 | `write.bulk_insert.shuffle_input` | `false`  | `true`   | Whether to shuffle data by the input field before writing. Enabling this option reduces the number of small files but may introduce data‑skew risk             |
@@ -64,7 +64,7 @@ then reduce the resources when writing incremental data (or enable the rate‑li
 ### Options
 
 | Option Name               | Required | Default | Remarks                                                                                                                    |
-| ------------------------- | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------- |
+|---------------------------|----------|---------|----------------------------------------------------------------------------------------------------------------------------|
 | `index.bootstrap.enabled` | `true`   | `false` | When index bootstrap is enabled, the remaining records in the Hudi table are loaded into the Flink state at once           |
 | `index.partition.regex`   | `false`  | `*`     | Optimization option. Set a regular expression to filter partitions. By default, all partitions are loaded into Flink state |
 
@@ -95,7 +95,7 @@ All changelog records can be consumed with the Flink streaming reader.
 ### Options
 
 | Option Name         | Required | Default | Remarks                                                                                                                                                                                                 |
-| ------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|---------------------|----------|---------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `changelog.enabled` | `false`  | `false` | It is turned off by default, to have the `upsert` semantics, only the merged messages are ensured to be kept, intermediate changes may be merged. Setting to true to support consumption of all changes |
 
 :::note
@@ -124,13 +124,13 @@ Only Copy‑on‑Write tables are supported.
 :::
 
 | Option Name            | Required | Default | Remarks                                                                                                                                                                              |
-| ---------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+|------------------------|----------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `write.insert.cluster` | `false`  | `false` | Whether to merge small files while ingesting. For COW tables, enable this option to use the small‑file merging strategy (no deduplication for keys, but throughput will be affected) |
 
 ### Async Clustering
 
 | Option Name                                      | Required | Default          | Remarks                                                                                                 |
-| ------------------------------------------------ | -------- | ---------------- | ------------------------------------------------------------------------------------------------------- |
+|--------------------------------------------------|----------|------------------|---------------------------------------------------------------------------------------------------------|
 | `clustering.schedule.enabled`                    | `false`  | `false`          | Whether to schedule the clustering plan during the write process; default is false                      |
 | `clustering.delta_commits`                       | `false`  | `4`              | Delta commits for scheduling the clustering plan; only valid when `clustering.schedule.enabled` is true |
 | `clustering.async.enabled`                       | `false`  | `false`          | Whether to execute the clustering plan asynchronously; default is false                                 |
@@ -144,7 +144,7 @@ Only Copy‑on‑Write tables are supported.
 Custom clustering strategy is supported.
 
 | Option Name                                             | Required | Default | Remarks                                                                                                                                          |
-| ------------------------------------------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+|---------------------------------------------------------|----------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------|
 | `clustering.plan.partition.filter.mode`                 | `false`  | `NONE`  | Valid options 1) `NONE`: no limit; 2) `RECENT_DAYS`: choose partitions that represent recent days; 3) `SELECTED_PARTITIONS`: specific partitions |
 | `clustering.plan.strategy.daybased.lookback.partitions` | `false`  | `2`     | Number of partitions to look back; valid for `RECENT_DAYS` mode                                                                                  |
 | `clustering.plan.strategy.cluster.begin.partition`      | `false`  | `N/A`   | Valid for `SELECTED_PARTITIONS` mode; specify the partition to begin with (inclusive)                                                            |
@@ -152,40 +152,192 @@ Custom clustering strategy is supported.
 | `clustering.plan.strategy.partition.regex.pattern`      | `false`  | `N/A`   | The regex to filter the partitions                                                                                                               |
 | `clustering.plan.strategy.partition.selected`           | `false`  | `N/A`   | Specific partitions, separated by commas                                                                                                         |
 
-## Use Bucket Index
+## Using Bucket Index
 
 Hudi Flink writer supports two types of writer indexes:
 
 - Flink state (default)
-- Bucket
+- Bucket index (3 variants: simple, partition-level, consistent hashing)
 
 ### Comparison
 
-| Feature                  | Bucket Index                                                          | Flink State Index                                                                                                 |
-| ------------------------ | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| How It Works             | Uses a deterministic hash algorithm to shuffle records into buckets   | Uses the Flink state backend to store index data: mappings of record keys to their residing file group's file IDs |
-| Computing/Storage Cost   | No cost for state‑backend indexing                                    | Has computing and storage cost for maintaining state; can become a bottleneck when working with large Hudi tables |
-| Performance              | Better performance due to no state overhead                           | Performance depends on state backend efficiency                                                                   |
-| Dynamic Bucket Expansion | Cannot expand buckets dynamically; immutable once set                 | Can expand buckets dynamically based on current file layout                                                       |
-| Cross‑Partition Changes  | Cannot handle changes among partitions (unless input is a CDC stream) | No limit on handling cross‑partition changes                                                                      |
+| Feature                 | Bucket Index                                                                                                                                                                                                                                                                | Flink State Index                                                                                                      |
+|-------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------|
+| How It Works            | Uses a deterministic hash algorithm to shuffle records into buckets                                                                                                                                                                                                         | Uses the Flink state backend to store index data: mappings of record keys to their residing file group's file IDs      |
+| Computing/Storage Cost  | No cost for state‑backend indexing                                                                                                                                                                                                                                          | Has computing and storage cost for maintaining state; can become a bottleneck when working with large Hudi tables      |
+| Performance             | Better performance due to no state overhead                                                                                                                                                                                                                                 | Performance depends on state backend efficiency                                                                        |
+| File Group Flexibility  | **Simple**: Fixed number of buckets (file groups) per partition, immutable once set<br/>**Partition-Level**: Different fixed buckets per partition via regex patterns (rescaling requires Spark procedure)<br/>**Consistent Hashing**: Auto-resizing buckets via clustering | Dynamically assigns records to file groups based on current table layout; no pre-configured limits on file group count |
+| Cross‑Partition Changes | Cannot handle changes among partitions (unless input is a CDC stream)                                                                                                                                                                                                       | No limit on handling cross‑partition changes                                                                           |
 
-### Options
+:::note
+Bucket index supports only the `UPSERT` write operation and cannot be used with the [append mode](#append-mode) in Flink.
+:::
 
-| Option Name                       | Required | Default       | Remarks                                                      |
-| --------------------------------- | -------- | ------------- | ------------------------------------------------------------ |
-| `index.type`                      | `false`  | `FLINK_STATE` | Set to `BUCKET` to use the bucket index                      |
-| `hoodie.bucket.index.hash.field`  | `false`  | Record key    | Can be a subset of the record key; default is the record key |
-| `hoodie.bucket.index.num.buckets` | `false`  | `4`           | The number of buckets per partition; immutable once set      |
+### Bucket Index Examples
+
+#### Simple Bucket Index
+
+Fixed number of buckets across all partitions:
+
+```sql
+CREATE TABLE orders_simple_bucket (
+  order_id BIGINT,
+  customer_id BIGINT,
+  amount DOUBLE,
+  order_date STRING,
+  ts BIGINT,
+  PRIMARY KEY (order_id) NOT ENFORCED
+) PARTITIONED BY (order_date)
+WITH (
+  'connector' = 'hudi',
+  'path' = 'hdfs:///warehouse/orders_simple',
+  'table.type' = 'MERGE_ON_READ',
+  
+  -- Bucket Index Configuration
+  'index.type' = 'BUCKET',
+  'hoodie.bucket.index.engine' = 'SIMPLE',
+  'hoodie.bucket.index.hash.field' = 'order_id',
+  'hoodie.bucket.index.num.buckets' = '16'  -- Fixed 16 buckets for ALL partitions
+);
+
+-- Insert data
+INSERT INTO orders_simple_bucket VALUES
+  (1, 100, 99.99, '2024-01-15', 1000),
+  (2, 101, 49.99, '2024-02-20', 2000);
+```
+
+#### Partition-Level Bucket Index
+
+Different bucket counts for different partitions based on regex patterns:
+
+```sql
+CREATE TABLE orders_partition_bucket (
+  order_id BIGINT,
+  customer_id BIGINT,
+  amount DOUBLE,
+  order_date STRING,
+  ts BIGINT,
+  PRIMARY KEY (order_id) NOT ENFORCED
+) PARTITIONED BY (order_date)
+WITH (
+  'connector' = 'hudi',
+  'path' = 'hdfs:///warehouse/orders_partition',
+  'table.type' = 'MERGE_ON_READ',
+  
+  -- Bucket Index Configuration
+  'index.type' = 'BUCKET',
+  'hoodie.bucket.index.engine' = 'SIMPLE',
+  'hoodie.bucket.index.hash.field' = 'order_id',
+  
+  -- Partition-Level Configuration
+  'hoodie.bucket.index.num.buckets' = '8',  -- Default for non-matching partitions
+  'hoodie.bucket.index.partition.rule.type' = 'regex',
+  -- Black Friday (11-24), Cyber Monday (11-27), Christmas (12-25) get 128 buckets
+  -- All other dates get 8 buckets (default)
+  'hoodie.bucket.index.partition.expressions' = '\\d{4}-(11-(24|27)|12-25),128'
+);
+
+-- Insert data - bucket count varies by partition
+INSERT INTO orders_partition_bucket VALUES
+  (1, 100, 999.99, '2024-11-24', 1000),  -- Black Friday: 128 buckets
+  (2, 101, 499.99, '2024-11-27', 2000),  -- Cyber Monday: 128 buckets
+  (3, 102, 299.99, '2024-12-25', 3000),  -- Christmas: 128 buckets
+  (4, 103, 49.99, '2024-01-15', 4000);   -- Regular day: 8 buckets
+```
+
+:::note
+For existing simple bucket index tables, use the Spark `partition_bucket_index_manager` procedure to upgrade to partition-level bucket index. After upgrade, Flink writers automatically load the expressions from table metadata.
+:::
+
+#### Consistent Hashing Bucket Index
+
+Auto-expanding buckets via clustering (requires Spark for execution):
+
+```sql
+CREATE TABLE orders_consistent_hashing (
+  order_id BIGINT,
+  customer_id BIGINT,
+  amount DOUBLE,
+  order_date STRING,
+  ts BIGINT,
+  PRIMARY KEY (order_id) NOT ENFORCED
+) PARTITIONED BY (order_date)
+WITH (
+  'connector' = 'hudi',
+  'path' = 'hdfs:///warehouse/orders_consistent',
+  'table.type' = 'MERGE_ON_READ',
+  
+  -- Consistent Hashing Bucket Index
+  'index.type' = 'BUCKET',
+  'hoodie.bucket.index.engine' = 'CONSISTENT_HASHING',
+  'hoodie.bucket.index.hash.field' = 'order_id',
+  
+  -- Initial and boundary configuration
+  'hoodie.bucket.index.num.buckets' = '4',      -- Initial bucket count
+  'hoodie.bucket.index.min.num.buckets' = '2',  -- Minimum allowed
+  'hoodie.bucket.index.max.num.buckets' = '128', -- Maximum allowed
+  
+  -- Clustering configuration (required for auto-resizing)
+  'clustering.schedule.enabled' = 'true',
+  'clustering.delta_commits' = '5',  -- Schedule clustering every 5 commits
+  'clustering.plan.strategy.class' = 'org.apache.hudi.client.clustering.plan.strategy.FlinkConsistentBucketClusteringPlanStrategy',
+  
+  -- File size thresholds for bucket resizing
+  'hoodie.clustering.plan.strategy.target.file.max.bytes' = '1073741824',  -- 1GB max
+  'hoodie.clustering.plan.strategy.small.file.limit' = '314572800'  -- 300MB min
+);
+
+-- Insert data - buckets auto-adjust based on file sizes
+INSERT INTO orders_consistent_hashing 
+SELECT * FROM source_stream;
+```
+
+:::note
+**Consistent hashing bucket index** automatically adjusts bucket counts via clustering. Flink can schedule clustering plans, but execution currently requires Spark. Start with `hoodie.bucket.index.num.buckets` and the system dynamically resizes based on file sizes within the min/max bounds.
+:::
+
+### Configuration Reference
+
+| Option                                      | Applies To         | Default       | Description                                                               |
+|---------------------------------------------|--------------------|---------------|---------------------------------------------------------------------------|
+| `index.type`                                | All                | `FLINK_STATE` | Set to `BUCKET` to enable bucket index                                    |
+| `hoodie.bucket.index.engine`                | All                | `SIMPLE`      | Engine type: `SIMPLE` or `CONSISTENT_HASHING`                             |
+| `hoodie.bucket.index.hash.field`            | All                | Record key    | Fields to hash for bucketing; can be a subset of record key               |
+| `hoodie.bucket.index.num.buckets`           | All                | `4`           | Default bucket count per partition (initial count for consistent hashing) |
+| `hoodie.bucket.index.partition.expressions` | Partition-Level    | N/A           | Regex patterns and bucket counts: `pattern1,count1;pattern2,count2`       |
+| `hoodie.bucket.index.partition.rule.type`   | Partition-Level    | `regex`       | Rule parser type                                                          |
+| `hoodie.bucket.index.min.num.buckets`       | Consistent Hashing | N/A           | Minimum bucket count (prevents over-merging)                              |
+| `hoodie.bucket.index.max.num.buckets`       | Consistent Hashing | N/A           | Maximum bucket count (prevents unlimited expansion)                       |
+| `clustering.schedule.enabled`               | Consistent Hashing | `false`       | Must be `true` for auto-resizing                                          |
+| `clustering.plan.strategy.class`            | Consistent Hashing | N/A           | Set to `FlinkConsistentBucketClusteringPlanStrategy`                      |
 
 ## Rate Limiting
 
-There are many use cases where users put the full‑history dataset onto the message queue together with real‑time incremental data. Then they consume the data from the queue into Hudi from the earliest offset using Flink. Consuming the full‑history dataset has problems:
+Hudi provides rate limiting capabilities for both writes and streaming reads to control data flow and prevent performance degradation.
 
-* The instantaneous throughput is huge
-* It has serious disorder (with random write partitions), which leads to degraded write performance and throughput glitches.
+### Write Rate Limiting
 
-For such cases, the `write.rate.limit` option can be enabled to ensure smooth writing of the flow.### Options
+In many scenarios, users publish both historical snapshot data and real‑time incremental updates to the same message queue, then consume from the earliest offset using Flink to ingest everything into Hudi. This backfill pattern can cause performance issues:
 
-| Option Name        | Required | Default | Remarks                                       |
-| ------------------ | -------- | ------- | --------------------------------------------- |
-| `write.rate.limit` | `false`  | `0`     | Rate limit disabled by default (0 = no limit) |
+- **High burst throughput**: The entire historical dataset arrives at once, overwhelming the writer with a massive volume of records
+- **Scattered writes across table partitions**: Historical records arrive scattered across many different table partitions (e.g., records from many different dates if the table is partitioned by date). This forces the writer to constantly switch between partitions, keeping many file handles open simultaneously and causing memory pressure, which degrades write performance and causes throughput instability
+
+The `write.rate.limit` option helps smooth out the ingestion flow, preventing traffic jitter and improving stability during backfill operations.
+
+### Streaming Read Rate Limiting
+
+For Flink streaming reads, rate limiting helps avoid backpressure when processing large workloads. The `read.splits.limit` option controls the maximum number of input splits allowed to be read in each check interval. This feature is particularly useful when:
+
+- Reading from tables with a large backlog of commits
+- Preventing downstream operators from being overwhelmed
+- Controlling resource consumption during catch-up scenarios
+
+The average read rate can be calculated as: **`read.splits.limit` / `read.streaming.check-interval`** splits per second.
+
+### Options
+
+| Option Name                     | Required | Default             | Remarks                                                                                                                                                                          |
+|---------------------------------|----------|---------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `write.rate.limit`              | `false`  | `0`                 | Write record rate limit per second to prevent traffic jitter and improve stability. Default is 0 (no limit)                                                                      |
+| `read.splits.limit`             | `false`  | `Integer.MAX_VALUE` | Maximum number of splits allowed to read in each instant check for streaming reads. Average read rate = `read.splits.limit`/`read.streaming.check-interval`. Default is no limit |
+| `read.streaming.check-interval` | `false`  | `60`                | Check interval in seconds for streaming reads. Default is 60 seconds (1 minute)                                                                                                  |
