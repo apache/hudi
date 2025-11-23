@@ -231,24 +231,24 @@ coordinate concurrent accesses. Here are a few different scenarios that would al
 Hudi's concurrency model intelligently differentiates actual writing to the table from table services that manage or optimize the table. Hudi offers similar **optimistic concurrency control across multiple writers**, but **table services can still execute completely lock-free and async** as long as they run in the same process as one of the writers.
 For multi-writing, Hudi leverages file level optimistic concurrency control(OCC). For example, when two writers write to non overlapping files, both writes are allowed to succeed. However, when the writes from different writers overlap (touch the same set of files), only one of them will succeed. Please note that this feature is currently experimental and requires external lock providers to acquire locks briefly at critical sections during the write. More on lock providers below.
 
-### Multi Writer Guarantees
+### Multi-Writer Guarantees
 
 With multiple writers using OCC, these are the write guarantees to expect:
 
 * *UPSERT Guarantee*: The target table will NEVER show duplicates.
 * *INSERT Guarantee*: The target table MIGHT have duplicates even if dedup is enabled.
 * *BULK_INSERT Guarantee*: The target table MIGHT have duplicates even if dedup is enabled.
-* *INCREMENTAL PULL Guarantee*: Data consumption and checkpoints are NEVER out of order. If there are inflight commits
-  (due to multi-writing), incremental queries will not expose the completed commits following the inflight commits.## Non-Blocking Concurrency Control  
+* *INCREMENTAL PULL Guarantee*: Data consumption and checkpoints are NEVER out of order. If there are inflight commits (due to multi-writing), incremental queries will not expose the completed commits following the inflight commits.
 
-`NON_BLOCKING_CONCURRENCY_CONTROL`, offers the same set of guarantees as mentioned in the case of OCC but without
+## Non-Blocking Concurrency Control
+
+The `NON_BLOCKING_CONCURRENCY_CONTROL` offers the same set of guarantees as mentioned in the case of OCC but without
 explicit locks for serializing the writes. Lock is only needed for writing the commit metadata to the Hudi timeline. The
 completion time for the commits reflects the serialization order and file slicing is done based on completion time.
 Multiple writers can operate on the table with non-blocking conflict resolution. The writers can write into the same
 file group with the conflicts resolved automatically by the query reader and the compactor. The new concurrency mode is
 currently available for preview in version 1.0.1-beta only with the caveat that conflict resolution is not supported yet
-between clustering and ingestion. It works for compaction and ingestion, and we can see an example of that with Flink
-writers [Flink writers example](sql_dml#non-blocking-concurrency-control-experimental).
+between clustering and ingestion. It works for compaction and ingestion, and we can see an example of that with [Flink writers](sql_dml#non-blocking-concurrency-control-experimental).
 
 :::note
 `NON_BLOCKING_CONCURRENCY_CONTROL` between ingestion writer and table service writer is not yet supported for clustering.
@@ -359,7 +359,6 @@ hoodie.write.lock.client.num_retries
 ```
 
 *Setting the right values for these depends on a case by case basis; some defaults have been provided for general cases.*
-
 
 ## Caveats
 
