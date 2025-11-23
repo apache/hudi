@@ -1,9 +1,7 @@
 {
   "default": true,
   "MD013": false,
-  "MD033": {
-    "allowed_elements": ["details", "summary", "br", "a", "img", "sup", "sub"]
-  },
+  "MD033": false,
   "MD029": {
     "style": "ordered"
   },
