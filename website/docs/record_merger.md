@@ -27,7 +27,7 @@ There are three merge modes: `COMMIT_TIME_ORDERING`, `EVENT_TIME_ORDERING`, and 
 
 You can explicitly configure the merge mode using the write config `hoodie.write.record.merge.mode`. When you create or write to a table with this config, it will be persisted to the table's configuration file (`hoodie.properties`) as `hoodie.record.merge.mode`. Once persisted, all subsequent reads and writes will use this merge mode unless explicitly overridden in the write config.
 
-**Merge modes are built-in, ready-to-use record mergers.** For most use cases, you can choose `COMMIT_TIME_ORDERING` or `EVENT_TIME_ORDERING` by setting the appropriate ordering field(s) without any additional configuration or implementation. These modes provide standard merging behaviors that cover the majority of scenarios. For advanced use cases requiring custom merge logic, you can use the `CUSTOM` merge mode and implement the `HoodieRecordMerger` interface.
+Merge mode is the way to choose and configure the record merger for your tables. For most use cases, you can choose `COMMIT_TIME_ORDERING` or `EVENT_TIME_ORDERING` by setting the appropriate ordering field(s) without any additional configuration or implementation. These modes provide standard merging behaviors that cover the majority of scenarios. For advanced use cases requiring custom merge logic, you can use the `CUSTOM` merge mode and implement the `HoodieRecordMerger` interface.
 
 :::note
 The merge mode should not be altered once a table is created to avoid inconsistent behavior due to compaction producing different merge results when switching between modes.
