@@ -38,6 +38,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -113,6 +114,13 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     return FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), baseFile.getHadoopPath().getParent());
   }
 
+  private Option<String> getTableBasePath(HoodieBaseFile baseFile) {
+    if (baseFile.getNumPartitionLevels().isPresent()) {
+      return Option.of(FSUtils.getTableBasePath(baseFile.getHadoopPath().getParent(), baseFile.getNumPartitionLevels().get()));
+    }
+    return Option.empty();
+  }
+
   /**
    * Initialize the view.
    */
@@ -183,32 +191,35 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   protected List<HoodieFileGroup> buildFileGroups(Stream<HoodieBaseFile> baseFileStream,
                                                   Stream<HoodieLogFile> logFileStream, HoodieTimeline timeline, boolean addPendingCompactionFileSlice) {
-    Map<Pair<String, String>, List<HoodieBaseFile>> baseFiles =
+    Map<Triple<String, String, Option<String>>, List<HoodieBaseFile>> baseFiles =
         baseFileStream.collect(Collectors.groupingBy(baseFile -> {
           String partitionPathStr = getPartitionPathFor(baseFile);
-          return Pair.of(partitionPathStr, baseFile.getFileId());
+          Option<String> tableBasePath = getTableBasePath(baseFile);
+          return Triple.of(partitionPathStr, baseFile.getFileId(), tableBasePath);
         }));
 
-    Map<Pair<String, String>, List<HoodieLogFile>> logFiles = logFileStream.collect(Collectors.groupingBy((logFile) -> {
+    Map<Triple<String, String, Option<String>>, List<HoodieLogFile>> logFiles = logFileStream.collect(Collectors.groupingBy((logFile) -> {
       String partitionPathStr =
           FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), logFile.getPath().getParent());
-      return Pair.of(partitionPathStr, logFile.getFileId());
+      return Triple.of(partitionPathStr, logFile.getFileId(), Option.empty());
     }));
 
-    Set<Pair<String, String>> fileIdSet = new HashSet<>(baseFiles.keySet());
+    Set<Triple<String, String, Option<String>>> fileIdSet = new HashSet<>(baseFiles.keySet());
     fileIdSet.addAll(logFiles.keySet());
 
     List<HoodieFileGroup> fileGroups = new ArrayList<>();
     fileIdSet.forEach(pair -> {
-      String fileId = pair.getValue();
-      String partitionPath = pair.getKey();
-      HoodieFileGroup group = new HoodieFileGroup(partitionPath, fileId, timeline);
+      String fileId = pair.getMiddle();
+      String partitionPath = pair.getLeft();
+      Option<String> tableBasePathOpt = pair.getRight();
+      HoodieFileGroup group = new HoodieFileGroup(partitionPath, fileId, timeline, tableBasePathOpt);
       if (baseFiles.containsKey(pair)) {
         baseFiles.get(pair).forEach(group::addBaseFile);
       }
       if (logFiles.containsKey(pair)) {
         logFiles.get(pair).forEach(group::addLogFile);
       }
+
 
       if (addPendingCompactionFileSlice) {
         Option<Pair<String, CompactionOperation>> pendingCompaction =
@@ -614,9 +625,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       readLock.lock();
       return fetchAllStoredFileGroups()
           .filter(fg -> !isFileGroupReplaced(fg))
-          .map(HoodieFileGroup::getPartitionPath)
+          .map(fg -> fg.getTableBasePathOpt().map(basePath -> fg.getPartitionPath().isEmpty() ? new Path(basePath) : new Path(basePath, fg.getPartitionPath()))
+              .orElseGet(() -> fg.getPartitionPath().isEmpty() ? metaClient.getBasePathV2() : new Path(metaClient.getBasePathV2(), fg.getPartitionPath())))
           .distinct()
-          .map(name -> name.isEmpty() ? metaClient.getBasePathV2() : new Path(metaClient.getBasePathV2(), name))
           .collect(Collectors.toList());
     } finally {
       readLock.unlock();

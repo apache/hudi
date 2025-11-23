@@ -260,6 +260,20 @@ public class FSUtils {
     }
   }
 
+  public static String getTableBasePath(Path fullPartitionPath, int numPartitionPathLevels) {
+    if (numPartitionPathLevels == 0) {
+      return StringUtils.EMPTY_STRING;
+    } else {
+      int levelsSoFar = 1;
+      Path tableBasePath = fullPartitionPath.getParent();
+      while (levelsSoFar < numPartitionPathLevels) {
+        tableBasePath = tableBasePath.getParent();
+        levelsSoFar++;
+      }
+      return tableBasePath.toString();
+    }
+  }
+
   /**
    * Recursively processes all files in the base-path. If excludeMetaFolder is set, the meta-folder and all its subdirs
    * are skipped
