@@ -1,5 +1,5 @@
 ---
-title: Record Mergers
+title: Record Merger
 keywords: [hudi, merge, upsert, precombine]
 toc: true
 toc_min_heading_level: 2
@@ -9,12 +9,14 @@ toc_max_heading_level: 4
 Hudi handles mutations to records and streaming data, as we briefly touched upon in [timeline ordering](timeline#ordering-of-actions) section.
 To provide users full-fledged support for stream processing, Hudi goes to great lengths to make the storage engine and the underlying storage format understand how to merge changes to the same record key, which may arrive even in different order at different times. With the rise of mobile applications and IoT, these scenarios have become the norm rather than an exception. For example, a social networking application uploading user events several hours after they happened when the user connects to WiFi networks.
 
-To achieve this, Hudi supports merge modes, which define how the base and log files are ordered in a file slice and how different records with
-the same record key within that file slice are merged consistently to produce the same deterministic results for snapshot queries, writers, and table services. Specifically,
-there are three merge modes supported as a table-level configuration, invoked in the following places.
+## Merge Modes
 
-* **(writing)** Combining multiple change records for the same record key while reading input data during writes. This is an optional optimization that
-    reduces the number of records written to log files to improve query and write performance subsequently.
+To address these challenges, Hudi supports merge modes, which define how the base and log files are ordered in a file slice and how different records with
+the same record key within that file slice are merged consistently to produce the same deterministic results for snapshot queries, writers, and table services.
+
+There are three merge modes supported as a table-level configuration, invoked in the following places:
+
+* **(writing)** Combining multiple change records for the same record key while reading input data during writes. This is an optional optimization that reduces the number of records written to log files to improve query and write performance subsequently.
 
 * **(writing)** Merging final change record (partial/full update/delete) against existing record in storage for CoW tables.
 
@@ -22,10 +24,20 @@ there are three merge modes supported as a table-level configuration, invoked in
 
 * **(query)** Merging change records in log files, after filtering and projections against base file for MoR table queries.
 
-Note that the merge mode should not be altered once the table is created to avoid inconsistent behavior due to compaction producing
-different merge results when switching between the modes.
+:::info
+**Merge modes are built-in, ready-to-use record mergers.** For most use cases, you can simply choose `COMMIT_TIME_ORDERING` or `EVENT_TIME_ORDERING` without any additional implementation. These modes provide standard merging behaviors that cover the majority of scenarios. For advanced use cases requiring custom merge logic, you can use the `CUSTOM` merge mode and implement your own `HoodieRecordMerger` interface.
+:::
 
-### COMMIT_TIME_ORDERING
+The default merge mode is automatically inferred based on whether any ordering field is configured. If you do not specify a ordering field (e.g., `hoodie.table.ordering.fields`), the merge mode defaults to `COMMIT_TIME_ORDERING`, which simply replaces the old record with the new one from the incoming batch. If you do specify one or morerecombine fields, the merge mode defaults to `EVENT_TIME_ORDERING`, which compares records based on the field's value to handle out-of-order data.ering
+
+You can explicitly configure the merge mode using the write config `hoodie.write.record.merge.mode`. When you create or write to a table with this config, it will be persisted to the table's configuration file (`hoodie.properties`) as `hoodie.record.merge.mode`. Once persisted, all subsequent reads and writes will use this merge mode unless explicitly overridden in the write config.
+
+:::note
+Merge mode should not be altered once a table is created to avoid inconsistent behavior due to compaction producing
+different merge results when switching between the modes.
+:::
+
+### `COMMIT_TIME_ORDERING`
 
 Here, we expect the input records to arrive in strict order such that arrival order is same as their
 delta commit order on the table. Merging simply picks the record belonging to the latest write as the merged result. In relational data model speak,
@@ -38,7 +50,7 @@ this provides overwrite semantics aligned with serializable writes on the timeli
 In the example above, the writer process consumes a database change log, expected to be in strict order of a logical sequence number (lsn)
 that denotes the ordering of the writes in the upstream database.
 
-### EVENT_TIME_ORDERING
+### `EVENT_TIME_ORDERING`
 
 This is the default merge mode. While commit time ordering provides a well-understood standard behavior, it's hardly sufficient. The commit time is unrelated to the actual
 ordering of data that a user may care about and strict ordering of input in complex distributed systems is difficult to achieve.
@@ -54,7 +66,11 @@ a paid order moved back to just-created state expecting payment again. Event tim
 avoiding order status from "jumping back" in time. Combined with [non-blocking concurrency control](concurrency_control#non-blocking-concurrency-control-mode),
 this provides a very powerful way for processing such data streams efficiently and correctly.
 
-### CUSTOM
+### `CUSTOM`
+
+:::tip
+**For most users:** The built-in `COMMIT_TIME_ORDERING` and `EVENT_TIME_ORDERING` merge modes should be sufficient. Only use `CUSTOM` mode if you need specialized merge logic that cannot be achieved with the standard modes.
+:::
 
 In some cases, even more control and customization may be needed. Extending the same example above, the two microservices could be updating two different
 sets of columns "order_info" and "payment_info", along with order state. The merge logic is then expected to not only resolve the correct status, but merge
@@ -62,7 +78,7 @@ order_info from the record in created state, into the record in cancelled state 
 Such reconciliation provides a simple denormalized data model for downstream consumption where queries (for example, fraud detection) can simply filter fields
 across order_info and payment_info without costly self-join on each access.
 
-Hudi allows the authoring of cross-language custom record mergers on top of a standard record merger API, which supports full and partial merges. The `HoodieRecordMerger` interface uses the `BufferedRecord` class to provide better performance and consistency by working directly with engine-native record formats without requiring conversion to Avro.
+To implement custom merge logic, you need to implement the `HoodieRecordMerger` interface. Hudi allows the authoring of cross-language custom record mergers on top of a standard record merger API, which supports full and partial merges. The `HoodieRecordMerger` interface uses the `BufferedRecord` class to provide better performance and consistency by working directly with engine-native record formats without requiring conversion to Avro.
 
 The `BufferedRecord` class wraps the record data along with key information such as the record key, ordering value, schema identifier, and `HoodieOperation`. The `RecordContext` provides a common interface for accessing and manipulating records across different engines (Spark, Flink, etc.), making custom mergers engine-agnostic.
 
@@ -112,7 +128,7 @@ When implementing the `HoodieRecordMerger` interface, follow these guidelines to
 
 For more details on the implementation, see [RFC 101](https://github.com/apache/hudi/blob/master/rfc/rfc-101/rfc-101.md).
 
-### Record Merger Configs
+### Merge Mode Configs
 
 The record merge mode and optional record merge strategy ID and custom merge implementation classes can be specified using the below configs.
 
@@ -122,10 +138,10 @@ The record merge mode and optional record merge strategy ID and custom merge imp
 | hoodie.write.record.merge.strategy.id                   | N/A (Optional)      | ID of record merge strategy. Hudi will pick `HoodieRecordMerger` implementations from `hoodie.write.record.merge.custom.implementation.classes` that have the same merge strategy ID. When using custom merge logic, you need to specify both this config and `hoodie.write.record.merge.custom.implementation.classes`.<br />`Config Param: RECORD_MERGE_STRATEGY_ID`<br />`Since Version: 0.13.0`<br />`Alternative: hoodie.datasource.write.record.merger.strategy` (deprecated)                                                                                                                                                                                                                                                                 |
 | hoodie.write.record.merge.custom.implementation.classes | N/A (Optional)      | List of `HoodieRecordMerger` implementations constituting Hudi's merging strategy based on the engine used. Hudi selects the first implementation from this list that matches the following criteria: (1) has the same merge strategy ID as specified in `hoodie.write.record.merge.strategy.id` (if provided), (2) is compatible with the execution engine (e.g., SPARK merger for Spark, FLINK merger for Flink, AVRO for Java/Hive). The order in the list matters - place your preferred implementation first. Engine-specific implementations (SPARK, FLINK) are more efficient as they avoid Avro serialization/deserialization overhead.<br />`Config Param: RECORD_MERGE_IMPL_CLASSES`<br />`Since Version: 0.13.0`<br />`Alternative: hoodie.datasource.write.record.merger.impls` (deprecated)                                                                                                                                                                                                                                                                                                                                                    |
 
-### Record Payloads (deprecated)
+## Record Payloads (deprecated)
 
 :::caution
-**Deprecation Notice:** As of release 1.1.0, the payload-based approach for record merging is deprecated. This approach is closely tied to Avro-formatted records, making it less compatible with native query engine formats (e.g., Spark InternalRow) and more challenging to maintain. We strongly recommends migrating to merge modes or custom record mergers, which offer better flexibility, performance, and maintainability for modern lakehouse architectures.
+**Deprecation Notice:** As of release 1.1.0, the payload-based approach for record merging is deprecated. This approach is closely tied to Avro-formatted records, making it less compatible with native query engine formats (e.g., Spark InternalRow) and more challenging to maintain. We strongly recommends migrating to [merge modes](#merge-modes), which offer better flexibility, performance, and maintainability for modern lakehouse architectures.
 
 Existing payload-based configurations will continue to work through backwards compatibility, but users are encouraged to migrate their implementations. For details, see [RFC 97](https://github.com/apache/hudi/pull/13499).
 :::
@@ -135,7 +151,7 @@ they had drawbacks like lower performance due to conversion of engine-native rec
 As we shall see below, Hudi provides out-of-the-box support for different payloads for different use cases. Hudi implements fallback from
 record merger APIs to payload APIs internally, to provide backwards compatibility for existing payload implementations.
 
-#### OverwriteWithLatestAvroPayload (deprecated)
+### OverwriteWithLatestAvroPayload (deprecated)
 
 ```scala
 hoodie.datasource.write.payload.class=org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
@@ -145,7 +161,7 @@ This is the default record payload implementation. It picks the record with the 
 `.compareTo()` on the value of precombine key) to break ties and simply picks the latest record while merging. This gives
 latest-write-wins style semantics.
 
-#### DefaultHoodieRecordPayload (deprecated)
+### DefaultHoodieRecordPayload (deprecated)
 
 ```scala
 hoodie.datasource.write.payload.class=org.apache.hudi.common.model.DefaultHoodieRecordPayload
@@ -195,7 +211,7 @@ Result data after merging using `DefaultHoodieRecordPayload` (always honors orde
     1       2       name_2  price_2
 ```
 
-#### EventTimeAvroPayload (deprecated)
+### EventTimeAvroPayload (deprecated)
 
 ```scala
 hoodie.datasource.write.payload.class=org.apache.hudi.common.model.EventTimeAvroPayload
@@ -205,7 +221,7 @@ This is the default record payload for Flink-based writing. Some use cases requi
 thus event time plays the role of an ordering field. This payload is particularly useful in the case of late-arriving data.
 For such use cases, users need to set the [payload event time field](configurations#RECORD_PAYLOAD) configuration.
 
-#### OverwriteNonDefaultsWithLatestAvroPayload (deprecated)
+### OverwriteNonDefaultsWithLatestAvroPayload (deprecated)
 
 ```scala
 hoodie.datasource.write.payload.class=org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload
@@ -216,7 +232,7 @@ precombining, just like `OverwriteWithLatestAvroPayload`, it picks the latest re
 field. While merging, it overwrites the existing record on storage only for the specified **fields that don't equal
 default value** for that field.
 
-#### PartialUpdateAvroPayload (deprecated)
+### PartialUpdateAvroPayload (deprecated)
 
 ```scala
 hoodie.datasource.write.payload.class=org.apache.hudi.common.model.PartialUpdateAvroPayload
@@ -261,7 +277,7 @@ Result data after merging using `PartialUpdateAvroPayload`:
     1       2       name_1  price_1
 ```
 
-#### Configs (deprecated)
+### Record Payload Configs (deprecated)
 
 Payload class can be specified using the below configs. For more advanced configs, refer to [the configurations page](https://hudi.apache.org/docs/configurations#RECORD_PAYLOAD)
 
