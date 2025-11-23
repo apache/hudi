@@ -231,7 +231,7 @@ scala> spark.sql("desc hudi_trips_snapshot").show()
     |   _hoodie_file_name|   string|   null|
     |               rowId|   string|   null|
     |         partitionId|   string|   null|
-    |        orderingField|   bigint|   null|
+    |       orderingField|   bigint|   null|
     |                name|   string|   null|
     |           versionId|   string|   null|
     |           intToLong|      int|   null|
@@ -240,11 +240,11 @@ scala> spark.sql("desc hudi_trips_snapshot").show()
 scala> spark.sql("select rowId, partitionId, orderingField, name, versionId, intToLong from hudi_trips_snapshot").show()
     +-----+-----------+-------------+----+---------+---------+
     |rowId|partitionId|orderingField|name|versionId|intToLong|
-    +-----+-----------+-------+----+---------+---------+
-    |row_3|     part_0|      0| tom|      v_0|        0|
-    |row_2|     part_0|      0|john|      v_0|        0|
-    |row_1|     part_0|      0| bob|      v_0|        0|
-    +-----+-----------+-------+----+---------+---------+
+    +-----+-----------+-------------+----+---------+---------+
+    |row_3|     part_0|            0| tom|      v_0|        0|
+    |row_2|     part_0|            0|john|      v_0|        0|
+    |row_1|     part_0|            0| bob|      v_0|        0|
+    +-----+-----------+-------------+----+---------+---------+
 
 // In the new schema, we are going to add a String field and 
 // change the datatype `intToLong` field from  int to long.
@@ -290,7 +290,7 @@ scala> spark.sql("desc hudi_trips_snapshot").show()
     |   _hoodie_file_name|   string|   null|
     |               rowId|   string|   null|
     |         partitionId|   string|   null|
-    |        orderingField|   bigint|   null|
+    |       orderingField|   bigint|   null|
     |                name|   string|   null|
     |           versionId|   string|   null|
     |           intToLong|   bigint|   null|
@@ -301,13 +301,13 @@ scala> spark.sql("desc hudi_trips_snapshot").show()
 scala> spark.sql("select rowId, partitionId, orderingField, name, versionId, intToLong, newField from hudi_trips_snapshot").show()
     +-----+-----------+-------------+-------+---------+---------+----------+
     |rowId|partitionId|orderingField|   name|versionId|intToLong|  newField|
-    +-----+-----------+-------+-------+---------+---------+----------+
-    |row_3|     part_0|      0|    tom|      v_0|        0|      null|
-    |row_2|     part_0|      5|   john|      v_3|        3|newField_1|
-    |row_1|     part_0|      0|    bob|      v_0|        0|      null|
-    |row_5|     part_0|      5| maroon|      v_2|        2|newField_1|
-    |row_9|     part_0|      5|michael|      v_2|        2|newField_1|
-    +-----+-----------+-------+-------+---------+---------+----------+
+    +-----+-----------+-------------+-------+---------+---------+----------+
+    |row_3|     part_0|            0|    tom|      v_0|        0|      null|
+    |row_2|     part_0|            5|   john|      v_3|        3|newField_1|
+    |row_1|     part_0|            0|    bob|      v_0|        0|      null|
+    |row_5|     part_0|            5| maroon|      v_2|        2|newField_1|
+    |row_9|     part_0|            5|michael|      v_2|        2|newField_1|
+    +-----+-----------+-------------+-------+---------+---------+----------+
 
 ```
 
