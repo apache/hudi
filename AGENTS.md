@@ -66,3 +66,5 @@ Your post is now ready for review.
 The `website/docs` directory contains documentation pages for the Hudi project, which are versioned against releases.
 
 When updating a markdown file in the hudi website repo, if the file contains a `last_modified_at` field in its front matter, update it to the current timestamp in ISO 8601 format (YYYY-MM-DDTHH:MM:SS) when modifying the file.
+
+Note: Agents do not need to run markdown linting every time after updating md files, as linting is handled automatically or is not required for agent updates.
