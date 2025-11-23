@@ -26,7 +26,7 @@ Default value: `"uuid"`<br/>
 Default value: `"partitionpath"`<br/>
 
 **ORDERING_FIELDS**: When two records within the same batch have the same key value, the record with the largest value from the ordering field specified will be chosen. If you are using default payload of OverwriteWithLatestAvroPayload for HoodieRecordPayload (`WRITE_PAYLOAD_CLASS`), an incoming record will always takes precedence compared to the one in storage ignoring this ordering field configuration. <br/>
-Default value: `"ts"`<br/>
+No default value<br/>
 Note: The config key `hoodie.datasource.write.precombine.field` is deprecated, use `hoodie.table.ordering.fields` instead.
 
 **OPERATION**: The [write operations](write_operations) to use.<br/>
