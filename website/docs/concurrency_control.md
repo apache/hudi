@@ -166,7 +166,7 @@ com.amazonaws:aws-java-sdk-dynamodb
 com.amazonaws:aws-java-sdk-core
 ```
 
-#### FileSystem based lock provider
+### FileSystem based lock provider
 
 FileSystem based lock provider supports multiple writers across different jobs/applications based on atomic create/delete operations of the underlying filesystem.
 
