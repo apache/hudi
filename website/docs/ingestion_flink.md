@@ -11,13 +11,13 @@ We recommend two ways for syncing CDC data into Hudi:
 
 ![slide1 title](/assets/images/cdc-2-hudi.png)
 
-1. Use the Ververica [flink-cdc-connectors](https://github.com/ververica/flink-cdc-connectors) to directly connect to the database server and sync binlog data into Hudi.
+1. Use [Apache Flink-CDC](https://github.com/apache/flink-cdc) to directly connect to the database server and sync binlog data into Hudi.
    The advantage is that it does not rely on message queues, but the disadvantage is that it puts pressure on the database server.
 2. Consume data from a message queue (e.g., Kafka) using the Flink CDC format. The advantage is that it is highly scalable,
    but the disadvantage is that it relies on message queues.
 
 :::note
-If the upstream data cannot guarantee ordering, you need to explicitly specify the `write.precombine.field` option.
+If the upstream data cannot guarantee ordering, you need to explicitly specify the `ordering.fields` option.
 :::
 
 ## Bulk Insert
@@ -38,7 +38,7 @@ frequent file‑handle switching.
 :::note
 The parallelism of `bulk_insert` is specified by `write.tasks`. The parallelism affects the number of small files.
 In theory, the parallelism of `bulk_insert` equals the number of buckets. (In particular, when each bucket writes to the maximum file size, it
-rolls over to a new file handle.) Finally, the number of files ≥ [`write.bucket_assign.tasks`](configurations#writebucket_assigntasks).
+rolls over to a new file handle.) The final number of files is greater than or equal to [`write.bucket_assign.tasks`](configurations#writebucket_assigntasks).
 :::
 
 ### Options
@@ -110,10 +110,7 @@ the compaction options `compaction.delta_commits` and `compaction.delta_seconds`
 
 ## Append Mode
 
-For `INSERT` mode write operations, the current workflow is:
-
-- For Merge‑on‑Read tables, auto‑file sizing is enabled by default
-- For Copy‑on‑Write tables, new parquet files are written directly; auto-file sizing is not applied
+For `INSERT` mode write operations, new Parquet files are written directly, and the [auto‑file sizing](file_sizing.md) is not enabled.
 
 ### In-Memory Buffer Sort
 
