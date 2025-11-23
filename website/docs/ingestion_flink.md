@@ -113,7 +113,25 @@ the compaction options `compaction.delta_commits` and `compaction.delta_seconds`
 For `INSERT` mode write operations, the current workflow is:
 
 - For Merge‑on‑Read tables, auto‑file sizing is enabled by default
-- For Copy‑on‑Write tables, new parquet files are written directly; no small‑file handling is applied
+- For Copy‑on‑Write tables, new parquet files are written directly; auto-file sizing is not applied
+
+### In-Memory Buffer Sort
+
+For append-only workloads, Hudi supports in-memory buffer sorting to improve Parquet compression ratio. When enabled, data is sorted within the write buffer before being flushed to disk. This improves columnar file compression efficiency by grouping similar values together.
+
+| Option Name                 | Required | Default | Remarks                                                                                                                       |
+|-----------------------------|----------|---------|-------------------------------------------------------------------------------------------------------------------------------|
+| `write.buffer.sort.enabled` | `false`  | `false` | Whether to enable buffer sort within append write function. Improves Parquet compression ratio by sorting data before writing |
+| `write.buffer.sort.keys`    | `false`  | `N/A`   | Sort keys concatenated by comma (e.g., `col1,col2`). Required when `write.buffer.sort.enabled` is `true`                      |
+| `write.buffer.size`         | `false`  | `1000`  | Buffer size in number of records. When buffer reaches this size, data is sorted and flushed to disk                           |
+
+### Disable Meta Fields
+
+For append-only workloads where Hudi metadata fields (e.g., `_hoodie_commit_time`, `_hoodie_record_key`) are not needed, you can disable them to reduce storage overhead. This is useful when integrating with external systems that don't require Hudi-specific metadata.
+
+| Option Name                   | Required | Default | Remarks                                                                                                                                                        |
+|-------------------------------|----------|---------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `hoodie.populate.meta.fields` | `false`  | `true`  | Whether to populate Hudi meta fields. Set to `false` for append-only workloads to reduce storage overhead. Note: Some Hudi features may not work when disabled |
 
 Hudi supports rich clustering strategies to optimize the files layout for `INSERT` mode:
 
