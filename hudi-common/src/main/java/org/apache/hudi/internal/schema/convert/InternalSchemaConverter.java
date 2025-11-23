@@ -52,17 +52,6 @@ import java.util.stream.Collectors;
  * Converts a HoodieSchema into InternalSchema, or convert InternalSchema to a HoodieSchema.
  */
 public class InternalSchemaConverter {
-
-  // NOTE: We're using dot as field's name delimiter for nested fields
-  //       so that Avro is able to interpret qualified name as rather
-  //       the combination of the Avro's namespace and actual record's name.
-  //       For example qualified nested field's name "trip.fare.amount",
-  //       Avro will produce a record with
-  //          - Namespace: "trip.fare"
-  //          - Name: "amount"
-  //
-  //        This is crucial aspect of maintaining compatibility b/w schemas, after
-  //        converting Avro [[Schema]]s to [[InternalSchema]]s and back
   private static final String FIELD_NAME_DELIMITER = ".";
 
   /**
@@ -91,29 +80,29 @@ public class InternalSchemaConverter {
   static List<String> collectColNamesFromSchema(HoodieSchema schema) {
     List<String> result = new ArrayList<>();
     Deque<String> visited = new LinkedList<>();
-    collectColNamesFromHoodieSchema(schema, visited, result);
+    collectColNamesFromSchema(schema, visited, result);
     return result;
   }
 
-  private static void collectColNamesFromHoodieSchema(HoodieSchema schema, Deque<String> visited, List<String> resultSet) {
+  private static void collectColNamesFromSchema(HoodieSchema schema, Deque<String> visited, List<String> resultSet) {
     switch (schema.getType()) {
       case RECORD:
         List<HoodieSchemaField> fields = schema.getFields();
         for (HoodieSchemaField f : fields) {
           visited.push(f.name());
-          collectColNamesFromHoodieSchema(f.schema(), visited, resultSet);
+          collectColNamesFromSchema(f.schema(), visited, resultSet);
           visited.pop();
           addFullNameIfLeafNode(f.schema(), f.name(), visited, resultSet);
         }
         return;
 
       case UNION:
-        collectColNamesFromHoodieSchema(schema.getUnderlyingType(), visited, resultSet);
+        collectColNamesFromSchema(schema.getNonNullType(), visited, resultSet);
         return;
 
       case ARRAY:
         visited.push("element");
-        collectColNamesFromHoodieSchema(schema.getElementType(), visited, resultSet);
+        collectColNamesFromSchema(schema.getElementType(), visited, resultSet);
         visited.pop();
         addFullNameIfLeafNode(schema.getElementType(), "element", visited, resultSet);
         return;
@@ -121,7 +110,7 @@ public class InternalSchemaConverter {
       case MAP:
         addFullNameIfLeafNode(HoodieSchemaType.STRING, "key", visited, resultSet);
         visited.push("value");
-        collectColNamesFromHoodieSchema(schema.getValueType(), visited, resultSet);
+        collectColNamesFromSchema(schema.getValueType(), visited, resultSet);
         visited.pop();
         addFullNameIfLeafNode(schema.getValueType(), "value", visited, resultSet);
         return;
@@ -131,7 +120,7 @@ public class InternalSchemaConverter {
   }
 
   private static void addFullNameIfLeafNode(HoodieSchema schema, String name, Deque<String> visited, List<String> resultSet) {
-    addFullNameIfLeafNode(schema.getUnderlyingType().getType(), name, visited, resultSet);
+    addFullNameIfLeafNode(schema.getNonNullType().getType(), name, visited, resultSet);
   }
 
   private static void addFullNameIfLeafNode(HoodieSchemaType type, String name, Deque<String> visited, List<String> resultSet) {
@@ -176,7 +165,7 @@ public class InternalSchemaConverter {
    * @return a HoodieSchema.
    */
   public static HoodieSchema convert(Types.RecordType type, String name) {
-    return buildHoodieSchemaFromType(type, name);
+    return buildSchemaFromType(type, name);
   }
 
   /**
@@ -187,7 +176,7 @@ public class InternalSchemaConverter {
    * @return a HoodieSchema.
    */
   public static HoodieSchema convert(Type type, String name) {
-    return buildHoodieSchemaFromType(type, name);
+    return buildSchemaFromType(type, name);
   }
 
   /** Convert a HoodieSchema into internal type. */
@@ -218,7 +207,7 @@ public class InternalSchemaConverter {
     // set flag to check this has not been visited.
     Deque<String> visited = new LinkedList<>();
     AtomicInteger nextId = new AtomicInteger(0);
-    return visitHoodieSchemaToBuildType(schema, visited, "", nextId, existingNameToPositions);
+    return visitSchemaToBuildType(schema, visited, "", nextId, existingNameToPositions);
   }
 
   private static void checkNullType(Type fieldType, String fieldName, Deque<String> visited) {
@@ -253,7 +242,7 @@ public class InternalSchemaConverter {
    * @param nextId an initial id which used to create id for all fields.
    * @return a hudi type match HoodieSchema.
    */
-  private static Type visitHoodieSchemaToBuildType(HoodieSchema schema, Deque<String> visited, String currentFieldPath, AtomicInteger nextId, Map<String, Integer> existingNameToPosition) {
+  private static Type visitSchemaToBuildType(HoodieSchema schema, Deque<String> visited, String currentFieldPath, AtomicInteger nextId, Map<String, Integer> existingNameToPosition) {
     switch (schema.getType()) {
       case RECORD:
         String name = schema.getFullName();
@@ -269,7 +258,7 @@ public class InternalSchemaConverter {
         int nextAssignId = nextId.get();
         nextId.set(nextAssignId + fields.size());
         fields.forEach(field -> {
-          Type fieldType = visitHoodieSchemaToBuildType(field.schema(), visited, currentFieldPath + field.name() + ".", nextId, existingNameToPosition);
+          Type fieldType = visitSchemaToBuildType(field.schema(), visited, currentFieldPath + field.name() + ".", nextId, existingNameToPosition);
           checkNullType(fieldType, field.name(), visited);
           fieldTypes.add(fieldType);
         });
@@ -290,7 +279,7 @@ public class InternalSchemaConverter {
       case UNION:
         List<Type> fTypes = new ArrayList<>(2);
         schema.getTypes().forEach(t -> {
-          fTypes.add(visitHoodieSchemaToBuildType(t, visited, currentFieldPath, nextId, existingNameToPosition));
+          fTypes.add(visitSchemaToBuildType(t, visited, currentFieldPath, nextId, existingNameToPosition));
         });
         return fTypes.get(0) == null ? fTypes.get(1) : fTypes.get(0);
       case ARRAY:
@@ -298,14 +287,14 @@ public class InternalSchemaConverter {
         HoodieSchema elementSchema = schema.getElementType();
         int elementId = nextId.get();
         nextId.set(elementId + 1);
-        Type elementType = visitHoodieSchemaToBuildType(elementSchema, visited, elementPath, nextId, existingNameToPosition);
+        Type elementType = visitSchemaToBuildType(elementSchema, visited, elementPath, nextId, existingNameToPosition);
         return Types.ArrayType.get(elementId, schema.getElementType().isNullable(), elementType);
       case MAP:
         int keyId = nextId.get();
         int valueId = keyId + 1;
         nextId.set(valueId + 1);
         String valuePath = currentFieldPath + InternalSchema.MAP_VALUE + ".";
-        Type valueType = visitHoodieSchemaToBuildType(schema.getValueType(), visited, valuePath, nextId, existingNameToPosition);
+        Type valueType = visitSchemaToBuildType(schema.getValueType(), visited, valuePath, nextId, existingNameToPosition);
         return Types.MapType.get(keyId, valueId, Types.StringType.get(), valueType, schema.getValueType().isNullable());
       default:
         return visitPrimitiveToBuildInternalType(schema);
@@ -379,7 +368,7 @@ public class InternalSchemaConverter {
    * @param recordName the record name
    * @return a HoodieSchema match this type
    */
-  private static HoodieSchema buildHoodieSchemaFromType(Type type, String recordName) {
+  private static HoodieSchema buildSchemaFromType(Type type, String recordName) {
     Map<Type, HoodieSchema> cache = new HashMap<>();
     return visitInternalSchemaToBuildHoodieSchema(type, cache, recordName);
   }
