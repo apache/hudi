@@ -43,7 +43,6 @@ import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -259,17 +258,13 @@ public class HoodieMetadataSync implements Serializable {
       txnManager.beginTransaction(Option.empty(), Option.empty());
       if (cfg.boostrap) {
         runBootstrapSync(sparkTable, sourceTableMetaClient, targetTableMetaClient, writeClient, schema);
-      } else if (cfg.doRestore) {
-        writeClient.savepoint(cfg.commitToRestore, "user1", "comment1");
-
-        // restore.
-        writeClient.restoreToSavepoint(cfg.commitToRestore);
-      }
-      {
+      } else {
         Pair<TreeMap<HoodieInstant, Boolean>, Option<String>> instantsToSyncAndLastSyncCheckpointPair =
             getInstantsToSyncAndLastSyncCheckpoint(cfg.sourceBasePath, targetTableMetaClient, sourceTableMetaClient);
+
         TreeMap<HoodieInstant, Boolean> instantsStatusMap = instantsToSyncAndLastSyncCheckpointPair.getLeft();
         Option<String> lastSyncCheckpoint = instantsToSyncAndLastSyncCheckpointPair.getRight();
+
         for (Map.Entry<HoodieInstant, Boolean> entry : instantsToSyncAndLastSyncCheckpointPair.getKey().entrySet()) {
           HoodieInstant instant = entry.getKey();
           boolean isCompleted = entry.getValue();
@@ -287,7 +282,7 @@ public class HoodieMetadataSync implements Serializable {
             writeClient.rollbackFailedWrites();
           }
 
-          String commitTime = writeClient.startCommit(instant.getAction(), targetTableMetaClient); // single writer. will rollback any pending commits from previous round.
+          String commitTime = writeClient.startCommit(instant.getAction(), targetTableMetaClient);
           targetTableMetaClient
               .reloadActiveTimeline()
               .transitionRequestedToInflight(
@@ -410,7 +405,7 @@ public class HoodieMetadataSync implements Serializable {
     // trigger archiver manually
     try {
       HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
-      archiver.archiveIfRequired(engineContext, true);
+      archiver.archiveIfRequired(engineContext, false);
     } catch (IOException ex) {
       throw new HoodieException("Unable to archive Hudi timeline", ex);
     }
@@ -450,10 +445,8 @@ public class HoodieMetadataSync implements Serializable {
           List<Pair<String, String>> fileNameAndBaseInstantTime = v;
           fileNameAndBaseInstantTime.forEach(pair -> {
             if (fileIdToBaseInstantTimeToFileName.get(fileId) != null && fileIdToBaseInstantTimeToFileName.get(fileId).containsKey(pair.getValue())) {
-              //System.out.println("Source file id " + k + ", base instant time " + pair.getRight() + ", file name " + pair.getLeft() + " => target table file Name " + fileIdToBaseInstantTimeToFileName.get(fileId).get(pair.getRight()));
               deletePathPatternsFromTarget.add(fileIdToBaseInstantTimeToFileName.get(fileId).get(pair.getRight()));
             } else {
-              //System.out.println("Source file id " + k + ", base instant time " + pair.getRight() + ", file name " + pair.getLeft() + " => No matching file found in target table XXXXXXX ");
             }
           });
         });
@@ -464,6 +457,7 @@ public class HoodieMetadataSync implements Serializable {
         }
       });
 
+      originalCleanMetadata.setEarliestCommitToRetain("");
       return originalCleanMetadata;
     } finally {
       if (tableMetadata != null) {
@@ -536,19 +530,15 @@ public class HoodieMetadataSync implements Serializable {
         .withPopulateMetaFields(metaClient.getTableConfig().populateMetaFields())
         .withEmbeddedTimelineServerEnabled(false)
         .withSchema(schema == null ? "" : schema.toString())
-        .withArchivalConfig(
-            HoodieArchivalConfig.newBuilder()
-                .fromProperties(props)
-                .build())
         .withMetadataConfig(
             HoodieMetadataConfig.newBuilder()
                 .enable(true)
-                .withProperties(properties)
                 .withMetadataIndexColumnStats(false)
                 .withEnableBasePathOverride(true)
                 .withEnableBootstrapMetadataSync(enableBoostrapSync)
                 .withBasePathOverride(basePathOverride)
                 .build())
+        .withProps(properties)
         .build();
   }
 }

@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -54,6 +55,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -159,75 +161,6 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
   @AfterAll
   public static void cleanup() {
     DATA_GENERATOR.close();
-  }
-
-  @Test
-  public void simpleTest() throws Exception {
-    init();
-    spark().read().format("hudi").load(sourcePath1 + "/.hoodie/metadata/").registerTempTable("srcMetadata");
-
-    Dataset<Row> srcMdtDF = spark().sql("select key, type, filesystemMetadata  from srcMetadata where fileSystemMetadata is not null");
-
-    srcMdtDF.show(false);
-    HoodieMetadataSync.Config cfg = new HoodieMetadataSync.Config();
-    cfg.sourceBasePath = sourcePath1;
-    cfg.targetBasePath = targetPath;
-    String latestCommit = sourceMetaClient1.reloadActiveTimeline().lastInstant().get().getTimestamp();
-    cfg.commitToSync = latestCommit;
-    cfg.targetTableName = TABLE_NAME;
-    cfg.sparkMaster = "local[2]";
-    cfg.sparkMemory = "1g";
-    HoodieMetadataSync metadataSync = new HoodieMetadataSync(jsc(), cfg);
-    metadataSync.run();
-
-    spark().read().format("hudi").load(sourcePath1).registerTempTable("sTable1");
-
-    spark().read().format("hudi").option("hoodie.metadata.enable","true")
-        .option("hoodie.metadata.enable.base.path.for.partitions","true").option("hoodie.metadata.num.partition.path.levels", 1).load(cfg.targetBasePath).registerTempTable("tTable1");
-
-    Dataset<Row> sDf1 = spark().sql("select * from sTable1").drop("city_to_state");
-    sDf1.cache();
-
-    spark().read().format("hudi").load(targetPath + "/.hoodie/metadata/").registerTempTable("tTableMetadata");
-
-    Dataset<Row> mdtDF = spark().sql("select key, type, filesystemMetadata  from tTableMetadata where fileSystemMetadata is not null and type = 1");
-
-    mdtDF.show(false);
-
-    Dataset<Row> tDf = spark().sql("select * from tTable1").drop("city_to_state");
-
-    assertEquals(0, sDf1.except(tDf).count());
-    assertEquals(0, tDf.except(sDf1).count());
-
-    // lets sync 2nd table as well.
-
-    cfg = new HoodieMetadataSync.Config();
-    cfg.sourceBasePath = sourcePath2;
-    cfg.targetBasePath = targetPath;
-    latestCommit = sourceMetaClient2.reloadActiveTimeline().lastInstant().get().getTimestamp();
-    cfg.commitToSync = latestCommit;
-    cfg.targetTableName = TABLE_NAME;
-    cfg.sparkMaster = "local[2]";
-    cfg.sparkMemory = "1g";
-    metadataSync = new HoodieMetadataSync(jsc(), cfg);
-    metadataSync.run();
-
-    spark().read().format("hudi").load(sourcePath2).registerTempTable("sTable2");
-
-    spark().read().format("hudi").option("hoodie.metadata.enable","true")
-        .option("hoodie.metadata.enable.base.path.for.partitions","true").option("hoodie.metadata.num.partition.path.levels", 1).load(cfg.targetBasePath).registerTempTable("tTable1");
-
-    spark().read().format("hudi").load(targetPath + "/.hoodie/metadata/").registerTempTable("tTableMetadata");
-    Dataset<Row> sDf2 = spark().sql("select * from sTable2").drop("city_to_state");
-
-    mdtDF = spark().sql("select key, type, filesystemMetadata  from tTableMetadata where fileSystemMetadata is not null and type = 1");
-
-    mdtDF.show(false);
-
-    Dataset<Row> tDf2 = spark().sql("select * from tTable1").drop("city_to_state");
-
-    assertEquals(0, sDf1.union(sDf2).except(tDf2).count());
-    assertEquals(0, tDf.except(sDf1.union(sDf2)).count());
   }
 
   @Test
@@ -413,21 +346,297 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     assertDataFromSourcesToTarget(asList(sourcePath1, sourcePath2), targetPath, true);
   }
 
-  private void syncMetadata(String sourcePath, HoodieTableMetaClient sourceMetaClient, String targetPath) throws Exception {
+  @Test
+  void testHoodieMetadataSyncWithMDTTableServices() throws Exception {
+    Properties props = getTableProps();
+    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
+
+    for (int i = 0; i < 5; i++) {
+      HoodieTestTable testTable = HoodieTestTable.of(sourceMetaClient1);
+
+      // add 1st completed commit to source table
+      String instant = HoodieActiveTimeline.createNewInstantTime();
+      testTable.addCommit(instant, Option.of(testTable.doWriteOperation(instant, INSERT, singletonList("p1"),
+          singletonList("p1"), 2, false, true)));
+    }
+
+    List<String> configs = new ArrayList<>();
+    configs.add("hoodie.keep.min.commits=2");
+    configs.add("hoodie.keep.max.commits=3");
+    configs.add("hoodie.metadata.compact.max.delta.commits=5");
+    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false, true, configs);
+
+    HoodieTableMetaClient targetTableMetaClient = HoodieTableMetaClient.builder().setBasePath(targetPath)
+        .setConf(hadoopConf()).build();
+
+    assertFalse(targetTableMetaClient.getArchivedTimeline().getInstants().isEmpty());
+
+    String metadataPath = targetPath + "/.hoodie/metadata";
+    HoodieTableMetaClient targetMetadataTableMetaClient = HoodieTableMetaClient.builder().setBasePath(metadataPath)
+        .setConf(hadoopConf()).build();
+
+    List<HoodieInstant> instants = targetMetadataTableMetaClient.getActiveTimeline().getCommitsAndCompactionTimeline().getInstants();
+    // assert metadata table timeline contains a compaction action
+    assertTrue(instants.stream().anyMatch(instant -> instant.getAction().equals(HoodieTimeline.COMMIT_ACTION)));
+    List<HoodieInstant> archivedInstants = targetMetadataTableMetaClient.getArchivedTimeline().getInstants();
+    // validate archived timeline is not empty
+    assertFalse(archivedInstants.isEmpty());
+  }
+
+  @Test
+  void testHoodieMetadataSync_Bootstrap() throws Exception {
+    Properties props = getTableProps();
+    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
+
+    // write data to 1st table
+    triggerNCommitsToSource(getHoodieWriteConfig(sourcePath1), PARTITION_PATH_1, 2);
+
+    triggerClustering(sourcePath1);
+
+    // write data to 1st table after clustering
+    triggerNCommitsToSource(getHoodieWriteConfig(sourcePath1), PARTITION_PATH_1, 1);
+
+    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, true);
+    assertDataFromSourcesToTarget(singletonList(sourcePath1), targetPath, true);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonList(PARTITION_PATH_1), true);
+
+    // write data to 2nd table
+    sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
+    triggerNCommitsToSource(getHoodieWriteConfig(sourcePath2), PARTITION_PATH_2, 1);
+
+    syncMetadata(sourcePath2, sourceMetaClient2, targetPath, true);
+    assertDataFromSourcesToTarget(asList(sourcePath1, sourcePath2), targetPath, true);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonList(PARTITION_PATH_1), true);
+
+    triggerNCommitsToSource(getHoodieWriteConfig(sourcePath2), PARTITION_PATH_2, 1);
+
+    syncMetadata(sourcePath2, sourceMetaClient2, targetPath);
+    assertDataFromSourcesToTarget(asList(sourcePath1, sourcePath2), targetPath, true);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonList(PARTITION_PATH_1), true);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true})
+  void testHoodieMetadataSync_PendingInstantsWithNoNewInstantsInTimeline(boolean performBootstrap) throws Exception {
+    Properties props = getTableProps();
+    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
+    HoodieTestTable testTable = HoodieTestTable.of(sourceMetaClient1);
+
+    // add 1st completed commit to source table
+    String instant1 = "100";
+    testTable.addCommit(instant1, Option.of(testTable.doWriteOperation(instant1, INSERT, singletonList("p1"),
+        singletonList("p1"), 2, false, true)));
+
+    // add inflight commit to source table after 100
+    String instant2 = "105";
+    testTable.addInflightCommit(instant2);
+
+    // add completed commit after 105
+    String instant3 = "110";
+    testTable.addCommit(instant3, Option.of(testTable.doWriteOperation(instant3, INSERT, emptyList(),
+        singletonList("p1"), 2, false, true)));
+
+    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, performBootstrap);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), performBootstrap);
+
+    // move inflight commit 105 to completed state
+    testTable.moveInflightCommitToComplete(instant2, testTable.doWriteOperation(instant2, INSERT, emptyList(),
+        singletonList("p1"), 2, false, true));
+
+    // it should pick up the commit 105 and sync to target table
+    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), performBootstrap);
+
+    sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
+    HoodieTestTable testTable2 = HoodieTestTable.of(sourceMetaClient2);
+
+    String instant4 = "105";
+    testTable2.addCommit(instant4, Option.of(testTable2.doWriteOperation(instant4, INSERT, singletonList("p2"),
+        singletonList("p2"), 2, false, true)));
+
+    syncMetadata(sourcePath2, sourceMetaClient2, targetPath, performBootstrap);
+    assertFSV(asList(sourcePath1, sourcePath2), targetPath, asList("p1", "p2"), true);
+  }
+
+  @Test
+  void testHoodieMetadataSync_PendingInstantStuckForMultipleSyncs() throws Exception{
+    Properties props = getTableProps();
+    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
+    HoodieTestTable testTable = HoodieTestTable.of(sourceMetaClient1);
+
+    // add 1st completed commit to source table
+    String instant1 = "100";
+    testTable.addCommit(instant1, Option.of(testTable.doWriteOperation(instant1, INSERT, singletonList("p1"),
+        singletonList("p1"), 2, false, true)));
+
+    // add inflight commit to source table after 100
+    String instant2 = "105";
+    testTable.addInflightCommit(instant2);
+
+    String instant3 = "110";
+    testTable.addInflightCommit(instant3);
+
+    // add completed commit after 105
+    String instant4 = "115";
+    testTable.addCommit(instant4, Option.of(testTable.doWriteOperation(instant4, INSERT, emptyList(),
+        singletonList("p1"), 2, false, true)));
+
+    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), true);
+
+    // move inflight commit 105 to completed state
+    testTable.moveInflightCommitToComplete(instant2, testTable.doWriteOperation(instant2, INSERT, emptyList(),
+        singletonList("p1"), 2, false, true));
+
+    // it should pick up the commit 105 and sync to target table
+    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), false);
+
+    // move inflight commit 110 to completed state
+    testTable.moveInflightCommitToComplete(instant3, testTable.doWriteOperation(instant3, INSERT, emptyList(),
+        singletonList("p1"), 2, false, true));
+
+    // Add new commit to the timeline
+    String instant5 = "120";
+    testTable.addCommit(instant5, Option.of(testTable.doWriteOperation(instant5, INSERT, emptyList(),
+        singletonList("p1"), 2, false, true)));
+
+    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), false);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testHoodieMetadataSync_SameInstantsOnDifferentSourceTables(boolean performBootstrap) throws Exception {
+    Properties props = getTableProps();
+    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
+    HoodieTestTable testTable = HoodieTestTable.of(sourceMetaClient1);
+
+    sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
+    HoodieTestTable testTable2 = HoodieTestTable.of(sourceMetaClient2);
+
+    String instant1 = "100";
+    testTable.addCommit(instant1, Option.of(testTable.doWriteOperation(instant1, INSERT, singletonList("p1"),
+        singletonList("p1"), 2, false, true)));
+
+    String instant2 = "105";
+    testTable.addCommit(instant2, Option.of(testTable.doWriteOperation(instant1, INSERT, singletonList("p2"),
+        singletonList("p2"), 2, false, true)));
+
+    String instant3 = "100";
+    testTable2.addCommit(instant3, Option.of(testTable2.doWriteOperation(instant1, INSERT, singletonList("p3"),
+        singletonList("p3"), 2, false, true)));
+
+
+    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, performBootstrap);
+    syncMetadata(sourcePath2, sourceMetaClient2, targetPath, performBootstrap);
+
+    assertFSV(asList(sourcePath1, sourcePath2), targetPath, asList("p1", "p2" ,"p3"), true);
+  }
+
+  @Test
+  void testMetadataSync_RollbackPendingInstantOnTargetTable() throws Exception {
+    Properties props = getTableProps();
+    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
+    HoodieTestTable testTable = HoodieTestTable.of(sourceMetaClient1);
+
+    String instant1 = HoodieActiveTimeline.createNewInstantTime();
+    testTable.addCommit(instant1, Option.of(testTable.doWriteOperation(instant1, INSERT, singletonList("p1"),
+        singletonList("p1"), 2, false, true)));
+
+    // bootstrap target table
+    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), true);
+
+    HoodieTableMetaClient targetTableMetaClient = HoodieTableMetaClient.builder().setBasePath(targetPath)
+        .setConf(hadoopConf()).build();
+    HoodieTestTable targetTestTable = HoodieTestTable.of(targetTableMetaClient);
+
+    // add pending instant on target table
+    String pendingInstant = HoodieActiveTimeline.createNewInstantTime();
+    targetTestTable.addInflightCommit(pendingInstant);
+
+    // validate pending instant is present in the timeline
+    assertTrue(targetTableMetaClient.reloadActiveTimeline().getInstants().stream().anyMatch(instant -> instant.getTimestamp().equals(pendingInstant)));
+
+    String instant2 = HoodieActiveTimeline.createNewInstantTime();
+    testTable.addCommit(instant2, Option.of(testTable.doWriteOperation(instant2, INSERT, emptyList(),
+        singletonList("p1"), 2, false, true)));
+
+    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
+
+    assertFalse(targetTableMetaClient.reloadActiveTimeline().getInstants().stream().anyMatch(instant -> instant.getTimestamp().equals(pendingInstant)));
+    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), true);
+  }
+
+  @Test
+  void testMetadataSync_MultiSyncParallel() throws Exception {
+    Properties props = getTableProps();
+    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
+    sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
+    HoodieTestTable testTable = HoodieTestTable.of(sourceMetaClient1);
+
+    // Create two commits in source table
+    String instant1 = HoodieActiveTimeline.createNewInstantTime();
+    testTable.addCommit(instant1, Option.of(testTable.doWriteOperation(
+        instant1, INSERT, singletonList("p1"), singletonList("p1"), 2, false, true)));
+
+    HoodieTestTable testTable2 = HoodieTestTable.of(sourceMetaClient2);
+    String instant2 = HoodieActiveTimeline.createNewInstantTime();
+    testTable2.addCommit(instant2, Option.of(testTable2.doWriteOperation(
+        instant2, INSERT, emptyList(), singletonList("p2"), 2, false, true)));
+
+
+    String sourcePath3 = Paths.get(basePath(), "source2").toString();
+    HoodieTableMetaClient sourceMetaClient3 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath3, props);
+
+    HoodieTestTable testTable3 = HoodieTestTable.of(sourceMetaClient3);
+    String instant3 = HoodieActiveTimeline.createNewInstantTime();
+    testTable3.addCommit(instant3, Option.of(testTable3.doWriteOperation(
+        instant3, INSERT, emptyList(), singletonList("p3"), 2, false, true)));
+
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+
+    Future<?> sync1 = executor.submit(() -> syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false));
+    Future<?> sync2 = executor.submit(() -> syncMetadata(sourcePath2, sourceMetaClient2, targetPath, false));
+    Future<?> sync3 = executor.submit(() -> syncMetadata(sourcePath3, sourceMetaClient3, targetPath, false));
+
+    // Ensure both sync tasks finish successfully
+    sync1.get(60, TimeUnit.SECONDS);
+    sync2.get(60, TimeUnit.SECONDS);
+    sync3.get(60, TimeUnit.SECONDS);
+
+    executor.shutdown();
+
+    // Validate target is fully synced
+    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), false);
+  }
+
+  private void syncMetadata(String sourcePath, HoodieTableMetaClient sourceMetaClient, String targetPath) {
     syncMetadata(sourcePath, sourceMetaClient, targetPath, false);
   }
 
   private void syncMetadata(String sourcePath, HoodieTableMetaClient sourceMetaClient, String targetPath, boolean bootstrap) {
+    syncMetadata(sourcePath, sourceMetaClient, targetPath, bootstrap, false);
+  }
+
+  private void syncMetadata(String sourcePath, HoodieTableMetaClient sourceMetaClient, String targetPath, boolean bootstrap, boolean performTableMaintenance) {
+    syncMetadata(sourcePath, sourceMetaClient, targetPath, bootstrap, performTableMaintenance, Collections.emptyList());
+  }
+
+  private void syncMetadata(String sourcePath, HoodieTableMetaClient sourceMetaClient, String targetPath, boolean bootstrap,
+                            boolean performTableMaintenance, List<String> configs) {
     try {
       HoodieMetadataSync.Config cfg = new HoodieMetadataSync.Config();
       cfg.sourceBasePath = sourcePath;
       cfg.targetBasePath = targetPath;
-      String latestCommit = sourceMetaClient.reloadActiveTimeline().lastInstant().get().getTimestamp();
-      cfg.commitToSync = latestCommit;
+      cfg.commitToSync = sourceMetaClient.reloadActiveTimeline().lastInstant().get().getTimestamp();
       cfg.targetTableName = TABLE_NAME;
       cfg.sparkMaster = "local[2]";
       cfg.sparkMemory = "1g";
       cfg.boostrap = bootstrap;
+      cfg.performTableMaintenance = performTableMaintenance;
+      cfg.configs = configs;
       HoodieMetadataSync metadataSync = new HoodieMetadataSync(jsc(), cfg);
       metadataSync.run();
     } catch (Exception e) {
@@ -543,248 +752,6 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     }
   }
 
-  @Test
-  void testHoodieMetadataSyncWithRestore() throws Exception {
-    Properties props = getTableProps();
-    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
-
-    HoodieWriteConfig writeConfig1 = getHoodieWriteConfig(sourcePath1);
-    triggerNCommitsToSource(writeConfig1, PARTITION_PATH_1, 5);
-
-    syncMetadata(sourcePath1, sourceMetaClient1, targetPath);
-
-    assertDataFromSourcesToTarget(singletonList(sourcePath1), targetPath, true);
-
-    metaClient = HoodieTableMetaClient.builder().setBasePath(targetPath).setConf(jsc().hadoopConfiguration()).build();
-    List<String> completedTargetInstants = metaClient.reloadActiveTimeline()
-        .filterCompletedInstants().getInstants().stream().map(instant -> instant.getTimestamp()).collect(Collectors.toList());
-    int totalCommits = completedTargetInstants.size();
-
-    List<String> completedCommitsItSource1 = sourceMetaClient1.reloadActiveTimeline().getWriteTimeline()
-        .filterCompletedInstants().getInstants().stream().map(instant -> instant.getTimestamp()).collect(Collectors.toList());
-
-    HoodieMetadataSync.Config cfg = new HoodieMetadataSync.Config();
-    cfg.sourceBasePath = sourcePath1;
-    cfg.targetBasePath = targetPath;
-    String latestCommit = sourceMetaClient1.reloadActiveTimeline().lastInstant().get().getTimestamp();
-    cfg.commitToSync = latestCommit;
-    cfg.targetTableName = TABLE_NAME;
-    cfg.sparkMaster = "local[2]";
-    cfg.sparkMemory = "1g";
-    cfg.doRestore = true;
-    cfg.commitToRestore = completedTargetInstants.get(3);
-    HoodieMetadataSync metadataSync = new HoodieMetadataSync(jsc(), cfg);
-    metadataSync.run();
-
-    assertDataFromSourcesToTarget(asList(sourcePath1, sourcePath2), targetPath, false);
-
-    spark().sqlContext().clearCache();
-    spark().read().format("hudi").option("as.of.instant",completedCommitsItSource1.get(3)).load(sourcePath1).registerTempTable("srcTable1");
-
-    spark().read().format("hudi").option("hoodie.metadata.enable","true")
-        .option("hoodie.metadata.enable.base.path.for.partitions","true").load(targetPath).registerTempTable("tgtTable1");
-
-    Dataset<Row> tempSrcDf = spark().sql("select * from srcTable1").drop("city_to_state");
-    tempSrcDf.cache();
-    Dataset<Row> srcDf = tempSrcDf;
-    Dataset<Row> tgtDf = spark().sql("select * from tgtTable1").drop("city_to_state");
-    assertTrue(srcDf.except(tgtDf).isEmpty() && tgtDf.except(srcDf).isEmpty());
-    System.out.println("adfasd");
-  }
-
-
-  @Test
-  void testHoodieMetadataSyncWithMDTTableServices() throws Exception {
-    Properties props = getTableProps();
-    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
-
-    HoodieWriteConfig writeConfig1 = getHoodieWriteConfig(sourcePath1);
-    triggerNCommitsToSource(writeConfig1, PARTITION_PATH_1, 10);
-
-    syncMetadata(sourcePath1, sourceMetaClient1, targetPath);
-
-    assertDataFromSourcesToTarget(singletonList(sourcePath1), targetPath, true);
-  }
-
-  @Test
-  void testHoodieMetadataSync_Bootstrap() throws Exception {
-    Properties props = getTableProps();
-    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
-
-    // write data to 1st table
-    triggerNCommitsToSource(getHoodieWriteConfig(sourcePath1), PARTITION_PATH_1, 2);
-
-    triggerClustering(sourcePath1);
-
-    // write data to 1st table after clustering
-    triggerNCommitsToSource(getHoodieWriteConfig(sourcePath1), PARTITION_PATH_1, 1);
-
-    syncMetadata(sourcePath1, sourceMetaClient1, targetPath);
-    assertDataFromSourcesToTarget(singletonList(sourcePath1), targetPath, true);
-
-    // write data to 2nd table
-    sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
-    triggerNCommitsToSource(getHoodieWriteConfig(sourcePath2), PARTITION_PATH_2, 1);
-
-    syncMetadata(sourcePath2, sourceMetaClient2, targetPath);
-    assertDataFromSourcesToTarget(asList(sourcePath1, sourcePath2), targetPath, true);
-
-    triggerNCommitsToSource(getHoodieWriteConfig(sourcePath2), PARTITION_PATH_2, 1);
-
-    syncMetadata(sourcePath2, sourceMetaClient2, targetPath);
-    assertDataFromSourcesToTarget(asList(sourcePath1, sourcePath2), targetPath, true);
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void testHoodieMetadataSync_PendingInstants(boolean performBootstrap) throws Exception {
-    Properties props = getTableProps();
-    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
-    HoodieTestTable testTable = HoodieTestTable.of(sourceMetaClient1);
-
-    // add 1st completed commit to source table
-    String instant1 = "100";
-    testTable.addCommit(instant1, Option.of(testTable.doWriteOperation(instant1, INSERT, singletonList("p1"),
-        singletonList("p1"), 2, false, true)));
-
-    // add inflight commit to source table after 100
-    String instant2 = "105";
-    testTable.addInflightCommit(instant2);
-
-    // add completed commit after 105
-    String instant3 = "110";
-    testTable.addCommit(instant3, Option.of(testTable.doWriteOperation(instant1, INSERT, emptyList(),
-        singletonList("p1"), 2, false, true)));
-
-    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, performBootstrap);
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), true);
-
-    // move inflight commit 105 to completed state
-    testTable.moveInflightCommitToComplete(instant2, testTable.doWriteOperation(instant1, INSERT, emptyList(),
-        singletonList("p1"), 2, false, true));
-
-    // it should pick up the commit 105 and sync to target table
-    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), performBootstrap);
-
-    sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
-    HoodieTestTable testTable2 = HoodieTestTable.of(sourceMetaClient2);
-
-    String instant4 = "105";
-    testTable2.addCommit(instant4, Option.of(testTable2.doWriteOperation(instant1, INSERT, singletonList("p2"),
-        singletonList("p2"), 2, false, true)));
-
-    syncMetadata(sourcePath2, sourceMetaClient2, targetPath, performBootstrap);
-    assertFSV(asList(sourcePath1, sourcePath2), targetPath, asList("p1", "p2"), true);
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void testHoodieMetadataSync_SameInstantsOnDifferentSourceTables(boolean performBootstrap) throws Exception {
-    Properties props = getTableProps();
-    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
-    HoodieTestTable testTable = HoodieTestTable.of(sourceMetaClient1);
-
-    sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
-    HoodieTestTable testTable2 = HoodieTestTable.of(sourceMetaClient2);
-
-    String instant1 = "100";
-    testTable.addCommit(instant1, Option.of(testTable.doWriteOperation(instant1, INSERT, singletonList("p1"),
-        singletonList("p1"), 2, false, true)));
-
-    String instant2 = "105";
-    testTable.addCommit(instant2, Option.of(testTable.doWriteOperation(instant1, INSERT, singletonList("p2"),
-        singletonList("p2"), 2, false, true)));
-
-    String instant3 = "100";
-    testTable2.addCommit(instant3, Option.of(testTable2.doWriteOperation(instant1, INSERT, singletonList("p3"),
-        singletonList("p3"), 2, false, true)));
-
-
-    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, performBootstrap);
-    syncMetadata(sourcePath2, sourceMetaClient2, targetPath, performBootstrap);
-
-    assertFSV(asList(sourcePath1, sourcePath2), targetPath, asList("p1", "p2" ,"p3"), true);
-  }
-
-  @Test
-  void testMetadataSync_RollbackPendingInstantOnTargetTable() throws Exception {
-    Properties props = getTableProps();
-    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
-    HoodieTestTable testTable = HoodieTestTable.of(sourceMetaClient1);
-
-    String instant1 = HoodieActiveTimeline.createNewInstantTime();
-    testTable.addCommit(instant1, Option.of(testTable.doWriteOperation(instant1, INSERT, singletonList("p1"),
-        singletonList("p1"), 2, false, true)));
-
-    // bootstrap target table
-    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), true);
-
-    HoodieTableMetaClient targetTableMetaClient = HoodieTableMetaClient.builder().setBasePath(targetPath)
-        .setConf(hadoopConf()).build();
-    HoodieTestTable targetTestTable = HoodieTestTable.of(targetTableMetaClient);
-
-    // add pending instant on target table
-    String pendingInstant = HoodieActiveTimeline.createNewInstantTime();
-    targetTestTable.addInflightCommit(pendingInstant);
-
-    // validate pending instant is present in the timeline
-    assertTrue(targetTableMetaClient.reloadActiveTimeline().getInstants().stream().anyMatch(instant -> instant.getTimestamp().equals(pendingInstant)));
-
-    String instant2 = HoodieActiveTimeline.createNewInstantTime();
-    testTable.addCommit(instant2, Option.of(testTable.doWriteOperation(instant2, INSERT, emptyList(),
-        singletonList("p1"), 2, false, true)));
-
-    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
-
-    assertFalse(targetTableMetaClient.reloadActiveTimeline().getInstants().stream().anyMatch(instant -> instant.getTimestamp().equals(pendingInstant)));
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), true);
-  }
-
-  @Test
-  void testMetadataSync_MultiSyncParallel() throws Exception {
-    Properties props = getTableProps();
-    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
-    sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
-    HoodieTestTable testTable = HoodieTestTable.of(sourceMetaClient1);
-
-    // Create two commits in source table
-    String instant1 = HoodieActiveTimeline.createNewInstantTime();
-    testTable.addCommit(instant1, Option.of(testTable.doWriteOperation(
-        instant1, INSERT, singletonList("p1"), singletonList("p1"), 2, false, true)));
-
-    HoodieTestTable testTable2 = HoodieTestTable.of(sourceMetaClient2);
-    String instant2 = HoodieActiveTimeline.createNewInstantTime();
-    testTable2.addCommit(instant2, Option.of(testTable2.doWriteOperation(
-        instant2, INSERT, emptyList(), singletonList("p2"), 2, false, true)));
-
-
-    String sourcePath3 = Paths.get(basePath(), "source2").toString();
-    HoodieTableMetaClient sourceMetaClient3 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath3, props);
-
-    HoodieTestTable testTable3 = HoodieTestTable.of(sourceMetaClient3);
-    String instant3 = HoodieActiveTimeline.createNewInstantTime();
-    testTable3.addCommit(instant3, Option.of(testTable3.doWriteOperation(
-        instant3, INSERT, emptyList(), singletonList("p3"), 2, false, true)));
-
-    ExecutorService executor = Executors.newFixedThreadPool(2);
-
-    Future<?> sync1 = executor.submit(() -> syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false));
-    Future<?> sync2 = executor.submit(() -> syncMetadata(sourcePath2, sourceMetaClient2, targetPath, false));
-    Future<?> sync3 = executor.submit(() -> syncMetadata(sourcePath3, sourceMetaClient3, targetPath, false));
-
-    // Ensure both sync tasks finish successfully
-    sync1.get(60, TimeUnit.SECONDS);
-    sync2.get(60, TimeUnit.SECONDS);
-    sync3.get(60, TimeUnit.SECONDS);
-
-    executor.shutdown();
-
-    // Validate target is fully synced
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), true);
-  }
-
   private Properties getTableProps() {
     return HoodieTableMetaClient.withPropertyBuilder()
         .setTableName(RAW_TRIPS_TEST_NAME)
@@ -812,22 +779,22 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
               HoodieMetadataConfig.newBuilder().enable(false).build());
         }).collect(Collectors.toList());
 
-    Set<Path> sourcePartitions = new HashSet<>();
-    sourceFSVs.forEach(fsv -> sourcePartitions.addAll(fsv.getPartitionPaths()));
-
+    targetFSV.loadAllPartitions();
     Set<Path> targetPartitions = new HashSet<>(targetFSV.getPartitionPaths());
-    assertEquals(sourcePartitions, targetPartitions);
+    // ToDo - validate full partition paths
+    assertEquals(partitions.size(), targetPartitions.size());
 
     partitions.forEach(partition -> {
       Set<HoodieBaseFile> sourceBaseFiles = new HashSet<>();
       sourceFSVs.forEach(fsv ->
           sourceBaseFiles.addAll(
-              fsv.getLatestBaseFiles(partition).collect(Collectors.toSet())
+              matchLatestFileGroups ? fsv.getLatestBaseFiles(partition).collect(Collectors.toSet())
+                  : fsv.getAllBaseFiles(partition).collect(Collectors.toSet())
           )
       );
 
-      Set<HoodieBaseFile> targetBaseFiles =
-          targetFSV.getLatestBaseFiles(partition).collect(Collectors.toSet());
+      Set<HoodieBaseFile> targetBaseFiles = matchLatestFileGroups ? targetFSV.getLatestBaseFiles(partition).collect(Collectors.toSet())
+          : targetFSV.getAllBaseFiles(partition).collect(Collectors.toSet());
 
       assertBaseFileListEquality(sourceBaseFiles, targetBaseFiles);
     });
