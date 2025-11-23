@@ -6,37 +6,37 @@ toc_min_heading_level: 2
 toc_max_heading_level: 4
 ---
 
-Hudi handles mutations to records and streaming data, as we briefly touched upon in [timeline ordering](timeline#ordering-of-actions) section.
-To provide users full-fledged support for stream processing, Hudi goes to great lengths to make the storage engine and the underlying storage format understand how to merge changes to the same record key, which may arrive even in different order at different times. With the rise of mobile applications and IoT, these scenarios have become the norm rather than an exception. For example, a social networking application uploading user events several hours after they happened when the user connects to WiFi networks.
+Hudi handles mutations to records and streaming data as briefly touched upon in the [timeline ordering](timeline#ordering-of-actions) section.
+To provide users with full-fledged support for stream processing, Hudi goes to great lengths to make the storage engine and the underlying storage format understand how to merge changes to the same record key, which may arrive in different orders at different times. With the rise of mobile applications and IoT, these scenarios have become the norm rather than an exception. For example, a social networking application may upload user events several hours after they occur when the user reconnects to Wi‑Fi.
 
 ## Merge Modes
 
 To address these challenges, Hudi supports merge modes, which define how the base and log files are ordered in a file slice and how different records with the same record key within that file slice are merged consistently to produce the same deterministic results for snapshot queries, writers, and table services.
 
-Merge mode is a table-level configuration and is consistently being used in the following code paths:
+The merge mode is a table-level configuration used in the following code paths:
 
 * **(writing)** Combining multiple change records for the same record key while reading input data during writes. This is an optional optimization that reduces the number of records written to log files to improve query and write performance subsequently.
 
-* **(writing)** Merging final change record (partial/full update/delete) against existing record in storage for COW tables.
+* **(writing)** Merging the final change record (partial/full update/delete) against the existing record in storage for COW tables.
 
 * **(compaction)** Compaction service merges all change records in log files against base files, respecting the merge mode.
 
-* **(query)** Merging change records in log files, after filtering and projections against base file for MOR table queries.
+* **(query)** Merging change records in log files, after filtering and projections against the base file for MOR table queries.
 
-There are three types of merge modes: `COMMIT_TIME_ORDERING`, `EVENT_TIME_ORDERING`, and `CUSTOM`. The default merge mode is automatically inferred based on whether any ordering field is configured. If you do not specify a ordering field (e.g., `hoodie.table.ordering.fields`), the merge mode defaults to `COMMIT_TIME_ORDERING`, which simply replaces the old record with the new one from the incoming batch. If you do specify one or more ordering fields, the merge mode defaults to `EVENT_TIME_ORDERING`, which compares records based on the ordering fields' values to handle out-of-order data.
+There are three merge modes: `COMMIT_TIME_ORDERING`, `EVENT_TIME_ORDERING`, and `CUSTOM`. The default merge mode is automatically inferred based on whether any ordering field is configured. If you do not specify an ordering field (e.g., `hoodie.table.ordering.fields`), the merge mode defaults to `COMMIT_TIME_ORDERING`, which replaces the old record with the new one from the incoming batch. If you do specify one or more ordering fields, the merge mode defaults to `EVENT_TIME_ORDERING`, which compares records based on the ordering field values to handle out-of-order data.
 
 You can explicitly configure the merge mode using the write config `hoodie.write.record.merge.mode`. When you create or write to a table with this config, it will be persisted to the table's configuration file (`hoodie.properties`) as `hoodie.record.merge.mode`. Once persisted, all subsequent reads and writes will use this merge mode unless explicitly overridden in the write config.
 
-**Merge modes are built-in, ready-to-use record mergers.** For most use cases, you can simply choose `COMMIT_TIME_ORDERING` or `EVENT_TIME_ORDERING` by setting the appropriate ordering field(s) without any additional config or implementation. These modes provide standard merging behaviors that cover the majority of scenarios. For advanced use cases requiring custom merge logic, you can use the `CUSTOM` merge mode and implement your own `HoodieRecordMerger` interface.
+**Merge modes are built-in, ready-to-use record mergers.** For most use cases, you can choose `COMMIT_TIME_ORDERING` or `EVENT_TIME_ORDERING` by setting the appropriate ordering field(s) without any additional configuration or implementation. These modes provide standard merging behaviors that cover the majority of scenarios. For advanced use cases requiring custom merge logic, you can use the `CUSTOM` merge mode and implement the `HoodieRecordMerger` interface.
 
 :::note
-Merge mode should not be altered once a table is created to avoid inconsistent behavior due to compaction producing different merge results when switching between the modes.
+The merge mode should not be altered once a table is created to avoid inconsistent behavior due to compaction producing different merge results when switching between modes.
 :::
 
 ### `COMMIT_TIME_ORDERING`
 
-Here, we expect the input records to arrive in strict order such that arrival order is same as their
-delta commit order on the table. Merging simply picks the record belonging to the latest write as the merged result. In relational data model speak,
+Here, we expect the input records to arrive in strict order such that arrival order matches their
+delta commit order on the table. Merging picks the record belonging to the latest write as the merged result. In relational data model terms,
 this provides overwrite semantics aligned with serializable writes on the timeline.
 
 <figure>
@@ -56,11 +56,11 @@ With event time ordering, the merging picks the record with the highest value on
     <img className="docimage" src={require("/assets/images/event-time-ordering-merge-mode.png").default} alt="upsert_path.png" />
 </figure>
 
-In the example above, two microservices produce change records about orders at different times, that can arrive out-of-order. As color-coded,
-this can lead to application-level inconsistent states in the table if simply merged in commit time order like a cancelled order being re-created or
+In the example above, two microservices produce change records about orders at different times that can arrive out of order. As color-coded,
+this can lead to application-level inconsistent states in the table if simply merged in commit time order like a canceled order being re-created or
 a paid order moved back to just-created state expecting payment again. Event time ordering helps by ignoring older state changes that arrive late and
 avoiding order status from "jumping back" in time. Combined with [non-blocking concurrency control](concurrency_control#non-blocking-concurrency-control-mode),
-this provides a very powerful way for processing such data streams efficiently and correctly.
+this provides a very powerful way to process such data streams efficiently and correctly.
 
 ### `CUSTOM`
 
@@ -68,17 +68,17 @@ this provides a very powerful way for processing such data streams efficiently a
 **For most users:** The built-in `COMMIT_TIME_ORDERING` and `EVENT_TIME_ORDERING` merge modes should be sufficient. Only use `CUSTOM` mode if you need specialized merge logic that cannot be achieved with the standard modes.
 :::
 
-In some cases, even more control and customization may be needed. Extending the same example above, the two microservices could be updating two different
+In some cases, even more control and customization may be needed. Extending the example above, the two microservices could be updating two different
 sets of columns "order_info" and "payment_info", along with order state. The merge logic is then expected to not only resolve the correct status, but merge
-order_info from the record in created state, into the record in cancelled state that already has payment_info fields populated with reasons payment failed.
+order_info from the record in created state into the record in the canceled state that already has payment_info fields populated with reasons payment failed.
 Such reconciliation provides a simple denormalized data model for downstream consumption where queries (for example, fraud detection) can simply filter fields
-across order_info and payment_info without costly self-join on each access.
+across order_info and payment_info without costly self-joins on each access.
 
 To implement custom merge logic, you need to implement the `HoodieRecordMerger` interface. Hudi allows the authoring of cross-language custom record mergers on top of a standard record merger API, which supports full and partial merges. The `HoodieRecordMerger` interface uses the `BufferedRecord` class to provide better performance and consistency by working directly with engine-native record formats without requiring conversion to Avro.
 
 The `BufferedRecord` class wraps the record data along with key information such as the record key, ordering value, schema identifier, and `HoodieOperation`. The `RecordContext` provides a common interface for accessing and manipulating records across different engines (Spark, Flink, etc.), making custom mergers engine-agnostic.
 
-The Java APIs are sketched below at a high-level. The interface takes older/newer records wrapped in `BufferedRecord` instances and produces a merged `BufferedRecord`. Record merger is configured using a `hoodie.write.record.merge.strategy.id` write config whose value is a UUID, which is taken by the writer to persist in the table config, and is expected to be returned by `getMergingStrategy()`
+The Java APIs are sketched below at a high level. The interface takes older/newer records wrapped in `BufferedRecord` instances and produces a merged `BufferedRecord`. The record merger is configured using a `hoodie.write.record.merge.strategy.id` write config whose value is a UUID, which is taken by the writer to persist in the table config, and is expected to be returned by `getMergingStrategy()`
 method below. Using this mechanism, Hudi can automatically deduce the record merger to use for the table across different language and engine runtimes.
 
 ```Java
