@@ -44,7 +44,45 @@
   --ifm-gray-900: #50646E;
   --ifm-background-gray-50: #F8F9FB;
   --ifm-font-family-base: 'Montserrat';
-  --ifm-heading-font-family: 'Zalando Sans';
+  --ifm-heading-font-family: 'ZalandoSans';
+}
+
+/* Montserrat Variable — normal */
+@font-face {
+  font-family: "Montserrat";
+  src: url("/fonts/Montserrat-VariableFont_wght.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Montserrat Variable — italic */
+@font-face {
+  font-family: "Montserrat";
+  src: url("/fonts/Montserrat-Italic-VariableFont_wght.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* ZalandoSans Variable — normal */
+@font-face {
+  font-family: "ZalandoSans";
+  src: url("/fonts/ZalandoSans-VariableFont_wdth,wght.ttf") format("truetype");
+  font-weight: 100 900;
+  font-stretch: 75% 125%; /* supports width axis */
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ZalandoSans Variable — italic */
+@font-face {
+  font-family: "ZalandoSans";
+  src: url("/fonts/ZalandoSans-Italic-VariableFont_wdth,wght.ttf") format("truetype");
+  font-weight: 100 900;
+  font-stretch: 75% 125%;
+  font-style: italic;
+  font-display: swap;
 }
 
 .dropdown__link--active, .dropdown__link--active:hover {

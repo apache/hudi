@@ -9,9 +9,9 @@ const Services = ({ name, serviceData }) => {
       </div>
       <div className={styles.serviceListContainer}>
         {
-          serviceData?.map((elem) => {
+          serviceData?.map((elem, i) => {
             return (
-              <div className={styles.serviceList}>
+              <div className={styles.serviceList} key={i}>
                 <img src={elem.icon} alt={elem.title}/>
                 <div className={styles.serviceTitle}>
                   {elem.title}
