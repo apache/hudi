@@ -12,7 +12,7 @@ Apache Hudi 1.1.0 is a major release that brings significant performance improve
 
 - **Pluggable Table Format Framework** - Native integration of multiple table formats with unified metadata management
 - **Spark 4.0 and Flink 2.0 Support** - Full support for latest major compute engine versions
-- **Enhanced Indexing** - Non-global Record Index, partition-level bucket index, native HFile writer, and Column Stats V2
+- **Enhanced Indexing** - Partitioned Record Index, partition-level bucket index, native HFile writer, and Column Stats V2
 - **Table Services Optimization** - Parquet file stitching and incremental scheduling for compaction/clustering
 - **Storage-based Lock Provider** - Multi-writer concurrency control without external dependencies
 - **Record Merging Evolution** - Deprecation of payload classes in favor of merge modes and merger APIs
@@ -35,9 +35,9 @@ Hudi 1.1.0 introduces table version 9 with support for index versioning. Indexes
 
 ### Indexing
 
-#### Non-Global Record Index
+#### Partitioned Record Index
 
-In addition to the global Record Index introduced in 0.14.0, Hudi 1.1.0 adds a non-global variant that guarantees uniqueness for partition path and record key pairs. This index speeds up lookups in very large partitioned datasets.
+In addition to the global Record Index introduced in 0.14.0, Hudi 1.1.0 adds a partitioned variant that guarantees uniqueness for partition path and record key pairs. This index speeds up lookups in very large partitioned datasets.
 
 Prior to 1.1.0, only global Record Index was available, configured as:
 
@@ -46,9 +46,9 @@ hoodie.metadata.record.index.enable=true
 hoodie.index.type=RECORD_INDEX
 ```
 
-From 1.1.0 onwards, both global and non-global variants are available:
+From 1.1.0 onwards, both global and partitioned variants are available:
 
-For non-global Record Index:
+For partitioned Record Index:
 
 - Metadata table: `hoodie.metadata.record.level.index.enable=true`
 - Write index: `hoodie.index.type=RECORD_LEVEL_INDEX`
