@@ -51,7 +51,7 @@ INSERT INTO hudi_cow_pt_tbl PARTITION(dt, hh) SELECT 1 AS id, 'a1' AS name, 1000
 :::note Mapping to write operations
 Hudi offers flexibility in choosing the underlying [write operation](write_operations) of a `INSERT INTO` statement using 
 the `hoodie.spark.sql.insert.into.operation` configuration. Possible options include *"bulk_insert"* (large inserts), *"insert"* (with small file management), 
-and *"upsert"* (with deduplication/merging). If a precombine field is not set, *"insert"* is chosen as the default. For a table with preCombine field set,
+and *"upsert"* (with deduplication/merging). If ordering fields are not set, *"insert"* is chosen as the default. For a table with ordering fields set (via `preCombineField`),
 *"upsert"* is chosen as the default operation.
 :::
 
@@ -101,7 +101,7 @@ update hudi_cow_pt_tbl set ts = 1001 where name = 'a1';
 ```
 
 :::info
-The `UPDATE` operation requires the specification of a `preCombineField`.
+The `UPDATE` operation requires the specification of ordering fields (via `preCombineField`).
 :::
 
 ### Merge Into
@@ -138,9 +138,9 @@ For a Hudi table with user configured primary keys, the join condition and the `
 
 For a table where Hudi auto generates primary keys, the join condition in `MERGE INTO` can be on any arbitrary data columns. 
 
-if the `hoodie.record.merge.mode` is set to `EVENT_TIME_ORDERING`, the `preCombineField` is required to be set with value in the `UPDATE`/`INSERT` clause. 
+if the `hoodie.record.merge.mode` is set to `EVENT_TIME_ORDERING`, ordering fields (via `preCombineField`) are required to be set with value in the `UPDATE`/`INSERT` clause. 
 
-It is enforced that if the target table has primary key and partition key column, the source table counterparts must enforce the same data type accordingly. Plus, if the target table is configured with `hoodie.record.merge.mode` = `EVENT_TIME_ORDERING` where target table is expected to have a valid precombine field configuration, the source table counterpart must also have the same data type.
+It is enforced that if the target table has primary key and partition key column, the source table counterparts must enforce the same data type accordingly. Plus, if the target table is configured with `hoodie.record.merge.mode` = `EVENT_TIME_ORDERING` where target table is expected to have valid ordering fields configuration, the source table counterpart must also have the same data type.
 :::
 
 Examples below
@@ -379,7 +379,7 @@ There are a number of options available for the sink table:
 | path | Y | N/A | Base path for the target hoodie table. The path would be created if it does not exist, otherwise a hudi table expects to be initialized successfully |
 | table.type  | N | COPY_ON_WRITE | Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ |
 | write.operation | N | upsert | The write operation, that this write should do (insert or upsert is supported) |
-| write.precombine.field | N | ts | Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..) |
+| write.precombine.field | N | ts | Field used for ordering records before actual write. When two records have the same key value, we will pick the one with the largest value for the ordering field, determined by Object.compareTo(..). Note: This config is deprecated, use `ordering.fields` instead |
 | write.payload.class | N | OverwriteWithLatestAvroPayload.class | Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. This will render any value set for the option in-effective |
 | write.insert.drop.duplicates | N | false | Flag to indicate whether to drop duplicates upon insert. By default insert will accept duplicates, to gain extra performance |
 | write.ignore.failed | N | true | Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch. By default true (in favor of streaming progressing over data integrity) |

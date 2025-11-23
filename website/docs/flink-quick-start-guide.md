@@ -194,7 +194,7 @@ String basePath = "file:///tmp/hudi_table";
 Map<String, String> options = new HashMap<>();
 options.put("path", basePath);
 options.put("table.type", HoodieTableType.MERGE_ON_READ.name());
-options.put("precombine.field", "ts");
+options.put("ordering.fields", "ts");
 
 DataStream<RowData> dataStream = env.addSource(...);
 HoodiePipeline.Builder builder = HoodiePipeline.builder(targetTable)

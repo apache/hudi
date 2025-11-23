@@ -57,7 +57,7 @@ var dfFromData0 = spark.createDataFrame(data0,schema)
 
 dfFromData0.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option("hoodie.datasource.write.precombine.field", "preComb").
+  option("hoodie.table.ordering.fields", "preComb").
   option("hoodie.datasource.write.recordkey.field", "rowId").
   option("hoodie.datasource.write.partitionpath.field", "partitionId").
   option("hoodie.database.name", databaseName).

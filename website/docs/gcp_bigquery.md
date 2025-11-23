@@ -94,7 +94,7 @@ spark-submit --master yarn \
 --hoodie-conf hoodie.datasource.hive_sync.table=mytable \
 --hoodie-conf hoodie.datasource.write.recordkey.field=mykey \
 --hoodie-conf hoodie.datasource.write.partitionpath.field=year,month,day \
---hoodie-conf hoodie.datasource.write.precombine.field=ts \
+--hoodie-conf hoodie.table.ordering.fields=ts \
 --hoodie-conf hoodie.datasource.write.keygenerator.type=COMPLEX \
 --hoodie-conf hoodie.datasource.write.hive_style_partitioning=true \
 --hoodie-conf hoodie.datasource.write.drop.partition.columns=true \

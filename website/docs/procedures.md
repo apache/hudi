@@ -958,7 +958,7 @@ call show_table_properties(table => 'test_hudi_table', limit => 10);
 
 | key                           | value |
 |-------------------------------|-------|
-| hoodie.table.precombine.field | ts    |
+| hoodie.table.ordering.fields | ts    |
 | hoodie.table.partition.fields | dt    |
 
 ### show_fs_path_detail

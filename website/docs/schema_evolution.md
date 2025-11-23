@@ -49,10 +49,10 @@ This chart shows what the table schema will be when an incoming column type has 
 | Incoming Schema &#8595; \ Table Schema &#8594; | int    | long   | float  | double | string | bytes |
 |------------------------------------------------|--------|--------|--------|--------|--------|-------|
 | int                                            | int    | long   | float  | double | string | X     |
-| long                                           | long   | long   | float  | double | string | X     | 
-| float                                          | float  | float  | float  | double | string | X     |  
-| double                                         | double | double | double | double | string | X     |  
-| string                                         | string | string | string | string | string | bytes | 
+| long                                           | long   | long   | float  | double | string | X     |
+| float                                          | float  | float  | float  | double | string | X     |
+| double                                         | double | double | double | double | string | X     |
+| string                                         | string | string | string | string | string | bytes |
 | bytes                                          | X      | X      | X      | X      | string | bytes |
 
 ## Schema Evolution on read
@@ -82,12 +82,12 @@ ALTER TABLE tableName ADD COLUMNS(col_spec[, col_spec ...])
 
 Column specification consists of five field, next to each other. 
 
-| Parameter    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-|:-------------|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| col_name     | name of the new column. To add sub-column col1 to a nested map type column member map\<string, struct\<n: string, a: int>>, set this field to member.value.col1                                                                                                                                                                                                                                                                               |
-| col_type     | type of the new column.                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| nullable     | whether or not the new column allows null values. (optional)                                                                                                                                                                                                                                                                                                                                                                                          |
-| comment      | comment of the new column. (optional)                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Parameter    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+|:-------------|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| col_name     | name of the new column. To add sub-column col1 to a nested map type column member map\<string, struct\<n: string, a: int>>, set this field to member.value.col1                                                                                                                                                                                                                                                                                 |
+| col_type     | type of the new column.                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| nullable     | whether or not the new column allows null values. (optional)                                                                                                                                                                                                                                                                                                                                                                                    |
+| comment      | comment of the new column. (optional)                                                                                                                                                                                                                                                                                                                                                                                                           |
 | col_position | The position where the new column is added. The value can be *FIRST* or *AFTER origin_col*. If it is set to *FIRST*, the new column will be added before the first column of the table. If it is set to *AFTER origin_col*, the new column will be added after the original column.  *FIRST* can be used only when new sub-columns are added to nested columns and not in top-level columns. There are no restrictions on the usage of *AFTER*. |
 
 **Examples**
@@ -107,13 +107,13 @@ ALTER TABLE tableName ALTER [COLUMN] col_old_name TYPE column_type [COMMENT] col
 
 **Parameter Description**
 
-| Parameter        | Description                                                                                                                                          |
-|:-----------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------|
-| tableName        | Table name.                                                                                                                                          |
-| col_old_name     | Name of the column to be altered.                                                                                                                    |
-| column_type      | Type of the target column.                                                                                                                           |
-| col_comment      | Optional comments on the altered column.                                                                                                             |
-| column_name      | The new position to place the altered column. For example, *AFTER* **column_name** indicates that the target column is placed after **column_name**. |
+| Parameter    | Description                                                                                                                                          |
+|:-------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------|
+| tableName    | Table name.                                                                                                                                          |
+| col_old_name | Name of the column to be altered.                                                                                                                    |
+| column_type  | Type of the target column.                                                                                                                           |
+| col_comment  | Optional comments on the altered column.                                                                                                             |
+| column_name  | The new position to place the altered column. For example, *AFTER* **column_name** indicates that the target column is placed after **column_name**. |
 
 
 **Examples**
@@ -131,15 +131,15 @@ ALTER TABLE table1 ALTER COLUMN a.b.c DROP NOT NULL
 
 **column type change**
 
-| Source\Target      | long  | float | double | string | decimal | date | int |
-|--------------------|-------|-------|--------|--------|---------|------|-----|
-| int                |   Y   |   Y   |    Y   |    Y   |    Y    |   N  |  Y  |
-| long               |   Y   |   Y   |    Y   |    Y   |    Y    |   N  |  N  |
-| float              |   N   |   Y   |    Y   |    Y   |    Y    |   N  |  N  |
-| double             |   N   |   N   |    Y   |    Y   |    Y    |   N  |  N  |
-| decimal            |   N   |   N   |    N   |    Y   |    Y    |   N  |  N  |
-| string             |   N   |   N   |    N   |    Y   |    Y    |   Y  |  N  |
-| date               |   N   |   N   |    N   |    Y   |    N    |   Y  |  N  |
+| Source\Target | long | float | double | string | decimal | date | int |
+|---------------|------|-------|--------|--------|---------|------|-----|
+| int           | Y    | Y     | Y      | Y      | Y       | N    | Y   |
+| long          | Y    | Y     | Y      | Y      | Y       | N    | N   |
+| float         | N    | Y     | Y      | Y      | Y       | N    | N   |
+| double        | N    | N     | Y      | Y      | Y       | N    | N   |
+| decimal       | N    | N     | N      | Y      | Y       | N    | N   |
+| string        | N    | N     | N      | Y      | Y       | Y    | N   |
+| date          | N    | N     | N      | Y      | N       | Y    | N   |
 
 ### Deleting Columns
 **Syntax**
@@ -193,7 +193,7 @@ val basePath = "file:///tmp/hudi_trips_cow"
 val schema = StructType( Array(
      StructField("rowId", StringType,true),
      StructField("partitionId", StringType,true),
-     StructField("preComb", LongType,true),
+     StructField("orderingField", LongType,true),
      StructField("name", StringType,true),
      StructField("versionId", StringType,true),
      StructField("intToLong", IntegerType,true)
@@ -207,7 +207,7 @@ val data1 = Seq(Row("row_1", "part_0", 0L, "bob", "v_0", 0),
 var dfFromData1 = spark.createDataFrame(data1, schema)
 dfFromData1.write.format("hudi").
    options(getQuickstartWriteConfigs).
-   option("hoodie.datasource.write.precombine.field", "preComb").
+   option("hoodie.table.ordering.fields", "orderingField").
    option("hoodie.datasource.write.recordkey.field", "rowId").
    option("hoodie.datasource.write.partitionpath.field", "partitionId").
    option("hoodie.index.type","SIMPLE").
@@ -231,15 +231,15 @@ scala> spark.sql("desc hudi_trips_snapshot").show()
     |   _hoodie_file_name|   string|   null|
     |               rowId|   string|   null|
     |         partitionId|   string|   null|
-    |             preComb|   bigint|   null|
+    |        orderingField|   bigint|   null|
     |                name|   string|   null|
     |           versionId|   string|   null|
     |           intToLong|      int|   null|
     +--------------------+---------+-------+
     
-scala> spark.sql("select rowId, partitionId, preComb, name, versionId, intToLong from hudi_trips_snapshot").show()
-    +-----+-----------+-------+----+---------+---------+
-    |rowId|partitionId|preComb|name|versionId|intToLong|
+scala> spark.sql("select rowId, partitionId, orderingField, name, versionId, intToLong from hudi_trips_snapshot").show()
+    +-----+-----------+-------------+----+---------+---------+
+    |rowId|partitionId|orderingField|name|versionId|intToLong|
     +-----+-----------+-------+----+---------+---------+
     |row_3|     part_0|      0| tom|      v_0|        0|
     |row_2|     part_0|      0|john|      v_0|        0|
@@ -252,7 +252,7 @@ scala> :paste
 val newSchema = StructType( Array(
     StructField("rowId", StringType,true),
     StructField("partitionId", StringType,true),
-    StructField("preComb", LongType,true),
+    StructField("orderingField", LongType,true),
     StructField("name", StringType,true),
     StructField("versionId", StringType,true),
     StructField("intToLong", LongType,true),
@@ -266,7 +266,7 @@ val data2 = Seq(Row("row_2", "part_0", 5L, "john", "v_3", 3L, "newField_1"),
 var dfFromData2 = spark.createDataFrame(data2, newSchema)
 dfFromData2.write.format("hudi").
     options(getQuickstartWriteConfigs).
-    option("hoodie.datasource.write.precombine.field", "preComb").
+    option("hoodie.table.ordering.fields", "orderingField").
     option("hoodie.datasource.write.recordkey.field", "rowId").
     option("hoodie.datasource.write.partitionpath.field", "partitionId").
     option("hoodie.index.type","SIMPLE").
@@ -290,7 +290,7 @@ scala> spark.sql("desc hudi_trips_snapshot").show()
     |   _hoodie_file_name|   string|   null|
     |               rowId|   string|   null|
     |         partitionId|   string|   null|
-    |             preComb|   bigint|   null|
+    |        orderingField|   bigint|   null|
     |                name|   string|   null|
     |           versionId|   string|   null|
     |           intToLong|   bigint|   null|
@@ -298,9 +298,9 @@ scala> spark.sql("desc hudi_trips_snapshot").show()
     +--------------------+---------+-------+
 
 
-scala> spark.sql("select rowId, partitionId, preComb, name, versionId, intToLong, newField from hudi_trips_snapshot").show()
-    +-----+-----------+-------+-------+---------+---------+----------+
-    |rowId|partitionId|preComb|   name|versionId|intToLong|  newField|
+scala> spark.sql("select rowId, partitionId, orderingField, name, versionId, intToLong, newField from hudi_trips_snapshot").show()
+    +-----+-----------+-------------+-------+---------+---------+----------+
+    |rowId|partitionId|orderingField|   name|versionId|intToLong|  newField|
     +-----+-----------+-------+-------+---------+---------+----------+
     |row_3|     part_0|      0|    tom|      v_0|        0|      null|
     |row_2|     part_0|      5|   john|      v_3|        3|newField_1|

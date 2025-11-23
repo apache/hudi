@@ -136,7 +136,7 @@ import org.apache.spark.sql.streaming.ProcessingTime;
         .option("hoodie.datasource.write.table.type", tableType)
         .option("hoodie.datasource.write.recordkey.field", "_row_key")
         .option("hoodie.datasource.write.partitionpath.field", "partition")
-        .option("hoodie.datasource.write.precombine.field"(), "timestamp")
+        .option("hoodie.table.ordering.fields", "timestamp")
         .option("hoodie.compact.inline.max.delta.commits", "10")
         .option("hoodie.datasource.compaction.async.enable", "true")
         .option("hoodie.table.name", tableName).option("checkpointLocation", checkpointLocation)

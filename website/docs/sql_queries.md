@@ -225,7 +225,7 @@ INSERT INTO hudi_table_merge_mode VALUES (1, 'a1', 900, 20.0);
 SELECT id, name, ts, price FROM hudi_table_merge_mode;
 ```
 
-With `EVENT_TIME_ORDERING`, the record with the larger event time (`precombineField`) overwrites the record with the
+With `EVENT_TIME_ORDERING`, the record with the larger event time (specified via `precombineField` ordering field) overwrites the record with the
 smaller event time on the same key, regardless of transaction time. 
 
 ### Snapshot Query with Custom Merge Mode
