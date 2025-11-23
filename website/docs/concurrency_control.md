@@ -215,10 +215,8 @@ In this model, the following are the guarantees on [write operations](write_oper
 
 ## Full-on Multi-writer + Async table services
 
-Hudi has introduced a new concurrency mode `NON_BLOCKING_CONCURRENCY_CONTROL`, where unlike OCC, multiple writers can
-operate on the table with non-blocking conflict resolution. The writers can write into the same file group with the
-conflicts resolved automatically by the query reader and the compactor. The new concurrency mode is currently
-available for preview in version 1.0.1-beta only. You can read more about it under section [Full-on Multi-writer + Async table services](#full-on-multi-writer--async-table-services).
+Hudi supports concurrency mode `NON_BLOCKING_CONCURRENCY_CONTROL`, where unlike OCC, multiple writers can
+operate on the table with non-blocking conflict resolution. The writers can write into the same file group with the conflicts resolved automatically by the query reader and the compactor. You can read more about it under [this section](#non-blocking-concurrency-control).
 
 It is not always possible to serialize all write operations to a table (such as UPSERT, INSERT or DELETE) into the same write process and therefore, multi-writing capability may be required.
 In multi-writing, disparate distributed processes run in parallel or overlapping time windows to write to the same table. In such cases, an external locking mechanism is a must to safely
@@ -246,13 +244,10 @@ The `NON_BLOCKING_CONCURRENCY_CONTROL` offers the same set of guarantees as ment
 explicit locks for serializing the writes. Lock is only needed for writing the commit metadata to the Hudi timeline. The
 completion time for the commits reflects the serialization order and file slicing is done based on completion time.
 Multiple writers can operate on the table with non-blocking conflict resolution. The writers can write into the same
-file group with the conflicts resolved automatically by the query reader and the compactor. The new concurrency mode is
-currently available for preview in version 1.0.1-beta only with the caveat that conflict resolution is not supported yet
-between clustering and ingestion. It works for compaction and ingestion, and we can see an example of that with [Flink writers](sql_dml#non-blocking-concurrency-control-experimental).
+file group with the conflicts resolved automatically by the query reader and the compactor. It works for compaction and ingestion, and we can see an example of that with [Flink writers](sql_dml#non-blocking-concurrency-control-experimental).
 
 :::note
-`NON_BLOCKING_CONCURRENCY_CONTROL` between ingestion writer and table service writer is not yet supported for clustering.
-Please use `OPTIMISTIC_CONCURRENCY_CONTROL` for clustering.
+`NON_BLOCKING_CONCURRENCY_CONTROL` between ingestion writer and table service writer is not yet supported for clustering. Please use `OPTIMISTIC_CONCURRENCY_CONTROL` for clustering.
 :::
 
 ## Early conflict Detection
@@ -292,7 +287,7 @@ A Hudi Streamer job can then be triggered as follows:
 
 ```java
 [hoodie]$ spark-submit \
-  --jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.1.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.1.jar" \
+  --jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.1.0.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.1.0.jar" \
   --class org.apache.hudi.utilities.streamer.HoodieStreamer `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
   --props file://${PWD}/hudi-utilities/src/test/resources/streamer-config/kafka-source.properties \
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
