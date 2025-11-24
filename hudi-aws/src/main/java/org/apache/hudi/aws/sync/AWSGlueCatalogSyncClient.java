@@ -22,6 +22,7 @@ import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 import org.apache.hudi.aws.sync.util.GluePartitionFilterGenerator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -38,7 +39,6 @@ import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
-import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.regions.Region;
@@ -543,7 +543,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public void updateTableSchema(String tableName, MessageType newSchema, SchemaDifference schemaDiff) {
+  public void updateTableSchema(String tableName, HoodieSchema newSchema, SchemaDifference schemaDiff) {
     try {
       Table table = getTable(awsGlue, databaseName, tableName);
       Map<String, String> newSchemaMap = parquetSchemaToMapSchema(newSchema, config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE), false);
@@ -595,7 +595,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public void createOrReplaceTable(String tableName,
-                                   MessageType storageSchema,
+                                   HoodieSchema storageSchema,
                                    String inputFormatClass,
                                    String outputFormatClass,
                                    String serdeClass,
@@ -626,7 +626,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
    * issues with table creation because of provided schema or properties
    */
   private void validateSchemaAndProperties(String tableName,
-                                           MessageType storageSchema,
+                                           HoodieSchema storageSchema,
                                            String inputFormatClass,
                                            String outputFormatClass,
                                            String serdeClass,
@@ -641,7 +641,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public void createTable(String tableName,
-                          MessageType storageSchema,
+                          HoodieSchema storageSchema,
                           String inputFormatClass,
                           String outputFormatClass,
                           String serdeClass,

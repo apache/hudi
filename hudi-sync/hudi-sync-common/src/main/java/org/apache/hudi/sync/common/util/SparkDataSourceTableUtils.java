@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sync.common.util;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
 
@@ -41,7 +42,7 @@ public class SparkDataSourceTableUtils {
    * @return A new parameters added the spark's table properties.
    */
   public static Map<String, String> getSparkTableProperties(List<String> partitionNames, String sparkVersion,
-                                                            int schemaLengthThreshold, MessageType schema) {
+                                                            int schemaLengthThreshold, HoodieSchema schema) {
     // Convert the schema and partition info used by spark sql to hive table properties.
     // The following code refers to the spark code in
     // https://github.com/apache/spark/blob/master/sql/hive/src/main/scala/org/apache/spark/sql/hive/HiveExternalCatalog.scala

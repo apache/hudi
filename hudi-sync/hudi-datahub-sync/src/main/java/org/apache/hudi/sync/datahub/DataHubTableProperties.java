@@ -21,11 +21,12 @@ package org.apache.hudi.sync.datahub;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
-import org.apache.parquet.schema.MessageType;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -112,9 +113,9 @@ public class DataHubTableProperties {
 
   public static class HoodieTableMetadata {
     private final HoodieTableMetaClient metaClient;
-    private final MessageType schema;
+    private final HoodieSchema schema;
 
-    public HoodieTableMetadata(HoodieTableMetaClient metaClient, MessageType schema) {
+    public HoodieTableMetadata(HoodieTableMetaClient metaClient, HoodieSchema schema) {
       this.metaClient = metaClient;
       this.schema = schema;
     }
@@ -127,7 +128,7 @@ public class DataHubTableProperties {
       return metaClient.getTableConfig().getTableVersion().toString();
     }
 
-    public MessageType getSchema() {
+    public HoodieSchema getSchema() {
       return schema;
     }
   }
