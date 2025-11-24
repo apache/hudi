@@ -156,7 +156,7 @@ public class HoodieMetadataSync implements Serializable {
     @Parameter(names = {"--commit-to-restore", "-ctr"}, description = "Commit to restore to", required = false)
     public String commitToRestore = null;
 
-    @Parameter(names = {"--boostrap"}, description = "performs table maintenance",
+    @Parameter(names = {"--perform-table-maintenance"}, description = "performs table maintenance",
         splitter = IdentitySplitter.class)
     public Boolean performTableMaintenance = false;
 
