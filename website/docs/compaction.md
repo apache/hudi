@@ -4,7 +4,7 @@ summary: "In this page, we describe async compaction in Hudi."
 toc: true
 toc_min_heading_level: 2
 toc_max_heading_level: 4
-last_modified_at:
+last_modified_at: 2025-11-24T02:44:48
 ---
 ## Background
 
@@ -54,6 +54,19 @@ There are two strategies involved in scheduling the compaction:
 - Compaction Strategy: Determines which file groups to compact.
 
 Hudi provides various options for both these strategies as discussed below.
+
+### Incremental Scheduling
+
+Hudi supports incremental scheduling for compaction operations, which significantly improves performance on tables with a large number of partitions. Instead of scanning all partitions during each compaction scheduling run, incremental scheduling only processes partitions that have changed since the last completed compaction.
+
+This feature is enabled by default via `hoodie.table.services.incremental.enabled`. When enabled, compaction scheduling will:
+
+1. Identify partitions that have been modified since the last completed compaction by analyzing commit metadata within the time window between the last completed compaction and the current scheduling instant
+2. Include any partitions that were marked as missing from previous scheduling runs (e.g., due to IO limits)
+3. Only scan and process those incremental partitions
+4. Fall back to scanning all partitions if the last completed compaction instant cannot be found (e.g., due to archival) or if an exception occurs during incremental partition retrieval
+
+For tables with many partitions, this optimization can dramatically reduce scheduling overhead and improve overall job stability.
 
 #### Trigger Strategies
 

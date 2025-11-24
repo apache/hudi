@@ -2,7 +2,7 @@
 title: Clustering
 summary: "In this page, we describe async compaction in Hudi."
 toc: true
-last_modified_at:
+last_modified_at: 2025-11-24T02:44:48
 ---
 
 ## Background
@@ -39,8 +39,21 @@ Clustering table service can run asynchronously or synchronously adding a new ac
 Following steps are followed to schedule clustering.
 
 1. Identify files that are eligible for clustering: Depending on the clustering strategy chosen, the scheduling logic will identify the files eligible for clustering.
-2. Group files that are eligible for clustering based on specific criteria. Each group is expected to have data size in multiples of ‘targetFileSize’. Grouping is done as part of ‘strategy’ defined in the plan. Additionally, there is an option to put a cap on group size to improve parallelism and avoid shuffling large amounts of data.
+2. Group files that are eligible for clustering based on specific criteria. Each group is expected to have data size in multiples of 'targetFileSize'. Grouping is done as part of 'strategy' defined in the plan. Additionally, there is an option to put a cap on group size to improve parallelism and avoid shuffling large amounts of data.
 3. Finally, the clustering plan is saved to the timeline in an avro [metadata format](https://github.com/apache/hudi/blob/master/hudi-common/src/main/avro/HoodieClusteringPlan.avsc).
+
+### Incremental Scheduling
+
+Hudi supports incremental scheduling for clustering operations, which significantly improves performance on tables with a large number of partitions. Instead of scanning all partitions during each clustering scheduling run, incremental scheduling only processes partitions that have changed since the last completed clustering operation.
+
+This feature is enabled by default via `hoodie.table.services.incremental.enabled`. When enabled, clustering scheduling will:
+
+1. Identify partitions that have been modified since the last completed clustering operation by analyzing commit metadata within the time window between the last completed clustering and the current scheduling instant
+2. Include any partitions that were marked as missing from previous scheduling runs (e.g., due to IO limits or group size restrictions)
+3. Only scan and process those incremental partitions
+4. Fall back to scanning all partitions if the last completed clustering instant cannot be found (e.g., due to archival) or if an exception occurs during incremental partition retrieval
+
+For tables with many partitions, this optimization can dramatically reduce scheduling overhead and improve overall job stability.
 
 ### Execute clustering
 
