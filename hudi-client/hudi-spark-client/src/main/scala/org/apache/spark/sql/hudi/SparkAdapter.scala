@@ -23,10 +23,10 @@ import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
-import org.apache.hudi.storage.StoragePath
-
+import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
+import org.apache.parquet.schema.MessageType
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
@@ -41,7 +41,7 @@ import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, ParquetFilters}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
@@ -245,7 +245,7 @@ trait SparkAdapter extends Serializable {
 
   def getRebaseSpec(policy: String): RebaseSpec
 
-  def enableParquetFilterPushDownStringPredicate(conf: SQLConf): Boolean
+  def createParquetFilters(schema: MessageType, storageConf: StorageConfiguration[_], sqlConf: SQLConf): ParquetFilters
 
   /**
    * Gets the [[UTF8String]] factory implementation for the current Spark version.
