@@ -82,6 +82,7 @@ public abstract class HFileBlock {
   private final HFileBlockType blockType;
   protected final int onDiskSizeWithoutHeader;
   protected final int uncompressedSizeWithoutHeader;
+  protected final int onDiskDataSizeWithHeader;
   protected final int bytesPerChecksum;
   private boolean isUnpacked = false;
   protected byte[] compressedByteBuff;
@@ -106,7 +107,9 @@ public abstract class HFileBlock {
         byteBuff, startOffsetInBuff + Header.UNCOMPRESSED_SIZE_WITHOUT_HEADER_INDEX);
     this.bytesPerChecksum = readInt(
         byteBuff, startOffsetInBuff + Header.BYTES_PER_CHECKSUM_INDEX);
-    this.sizeCheckSum = numChecksumBytes(getOnDiskSizeWithHeader(), bytesPerChecksum);
+    this.onDiskDataSizeWithHeader = readInt(
+        byteBuff, startOffsetInBuff + Header.ON_DISK_DATA_SIZE_WITH_HEADER_INDEX);
+    this.sizeCheckSum = numChecksumBytes(onDiskDataSizeWithHeader, bytesPerChecksum);
     if (CompressionCodec.NONE.equals(context.getCompressionCodec())) {
       isUnpacked = true;
       this.startOffsetInBuff = startOffsetInBuff;
@@ -137,6 +140,7 @@ public abstract class HFileBlock {
     this.uncompressedEndOffset = -1;
     this.onDiskSizeWithoutHeader = -1;
     this.uncompressedSizeWithoutHeader = -1;
+    this.onDiskDataSizeWithHeader = -1;
     this.bytesPerChecksum = -1;
   }
 
@@ -227,8 +231,11 @@ public abstract class HFileBlock {
         // Copy the block header which is not compressed
         System.arraycopy(
             compressedByteBuff, startOffsetInCompressedBuff, byteBuff, 0, HFILEBLOCK_HEADER_SIZE);
+        // The actual compressed data size excludes the checksum bytes.
+        // onDiskDataSizeWithHeader = HEADER_SIZE + compressedDataSize (no checksums)
+        int compressedDataSize = onDiskDataSizeWithHeader - HFILEBLOCK_HEADER_SIZE;
         try (InputStream byteBuffInputStream = new ByteArrayInputStream(
-            compressedByteBuff, startOffsetInCompressedBuff + HFILEBLOCK_HEADER_SIZE, onDiskSizeWithoutHeader)) {
+            compressedByteBuff, startOffsetInCompressedBuff + HFILEBLOCK_HEADER_SIZE, compressedDataSize)) {
           context.getCompressor().decompress(
               byteBuffInputStream,
               byteBuff,

@@ -20,6 +20,7 @@
 package org.apache.hudi.io.compress;
 
 import org.apache.hudi.io.compress.airlift.HoodieAirliftGzipCompressor;
+import org.apache.hudi.io.compress.airlift.HoodieAirliftZstdCompressor;
 import org.apache.hudi.io.compress.builtin.HoodieNoneCompressor;
 
 /**
@@ -35,6 +36,8 @@ public class HoodieCompressorFactory {
         return new HoodieNoneCompressor();
       case GZIP:
         return new HoodieAirliftGzipCompressor();
+      case ZSTD:
+        return new HoodieAirliftZstdCompressor();
       default:
         throw new IllegalArgumentException(
             "The compressor is not supported for compression codec: " + compressionCodec);
