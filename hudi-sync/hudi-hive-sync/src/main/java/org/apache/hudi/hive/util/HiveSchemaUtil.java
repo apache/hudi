@@ -208,7 +208,6 @@ public class HiveSchemaUtil {
    * @return : Equivalent Hive schema
    */
   private static String convertField(final HoodieSchema fieldSchema, boolean supportTimestamp, boolean doFormat) {
-    // TODO : handle logical types like decimal, date, timestamp etc.
     HoodieSchema nonNullType = fieldSchema.getNonNullType();
     switch (nonNullType.getType()) {
       case INT:
@@ -225,6 +224,20 @@ public class HiveSchemaUtil {
         return STRING_TYPE_NAME;
       case BYTES:
         return BINARY_TYPE_NAME;
+      case DATE:
+        return DATE_TYPE_NAME;
+      case TIMESTAMP:
+        if (!supportTimestamp) {
+          return BIGINT_TYPE_NAME;
+        } else {
+          return "TIMESTAMP";
+        }
+      case TIME:
+        HoodieSchema.Time timeSchema = (HoodieSchema.Time) nonNullType;
+        return timeSchema.getPrecision() == HoodieSchema.TimePrecision.MILLIS ? INT_TYPE_NAME : BIGINT_TYPE_NAME;
+      case DECIMAL:
+        HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) nonNullType;
+        return "DECIMAL(" + decimalSchema.getPrecision() + (doFormat ? " , " : ",") + decimalSchema.getScale() + ")";
       case ARRAY:
         HoodieSchema elementType = nonNullType.getElementType();
         return createHiveArray(elementType, supportTimestamp, doFormat);
