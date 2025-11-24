@@ -143,7 +143,8 @@ public enum HoodieSchemaType {
         return DECIMAL;
       } else if (logicalType instanceof LogicalTypes.TimeMillis || logicalType instanceof LogicalTypes.TimeMicros) {
         return TIME;
-      } else if (logicalType instanceof LogicalTypes.TimestampMillis || logicalType instanceof LogicalTypes.TimestampMicros) {
+      } else if (logicalType instanceof LogicalTypes.TimestampMillis || logicalType instanceof LogicalTypes.TimestampMicros
+          || logicalType instanceof LogicalTypes.LocalTimestampMillis || logicalType instanceof LogicalTypes.LocalTimestampMicros) {
         return TIMESTAMP;
       } else if (logicalType instanceof LogicalTypes.Date) {
         return DATE;
@@ -200,20 +201,7 @@ public enum HoodieSchemaType {
    * @return true if this type is a primitive type (not RECORD, ENUM, ARRAY, MAP, or UNION)
    */
   public boolean isPrimitive() {
-    switch (this) {
-      case STRING:
-      case BYTES:
-      case INT:
-      case LONG:
-      case FLOAT:
-      case DOUBLE:
-      case BOOLEAN:
-      case NULL:
-      case FIXED:
-        return true;
-      default:
-        return false;
-    }
+    return !isComplex();
   }
 
   /**
@@ -222,7 +210,16 @@ public enum HoodieSchemaType {
    * @return true if this type is a complex type (RECORD, ENUM, ARRAY, MAP, or UNION)
    */
   public boolean isComplex() {
-    return !isPrimitive();
+    switch (this) {
+      case RECORD:
+      case ENUM:
+      case ARRAY:
+      case MAP:
+      case UNION:
+        return true;
+      default:
+        return false;
+    }
   }
 
   /**
@@ -236,6 +233,7 @@ public enum HoodieSchemaType {
       case LONG:
       case FLOAT:
       case DOUBLE:
+      case DECIMAL:
         return true;
       default:
         return false;

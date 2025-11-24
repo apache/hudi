@@ -24,6 +24,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -33,27 +37,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test class for {@link HoodieSchemaType}.
  */
 public class TestHoodieSchemaType {
+  private static final Map<HoodieSchemaType, Schema> TEST_SCHEMAS = buildSampleSchemasForType();
 
   @ParameterizedTest
   @EnumSource(HoodieSchemaType.class)
   public void testAvroTypeRoundTripConversion(HoodieSchemaType hoodieType) {
     // Test conversion from Hudi to Avro and back
-    Schema.Type avroType = hoodieType.toAvroType();
-    HoodieSchemaType convertedBack = HoodieSchemaType.fromAvro(Schema.create(avroType));
+    HoodieSchemaType convertedBack = HoodieSchemaType.fromAvro(TEST_SCHEMAS.get(hoodieType));
 
     assertEquals(hoodieType, convertedBack,
         "Round-trip conversion should preserve type: " + hoodieType);
-  }
-
-  @ParameterizedTest
-  @EnumSource(Schema.Type.class)
-  public void testFromAvroTypeMapping(Schema.Type avroType) {
-    // Test that all Avro types can be converted to Hudi types
-    HoodieSchemaType hoodieType = HoodieSchemaType.fromAvro(Schema.create(avroType));
-    Schema.Type convertedBack = hoodieType.toAvroType();
-
-    assertEquals(avroType, convertedBack,
-        "Avro type conversion should be consistent: " + avroType);
   }
 
   @Test
@@ -152,7 +145,7 @@ public class TestHoodieSchemaType {
   }
 
   @Test
-  public void testFromAvroTypeSpecificMappings() {
+  public void testFromAvro() {
     // Test reverse mappings
     assertEquals(HoodieSchemaType.STRING, HoodieSchemaType.fromAvro(Schema.create(Schema.Type.STRING)));
     assertEquals(HoodieSchemaType.INT, HoodieSchemaType.fromAvro(Schema.create(Schema.Type.INT)));
@@ -162,20 +155,51 @@ public class TestHoodieSchemaType {
     assertEquals(HoodieSchemaType.BOOLEAN, HoodieSchemaType.fromAvro(Schema.create(Schema.Type.BOOLEAN)));
     assertEquals(HoodieSchemaType.BYTES, HoodieSchemaType.fromAvro(Schema.create(Schema.Type.BYTES)));
     assertEquals(HoodieSchemaType.NULL, HoodieSchemaType.fromAvro(Schema.create(Schema.Type.NULL)));
-    assertEquals(HoodieSchemaType.RECORD, HoodieSchemaType.fromAvro(Schema.create(Schema.Type.RECORD)));
-    assertEquals(HoodieSchemaType.ENUM, HoodieSchemaType.fromAvro(Schema.create(Schema.Type.ENUM)));
-    assertEquals(HoodieSchemaType.ARRAY, HoodieSchemaType.fromAvro(Schema.create(Schema.Type.ARRAY)));
-    assertEquals(HoodieSchemaType.MAP, HoodieSchemaType.fromAvro(Schema.create(Schema.Type.MAP)));
-    assertEquals(HoodieSchemaType.UNION, HoodieSchemaType.fromAvro(Schema.create(Schema.Type.UNION)));
-    assertEquals(HoodieSchemaType.FIXED, HoodieSchemaType.fromAvro(Schema.create(Schema.Type.FIXED)));
+    assertEquals(HoodieSchemaType.RECORD, HoodieSchemaType.fromAvro(Schema.createRecord("record", null, null, false)));
+    assertEquals(HoodieSchemaType.ENUM, HoodieSchemaType.fromAvro(Schema.createEnum("enum", null, null, Arrays.asList("A", "B", "C"))));
+    assertEquals(HoodieSchemaType.ARRAY, HoodieSchemaType.fromAvro(Schema.createArray(Schema.create(Schema.Type.STRING))));
+    assertEquals(HoodieSchemaType.MAP, HoodieSchemaType.fromAvro(Schema.createMap(Schema.create(Schema.Type.STRING))));
+    assertEquals(HoodieSchemaType.UNION, HoodieSchemaType.fromAvro(Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.INT))));
+    assertEquals(HoodieSchemaType.FIXED, HoodieSchemaType.fromAvro(Schema.createFixed("fixed", null, null, 10)));
     assertEquals(HoodieSchemaType.TIMESTAMP, HoodieSchemaType.fromAvro(LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG))));
     assertEquals(HoodieSchemaType.TIMESTAMP, HoodieSchemaType.fromAvro(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))));
     assertEquals(HoodieSchemaType.TIMESTAMP, HoodieSchemaType.fromAvro(LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG))));
     assertEquals(HoodieSchemaType.TIMESTAMP, HoodieSchemaType.fromAvro(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))));
     assertEquals(HoodieSchemaType.TIME, HoodieSchemaType.fromAvro(LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG))));
     assertEquals(HoodieSchemaType.TIME, HoodieSchemaType.fromAvro(LogicalTypes.timeMillis().addToSchema(Schema.create(Schema.Type.INT))));
-    assertEquals(HoodieSchemaType.DECIMAL, HoodieSchemaType.fromAvro(LogicalTypes.decimal(2, 5).addToSchema(Schema.create(Schema.Type.BYTES))));
+    assertEquals(HoodieSchemaType.DECIMAL, HoodieSchemaType.fromAvro(LogicalTypes.decimal(10, 5).addToSchema(Schema.create(Schema.Type.BYTES))));
     assertEquals(HoodieSchemaType.DATE, HoodieSchemaType.fromAvro(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT))));
     assertEquals(HoodieSchemaType.UUID, HoodieSchemaType.fromAvro(LogicalTypes.uuid().addToSchema(Schema.create(Schema.Type.STRING))));
+  }
+
+  private static Map<HoodieSchemaType, Schema> buildSampleSchemasForType() {
+    Map<HoodieSchemaType, Schema> map = new EnumMap<>(HoodieSchemaType.class);
+    // Standard types
+    map.put(HoodieSchemaType.STRING, Schema.create(Schema.Type.STRING));
+    map.put(HoodieSchemaType.INT, Schema.create(Schema.Type.INT));
+    map.put(HoodieSchemaType.LONG, Schema.create(Schema.Type.LONG));
+    map.put(HoodieSchemaType.FLOAT, Schema.create(Schema.Type.FLOAT));
+    map.put(HoodieSchemaType.DOUBLE, Schema.create(Schema.Type.DOUBLE));
+    map.put(HoodieSchemaType.BOOLEAN, Schema.create(Schema.Type.BOOLEAN));
+    map.put(HoodieSchemaType.BYTES, Schema.create(Schema.Type.BYTES));
+    map.put(HoodieSchemaType.NULL, Schema.create(Schema.Type.NULL));
+    map.put(HoodieSchemaType.RECORD, Schema.createRecord("record", null, null, false));
+    map.put(HoodieSchemaType.ENUM, Schema.createEnum("enum", null, null, Arrays.asList("A", "B", "C")));
+    map.put(HoodieSchemaType.ARRAY, Schema.createArray(Schema.create(Schema.Type.STRING)));
+    map.put(HoodieSchemaType.MAP, Schema.createMap(Schema.create(Schema.Type.STRING)));
+    map.put(HoodieSchemaType.UNION, Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.INT)));
+    map.put(HoodieSchemaType.FIXED, Schema.createFixed("fixed", null, null, 10));
+    // Logical types
+    map.put(HoodieSchemaType.TIMESTAMP,
+        LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG)));
+    map.put(HoodieSchemaType.TIME,
+        LogicalTypes.timeMillis().addToSchema(Schema.create(Schema.Type.INT)));
+    map.put(HoodieSchemaType.DECIMAL,
+        LogicalTypes.decimal(10, 5).addToSchema(Schema.create(Schema.Type.BYTES)));
+    map.put(HoodieSchemaType.DATE,
+        LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT)));
+    map.put(HoodieSchemaType.UUID,
+        LogicalTypes.uuid().addToSchema(Schema.create(Schema.Type.STRING)));
+    return map;
   }
 }

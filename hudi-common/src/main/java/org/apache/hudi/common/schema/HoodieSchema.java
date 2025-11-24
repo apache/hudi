@@ -32,6 +32,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -128,7 +129,15 @@ public class HoodieSchema implements Serializable {
    */
   public static HoodieSchema create(HoodieSchemaType type) {
     ValidationUtils.checkArgument(type != null, "Schema type cannot be null");
-    ValidationUtils.checkArgument(type.isPrimitive(), "Only primitive types are supported: " + type);
+    ValidationUtils.checkArgument(type.isPrimitive(), () -> "Only primitive types are supported: " + type);
+    ValidationUtils.checkArgument(type != HoodieSchemaType.DECIMAL, () -> "Decimal precision and scale must be specified");
+    ValidationUtils.checkArgument(type != HoodieSchemaType.TIME, () -> "Time precision must be specified");
+    ValidationUtils.checkArgument(type != HoodieSchemaType.TIMESTAMP, () -> "Timestamp precision must be specified");
+    if (type == HoodieSchemaType.DATE) {
+      return createDate();
+    } else if (type == HoodieSchemaType.UUID) {
+      return createUUID();
+    }
 
     Schema.Type avroType = type.toAvroType();
     ValidationUtils.checkState(avroType != null, "Converted Avro type cannot be null");
@@ -305,6 +314,16 @@ public class HoodieSchema implements Serializable {
     return new HoodieSchema(fixedSchema);
   }
 
+  /**
+   * Creates a decimal schema backed by a fixed size byte array with the specified properties.
+   * @param name      the fixed type name
+   * @param namespace the namespace (can be null)
+   * @param doc       the documentation (can be null)
+   * @param precision the precision of the decimal value
+   * @param scale     the scale of the decimal value
+   * @param fixedSize the size in bytes
+   * @return a new HoodieSchema representing a decimal type
+   */
   public static HoodieSchema createDecimal(String name, String namespace, String doc, int precision, int scale, int fixedSize) {
     ValidationUtils.checkArgument(name != null && !name.isEmpty(), "Decimal name cannot be null or empty");
     ValidationUtils.checkArgument(precision > 0, () -> "Decimal precision must be positive: " + precision);
@@ -316,6 +335,12 @@ public class HoodieSchema implements Serializable {
     return new HoodieSchema.Decimal(decimalSchema);
   }
 
+  /**
+   * Creates a decimal schema with the specified precision and scale.
+   * @param precision the precision of the decimal value
+   * @param scale     the scale of the decimal value
+   * @return a new HoodieSchema representing a decimal type
+   */
   public static HoodieSchema createDecimal(int precision, int scale) {
     ValidationUtils.checkArgument(precision > 0, () -> "Decimal precision must be positive: " + precision);
     ValidationUtils.checkArgument(scale >= 0, () -> "Decimal scale cannot be negative: " + scale);
@@ -326,46 +351,84 @@ public class HoodieSchema implements Serializable {
     return new HoodieSchema.Decimal(decimalSchema);
   }
 
+  /**
+   * Creates a timestamp with milliseconds precision that is adjusted to UTC.
+   * @return a new HoodieSchema representing a timestamp
+   */
   public static HoodieSchema createTimestampMillis() {
     Schema timestampSchema = Schema.create(Schema.Type.LONG);
     LogicalTypes.timestampMillis().addToSchema(timestampSchema);
     return new HoodieSchema.Timestamp(timestampSchema);
   }
 
+  /**
+   * Creates a timestamp with microseconds precision that is adjusted to UTC.
+   * @return a new HoodieSchema representing a timestamp
+   */
   public static HoodieSchema createTimestampMicros() {
     Schema timestampSchema = Schema.create(Schema.Type.LONG);
     LogicalTypes.timestampMicros().addToSchema(timestampSchema);
     return new HoodieSchema.Timestamp(timestampSchema);
   }
 
+  /**
+   * Creates a local timestamp with milliseconds precision (no timezone adjustment).
+   * @return a new HoodieSchema representing a local timestamp
+   */
   public static HoodieSchema createLocalTimestampMillis() {
     Schema localTimestampSchema = Schema.create(Schema.Type.LONG);
     LogicalTypes.localTimestampMillis().addToSchema(localTimestampSchema);
     return new HoodieSchema.Timestamp(localTimestampSchema);
   }
 
+  /**
+   * Creates a local timestamp with microseconds precision (no timezone adjustment).
+   * @return a new HoodieSchema representing a local timestamp
+   */
   public static HoodieSchema createLocalTimestampMicros() {
     Schema localTimestampSchema = Schema.create(Schema.Type.LONG);
     LogicalTypes.localTimestampMicros().addToSchema(localTimestampSchema);
     return new HoodieSchema.Timestamp(localTimestampSchema);
   }
 
+  /**
+   * Creates a schema representing a time of day with milliseconds precision.
+   * @return a new HoodieSchema representing time of day
+   */
   public static HoodieSchema createTimeMillis() {
     Schema timeSchema = Schema.create(Schema.Type.INT);
     LogicalTypes.timeMillis().addToSchema(timeSchema);
     return new HoodieSchema.Time(timeSchema);
   }
 
+  /**
+   * Creates a schema representing a time of day with microseconds precision.
+   * @return a new HoodieSchema representing time of day
+   */
   public static HoodieSchema createTimeMicros() {
     Schema timeSchema = Schema.create(Schema.Type.LONG);
     LogicalTypes.timeMicros().addToSchema(timeSchema);
     return new HoodieSchema.Time(timeSchema);
   }
 
+  /**
+   * Creates a schema representing a date.
+   * @return a new HoodieSchema representing a date
+   */
   public static HoodieSchema createDate() {
     Schema dateSchema = Schema.create(Schema.Type.INT);
     LogicalTypes.date().addToSchema(dateSchema);
     return new HoodieSchema(dateSchema);
+  }
+
+  /**
+   * Creates a schema representing a random generated universally unique identifier.
+   * @return a new HoodieSchema representing a UUID
+   */
+  public static HoodieSchema createUUID() {
+    Schema uuidSchema = Schema.create(Schema.Type.STRING);
+    LogicalTypes.uuid().addToSchema(uuidSchema);
+    return new HoodieSchema(uuidSchema);
   }
 
   /**
@@ -454,6 +517,9 @@ public class HoodieSchema implements Serializable {
    * @return Option containing the schema name, or Option.empty() if none
    */
   public Option<String> getName() {
+    if (avroSchema.getLogicalType() != null) {
+      return Option.of(type.name().toLowerCase(Locale.ENGLISH));
+    }
     return Option.ofNullable(avroSchema.getName());
   }
 
@@ -1032,6 +1098,11 @@ public class HoodieSchema implements Serializable {
     }
 
     @Override
+    public Option<String> getName() {
+      return Option.of(String.format("decimal(%d,%d)", precision, scale));
+    }
+
+    @Override
     public int getFixedSize() {
       if (fixedSize.isPresent()) {
         return fixedSize.get();
@@ -1099,6 +1170,23 @@ public class HoodieSchema implements Serializable {
     }
 
     @Override
+    public Option<String> getName() {
+      if (isUtcAdjusted) {
+        if (precision == TimePrecision.MILLIS) {
+          return Option.of("timestamp-millis");
+        } else {
+          return Option.of("timestamp-micros");
+        }
+      } else {
+        if (precision == TimePrecision.MILLIS) {
+          return Option.of("local-timestamp-millis");
+        } else {
+          return Option.of("local-timestamp-micros");
+        }
+      }
+    }
+
+    @Override
     public boolean equals(Object o) {
       if (o == null || getClass() != o.getClass()) {
         return false;
@@ -1141,6 +1229,15 @@ public class HoodieSchema implements Serializable {
 
     public TimePrecision getPrecision() {
       return precision;
+    }
+
+    @Override
+    public Option<String> getName() {
+      if (precision == TimePrecision.MILLIS) {
+        return Option.of("time-millis");
+      } else {
+        return Option.of("time-micros");
+      }
     }
 
     @Override
