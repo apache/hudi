@@ -1184,15 +1184,15 @@ PARTITIONED BY (city);
 
 :::note Implications of defining record keys
 Configuring keys for a Hudi table, has a new implications on the table. If record key is set by the user, `upsert` is chosen as the [write operation](write_operations).
-Also if a record key is configured, then it's also advisable to specify a precombine or ordering field, to correctly handle cases where the source data has 
+Also if a record key is configured, then it's also advisable to specify ordering fields, to correctly handle cases where the source data has 
 multiple records with the same key. See section below. 
 :::
 
 ## Merge Modes
-Hudi also allows users to specify a _precombine_ field, which will be used to order and resolve conflicts between multiple versions of the same record. This is very important for 
+Hudi also allows users to specify ordering fields, which will be used to order and resolve conflicts between multiple versions of the same record. This is very important for 
 use-cases like applying database CDC logs to a Hudi table, where a given record may appear multiple times in the source data due to repeated upstream updates. 
 Hudi also uses this mechanism to support out-of-order data arrival into a table, where records may need to be resolved in a different order than their commit time. 
-For e.g. using a _created_at_ timestamp field as the precombine field will prevent older versions of a record from overwriting newer ones or being exposed to queries, even 
+For e.g. using a _created_at_ timestamp field as an ordering field will prevent older versions of a record from overwriting newer ones or being exposed to queries, even 
 if they are written at a later commit time to the table. This is one of the key features, that makes Hudi, best suited for dealing with streaming data.
 
 To enable different merge semantics, Hudi supports [merge modes](record_merger). Commit time and event time based merge modes are supported out of the box.
@@ -1214,7 +1214,7 @@ values={[
 // spark-shell 
 updatesDf.write.format("hudi").
   ...
-  option("hoodie.datasource.write.precombine.field", "ts").
+  option("hoodie.table.ordering.fields", "ts").
   ...
 ```
 
@@ -1226,7 +1226,7 @@ updatesDf.write.format("hudi").
 # pyspark
 hudi_options = {
 ...
-'hoodie.datasource.write.precombine.field': 'ts'
+'hoodie.table.ordering.fields': 'ts'
 }
 
 upsert.write.format("hudi").

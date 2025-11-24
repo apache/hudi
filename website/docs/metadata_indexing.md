@@ -138,7 +138,7 @@ from raw parquet to Hudi table. We used the widely available [NY Taxi dataset](h
 ```bash
 hoodie.datasource.write.recordkey.field=VendorID
 hoodie.datasource.write.partitionpath.field=tpep_dropoff_datetime
-hoodie.datasource.write.precombine.field=tpep_dropoff_datetime
+hoodie.table.ordering.fields=tpep_dropoff_datetime
 hoodie.streamer.source.dfs.root=/Users/home/path/to/data/parquet_files/
 hoodie.streamer.schemaprovider.target.schema.file=/Users/home/path/to/schema/schema.avsc
 hoodie.streamer.schemaprovider.source.schema.file=/Users/home/path/to/schema/schema.avsc

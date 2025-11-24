@@ -48,7 +48,7 @@ val inserts = convertToStringList(dataGen.generateInserts(10))
 val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option("hoodie.datasource.write.precombine.field", "ts").
+  option("hoodie.table.ordering.fields", "ts").
   option("hoodie.datasource.write.recordkey.field", "uuid").
   option("hoodie.datasource.write.partitionpath.field", "partitionpath").
   option("hoodie.table.name", tableName).
@@ -63,7 +63,7 @@ for (_ <- 1 to 4) {
   val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
   df.write.format("hudi").
     options(getQuickstartWriteConfigs).
-    option("hoodie.datasource.write.precombine.field", "ts").
+    option("hoodie.table.ordering.fields", "ts").
     option("hoodie.datasource.write.recordkey.field", "uuid").
     option("hoodie.datasource.write.partitionpath.field", "partitionpath").
     option("hoodie.table.name", tableName).
@@ -204,7 +204,7 @@ for (_ <- 1 to 3) {
   val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
   df.write.format("hudi").
     options(getQuickstartWriteConfigs).
-    option("hoodie.datasource.write.precombine.field", "ts").
+    option("hoodie.table.ordering.fields", "ts").
     option("hoodie.datasource.write.recordkey.field", "uuid").
     option("hoodie.datasource.write.partitionpath.field", "partitionpath").
     option("hoodie.table.name", tableName).

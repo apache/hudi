@@ -307,7 +307,7 @@ Following is an example of how to use optimistic_concurrency_control via spark d
 ```java
 inputDF.write.format("hudi")
        .options(getQuickstartWriteConfigs)
-       .option("hoodie.datasource.write.precombine.field", "ts")
+       .option("hoodie.table.ordering.fields", "ts")
        .option("hoodie.cleaner.policy.failed.writes", "LAZY")
        .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
        .option("hoodie.write.lock.zookeeper.url", "zookeeper")

@@ -64,7 +64,7 @@ spark-submit --master local \
 --hoodie-conf hoodie.bootstrap.base.path=/tmp/source_table \
 --hoodie-conf hoodie.datasource.write.recordkey.field=${KEY_FIELD} \
 --hoodie-conf hoodie.datasource.write.partitionpath.field=${PARTITION_FIELD} \
---hoodie-conf hoodie.datasource.write.precombine.field=${PRECOMBINE_FILED} \
+--hoodie-conf hoodie.table.ordering.fields=${ORDERING_FIELDS} \
 --hoodie-conf hoodie.bootstrap.keygen.class=org.apache.hudi.keygen.SimpleKeyGenerator \
 --hoodie-conf hoodie.bootstrap.mode.selector=org.apache.hudi.client.bootstrap.selector.BootstrapRegexModeSelector \
 --hoodie-conf hoodie.bootstrap.mode.selector.regex='.*' \

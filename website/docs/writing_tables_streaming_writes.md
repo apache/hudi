@@ -39,7 +39,7 @@ val df = spark.readStream.
 // write stream to new hudi table
 df.writeStream.format("hudi").
   options(getQuickstartWriteConfigs).
-  option("hoodie.datasource.write.precombine.field", "ts").
+  option("hoodie.table.ordering.fields", "ts").
   option("hoodie.datasource.write.recordkey.field", "uuid").
   option("hoodie.datasource.write.partitionpath.field", "partitionpath").
   option("hoodie.table.name", streamingTableName).
@@ -67,7 +67,7 @@ hudi_streaming_options = {
     'hoodie.datasource.write.partitionpath.field': 'partitionpath',
     'hoodie.datasource.write.table.name': streamingTableName,
     'hoodie.datasource.write.operation': 'upsert',
-    'hoodie.datasource.write.precombine.field': 'ts',
+    'hoodie.table.ordering.fields': 'ts',
     'hoodie.upsert.shuffle.parallelism': 2,
     'hoodie.insert.shuffle.parallelism': 2
 }

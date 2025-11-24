@@ -41,7 +41,7 @@ val basePath = "/user/hive/warehouse/hudi_cow"
 val schema = StructType(Array(
 StructField("rowId", StringType,true),
 StructField("partitionId", StringType,true),
-StructField("preComb", LongType,true),
+StructField("orderingField", LongType,true),
 StructField("name", StringType,true),
 StructField("versionId", StringType,true),
 StructField("toBeDeletedStr", StringType,true),
@@ -57,7 +57,7 @@ var dfFromData0 = spark.createDataFrame(data0,schema)
 
 dfFromData0.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option("hoodie.datasource.write.precombine.field", "preComb").
+  option("hoodie.table.ordering.fields", "orderingField").
   option("hoodie.datasource.write.recordkey.field", "rowId").
   option("hoodie.datasource.write.partitionpath.field", "partitionId").
   option("hoodie.database.name", databaseName).
@@ -100,7 +100,7 @@ Beeline version 1.2.1.spark2 by Apache Hive
 1 row selected (0.531 seconds)
 0: jdbc:hive2://hiveserver:10000> select * from hudi_cow limit 1;
 +-------------------------------+--------------------------------+------------------------------+----------------------------------+----------------------------------------------------------------------------+-----------------+-------------------+----------------+---------------------+--------------------------+---------------------+---------------------+-----------------------+--+
-| hudi_cow._hoodie_commit_time  | hudi_cow._hoodie_commit_seqno  | hudi_cow._hoodie_record_key  | hudi_cow._hoodie_partition_path  |                         hudi_cow._hoodie_file_name                         | hudi_cow.rowid  | hudi_cow.precomb  | hudi_cow.name  | hudi_cow.versionid  | hudi_cow.tobedeletedstr  | hudi_cow.inttolong  | hudi_cow.longtoint  | hudi_cow.partitionid  |
+| hudi_cow._hoodie_commit_time  | hudi_cow._hoodie_commit_seqno  | hudi_cow._hoodie_record_key  | hudi_cow._hoodie_partition_path  |                         hudi_cow._hoodie_file_name                         | hudi_cow.rowid  | hudi_cow.orderingfield  | hudi_cow.name  | hudi_cow.versionid  | hudi_cow.tobedeletedstr  | hudi_cow.inttolong  | hudi_cow.longtoint  | hudi_cow.partitionid  |
 +-------------------------------+--------------------------------+------------------------------+----------------------------------+----------------------------------------------------------------------------+-----------------+-------------------+----------------+---------------------+--------------------------+---------------------+---------------------+-----------------------+--+
 | 20220120090023631             | 20220120090023631_1_2          | row_1                        | partitionId=2021/01/01           | 0bf9b822-928f-4a57-950a-6a5450319c83-0_1-24-314_20220120090023631.parquet  | row_1           | 0                 | bob            | v_0                 | toBeDel0                 | 0                   | 1000000             | 2021/01/01            |
 +-------------------------------+--------------------------------+------------------------------+----------------------------------+----------------------------------------------------------------------------+-----------------+-------------------+----------------+---------------------+--------------------------+---------------------+---------------------+-----------------------+--+
@@ -156,16 +156,16 @@ Corresponding datasource options for the most commonly used hive sync configs ar
 In the table below **(N/A)** means there is no default value set.
 :::
 
-| HiveSyncConfig | DataSourceWriteOption | Default Value | Description |
-| -----------   | ----------- | ----------- | ----------- |
-| --database       | hoodie.datasource.hive_sync.database  |  default   | Name of the target database in Hive metastore       |
-| --table   | hoodie.datasource.hive_sync.table |  (N/A)     | Name of the target table in Hive. Inferred from the table name in Hudi table config if not specified.        |
-| --user   | hoodie.datasource.hive_sync.username |   hive     | Username for hive metastore        | 
-| --pass   | hoodie.datasource.hive_sync.password  |  hive    | Password for hive metastore        | 
-| --jdbc-url   | hoodie.datasource.hive_sync.jdbcurl  |  jdbc:hive2://localhost:10000    | Hive server url if using `jdbc` mode to sync     |
-| --sync-mode   | hoodie.datasource.hive_sync.mode    |  (N/A)  | Mode to choose for Hive ops. Valid values are `hms`, `jdbc` and `hiveql`. More details in the following section.       |
-| --partitioned-by   | hoodie.datasource.hive_sync.partition_fields   |  (N/A)   | Comma-separated column names in the table to use for determining hive partition.        |
-| --partition-value-extractor   | hoodie.datasource.hive_sync.partition_extractor_class   |  `org.apache.hudi.hive.MultiPartKeysValueExtractor`   | Class which implements `PartitionValueExtractor` to extract the partition values. Inferred automatically depending on the partition fields specified.        |
+| HiveSyncConfig              | DataSourceWriteOption                                 | Default Value                                      | Description                                                                                                                                           |
+|-----------------------------|-------------------------------------------------------|----------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
+| --database                  | hoodie.datasource.hive_sync.database                  | default                                            | Name of the target database in Hive metastore                                                                                                         |
+| --table                     | hoodie.datasource.hive_sync.table                     | (N/A)                                              | Name of the target table in Hive. Inferred from the table name in Hudi table config if not specified.                                                 |
+| --user                      | hoodie.datasource.hive_sync.username                  | hive                                               | Username for hive metastore                                                                                                                           |
+| --pass                      | hoodie.datasource.hive_sync.password                  | hive                                               | Password for hive metastore                                                                                                                           |
+| --jdbc-url                  | hoodie.datasource.hive_sync.jdbcurl                   | jdbc:hive2://localhost:10000                       | Hive server url if using `jdbc` mode to sync                                                                                                          |
+| --sync-mode                 | hoodie.datasource.hive_sync.mode                      | (N/A)                                              | Mode to choose for Hive ops. Valid values are `hms`, `jdbc` and `hiveql`. More details in the following section.                                      |
+| --partitioned-by            | hoodie.datasource.hive_sync.partition_fields          | (N/A)                                              | Comma-separated column names in the table to use for determining hive partition.                                                                      |
+| --partition-value-extractor | hoodie.datasource.hive_sync.partition_extractor_class | `org.apache.hudi.hive.MultiPartKeysValueExtractor` | Class which implements `PartitionValueExtractor` to extract the partition values. Inferred automatically depending on the partition fields specified. |
 
 
 ### Sync modes

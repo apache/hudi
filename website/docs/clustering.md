@@ -193,7 +193,7 @@ import org.apache.hudi.config.HoodieWriteConfig._
 val df =  //generate data frame
 df.write.format("org.apache.hudi").
         options(getQuickstartWriteConfigs).
-        option("hoodie.datasource.write.precombine.field", "ts").
+        option("hoodie.table.ordering.fields", "ts").
         option("hoodie.datasource.write.recordkey.field", "uuid").
         option("hoodie.datasource.write.partitionpath.field", "partitionpath").
         option("hoodie.table.name", "tableName").
@@ -305,7 +305,7 @@ val commonOpts = Map(
    "hoodie.upsert.shuffle.parallelism" -> "4",
    "hoodie.datasource.write.recordkey.field" -> "_row_key",
    "hoodie.datasource.write.partitionpath.field" -> "partition",
-   "hoodie.datasource.write.precombine.field" -> "timestamp",
+   "hoodie.table.ordering.fields" -> "timestamp",
    "hoodie.table.name" -> "hoodie_test"
 )
 

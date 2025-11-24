@@ -25,8 +25,9 @@ Default value: `"uuid"`<br/>
 **PARTITIONPATH_FIELD**: Columns to be used for partitioning the table. To prevent partitioning, provide empty string as value eg: `""`. Specify partitioning/no partitioning using `KEYGENERATOR_CLASS_OPT_KEY`. If partition path needs to be url encoded, you can set `URL_ENCODE_PARTITIONING_OPT_KEY`. If synchronizing to hive, also specify using `HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY.`<br/>
 Default value: `"partitionpath"`<br/>
 
-**PRECOMBINE_FIELD**: When two records within the same batch have the same key value, the record with the largest value from the field specified will be choosen. If you are using default payload of OverwriteWithLatestAvroPayload for HoodieRecordPayload (`WRITE_PAYLOAD_CLASS`), an incoming record will always takes precendence compared to the one in storage ignoring this `PRECOMBINE_FIELD_OPT_KEY`. <br/>
-Default value: `"ts"`<br/>
+**ORDERING_FIELDS**: When two records within the same batch have the same key value, the record with the largest value from the ordering field specified will be chosen. If you are using default payload of OverwriteWithLatestAvroPayload for HoodieRecordPayload (`WRITE_PAYLOAD_CLASS`), an incoming record will always takes precedence compared to the one in storage ignoring this ordering field configuration. <br/>
+No default value<br/>
+Note: The config key `hoodie.datasource.write.precombine.field` is deprecated, use `hoodie.table.ordering.fields` instead.
 
 **OPERATION**: The [write operations](write_operations) to use.<br/>
 Available values:<br/>
@@ -40,7 +41,7 @@ Available values:<br/>
 
 
 Example:
-Upsert a DataFrame, specifying the necessary field names for `recordKey => _row_key`, `partitionPath => partition`, and `precombineKey => timestamp`
+Upsert a DataFrame, specifying the necessary field names for `recordKey => _row_key`, `partitionPath => partition`, and `orderingField => timestamp`
 
 ```java
 inputDF.write()
@@ -48,7 +49,7 @@ inputDF.write()
        .options(clientOpts) //Where clientOpts is of type Map[String, String]. clientOpts can include any other options necessary.
        .option("hoodie.datasource.write.recordkey.field", "_row_key")
        .option("hoodie.datasource.write.partitionpath.field", "partition")
-       .option("hoodie.datasource.write.precombine.field"(), "timestamp")
+       .option("hoodie.table.ordering.fields", "timestamp")
        .option("hoodie.table.name", tableName)
        .mode(SaveMode.Append)
        .save(basePath);
@@ -71,7 +72,7 @@ val inserts = convertToStringList(dataGen.generateInserts(10))
 val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option("hoodie.datasource.write.precombine.field", "ts").
+  option("hoodie.table.ordering.fields", "ts").
   option("hoodie.datasource.write.recordkey.field", "uuid").
   option("hoodie.datasource.write.partitionpath.field", "partitionpath").
   option("hoodie.table.name", tableName).
@@ -104,7 +105,7 @@ hudi_options = {
     'hoodie.datasource.write.partitionpath.field': 'partitionpath',
     'hoodie.datasource.write.table.name': tableName,
     'hoodie.datasource.write.operation': 'upsert',
-    'hoodie.datasource.write.precombine.field': 'ts',
+    'hoodie.table.ordering.fields': 'ts',
     'hoodie.upsert.shuffle.parallelism': 2,
     'hoodie.insert.shuffle.parallelism': 2
 }
@@ -197,7 +198,7 @@ val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
   option("hoodie.datasource.write.operation","insert_overwrite_table").
-  option("hoodie.datasource.write.precombine.field", "ts").
+  option("hoodie.table.ordering.fields", "ts").
   option("hoodie.datasource.write.recordkey.field", "uuid").
   option("hoodie.datasource.write.partitionpath.field", "partitionpath").
   option("hoodie.table.name", tableName).
@@ -255,7 +256,7 @@ val df = spark.
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
   option("hoodie.datasource.write.operation","insert_overwrite").
-  option("hoodie.datasource.write.precombine.field", "ts").
+  option("hoodie.table.ordering.fields", "ts").
   option("hoodie.datasource.write.recordkey.field", "uuid").
   option("hoodie.datasource.write.partitionpath.field", "partitionpath").
   option("hoodie.table.name", tableName).
@@ -312,7 +313,7 @@ val softDeleteDf = nullifyColumns.
 softDeleteDf.write.format("hudi").
   options(getQuickstartWriteConfigs).
   option("hoodie.datasource.write.operation", "upsert").
-  option("hoodie.datasource.write.precombine.field", "ts").
+  option("hoodie.table.ordering.fields", "ts").
   option("hoodie.datasource.write.recordkey.field", "uuid").
   option("hoodie.datasource.write.partitionpath.field", "partitionpath").
   option("hoodie.table.name", tableName).
@@ -346,7 +347,7 @@ val df = spark.read.json(spark.sparkContext.parallelize(deletes, 2));
 df.write.format("org.apache.hudi").
 options(getQuickstartWriteConfigs).
 option("hoodie.datasource.write.operation","delete").
-option("hoodie.datasource.write.precombine.field", "ts").
+option("hoodie.table.ordering.fields", "ts").
 option("hoodie.datasource.write.recordkey.field", "uuid").
 option("hoodie.datasource.write.partitionpath.field", "partitionpath").
 option("hoodie.table.name", tableName).
@@ -361,7 +362,7 @@ This example will remove all the records from the table that exist in the DataSe
  deleteDF // dataframe containing just records to be deleted
    .write().format("org.apache.hudi")
    .option(...) // Add HUDI options like record-key, partition-path and others as needed for your setup
-   // specify record_key, partition_key, precombine_fieldkey & usual params
+   // specify record_key, partition_key, ordering_fields & usual params
    .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "org.apache.hudi.EmptyHoodieRecordPayload")
 ```
 
@@ -426,7 +427,7 @@ Read more in-depth details about concurrency control in the [concurrency control
 ```java
 inputDF.write.format("hudi")
        .options(getQuickstartWriteConfigs)
-       .option("hoodie.datasource.write.precombine.field", "ts")
+       .option("hoodie.table.ordering.fields", "ts")
        .option("hoodie.cleaner.policy.failed.writes", "LAZY")
        .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
        .option("hoodie.write.lock.zookeeper.url", "zookeeper")

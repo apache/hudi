@@ -143,7 +143,7 @@ inputDF.write()
        .options(clientOpts) // any of the Hudi client opts can be passed in as well
        .option("hoodie.datasource.write.recordkey.field", "_row_key")
        .option("hoodie.datasource.write.partitionpath.field", "partition")
-       .option("hoodie.datasource.write.precombine.field"(), "timestamp")
+       .option("hoodie.table.ordering.fields", "timestamp")
        .option("hoodie.table.name", tableName)
        .mode(SaveMode.Append)
        .save(basePath);
@@ -228,7 +228,7 @@ val inserts = convertToStringList(dataGen.generateInserts(100)).toList
 val insertDf = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 insertDf.write.format("hudi").
         options(getQuickstartWriteConfigs).
-        option("hoodie.datasource.write.precombine.field", "ts").
+        option("hoodie.table.ordering.fields", "ts").
         option("hoodie.datasource.write.recordkey.field", "uuid").
         option("hoodie.datasource.write.partitionpath.field", "partitionpath").
         option("hoodie.table.name", tableName).
