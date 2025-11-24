@@ -12,7 +12,7 @@ This page introduces Flink–Hudi integration and demonstrates how Flink brings 
 
 ### Flink Support Matrix
 
-| Hudi   | Supported Flink version                                                |
+| Hudi   | Supported Flink versions                                               |
 | :----- | :--------------------------------------------------------------------- |
 | 1.1.x  | 1.17.x, 1.18.x, 1.19.x, 1.20.x (default build), 2.0.x                  |
 | 1.0.x  | 1.14.x, 1.15.x, 1.16.x, 1.17.x, 1.18.x, 1.19.x, 1.20.x (default build) |
