@@ -57,12 +57,12 @@ import org.apache.spark.sql.types.StringType$;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.StructType$;
-import org.apache.spark.sql.types.TimestampNTZType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.sql.types.TimestampType$;
 import org.apache.spark.sql.types.UserDefinedType;
 import org.apache.spark.sql.types.VarcharType;
 
+import java.lang.reflect.Field;
 import java.sql.Date;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -82,6 +82,21 @@ public class SparkInternalSchemaConverter {
   public static final String HOODIE_QUERY_SCHEMA = "hoodie.schema.internal.querySchema";
   public static final String HOODIE_TABLE_PATH = "hoodie.tablePath";
   public static final String HOODIE_VALID_COMMITS_LIST = "hoodie.valid.commits.list";
+
+  /**
+   * Get TimestampNTZType$ using reflection, as it's only available in Spark 3.3+.
+   * Falls back to TimestampType$ if TimestampNTZType is not available.
+   */
+  private static DataType getTimestampNTZType() {
+    try {
+      Class<?> timestampNTZTypeClass = Class.forName("org.apache.spark.sql.types.TimestampNTZType$");
+      Field moduleField = timestampNTZTypeClass.getField("MODULE$");
+      return (DataType) moduleField.get(null);
+    } catch (ClassNotFoundException | NoSuchFieldException | IllegalAccessException e) {
+      // TimestampNTZType is not available in this Spark version, fall back to TimestampType
+      return TimestampType$.MODULE$;
+    }
+  }
 
   public static Type buildTypeFromStructType(DataType sparkType, Boolean firstVisitRoot, AtomicInteger nextId) {
     if (sparkType instanceof StructType) {
@@ -275,7 +290,7 @@ public class SparkInternalSchemaConverter {
         return TimestampType$.MODULE$;
       case LOCAL_TIMESTAMP_MILLIS:
       case LOCAL_TIMESTAMP_MICROS:
-        return TimestampNTZType$.MODULE$;
+        return getTimestampNTZType();
       case STRING:
         return StringType$.MODULE$;
       case UUID:

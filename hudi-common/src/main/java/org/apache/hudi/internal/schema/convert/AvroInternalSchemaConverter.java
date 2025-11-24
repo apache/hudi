@@ -268,9 +268,9 @@ public class AvroInternalSchemaConverter {
         return Types.TimestampMillisType.get();
       } else if (logical instanceof LogicalTypes.TimestampMicros) {
         return Types.TimestampType.get();
-      } else if (logical instanceof LogicalTypes.LocalTimestampMillis) {
+      } else if (isLocalTimestampMillis(logical)) {
         return Types.LocalTimestampMillisType.get();
-      } else if (logical instanceof LogicalTypes.LocalTimestampMicros) {
+      } else if (isLocalTimestampMicros(logical)) {
         return Types.LocalTimestampMicrosType.get();
       } else if (LogicalTypes.uuid().getName().equals(name)) {
         return Types.UUIDType.get();
@@ -470,10 +470,10 @@ public class AvroInternalSchemaConverter {
         return LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
 
       case LOCAL_TIMESTAMP_MICROS:
-        return LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
+        return createLocalTimestampMicrosSchema();
 
       case LOCAL_TIMESTAMP_MILLIS:
-        return LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
+        return createLocalTimestampMillisSchema();
 
       case STRING:
         return Schema.create(Schema.Type.STRING);
@@ -524,5 +524,69 @@ public class AvroInternalSchemaConverter {
       numBytes += 1;
     }
     return numBytes;
+  }
+
+  /**
+   * Checks if a logical type is an instance of LocalTimestampMillis using reflection.
+   * Returns false if the class doesn't exist (e.g., in Avro 1.8.2).
+   */
+  private static boolean isLocalTimestampMillis(LogicalType logicalType) {
+    if (logicalType == null) {
+      return false;
+    }
+    try {
+      Class<?> localTimestampMillisClass = Class.forName("org.apache.avro.LogicalTypes$LocalTimestampMillis");
+      return localTimestampMillisClass.isInstance(logicalType);
+    } catch (ClassNotFoundException e) {
+      // Class doesn't exist (e.g., Avro 1.8.2)
+      return false;
+    }
+  }
+
+  /**
+   * Checks if a logical type is an instance of LocalTimestampMicros using reflection.
+   * Returns false if the class doesn't exist (e.g., in Avro 1.8.2).
+   */
+  private static boolean isLocalTimestampMicros(LogicalType logicalType) {
+    if (logicalType == null) {
+      return false;
+    }
+    try {
+      Class<?> localTimestampMicrosClass = Class.forName("org.apache.avro.LogicalTypes$LocalTimestampMicros");
+      return localTimestampMicrosClass.isInstance(logicalType);
+    } catch (ClassNotFoundException e) {
+      // Class doesn't exist (e.g., Avro 1.8.2)
+      return false;
+    }
+  }
+
+  /**
+   * Creates a LocalTimestampMicros schema using reflection.
+   * Returns null if the class doesn't exist (e.g., in Avro 1.8.2).
+   */
+  private static Schema createLocalTimestampMicrosSchema() {
+    try {
+      java.lang.reflect.Method method = LogicalTypes.class.getMethod("localTimestampMicros");
+      LogicalType logicalType = (LogicalType) method.invoke(null);
+      return logicalType.addToSchema(Schema.create(Schema.Type.LONG));
+    } catch (Exception e) {
+      // Method doesn't exist (e.g., Avro 1.8.2)
+      throw new UnsupportedOperationException("LocalTimestampMicros is not supported in this Avro version", e);
+    }
+  }
+
+  /**
+   * Creates a LocalTimestampMillis schema using reflection.
+   * Returns null if the class doesn't exist (e.g., in Avro 1.8.2).
+   */
+  private static Schema createLocalTimestampMillisSchema() {
+    try {
+      java.lang.reflect.Method method = LogicalTypes.class.getMethod("localTimestampMillis");
+      LogicalType logicalType = (LogicalType) method.invoke(null);
+      return logicalType.addToSchema(Schema.create(Schema.Type.LONG));
+    } catch (Exception e) {
+      // Method doesn't exist (e.g., Avro 1.8.2)
+      throw new UnsupportedOperationException("LocalTimestampMillis is not supported in this Avro version", e);
+    }
   }
 }

@@ -17,14 +17,15 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.avro.LogicalTypes.{Date, Decimal, LocalTimestampMicros, LocalTimestampMillis, TimestampMicros, TimestampMillis}
+import org.apache.avro.LogicalTypes.{Date, Decimal, TimestampMicros, TimestampMillis}
 import org.apache.avro.Schema.Type._
-import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
+import org.apache.avro.{LogicalType, LogicalTypes, Schema, SchemaBuilder}
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.sql.types.Decimal.minBytesForPrecision
 import org.apache.spark.sql.types._
 
 import scala.collection.JavaConverters._
+import scala.util.Try
 
 /**
  * This object contains method that are used to convert sparkSQL schemas to avro schemas and vice
@@ -39,6 +40,73 @@ import scala.collection.JavaConverters._
 @DeveloperApi
 private[sql] object SchemaConverters {
   private lazy val nullSchema = Schema.create(Schema.Type.NULL)
+
+  // Reflection-based checks for types that may not be available in all Avro/Spark versions
+  private lazy val localTimestampMillisClass: Option[Class[_]] = Try {
+    Class.forName("org.apache.avro.LogicalTypes$LocalTimestampMillis")
+  }.toOption
+
+  private lazy val localTimestampMicrosClass: Option[Class[_]] = Try {
+    Class.forName("org.apache.avro.LogicalTypes$LocalTimestampMicros")
+  }.toOption
+
+  private lazy val timestampNTZTypeClass: Option[Class[_]] = Try {
+    Class.forName("org.apache.spark.sql.types.TimestampNTZType$")
+  }.toOption
+
+  private lazy val timestampNTZTypeInstance: Option[DataType] = timestampNTZTypeClass.flatMap { clazz =>
+    Try {
+      val module = clazz.getField("MODULE$").get(null)
+      module.asInstanceOf[DataType]
+    }.toOption
+  }
+
+  private lazy val localTimestampMicrosMethod: Option[java.lang.reflect.Method] = Try {
+    classOf[LogicalTypes].getMethod("localTimestampMicros")
+  }.toOption
+
+  private lazy val localTimestampMillisMethod: Option[java.lang.reflect.Method] = Try {
+    classOf[LogicalTypes].getMethod("localTimestampMillis")
+  }.toOption
+
+  /**
+   * Checks if a logical type is an instance of LocalTimestampMillis using reflection.
+   * Returns false if the class doesn't exist (e.g., in Avro 1.8.2).
+   */
+  private def isLocalTimestampMillis(logicalType: LogicalType): Boolean = {
+    logicalType != null && localTimestampMillisClass.exists(_.isInstance(logicalType))
+  }
+
+  /**
+   * Checks if a logical type is an instance of LocalTimestampMicros using reflection.
+   * Returns false if the class doesn't exist (e.g., in Avro 1.8.2).
+   */
+  private def isLocalTimestampMicros(logicalType: LogicalType): Boolean = {
+    logicalType != null && localTimestampMicrosClass.exists(_.isInstance(logicalType))
+  }
+
+  /**
+   * Checks if a DataType is TimestampNTZType using reflection.
+   * Returns false if the class doesn't exist (e.g., in Spark 2.x or Spark 3.2).
+   */
+  private def isTimestampNTZType(dataType: DataType): Boolean = {
+    timestampNTZTypeInstance.contains(dataType) ||
+      (timestampNTZTypeClass.isDefined && timestampNTZTypeClass.get.isInstance(dataType))
+  }
+
+  /**
+   * Creates a LocalTimestampMicros schema using reflection.
+   * Throws UnsupportedOperationException if not available.
+   */
+  private def createLocalTimestampMicrosSchema(): Schema = {
+    localTimestampMicrosMethod match {
+      case Some(method) =>
+        val logicalType = method.invoke(null).asInstanceOf[LogicalType]
+        logicalType.addToSchema(Schema.create(Schema.Type.LONG))
+      case None =>
+        throw new UnsupportedOperationException("LocalTimestampMicros is not supported in this Avro version")
+    }
+  }
 
   /**
    * Internal wrapper for SQL data type and nullability.
@@ -77,7 +145,11 @@ private[sql] object SchemaConverters {
       case FLOAT => SchemaType(FloatType, nullable = false)
       case LONG => avroSchema.getLogicalType match {
         case _: TimestampMillis | _: TimestampMicros => SchemaType(TimestampType, nullable = false)
-        case _: LocalTimestampMillis | _: LocalTimestampMicros => SchemaType(TimestampNTZType, nullable = false)
+        case logicalType if isLocalTimestampMillis(logicalType) || isLocalTimestampMicros(logicalType) =>
+          timestampNTZTypeInstance match {
+            case Some(timestampNTZ) => SchemaType(timestampNTZ, nullable = false)
+            case None => SchemaType(LongType, nullable = false) // Fallback for older Spark versions
+          }
         case _ => SchemaType(LongType, nullable = false)
       }
 
@@ -166,8 +238,8 @@ private[sql] object SchemaConverters {
         LogicalTypes.date().addToSchema(builder.intType())
       case TimestampType =>
         LogicalTypes.timestampMicros().addToSchema(builder.longType())
-      case TimestampNTZType =>
-        LogicalTypes.localTimestampMicros().addToSchema(builder.longType())
+      case dataType if isTimestampNTZType(dataType) =>
+        createLocalTimestampMicrosSchema()
 
       case FloatType => builder.floatType()
       case DoubleType => builder.doubleType()
