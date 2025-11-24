@@ -94,7 +94,9 @@ An optimization that enables direct copying of RowGroup-level data from Parquet 
 
 #### Incremental Table Service Scheduling
 
-Significantly improves performance of compaction and clustering operations on tables with large numbers of partitions. Enabled by default via `hoodie.table.services.incremental.enabled`.
+Significantly improves performance of compaction and clustering operations on tables with large numbers of partitions. Instead of scanning all partitions during each scheduling run, incremental scheduling only processes partitions that have changed since the last completed table service operation. Enabled by default via `hoodie.table.services.incremental.enabled`.
+
+For more details, see [Incremental Scheduling in Compaction](/docs/compaction#incremental-scheduling) and [Incremental Scheduling in Clustering](/docs/clustering#incremental-scheduling).
 
 ### Concurrency Control
 
