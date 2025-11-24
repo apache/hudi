@@ -38,19 +38,32 @@ public class SparkSchemaUtils {
   private static String convertFieldType(HoodieSchema originalFieldSchema) {
     HoodieSchema fieldSchema = originalFieldSchema.getNonNullType();
     switch (fieldSchema.getType()) {
-      case BOOLEAN: return "boolean";
-      case FLOAT: return "float";
-      case DOUBLE: return "double";
+      case BOOLEAN: return "\"boolean\"";
+      case FLOAT: return "\"float\"";
+      case DOUBLE: return "\"double\"";
       case INT:
-        return "integer";
+        return "\"integer\"";
       case LONG:
-        return "long";
+        return "\"long\"";
       case STRING:
       case ENUM:
-        return "string";
+      case UUID:
+        return "\"string\"";
       case BYTES:
       case FIXED:
-        return "binary";
+        return "\"binary\"";
+      case DATE:
+        return "\"date\"";
+      case TIMESTAMP:
+        HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) fieldSchema;
+        if (timestampSchema.isUtcAdjusted()) {
+          return "\"timestamp\"";
+        } else {
+          return "\"timestamp_ntz\"";
+        }
+      case DECIMAL:
+        HoodieSchema.Decimal decimal = (HoodieSchema.Decimal) fieldSchema;
+        return "\"decimal(" + decimal.getPrecision() + "," + decimal.getScale() + ")\"";
       case ARRAY:
         return arrayType(fieldSchema.getElementType());
       case MAP:
@@ -60,6 +73,8 @@ public class SparkSchemaUtils {
         return "{\"type\":\"map\", \"keyType\":" + convertFieldType(keyType)
             + ",\"valueType\":" + convertFieldType(valueType)
             + ",\"valueContainsNull\":" + valueOptional + "}";
+      case RECORD:
+        return convertToSparkSchemaJson(fieldSchema);
       default:
         throw new UnsupportedOperationException("Cannot convert " + fieldSchema.getType() + " to spark sql type");
     }
