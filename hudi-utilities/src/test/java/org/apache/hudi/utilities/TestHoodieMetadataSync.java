@@ -19,6 +19,10 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.hudi.avro.model.HoodieInstantInfo;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -32,6 +36,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -59,6 +64,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -284,6 +290,53 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
   }
 
   @Test
+  public void testCompareHudiTables() {
+    String path1 = "file:///Users/vamsi/pg/unified_view/source1";
+    String path2 = "file:///Users/vamsi/pg/unified_view/source2";
+    String pathGlobal = "file:///Users/vamsi/pg/unified_view/target";
+
+    // Load all 3 tables
+    Dataset<Row> df1 = spark().read()
+        .format("hudi")
+        .load(path1);
+
+    Dataset<Row> df2 = spark().read()
+        .format("hudi")
+        .load(path2);
+
+    Dataset<Row> dfGlobal = spark().read()
+        .format("hudi")
+        .option("hoodie.metadata.enable", "true")
+        .load(pathGlobal);
+
+    // Filter out Hudi metadata columns
+    List<String> metaCols = df1.columns() != null ?
+        Arrays.stream(df1.columns())
+            .filter(c -> c.startsWith("_hoodie_"))
+            .collect(Collectors.toList())
+        : Collections.emptyList();
+
+    Dataset<Row> df1Clean = df1.drop(metaCols.toArray(new String[0]));
+    Dataset<Row> df2Clean = df2.drop(metaCols.toArray(new String[0]));
+    Dataset<Row> dfGlobalClean = dfGlobal.drop(metaCols.toArray(new String[0]));
+
+    // UNION ALL
+    Dataset<Row> unionDf = df1Clean.unionByName(df2Clean);
+
+    // EXCEPT ALL → union minus global
+    Dataset<Row> resultDf = unionDf.exceptAll(dfGlobalClean);
+
+    df1Clean.show(false);
+    System.out.println("=== Result ===");
+    resultDf.show(false);
+
+    // Optionally: assert if mismatched rows > 0
+    long mismatches = resultDf.count();
+    assertEquals(0, mismatches, "Mismatched rows found!");
+  }
+
+
+  @Test
   void testHoodieMetadataSyncWithClean() throws Exception {
     Properties props = getTableProps();
     sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
@@ -379,7 +432,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true})
+  @ValueSource(booleans = {true, false})
   void testHoodieMetadataSync_PendingInstantsWithNoNewInstantsInTimeline(boolean performBootstrap) throws Exception {
     Properties props = getTableProps();
     sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
@@ -466,6 +519,82 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
     assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), false);
+  }
+
+  @Test
+  void testHoodieMetadataSync_RollbackPendingInstantInSyncMetadata() throws Exception {
+    Properties props = getTableProps();
+    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
+    HoodieTestTable testTable = HoodieTestTable.of(sourceMetaClient1);
+
+    // add inflight commit to source table after 100
+    String instant1 = "100";
+    testTable.addRequestedCommit(instant1);
+
+    // add completed commit after 105
+    String instant2 = "105";
+    testTable.addCommit(instant2, Option.of(testTable.doWriteOperation(instant2, INSERT, singletonList("p1"),
+        singletonList("p1"), 2, false, true)));
+
+    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), true);
+
+    String rollbackInstant = "110";
+    HoodieRollbackMetadata rollbackMetadata = getHoodieRollbackMetadata(instant2);
+    HoodieRollbackPlan rollbackPlan = getHoodieRollbackPlan(instant2);
+    testTable.addRollback(rollbackInstant, rollbackMetadata, rollbackPlan);
+
+    testTable.addRollbackCompleted(rollbackInstant, rollbackMetadata, false);
+    FileCreateUtils.deleteRequestedCommit(sourceMetaClient1.getBasePathV2().toUri().getPath(), instant2);
+
+    String instant3 = "115";
+    testTable.addCommit(instant3, Option.of(testTable.doWriteOperation(instant3, INSERT, emptyList(),
+        singletonList("p1"), 2, false, true)));
+
+    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), false);
+  }
+
+  private HoodieRollbackPlan getHoodieRollbackPlan(String commitToRollback) {
+
+    HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan();
+
+    // Instant to rollback (commit + action)
+    rollbackPlan.setInstantToRollback(
+        new HoodieInstantInfo(commitToRollback, HoodieTimeline.COMMIT_ACTION)
+    );
+
+    // No file-level delete actions for now
+    rollbackPlan.setRollbackRequests(Collections.emptyList());
+
+    // Version = 1 (matches metadata)
+    rollbackPlan.setVersion(1);
+
+    return rollbackPlan;
+  }
+
+  private HoodieRollbackMetadata getHoodieRollbackMetadata(String commitToRollback) {
+    HoodieRollbackMetadata rollbackMetadata = new HoodieRollbackMetadata();
+
+    rollbackMetadata.setStartRollbackTime(commitToRollback);
+    rollbackMetadata.setTimeTakenInMillis(0L);
+    rollbackMetadata.setTotalFilesDeleted(0);
+
+    // Single commit being rolled back
+    rollbackMetadata.setCommitsRollback(Collections.singletonList(commitToRollback));
+
+    // Empty partition metadata for now
+    rollbackMetadata.setPartitionMetadata(Collections.emptyMap());
+
+    // Instant info
+    rollbackMetadata.setInstantsRollback(Collections.singletonList(
+        new HoodieInstantInfo(commitToRollback, HoodieTimeline.COMMIT_ACTION)
+    ));
+
+    // Schema default = 1 but set it anyway for clarity
+    rollbackMetadata.setVersion(1);
+
+    return rollbackMetadata;
   }
 
   @ParameterizedTest

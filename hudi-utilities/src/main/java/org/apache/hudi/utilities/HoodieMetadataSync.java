@@ -80,7 +80,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
 import static org.apache.hudi.utilities.MetadataSyncUtils.getHoodieCommitMetadata;
 import static org.apache.hudi.utilities.MetadataSyncUtils.getInstantsToSyncAndLastSyncCheckpoint;
-import static org.apache.hudi.utilities.MetadataSyncUtils.getPendingInstants;
+import static org.apache.hudi.utilities.MetadataSyncUtils.getPendingWriteInstants;
 import static org.apache.hudi.utilities.MetadataSyncUtils.getTableSyncExtraMetadata;
 
 /**
@@ -277,7 +277,7 @@ public class HoodieMetadataSync implements Serializable {
           SyncMetadata syncMetadata = getTableSyncExtraMetadata(targetTableMetaClient.reloadActiveTimeline().getWriteTimeline().filterCompletedInstants().lastInstant(),
               targetTableMetaClient, cfg.sourceBasePath, instant.getTimestamp(), instantsStatusMap, lastSyncCheckpoint, instant);
 
-          if (!getPendingInstants(targetTableMetaClient.reloadActiveTimeline(), Option.empty()).isEmpty()) {
+          if (!getPendingWriteInstants(targetTableMetaClient.reloadActiveTimeline(), Option.empty()).isEmpty()) {
             // rollback failing writes
             writeClient.rollbackFailedWrites(true);
           }
@@ -361,7 +361,7 @@ public class HoodieMetadataSync implements Serializable {
         (SparkHoodieBackedMetadataSyncMetadataWriter) sparkTable.getMetadataWriter(commitTime).get();
     metadataWriter.bootstrap(sourceLastInstant.map(HoodieInstant::getTimestamp));
     Option<HoodieInstant> targetTableLastInstant = targetTableMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
-    List<String> pendingInstants = getPendingInstants(sourceTableMetaClient.getActiveTimeline(), sourceLastInstant).stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+    List<String> pendingInstants = getPendingWriteInstants(sourceTableMetaClient.getActiveTimeline(), sourceLastInstant).stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     SyncMetadata syncMetadata = getTableSyncExtraMetadata(targetTableLastInstant, targetTableMetaClient,
         cfg.sourceBasePath, sourceLastInstant.get().getTimestamp(), pendingInstants);
     HoodieReplaceCommitMetadata replaceCommitMetadata = buildComprehensiveReplaceCommitMetadata(sourceTableMetaClient, schema);

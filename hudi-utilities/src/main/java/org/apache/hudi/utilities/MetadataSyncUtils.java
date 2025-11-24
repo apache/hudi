@@ -40,13 +40,13 @@ import java.util.stream.Collectors;
 
 public class MetadataSyncUtils {
 
-  public static List<HoodieInstant> getPendingInstants(
+  public static List<HoodieInstant> getPendingWriteInstants(
       HoodieActiveTimeline activeTimeline,
       Option<HoodieInstant> latestCommitOpt) {
     List<HoodieInstant> pendingHoodieInstants;
     if (latestCommitOpt.isPresent()) {
       pendingHoodieInstants =
-          activeTimeline
+          activeTimeline.getWriteTimeline()
               .filterInflightsAndRequested().findInstantsBefore(latestCommitOpt.get().getTimestamp())
               .getInstants();
     } else {
@@ -203,17 +203,17 @@ public class MetadataSyncUtils {
     String lastInstantSynced = checkpointInfo.getLastInstantSynced();
 
     List<HoodieInstant> newInstants =
-        sourceTimeline.filterCompletedInstants()
+        sourceTimeline.getWriteTimeline().filterCompletedInstants()
             .findInstantsAfter(lastInstantSynced)
             .getInstants();
 
-    List<HoodieInstant> currentPending = getPendingInstants(sourceTimeline, Option.empty());
+    List<HoodieInstant> currentPending = getPendingWriteInstants(sourceTimeline, Option.empty());
 
     List<HoodieInstant> pendingFromLastSync =
         checkpointInfo.getInstantsToConsiderForNextSync().stream()
             .map(instant ->
-                sourceTimeline.findInstantsAfterOrEquals(instant, 1)
-                    .getInstants().stream().findFirst().orElse(null))
+                sourceTimeline.getWriteTimeline()
+                    .getInstants().stream().filter(i -> i.getTimestamp().equals(instant)).findFirst().orElse(null))
             .filter(Objects::nonNull)
             .collect(Collectors.toList());
 
@@ -221,11 +221,6 @@ public class MetadataSyncUtils {
     pendingFromLastSync.forEach(instant ->
         instantSyncMap.put(instant, !currentPending.contains(instant))
     );
-
-    // pending that got completed
-    pendingFromLastSync.stream()
-        .filter(instant -> !currentPending.contains(instant))
-        .forEach(i -> instantSyncMap.put(i, true));
 
     // all current pending
     currentPending.forEach(i -> instantSyncMap.put(i, false));
@@ -246,7 +241,7 @@ public class MetadataSyncUtils {
         timeline.filterCompletedInstants().getInstants();
 
     List<HoodieInstant> pending =
-        getPendingInstants(timeline, Option.empty());
+        getPendingWriteInstants(timeline, Option.empty());
 
     completed.forEach(i -> map.put(i, true));
     pending.forEach(i -> map.put(i, false));
