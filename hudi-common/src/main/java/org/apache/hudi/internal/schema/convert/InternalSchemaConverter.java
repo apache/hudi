@@ -31,7 +31,6 @@ import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
-import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 
@@ -301,42 +300,8 @@ public class InternalSchemaConverter {
     }
   }
 
-  private static Type visitPrimitiveToBuildInternalType(HoodieSchema hoodieSchema) {
-    Schema primitive = hoodieSchema.toAvroSchema();
-    LogicalType logical = primitive.getLogicalType();
-    if (logical != null) {
-      String name = logical.getName();
-      if (logical instanceof LogicalTypes.Decimal) {
-        if (primitive.getType() == Schema.Type.FIXED) {
-          return Types.DecimalTypeFixed.get(((LogicalTypes.Decimal) logical).getPrecision(),
-                  ((LogicalTypes.Decimal) logical).getScale(), primitive.getFixedSize());
-        } else if (primitive.getType() == Schema.Type.BYTES) {
-          return Types.DecimalTypeBytes.get(
-              ((LogicalTypes.Decimal) logical).getPrecision(),
-              ((LogicalTypes.Decimal) logical).getScale());
-        } else {
-          throw new IllegalArgumentException("Unsupported primitive type for Decimal: " + primitive.getType().getName());
-        }
-      } else if (logical instanceof LogicalTypes.Date) {
-        return Types.DateType.get();
-      } else if (logical instanceof LogicalTypes.TimeMillis) {
-        return Types.TimeMillisType.get();
-      } else if (logical instanceof LogicalTypes.TimeMicros) {
-        return Types.TimeType.get();
-      } else if (logical instanceof LogicalTypes.TimestampMillis) {
-        return Types.TimestampMillisType.get();
-      } else if (logical instanceof LogicalTypes.TimestampMicros) {
-        return Types.TimestampType.get();
-      } else if (logical instanceof LogicalTypes.LocalTimestampMillis) {
-        return Types.LocalTimestampMillisType.get();
-      } else if (logical instanceof LogicalTypes.LocalTimestampMicros) {
-        return Types.LocalTimestampMicrosType.get();
-      } else if (LogicalTypes.uuid().getName().equals(name)) {
-        return Types.UUIDType.get();
-      }
-    }
-
-    switch (primitive.getType()) {
+  private static Type visitPrimitiveToBuildInternalType(HoodieSchema schema) {
+    switch (schema.getType()) {
       case BOOLEAN:
         return Types.BooleanType.get();
       case INT:
@@ -351,13 +316,41 @@ public class InternalSchemaConverter {
       case ENUM:
         return Types.StringType.get();
       case FIXED:
-        return Types.FixedType.getFixed(primitive.getFixedSize());
+        return Types.FixedType.getFixed(schema.getFixedSize());
       case BYTES:
         return Types.BinaryType.get();
+      case UUID:
+        return Types.UUIDType.get();
+      case DECIMAL:
+        HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) schema;
+        if (decimalSchema.isFixed()) {
+          return Types.DecimalTypeFixed.get(decimalSchema.getPrecision(), decimalSchema.getScale(), decimalSchema.getFixedSize());
+        }
+        return Types.DecimalType.get(decimalSchema.getPrecision(), decimalSchema.getScale());
+      case TIME:
+        HoodieSchema.Time timeSchema = (HoodieSchema.Time) schema;
+        if (timeSchema.getPrecision() == HoodieSchema.TimePrecision.MICROS) {
+          return Types.TimeType.get();
+        } else if (timeSchema.getPrecision() == HoodieSchema.TimePrecision.MILLIS) {
+          return Types.TimeMillisType.get();
+        } else {
+          throw new UnsupportedOperationException("Unsupported time precision: " + timeSchema.getPrecision());
+        }
+      case TIMESTAMP:
+        HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) schema;
+        if (timestampSchema.getPrecision() == HoodieSchema.TimePrecision.MICROS) {
+          return timestampSchema.isUtcAdjusted() ? Types.TimestampType.get() : Types.LocalTimestampMicrosType.get();
+        } else if (timestampSchema.getPrecision() == HoodieSchema.TimePrecision.MILLIS) {
+          return timestampSchema.isUtcAdjusted() ? Types.TimestampMillisType.get() : Types.LocalTimestampMillisType.get();
+        } else {
+          throw new UnsupportedOperationException("Unsupported timestamp precision: " + timestampSchema.getPrecision());
+        }
+      case DATE:
+        return Types.DateType.get();
       case NULL:
         return null;
       default:
-        throw new UnsupportedOperationException("Unsupported primitive type: " + primitive);
+        throw new UnsupportedOperationException("Unsupported primitive type: " + schema.getType());
     }
   }
 
