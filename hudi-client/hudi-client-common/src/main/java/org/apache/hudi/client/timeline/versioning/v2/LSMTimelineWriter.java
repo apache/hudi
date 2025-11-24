@@ -142,12 +142,13 @@ public class LSMTimelineWriter {
     try (HoodieFileWriter writer = openWriter(filePath)) {
       Schema wrapperSchema = HoodieLSMTimelineInstant.getClassSchema();
       LOG.info("Writing schema " + wrapperSchema.toString());
+      HoodieSchema schema = HoodieSchema.fromAvroSchema(wrapperSchema);
       for (ActiveAction activeAction : activeActions) {
         try {
           preWriteCallback.ifPresent(callback -> callback.accept(activeAction));
           // in local FS and HDFS, there could be empty completed instants due to crash.
           final HoodieLSMTimelineInstant metaEntry = MetadataConversionUtils.createLSMTimelineInstant(activeAction, metaClient);
-          writer.write(metaEntry.getInstantTime(), new HoodieAvroIndexedRecord(metaEntry), HoodieSchema.fromAvroSchema(wrapperSchema));
+          writer.write(metaEntry.getInstantTime(), new HoodieAvroIndexedRecord(metaEntry), schema);
         } catch (Exception e) {
           LOG.error("Failed to write instant: " + activeAction.getInstantTime(), e);
           exceptionHandler.ifPresent(handler -> handler.accept(e));

@@ -25,7 +25,9 @@ import org.apache.hudi.exception.HoodieAvroSchemaException;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
+import org.apache.hudi.exception.HoodieIOException;
 
+import java.io.InputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -727,7 +729,7 @@ public class HoodieSchema implements Serializable {
      * @throws java.io.IOException if reading from the stream fails
      * @throws HoodieAvroSchemaException if the schema is invalid
      */
-    public HoodieSchema parse(java.io.InputStream inputStream) throws java.io.IOException {
+    public HoodieSchema parse(InputStream inputStream) throws HoodieIOException {
       ValidationUtils.checkArgument(inputStream != null, "InputStream cannot be null");
 
       try {

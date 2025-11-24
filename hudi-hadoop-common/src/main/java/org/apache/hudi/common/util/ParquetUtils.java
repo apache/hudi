@@ -434,7 +434,7 @@ public class ParquetUtils extends FileFormatUtils {
         HoodieFileFormat.PARQUET, outputStream, storage, config, schema, recordType)) {
       for (HoodieRecord<?> record : records) {
         String recordKey = record.getRecordKey(readerSchema, keyFieldName);
-        parquetWriter.write(recordKey, record, HoodieSchema.fromAvroSchema(writerSchema));
+        parquetWriter.write(recordKey, record, schema);
       }
       outputStream.flush();
     }
@@ -456,12 +456,13 @@ public class ParquetUtils extends FileFormatUtils {
     config.setValue(PARQUET_PAGE_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_PAGE_SIZE));
     config.setValue(PARQUET_MAX_FILE_SIZE.key(), String.valueOf(1024 * 1024 * 1024));
 
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(writerSchema);
     HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(
-        HoodieFileFormat.PARQUET, outputStream, storage, config, HoodieSchema.fromAvroSchema(writerSchema), recordType);
+        HoodieFileFormat.PARQUET, outputStream, storage, config, schema, recordType);
     while (recordItr.hasNext()) {
       HoodieRecord record = recordItr.next();
       String recordKey = record.getRecordKey(readerSchema, keyFieldName);
-      parquetWriter.write(recordKey, record, HoodieSchema.fromAvroSchema(writerSchema));
+      parquetWriter.write(recordKey, record, schema);
     }
     outputStream.flush();
     parquetWriter.close();
