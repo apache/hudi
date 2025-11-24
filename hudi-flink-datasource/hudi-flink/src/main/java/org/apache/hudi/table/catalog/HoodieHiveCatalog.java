@@ -22,6 +22,7 @@ import org.apache.hudi.adapter.HiveCatalogConstants.AlterHiveDatabaseOp;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -45,7 +46,6 @@ import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.CatalogUtils;
 
-import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.catalog.AbstractCatalog;
@@ -421,7 +421,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     Table hiveTable = translateSparkTable2Flink(tablePath, getHiveTable(tablePath));
     String path = hiveTable.getSd().getLocation();
     Map<String, String> parameters = hiveTable.getParameters();
-    Schema latestTableSchema = StreamerUtil.getLatestTableSchema(path, hiveConf);
+    HoodieSchema latestTableSchema = StreamerUtil.getLatestTableSchema(path, hiveConf);
     org.apache.flink.table.api.Schema schema;
     if (latestTableSchema != null) {
       String pkColumnsStr = parameters.get(FlinkOptions.RECORD_KEY_FIELD.key());

@@ -22,6 +22,9 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -41,8 +44,6 @@ import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.utils.FlinkMiniCluster;
 
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -63,6 +64,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -245,35 +247,44 @@ public class ITTestSchemaEvolution {
         doCompact(conf);
       }
 
-      Schema intType = SchemaBuilder.unionOf().nullType().and().intType().endUnion();
-      Schema longType = SchemaBuilder.unionOf().nullType().and().longType().endUnion();
-      Schema doubleType = SchemaBuilder.unionOf().nullType().and().doubleType().endUnion();
-      Schema stringType = SchemaBuilder.unionOf().nullType().and().stringType().endUnion();
-      Schema structType = SchemaBuilder.builder().record("new_row_col").fields()
-              .name("f0").type(longType).noDefault()
-              .name("f1").type(stringType).noDefault().endRecord();
-      Schema arrayType = Schema.createUnion(SchemaBuilder.builder().array().items(stringType), SchemaBuilder.builder().nullType());
-      Schema mapType = Schema.createUnion(SchemaBuilder.builder().map().values(stringType), SchemaBuilder.builder().nullType());
+      // Create nullable primitive types using HoodieSchema
+      HoodieSchema intType = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.INT));
+      HoodieSchema longType = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.LONG));
+      HoodieSchema doubleType = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.DOUBLE));
+      HoodieSchema stringType = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING));
 
-      writeClient.addColumn("salary", doubleType, null, "name", AFTER);
+      // Create struct type with fields
+      List<HoodieSchemaField> structFields = Arrays.asList(
+          HoodieSchemaField.of("f0", longType, null, HoodieSchema.NULL_VALUE),
+          HoodieSchemaField.of("f1", stringType, null, HoodieSchema.NULL_VALUE)
+      );
+      HoodieSchema structType = HoodieSchema.createRecord("new_row_col", null, null, structFields);
+
+      // Create nullable array type
+      HoodieSchema arrayType = HoodieSchema.createNullable(HoodieSchema.createArray(stringType));
+
+      // Create nullable map type
+      HoodieSchema mapType = HoodieSchema.createNullable(HoodieSchema.createMap(stringType));
+
+      writeClient.addColumn("salary", doubleType.getAvroSchema(), null, "name", AFTER);
       writeClient.deleteColumns("gender");
       writeClient.renameColumn("name", "first_name");
       writeClient.updateColumnType("age", Types.StringType.get());
-      writeClient.addColumn("last_name", stringType, "empty allowed", "salary", BEFORE);
+      writeClient.addColumn("last_name", stringType.getAvroSchema(), "empty allowed", "salary", BEFORE);
       writeClient.reOrderColPosition("age", "first_name", BEFORE);
       // add a field in the middle of the `f_struct` and `f_row_map` columns
-      writeClient.addColumn("f_struct.f2", intType, "add field in middle of struct", "f_struct.f0", AFTER);
-      writeClient.addColumn("f_row_map.value.f2", intType, "add field in middle of struct", "f_row_map.value.f0", AFTER);
+      writeClient.addColumn("f_struct.f2", intType.getAvroSchema(), "add field in middle of struct", "f_struct.f0", AFTER);
+      writeClient.addColumn("f_row_map.value.f2", intType.getAvroSchema(), "add field in middle of struct", "f_row_map.value.f0", AFTER);
       // add a field at the end of `f_struct` and `f_row_map` column
-      writeClient.addColumn("f_struct.f3", stringType);
-      writeClient.addColumn("f_row_map.value.f3", stringType);
+      writeClient.addColumn("f_struct.f3", stringType.getAvroSchema());
+      writeClient.addColumn("f_row_map.value.f3", stringType.getAvroSchema());
 
       // delete and add a field with the same name
       // reads should not return previously inserted datum of dropped field of the same name
       writeClient.deleteColumns("f_struct.drop_add");
-      writeClient.addColumn("f_struct.drop_add", doubleType);
+      writeClient.addColumn("f_struct.drop_add", doubleType.getAvroSchema());
       writeClient.deleteColumns("f_row_map.value.drop_add");
-      writeClient.addColumn("f_row_map.value.drop_add", doubleType);
+      writeClient.addColumn("f_row_map.value.drop_add", doubleType.getAvroSchema());
 
       // perform comprehensive evolution on complex types (struct, array, map) by promoting its primitive types
       writeClient.updateColumnType("f_struct.change_type", Types.LongType.get());
@@ -284,9 +295,9 @@ public class ITTestSchemaEvolution {
       writeClient.updateColumnType("f_map.value", Types.DoubleType.get());
 
       // perform comprehensive schema evolution on table by adding complex typed columns
-      writeClient.addColumn("new_row_col", structType);
-      writeClient.addColumn("new_array_col", arrayType);
-      writeClient.addColumn("new_map_col", mapType);
+      writeClient.addColumn("new_row_col", structType.getAvroSchema());
+      writeClient.addColumn("new_array_col", arrayType.getAvroSchema());
+      writeClient.addColumn("new_map_col", mapType.getAvroSchema());
 
       writeClient.reOrderColPosition("partition", "new_map_col", AFTER);
 

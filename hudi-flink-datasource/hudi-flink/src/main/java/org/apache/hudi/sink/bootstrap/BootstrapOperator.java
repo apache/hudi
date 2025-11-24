@@ -22,6 +22,7 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
@@ -44,7 +45,6 @@ import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
-import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
@@ -217,7 +217,8 @@ public class BootstrapOperator
     Option<HoodieInstant> latestCommitTime = commitsTimeline.filterCompletedAndCompactionInstants().lastInstant();
 
     if (latestCommitTime.isPresent()) {
-      Schema schema = new TableSchemaResolver(this.hoodieTable.getMetaClient()).getTableAvroSchema();
+      HoodieSchema schema = HoodieSchema.fromAvroSchema(
+          new TableSchemaResolver(this.hoodieTable.getMetaClient()).getTableAvroSchema());
 
       List<FileSlice> fileSlices = this.hoodieTable.getSliceView()
           .getLatestMergedFileSlicesBeforeOrOn(partitionPath, latestCommitTime.get().requestedTime())
@@ -250,7 +251,7 @@ public class BootstrapOperator
    *
    * @return A record key iterator for the file slice.
    */
-  private ClosableIterator<String> getRecordKeyIterator(FileSlice fileSlice, Schema tableSchema) throws IOException {
+  private ClosableIterator<String> getRecordKeyIterator(FileSlice fileSlice, HoodieSchema tableSchema) throws IOException {
     FileSlice scanFileSlice = new FileSlice(fileSlice.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId());
     // filter out crushed base file
     fileSlice.getBaseFile().map(f -> isValidFile(f.getPathInfo()) ? f : null).ifPresent(scanFileSlice::setBaseFile);

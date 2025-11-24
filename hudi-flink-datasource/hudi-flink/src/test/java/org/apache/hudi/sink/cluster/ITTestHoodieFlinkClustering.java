@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -47,7 +48,6 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestSQL;
 
-import org.apache.avro.Schema;
 import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
@@ -180,8 +180,8 @@ public class ITTestHoodieFlinkClustering {
       HoodieInstant instant = INSTANT_GENERATOR.getClusteringCommitRequestedInstant(clusteringInstantTime.get());
       table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
 
-      final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
-      final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
+      final HoodieSchema tableSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
+      final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableSchema.getAvroSchema());
       final RowType rowType = (RowType) rowDataType.getLogicalType();
 
       DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstantTime.get(), clusteringPlan, conf))
@@ -383,8 +383,8 @@ public class ITTestHoodieFlinkClustering {
       HoodieInstant instant = INSTANT_GENERATOR.getClusteringCommitRequestedInstant(firstClusteringInstant.get());
       table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
 
-      final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
-      final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
+      final HoodieSchema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
+      final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema.getAvroSchema());
       final RowType rowType = (RowType) rowDataType.getLogicalType();
 
       DataStream<ClusteringCommitEvent> dataStream =
@@ -752,8 +752,8 @@ public class ITTestHoodieFlinkClustering {
       HoodieInstant instant = INSTANT_GENERATOR.getClusteringCommitRequestedInstant(clusteringInstantTime.get());
       table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
 
-      final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
-      final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
+      final HoodieSchema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
+      final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema.getAvroSchema());
       final RowType rowType = (RowType) rowDataType.getLogicalType();
 
       DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstantTime.get(), clusteringPlan, conf))

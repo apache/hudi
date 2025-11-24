@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.clustering;
 
+import org.apache.hadoop.yarn.webapp.hamlet.Hamlet;
 import org.apache.hudi.adapter.MaskingOutputAdapter;
 import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.avro.AvroSchemaUtils;
@@ -32,6 +33,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -59,7 +61,6 @@ import org.apache.hudi.util.FlinkTaskContextSupplier;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
-import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.Gauge;
@@ -107,8 +108,8 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   private int taskID;
   private transient HoodieWriteConfig writeConfig;
   private transient HoodieFlinkTable<?> table;
-  private transient Schema schema;
-  private transient Schema readerSchema;
+  private transient HoodieSchema schema;
+  private transient HoodieSchema readerSchema;
   private transient HoodieFlinkWriteClient writeClient;
   private transient StreamRecordCollector<ClusteringCommitEvent> collector;
   private transient BinaryRowDataSerializer binarySerializer;
@@ -170,11 +171,12 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     this.table = writeClient.getHoodieTable();
 
-    this.schema = AvroSchemaConverter.convertToSchema(rowType);
+    //TODO make a converter class for HoodieSchemaConverter
+    this.schema = HoodieSchema.fromAvroSchema(AvroSchemaConverter.convertToSchema(rowType));
     // Since there exists discrepancies between flink and spark dealing with nullability of primary key field,
     // and there may be some files written by spark, force update schema as nullable to make sure clustering
     // scan successfully without schema validating exception.
-    this.readerSchema = AvroSchemaUtils.asNullable(schema);
+    this.readerSchema = HoodieSchemaUtils.createNullableSchema(schema);
 
     this.binarySerializer = new BinaryRowDataSerializer(rowType.getFieldCount());
 
@@ -312,8 +314,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
         HoodieRowDataParquetReader fileReader = (HoodieRowDataParquetReader) fileReaderFactory.getFileReader(
             table.getConfig(), new StoragePath(clusteringOp.getDataFilePath()));
 
-        //TODO boundary to revisit in later pr to use HoodieSchema directly
-        return new CloseableMappingIterator<>(fileReader.getRecordIterator(HoodieSchema.fromAvroSchema(readerSchema)), HoodieRecord::getData);
+        return new CloseableMappingIterator<>(fileReader.getRecordIterator(readerSchema), HoodieRecord::getData);
       } catch (IOException e) {
         throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
             + " and " + clusteringOp.getDeltaFilePaths(), e);
