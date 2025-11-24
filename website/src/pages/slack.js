@@ -3,7 +3,7 @@ import { originalSlackUrl } from '../../constants';
 
 export default function SlackRedirect() {
   useEffect(() => {
-    window.location.href = originalSlackUrl ;
+    window.location.href = originalSlackUrl;
   }, []);
   return <p>Redirecting to Slack...</p>;
 }
