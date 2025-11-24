@@ -19,21 +19,15 @@
 package org.apache.hudi.sync.common.util;
 
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
-
-import org.apache.parquet.schema.GroupType;
-import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.PrimitiveType;
-import org.apache.parquet.schema.Type;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static org.apache.parquet.schema.OriginalType.UTF8;
-import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
 
 public class SparkDataSourceTableUtils {
   /**
@@ -46,32 +40,31 @@ public class SparkDataSourceTableUtils {
     // Convert the schema and partition info used by spark sql to hive table properties.
     // The following code refers to the spark code in
     // https://github.com/apache/spark/blob/master/sql/hive/src/main/scala/org/apache/spark/sql/hive/HiveExternalCatalog.scala
-    GroupType originGroupType = schema.asGroupType();
-    List<Type> partitionCols = new ArrayList<>();
-    List<Type> dataCols = new ArrayList<>();
-    Map<String, Type> column2Field = new HashMap<>();
+    List<HoodieSchemaField> partitionCols = new ArrayList<>();
+    List<HoodieSchemaField> dataCols = new ArrayList<>();
+    Map<String, HoodieSchemaField> column2Field = new HashMap<>();
 
-    for (Type field : originGroupType.getFields()) {
-      column2Field.put(field.getName(), field);
+    for (HoodieSchemaField field : schema.getFields()) {
+      column2Field.put(field.name(), field);
     }
     // Get partition columns and data columns.
     for (String partitionName : partitionNames) {
       // Default the unknown partition fields to be String.
       // Keep the same logical with HiveSchemaUtil#getPartitionKeyType.
       partitionCols.add(column2Field.getOrDefault(partitionName,
-          new PrimitiveType(Type.Repetition.REQUIRED, BINARY, partitionName, UTF8)));
+          HoodieSchemaField.of(partitionName, HoodieSchema.create(HoodieSchemaType.STRING))));
     }
 
-    for (Type field : originGroupType.getFields()) {
-      if (!partitionNames.contains(field.getName())) {
+    for (HoodieSchemaField field : schema.getFields()) {
+      if (!partitionNames.contains(field.name())) {
         dataCols.add(field);
       }
     }
 
-    List<Type> reOrderedFields = new ArrayList<>();
+    List<HoodieSchemaField> reOrderedFields = new ArrayList<>();
     reOrderedFields.addAll(dataCols);
     reOrderedFields.addAll(partitionCols);
-    GroupType reOrderedType = new GroupType(originGroupType.getRepetition(), originGroupType.getName(), reOrderedFields);
+    HoodieSchema reOrderedSchema = HoodieSchema.createRecord(schema.getName().get(), null, null, reOrderedFields);
 
     Map<String, String> sparkProperties = new HashMap<>();
     sparkProperties.put("spark.sql.sources.provider", "hudi");
@@ -79,7 +72,7 @@ public class SparkDataSourceTableUtils {
       sparkProperties.put("spark.sql.create.version", sparkVersion);
     }
     // Split the schema string to multi-parts according the schemaLengthThreshold size.
-    String schemaString = Parquet2SparkSchemaUtils.convertToSparkSchemaJson(reOrderedType);
+    String schemaString = SparkSchemaUtils.convertToSparkSchemaJson(reOrderedSchema);
     int numSchemaPart = (schemaString.length() + schemaLengthThreshold - 1) / schemaLengthThreshold;
     sparkProperties.put("spark.sql.sources.schema.numParts", String.valueOf(numSchemaPart));
     // Add each part of schema string to sparkProperties
