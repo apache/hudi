@@ -16,19 +16,15 @@ Hudi works with Spark 3.3 and above versions. You can follow instructions [here]
 
 ### Spark Support Matrix
 
-| Hudi            | Supported Spark  version(s)                              | Scala Version | Java Version |
-|:----------------|:---------------------------------------------------------|:--------------|:-------------|
-| 1.1.x           | 4.0.x, 3.5.x (default build), 3.4.x, 3.3.x               | 2.13 (Spark 4.0), 2.12/2.13 (Spark 3.5), 2.12 (Spark 3.3-3.4) | 17+ (Spark 4.0), 8+ (Spark 3.x) |
-| 1.0.x           | 3.5.x (default build), 3.4.x, 3.3.x                      | 2.12/2.13 (Spark 3.5), 2.12 (Spark 3.3-3.4)     | 8+            |
-| 0.15.x          | 3.5.x (default build), 3.4.x, 3.3.x, 3.2.x, 3.1.x, 3.0.x | 2.12/2.13 (Spark 3.5), 2.12          | 8+            |
-| 0.14.x          | 3.4.x (default build), 3.3.x, 3.2.x, 3.1.x, 3.0.x        | 2.12          | 8+            |
+| Hudi   | Supported Spark  version(s)                              | Scala Version                                                 | Java Version                    |
+|:-------|:---------------------------------------------------------|:--------------------------------------------------------------|:--------------------------------|
+| 1.1.x  | 4.0.x, 3.5.x (default build), 3.4.x, 3.3.x               | 2.13 (Spark 4.0), 2.12/2.13 (Spark 3.5), 2.12 (Spark 3.3-3.4) | 17+ (Spark 4.0), 8+ (Spark 3.x) |
+| 1.0.x  | 3.5.x (default build), 3.4.x, 3.3.x                      | 2.12/2.13 (Spark 3.5), 2.12 (Spark 3.3-3.4)                   | 8+                              |
+| 0.15.x | 3.5.x (default build), 3.4.x, 3.3.x, 3.2.x, 3.1.x, 3.0.x | 2.12/2.13 (Spark 3.5), 2.12                                   | 8+                              |
+| 0.14.x | 3.4.x (default build), 3.3.x, 3.2.x, 3.1.x, 3.0.x        | 2.12                                                          | 8+                              |
 
+:::note
 The *default build* Spark version indicates how we build `hudi-spark3-bundle`.
-
-:::note Change summary
-In 1.0.0, we dropped the support for Spark 3.2.x and lower Spark 3 versions.
-In 0.15.0, we introduced the support for Spark 3.5.x.
-In 0.14.0, we introduced the support for Spark 3.4.x and bring back the support for Spark 3.0.x.
 :::
 
 ### Spark Shell/SQL
