@@ -58,6 +58,22 @@ jobs:
     strategy:
       matrix:
         include:
+          - scalaProfile: "scala-2.11"
+            sparkProfile: "spark2.4"
+            sparkModules: "hudi-spark-datasource/hudi-spark2"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.0"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.0.x"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.1"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.1.x"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.2"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.2.x"
+
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.3"
             sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
@@ -117,6 +133,22 @@ jobs:
     strategy:
       matrix:
         include:
+          - scalaProfile: "scala-2.11"
+            sparkProfile: "spark2.4"
+            sparkModules: "hudi-spark-datasource/hudi-spark2"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.0"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.0.x"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.1"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.1.x"
+
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.2"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.2.x"
+
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.3"
             sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
@@ -637,3 +669,47 @@ jobs:
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - sparkProfile: 'spark2.4'
+            sparkArchive: 'spark-2.4.4/spark-2.4.4-bin-hadoop2.7.tgz'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 8
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Build Project
+        env:
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
+        run:
+          mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS
+      - name: 'UT integ-test'
+        env:
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
+        run:
+          mvn test $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
+      - name: 'IT'
+        env:
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_ARCHIVE: ${{ matrix.sparkArchive }}
+          SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
+        run: |
+          echo "Downloading $SPARK_ARCHIVE"
+          curl https://archive.apache.org/dist/spark/$SPARK_ARCHIVE --create-dirs -o $GITHUB_WORKSPACE/$SPARK_ARCHIVE
+          tar -xvf $GITHUB_WORKSPACE/$SPARK_ARCHIVE -C $GITHUB_WORKSPACE/
+          mkdir /tmp/spark-events/
+          SPARK_ARCHIVE_BASENAME=$(basename $SPARK_ARCHIVE)
+          export SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE_BASENAME%.*}
+          rm -f $GITHUB_WORKSPACE/$SPARK_ARCHIVE
+          docker system prune --all --force
+          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS
