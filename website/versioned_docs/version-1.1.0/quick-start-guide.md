@@ -20,7 +20,7 @@ Hudi works with Spark 3.3 and above versions. You can follow instructions [here]
 |:----------------|:---------------------------------------------------------|:--------------|:-------------|
 | 1.1.x           | 4.0.x, 3.5.x (default build), 3.4.x, 3.3.x               | 2.13 (Spark 4.0), 2.12/2.13 (Spark 3.5), 2.12 (Spark 3.3-3.4) | 17+ (Spark 4.0), 8+ (Spark 3.x) |
 | 1.0.x           | 3.5.x (default build), 3.4.x, 3.3.x                      | 2.12/2.13 (Spark 3.5), 2.12 (Spark 3.3-3.4)     | 8+            |
-| 0.15.x          | 3.5.x (default build), 3.4.x, 3.3.x, 3.2.x, 3.1.x, 3.0.x | 2.12          | 8+            |
+| 0.15.x          | 3.5.x (default build), 3.4.x, 3.3.x, 3.2.x, 3.1.x, 3.0.x | 2.12/2.13 (Spark 3.5), 2.12          | 8+            |
 | 0.14.x          | 3.4.x (default build), 3.3.x, 3.2.x, 3.1.x, 3.0.x        | 2.12          | 8+            |
 
 The *default build* Spark version indicates how we build `hudi-spark3-bundle`.
@@ -53,7 +53,7 @@ From the extracted directory run spark-shell with Hudi:
 export SPARK_VERSION=3.5
 export HUDI_VERSION=1.1.0
 # For Scala versions: 2.12/2.13
-export SCALA_VERSION=2.12
+export SCALA_VERSION=2.13
 
 spark-shell --master "local[2]" \
   --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_$SCALA_VERSION:$HUDI_VERSION \
@@ -74,7 +74,7 @@ export PYSPARK_PYTHON=$(which python3)
 export SPARK_VERSION=3.5
 export HUDI_VERSION=1.1.0
 # For Scala versions: 2.12/2.13
-export SCALA_VERSION=2.12
+export SCALA_VERSION=2.13
 
 pyspark --master "local[2]" \
   --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_$SCALA_VERSION:$HUDI_VERSION \
@@ -95,7 +95,7 @@ From the extracted directory run Spark SQL with Hudi:
 export SPARK_VERSION=3.5
 export HUDI_VERSION=1.1.0
 # For Scala versions: 2.12/2.13
-export SCALA_VERSION=2.12
+export SCALA_VERSION=2.13
 
 spark-sql --master "local[2]" \
   --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_$SCALA_VERSION:$HUDI_VERSION \
