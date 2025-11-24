@@ -21,6 +21,7 @@ package org.apache.hudi.sync.common;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.ParquetTableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -34,7 +35,6 @@ import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -108,18 +108,18 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   }
 
   @Override
-  public MessageType getStorageSchema() {
+  public HoodieSchema getStorageSchema() {
     try {
-      return tableSchemaResolver.getTableParquetSchema();
+      return tableSchemaResolver.getTableSchema();
     } catch (Exception e) {
       throw new HoodieSyncException(buildSchemaReadErrorMessage(e), e);
     }
   }
 
   @Override
-  public MessageType getStorageSchema(boolean includeMetadataField) {
+  public HoodieSchema getStorageSchema(boolean includeMetadataField) {
     try {
-      return tableSchemaResolver.getTableParquetSchema(includeMetadataField);
+      return tableSchemaResolver.getTableSchema(includeMetadataField);
     } catch (Exception e) {
       throw new HoodieSyncException(buildSchemaReadErrorMessage(e), e);
     }

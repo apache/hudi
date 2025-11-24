@@ -19,6 +19,7 @@
 
 package org.apache.hudi.sync.datahub;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -34,10 +35,10 @@ import com.linkedin.common.BrowsePathEntry;
 import com.linkedin.common.BrowsePathEntryArray;
 import com.linkedin.common.BrowsePathsV2;
 import com.linkedin.common.DataPlatformInstance;
-import com.linkedin.common.urn.DataPlatformUrn;
 import com.linkedin.common.Status;
 import com.linkedin.common.SubTypes;
 import com.linkedin.common.UrnArray;
+import com.linkedin.common.urn.DataPlatformUrn;
 import com.linkedin.common.urn.DatasetUrn;
 import com.linkedin.common.urn.Urn;
 import com.linkedin.container.Container;
@@ -51,7 +52,6 @@ import datahub.client.rest.RestEmitter;
 import datahub.event.MetadataChangeProposalWrapper;
 import io.datahubproject.schematron.converters.avro.AvroSchemaConverter;
 import org.apache.avro.Schema;
-import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -170,7 +170,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public void updateTableSchema(String tableName, MessageType schema, SchemaDifference schemaDifference) {
+  public void updateTableSchema(String tableName, HoodieSchema schema, SchemaDifference schemaDifference) {
     try (RestEmitter emitter = config.getRestEmitter()) {
       DataHubResponseLogger responseLogger = new DataHubResponseLogger();
 

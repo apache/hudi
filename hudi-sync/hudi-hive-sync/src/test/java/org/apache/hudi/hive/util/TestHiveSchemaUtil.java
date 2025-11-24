@@ -19,6 +19,7 @@
 
 package org.apache.hudi.hive.util;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.hive.SchemaDifference;
 
 import org.apache.parquet.schema.MessageType;
@@ -45,7 +46,7 @@ public class TestHiveSchemaUtil {
   @Test
   public void testSchemaConvertArray() throws IOException {
     // Testing the 3-level annotation structure
-    MessageType schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup()
+    HoodieSchema schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup()
         .optional(PrimitiveType.PrimitiveTypeName.INT32).named("element").named("list").named("int_list")
         .named("ArrayOfInts");
 
@@ -118,7 +119,7 @@ public class TestHiveSchemaUtil {
   @ParameterizedTest
   @ValueSource(strings = {"TIMESTAMP_MICROS", "TIMESTAMP_MILLIS"})
   public void testSchemaConvertTimestamp(String type) throws IOException {
-    MessageType schema = Types.buildMessage().optional(PrimitiveType.PrimitiveTypeName.INT64)
+    HoodieSchema schema = Types.buildMessage().optional(PrimitiveType.PrimitiveTypeName.INT64)
         .as(OriginalType.valueOf(type)).named("my_element").named("my_timestamp");
     String schemaString = HiveSchemaUtil.generateSchemaString(schema);
     // verify backward compatibility - int64 converted to bigint type
@@ -131,7 +132,7 @@ public class TestHiveSchemaUtil {
   @ParameterizedTest
   @ValueSource(strings = {"TIMESTAMP_MICROS", "TIMESTAMP_MILLIS"})
   public void testSchemaDiffForTimestamp(String type) {
-    MessageType schema = Types.buildMessage().optional(PrimitiveType.PrimitiveTypeName.INT64)
+    HoodieSchema schema = Types.buildMessage().optional(PrimitiveType.PrimitiveTypeName.INT64)
         .as(OriginalType.valueOf(type)).named("my_element").named("my_timestamp");
     // verify backward compatibility - int64 converted to bigint type
     SchemaDifference schemaDifference = HiveSchemaUtil.getSchemaDifference(schema,
