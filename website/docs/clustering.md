@@ -13,7 +13,7 @@ Apache Hudi brings stream processing to big data, providing fresh data while bei
 ## How is compaction different from clustering?
 
 Hudi is modeled like a log-structured storage engine with multiple versions of the data.
-Particularly, [Merge-On-Read](table_types#merge-on-read-table)
+Particularly, [Merge-on-Read](table_types#merge-on-read-table)
 tables in Hudi store data using a combination of base file in columnar format and row-based delta logs that contain
 updates. Compaction is a way to merge the delta logs with base files to produce the latest file slices with the most
 recent snapshot of data. Compaction helps to keep the query performance in check (larger delta log files would incur

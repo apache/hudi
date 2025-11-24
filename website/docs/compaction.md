@@ -8,9 +8,9 @@ last_modified_at:
 ---
 ## Background
 
-Compaction is a table service employed by Hudi specifically in Merge On Read(MOR) tables to merge updates from row-based log
+Compaction is a table service employed by Hudi specifically in Merge-on-Read (MOR) tables to merge updates from row-based log
 files to the corresponding columnar-based base file periodically to produce a new version of the base file. Compaction is
-not applicable to Copy On Write(COW) tables and only applies to MOR tables.
+not applicable to Copy-on-Write (COW) tables and only applies to MOR tables.
 
 ### Why MOR tables need compaction?
 
@@ -98,8 +98,8 @@ Please refer to [advanced configs](https://hudi.apache.org/docs/next/configurati
 
 By default, compaction is run asynchronously.
 
-If latency of ingesting records is important for you, you are most likely using Merge-On-Read tables.
-Merge-On-Read tables store data using a combination of columnar (e.g parquet) + row based (e.g avro) file formats.
+If latency of ingesting records is important for you, you are most likely using Merge-on-Read tables.
+Merge-on-Read tables store data using a combination of columnar (e.g parquet) + row based (e.g avro) file formats.
 Updates are logged to delta files & later compacted to produce new versions of columnar files.
 To improve ingestion latency, Async Compaction is the default configuration.
 
