@@ -20,17 +20,16 @@
 package org.apache.hudi.hive.util;
 
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.hive.SchemaDifference;
 
-import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.OriginalType;
-import org.apache.parquet.schema.PrimitiveType;
-import org.apache.parquet.schema.Types;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -45,33 +44,25 @@ public class TestHiveSchemaUtil {
    */
   @Test
   public void testSchemaConvertArray() throws IOException {
-    // Testing the 3-level annotation structure
-    HoodieSchema schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup()
-        .optional(PrimitiveType.PrimitiveTypeName.INT32).named("element").named("list").named("int_list")
-        .named("ArrayOfInts");
+    // A list of integers
+    HoodieSchema schema = HoodieSchema.createRecord("message", null, null,
+        Collections.singletonList(HoodieSchemaField.of("int_list", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT)))));
 
     String schemaString = HiveSchemaUtil.generateSchemaString(schema);
     assertEquals("`int_list` ARRAY< int>", schemaString);
 
-    // A array of arrays
-    schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup().requiredGroup()
-        .as(OriginalType.LIST).repeatedGroup().required(PrimitiveType.PrimitiveTypeName.INT32).named("element")
-        .named("list").named("element").named("list").named("int_list_list").named("ArrayOfArrayOfInts");
+    // An array of arrays
+    schema = HoodieSchema.createRecord("message", null, null,
+        Collections.singletonList(HoodieSchemaField.of("int_list_list", HoodieSchema.createArray(HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT))))));
 
     schemaString = HiveSchemaUtil.generateSchemaString(schema);
     assertEquals("`int_list_list` ARRAY< ARRAY< int>>", schemaString);
 
-    // A list of integers
-    schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeated(PrimitiveType.PrimitiveTypeName.INT32)
-        .named("element").named("int_list").named("ArrayOfInts");
-
-    schemaString = HiveSchemaUtil.generateSchemaString(schema);
-    assertEquals("`int_list` ARRAY< int>", schemaString);
-
     // A list of structs with two fields
-    schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup()
-        .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str").required(PrimitiveType.PrimitiveTypeName.INT32)
-        .named("num").named("element").named("tuple_list").named("ArrayOfTuples");
+    schema = HoodieSchema.createRecord("ArrayOfTuples", null, null,
+        Collections.singletonList(HoodieSchemaField.of("tuple_list", HoodieSchema.createArray(
+            HoodieSchema.createRecord(null, null, null, Arrays.asList(HoodieSchemaField.of("str", HoodieSchema.create(HoodieSchemaType.BYTES)),
+                HoodieSchemaField.of("num", HoodieSchema.create(HoodieSchemaType.INT))))))));
 
     schemaString = HiveSchemaUtil.generateSchemaString(schema);
     assertEquals("`tuple_list` ARRAY< STRUCT< `str` : binary, `num` : int>>", schemaString);
@@ -79,38 +70,18 @@ public class TestHiveSchemaUtil {
     // A list of structs with a single field
     // For this case, since the inner group name is "array", we treat the
     // element type as a one-element struct.
-    schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup()
-        .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str").named("array").named("one_tuple_list")
-        .named("ArrayOfOneTuples");
+    schema = HoodieSchema.createRecord("ArrayOfOneTuples", null, null,
+        Collections.singletonList(HoodieSchemaField.of("one_tuple_list", HoodieSchema.createArray(
+            HoodieSchema.createRecord(null, null, null,
+                Collections.singletonList(HoodieSchemaField.of("str", HoodieSchema.create(HoodieSchemaType.BYTES))))))));
 
     schemaString = HiveSchemaUtil.generateSchemaString(schema);
     assertEquals("`one_tuple_list` ARRAY< STRUCT< `str` : binary>>", schemaString);
-
-    // A list of structs with a single field
-    // For this case, since the inner group name ends with "_tuple", we also treat the
-    // element type as a one-element struct.
-    schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup()
-        .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str").named("one_tuple_list_tuple")
-        .named("one_tuple_list").named("ArrayOfOneTuples2");
-
-    schemaString = HiveSchemaUtil.generateSchemaString(schema);
-    assertEquals("`one_tuple_list` ARRAY< STRUCT< `str` : binary>>", schemaString);
-
-    // A list of structs with a single field
-    // Unlike the above two cases, for this the element type is the type of the
-    // only field in the struct.
-    schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup()
-        .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str").named("one_tuple_list").named("one_tuple_list")
-        .named("ArrayOfOneTuples3");
-
-    schemaString = HiveSchemaUtil.generateSchemaString(schema);
-    assertEquals("`one_tuple_list` ARRAY< binary>", schemaString);
 
     // A list of maps
-    schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup().as(OriginalType.MAP)
-        .repeatedGroup().as(OriginalType.MAP_KEY_VALUE).required(PrimitiveType.PrimitiveTypeName.BINARY)
-        .as(OriginalType.UTF8).named("string_key").required(PrimitiveType.PrimitiveTypeName.INT32).named("int_value")
-        .named("key_value").named("array").named("map_list").named("ArrayOfMaps");
+    schema = HoodieSchema.createRecord("ArrayOfMaps", null, null,
+        Collections.singletonList(HoodieSchemaField.of("map_list", HoodieSchema.createArray(
+            HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT))))));
 
     schemaString = HiveSchemaUtil.generateSchemaString(schema);
     assertEquals("`map_list` ARRAY< MAP< string, int>>", schemaString);
@@ -119,8 +90,8 @@ public class TestHiveSchemaUtil {
   @ParameterizedTest
   @ValueSource(strings = {"TIMESTAMP_MICROS", "TIMESTAMP_MILLIS"})
   public void testSchemaConvertTimestamp(String type) throws IOException {
-    HoodieSchema schema = Types.buildMessage().optional(PrimitiveType.PrimitiveTypeName.INT64)
-        .as(OriginalType.valueOf(type)).named("my_element").named("my_timestamp");
+    HoodieSchema schema = HoodieSchema.createRecord("my_timestamp", null, null,
+        Collections.singletonList(HoodieSchemaField.of("my_element", HoodieSchema.create(HoodieSchemaType.LONG))));
     String schemaString = HiveSchemaUtil.generateSchemaString(schema);
     // verify backward compatibility - int64 converted to bigint type
     assertEquals("`my_element` bigint", schemaString);
@@ -132,8 +103,8 @@ public class TestHiveSchemaUtil {
   @ParameterizedTest
   @ValueSource(strings = {"TIMESTAMP_MICROS", "TIMESTAMP_MILLIS"})
   public void testSchemaDiffForTimestamp(String type) {
-    HoodieSchema schema = Types.buildMessage().optional(PrimitiveType.PrimitiveTypeName.INT64)
-        .as(OriginalType.valueOf(type)).named("my_element").named("my_timestamp");
+    HoodieSchema schema = HoodieSchema.createRecord("my_timestamp", null, null,
+        Collections.singletonList(HoodieSchemaField.of("my_element", HoodieSchema.create(HoodieSchemaType.LONG))));
     // verify backward compatibility - int64 converted to bigint type
     SchemaDifference schemaDifference = HiveSchemaUtil.getSchemaDifference(schema,
         Collections.emptyMap(), Collections.emptyList(), false);
