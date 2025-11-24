@@ -84,9 +84,9 @@ module.exports = {
             label: 'Data Catalogs',
             items: [
                  'syncing_aws_glue_data_catalog',
+                 'gcp_bigquery',
                  'syncing_datahub',
                  'syncing_metastore',
-                 'gcp_bigquery',
                  'syncing_xtable',
                  'catalog_polaris',
             ],

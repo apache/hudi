@@ -12,8 +12,8 @@ Apache Hudi 1.1.0 is a major release that brings significant performance improve
 
 - **Pluggable Table Format Framework** - Native integration of multiple table formats with unified metadata management
 - **Spark 4.0 and Flink 2.0 Support** - Full support for latest major compute engine versions
-- **Enhanced Indexing** - Partitioned Record Index, partition-level bucket index, native HFile writer, and Column Stats V2
-- **Table Services Optimization** - Parquet file stitching and incremental scheduling for compaction/clustering
+- **Enhanced Indexing** - Partitioned record index, partition-level bucket index, native HFile writer, and column stats V2
+- **Table Services Optimization** - Parquet binary copy and incremental scheduling for compaction/clustering
 - **Storage-based Lock Provider** - Multi-writer concurrency control without external dependencies
 - **Record Merging Evolution** - Deprecation of payload classes in favor of merge modes and merger APIs
 
@@ -25,9 +25,9 @@ Apache Hudi 1.1.0 is a major release that brings significant performance improve
 
 #### Pluggable Table Format Support
 
-Hudi 1.1.0 introduces a new Pluggable Table Format framework that enables native integration of multiple table formats within the system. This foundation includes a base interface for pluggable table formats, designed to simplify extension and allow seamless interoperability across different storage backends. The Metadata Table (MDT) integration has been enhanced to support pluggability, ensuring modularity and unified metadata management across all supported table formats.
+Hudi 1.1.0 introduces a new [Pluggable Table Format](/docs/hudi_stack#pluggable-table-format) framework that enables native integration of multiple table formats within the system. This foundation includes a base interface for pluggable table formats, designed to simplify extension and allow seamless interoperability across different storage backends. The Metadata Table (MDT) integration has been enhanced to support pluggability, ensuring modularity and unified metadata management across all supported table formats.
 
-This release brings native Hudi integration through the new framework, allowing users to leverage Hudi's advanced capabilities directly while maintaining consistent semantics and performance. The configuration `hoodie.table.format` is set to `native` by default, which works as the Hudi table format. **No configuration changes are required** for existing and new Hudi tables. As additional table formats are supported in future releases, users will be able to set this configuration to work natively with other formats.
+This release brings native Hudi integration through the new framework, allowing users to leverage Hudi's advanced capabilities directly while maintaining consistent semantics and performance. The configuration `hoodie.table.format` is set to `native` by default, which works as the Hudi table format. **No configuration changes are required** for existing and new Hudi tables. As additional table formats are supported in future releases, users will be able to set this configuration to work natively with other formats. [Apache XTable (Incubating)](https://xtable.apache.org/) provides pluggable format adapters for formats like Iceberg and Delta Lake.
 
 #### Table Version 9 with Index Versioning
 
@@ -37,9 +37,9 @@ Hudi 1.1.0 introduces table version 9 with support for index versioning. Indexes
 
 #### Partitioned Record Index
 
-In addition to the global Record Index introduced in 0.14.0, Hudi 1.1.0 adds a partitioned variant that guarantees uniqueness for partition path and record key pairs. This index speeds up lookups in very large partitioned datasets.
+In addition to the global record index introduced in 0.14.0, Hudi 1.1.0 adds a partitioned variant that guarantees uniqueness for partition path and record key pairs. This index speeds up lookups in very large partitioned datasets. For more details, see [record index](/docs/indexes#record-index).
 
-Prior to 1.1.0, only global Record Index was available, configured as:
+Prior to 1.1.0, only global record index was available, configured as:
 
 ```properties
 hoodie.metadata.record.index.enable=true
@@ -48,19 +48,19 @@ hoodie.index.type=RECORD_INDEX
 
 From 1.1.0 onwards, both global and partitioned variants are available:
 
-For partitioned Record Index:
+For partitioned record index:
 
 - Metadata table: `hoodie.metadata.record.level.index.enable=true`
 - Write index: `hoodie.index.type=RECORD_LEVEL_INDEX`
 
-For global Record Index:
+For global record index:
 
 - Metadata table: `hoodie.metadata.global.record.level.index.enable=true`
 - Write index: `hoodie.index.type=GLOBAL_RECORD_LEVEL_INDEX`
 
 #### Partition-Level Bucket Index
 
-A new bucket index type that addresses bucket rescaling challenges. Users can set specific bucket numbers for different partitions through a rule engine (regex pattern matching). Existing Bucket Index tables can be upgraded smoothly and seamlessly.
+A new bucket index type that addresses bucket rescaling challenges. Users can set specific bucket numbers for different partitions through a rule engine (regex pattern matching). Existing bucket index tables can be upgraded smoothly and seamlessly.
 
 Key Configurations:
 
@@ -68,7 +68,7 @@ Key Configurations:
 - `hoodie.bucket.index.partition.expressions` - Expression and bucket number pairs
 - `hoodie.bucket.index.num.buckets` - Default bucket count for partitions
 
-For more details, see [RFC-89](https://github.com/apache/hudi/pull/12884/files)
+For more details, see [RFC-89](https://github.com/apache/hudi/pull/12884/) and [bucket index](/docs/indexes#additional-writer-side-indexes).
 
 #### Native HFile Writer
 
@@ -84,11 +84,11 @@ Multiple enhancements to speed up metadata table reads:
 
 #### Column Stats V2 with Enhanced Data Type Support
 
-Column Stats V2 significantly improves support for logical data types during writes and statistics collection. Logical types like decimals (with precision/scale) and timestamps are now preserved with proper metadata, improving accuracy for query planning and predicate pushdown.
+column stats V2 significantly improves support for logical data types during writes and statistics collection. Logical types like decimals (with precision/scale) and timestamps are now preserved with proper metadata, improving accuracy for query planning and predicate pushdown.
 
 ### Table Services
 
-#### Parquet File Stitching
+#### Parquet Binary Copy
 
 An optimization that enables direct copying of RowGroup-level data from Parquet files during operations like clustering, bypassing expensive compression/decompression, encoding/decoding, and column-to-row conversions. This optimization supports proper schema evolution and ensures Hudi metadata are collected and aggregated correctly. Experimental results show a **95% reduction in computational workload** for clustering operations.
 
@@ -102,7 +102,7 @@ For more details, see [Incremental Scheduling in Compaction](/docs/compaction#in
 
 #### Storage-based Lock Provider
 
-A new storage-based lock provider enables Hudi to manage multi-writer concurrency directly using the `.hoodie` directory in the underlying storage, eliminating the need for external lock providers like DynamoDB or ZooKeeper. Currently supports S3 and GCS, with lock information maintained under `.hoodie/.lock`.
+A new storage-based lock provider enables Hudi to manage multi-writer concurrency directly using the `.hoodie` directory in the underlying storage, eliminating the need for external lock providers like DynamoDB or ZooKeeper. Currently supports S3 and GCS, with lock information maintained under `.hoodie/.lock`. For more details, see [Storage-Based Lock Provider](/docs/concurrency_control#storage-based-lock-provider).
 
 ### Writers & Readers
 
@@ -128,7 +128,7 @@ Hive readers can now handle schema evolution when schema-on-write is used.
 
 #### Spark 4.0 Support
 
-Spark 4.0 is now supported with necessary compatibility and dependency changes. Available through the new `hudi-spark4.0-bundle_2.13` release artifact.
+Spark 4.0 is now supported with necessary compatibility and dependency changes. Available through the new `hudi-spark4.0-bundle_2.13` release artifact. For more details, see [Spark Quick Start](/docs/quick-start-guide#spark-support-matrix).
 
 #### Metadata Table Streaming Writes
 
@@ -147,6 +147,8 @@ Enhanced Capabilities:
 - Regex pattern support in `run_clustering` via `partition_regex_pattern` parameter
 - Base path and filter parameters for all non-action `SHOW` procedures with advanced predicate expressions
 
+For more details, see [SQL Procedures](/docs/procedures).
+
 ### Flink
 
 #### Flink 2.0 Support
@@ -154,6 +156,8 @@ Enhanced Capabilities:
 Full support for Flink 2.0 including sink, read, catalog, and new bundle artifact `hudi-flink2.0-bundle`. Includes compatibility fixes for legacy APIs and supports sinkV2 API by default.
 
 Deprecation: Removed support for Flink 1.14, 1.15, and 1.16
+
+For more details, see [Flink Quick Start](/docs/flink-quick-start-guide#flink-support-matrix).
 
 #### Performance Improvements
 
@@ -166,13 +170,15 @@ Deprecation: Removed support for Flink 1.14, 1.15, and 1.16
 - In-memory Buffer Sort: For pk-less tables, enables better compaction ratio for columnar formats (`write.buffer.sort.enabled`)
 - Split-level Rate Limiting: Configure maximum splits per instant check for streaming reads (`read.splits.limit`)
 
+For more details, see [Using Flink](/docs/ingestion_flink).
+
 ### Catalogs
 
 #### Polaris Integration
 
 Integration with Polaris catalog by delegating table creation to the Polaris Spark client, allowing Hudi tables to be registered in the Polaris Catalog.
 
-Configuration: `hoodie.datasource.polaris.catalog.class` (default: `org.apache.polaris.spark.SparkCatalog`)
+Configuration: `hoodie.datasource.polaris.catalog.class` (default: `org.apache.polaris.spark.SparkCatalog`). For more details, see [Polaris catalog](/docs/catalog_polaris).
 
 #### AWS Glue & DataHub Sync Enhancements
 
@@ -236,7 +242,7 @@ A regression affecting Complex Key Generator with a single record key field has 
 
 **Validation**: By default, writes will validate table configuration and alert you if affected. Disable with `hoodie.write.complex.keygen.validation.enable=false` if needed (readers are unaffected).
 
-**Note on Table Version 9**: For tables upgraded to version 9, key encoding format is locked to prevent future regressions and ensure correct behavior for Record Index and Secondary Index.
+**Note on Table Version 9**: For tables upgraded to version 9, key encoding format is locked to prevent future regressions and ensure correct behavior for record index and Secondary Index.
 
 For detailed technical information, see the [PR documentation](https://github.com/apache/hudi/pull/13650/).
 
@@ -336,7 +342,7 @@ The `hoodie.datasource.read.begin.instanttime` configuration behavior has been r
 
 ### Timestamp Logical Type Handling
 
-With Column Stats V2, timestamp fields are now correctly handled as `timestamp_millis` instead of `timestamp_micros` (as in 0.15.0 and earlier 1.x releases). The release maintains backward compatibility when reading tables written with older versions.
+With column stats V2, timestamp fields are now correctly handled as `timestamp_millis` instead of `timestamp_micros` (as in 0.15.0 and earlier 1.x releases). The release maintains backward compatibility when reading tables written with older versions.
 
 ### Flink Bucket Index Append Mode Restriction
 
