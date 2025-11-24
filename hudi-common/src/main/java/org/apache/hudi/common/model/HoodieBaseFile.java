@@ -36,7 +36,7 @@ public class HoodieBaseFile extends BaseFile {
   private static final long serialVersionUID = 1L;
   private static final char UNDERSCORE = '_';
   private static final char DOT = '.';
-  private static final String UNIFIED_VIEW_SUFFIX ="uv";
+  private static final String UNIFIED_VIEW_SUFFIX = "uv";
   private final String fileId;
   private final String commitTime;
   private final Option<Integer> numPartitionLevels;
@@ -56,7 +56,7 @@ public class HoodieBaseFile extends BaseFile {
   }
 
   public HoodieBaseFile(FileStatus fileStatus, BaseFile bootstrapBaseFile) {
-    this(fileStatus, getFileIdAndCommitTimeFromFileName(fileStatus.getPath().getName()), bootstrapBaseFile);
+    this(fileStatus, getInfoFromFileName(fileStatus.getPath().getName()), bootstrapBaseFile);
   }
 
   public HoodieBaseFile(String filePath) {
@@ -66,11 +66,11 @@ public class HoodieBaseFile extends BaseFile {
   public HoodieBaseFile(String filePath, BaseFile bootstrapBaseFile) {
     super(filePath);
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
-    String[] fileIdAndCommitTime = getFileIdAndCommitTimeFromFileName(getFileName());
-    this.fileId = fileIdAndCommitTime[0];
-    this.commitTime = fileIdAndCommitTime[1];
-    this.numPartitionLevels = StringUtils.isNullOrEmpty(fileIdAndCommitTime[3]) ?
-        Option.empty() : Option.ofNullable(parseSafe(fileIdAndCommitTime[3]));
+    String[] fileInfo = getInfoFromFileName(getFileName());
+    this.fileId = fileInfo[0];
+    this.commitTime = fileInfo[1];
+    this.numPartitionLevels = StringUtils.isNullOrEmpty(fileInfo[3])
+        ? Option.empty() : Option.ofNullable(parseSafe(fileInfo[3]));
   }
 
   public HoodieBaseFile(String filePath, String fileId, String commitTime, BaseFile bootstrapBaseFile) {
@@ -98,12 +98,16 @@ public class HoodieBaseFile extends BaseFile {
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
     this.fileId = fileId;
     this.commitTime = commitTime;
-    this.numPartitionLevels = StringUtils.isNullOrEmpty(numPartitionLevels) ?
-        Option.empty() : Option.ofNullable(parseSafe(numPartitionLevels));
+    this.numPartitionLevels = StringUtils.isNullOrEmpty(numPartitionLevels)
+        ? Option.empty() : Option.ofNullable(parseSafe(numPartitionLevels));
   }
 
   private static Integer parseSafe(String s) {
-    try { return Integer.parseInt(s); } catch (Exception e) { return null; }
+    try {
+      return Integer.parseInt(s);
+    } catch (Exception e) {
+      return null;
+    }
   }
 
   /**
@@ -111,7 +115,7 @@ public class HoodieBaseFile extends BaseFile {
    * @param fileName Name of the file
    * @return String array of size 2 with fileId as the first and commitTime as the second element.
    */
-  private static String[] getFileIdAndCommitTimeFromFileName(String fileName) {
+  private static String[] getInfoFromFileName(String fileName) {
     return ExternalFilePathUtil.isExternallyCreatedFile(fileName) ? handleExternallyGeneratedFile(fileName) : handleHudiGeneratedFile(fileName);
   }
 

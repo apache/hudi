@@ -35,7 +35,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -60,7 +59,8 @@ public class MetadataSyncUtils {
   }
 
   public static SyncMetadata getTableSyncExtraMetadata(Option<HoodieInstant> targetTableLastInstant, HoodieTableMetaClient targetTableMetaClient, String sourceIdentifier,
-                                                       String sourceInstantSynced, TreeMap<HoodieInstant, Boolean> instantStatusMap, Option<String> lastSyncCheckpointOpt, HoodieInstant currentInstantToSync) {
+                                                       String sourceInstantSynced, TreeMap<HoodieInstant, Boolean> instantStatusMap, Option<String> lastSyncCheckpointOpt,
+                                                       HoodieInstant currentInstantToSync) {
     Pair<String, List<String>> pendingInstantsAndCheckpointPair = getPendingInstantsAndCheckpointForNextSync(instantStatusMap, lastSyncCheckpointOpt, currentInstantToSync);
     return targetTableLastInstant.map(instant -> {
       SyncMetadata lastSyncMetadata;
@@ -102,8 +102,9 @@ public class MetadataSyncUtils {
     });
   }
 
-  private static Pair<String, List<String>> getPendingInstantsAndCheckpointForNextSync(TreeMap<HoodieInstant, Boolean> instantStatusMap, Option<String> lastSyncCheckpoint, HoodieInstant currentInstantToSync) {
-    if(!lastSyncCheckpoint.isPresent()) {
+  private static Pair<String, List<String>> getPendingInstantsAndCheckpointForNextSync(TreeMap<HoodieInstant, Boolean> instantStatusMap, Option<String> lastSyncCheckpoint,
+                                                                                       HoodieInstant currentInstantToSync) {
+    if (!lastSyncCheckpoint.isPresent()) {
       return Pair.of(currentInstantToSync.getTimestamp(), Collections.emptyList());
     }
 
@@ -113,11 +114,11 @@ public class MetadataSyncUtils {
       HoodieInstant instant = entry.getKey();
       boolean isCompleted = entry.getValue();
 
-      if(instant.compareTo(currentInstantToSync) >= 0) {
+      if (instant.compareTo(currentInstantToSync) >= 0) {
         break;
       }
 
-      if(!isCompleted) {
+      if (!isCompleted) {
         pendingInstantsForNextSync.add(instant.getTimestamp());
       }
     }
@@ -186,10 +187,10 @@ public class MetadataSyncUtils {
     SyncMetadata syncMetadata =
         getTableSyncMetadataFromCommitMetadata(lastInstant.get(), targetTableMetaClient);
 
-    Optional<TableCheckpointInfo> maybeSourceSync =
+    Option<TableCheckpointInfo> maybeSourceSync =
         syncMetadata.getTableCheckpointInfos().stream()
             .filter(info -> info.getSourceIdentifier().equals(sourceIdentifier))
-            .findFirst();
+            .findFirst().map(Option::of).orElseGet(Option::empty);
 
     // --- Case 2A: No sync metadata for this source (fresh sync) ---
     if (!maybeSourceSync.isPresent()) {

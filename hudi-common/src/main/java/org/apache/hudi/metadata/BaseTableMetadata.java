@@ -352,7 +352,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
       HoodieMetadataPayload metadataPayload = record.getData();
       checkForSpuriousDeletes(metadataPayload, recordKey);
       try {
-        Path partitionPathToUseForDataFiles =metadataPayload.getBasePathOverrideOpt()
+        Path partitionPathToUseForDataFiles = metadataPayload.getBasePathOverrideOpt()
             .map(basePathOverride -> new Path(basePathOverride, relativePartitionPath))
             .orElse(partitionPath);
         return metadataPayload.getFileStatuses(getHadoopConf(), partitionPathToUseForDataFiles);

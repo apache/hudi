@@ -41,7 +41,6 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -423,7 +422,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
   }
 
   @Test
-  void testHoodieMetadataSync_PendingInstantStuckForMultipleSyncs() throws Exception{
+  void testHoodieMetadataSync_PendingInstantStuckForMultipleSyncs() throws Exception {
     Properties props = getTableProps();
     sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
     HoodieTestTable testTable = HoodieTestTable.of(sourceMetaClient1);
@@ -495,7 +494,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     syncMetadata(sourcePath1, sourceMetaClient1, targetPath, performBootstrap);
     syncMetadata(sourcePath2, sourceMetaClient2, targetPath, performBootstrap);
 
-    assertFSV(asList(sourcePath1, sourcePath2), targetPath, asList("p1", "p2" ,"p3"), true);
+    assertFSV(asList(sourcePath1, sourcePath2), targetPath, asList("p1", "p2", "p3"), true);
   }
 
   @Test
@@ -626,7 +625,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
   }
 
   private void triggerDeletePartition(HoodieWriteConfig writeConfig, List<String> partitions) throws IOException {
-    try(SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
       String instant = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, sourceMetaClient1);
       writeClient.deletePartitions(partitions, instant);
     }
@@ -634,7 +633,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
   private void triggerNCommitsToSource(HoodieWriteConfig writeConfig, String partitionPath, int numCommits, Option<HoodieTestDataGenerator> dataGeneratorOption) throws IOException {
     HoodieTestDataGenerator dataGen = dataGeneratorOption.orElseGet(() -> new HoodieTestDataGenerator(new String[] {partitionPath}));
-    try(SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
       for (int i = 0; i < numCommits; i++) {
         String instant = writeClient.startCommit();
         List<HoodieRecord> records = dataGen.generateInserts(instant, 10);
@@ -644,10 +643,11 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     }
   }
 
-  private void triggerNBulkInsertsToSource(HoodieWriteConfig writeConfig, String partitionPath, int numCommits, int numRecords, Option<HoodieTestDataGenerator> dataGeneratorOption) throws IOException {
+  private void triggerNBulkInsertsToSource(HoodieWriteConfig writeConfig, String partitionPath, int numCommits, int numRecords, Option<HoodieTestDataGenerator> dataGeneratorOption)
+      throws IOException {
     HoodieTestDataGenerator dataGen = dataGeneratorOption.orElseGet(() -> new HoodieTestDataGenerator(new String[] {partitionPath}));
-    try(SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
-      for(int i = 0; i < numCommits; i++) {
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
+      for (int i = 0; i < numCommits; i++) {
         String instant = writeClient.startCommit();
         List<HoodieRecord> updates = dataGen.generateInserts(instant, numRecords);
         JavaRDD<HoodieRecord> dataset = jsc().parallelize(updates);
@@ -669,7 +669,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
   }
 
   private void triggerNDeletesToSource(HoodieWriteConfig writeConfig, int numCommits, int numDeletes, HoodieTestDataGenerator dataGen) throws IOException {
-    try(SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
       for (int i = 0; i < numCommits; i++) {
         String instant = writeClient.startCommit();
         List<HoodieRecord> deletes = dataGen.generateDeletes(instant, numDeletes);
@@ -680,7 +680,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
   }
 
   private void triggerNUpdatesToSource(HoodieWriteConfig writeConfig, int numCommits, int numUpdates, HoodieTestDataGenerator dataGen) throws IOException {
-    try(SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
       for (int i = 0; i < numCommits; i++) {
         String instant = writeClient.startCommit();
         List<HoodieRecord> deletes = dataGen.generateUpdates(instant, numUpdates);
@@ -697,17 +697,17 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
   }
 
   private void triggerCleanToSource(HoodieWriteConfig writeConfig) throws IOException {
-    try(SparkRDDWriteClient cleanClient = getHoodieWriteClient(writeConfig)) {
+    try (SparkRDDWriteClient cleanClient = getHoodieWriteClient(writeConfig)) {
       cleanClient.clean();
     }
   }
 
   private void assertDataFromSourcesToTarget(List<String> sourcePaths, String targetPath, boolean doMatch) {
     spark().sqlContext().clearCache();
-    for (int i = 0;i < sourcePaths.size(); i++) {
-      spark().read().format("hudi").load(sourcePaths.get(i)).registerTempTable("srcTable" + (i+1));
+    for (int i = 0; i < sourcePaths.size(); i++) {
+      spark().read().format("hudi").load(sourcePaths.get(i)).registerTempTable("srcTable" + (i + 1));
     }
-    spark().read().format("hudi").option("hoodie.metadata.enable","true")
+    spark().read().format("hudi").option("hoodie.metadata.enable", "true")
         .load(targetPath).registerTempTable("tgtTable1");
 
     Dataset<Row> tempSrcDf = spark().sql("select * from srcTable1").drop("city_to_state");
@@ -800,7 +800,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     assertEquals(baseFile1.getFileSize(), baseFile2.getFileSize());
   }
 
-  private HoodieClusteringJob.Config  buildHoodieClusteringUtilConfig(String basePath, boolean runSchedule, String runningMode, boolean isAutoClean) {
+  private HoodieClusteringJob.Config buildHoodieClusteringUtilConfig(String basePath, boolean runSchedule, String runningMode, boolean isAutoClean) {
     HoodieClusteringJob.Config config = new HoodieClusteringJob.Config();
     config.basePath = basePath;
     config.runSchedule = runSchedule;

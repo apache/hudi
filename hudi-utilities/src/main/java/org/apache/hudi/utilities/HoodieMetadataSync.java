@@ -186,8 +186,8 @@ public class HoodieMetadataSync implements Serializable {
         return false;
       }
       Config config = (Config) o;
-      return sourceBasePath.equals(config.sourceBasePath) && targetBasePath.equals(config.targetBasePath) && Objects.equals(commitToSync, config.commitToSync) &&
-          Objects.equals(sparkMaster, config.sparkMaster) && Objects.equals(sparkMemory, config.sparkMemory);
+      return sourceBasePath.equals(config.sourceBasePath) && targetBasePath.equals(config.targetBasePath) && Objects.equals(commitToSync, config.commitToSync)
+          && Objects.equals(sparkMaster, config.sparkMaster) && Objects.equals(sparkMemory, config.sparkMemory);
     }
 
     @Override
@@ -245,7 +245,7 @@ public class HoodieMetadataSync implements Serializable {
         .setConf(jsc.hadoopConfiguration()).build();
     Schema schema = new TableSchemaResolver(sourceTableMetaClient).getTableAvroSchema(false);
     runMetadataSync(sourceTableMetaClient, targetTableMetaClient, schema);
-    LOG.info("Completed syncing " + cfg.commitToSync +" to target table");
+    LOG.info("Completed syncing {} to target table", cfg.commitToSync);
   }
 
   private void runMetadataSync(HoodieTableMetaClient sourceTableMetaClient, HoodieTableMetaClient targetTableMetaClient, Schema schema) throws Exception {
@@ -321,6 +321,8 @@ public class HoodieMetadataSync implements Serializable {
               hoodieTableMetadataWriter.update(tgtCleanMetadata, commitTime);
 
               commitMetadataInBytes = TimelineMetadataUtils.serializeCleanMetadata(tgtCleanMetadata);
+              break;
+            default:
               break;
           }
 
@@ -446,7 +448,6 @@ public class HoodieMetadataSync implements Serializable {
           fileNameAndBaseInstantTime.forEach(pair -> {
             if (fileIdToBaseInstantTimeToFileName.get(fileId) != null && fileIdToBaseInstantTimeToFileName.get(fileId).containsKey(pair.getValue())) {
               deletePathPatternsFromTarget.add(fileIdToBaseInstantTimeToFileName.get(fileId).get(pair.getRight()));
-            } else {
             }
           });
         });

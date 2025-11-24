@@ -33,7 +33,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -119,8 +118,9 @@ public class TestMetadataSyncUtils {
 
     assertTrue(newSourceFound);
 
-    Optional<TableCheckpointInfo> newSourceCheckpointInfo = updated.tableCheckpointInfos.stream()
-        .filter(tableCheckpointInfo -> tableCheckpointInfo.sourceIdentifier.equals(newSourceId)).findFirst();
+    Option<TableCheckpointInfo> newSourceCheckpointInfo = updated.tableCheckpointInfos.stream()
+        .filter(tableCheckpointInfo -> tableCheckpointInfo.sourceIdentifier.equals(newSourceId))
+        .findFirst().map(Option::of).orElseGet(Option::empty);
     assertTrue(newSourceCheckpointInfo.isPresent());
     assertEquals(newSourceId, newSourceCheckpointInfo.get().getSourceIdentifier());
     assertEquals(newSyncedInst, newSourceCheckpointInfo.get().getLastInstantSynced());
@@ -173,7 +173,6 @@ public class TestMetadataSyncUtils {
     assertEquals(pending, info.instantsToConsiderForNextSync);
     assertEquals(sourceId, info.sourceIdentifier);
   }
-
 
   private byte[] buildCommitMetadataBytes(SyncMetadata metadata) throws Exception {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();

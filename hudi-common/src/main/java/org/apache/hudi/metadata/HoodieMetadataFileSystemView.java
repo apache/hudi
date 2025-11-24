@@ -33,7 +33,6 @@ import org.apache.hadoop.fs.Path;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -76,9 +75,9 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
   @Override
   protected Map<Pair<String, Path>, FileStatus[]> listPartitions(List<Pair<String, Path>> partitionPathList) throws IOException {
     return tableMetadata.getAllFilesInPartitions(
-        partitionPathList.stream().map(pair -> pair.getRight().toString()).collect(Collectors.toList()))
+            partitionPathList.stream().map(pair -> pair.getRight().toString()).collect(Collectors.toList()))
         .entrySet().stream().collect(Collectors.toMap(
-        entry -> Pair.of(entry.getKey(), new CachingPath(entry.getKey())), Map.Entry::getValue));
+            entry -> Pair.of(entry.getKey(), new CachingPath(entry.getKey())), Map.Entry::getValue));
   }
 
   @Override

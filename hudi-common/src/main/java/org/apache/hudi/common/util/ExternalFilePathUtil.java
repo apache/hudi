@@ -42,7 +42,7 @@ public class ExternalFilePathUtil {
   }
 
   private static int getNumPartitionLevels(String partitionPath) {
-    if(StringUtils.isNullOrEmpty(partitionPath)) {
+    if (StringUtils.isNullOrEmpty(partitionPath)) {
       return 0;
     }
 
