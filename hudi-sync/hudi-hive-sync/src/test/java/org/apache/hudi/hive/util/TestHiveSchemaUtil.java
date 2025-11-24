@@ -26,7 +26,7 @@ import org.apache.hudi.hive.SchemaDifference;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -61,7 +61,7 @@ public class TestHiveSchemaUtil {
     // A list of structs with two fields
     schema = HoodieSchema.createRecord("ArrayOfTuples", null, null,
         Collections.singletonList(HoodieSchemaField.of("tuple_list", HoodieSchema.createArray(
-            HoodieSchema.createRecord(null, null, null, Arrays.asList(HoodieSchemaField.of("str", HoodieSchema.create(HoodieSchemaType.BYTES)),
+            HoodieSchema.createRecord("nested", null, null, Arrays.asList(HoodieSchemaField.of("str", HoodieSchema.create(HoodieSchemaType.BYTES)),
                 HoodieSchemaField.of("num", HoodieSchema.create(HoodieSchemaType.INT))))))));
 
     schemaString = HiveSchemaUtil.generateSchemaString(schema);
@@ -72,7 +72,7 @@ public class TestHiveSchemaUtil {
     // element type as a one-element struct.
     schema = HoodieSchema.createRecord("ArrayOfOneTuples", null, null,
         Collections.singletonList(HoodieSchemaField.of("one_tuple_list", HoodieSchema.createArray(
-            HoodieSchema.createRecord(null, null, null,
+            HoodieSchema.createRecord("nested", null, null,
                 Collections.singletonList(HoodieSchemaField.of("str", HoodieSchema.create(HoodieSchemaType.BYTES))))))));
 
     schemaString = HiveSchemaUtil.generateSchemaString(schema);
@@ -88,10 +88,11 @@ public class TestHiveSchemaUtil {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"TIMESTAMP_MICROS", "TIMESTAMP_MILLIS"})
-  public void testSchemaConvertTimestamp(String type) throws IOException {
+  @EnumSource(value = HoodieSchema.TimePrecision.class)
+  public void testSchemaConvertTimestamp(HoodieSchema.TimePrecision timePrecision) throws IOException {
     HoodieSchema schema = HoodieSchema.createRecord("my_timestamp", null, null,
-        Collections.singletonList(HoodieSchemaField.of("my_element", HoodieSchema.create(HoodieSchemaType.LONG))));
+        Collections.singletonList(HoodieSchemaField.of("my_element",
+            timePrecision == HoodieSchema.TimePrecision.MICROS ? HoodieSchema.createTimestampMicros() : HoodieSchema.createTimestampMillis())));
     String schemaString = HiveSchemaUtil.generateSchemaString(schema);
     // verify backward compatibility - int64 converted to bigint type
     assertEquals("`my_element` bigint", schemaString);
@@ -101,10 +102,11 @@ public class TestHiveSchemaUtil {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"TIMESTAMP_MICROS", "TIMESTAMP_MILLIS"})
-  public void testSchemaDiffForTimestamp(String type) {
+  @EnumSource(value = HoodieSchema.TimePrecision.class)
+  public void testSchemaDiffForTimestamp(HoodieSchema.TimePrecision timePrecision) {
     HoodieSchema schema = HoodieSchema.createRecord("my_timestamp", null, null,
-        Collections.singletonList(HoodieSchemaField.of("my_element", HoodieSchema.create(HoodieSchemaType.LONG))));
+        Collections.singletonList(HoodieSchemaField.of("my_element",
+            timePrecision == HoodieSchema.TimePrecision.MICROS ? HoodieSchema.createTimestampMicros() : HoodieSchema.createTimestampMillis())));
     // verify backward compatibility - int64 converted to bigint type
     SchemaDifference schemaDifference = HiveSchemaUtil.getSchemaDifference(schema,
         Collections.emptyMap(), Collections.emptyList(), false);
