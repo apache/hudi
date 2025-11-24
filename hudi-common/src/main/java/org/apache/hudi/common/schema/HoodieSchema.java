@@ -737,6 +737,8 @@ public class HoodieSchema implements Serializable {
         return new HoodieSchema(avroSchema);
       } catch (IOException e) {
         throw new HoodieIOException("Failed to parse schema from InputStream", e);
+      } catch (Exception e) {
+        throw new HoodieAvroSchemaException("Failed to parse schema", e);
       }
     }
   }
