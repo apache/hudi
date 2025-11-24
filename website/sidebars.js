@@ -70,24 +70,25 @@ module.exports = {
             type: 'category',
             label: 'Table Services',
             items: [
-                'cleaning',
                 'compaction',
                 'clustering',
+                'cleaning',
                 'metadata_indexing',
+                'file_sizing',
                 'rollbacks',
                 'markers',
-                'file_sizing',
-                {
-                    type: 'category',
-                    label: 'Syncing to Catalogs',
-                    items: [
-                         'syncing_aws_glue_data_catalog',
-                         'syncing_datahub',
-                         'syncing_metastore',
-                         'gcp_bigquery',
-                         'syncing_xtable'
-                    ],
-                }
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Data Catalogs',
+            items: [
+                 'syncing_aws_glue_data_catalog',
+                 'syncing_datahub',
+                 'syncing_metastore',
+                 'gcp_bigquery',
+                 'syncing_xtable',
+                 'catalog_polaris',
             ],
         },
         {

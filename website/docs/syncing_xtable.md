@@ -1,5 +1,5 @@
 ---
-title: Apache XTable (incubating)
+title: Apache XTable (Incubating)
 keywords: [xtable, hudi, delta-lake, iceberg, sync]
 ---
 
