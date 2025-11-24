@@ -2,59 +2,85 @@
 title: SQL Procedures
 summary: "In this page, we introduce how to use SQL procedures with Hudi."
 toc: true
-last_modified_at: 
+last_modified_at: 2025-11-23T00:00:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Stored procedures are available when use Hudi SparkSQL extensions in all spark's version.
+Stored procedures are available when using Hudi SparkSQL extensions in all Spark versions.
 
 ## Usage
+
 `CALL` supports passing arguments by name (recommended) or by position. Mixing position and named arguments is also supported.
 
-#### Named arguments
+### Named arguments
+
 All procedure arguments are named. When passing arguments by name, arguments can be in any order and any optional argument can be omitted.
-```
+
+```sql
 CALL system.procedure_name(arg_name_2 => arg_2, arg_name_1 => arg_1, ... arg_name_n => arg_n);
 ```
-#### Positional arguments
+
+### Positional arguments
+
 When passing arguments by position, the arguments may be omitted if they are optional.
-```
+
+```sql
 CALL system.procedure_name(arg_1, arg_2, ... arg_n);
 ```
-*note:* The system here has no practical meaning, the complete procedure name is system.procedure_name.
+
+:::note
+The system here has no practical meaning, the complete procedure name is system.procedure_name.
+:::
 
 ### help
 
-Show parameters and outputTypes of a procedure.
+Show parameters and output types of a procedure.
 
 **Input**
 
 | Parameter Name | Type   | Required | Default Value | Description         |
 |----------------|--------|----------|---------------|---------------------|
-| cmd            | String | N        | None          | name of a procedure |
+| cmd            | String | N        | None          | Name of a procedure |
 
 **Output**
 
-| Output Name  | Type   |
-|--------------|--------|
-| result       | String |
+| Output Name | Type   |
+|-------------|--------|
+| result      | String |
 
 **Example**
 
-```
+```sql
 call help(cmd => 'show_commits');
 ```
 
-| result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 
-|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| parameters: <br/>param                           type_name                       default_value                   required <br/>table                           string                          None                            true <br/>limit                           integer                         10                              false <br/>outputType: <br/>name                            type_name                       nullable                        metadata <br/>commit_time                     string                          true                            \{} <br/>action                          string                          true                            \{} <br/>total_bytes_written             long                            true                            \{} <br/>total_files_added               long                            true                            \{} <br/>total_files_updated             long                            true                            \{} <br/>total_partitions_written        long                            true                            \{} <br/>total_records_written           long                            true                            \{} <br/>total_update_records_written    long                            true                            \{} <br/>total_errors                    long                            true                            \{} | 
+**parameters:**
+
+| param | type_name | default_value | required |
+|-------|-----------|---------------|----------|
+| table | string    | None          | true     |
+| limit | integer   | 10            | false    |
+
+**outputType:**
+
+| name                         | type_name | nullable | metadata |
+|------------------------------|-----------|----------|----------|
+| commit_time                  | string    | true     | {}       |
+| action                       | string    | true     | {}       |
+| total_bytes_written          | long      | true     | {}       |
+| total_files_added            | long      | true     | {}       |
+| total_files_updated          | long      | true     | {}       |
+| total_partitions_written     | long      | true     | {}       |
+| total_records_written        | long      | true     | {}       |
+| total_update_records_written | long      | true     | {}       |
+| total_errors                 | long      | true     | {}       |
 
 ## Commit management
 
 ### show_commits
 
-Show commits' info.
+Show commit information.
 
 **Input**
 
@@ -78,19 +104,19 @@ Show commits' info.
 
 **Example**
 
-```
+```sql
 call show_commits(table => 'test_hudi_table', limit => 10);
 ```
 
-| commit_time       | 	total_bytes_written     | total_files_added | total_files_updated | total_partitions_written | total_records_written | total_update_records_written | total_errors |
-|-------------------|--------------------------|-------------------|---------------------|--------------------------|-----------------------|------------------------------|--------------|
-| 20220216171049652 | 	432653                  | 0                 | 1                   | 1                        | 0                     | 0                            | 0            |
-| 20220216171027021 | 	435346                  | 1                 | 0                   | 1                        | 1                     | 	0                           | 0            |
-| 20220216171019361 | 	435349                  | 1                 | 0                   | 1                        | 1                     | 	0                           | 0            |
+| commit_time       | total_bytes_written | total_files_added | total_files_updated | total_partitions_written | total_records_written | total_update_records_written | total_errors |
+|-------------------|---------------------|-------------------|---------------------|--------------------------|-----------------------|------------------------------|--------------|
+| 20220216171049652 | 432653              | 0                 | 1                   | 1                        | 0                     | 0                            | 0            |
+| 20220216171027021 | 435346              | 1                 | 0                   | 1                        | 1                     | 0                            | 0            |
+| 20220216171019361 | 435349              | 1                 | 0                   | 1                        | 1                     | 0                            | 0            |
 
 ### show_commits_metadata
 
-Show commits' metadata.
+Show commit metadata.
 
 **Input**
 
@@ -122,23 +148,23 @@ Show commits' metadata.
 
 **Example**
 
-```
+```sql
 call show_commits_metadata(table => 'test_hudi_table');
 ```
 
-|    commit_time   | action  | partition     | file_id                                | previous_commit   | num_writes | num_inserts | num_deletes | num_update_writes | total_errors | total_log_blocks | total_corrupt_logblocks | total_rollback_blocks | total_log_records | total_updated_records_compacted | total_bytes_written|
-|----------------- |---------|---------------|----------------------------------------|-------------------|------------|-------------|-------------|-------------------|--------------|------------------|-------------------------|-----------------------|-------------------|---------------------------------|------------------- |
-|20220109225319449 | commit  | dt=2021-05-03 | d0073a12-085d-4f49-83e9-402947e7e90a-0 | null              | 1          | 1           | 0           | 0                 | 0            | 0 	              | 0                       | 0                     | 0                 | 0                               | 435349             |
-|20220109225311742 | commit  | dt=2021-05-02 | b3b32bac-8a44-4c4d-b433-0cb1bf620f23-0 | 20220109214830592 | 1          | 1           | 0           | 0	                | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435340             |
-|20220109225301429 | commit  | dt=2021-05-01 | 0d7298b3-6b55-4cff-8d7d-b0772358b78a-0 | 20220109214830592 | 1          | 1           | 0           | 0                 | 0	           | 0                | 0                       | 0                     | 0                 | 0                               | 435340             |
-|20220109214830592 | commit  | dt=2021-05-01 | 0d7298b3-6b55-4cff-8d7d-b0772358b78a-0 | 20220109191631015 | 0          | 0           | 1           | 0	                | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 432653             |
-|20220109214830592 | commit  | dt=2021-05-02 | b3b32bac-8a44-4c4d-b433-0cb1bf620f23-0 | 20220109191648181 | 0          | 0           | 1           | 0	                | 0	           | 0                | 0                       | 0                     | 0                 | 0                               | 432653             |
-|20220109191648181 | commit  | dt=2021-05-02 | b3b32bac-8a44-4c4d-b433-0cb1bf620f23-0 | null              | 1          | 1           | 0           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435341             |
-|20220109191631015 | commit  | dt=2021-05-01 | 0d7298b3-6b55-4cff-8d7d-b0772358b78a-0 | null              | 1          | 1           | 0           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435341             |
+| commit_time       | action | partition     | file_id                                | previous_commit   | num_writes | num_inserts | num_deletes | num_update_writes | total_errors | total_log_blocks | total_corrupt_logblocks | total_rollback_blocks | total_log_records | total_updated_records_compacted | total_bytes_written |
+|-------------------|--------|---------------|----------------------------------------|-------------------|------------|-------------|-------------|-------------------|--------------|------------------|-------------------------|-----------------------|-------------------|---------------------------------|---------------------|
+| 20220109225319449 | commit | dt=2021-05-03 | d0073a12-085d-4f49-83e9-402947e7e90a-0 | null              | 1          | 1           | 0           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435349              |
+| 20220109225311742 | commit | dt=2021-05-02 | b3b32bac-8a44-4c4d-b433-0cb1bf620f23-0 | 20220109214830592 | 1          | 1           | 0           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435340              |
+| 20220109225301429 | commit | dt=2021-05-01 | 0d7298b3-6b55-4cff-8d7d-b0772358b78a-0 | 20220109214830592 | 1          | 1           | 0           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435340              |
+| 20220109214830592 | commit | dt=2021-05-01 | 0d7298b3-6b55-4cff-8d7d-b0772358b78a-0 | 20220109191631015 | 0          | 0           | 1           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 432653              |
+| 20220109214830592 | commit | dt=2021-05-02 | b3b32bac-8a44-4c4d-b433-0cb1bf620f23-0 | 20220109191648181 | 0          | 0           | 1           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 432653              |
+| 20220109191648181 | commit | dt=2021-05-02 | b3b32bac-8a44-4c4d-b433-0cb1bf620f23-0 | null              | 1          | 1           | 0           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435341              |
+| 20220109191631015 | commit | dt=2021-05-01 | 0d7298b3-6b55-4cff-8d7d-b0772358b78a-0 | null              | 1          | 1           | 0           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435341              |
 
 ### show_commit_extra_metadata
 
-Show commits' extra metadata.
+Show commit extra metadata.
 
 **Input**
 
@@ -160,14 +186,14 @@ Show commits' extra metadata.
 
 **Example**
 
-```
+```sql
 call show_commit_extra_metadata(table => 'test_hudi_table');
 ```
 
-| instant_time      | action      | metadata_key  | metadata_value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-|-------------------|-------------|---------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 20230206174349556 | deltacommit | schema        | \{"type":"record","name":"hudi_mor_tbl","fields":[\{"name":"_hoodie_commit_time","type":["null","string"],"doc":"","default":null},\{"name":"_hoodie_commit_seqno","type":["null","string"],"doc":"","default":null},\{"name":"_hoodie_record_key","type":["null","string"],"doc":"","default":null},\{"name":"_hoodie_partition_path","type":["null","string"],"doc":"","default":null},\{"name":"_hoodie_file_name","type":["null","string"],"doc":"","default":null},\{"name":"id","type":"int"},\{"name":"ts","type":"long"}]}                                                                       | 
-| 20230206174349556 | deltacommit | latest_schema | \{"max_column_id":8,"version_id":20230206174349556,"type":"record","fields":[\{"id":0,"name":"_hoodie_commit_time","optional":true,"type":"string","doc":""},\{"id":1,"name":"_hoodie_commit_seqno","optional":true,"type":"string","doc":""},\{"id":2,"name":"_hoodie_record_key","optional":true,"type":"string","doc":""},\{"id":3,"name":"_hoodie_partition_path","optional":true,"type":"string","doc":""},\{"id":4,"name":"_hoodie_file_name","optional":true,"type":"string","doc":""},\{"id":5,"name":"id","optional":false,"type":"int"},\{"id":8,"name":"ts","optional":false,"type":"long"}]} | 
+| instant_time      | action      | metadata_key  | metadata_value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+|-------------------|-------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 20230206174349556 | deltacommit | schema        | \{"type":"record","name":"hudi_mor_tbl","fields":[\{"name":"_hoodie_commit_time","type":["null","string"],"doc":"","default":null},\{"name":"_hoodie_commit_seqno","type":["null","string"],"doc":"","default":null},\{"name":"_hoodie_record_key","type":["null","string"],"doc":"","default":null},\{"name":"_hoodie_partition_path","type":["null","string"],"doc":"","default":null},\{"name":"_hoodie_file_name","type":["null","string"],"doc":"","default":null},\{"name":"id","type":"int"},\{"name":"ts","type":"long"}]}                                                                       |
+| 20230206174349556 | deltacommit | latest_schema | \{"max_column_id":8,"version_id":20230206174349556,"type":"record","fields":[\{"id":0,"name":"_hoodie_commit_time","optional":true,"type":"string","doc":""},\{"id":1,"name":"_hoodie_commit_seqno","optional":true,"type":"string","doc":""},\{"id":2,"name":"_hoodie_record_key","optional":true,"type":"string","doc":""},\{"id":3,"name":"_hoodie_partition_path","optional":true,"type":"string","doc":""},\{"id":4,"name":"_hoodie_file_name","optional":true,"type":"string","doc":""},\{"id":5,"name":"id","optional":false,"type":"int"},\{"id":8,"name":"ts","optional":false,"type":"long"}]} |
 
 ### show_archived_commits
 
@@ -197,16 +223,15 @@ Show archived commits.
 
 **Example**
 
-```
+```sql
 call show_archived_commits(table => 'test_hudi_table');
 ```
 
-| commit_time       | 	total_bytes_written     | total_files_added | total_files_updated | total_partitions_written | total_records_written | total_update_records_written | total_errors |
-|-------------------|--------------------------|-------------------|---------------------|--------------------------|-----------------------|------------------------------|--------------|
-| 20220216171049652 | 	432653                  | 0                 | 1                   | 1                        | 0                     | 0                            | 0            |
-| 20220216171027021 | 	435346                  | 1                 | 0                   | 1                        | 1                     | 	0                           | 0            |
-| 20220216171019361 | 	435349                  | 1                 | 0                   | 1                        | 1                     | 	0                           | 0            |
-
+| commit_time       | total_bytes_written | total_files_added | total_files_updated | total_partitions_written | total_records_written | total_update_records_written | total_errors |
+|-------------------|---------------------|-------------------|---------------------|--------------------------|-----------------------|------------------------------|--------------|
+| 20220216171049652 | 432653              | 0                 | 1                   | 1                        | 0                     | 0                            | 0            |
+| 20220216171027021 | 435346              | 1                 | 0                   | 1                        | 1                     | 0                            | 0            |
+| 20220216171019361 | 435349              | 1                 | 0                   | 1                        | 1                     | 0                            | 0            |
 
 ### show_archived_commits_metadata
 
@@ -244,30 +269,29 @@ Show archived commits' metadata.
 
 **Example**
 
-```
+```sql
 call show_archived_commits_metadata(table => 'test_hudi_table');
 ```
 
-|    commit_time   | action  | partition     | file_id                                | previous_commit   | num_writes | num_inserts | num_deletes | num_update_writes | total_errors | total_log_blocks | total_corrupt_logblocks | total_rollback_blocks | total_log_records | total_updated_records_compacted | total_bytes_written|
-|----------------- |---------|---------------|----------------------------------------|-------------------|------------|-------------|-------------|-------------------|--------------|------------------|-------------------------|-----------------------|-------------------|---------------------------------|------------------- |
-|20220109225319449 | commit  | dt=2021-05-03 | d0073a12-085d-4f49-83e9-402947e7e90a-0 | null              | 1          | 1           | 0           | 0                 | 0            | 0 	              | 0                       | 0                     | 0                 | 0                               | 435349             |
-|20220109225311742 | commit  | dt=2021-05-02 | b3b32bac-8a44-4c4d-b433-0cb1bf620f23-0 | 20220109214830592 | 1          | 1           | 0           | 0	                | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435340             |
-|20220109225301429 | commit  | dt=2021-05-01 | 0d7298b3-6b55-4cff-8d7d-b0772358b78a-0 | 20220109214830592 | 1          | 1           | 0           | 0                 | 0	           | 0                | 0                       | 0                     | 0                 | 0                               | 435340             |
-|20220109214830592 | commit  | dt=2021-05-01 | 0d7298b3-6b55-4cff-8d7d-b0772358b78a-0 | 20220109191631015 | 0          | 0           | 1           | 0	                | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 432653             |
-|20220109214830592 | commit  | dt=2021-05-02 | b3b32bac-8a44-4c4d-b433-0cb1bf620f23-0 | 20220109191648181 | 0          | 0           | 1           | 0	                | 0	           | 0                | 0                       | 0                     | 0                 | 0                               | 432653             |
-|20220109191648181 | commit  | dt=2021-05-02 | b3b32bac-8a44-4c4d-b433-0cb1bf620f23-0 | null              | 1          | 1           | 0           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435341             |
-|20220109191631015 | commit  | dt=2021-05-01 | 0d7298b3-6b55-4cff-8d7d-b0772358b78a-0 | null              | 1          | 1           | 0           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435341             |
+| commit_time       | action | partition     | file_id                                | previous_commit   | num_writes | num_inserts | num_deletes | num_update_writes | total_errors | total_log_blocks | total_corrupt_logblocks | total_rollback_blocks | total_log_records | total_updated_records_compacted | total_bytes_written |
+|-------------------|--------|---------------|----------------------------------------|-------------------|------------|-------------|-------------|-------------------|--------------|------------------|-------------------------|-----------------------|-------------------|---------------------------------|---------------------|
+| 20220109225319449 | commit | dt=2021-05-03 | d0073a12-085d-4f49-83e9-402947e7e90a-0 | null              | 1          | 1           | 0           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435349              |
+| 20220109225311742 | commit | dt=2021-05-02 | b3b32bac-8a44-4c4d-b433-0cb1bf620f23-0 | 20220109214830592 | 1          | 1           | 0           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435340              |
+| 20220109225301429 | commit | dt=2021-05-01 | 0d7298b3-6b55-4cff-8d7d-b0772358b78a-0 | 20220109214830592 | 1          | 1           | 0           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435340              |
+| 20220109214830592 | commit | dt=2021-05-01 | 0d7298b3-6b55-4cff-8d7d-b0772358b78a-0 | 20220109191631015 | 0          | 0           | 1           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 432653              |
+| 20220109214830592 | commit | dt=2021-05-02 | b3b32bac-8a44-4c4d-b433-0cb1bf620f23-0 | 20220109191648181 | 0          | 0           | 1           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 432653              |
+| 20220109191648181 | commit | dt=2021-05-02 | b3b32bac-8a44-4c4d-b433-0cb1bf620f23-0 | null              | 1          | 1           | 0           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435341              |
+| 20220109191631015 | commit | dt=2021-05-01 | 0d7298b3-6b55-4cff-8d7d-b0772358b78a-0 | null              | 1          | 1           | 0           | 0                 | 0            | 0                | 0                       | 0                     | 0                 | 0                               | 435341              |
 
-
-```
+```sql
 call show_archived_commits(table => 'test_hudi_table');
 ```
 
-| commit_time       | 	total_bytes_written     | total_files_added | total_files_updated | total_partitions_written | total_records_written | total_update_records_written | total_errors |
-|-------------------|--------------------------|-------------------|---------------------|--------------------------|-----------------------|------------------------------|--------------|
-| 20220216171049652 | 	432653                  | 0                 | 1                   | 1                        | 0                     | 0                            | 0            |
-| 20220216171027021 | 	435346                  | 1                 | 0                   | 1                        | 1                     | 	0                           | 0            |
-| 20220216171019361 | 	435349                  | 1                 | 0                   | 1                        | 1                     | 	0                           | 0            |
+| commit_time       | total_bytes_written | total_files_added | total_files_updated | total_partitions_written | total_records_written | total_update_records_written | total_errors |
+|-------------------|---------------------|-------------------|---------------------|--------------------------|-----------------------|------------------------------|--------------|
+| 20220216171049652 | 432653              | 0                 | 1                   | 1                        | 0                     | 0                            | 0            |
+| 20220216171027021 | 435346              | 1                 | 0                   | 1                        | 1                     | 0                            | 0            |
+| 20220216171019361 | 435349              | 1                 | 0                   | 1                        | 1                     | 0                            | 0            |
 
 ### show_commit_files
 
@@ -297,13 +321,13 @@ Show files of a commit.
 
 **Example**
 
-```
+```sql
 call show_commit_files(table => 'test_hudi_table', instant_time => '20230206174349556');
 ```
 
-| action      | 	partition_path | file_id                                | previous_commit | total_records_updated | total_records_written | total_bytes_written | total_errors | file_size |
-|-------------|-----------------|----------------------------------------|-----------------|-----------------------|-----------------------|---------------------|--------------|-----------|
-| deltacommit | dt=2021-05-03   | 7fb52523-c7f6-41aa-84a6-629041477aeb-0 | null            | 0                     | 1                     | 434768              | 0            | 434768    |           
+| action      | partition_path | file_id                                | previous_commit | total_records_updated | total_records_written | total_bytes_written | total_errors | file_size |
+|-------------|----------------|----------------------------------------|-----------------|-----------------------|-----------------------|---------------------|--------------|-----------|
+| deltacommit | dt=2021-05-03  | 7fb52523-c7f6-41aa-84a6-629041477aeb-0 | null            | 0                     | 1                     | 434768              | 0            | 434768    |
 
 ### show_commit_partitions
 
@@ -332,13 +356,13 @@ Show partitions of a commit.
 
 **Example**
 
-```
+```sql
 call show_commit_partitions(table => 'test_hudi_table', instant_time => '20230206174349556');
 ```
 
-| action      | 	partition_path | total_files_added                      | total_files_updated | total_records_inserted | total_records_updated | total_bytes_written | total_errors | 
-|-------------|-----------------|----------------------------------------|---------------------|------------------------|-----------------------|---------------------|--------------|
-| deltacommit | dt=2021-05-03   | 7fb52523-c7f6-41aa-84a6-629041477aeb-0 | 0                   | 1                      | 434768                | 0                   | 0            |          
+| action      | partition_path | total_files_added                      | total_files_updated | total_records_inserted | total_records_updated | total_bytes_written | total_errors |
+|-------------|----------------|----------------------------------------|---------------------|------------------------|-----------------------|---------------------|--------------|
+| deltacommit | dt=2021-05-03  | 7fb52523-c7f6-41aa-84a6-629041477aeb-0 | 0                   | 1                      | 434768                | 0                   | 0            |
 
 ### show_commit_write_stats
 
@@ -363,7 +387,7 @@ Show write statistics of a commit.
 
 **Example**
 
-```
+```sql
 call show_commit_write_stats(table => 'test_hudi_table', instant_time => '20230206174349556');
 ```
 
@@ -394,14 +418,13 @@ Show rollback commits.
 
 **Example**
 
-```
+```sql
 call show_rollbacks(table => 'test_hudi_table');
 ```
 
-| instant     | rollback_instant | total_files_deleted | time_taken_in_millis | time_taken_in_millis |
-|-------------|------------------|---------------------|----------------------|----------------------|
-| deltacommit | 434768           | 1                   | 434768               | 2                    |
-
+| instant     | rollback_instant | total_files_deleted | time_taken_in_millis | total_partitions |
+|-------------|------------------|---------------------|----------------------|------------------|
+| deltacommit | 434768           | 1                   | 434768               | 2                |
 
 ### show_rollback_detail
 
@@ -427,7 +450,7 @@ Show details of a rollback commit.
 
 **Example**
 
-```
+```sql
 call show_rollback_detail(table => 'test_hudi_table', instant_time => '20230206174349556');
 ```
 
@@ -454,13 +477,13 @@ Compare commit with another path.
 
 **Example**
 
-```
+```sql
 call commits_compare(table => 'test_hudi_table', path => 'hdfs://ns1/hive/warehouse/hudi.db/test_hudi_table');
 ```
 
 | compare_detail                                                         |
 |------------------------------------------------------------------------|
-| Source test_hudi_table is ahead by 0 commits. Commits to catch up - [] |       
+| Source test_hudi_table is ahead by 0 commits. Commits to catch up - [] |
 
 ### archive_commits
 
@@ -468,10 +491,10 @@ archive commits.
 
 **Input**
 
-| Parameter Name                                                         | Type    | Required | Default Value | Description                                                                                                                                                                                                                                            |
-|------------------------------------------------------------------------|---------|----------|---------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| table                                                                  | String  | N        | None          | Hudi table name                                                                                                                                                                                                                                        |
-| path                                                                   | String  | N        | None          | Path of table                                                                                                                                                                                                                                          |
+| Parameter Name                                              | Type    | Required | Default Value | Description                                                                                                                                                                                                                                            |
+|-------------------------------------------------------------|---------|----------|---------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| table                                                       | String  | N        | None          | Hudi table name                                                                                                                                                                                                                                        |
+| path                                                        | String  | N        | None          | Path of table                                                                                                                                                                                                                                          |
 | [min_commits](configurations#hoodiekeepmincommits)          | Int     | N        | 20            | Similar to hoodie.keep.max.commits, but controls the minimum number of instants to retain in the active timeline.                                                                                                                                      |
 | [max_commits](configurations#hoodiekeepmaxcommits)          | Int     | N        | 30            | Archiving service moves older entries from timeline into an archived log after each write, to keep the metadata overhead constant, even as the table size grows. This config controls the maximum number of instants to retain in the active timeline. |
 | [retain_commits](configurations#hoodiecommitsarchivalbatch) | Int     | N        | 10            | Archiving of instants is batched in best-effort manner, to pack more instants into a single archive log. This config controls such archival batch size.                                                                                                |
@@ -485,13 +508,13 @@ archive commits.
 
 **Example**
 
-```
+```sql
 call archive_commits(table => 'test_hudi_table');
 ```
 
 | result |
 |--------|
-| 0      |    
+| 0      |
 
 ### export_instants
 
@@ -515,7 +538,7 @@ extract instants to local folder.
 
 **Example**
 
-```
+```sql
 call export_instants(table => 'test_hudi_table', local_folder => '/tmp/folder');
 ```
 
@@ -542,7 +565,7 @@ Rollback a table to the commit that was current at some time.
 **Example**
 
 Roll back test_hudi_table to one instant
-```
+```sql
 call rollback_to_instant(table => 'test_hudi_table', instant_time => '20220109225319449');
 ```
 
@@ -552,7 +575,7 @@ call rollback_to_instant(table => 'test_hudi_table', instant_time => '2022010922
 
 ### create_savepoint
 
-Create a savepoint to hudi's table.
+Create a savepoint for a Hudi table.
 
 **Input**
 
@@ -571,7 +594,7 @@ Create a savepoint to hudi's table.
 
 **Example**
 
-```
+```sql
 call create_savepoint(table => 'test_hudi_table', commit_time => '20220109225319449');
 ```
 
@@ -597,7 +620,7 @@ Show savepoints.
 
 **Example**
 
-```
+```sql
 call show_savepoints(table => 'test_hudi_table');
 ```
 
@@ -626,8 +649,8 @@ Delete a savepoint to hudi's table.
 
 **Example**
 
-Delete a savepoint to test_hudi_table
-```
+Delete a savepoint from the test_hudi_table
+```sql
 call delete_savepoint(table => 'test_hudi_table', instant_time => '20220109225319449');
 ```
 
@@ -654,8 +677,8 @@ Rollback a table to the commit that was current at some time.
 
 **Example**
 
-Rollback test_hudi_table to one savepoint
-```
+Rollback test_hudi_table to a savepoint
+```sql
 call rollback_to_savepoint(table => 'test_hudi_table', instant_time => '20220109225319449');
 ```
 
@@ -665,20 +688,20 @@ call rollback_to_savepoint(table => 'test_hudi_table', instant_time => '20220109
 
 ### copy_to_temp_view
 
-copy table to a temporary view.
+Copy a table to a temporary view.
 
 **Input**
 
-| Parameter Name                                                    | Type    | Required | Default Value | Description                                                                                                                                                                                                                                 |
-|-------------------------------------------------------------------|---------|----------|---------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| table                                                             | String  | Y        | None          | Hudi table name                                                                                                                                                                                                                             |
+| Parameter Name                                         | Type    | Required | Default Value | Description                                                                                                                                                                                                                                 |
+|--------------------------------------------------------|---------|----------|---------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| table                                                  | String  | Y        | None          | Hudi table name                                                                                                                                                                                                                             |
 | [query_type](configurations#hoodiedatasourcequerytype) | String  | N        | "snapshot"    | Whether data needs to be read, in `incremental` mode (new data since an instantTime) (or) `read_optimized` mode (obtain latest view, based on base files) (or) `snapshot` mode (obtain latest view, by merging base and (if any) log files) |
-| view_name                                                         | String  | Y        | None          | Name of view                                                                                                                                                                                                                                |
-| begin_instance_time                                               | String  | N        | ""            | Begin instance time                                                                                                                                                                                                                         |
-| end_instance_time                                                 | String  | N        | ""            | End instance time                                                                                                                                                                                                                           |
-| as_of_instant                                                     | String  | N        | ""            | As of instant time                                                                                                                                                                                                                          |
-| replace                                                           | Boolean | N        | false         | Replace an existed view                                                                                                                                                                                                                     |
-| global                                                            | Boolean | N        | false         | Global view                                                                                                                                                                                                                                 |
+| view_name                                              | String  | Y        | None          | Name of view                                                                                                                                                                                                                                |
+| begin_instance_time                                    | String  | N        | ""            | Begin instance time                                                                                                                                                                                                                         |
+| end_instance_time                                      | String  | N        | ""            | End instance time                                                                                                                                                                                                                           |
+| as_of_instant                                          | String  | N        | ""            | As of instant time                                                                                                                                                                                                                          |
+| replace                                                | Boolean | N        | false         | Replace an existed view                                                                                                                                                                                                                     |
+| global                                                 | Boolean | N        | false         | Global view                                                                                                                                                                                                                                 |
 
 **Output**
 
@@ -688,31 +711,30 @@ copy table to a temporary view.
 
 **Example**
 
-```
+```sql
 call copy_to_temp_view(table => 'test_hudi_table', view_name => 'copy_view_test_hudi_table');
 ```
 
-| status | 
+| status |
 |--------|
-| 0      | 
+| 0      |
 
 ### copy_to_table
 
-copy table to a new table.
+Copy a table to a new table.
 
 **Input**
 
-| Parameter Name                                                    | Type   | Required | Default Value | Description                                                                                                                                                                                                                                 |
-|-------------------------------------------------------------------|--------|----------|---------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| table                                                             | String | Y        | None          | Hudi table name                                                                                                                                                                                                                             |
+| Parameter Name                                         | Type   | Required | Default Value | Description                                                                                                                                                                                                                                 |
+|--------------------------------------------------------|--------|----------|---------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| table                                                  | String | Y        | None          | Hudi table name                                                                                                                                                                                                                             |
 | [query_type](configurations#hoodiedatasourcequerytype) | String | N        | "snapshot"    | Whether data needs to be read, in `incremental` mode (new data since an instantTime) (or) `read_optimized` mode (obtain latest view, based on base files) (or) `snapshot` mode (obtain latest view, by merging base and (if any) log files) |
-| new_table                                                         | String | Y        | None          | Name of new table                                                                                                                                                                                                                           |
-| begin_instance_time                                               | String | N        | ""            | Begin instance time                                                                                                                                                                                                                         |
-| end_instance_time                                                 | String | N        | ""            | End instance time                                                                                                                                                                                                                           |
-| as_of_instant                                                     | String | N        | ""            | As of instant time                                                                                                                                                                                                                          |
-| save_mode                                                         | String | N        | "overwrite"   | Save mode                                                                                                                                                                                                                                   |
-| columns                                                           | String | N        | ""            | Columns of source table which should copy to new table                                                                                                                                                                                      |
-
+| new_table                                              | String | Y        | None          | Name of new table                                                                                                                                                                                                                           |
+| begin_instance_time                                    | String | N        | ""            | Begin instance time                                                                                                                                                                                                                         |
+| end_instance_time                                      | String | N        | ""            | End instance time                                                                                                                                                                                                                           |
+| as_of_instant                                          | String | N        | ""            | As of instant time                                                                                                                                                                                                                          |
+| save_mode                                              | String | N        | "overwrite"   | Save mode                                                                                                                                                                                                                                   |
+| columns                                                | String | N        | ""            | Columns of the source table that should be copied to the new table                                                                                                                                                                          |
 
 **Output**
 
@@ -722,13 +744,13 @@ copy table to a new table.
 
 **Example**
 
-```
+```sql
 call copy_to_table(table => 'test_hudi_table', new_table => 'copy_table_test_hudi_table');
 ```
 
-| status | 
+| status |
 |--------|
-| 0      | 
+| 0      |
 
 ## Metadata Table management
 
@@ -750,7 +772,7 @@ Create metadata table of a hudi table.
 
 **Example**
 
-```
+```sql
 call create_metadata_table(table => 'test_hudi_table');
 ```
 
@@ -771,13 +793,13 @@ Init metadata table of a hudi table.
 
 **Output**
 
-| Output Name | Type    |
-|-------------|---------|
-| result      | String  |
+| Output Name | Type   |
+|-------------|--------|
+| result      | String |
 
 **Example**
 
-```
+```sql
 call init_metadata_table(table => 'test_hudi_table');
 ```
 
@@ -791,19 +813,19 @@ Delete metadata table of a hudi table.
 
 **Input**
 
-| Parameter Name | Type    | Required | Default Value | Description     |
-|----------------|---------|----------|---------------|-----------------|
-| table          | String  | Y        | None          | Hudi table name |
+| Parameter Name | Type   | Required | Default Value | Description     |
+|----------------|--------|----------|---------------|-----------------|
+| table          | String | Y        | None          | Hudi table name |
 
 **Output**
 
-| Output Name | Type    |
-|-------------|---------|
-| result      | String  |
+| Output Name | Type   |
+|-------------|--------|
+| result      | String |
 
 **Example**
 
-```
+```sql
 call delete_metadata_table(table => 'test_hudi_table');
 ```
 
@@ -823,13 +845,13 @@ Show partition of a hudi table.
 
 **Output**
 
-| Output Name | Type    |
-|-------------|---------|
-| partition   | String  |
+| Output Name | Type   |
+|-------------|--------|
+| partition   | String |
 
 **Example**
 
-```
+```sql
 call show_metadata_table_partitions(table => 'test_hudi_table');
 ```
 
@@ -853,14 +875,14 @@ Show files of a hudi table.
 
 **Output**
 
-| Output Name | Type    |
-|-------------|---------|
-| file_path   | String  |
+| Output Name | Type   |
+|-------------|--------|
+| file_path   | String |
 
 **Example**
 
 Show files of a hudi table under one partition.
-```
+```sql
 call show_metadata_table_files(table => 'test_hudi_table', partition => 'dt=20230220');
 ```
 
@@ -888,11 +910,11 @@ Show metadata table stats of a hudi table.
 
 **Example**
 
-```
+```sql
 call show_metadata_table_stats(table => 'test_hudi_table');
 ```
 
-| stat_key                               | stat_value | 
+| stat_key                               | stat_value |
 |----------------------------------------|------------|
 | dt=2021-05-03.totalBaseFileSizeInBytes | 23142      |
 
@@ -907,7 +929,6 @@ Validate metadata table files of a hudi table.
 | table          | String  | Y        | None          | Hudi table name            |
 | verbose        | Boolean | N        | False         | If verbose print all files |
 
-
 **Output**
 
 | Output Name            | Type    |
@@ -921,13 +942,13 @@ Validate metadata table files of a hudi table.
 
 **Example**
 
-```
+```sql
 call validate_metadata_table_files(table => 'test_hudi_table');
 ```
 
 | partition     | file_name                                                           | is_present_in_fs | is_present_in_metadata | fs_size | metadata_size |
 |---------------|---------------------------------------------------------------------|------------------|------------------------|---------|---------------|
-| dt=2021-05-03 | ad1e5a3f-532f-4a13-9f60-223676798bf3-0_0-4-4_00000000000002.parquet | true             | true                   | 43523   | 43523         | 
+| dt=2021-05-03 | ad1e5a3f-532f-4a13-9f60-223676798bf3-0_0-4-4_00000000000002.parquet | true             | true                   | 43523   | 43523         |
 
 ## Table information
 
@@ -952,7 +973,7 @@ Show hudi properties of a table.
 
 **Example**
 
-```
+```sql
 call show_table_properties(table => 'test_hudi_table', limit => 10);
 ```
 
@@ -989,7 +1010,7 @@ Show detail of a path.
 
 **Example**
 
-```
+```sql
 call show_fs_path_detail(path => 'hdfs://ns1/hive/warehouse/hudi.db/test_hudi_table');
 ```
 
@@ -1025,7 +1046,7 @@ Show file sizes of a table.
 
 **Example**
 
-```
+```sql
 call stats_file_sizes(table => 'test_hudi_table');
 ```
 
@@ -1055,11 +1076,11 @@ Show write stats and amplification of a table.
 
 **Example**
 
-```
+```sql
 call stats_wa(table => 'test_hudi_table');
 ```
 
-| commit_time | total_upserted | total_written | write_amplification_factor | 
+| commit_time | total_upserted | total_written | write_amplification_factor |
 |-------------|----------------|---------------|----------------------------|
 | Total       | 0              | 0             | 0                          |
 
@@ -1084,13 +1105,13 @@ Show records in logfile of a table.
 
 **Example**
 
-```
+```sql
 call show_logfile_records(table => 'test_hudi_table', log_file_path_pattern => 'hdfs://ns1/hive/warehouse/hudi.db/test_hudi_table/*.log*');
 ```
 
-| records                                                                                                                                                                                                                                                                  |
-|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| \{"_hoodie_commit_time": "20230205133427059", "_hoodie_commit_seqno": "20230205133427059_0_10", "_hoodie_record_key": "1", "_hoodie_partition_path": "", "_hoodie_file_name": "3438e233-7b50-4eff-adbb-70b1cd76f518-0", "id": 1, "name": "a1", "price": 40.0, "ts": 1111} | 
+| records                                                                                                                                                                                                                                                                   |
+|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| \{"_hoodie_commit_time": "20230205133427059", "_hoodie_commit_seqno": "20230205133427059_0_10", "_hoodie_record_key": "1", "_hoodie_partition_path": "", "_hoodie_file_name": "3438e233-7b50-4eff-adbb-70b1cd76f518-0", "id": 1, "name": "a1", "price": 40.0, "ts": 1111} |
 
 ### show_logfile_metadata
 
@@ -1117,12 +1138,12 @@ Show metadatas in logfile of a table.
 
 **Example**
 
-```
+```sql
 call show_logfile_metadata(table => 'hudi_mor_tbl', log_file_path_pattern => 'hdfs://ns1/hive/warehouse/hudi.db/hudi_mor_tbl/*.log*');
 ```
 
-| instant_time      | record_count | block_type      | header_metadata                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | footer_metadata |
-|-------------------|--------------|-----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------|
+| instant_time      | record_count | block_type      | header_metadata                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | footer_metadata |
+|-------------------|--------------|-----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------|
 | 20230205133427059 | 1            | AVRO_DATA_BLOCK | \{"INSTANT_TIME":"20230205133427059","SCHEMA":"\{"type":"record","name":"hudi_mor_tbl_record","namespace":"hoodie.hudi_mor_tbl","fields":[\{"name":"_hoodie_commit_time","type":["null","string"],"doc":"","default":null},\{"name":"_hoodie_commit_seqno","type":["null","string"],"doc":"","default":null},\{"name":"_hoodie_record_key","type":["null","string"],"doc":"","default":null},\{"name":"_hoodie_partition_path","type":["null","string"],"doc":"","default":null},\{"name":"_hoodie_file_name","type":["null","string"],"doc":"","default":null},\{"name":"id","type":"int"},\{"name":"name","type":"string"},\{"name":"price","type":"double"},\{"name":"ts","type":"long"}]}"} | {}              |
 
 ### show_invalid_parquet
@@ -1131,11 +1152,11 @@ Show invalid parquet files of a table.
 
 **Input**
 
-| Parameter Name | Type    | Required | Default Value | Description                          |
-|----------------|---------|----------|---------------|--------------------------------------|
-| Path           | String  | Y        | None          | Hudi table name                      |
-| limit          | Int     | N        | 100           | Limit number                         |
-| needDelete     | Boolean | N        | false         | should delete                        |
+| Parameter Name | Type    | Required | Default Value | Description     |
+|----------------|---------|----------|---------------|-----------------|
+| Path           | String  | Y        | None          | Hudi table name |
+| limit          | Int     | N        | 100           | Limit number    |
+| needDelete     | Boolean | N        | false         | should delete   |
 
 **Output**
 
@@ -1145,13 +1166,13 @@ Show invalid parquet files of a table.
 
 **Example**
 
-```
+```sql
 call show_invalid_parquet(path => 'hdfs://ns1/hive/warehouse/hudi.db/test_hudi_table');
 ```
 
-| Path                                                                                                                       | 
+| Path                                                                                                                       |
 |----------------------------------------------------------------------------------------------------------------------------|
-| hdfs://ns1/hive/warehouse/hudi.db/test_hudi_table/7fb52523-c7f6-41aa-84a6-629041477aeb-0_0-92-99_20230205133532199.parquet | 
+| hdfs://ns1/hive/warehouse/hudi.db/test_hudi_table/7fb52523-c7f6-41aa-84a6-629041477aeb-0_0-92-99_20230205133532199.parquet |
 
 ### show_fsview_all
 
@@ -1184,7 +1205,7 @@ Show file system views of a table.
 
 **Example**
 
-```
+```sql
 call show_fsview_all(table => 'test_hudi_table');
 ```
 
@@ -1198,16 +1219,16 @@ Show latest file system view of a table.
 
 **Input**
 
-| Parameter Name     | Type    | Required | Default Value    | Description                          |
-|--------------------|---------|----------|------------------|--------------------------------------|
-| table              | String  | Y        | None             | Hudi table name                      |
-| max_instant        | String  | N        | ""               | Max instant time                     |
-| include_max        | Boolean | N        | false            | Include max instant                  |
-| include_in_flight  | Boolean | N        | false            | Include in flight                    |
-| exclude_compaction | Boolean | N        | false            | Exclude compaction                   |
-| path_regex         | String  | N        | "ALL_PARTITIONS" | Pattern of path                      |
-| partition_path     | String  | N        | "ALL_PARTITIONS" | Partition path                       |
-| merge              | Boolean | N        | false            | Merge results                        |
+| Parameter Name     | Type    | Required | Default Value    | Description         |
+|--------------------|---------|----------|------------------|---------------------|
+| table              | String  | Y        | None             | Hudi table name     |
+| max_instant        | String  | N        | ""               | Max instant time    |
+| include_max        | Boolean | N        | false            | Include max instant |
+| include_in_flight  | Boolean | N        | false            | Include in flight   |
+| exclude_compaction | Boolean | N        | false            | Exclude compaction  |
+| path_regex         | String  | N        | "ALL_PARTITIONS" | Pattern of path     |
+| partition_path     | String  | N        | "ALL_PARTITIONS" | Partition path      |
+| merge              | Boolean | N        | false            | Merge results       |
 
 **Output**
 
@@ -1229,7 +1250,7 @@ Show latest file system view of a table.
 
 **Example**
 
-```
+```sql
 call show_fsview_latest(table => 'test_hudi_table'， partition => 'dt=2021-05-03');
 ```
 
@@ -1241,7 +1262,7 @@ call show_fsview_latest(table => 'test_hudi_table'， partition => 'dt=2021-05-0
 
 ### run_clustering
 
-Trigger clustering on a hoodie table. By using partition predicates, clustering table can be run 
+Trigger clustering on a hoodie table. By using partition predicates, clustering table can be run
 with specified partitions, and you can also specify the order columns to sort data.
 
 :::note
@@ -1251,18 +1272,17 @@ parameters are given, ``table`` will take effect.
 
 :::
 
-
 **Input**
 
-| Parameter Name          | Type    | Required | Default Value | Description                                                    |
-|-------------------------|---------|----------|---------------|----------------------------------------------------------------|
-| table                   | String  | N        | None          | Name of table to be clustered                                  |
-| path                    | String  | N        | None          | Path of table to be clustered                                  |
-| predicate               | String  | N        | None          | Predicate to filter partition                                  |
-| order                   | String  | N        | None          | Order column split by `,`                                      |
-| show_involved_partition | Boolean | N        | false         | Show involved partition in the output                          |
-| op                      | String  | N        | None          | Operation type, `EXECUTE` or `SCHEDULE`                        |
-| order_strategy          | String  | N        | None          | Records layout optimization, `linear/z-order/hilbert`          |
+| Parameter Name          | Type    | Required | Default Value | Description                                           |
+|-------------------------|---------|----------|---------------|-------------------------------------------------------|
+| table                   | String  | N        | None          | Name of table to be clustered                         |
+| path                    | String  | N        | None          | Path of table to be clustered                         |
+| predicate               | String  | N        | None          | Predicate to filter partition                         |
+| order                   | String  | N        | None          | Order column split by `,`                             |
+| show_involved_partition | Boolean | N        | false         | Show involved partition in the output                 |
+| op                      | String  | N        | None          | Operation type, `EXECUTE` or `SCHEDULE`               |
+| order_strategy          | String  | N        | None          | Records layout optimization, `linear/z-order/hilbert` |
 | options                 | String  | N        | None          | Customize hudi configs in the format "key1=value1,key2=value2` |
 | instants                | String  | N        | None          | Specified instants by `,`                                      |
 | selected_partitions     | String  | N        | None          | Partitions to run clustering by `,`                            |
@@ -1282,56 +1302,67 @@ The output as follows:
 **Example**
 
 Clustering test_hudi_table with table name
-```
+
+```sql
 call run_clustering(table => 'test_hudi_table');
 ```
 
 Clustering test_hudi_table with table path
-```
+
+```sql
 call run_clustering(path => '/tmp/hoodie/test_hudi_table');
 ```
 
 Clustering test_hudi_table with table name, predicate and order column
-```
+
+```sql
 call run_clustering(table => 'test_hudi_table', predicate => 'ts <= 20220408L', order => 'ts');
 ```
 
 Clustering test_hudi_table with table name, show_involved_partition
-```
+
+```sql
 call run_clustering(table => 'test_hudi_table', show_involved_partition => true);
 ```
 
 Clustering test_hudi_table with table name, op
-```
+
+```sql
 call run_clustering(table => 'test_hudi_table', op => 'schedule');
 ```
 
 Clustering test_hudi_table with table name, order_strategy
-```
+
+```sql
 call run_clustering(table => 'test_hudi_table', order_strategy => 'z-order');
 ```
 
 Clustering test_hudi_table with table name, op, options
-```
+
+```sql
 call run_clustering(table => 'test_hudi_table', op => 'schedule', options => '
 hoodie.clustering.plan.strategy.target.file.max.bytes=1024*1024*1024,
 hoodie.clustering.plan.strategy.max.bytes.per.group=2*1024*1024*1024');
 ```
 
 Clustering test_hudi_table with table name, op, instants
-```
+
+```sql
 call run_clustering(table => 'test_hudi_table', op => 'execute', instants => 'ts1,ts2');
 ```
 
 Clustering test_hudi_table with table name, op, selected_partitions
-```
+
+```sql
 call run_clustering(table => 'test_hudi_table', op => 'execute', selected_partitions => 'par1,par2');
 ```
 
 Clustering test_hudi_table with table name, op, limit
-```
+
+```sql
 call run_clustering(table => 'test_hudi_table', op => 'execute', limit => 10);
 ```
+
 :::note
 Limit parameter is valid only when op is execute.
 
@@ -1339,14 +1370,13 @@ Limit parameter is valid only when op is execute.
 
 ### show_clustering
 
-Show pending clusterings on a hoodie table. 
+Show pending clusterings on a hoodie table.
 
 :::note
-When calling this procedure, one of parameters ``table`` and ``path`` must be specified at least. 
+When calling this procedure, one of parameters ``table`` and ``path`` must be specified at least.
 If both parameters are given, ``table`` will take effect.
 
 :::
-
 
 **Input**
 
@@ -1366,45 +1396,45 @@ If both parameters are given, ``table`` will take effect.
 **Example**
 
 Show pending clusterings with table name
-```
+```sql
 call show_clustering(table => 'test_hudi_table');
 ```
-| timestamp         | groups | 
+| timestamp         | groups |
 |-------------------|--------|
 | 20220408153707928 | 2      |
 | 20220408153636963 | 3      |
 
 Show pending clusterings with table path
-```
+```sql
 call show_clustering(path => '/tmp/hoodie/test_hudi_table');
 ```
-| timestamp         | groups | 
+| timestamp         | groups |
 |-------------------|--------|
 | 20220408153707928 | 2      |
 | 20220408153636963 | 3      |
 
 Show pending clusterings with table name and limit
-```
+```sql
 call show_clustering(table => 'test_hudi_table', limit => 1);
 ```
-| timestamp         | groups | 
+| timestamp         | groups |
 |-------------------|--------|
 | 20220408153707928 | 2      |
 
 ### run_compaction
 
-Schedule or run compaction on a hoodie table. 
+Schedule or run compaction on a hoodie table.
 
 :::note
-For scheduling compaction, if `timestamp` is specified, new scheduled compaction will use given 
-timestamp as instant time. Otherwise, compaction will be scheduled by using current system time. 
+For scheduling compaction, if `timestamp` is specified, new scheduled compaction will use given
+timestamp as instant time. Otherwise, compaction will be scheduled by using current system time.
 
-For running compaction, given ``timestamp`` must be a pending compaction instant time that 
-already exists, if it's not, exception will be thrown. Meanwhile, if ``timestamp``is specified 
-and there are pending compactions, all pending compactions will be executed without new compaction 
-instant generated. 
+For running compaction, given ``timestamp`` must be a pending compaction instant time that
+already exists, if it's not, exception will be thrown. Meanwhile, if ``timestamp``is specified
+and there are pending compactions, all pending compactions will be executed without new compaction
+instant generated.
 
-When calling this procedure, one of parameters ``table`` and ``path``must be specified at least. 
+When calling this procedure, one of parameters ``table`` and ``path``must be specified at least.
 If both parameters are given, ``table`` will take effect.
 :::
 
@@ -1422,33 +1452,33 @@ If both parameters are given, ``table`` will take effect.
 
 The output of `RUN` operation is `EMPTY`, the output of `SCHEDULE` as follow:
 
-| Parameter Name | Type   | Required  | Default Value | Description  |
-|----------------|--------|-----------|---------------|--------------|
-| instant        | String | N         | None          | Instant name |
+| Parameter Name | Type   | Required | Default Value | Description  |
+|----------------|--------|----------|---------------|--------------|
+| instant        | String | N        | None          | Instant name |
 
 **Example**
 
 Run compaction with table name
-```
+```sql
 call run_compaction(op => 'run', table => 'test_hudi_table');
 ```
 
 Run compaction with table path
-```
+```sql
 call run_compaction(op => 'run', path => '/tmp/hoodie/test_hudi_table');
 ```
 
 Run compaction with table path and timestamp
-```
+```sql
 call run_compaction(op => 'run', path => '/tmp/hoodie/test_hudi_table', timestamp => '20220408153658568');
 ```
 Run compaction with options
-```
+```sql
 call run_compaction(op => 'run', table => 'test_hudi_table', options => hoodie.compaction.strategy=org.apache.hudi.table.action.compact.strategy.LogFileNumBasedCompactionStrategy,hoodie.compaction.logfile.num.threshold=3);
 ```
 
 Schedule compaction with table name
-```
+```sql
 call run_compaction(op => 'schedule', table => 'test_hudi_table');
 ```
 | instant           |
@@ -1456,7 +1486,7 @@ call run_compaction(op => 'schedule', table => 'test_hudi_table');
 | 20220408153650834 |
 
 Schedule compaction with table path
-```
+```sql
 call run_compaction(op => 'schedule', path => '/tmp/hoodie/test_hudi_table');
 ```
 | instant           |
@@ -1464,7 +1494,7 @@ call run_compaction(op => 'schedule', path => '/tmp/hoodie/test_hudi_table');
 | 20220408153650834 |
 
 Schedule compaction with table path and timestamp
-```
+```sql
 call run_compaction(op => 'schedule', path => '/tmp/hoodie/test_hudi_table', timestamp => '20220408153658568');
 ```
 | instant           |
@@ -1474,10 +1504,10 @@ call run_compaction(op => 'schedule', path => '/tmp/hoodie/test_hudi_table', tim
 ### show_compaction
 
 Show all compactions on a hoodie table, in-flight or completed compactions are included, and result will
-be in reverse order according to trigger time. 
+be in reverse order according to trigger time.
 
 :::note
-When calling this procedure, one of parameters ``table``and ``path`` must be specified at least. 
+When calling this procedure, one of parameters ``table``and ``path`` must be specified at least.
 If both parameters are given, ``table`` will take effect.
 :::
 
@@ -1500,30 +1530,36 @@ If both parameters are given, ``table`` will take effect.
 **Example**
 
 Show compactions with table name
-```
+
+```sql
 call show_compaction(table => 'test_hudi_table');
 ```
-| timestamp         | action     | size    |
-|-------------------|------------|---------|
-| 20220408153707928 | compaction | 10      |
-| 20220408153636963 | compaction | 10      |
+
+| timestamp         | action     | size |
+|-------------------|------------|------|
+| 20220408153707928 | compaction | 10   |
+| 20220408153636963 | compaction | 10   |
 
 Show compactions with table path
-```
+
+```sql
 call show_compaction(path => '/tmp/hoodie/test_hudi_table');
 ```
-| timestamp         | action     | size    |
-|-------------------|------------|---------|
-| 20220408153707928 | compaction | 10      |
-| 20220408153636963 | compaction | 10      |
+
+| timestamp         | action     | size |
+|-------------------|------------|------|
+| 20220408153707928 | compaction | 10   |
+| 20220408153636963 | compaction | 10   |
 
 Show compactions with table name and limit
-```
+
+```sql
 call show_compaction(table => 'test_hudi_table', limit => 1);
 ```
-| timestamp         | action     | size    |
-|-------------------|------------|---------|
-| 20220408153707928 | compaction | 10      |
+
+| timestamp         | action     | size |
+|-------------------|------------|------|
+| 20220408153707928 | compaction | 10   |
 
 ### run_clean
 
@@ -1531,10 +1567,10 @@ Run cleaner on a hoodie table.
 
 **Input**
 
-| Parameter Name                                                                        | Type    | Required | Default Value | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-|---------------------------------------------------------------------------------------|---------|----------|---------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| table                                                                                 | String  | Y        | None          | Name of table to be cleaned                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| schedule_in_line                                                                      | Boolean | N        | true          | Set "true" if you want to schedule and run a clean. Set false if you have already scheduled a clean and want to run that.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Parameter Name                                                             | Type    | Required | Default Value | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+|----------------------------------------------------------------------------|---------|----------|---------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| table                                                                      | String  | Y        | None          | Name of table to be cleaned                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| schedule_in_line                                                           | Boolean | N        | true          | Set "true" if you want to schedule and run a clean. Set false if you have already scheduled a clean and want to run that.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | [clean_policy](configurations#hoodiecleanerpolicy)                         | String  | N        | None          | org.apache.hudi.common.model.HoodieCleaningPolicy: Cleaning policy to be used. The cleaner service deletes older file slices files to re-claim space. Long running query plans may often refer to older file slices and will break if those are cleaned, before the query has had a chance to run. So, it is good to make sure that the data is retained for more than the maximum query execution time. By default, the cleaning policy is determined based on one of the following configs explicitly set by the user (at most one of them can be set; otherwise, KEEP_LATEST_COMMITS cleaning policy is used). KEEP_LATEST_FILE_VERSIONS: keeps the last N versions of the file slices written; used when "hoodie.cleaner.fileversions.retained" is explicitly set only. KEEP_LATEST_COMMITS(default): keeps the file slices written by the last N commits; used when "hoodie.cleaner.commits.retained" is explicitly set only. KEEP_LATEST_BY_HOURS: keeps the file slices written in the last N hours based on the commit time; used when "hoodie.cleaner.hours.retained" is explicitly set only. |
 | [retain_commits](configurations#hoodiecleanercommitsretained)              | Int     | N        | None          | When KEEP_LATEST_COMMITS cleaning policy is used, the number of commits to retain, without cleaning. This will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much data retention the table supports for incremental queries.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | [hours_retained](configurations#hoodiecleanerhoursretained)                | Int     | N        | None          | When KEEP_LATEST_BY_HOURS cleaning policy is used, the number of hours for which commits need to be retained. This config provides a more flexible option as compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group, corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -1557,12 +1593,14 @@ Run cleaner on a hoodie table.
 **Example**
 
 Run clean with table name
-```
+
+```sql
 call run_clean(table => 'test_hudi_table');
 ```
 
 Run clean with keep latest file versions policy
-```
+
+```sql
 call run_clean(table => 'test_hudi_table', trigger_max_commits => 2, clean_policy => 'KEEP_LATEST_FILE_VERSIONS', file_versions_retained => 1)
 ```
 
@@ -1585,7 +1623,7 @@ Delete marker files of a hudi table.
 
 **Example**
 
-```
+```sql
 call delete_marker(table => 'test_hudi_table', instant_time => '20230206174349556');
 ```
 
@@ -1619,7 +1657,7 @@ Validate sync procedure.
 
 **Example**
 
-```
+```sql
  call sync_validate(hive_server_url=>'jdbc:hive2://localhost:10000/default', src_table => 'test_hudi_table_src', dst_table=> 'test_hudi_table_dst', mode=>'complete', hive_pass=>'', src_db=> 'default', target_db=>'default');
 ```
 
@@ -1629,20 +1667,18 @@ Sync the table's latest schema to Hive metastore.
 
 **Input**
 
-| Parameter Name                                                                                            | Type   | Required | Default Value | Description                                                                                                                                                                                                                                        |
-|-----------------------------------------------------------------------------------------------------------|--------|----------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| table                                                                                                     | String | Y        | None          | Hudi table name                                                                                                                                                                                                                                    |
-| metastore_uri                                                                                             | String | N        | ""            | Metastore_uri                                                                                                                                                                                                                                      |
-| username                                                                                                  | String | N        | ""            | User name                                                                                                                                                                                                                                          |
-| password                                                                                                  | String | N        | ""            | Password                                                                                                                                                                                                                                           |
-| [use_jdbc](configurations#hoodiedatasourcehive_syncuse_jdbc)                                   | String | N        | ""            | Use JDBC when hive synchronization is enabled                                                                                                                                                                                                      |
-| [mode](configurations#hoodiedatasourcehive_syncmode)                                           | String | N        | ""            | Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.                                                                                                                                                                                |
+| Parameter Name                                               | Type   | Required | Default Value | Description                                                         |
+|--------------------------------------------------------------|--------|----------|---------------|---------------------------------------------------------------------|
+| table                                                        | String | Y        | None          | Hudi table name                                                     |
+| metastore_uri                                                | String | N        | ""            | Metastore_uri                                                       |
+| username                                                     | String | N        | ""            | User name                                                           |
+| password                                                     | String | N        | ""            | Password                                                            |
+| [use_jdbc](configurations#hoodiedatasourcehive_syncuse_jdbc) | String | N        | ""            | Use JDBC when hive synchronization is enabled                       |
+| [mode](configurations#hoodiedatasourcehive_syncmode)         | String | N        | ""            | Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql. |
 | [partition_fields](configurations#hoodiedatasourcehive_syncpartition_fields)                   | String | N        | ""            | Field in the table to use for determining hive partition columns.                                                                                                                                                                                  |                                                       |
 | [partition_extractor_class](configurations#hoodiedatasourcehive_syncpartition_extractor_class) | String | N        | ""            | Class which implements PartitionValueExtractor to extract the partition values, default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.                                                                                                        |
 | [strategy](configurations#hoodiedatasourcehive_synctablestrategy)                              | String | N        | ""            | Hive table synchronization strategy. Available option: RO, RT, ALL.                                                                                                                                                                                |
 | [sync_incremental](configurations#hoodiemetasyncincremental)                                   | String | N        | ""            | Whether to incrementally sync the partitions to the metastore, i.e., only added, changed, and deleted partitions based on the commit metadata. If set to `false`, the meta sync executes a full partition sync operation when partitions are lost. |
-
-
 
 **Output**
 
@@ -1652,7 +1688,7 @@ Sync the table's latest schema to Hive metastore.
 
 **Example**
 
-```
+```sql
 call hive_sync(table => 'test_hudi_table');
 ```
 
@@ -1689,14 +1725,13 @@ add parquet files to a hudi table.
 
 **Example**
 
-```
+```sql
 call hdfs_parquet_import(table => 'test_hudi_table', table_type => 'COPY_ON_WRITE', src_path => '', target_path => '', row_key => 'id', partition_key => 'dt', schema_file_path => '');
 ```
 
 | import_result |
 |:--------------|
 | 0             |
-
 
 ### repair_add_partition_meta
 
@@ -1719,7 +1754,7 @@ Repair add partition for a hudi table.
 
 **Example**
 
-```
+```sql
 call repair_add_partition_meta(table => 'test_hudi_table');
 ```
 
@@ -1733,9 +1768,9 @@ Repair corrupted clean files for a hudi table.
 
 **Input**
 
-| Parameter Name      | Type    | Required | Default Value | Description        |
-|---------------------|---------|----------|---------------|--------------------|
-| table               | String  | Y        | None          | Hudi table name    |
+| Parameter Name | Type   | Required | Default Value | Description     |
+|----------------|--------|----------|---------------|-----------------|
+| table          | String | Y        | None          | Hudi table name |
 
 **Output**
 
@@ -1745,13 +1780,13 @@ Repair corrupted clean files for a hudi table.
 
 **Example**
 
-```
+```sql
 call repair_corrupted_clean_files(table => 'test_hudi_table');
 ```
 
-| result | 
+| result |
 |--------|
-| true   | 
+| true   |
 
 ### repair_deduplicate
 
@@ -1775,13 +1810,13 @@ Repair deduplicate records for a hudi table. The job dedupliates the data in the
 
 **Example**
 
-```
+```sql
 call repair_deduplicate(table => 'test_hudi_table', duplicated_partition_path => 'dt=2021-05-03', repaired_output_path => '/tmp/repair_path/');
 ```
 
-| result                                       | 
-|----------------------------------------------|
-| Reduplicated files placed in: /tmp/repair_path/. | 
+| result                                           |
+|--------------------------------------------------|
+| Reduplicated files placed in: /tmp/repair_path/. |
 
 ### repair_migrate_partition_meta
 
@@ -1805,7 +1840,7 @@ downgrade a hudi table.
 
 **Example**
 
-```
+```sql
 call repair_migrate_partition_meta(table => 'test_hudi_table');
 ```
 
@@ -1830,13 +1865,13 @@ overwrite a hudi table properties.
 
 **Example**
 
-```
+```sql
 call repair_overwrite_hoodie_props(table => 'test_hudi_table', new_props_file_path = > '/tmp/props');
 ```
 
 | property                 | old_value | new_value |
 |--------------------------|-----------|-----------|
-| hoodie.file.index.enable | true      | false     | 
+| hoodie.file.index.enable | true      | false     |
 
 ## Bootstrap
 
@@ -1846,25 +1881,25 @@ Convert an existing table to Hudi.
 
 **Input**
 
-| Parameter Name                                                               | Type    | Required | Default Value                                                                 | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-|------------------------------------------------------------------------------|---------|----------|-------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| table                                                                        | String  | Y        | None                                                                          | Name of table to be clustered                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| table_type                                                                   | String  | Y        | None                                                                          | Table type, MERGE_ON_READ or COPY_ON_WRITE                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Parameter Name                                                    | Type    | Required | Default Value                                                                 | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+|-------------------------------------------------------------------|---------|----------|-------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| table                                                             | String  | Y        | None                                                                          | Name of table to be clustered                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| table_type                                                        | String  | Y        | None                                                                          | Table type, MERGE_ON_READ or COPY_ON_WRITE                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | [bootstrap_path](configurations#hoodiebootstrapbasepath)          | String  | Y        | None                                                                          | Base path of the dataset that needs to be bootstrapped as a Hudi table                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| base_path                                                                    | String  | Y        | None                                                                          | Base path                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| rowKey_field                                                                 | String  | Y        | None                                                                          | Primary key field                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| base_file_format                                                             | String  | N        | "PARQUET"                                                                     | Format of base file                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| partition_path_field                                                         | String  | N        | ""                                                                            | Partitioned column field                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| base_path                                                         | String  | Y        | None                                                                          | Base path                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| rowKey_field                                                      | String  | Y        | None                                                                          | Primary key field                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| base_file_format                                                  | String  | N        | "PARQUET"                                                                     | Format of base file                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| partition_path_field                                              | String  | N        | ""                                                                            | Partitioned column field                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | [bootstrap_index_class](configurations#hoodiebootstrapindexclass) | String  | N        | "org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex"                  | Implementation to use, for mapping a skeleton base file to a bootstrap base file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | [selector_class](configurations#hoodiebootstrapmodeselector)      | String  | N        | "org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector" | Selects the mode in which each file/partition in the bootstrapped dataset gets bootstrapped                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| key_generator_class                                                          | String  | N        | "org.apache.hudi.keygen.SimpleKeyGenerator"                                   | Class of key generator                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| full_bootstrap_input_provider                                                | String  | N        | "org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider"                 | Class of full bootstrap input provider                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| schema_provider_class                                                        | String  | N        | ""                                                                            | Class of schema provider                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| payload_class                                                                | String  | N        | "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"                 | Class of payload                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| key_generator_class                                               | String  | N        | "org.apache.hudi.keygen.SimpleKeyGenerator"                                   | Class of key generator                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| full_bootstrap_input_provider                                     | String  | N        | "org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider"                 | Class of full bootstrap input provider                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| schema_provider_class                                             | String  | N        | ""                                                                            | Class of schema provider                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| payload_class                                                     | String  | N        | "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"                 | Class of payload                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | [parallelism](configurations#hoodiebootstrapparallelism)          | Int     | N        | 1500                                                                          | For metadata-only bootstrap, Hudi parallelizes the operation so that each table partition is handled by one Spark task. This config limits the number of parallelism. We pick the configured parallelism if the number of table partitions is larger than this configured value. The parallelism is assigned to the number of table partitions if it is smaller than the configured value. For full-record bootstrap, i.e., BULK_INSERT operation of the records, this configured value is passed as the BULK_INSERT shuffle parallelism (`hoodie.bulkinsert.shuffle.parallelism`), determining the BULK_INSERT write behavior. If you see that the bootstrap is slow due to the limited parallelism, you can increase this. |
-| enable_hive_sync                                                             | Boolean | N        | false                                                                         | Whether to enable hive sync                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| props_file_path                                                              | String  | N        | ""                                                                            | Path of properties file                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| bootstrap_overwrite                                                          | Boolean | N        | false                                                                         | Overwrite bootstrap path                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| enable_hive_sync                                                  | Boolean | N        | false                                                                         | Whether to enable hive sync                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| props_file_path                                                   | String  | N        | ""                                                                            | Path of properties file                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| bootstrap_overwrite                                               | Boolean | N        | false                                                                         | Overwrite bootstrap path                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 **Output**
 
@@ -1874,13 +1909,13 @@ Convert an existing table to Hudi.
 
 **Example**
 
-```
+```sql
 call run_bootstrap(table => 'test_hudi_table', table_type => 'COPY_ON_WRITE', bootstrap_path => 'hdfs://ns1/hive/warehouse/hudi.db/test_hudi_table', base_path => 'hdfs://ns1//tmp/hoodie/test_hudi_table', rowKey_field => 'id', partition_path_field => 'dt',bootstrap_overwrite => true);
 ```
 
-| status | 
+| status |
 |--------|
-| 0      | 
+| 0      |
 
 ### show_bootstrap_mapping
 
@@ -1899,24 +1934,23 @@ Show mapping files of a bootstrap table.
 
 **Output**
 
-| Parameter Name   | Type   | 
+| Parameter Name   | Type   |
 |------------------|--------|
-| partition        | String | 
+| partition        | String |
 | file_id          | Int    |
-| source_base_path | String | 
-| source_partition | Int    | 
-| source_file      | String | 
+| source_base_path | String |
+| source_partition | Int    |
+| source_file      | String |
 
 **Example**
 
-```
+```sql
 call show_bootstrap_mapping(table => 'test_hudi_table');
 ```
 
-| partition     | file_id                                | source_base_path                                                                                                                    | source_partition | source_file                                | 
+| partition     | file_id                                | source_base_path                                                                                                                    | source_partition | source_file                                |
 |---------------|----------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------|------------------|--------------------------------------------|
 | dt=2021-05-03 | d0073a12-085d-4f49-83e9-402947e7e90a-0 | hdfs://ns1/hive/warehouse/hudi.db/test_hudi_table/dt=2021-05-03/d0073a12-085d-4f49-83e9-402947e7e90a-0_0-2-2_00000000000002.parquet | dt=2021-05-03    | hdfs://ns1/tmp/dt=2021-05-03/00001.parquet |
-
 
 ### show_bootstrap_partitions
 
@@ -1924,25 +1958,25 @@ Show partitions of a bootstrap table.
 
 **Input**
 
-| Parameter Name | Type   | Required | Default Value | Description                          |
-|----------------|--------|----------|---------------|--------------------------------------|
-| table          | String | Y        | None          | Name of table to be clustered        |
+| Parameter Name | Type   | Required | Default Value | Description                   |
+|----------------|--------|----------|---------------|-------------------------------|
+| table          | String | Y        | None          | Name of table to be clustered |
 
 **Output**
 
-| Parameter Name     | Type   | 
+| Parameter Name     | Type   |
 |--------------------|--------|
-| indexed_partitions | String | 
+| indexed_partitions | String |
 
 **Example**
 
-```
+```sql
 call show_bootstrap_partitions(table => 'test_hudi_table');
 ```
 
-| indexed_partitions | 
+| indexed_partitions |
 |--------------------|
-| 	dt=2021-05-03     |
+| dt=2021-05-03      |
 
 ## Version management
 
@@ -1965,13 +1999,13 @@ upgrade a hudi table to a specific version.
 
 **Example**
 
-```
+```sql
 call upgrade_table(table => 'test_hudi_table', to_version => 'FIVE');
 ```
 
-| result | 
+| result |
 |--------|
-| true   | 
+| true   |
 
 ### downgrade_table
 
@@ -1992,10 +2026,10 @@ downgrade a hudi table to a specific version.
 
 **Example**
 
-```
+```sql
 call downgrade_table(table => 'test_hudi_table', to_version => 'FOUR');
 ```
 
-| result | 
+| result |
 |--------|
 | true   |
