@@ -18,8 +18,28 @@ module.exports = {
     },
     {
       type: 'link',
-      label: 'Join Our Slack Space',
+      label: 'Github',
+      href: 'https://github.com/apache/hudi',
+    },
+    {
+      type: 'link',
+      label: 'Slack',
       href: slackUrl,
+    },
+    {
+      type: 'link',
+      label: 'Linkdin',
+      href: 'https://www.linkedin.com/company/apache-hudi/?viewAsMember=true',
+    },
+    {
+      type: 'link',
+      label: 'Youtube',
+      href: 'https://www.youtube.com/channel/UCs7AhE0BWaEPZSChrBR-Muw',
+    },
+    {
+      type: 'link',
+      label: 'X',
+      href: 'https://x.com/ApacheHudi',
     },
   ],
 };
