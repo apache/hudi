@@ -621,6 +621,7 @@ The following table shows the Hudi table versions corresponding to the Hudi rele
 
 | Hudi Table Version | Hudi Release Version(s) |
 |:-------------------|:------------------------|
+| `NINE` or `9`      | 1.1.x                   |
 | `EIGHT` or `8`     | 1.0.x                   |
 | `SIX` or `6`       | 0.14.x - 0.15.x         |
 | `FIVE` or `5`      | 0.12.x - 0.13.x         |

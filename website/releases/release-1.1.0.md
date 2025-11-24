@@ -13,6 +13,7 @@ Apache Hudi 1.1.0 is a major release that brings significant performance improve
 - **Pluggable Table Format Framework** - Native integration of multiple table formats with unified metadata management
 - **Spark 4.0 and Flink 2.0 Support** - Full support for latest major compute engine versions
 - **Enhanced Indexing** - Partitioned record index, partition-level bucket index, native HFile writer, and column stats V2
+- **Performance Boost** - 2-3x Flink write throughput improvements and 4x metadata table read speedup
 - **Table Services Optimization** - Parquet binary copy and incremental scheduling for compaction/clustering
 - **Storage-based Lock Provider** - Multi-writer concurrency control without external dependencies
 - **Record Merging Evolution** - Deprecation of payload classes in favor of merge modes and merger APIs
