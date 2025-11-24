@@ -185,7 +185,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private HoodieMetadataColumnStats columnStatMetadata = null;
   private HoodieRecordIndexInfo recordIndexMetadata;
   private boolean isDeletedRecord = false;
-  private Option<String> basePathOverrideOpt;
+  private Option<String> basePathOverrideOpt = Option.empty();
 
   public HoodieMetadataPayload(@Nullable GenericRecord record, Comparable<?> orderingVal) {
     this(Option.ofNullable(record));
