@@ -85,10 +85,9 @@ export default function BlogList() {
 
   const filteretdBlogPosts = useMemo(() => {
     let filtered = allBlogPosts;
-
-    // Filter by category
+    // Filter by subCategory
     if(category !== 'all') {
-      filtered = filtered.filter((elem) => elem.frontMatter.category === category);
+      filtered = filtered.filter((elem) => elem.frontMatter.subCategory === category);
     }
 
     // Filter by search query - only search by title (case-insensitive)

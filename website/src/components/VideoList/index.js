@@ -37,12 +37,12 @@ const sortedVideos = allVideos
     return dateB - dateA;
   });
 
-const POSTS_PER_PAGE = 10;
+const POSTS_PER_PAGE = 12;
 
 export default function VideoList() {
   const { withBaseUrl } = useBaseUrlUtils();
   const [currentPage, setCurrentPage] = useState(1);
-  
+
   const totalPages = Math.ceil(sortedVideos.length / POSTS_PER_PAGE);
   const startIndex = (currentPage - 1) * POSTS_PER_PAGE;
   const endIndex = startIndex + POSTS_PER_PAGE;
@@ -58,11 +58,11 @@ export default function VideoList() {
     const maxVisible = 5;
     let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
     let endPage = Math.min(totalPages, startPage + maxVisible - 1);
-    
+
     if (endPage - startPage < maxVisible - 1) {
       startPage = Math.max(1, endPage - maxVisible + 1);
     }
-    
+
     for (let i = startPage; i <= endPage; i++) {
       pages.push(i);
     }
@@ -78,21 +78,21 @@ export default function VideoList() {
           const { date, title, authors, permalink, description } = metadata || {};
           const image = assets?.image ?? frontMatter?.image ?? "/assets/images/hudi.png";
           const videoUrl = frontMatter?.navigate || permalink;
-          
+
           if (!title || !videoUrl) {
             return null;
           }
-          
+
           const dateObj = date ? new Date(date) : null;
-          const formattedDate = dateObj ? dateObj.toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
+          const formattedDate = dateObj ? dateObj.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
           }) : '';
 
           const isExternalUrl = videoUrl && (videoUrl.startsWith('http://') || videoUrl.startsWith('https://'));
           const LinkComponent = isExternalUrl ? 'a' : Link;
-          const linkProps = isExternalUrl 
+          const linkProps = isExternalUrl
             ? { href: videoUrl, target: '_blank', rel: 'noopener noreferrer' }
             : { to: videoUrl, target: '_blank', rel: 'noopener noreferrer' };
 
@@ -127,7 +127,7 @@ export default function VideoList() {
           );
         })}
       </div>
-      
+
       {totalPages > 1 && (
         <nav className={styles.pagination} aria-label="Video pagination">
           <button
@@ -138,7 +138,7 @@ export default function VideoList() {
           >
             Previous
           </button>
-          
+
           <div className={styles.paginationNumbers}>
             {getPageNumbers().map((pageNum) => (
               <button
@@ -152,7 +152,7 @@ export default function VideoList() {
               </button>
             ))}
           </div>
-          
+
           <button
             className={styles.paginationButton}
             onClick={() => handlePageChange(currentPage + 1)}
@@ -163,7 +163,7 @@ export default function VideoList() {
           </button>
         </nav>
       )}
-      
+
       <div className={styles.paginationInfo}>
         Showing {startIndex + 1}-{Math.min(endIndex, sortedVideos.length)} of {sortedVideos.length} videos
       </div>

@@ -2,7 +2,8 @@
 title: "Modernizing Upstox's Data Platform with Apache Hudi, dbt, and EMR Serverless"
 excerpt: ""
 author: The Hudi Community
-category: data lake
+category: blog
+subCategory: data lake
 image: /assets/images/blog/2025-10-16-Modernizing-Upstox-Data-Platform-with-Apache-Hudi-DBT-and-EMR-Serverless/fig1.png
 tags:
 - hudi
