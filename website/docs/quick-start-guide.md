@@ -53,7 +53,7 @@ From the extracted directory run spark-shell with Hudi:
 export SPARK_VERSION=3.5
 export HUDI_VERSION=1.1.0
 # For Scala versions: 2.12/2.13
-export SCALA_VERSION=2.12
+export SCALA_VERSION=2.13
 
 spark-shell --master "local[2]" \
   --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_$SCALA_VERSION:$HUDI_VERSION \
@@ -74,7 +74,7 @@ export PYSPARK_PYTHON=$(which python3)
 export SPARK_VERSION=3.5
 export HUDI_VERSION=1.1.0
 # For Scala versions: 2.12/2.13
-export SCALA_VERSION=2.12
+export SCALA_VERSION=2.13
 
 pyspark --master "local[2]" \
   --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_$SCALA_VERSION:$HUDI_VERSION \
@@ -95,7 +95,7 @@ From the extracted directory run Spark SQL with Hudi:
 export SPARK_VERSION=3.5
 export HUDI_VERSION=1.1.0
 # For Scala versions: 2.12/2.13
-export SCALA_VERSION=2.12
+export SCALA_VERSION=2.13
 
 spark-sql --master "local[2]" \
   --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_$SCALA_VERSION:$HUDI_VERSION \
