@@ -18,6 +18,9 @@
 
 package org.apache.hudi.utilities.schema;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+
 import org.apache.avro.Schema;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -36,10 +39,10 @@ class TestKafkaOffsetPostProcessor {
 
   @ParameterizedTest
   @MethodSource("cases")
-  void testProcessSchema(Schema inputSchema) {
+  void testProcessSchema(HoodieSchema inputSchema) {
     KafkaOffsetPostProcessor kafkaOffsetPostProcessor = new KafkaOffsetPostProcessor(null, null);
-    Schema actual = kafkaOffsetPostProcessor.processSchema(inputSchema);
-    List<String> actualFieldNames = actual.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
+    HoodieSchema actual = kafkaOffsetPostProcessor.processSchema(inputSchema);
+    List<String> actualFieldNames = actual.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList());
     assertEquals(EXPECTED_FIELD_NAMES, actualFieldNames);
   }
 

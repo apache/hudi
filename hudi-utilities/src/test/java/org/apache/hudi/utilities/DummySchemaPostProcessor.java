@@ -19,21 +19,25 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
 import org.apache.spark.api.java.JavaSparkContext;
 
-public class DummySchemaPostProcessor  extends SchemaPostProcessor {
+import java.util.Collections;
+
+public class DummySchemaPostProcessor extends SchemaPostProcessor {
 
   public DummySchemaPostProcessor(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
   }
 
   @Override
-  public Schema processSchema(Schema schema) {
-    return SchemaBuilder.record("test").fields().optionalString("testString").endRecord();
+  public HoodieSchema processSchema(HoodieSchema schema) {
+    return HoodieSchema.createRecord("test", null, null,
+        Collections.singletonList(HoodieSchemaField.of("testString", HoodieSchema.createNullableSchema(HoodieSchema.create(HoodieSchemaType.STRING)))));
   }
 
 }

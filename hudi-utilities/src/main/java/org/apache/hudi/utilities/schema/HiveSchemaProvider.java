@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.utilities.config.HiveSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 
@@ -43,8 +44,8 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
  */
 public class HiveSchemaProvider extends SchemaProvider {
 
-  private final Schema sourceSchema;
-  private Schema targetSchema;
+  private final HoodieSchema sourceSchema;
+  private HoodieSchema targetSchema;
 
   public HiveSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
@@ -83,12 +84,12 @@ public class HiveSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getSourceSchema() {
+  public HoodieSchema getSourceSchema() {
     return sourceSchema;
   }
 
   @Override
-  public Schema getTargetSchema() {
+  public HoodieSchema getTargetSchema() {
     if (targetSchema != null) {
       return targetSchema;
     } else {

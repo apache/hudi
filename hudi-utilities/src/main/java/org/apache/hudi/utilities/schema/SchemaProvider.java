@@ -22,8 +22,8 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 
-import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.Serializable;
@@ -49,10 +49,10 @@ public abstract class SchemaProvider implements Serializable {
   }
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
-  public abstract Schema getSourceSchema();
+  public abstract HoodieSchema getSourceSchema();
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
-  public Schema getTargetSchema() {
+  public HoodieSchema getTargetSchema() {
     // by default, use source schema as target for hoodie table as well
     return getSourceSchema();
   }

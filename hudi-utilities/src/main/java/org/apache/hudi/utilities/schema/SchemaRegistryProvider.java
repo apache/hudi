@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -40,7 +41,6 @@ import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
-import org.apache.avro.Schema;
 import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.ssl.SSLContexts;
@@ -148,9 +148,9 @@ public class SchemaRegistryProvider extends SchemaProvider {
     String convert(ParsedSchema schema) throws IOException;
   }
 
-  public Schema parseSchemaFromRegistry(String registryUrl) {
+  public HoodieSchema parseSchemaFromRegistry(String registryUrl) {
     String schema = fetchSchemaFromRegistry(registryUrl);
-    return new Schema.Parser().parse(schema);
+    return HoodieSchema.parse(schema);
   }
 
   /**
@@ -308,7 +308,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getSourceSchema() {
+  public HoodieSchema getSourceSchema() {
     String registryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL);
     try {
       return parseSchemaFromRegistry(registryUrl);
@@ -321,7 +321,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getTargetSchema() {
+  public HoodieSchema getTargetSchema() {
     String registryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL);
     String targetRegistryUrl =
         getStringWithAltKeys(config, HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL, registryUrl);
