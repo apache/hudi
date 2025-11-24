@@ -2,7 +2,7 @@
 title: SQL Procedures
 summary: "In this page, we introduce how to use SQL procedures with Hudi."
 toc: true
-last_modified_at: 2025-11-23T00:00:00
+last_modified_at: 2025-11-24T00:00:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -84,10 +84,16 @@ Show commit information.
 
 **Input**
 
-| Parameter Name | Type   | Required | Default Value | Description                          |
-|----------------|--------|----------|---------------|--------------------------------------|
-| table          | String | Y        | None          | Hudi table name                      |
-| limit          | Int    | N        | 10            | Max number of records to be returned |
+| Parameter Name | Type   | Required | Default Value | Description                                                                     |
+|----------------|--------|----------|---------------|---------------------------------------------------------------------------------|
+| table          | String | N        | None          | Hudi table name                                                                 |
+| path           | String | N        | None          | Path of table                                                                   |
+| limit          | Int    | N        | 10            | Max number of records to be returned                                            |
+| filter         | String | N        | None          | Advanced predicate expression to filter results (e.g., `total_files_added > 0`) |
+
+:::note
+When calling this procedure, one of parameters `table` and `path` must be specified at least. If both parameters are given, `table` will take effect.
+:::
 
 **Output**
 
@@ -104,8 +110,22 @@ Show commit information.
 
 **Example**
 
+Show commits with table name
+
 ```sql
 call show_commits(table => 'test_hudi_table', limit => 10);
+```
+
+Show commits with table path
+
+```sql
+call show_commits(path => '/tmp/hoodie/test_hudi_table', limit => 10);
+```
+
+Show commits with filter
+
+```sql
+call show_commits(table => 'test_hudi_table', filter => 'total_files_added > 0');
 ```
 
 | commit_time       | total_bytes_written | total_files_added | total_files_updated | total_partitions_written | total_records_written | total_update_records_written | total_errors |
@@ -650,6 +670,7 @@ Delete a savepoint to hudi's table.
 **Example**
 
 Delete a savepoint from the test_hudi_table
+
 ```sql
 call delete_savepoint(table => 'test_hudi_table', instant_time => '20220109225319449');
 ```
@@ -678,6 +699,7 @@ Rollback a table to the commit that was current at some time.
 **Example**
 
 Rollback test_hudi_table to a savepoint
+
 ```sql
 call rollback_to_savepoint(table => 'test_hudi_table', instant_time => '20220109225319449');
 ```
@@ -867,11 +889,17 @@ Show files of a hudi table.
 
 **Input**
 
-| Parameter Name | Type   | Required | Default Value | Description     |
-|----------------|--------|----------|---------------|-----------------|
-| table          | String | Y        | None          | Hudi table name |
-| partition      | String | N        | ""            | Partition name  |
-| limit          | Int    | N        | 100           | Limit number    |
+| Parameter Name | Type   | Required | Default Value | Description                                                                          |
+|----------------|--------|----------|---------------|--------------------------------------------------------------------------------------|
+| table          | String | N        | None          | Hudi table name                                                                      |
+| path           | String | N        | None          | Path of table                                                                        |
+| partition      | String | N        | ""            | Partition name                                                                       |
+| limit          | Int    | N        | 100           | Limit number                                                                         |
+| filter         | String | N        | None          | Advanced predicate expression to filter results (e.g., `file_path LIKE '%.parquet'`) |
+
+:::note
+When calling this procedure, one of parameters `table` and `path` must be specified at least. If both parameters are given, `table` will take effect.
+:::
 
 **Output**
 
@@ -882,6 +910,7 @@ Show files of a hudi table.
 **Example**
 
 Show files of a hudi table under one partition.
+
 ```sql
 call show_metadata_table_files(table => 'test_hudi_table', partition => 'dt=20230220');
 ```
@@ -1286,6 +1315,7 @@ parameters are given, ``table`` will take effect.
 | options                 | String  | N        | None          | Customize hudi configs in the format "key1=value1,key2=value2` |
 | instants                | String  | N        | None          | Specified instants by `,`                                      |
 | selected_partitions     | String  | N        | None          | Partitions to run clustering by `,`                            |
+| partition_regex_pattern | String  | N        | None          | Regex pattern to filter partitions (e.g., `2025.*`)            |
 | limit                   | Int     | N        | None          | Max number of plans to be executed                             |
 
 **Output**
@@ -1363,6 +1393,12 @@ Clustering test_hudi_table with table name, op, limit
 call run_clustering(table => 'test_hudi_table', op => 'execute', limit => 10);
 ```
 
+Clustering test_hudi_table with table name and partition regex pattern
+
+```sql
+call run_clustering(table => 'test_hudi_table', partition_regex_pattern => '2025.*');
+```
+
 :::note
 Limit parameter is valid only when op is execute.
 
@@ -1380,11 +1416,12 @@ If both parameters are given, ``table`` will take effect.
 
 **Input**
 
-| Parameter Name | Type   | Required | Default Value | Description                          |
-|----------------|--------|----------|---------------|--------------------------------------|
-| table          | String | N        | None          | Name of table to be clustered        |
-| path           | String | N        | None          | Path of table to be clustered        |
-| limit          | Int    | N        | None          | Max number of records to be returned |
+| Parameter Name | Type   | Required | Default Value | Description                                                          |
+|----------------|--------|----------|---------------|----------------------------------------------------------------------|
+| table          | String | N        | None          | Name of table to be clustered                                        |
+| path           | String | N        | None          | Path of table to be clustered                                        |
+| limit          | Int    | N        | None          | Max number of records to be returned                                 |
+| filter         | String | N        | None          | Advanced predicate expression to filter results (e.g., `groups > 5`) |
 
 **Output**
 
@@ -1396,27 +1433,33 @@ If both parameters are given, ``table`` will take effect.
 **Example**
 
 Show pending clusterings with table name
+
 ```sql
 call show_clustering(table => 'test_hudi_table');
 ```
+
 | timestamp         | groups |
 |-------------------|--------|
 | 20220408153707928 | 2      |
 | 20220408153636963 | 3      |
 
 Show pending clusterings with table path
+
 ```sql
 call show_clustering(path => '/tmp/hoodie/test_hudi_table');
 ```
+
 | timestamp         | groups |
 |-------------------|--------|
 | 20220408153707928 | 2      |
 | 20220408153636963 | 3      |
 
 Show pending clusterings with table name and limit
+
 ```sql
 call show_clustering(table => 'test_hudi_table', limit => 1);
 ```
+
 | timestamp         | groups |
 |-------------------|--------|
 | 20220408153707928 | 2      |
@@ -1459,44 +1502,55 @@ The output of `RUN` operation is `EMPTY`, the output of `SCHEDULE` as follow:
 **Example**
 
 Run compaction with table name
+
 ```sql
 call run_compaction(op => 'run', table => 'test_hudi_table');
 ```
 
 Run compaction with table path
+
 ```sql
 call run_compaction(op => 'run', path => '/tmp/hoodie/test_hudi_table');
 ```
 
 Run compaction with table path and timestamp
+
 ```sql
 call run_compaction(op => 'run', path => '/tmp/hoodie/test_hudi_table', timestamp => '20220408153658568');
 ```
+
 Run compaction with options
+
 ```sql
 call run_compaction(op => 'run', table => 'test_hudi_table', options => hoodie.compaction.strategy=org.apache.hudi.table.action.compact.strategy.LogFileNumBasedCompactionStrategy,hoodie.compaction.logfile.num.threshold=3);
 ```
 
 Schedule compaction with table name
+
 ```sql
 call run_compaction(op => 'schedule', table => 'test_hudi_table');
 ```
+
 | instant           |
 |-------------------|
 | 20220408153650834 |
 
 Schedule compaction with table path
+
 ```sql
 call run_compaction(op => 'schedule', path => '/tmp/hoodie/test_hudi_table');
 ```
+
 | instant           |
 |-------------------|
 | 20220408153650834 |
 
 Schedule compaction with table path and timestamp
+
 ```sql
 call run_compaction(op => 'schedule', path => '/tmp/hoodie/test_hudi_table', timestamp => '20220408153658568');
 ```
+
 | instant           |
 |-------------------|
 | 20220408153658568 |
@@ -1513,11 +1567,12 @@ If both parameters are given, ``table`` will take effect.
 
 **Input**
 
-| Parameter Name | Type   | Required | Default Value | Description                          |
-|----------------|--------|----------|---------------|--------------------------------------|
-| table          | String | N        | None          | Name of table to show compaction     |
-| path           | String | N        | None          | Path of table to show compaction     |
-| limit          | Int    | N        | None          | Max number of records to be returned |
+| Parameter Name | Type   | Required | Default Value | Description                                                         |
+|----------------|--------|----------|---------------|---------------------------------------------------------------------|
+| table          | String | N        | None          | Name of table to show compaction                                    |
+| path           | String | N        | None          | Path of table to show compaction                                    |
+| limit          | Int    | N        | None          | Max number of records to be returned                                |
+| filter         | String | N        | None          | Advanced predicate expression to filter results (e.g., `size > 10`) |
 
 **Output**
 
@@ -1604,6 +1659,149 @@ Run clean with keep latest file versions policy
 call run_clean(table => 'test_hudi_table', trigger_max_commits => 2, clean_policy => 'KEEP_LATEST_FILE_VERSIONS', file_versions_retained => 1)
 ```
 
+### show_cleans
+
+Show completed cleaning operations with metadata like timing, files deleted, and retention policies.
+
+**Input**
+
+| Parameter Name | Type    | Required | Default Value | Description                                                                      |
+|----------------|---------|----------|---------------|----------------------------------------------------------------------------------|
+| table          | String  | N        | None          | Hudi table name                                                                  |
+| path           | String  | N        | None          | Path of table                                                                    |
+| limit          | Int     | N        | 10            | Max number of records to be returned                                             |
+| show_archived  | Boolean | N        | false         | Whether to include archived timeline data                                        |
+| filter         | String  | N        | None          | Advanced predicate expression to filter results (e.g., `partition LIKE '2025%'`) |
+
+:::note
+When calling this procedure, one of parameters `table` and `path` must be specified at least. If both parameters are given, `table` will take effect.
+:::
+
+**Output**
+
+| Output Name               | Type   |
+|---------------------------|--------|
+| clean_time                | String |
+| start_clean_time          | String |
+| time_taken_in_millis      | Long   |
+| total_files_deleted       | Int    |
+| earliest_commit_to_retain | String |
+| version                   | Int    |
+
+**Example**
+
+Show completed cleaning operations with table name
+
+```sql
+call show_cleans(table => 'test_hudi_table');
+```
+
+Show completed cleaning operations with table path and archived data
+
+```sql
+call show_cleans(path => '/tmp/hoodie/test_hudi_table', show_archived => true);
+```
+
+Show completed cleaning operations with filter
+
+```sql
+call show_cleans(table => 'test_hudi_table', filter => "total_files_deleted > 10");
+```
+
+### show_clean_plans
+
+Show clean operations in all states (REQUESTED, INFLIGHT, COMPLETED) with state information.
+
+**Input**
+
+| Parameter Name | Type    | Required | Default Value | Description                                                                   |
+|----------------|---------|----------|---------------|-------------------------------------------------------------------------------|
+| table          | String  | N        | None          | Hudi table name                                                               |
+| path           | String  | N        | None          | Path of table                                                                 |
+| limit          | Int     | N        | 10            | Max number of records to be returned                                          |
+| show_archived  | Boolean | N        | false         | Whether to include archived timeline data                                     |
+| filter         | String  | N        | None          | Advanced predicate expression to filter results (e.g., `state = 'COMPLETED'`) |
+
+:::note
+When calling this procedure, one of parameters `table` and `path` must be specified at least. If both parameters are given, `table` will take effect.
+:::
+
+**Output**
+
+| Output Name | Type   |
+|-------------|--------|
+| timestamp   | String |
+| state       | String |
+| plan        | String |
+
+**Example**
+
+Show clean plans with table name
+
+```sql
+call show_clean_plans(table => 'test_hudi_table');
+```
+
+Show clean plans with table path and archived data
+
+```sql
+call show_clean_plans(path => '/tmp/hoodie/test_hudi_table', show_archived => true);
+```
+
+Show clean plans with filter
+
+```sql
+call show_clean_plans(table => 'test_hudi_table', filter => "state = 'COMPLETED'");
+```
+
+### show_cleans_metadata
+
+Show partition-level cleaning details for debugging purposes.
+
+**Input**
+
+| Parameter Name | Type    | Required | Default Value | Description                                                                      |
+|----------------|---------|----------|---------------|----------------------------------------------------------------------------------|
+| table          | String  | N        | None          | Hudi table name                                                                  |
+| path           | String  | N        | None          | Path of table                                                                    |
+| limit          | Int     | N        | 10            | Max number of records to be returned                                             |
+| show_archived  | Boolean | N        | false         | Whether to include archived timeline data                                        |
+| filter         | String  | N        | None          | Advanced predicate expression to filter results (e.g., `partition LIKE '2025%'`) |
+
+:::note
+When calling this procedure, one of parameters `table` and `path` must be specified at least. If both parameters are given, `table` will take effect.
+:::
+
+**Output**
+
+| Output Name  | Type   |
+|--------------|--------|
+| clean_time   | String |
+| partition    | String |
+| deleted_file | String |
+| succeeded    | Int    |
+| failed       | Int    |
+
+**Example**
+
+Show cleaning metadata with table name
+
+```sql
+call show_cleans_metadata(table => 'test_hudi_table');
+```
+
+Show cleaning metadata with table path and archived data
+
+```sql
+call show_cleans_metadata(path => '/tmp/hoodie/test_hudi_table', show_archived => true);
+```
+
+Show cleaning metadata with filter
+
+```sql
+call show_cleans_metadata(table => 'test_hudi_table', filter => "partition LIKE '2025%' AND succeeded > 0");
+```
+
 ### delete_marker
 
 Delete marker files of a hudi table.
@@ -1667,15 +1865,15 @@ Sync the table's latest schema to Hive metastore.
 
 **Input**
 
-| Parameter Name                                               | Type   | Required | Default Value | Description                                                         |
-|--------------------------------------------------------------|--------|----------|---------------|---------------------------------------------------------------------|
-| table                                                        | String | Y        | None          | Hudi table name                                                     |
-| metastore_uri                                                | String | N        | ""            | Metastore_uri                                                       |
-| username                                                     | String | N        | ""            | User name                                                           |
-| password                                                     | String | N        | ""            | Password                                                            |
-| [use_jdbc](configurations#hoodiedatasourcehive_syncuse_jdbc) | String | N        | ""            | Use JDBC when hive synchronization is enabled                       |
-| [mode](configurations#hoodiedatasourcehive_syncmode)         | String | N        | ""            | Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql. |
-| [partition_fields](configurations#hoodiedatasourcehive_syncpartition_fields)                   | String | N        | ""            | Field in the table to use for determining hive partition columns.                                                                                                                                                                                  |                                                       |
+| Parameter Name                                                                                 | Type   | Required | Default Value | Description                                                                                                                                                                                                                                        |
+|------------------------------------------------------------------------------------------------|--------|----------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| table                                                                                          | String | Y        | None          | Hudi table name                                                                                                                                                                                                                                    |
+| metastore_uri                                                                                  | String | N        | ""            | Metastore_uri                                                                                                                                                                                                                                      |
+| username                                                                                       | String | N        | ""            | User name                                                                                                                                                                                                                                          |
+| password                                                                                       | String | N        | ""            | Password                                                                                                                                                                                                                                           |
+| [use_jdbc](configurations#hoodiedatasourcehive_syncuse_jdbc)                                   | String | N        | ""            | Use JDBC when hive synchronization is enabled                                                                                                                                                                                                      |
+| [mode](configurations#hoodiedatasourcehive_syncmode)                                           | String | N        | ""            | Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.                                                                                                                                                                                |
+| [partition_fields](configurations#hoodiedatasourcehive_syncpartition_fields)                   | String | N        | ""            | Field in the table to use for determining hive partition columns.                                                                                                                                                                                  |
 | [partition_extractor_class](configurations#hoodiedatasourcehive_syncpartition_extractor_class) | String | N        | ""            | Class which implements PartitionValueExtractor to extract the partition values, default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.                                                                                                        |
 | [strategy](configurations#hoodiedatasourcehive_synctablestrategy)                              | String | N        | ""            | Hive table synchronization strategy. Available option: RO, RT, ALL.                                                                                                                                                                                |
 | [sync_incremental](configurations#hoodiemetasyncincremental)                                   | String | N        | ""            | Whether to incrementally sync the partitions to the metastore, i.e., only added, changed, and deleted partitions based on the commit metadata. If set to `false`, the meta sync executes a full partition sync operation when partitions are lost. |
@@ -1923,14 +2121,20 @@ Show mapping files of a bootstrap table.
 
 **Input**
 
-| Parameter Name | Type    | Required | Default Value | Description                          |
-|----------------|---------|----------|---------------|--------------------------------------|
-| table          | String  | Y        | None          | Name of table to be clustered        |
-| partition_path | String  | N        | ""            | Partition path                       |
-| file_ids       | String  | N        | ""            | File ids                             |
-| limit          | Int     | N        | 10            | Max number of records to be returned |
-| sort_by        | String  | N        | "partition"   | Sort by columns                      |
-| desc           | Boolean | N        | false         | Descending order                     |
+| Parameter Name | Type    | Required | Default Value | Description                                                                      |
+|----------------|---------|----------|---------------|----------------------------------------------------------------------------------|
+| table          | String  | N        | None          | Hudi table name                                                                  |
+| path           | String  | N        | None          | Path of table                                                                    |
+| partition_path | String  | N        | ""            | Partition path                                                                   |
+| file_ids       | String  | N        | ""            | File ids                                                                         |
+| limit          | Int     | N        | 10            | Max number of records to be returned                                             |
+| sort_by        | String  | N        | "partition"   | Sort by columns                                                                  |
+| desc           | Boolean | N        | false         | Descending order                                                                 |
+| filter         | String  | N        | None          | Advanced predicate expression to filter results (e.g., `partition LIKE '2025%'`) |
+
+:::note
+When calling this procedure, one of parameters `table` and `path` must be specified at least. If both parameters are given, `table` will take effect.
+:::
 
 **Output**
 
@@ -1944,8 +2148,22 @@ Show mapping files of a bootstrap table.
 
 **Example**
 
+Show bootstrap mapping with table name
+
 ```sql
 call show_bootstrap_mapping(table => 'test_hudi_table');
+```
+
+Show bootstrap mapping with table path
+
+```sql
+call show_bootstrap_mapping(path => '/tmp/hoodie/test_hudi_table');
+```
+
+Show bootstrap mapping with filter
+
+```sql
+call show_bootstrap_mapping(table => 'test_hudi_table', filter => "partition LIKE '2025%' AND file_id > '20251006'");
 ```
 
 | partition     | file_id                                | source_base_path                                                                                                                    | source_partition | source_file                                |
