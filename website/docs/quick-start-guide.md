@@ -14,19 +14,14 @@ we will walk through code snippets that allows you to insert, update, delete and
 
 Hudi works with Spark 3.3 and above versions. You can follow instructions [here](https://spark.apache.org/downloads) for setting up Spark.
 
-### Spark 3 Support Matrix
+### Spark Support Matrix
 
-| Hudi            | Supported Spark 3 version                                |
-|:----------------|:---------------------------------------------------------|
-| 1.0.x           | 3.5.x (default build), 3.4.x, 3.3.x                      |
-| 0.15.x          | 3.5.x (default build), 3.4.x, 3.3.x, 3.2.x, 3.1.x, 3.0.x |
-| 0.14.x          | 3.4.x (default build), 3.3.x, 3.2.x, 3.1.x, 3.0.x        |
-| 0.13.x          | 3.3.x (default build), 3.2.x, 3.1.x                      |
-| 0.12.x          | 3.3.x (default build), 3.2.x, 3.1.x                      |
-| 0.11.x          | 3.2.x (default build, Spark bundle only), 3.1.x          |
-| 0.10.x          | 3.1.x (default build), 3.0.x                             |
-| 0.7.0 - 0.9.0   | 3.0.x                                                    |
-| 0.6.0 and prior | not supported                                            |
+| Hudi            | Supported Spark  version(s)                              | Scala Version | Java Version |
+|:----------------|:---------------------------------------------------------|:--------------|:-------------|
+| 1.1.x           | 4.0.x, 3.5.x (default build), 3.4.x, 3.3.x               | 2.13 (Spark 4.0), 2.12/2.13 (Spark 3.5), 2.12 (Spark 3.3-3.4) | 17+ (Spark 4.0), 8+ (Spark 3.x) |
+| 1.0.x           | 3.5.x (default build), 3.4.x, 3.3.x                      | 2.12/2.13 (Spark 3.5), 2.12 (Spark 3.3-3.4)     | 8+            |
+| 0.15.x          | 3.5.x (default build), 3.4.x, 3.3.x, 3.2.x, 3.1.x, 3.0.x | 2.12          | 8+            |
+| 0.14.x          | 3.4.x (default build), 3.3.x, 3.2.x, 3.1.x, 3.0.x        | 2.12          | 8+            |
 
 The *default build* Spark version indicates how we build `hudi-spark3-bundle`.
 
@@ -34,8 +29,6 @@ The *default build* Spark version indicates how we build `hudi-spark3-bundle`.
 In 1.0.0, we dropped the support for Spark 3.2.x and lower Spark 3 versions.
 In 0.15.0, we introduced the support for Spark 3.5.x.
 In 0.14.0, we introduced the support for Spark 3.4.x and bring back the support for Spark 3.0.x.
-In 0.12.0, we introduced the experimental support for Spark 3.3.0.
-In 0.11.0, there are changes on using Spark bundles, please refer to [0.11.0 release notes](https://hudi.apache.org/releases/release-0.11.0/#spark-versions-and-bundles) for detailed instructions.
 :::
 
 ### Spark Shell/SQL
@@ -56,10 +49,14 @@ From the extracted directory run spark-shell with Hudi:
 
 
 ```shell
-# For Spark versions: 3.3 - 3.5
-export SPARK_VERSION=3.5 # or 3.4, 3.3
+# For Spark versions: 3.3 - 4.0
+export SPARK_VERSION=3.5
+export HUDI_VERSION=1.1.0
+# For Scala versions: 2.12/2.13
+export SCALA_VERSION=2.12
+
 spark-shell --master "local[2]" \
-  --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:1.0.2 \
+  --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_$SCALA_VERSION:$HUDI_VERSION \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
   --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
   --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
@@ -72,11 +69,15 @@ spark-shell --master "local[2]" \
 From the extracted directory run pyspark with Hudi:
 
 ```shell
-# For Spark versions: 3.3 - 3.5
 export PYSPARK_PYTHON=$(which python3)
-export SPARK_VERSION=3.5 # or 3.4, 3.3
+# For Spark versions: 3.3 - 4.0
+export SPARK_VERSION=3.5
+export HUDI_VERSION=1.1.0
+# For Scala versions: 2.12/2.13
+export SCALA_VERSION=2.12
+
 pyspark --master "local[2]" \
-  --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:1.0.2 \
+  --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_$SCALA_VERSION:$HUDI_VERSION \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
   --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
   --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
@@ -90,17 +91,23 @@ Hudi support using Spark SQL to write and read data with the **HoodieSparkSessio
 From the extracted directory run Spark SQL with Hudi:
 
 ```shell
-# For Spark versions: 3.3 - 3.5
-export SPARK_VERSION=3.5 # or 3.4, 3.3
+# For Spark versions: 3.3 - 4.0
+export SPARK_VERSION=3.5
+export HUDI_VERSION=1.1.0
+# For Scala versions: 2.12/2.13
+export SCALA_VERSION=2.12
+
 spark-sql --master "local[2]" \
-  --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:1.0.2 \
+  --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_$SCALA_VERSION:$HUDI_VERSION \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
-  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
   --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
+  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
   --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
-```
+``` 
 </TabItem>
 </Tabs>
+
+**Note:** You must adjust the `SPARK_VERSION` and `SCALA_VERSION` variables based on your environment requirements.
 
 :::note on Kryo serialization
 Users are recommended to set this config to reduce Kryo serialization overhead
@@ -127,15 +134,6 @@ values={[
 
 ```scala
 // spark-shell
-import scala.collection.JavaConversions._
-import org.apache.spark.sql.SaveMode._
-import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.table.HoodieTableConfig._
-import org.apache.hudi.config.HoodieWriteConfig._
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions._
-import org.apache.hudi.common.model.HoodieRecord
-import spark.implicits._
 
 val tableName = "trips_table"
 val basePath = "file:///tmp/trips_table"
@@ -253,7 +251,7 @@ var inserts = spark.createDataFrame(data).toDF(columns:_*)
 inserts.write.format("hudi").
   option("hoodie.datasource.write.partitionpath.field", "city").
   option("hoodie.table.name", tableName).
-  mode(Overwrite).
+  mode("overwrite").
   save(basePath)
 ```
 
@@ -398,7 +396,7 @@ updatesDf.write.format("hudi").
   option("hoodie.datasource.write.operation", "upsert").
   option("hoodie.datasource.write.partitionpath.field", "city").
   option("hoodie.table.name", tableName).
-  mode(Append).
+  mode("append").
   save(basePath)
 ```
 
@@ -534,7 +532,7 @@ deletesDF.write.format("hudi").
   option("hoodie.datasource.write.operation", "delete").
   option("hoodie.datasource.write.partitionpath.field", "city").
   option("hoodie.table.name", tableName).
-  mode(Append).
+  mode("append").
   save(basePath)
 
 ```
@@ -608,25 +606,19 @@ values={[
 Here is an example which shows how to create indexes for a table created using Datasource API.
 
 ```scala
-import scala.collection.JavaConversions._
-import org.apache.spark.sql.SaveMode._
-import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.table.HoodieTableConfig._
-import org.apache.hudi.config.HoodieWriteConfig._
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions._
-import org.apache.hudi.common.model.HoodieRecord
-import spark.implicits._
-
+// spark-shell
 val tableName = "trips_table_index"
 val basePath = "file:///tmp/hudi_indexed_table"
 
 val columns = Seq("ts","uuid","rider","driver","fare","city")
 val data =
   Seq((1695159649087L,"334e26e9-8355-45cc-97c6-c31daf0df330","rider-A","driver-K",19.10,"san_francisco"),
-    (1695091554788L,"e96c4396-3fad-413a-a942-4cb36106d721","rider-C","driver-M",27.70 ,"san_francisco"),
-    (1695046462179L,"9909a8b1-2d15-4d3d-8ec9-efc48c536a00","rider-D","driver-L",33.90 ,"san_francisco"),
-    (1695516137016L,"e3cf430c-889d-4015-bc98-59bdce1e530c","rider-F","driver-P",34.15,"sao_paulo"    ),
+    (1695091554788L,"e96c4396-3fad-413a-a942-4cb36106d721","rider-C","driver-M",27.70,"san_francisco"),
+    (1695046462179L,"9909a8b1-2d15-4d3d-8ec9-efc48c536a00","rider-D","driver-L",33.90,"san_francisco"),
+    (1695516137016L,"1dced545-862b-4ceb-8b43-d2a568f6616b","rider-E","driver-O",93.50,"san_francisco"),
+    (1695332066036L,"e3cf430c-889d-4015-bc98-59bdce1e530c","rider-F","driver-P",34.15,"sao_paulo"),
+    (1695376420034L,"7a84095f-737f-40bc-b62f-6b69664712d2","rider-G","driver-Q",43.40,"sao_paulo"),
+    (1695173887012L,"3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04","rider-I","driver-S",41.06,"chennai"),
     (1695115999911L,"c8abbe79-8d89-47ea-b4ce-4d224bae5bfa","rider-J","driver-T",17.85,"chennai"));
 
 var inserts = spark.createDataFrame(data).toDF(columns:_*)
@@ -634,25 +626,27 @@ inserts.write.format("hudi").
   option("hoodie.datasource.write.partitionpath.field", "city").
   option("hoodie.table.name", tableName).
   option("hoodie.write.record.merge.mode", "COMMIT_TIME_ORDERING").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  mode(Overwrite).
+  option("hoodie.datasource.write.recordkey.field", "uuid").
+  mode("overwrite").
   save(basePath)
 
 // Create record index and secondary index for the table
 spark.sql(s"CREATE TABLE hudi_indexed_table USING hudi LOCATION '$basePath'")
+// Set the Lock Provider
+spark.sql("set hoodie.write.lock.provider = org.apache.hudi.client.transaction.lock.InProcessLockProvider")
 // Create bloom filter expression index on driver column
 spark.sql(s"CREATE INDEX idx_bloom_driver ON hudi_indexed_table USING bloom_filters(driver) OPTIONS(expr='identity')");
 // It would show bloom filter expression index 
-spark.sql(s"SHOW INDEXES FROM hudi_indexed_table");
+spark.sql(s"SHOW INDEXES FROM hudi_indexed_table").show(false);
 // Query on driver column would prune the data using the idx_bloom_driver index
-spark.sql(s"SELECT uuid, rider FROM hudi_indexed_table WHERE driver = 'driver-S'");
+spark.sql(s"SELECT uuid, rider FROM hudi_indexed_table WHERE driver = 'driver-S'").show(false);
 
 // Create column stat expression index on ts column
 spark.sql(s"CREATE INDEX idx_column_ts ON hudi_indexed_table USING column_stats(ts) OPTIONS(expr='from_unixtime', format = 'yyyy-MM-dd')");
 // Shows both expression indexes 
-spark.sql(s"SHOW INDEXES FROM hudi_indexed_table");
+spark.sql(s"SHOW INDEXES FROM hudi_indexed_table").show(false);
 // Query on ts column would prune the data using the idx_column_ts index
-spark.sql(s"SELECT * FROM hudi_indexed_table WHERE from_unixtime(ts, 'yyyy-MM-dd') = '2023-09-24'");
+spark.sql(s"SELECT * FROM hudi_indexed_table WHERE from_unixtime(ts, 'yyyy-MM-dd') = '2023-09-24'").show(false);
 
 // To create secondary index, first create the record index
 spark.sql(s"SET hoodie.metadata.record.index.enable=true");
@@ -661,18 +655,18 @@ spark.sql(s"CREATE INDEX record_index ON hudi_indexed_table (uuid)");
 spark.sql(s"CREATE INDEX idx_rider ON hudi_indexed_table (rider)");
 
 // Expression index and secondary index should show up
-spark.sql(s"SHOW INDEXES FROM hudi_indexed_table");
+spark.sql(s"SHOW INDEXES FROM hudi_indexed_table").show(false);
 // Query on rider column would leverage the secondary index idx_rider
-spark.sql(s"SELECT * FROM hudi_indexed_table WHERE rider = 'rider-E'");
+spark.sql(s"SELECT * FROM hudi_indexed_table WHERE rider = 'rider-E'").show(false);
 
 // Update a record and query the table based on indexed columns
 spark.sql(s"UPDATE hudi_indexed_table SET rider = 'rider-B', driver = 'driver-N', ts = '1697516137' WHERE rider = 'rider-A'");
 // Data skipping would be performed using column stat expression index
-spark.sql(s"SELECT uuid, rider FROM hudi_indexed_table WHERE from_unixtime(ts, 'yyyy-MM-dd') = '2023-10-17'");
+spark.sql(s"SELECT uuid, rider FROM hudi_indexed_table WHERE from_unixtime(ts, 'yyyy-MM-dd') = '2023-10-17'").show(false);
 // Data skipping would be performed using bloom filter expression index
-spark.sql(s"SELECT * FROM hudi_indexed_table WHERE driver = 'driver-N'");
+spark.sql(s"SELECT * FROM hudi_indexed_table WHERE driver = 'driver-N'").show(false);
 // Data skipping would be performed using secondary index
-spark.sql(s"SELECT * FROM hudi_indexed_table WHERE rider = 'rider-B'");
+spark.sql(s"SELECT * FROM hudi_indexed_table WHERE rider = 'rider-B'").show(false);
 
 // Drop all the indexes
 spark.sql(s"DROP INDEX secondary_index_idx_rider on hudi_indexed_table");
@@ -680,7 +674,7 @@ spark.sql(s"DROP INDEX record_index on hudi_indexed_table");
 spark.sql(s"DROP INDEX expr_index_idx_bloom_driver on hudi_indexed_table");
 spark.sql(s"DROP INDEX expr_index_idx_column_ts on hudi_indexed_table");
 // No indexes should show up for the table
-spark.sql(s"SHOW INDEXES FROM hudi_indexed_table");
+spark.sql(s"SHOW INDEXES FROM hudi_indexed_table").show(false);
 
 spark.sql(s"SET hoodie.metadata.record.index.enable=false");
 ```
@@ -716,6 +710,8 @@ VALUES
 (1695173887,'3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04','rider-I','driver-S',41.06 ,'chennai'      ),
 (1695115999,'c8abbe79-8d89-47ea-b4ce-4d224bae5bfa','rider-J','driver-T',17.85,'chennai');
 
+-- Setting the Lock Provider
+SET hoodie.write.lock.provider = org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 -- Create bloom filter expression index on driver column
 CREATE INDEX idx_bloom_driver ON hudi_indexed_table USING bloom_filters(driver) OPTIONS(expr='identity');
 -- It would show bloom filter expression index
@@ -963,7 +959,7 @@ df.write.format("hudi").
   option("hoodie.datasource.write.partitionpath.field", "city").
   option("hoodie.table.cdc.enabled", "true").
   option("hoodie.table.name", tableName).
-  mode(Overwrite).
+  mode("overwrite").
   save(basePath)
 
 // Update fare for riders: rider-A and rider-B 
@@ -974,7 +970,7 @@ updatesDf.write.format("hudi").
   option("hoodie.datasource.write.partitionpath.field", "city").
   option("hoodie.table.cdc.enabled", "true").
   option("hoodie.table.name", tableName).
-  mode(Append).
+  mode("append").
   save(basePath)
 
 
@@ -1284,4 +1280,3 @@ to get your transactional data lakes up and running quickly, across a variety qu
 We have put together a [demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) that showcases all of this on a docker based setup with all
 dependent systems running locally. We recommend you replicate the same setup and run the demo yourself, by following
 steps [here](docker_demo) to get a taste for it. 
-
