@@ -279,7 +279,7 @@ public class HoodieMetadataSync implements Serializable {
 
           if (!getPendingInstants(targetTableMetaClient.reloadActiveTimeline(), Option.empty()).isEmpty()) {
             // rollback failing writes
-            writeClient.rollbackFailedWrites();
+            writeClient.rollbackFailedWrites(true);
           }
 
           String commitTime = writeClient.startCommit(instant.getAction(), targetTableMetaClient);

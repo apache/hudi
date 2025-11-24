@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
@@ -40,6 +41,9 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.testutils.providers.SparkProvider;
 
@@ -87,7 +91,6 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
   static final String TABLE_NAME = "testing";
 
   private static final HoodieTestDataGenerator DATA_GENERATOR = new HoodieTestDataGenerator(0L);
-  private HoodieTableMetaClient metaClient;
   private HoodieTableMetaClient sourceMetaClient1;
   private HoodieTableMetaClient sourceMetaClient2;
 
@@ -97,49 +100,10 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
   @BeforeEach
   public void init() throws IOException {
-    this.metaClient = getHoodieMetaClient(HoodieTableType.COPY_ON_WRITE);
-
-
     // Initialize test data dirs
     sourcePath1 = Paths.get(basePath(), "source1").toString();
     sourcePath2 = Paths.get(basePath(), "source2").toString();
     targetPath = Paths.get(basePath(), "target").toString();
-
-//    HoodieTableMetaClient.withPropertyBuilder()
-//        .setTableType(HoodieTableType.COPY_ON_WRITE)
-//        .setTableName(TABLE_NAME)
-//        .setPayloadClass(HoodieAvroPayload.class)
-//        .initTable(jsc().hadoopConfiguration(), sourcePath1);
-//
-//    // Prepare data as source Hudi dataset
-//    HoodieWriteConfig cfg = getHoodieWriteConfig(sourcePath1);
-//    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(cfg)) {
-//      String commitTime = writeClient.startCommit();
-//      HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH_1});
-//      List<HoodieRecord> records = dataGen.generateInserts(commitTime, NUM_RECORDS);
-//      JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
-//      writeClient.bulkInsert(recordsRDD, commitTime);
-//    }
-//
-//    sourceMetaClient1 = HoodieTableMetaClient.builder().setBasePath(sourcePath1).setConf(jsc().hadoopConfiguration()).build();
-//
-//    HoodieTableMetaClient.withPropertyBuilder()
-//        .setTableType(HoodieTableType.COPY_ON_WRITE)
-//        .setTableName(TABLE_NAME)
-//        .setPayloadClass(HoodieAvroPayload.class)
-//        .initTable(jsc().hadoopConfiguration(), sourcePath2);
-//
-//    // Prepare data as source Hudi dataset
-//    cfg = getHoodieWriteConfig(sourcePath2);
-//    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(cfg)) {
-//      String commitTime = writeClient.startCommit();
-//      HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH_2});
-//      List<HoodieRecord> records = dataGen.generateInserts(commitTime, NUM_RECORDS);
-//      JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
-//      writeClient.bulkInsert(recordsRDD, commitTime);
-//    }
-//
-//    sourceMetaClient2 = HoodieTableMetaClient.builder().setBasePath(sourcePath2).setConf(jsc().hadoopConfiguration()).build();
   }
 
   private HoodieWriteConfig getHoodieWriteConfig(String basePath) {
@@ -535,7 +499,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
   }
 
   @Test
-  void testMetadataSync_RollbackPendingInstantOnTargetTable() throws Exception {
+  void testMetadataSync_RollbackPendingInstantOnTargetTableAndMetadataTable() throws Exception {
     Properties props = getTableProps();
     sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
     HoodieTestTable testTable = HoodieTestTable.of(sourceMetaClient1);
@@ -550,14 +514,26 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     HoodieTableMetaClient targetTableMetaClient = HoodieTableMetaClient.builder().setBasePath(targetPath)
         .setConf(hadoopConf()).build();
-    HoodieTestTable targetTestTable = HoodieTestTable.of(targetTableMetaClient);
+    HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(hadoopConf(), getHoodieWriteConfig(targetPath), context());
+    HoodieTestTable targetTestTable = HoodieMetadataTestTable.of(targetTableMetaClient, writer, Option.of(context()));
 
     // add pending instant on target table
     String pendingInstant = HoodieActiveTimeline.createNewInstantTime();
     targetTestTable.addInflightCommit(pendingInstant);
 
+    // move pending instant to target table on metadata table
+    ((HoodieMetadataTestTable) targetTestTable).moveInflightCommitToComplete(pendingInstant, testTable.doWriteOperation(pendingInstant, INSERT, emptyList(),
+        singletonList("p1"), 2, false, true), false, true);
+
     // validate pending instant is present in the timeline
     assertTrue(targetTableMetaClient.reloadActiveTimeline().getInstants().stream().anyMatch(instant -> instant.getTimestamp().equals(pendingInstant)));
+
+    String metadataPath = targetPath + "/.hoodie/metadata";
+    HoodieTableMetaClient targetMetadataTableMetaClient = HoodieTableMetaClient.builder().setBasePath(metadataPath)
+        .setConf(hadoopConf()).build();
+
+    // validate metadata table timeline contains a completed commit corresponding to pending commit on data table
+    assertTrue(targetMetadataTableMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(pendingInstant));
 
     String instant2 = HoodieActiveTimeline.createNewInstantTime();
     testTable.addCommit(instant2, Option.of(testTable.doWriteOperation(instant2, INSERT, emptyList(),
@@ -566,6 +542,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
 
     assertFalse(targetTableMetaClient.reloadActiveTimeline().getInstants().stream().anyMatch(instant -> instant.getTimestamp().equals(pendingInstant)));
+    assertFalse(targetMetadataTableMetaClient.reloadActiveTimeline().containsInstant(pendingInstant));
     assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), true);
   }
 

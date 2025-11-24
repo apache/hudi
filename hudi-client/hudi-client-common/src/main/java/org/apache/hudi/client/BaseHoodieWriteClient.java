@@ -1420,7 +1420,16 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return true if rollback happened. false otherwise.
    */
   public boolean rollbackFailedWrites() {
-    return tableServiceClient.rollbackFailedWrites();
+    return rollbackFailedWrites(false);
+  }
+
+  /**
+   * Rollback failed writes if any.
+   *
+   * @return true if rollback happened. false otherwise.
+   */
+  public boolean rollbackFailedWrites(boolean skipLocking) {
+    return tableServiceClient.rollbackFailedWrites(skipLocking);
   }
 
   /**
