@@ -10,7 +10,7 @@ import clsx from 'clsx';
 import {useLocation} from '@docusaurus/router';
 
 function getTargetPath(version, ctx) {
-  return (ctx.alternateDocVersions?.[version.name] ?? version.mainDoc).path;
+  return (ctx.alternateDocVersions?.[version.name] ?? version.mainDoc)?.path;
 }
 
 const SidebarVersions = ({docsPluginId = 'default'}) =>  {
