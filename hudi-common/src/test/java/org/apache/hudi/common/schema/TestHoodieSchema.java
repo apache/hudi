@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 
 import org.apache.avro.JsonProperties;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -33,6 +34,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -138,7 +140,8 @@ public class TestHoodieSchema {
   @ParameterizedTest
   @EnumSource(value = HoodieSchemaType.class, mode = EnumSource.Mode.MATCH_ALL)
   public void testPrimitiveSchemaCreation(HoodieSchemaType type) {
-    if (type.isPrimitive() && type != HoodieSchemaType.FIXED) { // FIXED requires name and size
+    // FIXED requires name and size, DECIMAL requires precision and scale, TIMESTAMP and TIME require precision
+    if (type.isPrimitive() && type != HoodieSchemaType.FIXED && type != HoodieSchemaType.DECIMAL && type != HoodieSchemaType.TIMESTAMP && type != HoodieSchemaType.TIME) {
       HoodieSchema schema = HoodieSchema.create(type);
 
       assertNotNull(schema);
@@ -150,9 +153,7 @@ public class TestHoodieSchema {
           ? org.apache.avro.AvroRuntimeException.class 
           : IllegalArgumentException.class;
       
-      assertThrows(expectedExceptionType, () -> {
-        HoodieSchema.create(type);
-      }, "Should throw exception for non-primitive type: " + type);
+      assertThrows(expectedExceptionType, () -> HoodieSchema.create(type), "Should throw exception for non-primitive type or type requiring additional arguments: " + type);
     }
   }
 
@@ -803,5 +804,110 @@ public class TestHoodieSchema {
     assertThrows(IllegalArgumentException.class, () -> {
       HoodieSchema.createNullableSchema(null);
     }, "Should throw exception for null type");
+  }
+
+  @Test
+  void testCreateDecimalSchema() {
+    HoodieSchema decimalSchema = HoodieSchema.createDecimal(10, 2);
+
+    assertTrue(decimalSchema instanceof HoodieSchema.Decimal);
+    assertEquals(HoodieSchemaType.DECIMAL, decimalSchema.getType());
+    assertEquals(Option.of("decimal(10,2)"), decimalSchema.getName());
+    assertEquals(10, ((HoodieSchema.Decimal) decimalSchema).getPrecision());
+    assertEquals(2, ((HoodieSchema.Decimal) decimalSchema).getScale());
+    LogicalTypes.Decimal avroLogicalType = (LogicalTypes.Decimal) decimalSchema.toAvroSchema().getLogicalType();
+    assertEquals(10, avroLogicalType.getPrecision());
+    assertEquals(2, avroLogicalType.getScale());
+
+    // create with fixed size
+    HoodieSchema decimalFixedSchema = HoodieSchema.createDecimal("fixed_decimal", null, null, 10, 2, 5);
+    assertTrue(decimalFixedSchema instanceof HoodieSchema.Decimal);
+    assertEquals(5, decimalFixedSchema.getFixedSize());
+    assertEquals(10, ((HoodieSchema.Decimal) decimalFixedSchema).getPrecision());
+    assertEquals(2, ((HoodieSchema.Decimal) decimalFixedSchema).getScale());
+    LogicalTypes.Decimal avroLogicalTypeFixed = (LogicalTypes.Decimal) decimalFixedSchema.toAvroSchema().getLogicalType();
+    assertEquals(10, avroLogicalTypeFixed.getPrecision());
+    assertEquals(2, avroLogicalTypeFixed.getScale());
+    assertEquals(5, decimalFixedSchema.getFixedSize());
+  }
+
+  @Test
+  void testCreateTimestampMillis() {
+    HoodieSchema timestampSchema = HoodieSchema.createTimestampMillis();
+
+    assertEquals(HoodieSchemaType.TIMESTAMP, timestampSchema.getType());
+    assertEquals("timestamp-millis", timestampSchema.getName().get());
+    assertTrue(((HoodieSchema.Timestamp) timestampSchema).isUtcAdjusted());
+    assertEquals(HoodieSchema.TimePrecision.MILLIS, ((HoodieSchema.Timestamp) timestampSchema).getPrecision());
+    assertInstanceOf(LogicalTypes.TimestampMillis.class, timestampSchema.toAvroSchema().getLogicalType());
+  }
+
+  @Test
+  void testCreateTimestampMicros() {
+    HoodieSchema timestampSchema = HoodieSchema.createTimestampMicros();
+
+    assertEquals(HoodieSchemaType.TIMESTAMP, timestampSchema.getType());
+    assertEquals("timestamp-micros", timestampSchema.getName().get());
+    assertTrue(((HoodieSchema.Timestamp) timestampSchema).isUtcAdjusted());
+    assertEquals(HoodieSchema.TimePrecision.MICROS, ((HoodieSchema.Timestamp) timestampSchema).getPrecision());
+    assertInstanceOf(LogicalTypes.TimestampMicros.class, timestampSchema.toAvroSchema().getLogicalType());
+  }
+
+  @Test
+  void testCreateLocalTimestampMillis() {
+    HoodieSchema timestampSchema = HoodieSchema.createLocalTimestampMillis();
+
+    assertEquals(HoodieSchemaType.TIMESTAMP, timestampSchema.getType());
+    assertEquals("local-timestamp-millis", timestampSchema.getName().get());
+    assertFalse(((HoodieSchema.Timestamp) timestampSchema).isUtcAdjusted());
+    assertEquals(HoodieSchema.TimePrecision.MILLIS, ((HoodieSchema.Timestamp) timestampSchema).getPrecision());
+    assertInstanceOf(LogicalTypes.LocalTimestampMillis.class, timestampSchema.toAvroSchema().getLogicalType());
+  }
+
+  @Test
+  void testCreateLocalTimestampMicros() {
+    HoodieSchema timestampSchema = HoodieSchema.createLocalTimestampMicros();
+
+    assertEquals(HoodieSchemaType.TIMESTAMP, timestampSchema.getType());
+    assertEquals("local-timestamp-micros", timestampSchema.getName().get());
+    assertFalse(((HoodieSchema.Timestamp) timestampSchema).isUtcAdjusted());
+    assertEquals(HoodieSchema.TimePrecision.MICROS, ((HoodieSchema.Timestamp) timestampSchema).getPrecision());
+    assertInstanceOf(LogicalTypes.LocalTimestampMicros.class, timestampSchema.toAvroSchema().getLogicalType());
+  }
+
+  @Test
+  void testCreateTimeMillisSchema() {
+    HoodieSchema timeSchema = HoodieSchema.createTimeMillis();
+
+    assertEquals(HoodieSchemaType.TIME, timeSchema.getType());
+    assertEquals("time-millis", timeSchema.getName().get());
+    assertInstanceOf(LogicalTypes.TimeMillis.class, timeSchema.toAvroSchema().getLogicalType());
+  }
+
+  @Test
+  void testCreateTimeMicrosSchema() {
+    HoodieSchema timeSchema = HoodieSchema.createTimeMicros();
+
+    assertEquals(HoodieSchemaType.TIME, timeSchema.getType());
+    assertEquals("time-micros", timeSchema.getName().get());
+    assertInstanceOf(LogicalTypes.TimeMicros.class, timeSchema.toAvroSchema().getLogicalType());
+  }
+
+  @Test
+  void testCreateDateSchema() {
+    HoodieSchema dateSchema = HoodieSchema.createDate();
+
+    assertEquals(HoodieSchemaType.DATE, dateSchema.getType());
+    assertEquals("date", dateSchema.getName().get());
+    assertInstanceOf(LogicalTypes.Date.class, dateSchema.toAvroSchema().getLogicalType());
+  }
+
+  @Test
+  void testCreateUuidSchema() {
+    HoodieSchema uuidSchema = HoodieSchema.createUUID();
+
+    assertEquals(HoodieSchemaType.UUID, uuidSchema.getType());
+    assertEquals("uuid", uuidSchema.getName().get());
+    assertEquals("uuid", uuidSchema.toAvroSchema().getLogicalType().getName());
   }
 }
