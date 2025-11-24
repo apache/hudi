@@ -60,6 +60,10 @@ class Spark3_2Adapter extends BaseSpark3Adapter {
 
   override def isColumnarBatchRow(r: InternalRow): Boolean = ColumnarUtils.isColumnarBatchRow(r)
 
+  override def isTimestampNTZType(dataType: DataType): Boolean = {
+    dataType.getClass.getSimpleName.startsWith("TimestampNTZType")
+  }
+
   def createCatalystMetadataForMetaField: Metadata =
     new MetadataBuilder()
       .putBoolean(METADATA_COL_ATTR_KEY, value = true)
