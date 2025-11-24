@@ -224,7 +224,7 @@ runs in the background.
 | hoodie.clustering.async.enabled     | false (Optional) | Enable running of clustering service, asynchronously as inserts happen on the table.<br /><br />`Config Param: ASYNC_CLUSTERING_ENABLE`<br />`Since Version: 0.7.0` |
 | hoodie.clustering.async.max.commits | 4 (Optional)     | Config to control frequency of async clustering<br /><br />`Config Param: ASYNC_CLUSTERING_MAX_COMMITS`<br />`Since Version: 0.9.0`                                 |
 
-## Setup Asynchronous Clustering
+### Setup Asynchronous Clustering
 
 Users can leverage [HoodieClusteringJob](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+19+Clustering+data+for+freshness+and+query+performance#RFC19Clusteringdataforfreshnessandqueryperformance-SetupforAsyncclusteringJob)
 to setup 2-step asynchronous clustering.

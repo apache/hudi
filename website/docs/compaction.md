@@ -42,9 +42,8 @@ spike up.
 
 There are two steps to compaction.
 
-- ___Compaction Scheduling___: In this step, Hudi scans the partitions and selects file slices to be compacted. A compaction
-  plan is finally written to Hudi timeline.
-- ___Compaction Execution___: In this step the compaction plan is read and file slices are compacted.
+- **Compaction Scheduling**: In this step, Hudi scans the partitions and selects file slices to be compacted. A compaction plan is finally written to Hudi timeline.
+- **Compaction Execution**: In this step the compaction plan is read and file slices are compacted.
 
 ### Strategies in Compaction Scheduling
 
@@ -55,7 +54,7 @@ There are two strategies involved in scheduling the compaction:
 
 Hudi provides various options for both these strategies as discussed below.
 
-### Incremental Scheduling
+#### Incremental Scheduling
 
 Hudi supports incremental scheduling for compaction operations, which significantly improves performance on tables with a large number of partitions. Instead of scanning all partitions during each compaction scheduling run, incremental scheduling only processes partitions that have changed since the last completed compaction.
 
@@ -199,7 +198,7 @@ will serialize the compaction plan in the timeline but will not execute it). And
 HudiCompactor or HoodieFlinkCompactor can take care of periodically executing the compaction plan.
 
 :::note
-This model may need a lock provider __if__ metadata table is enabled.
+This model may need a lock provider **if** metadata table is enabled.
 :::
 
 #### Hudi Compactor Utility
