@@ -2,7 +2,7 @@
 title: "Real-Time Cloud Security Graphs with Apache Hudi and PuppyGraph"
 excerpt: "Hudi tables support fast upserts and incremental processing. PuppyGraph queries relationships in place using openCypher or Gremlin. In this blog, we explore how to get started with real-time security graph analytics at scale using the data already stored in your Hudi lakehouse tables."
 author: Jaz Samantha Ku, in collaboration with Shiyan Xu
-category: blog
+category: use case
 image: /assets/images/blog/2025-10-02-Real-Time-Cloud-Security-Graphs-Hudi+PuppyGraph/fig-4-Sample-Architecture-of-PuppyGraph-Hudi.png
 tags:
 - Apache Hudi
@@ -16,8 +16,8 @@ Security tools such as SIEM, CSPM, and cloud workload protection need relationsh
 
 To keep up, the data pipeline must support:
 
-* Continuous upserts with low lag so detections run on the latest state  
-* Incremental consumption so analytics read only “what changed since T”  
+* Continuous upserts with low lag so detections run on the latest state
+* Incremental consumption so analytics read only “what changed since T”
 * A rewindable timeline so responders can review state during investigations
 
 With Apache Hudi and PuppyGraph, this becomes straightforward. Hudi tables support fast upserts and incremental processing. PuppyGraph queries relationships in place using openCypher or Gremlin. In this blog, we explore how to get started with real-time security graph analytics at scale using the data already stored in your Hudi lakehouse tables.
@@ -81,19 +81,19 @@ Getting started is straightforward. You will deploy the stack, load security dat
 
 The components of this demo project include:
 
-* Storage: MinIO/S3 – Object store for Hudi data  
-* Data Lakehouse: Apache Hudi – Brings database functionality to your data lakes  
-* Catalog: Hive Metastore – Backed by Postgres  
-* Compute engines:  
-  * Spark – Initial table writes  
+* Storage: MinIO/S3 – Object store for Hudi data
+* Data Lakehouse: Apache Hudi – Brings database functionality to your data lakes
+* Catalog: Hive Metastore – Backed by Postgres
+* Compute engines:
+  * Spark – Initial table writes
   * PuppyGraph – Graph query engine for complex, multi-hop graph queries
 
 ### Prerequisites
 
 This tutorial assumes that you have the following:
 
-1. **Docker** and **Docker** **Compose** (for setting up the Docker container)  
-2. **Python 3** (for managing dependencies)  
+1. **Docker** and **Docker** **Compose** (for setting up the Docker container)
+2. **Python 3** (for managing dependencies)
 3. [PuppyGraph-Hudi Demo Repository](https://github.com/puppygraph/puppygraph-getting-started/tree/main/integration-demos/hudi-demo)
 
 #### Data Preparation
@@ -137,7 +137,7 @@ docker compose exec spark /opt/spark/bin/spark-sql -f /init.sql
 
 #### Modeling the Graph
 
-Now that our data is loaded in, we can log into the PuppyGraph Web UI at [http://localhost:8081](http://localhost:8081) with the default credentials (username: puppygraph, password: puppygraph123)  
+Now that our data is loaded in, we can log into the PuppyGraph Web UI at [http://localhost:8081](http://localhost:8081) with the default credentials (username: puppygraph, password: puppygraph123)
 
 <figure>
 ![](/assets/images/blog/2025-10-02-Real-Time-Cloud-Security-Graphs-Hudi+PuppyGraph/fig-5-PuppyGraph-Login-Page.png)
@@ -162,9 +162,9 @@ Once you see your graph schema loaded in, you’re ready to start querying your 
 
 By modeling the network infrastructure as a graph, users can identify potential security risks, such as:
 
-* Public IP addresses exposed to the internet  
-* Network interfaces not protected by any security group  
-* Roles granted excessive access permissions  
+* Public IP addresses exposed to the internet
+* Network interfaces not protected by any security group
+* Roles granted excessive access permissions
 * Security groups with overly permissive ingress rules
 
 Listed below are some sample queries you can try running to explore the data:

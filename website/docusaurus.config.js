@@ -282,9 +282,24 @@ module.exports = {
             },
           ],
         },
-        { to: "/ecosystem", label: "Ecosystem", position: "left" },
-        { to: "/powered-by", label: "Who's Using", position: "left" },
-        { to: "/roadmap", label: "Roadmap", position: "left" },
+        {
+          label: "Ecosystem",
+          position: "left",
+          items: [
+            {
+              label: "Adopters",
+              to: "/powered-by",
+            },
+            {
+              label: "Roadmap",
+              to: "/roadmap",
+            },
+            {
+              label: "Integrations",
+              to: "/ecosystem",
+            },
+          ],
+        },
         { to: "/releases/download", label: "Download", position: "left" },
       ],
     },
@@ -315,7 +330,7 @@ module.exports = {
               to: "/releases/download",
             },
             {
-              label: "Who's Using",
+              label: "Adopters",
               to: "powered-by",
             },
           ],
@@ -583,9 +598,5 @@ module.exports = {
       "data-deep-thinking-button-active-text-color": "#FFFFFF",
       async: true,
     }
-  ],
-  stylesheets: [
-    "https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro",
-    "https://at-ui.github.io/feather-font/css/iconfont.css"
-  ],
+  ]
 };

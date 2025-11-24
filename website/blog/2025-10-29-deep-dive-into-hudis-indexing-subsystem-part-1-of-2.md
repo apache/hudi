@@ -2,7 +2,7 @@
 title: "Deep Dive Into Hudi’s Indexing Subsystem (Part 1 of 2)"
 excerpt: ""
 author: Shiyan Xu
-category: blog
+category: upserts
 image: /assets/images/blog/2025-10-29-deep-dive-into-hudis-indexing-subsystem-part-1-of-2/fig1.png
 tags:
 - hudi

@@ -2,7 +2,7 @@
 title: "Automatic Record Key Generation in Apache Hudi"
 excerpt: ""
 author: Shiyan Xu
-category: blog
+category: security
 image: /assets/images/blog/2025-09-17-hudi-auto-gen-keys/2025-09-17-hudi-auto-gen-keys.fig2.jpg
 tags:
 - hudi
@@ -19,8 +19,8 @@ By using a primary key that is stable across record movement, a system can effic
 
 Apache Hudi was the first lakehouse storage project to introduce the notion of record keys. For mutable workloads, this addressed a significant architectural challenge. In a typical data lake table, updating records usually required rewriting entire partitions—a process that is slow and expensive. By supporting the record key as the stable identifier for every record, Hudi offered unique and advanced capabilities among lakehouse frameworks:
 
-* Hudi supports [record-level indexing](https://hudi.apache.org/blog/2023/11/01/record-level-index/) for directly locating records in [file groups](https://hudi.apache.org/docs/storage_layouts) for highly efficient upserts and queries, and [secondary indexes](https://hudi.apache.org/blog/2025/04/02/secondary-index/) that enable performant lookups for predicates on non-record key fields.  
-* Hudi implements [merge modes](https://hudi.apache.org/blog/2025/03/03/record-mergers-in-hudi/), standardizing record-merging semantics to handle requirements such as unordered events, duplicate records, and custom merge logic.  
+* Hudi supports [record-level indexing](https://hudi.apache.org/blog/2023/11/01/record-level-index/) for directly locating records in [file groups](https://hudi.apache.org/docs/storage_layouts) for highly efficient upserts and queries, and [secondary indexes](https://hudi.apache.org/blog/2025/04/02/secondary-index/) that enable performant lookups for predicates on non-record key fields.
+* Hudi implements [merge modes](https://hudi.apache.org/blog/2025/03/03/record-mergers-in-hudi/), standardizing record-merging semantics to handle requirements such as unordered events, duplicate records, and custom merge logic.
 * By materializing record keys along with other [record-level meta-fields](https://www.onehouse.ai/blog/hudi-metafields-demystified), Hudi unlocks features such as efficient [change data capture (CDC)](https://hudi.apache.org/blog/2024/07/30/data-lake-cdc/) that serves record-level change streams, near-infinite history for time-travel queries, and the [clustering table service](https://hudi.apache.org/docs/clustering) that can significantly optimize file sizes.
 
 <figure>
@@ -61,10 +61,10 @@ In this example, you’re creating a Copy-on-Write table partitioned by `city`. 
 
 Designing a key generation mechanism that operates efficiently at petabyte scale requires careful thought. We established five core requirements for the auto-generated keys:
 
-1. **Global Uniqueness:** Keys must be unique across the entire table to maintain the integrity of a primary key.  
-2. **Low Storage Footprint:** The keys should be highly compressible to add minimal storage overhead.  
-3. **Computational Efficiency:** The encoding and decoding process must be lightweight so as not to slow down the write process.  
-4. **Idempotency:** The generation process must be resilient to task retries, producing the same key for the same record every time.  
+1. **Global Uniqueness:** Keys must be unique across the entire table to maintain the integrity of a primary key.
+2. **Low Storage Footprint:** The keys should be highly compressible to add minimal storage overhead.
+3. **Computational Efficiency:** The encoding and decoding process must be lightweight so as not to slow down the write process.
+4. **Idempotency:** The generation process must be resilient to task retries, producing the same key for the same record every time.
 5. **Engine Agnostic:** The logic must be reusable and implemented consistently across different execution engines like Spark and Flink.
 
 These principles guided the technical design. To align with primary key semantics, global uniqueness was non-negotiable. To minimize storage footprint, the generated keys needed to be compact and highly compressible, especially for tables with billions of records. The computational cost was also critical; any expensive operation would be amplified by the number of records, creating a significant performance overhead. Furthermore, in distributed systems where task failures and retries are common, the key generation process had to be idempotent—ensuring the same input record always produces the exact same key. Finally, the solution needed to be engine-agnostic to provide consistent behavior, whether data is written via Spark, Flink, or another supported engine.
@@ -79,8 +79,8 @@ Based on the requirements mentioned previously, we eliminated several common ID 
 
 Each component serves a specific purpose:
 
-* **Write Action Start Time:** The timestamp from the Hudi timeline that marks the beginning of a write transaction.  
-* **Workload Partition ID:** An internal identifier that execution engines use to track the specific data split being processed by a given distributed write task.  
+* **Write Action Start Time:** The timestamp from the Hudi timeline that marks the beginning of a write transaction.
+* **Workload Partition ID:** An internal identifier that execution engines use to track the specific data split being processed by a given distributed write task.
 * **Record Sequence ID:** A counter that uniquely identifies each record within that data split.
 
 Together, these three components—all readily accessible during the write process—form a record identifier that satisfies the requirements of global uniqueness, idempotency, and being engine-agnostic.
