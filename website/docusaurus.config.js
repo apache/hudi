@@ -1,6 +1,6 @@
 const { themes } = require("prism-react-renderer");
 const versions = require("./versions.json");
-const { slackUrl, originalSlackUrl } = require('./constants');
+const { originalSlackUrl } = require('./constants');
 const allDocHomesPaths = [
   "/docs/",
   "/docs/next/",
@@ -38,7 +38,7 @@ module.exports = {
         "CDC and indexes"
       ],
     },
-    slackUrl: slackUrl,
+    slackUrl: originalSlackUrl,
   },
   plugins: [
     [
