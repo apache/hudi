@@ -8,7 +8,7 @@
 
  Create as many sidebars as you want.
  */
-const { slackUrl } = require('./constants');
+const { originalSlackUrl } = require('./constants');
 
 module.exports = {
   community: [
@@ -24,7 +24,7 @@ module.exports = {
     {
       type: 'link',
       label: 'Slack',
-      href: slackUrl,
+      href: originalSlackUrl,
     },
     {
       type: 'link',

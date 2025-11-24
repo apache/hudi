@@ -1,6 +1,6 @@
 const { themes } = require("prism-react-renderer");
 const versions = require("./versions.json");
-const { slackUrl } = require('./constants');
+const { slackUrl, originalSlackUrl } = require('./constants');
 const allDocHomesPaths = [
   "/docs/",
   "/docs/next/",
@@ -266,7 +266,7 @@ module.exports = {
             },
             {
               label: 'Slack',
-              href: slackUrl,
+              href: originalSlackUrl,
             },
             {
               label: 'LinkedIn',
@@ -406,7 +406,7 @@ module.exports = {
             },
             {
               label: "Slack",
-              href: slackUrl,
+              href: originalSlackUrl,
             },
             {
               label: "GitHub",
