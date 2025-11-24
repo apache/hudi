@@ -16,7 +16,7 @@ Hudi works with Spark 3.3 and above versions. You can follow instructions [here]
 
 ### Spark Support Matrix
 
-| Hudi   | Supported Spark  version(s)                              | Scala Version                                                 | Java Version                    |
+| Hudi   | Supported Spark versions                                 | Scala versions                                                | Java versions                   |
 |:-------|:---------------------------------------------------------|:--------------------------------------------------------------|:--------------------------------|
 | 1.1.x  | 4.0.x, 3.5.x (default build), 3.4.x, 3.3.x               | 2.13 (Spark 4.0), 2.12/2.13 (Spark 3.5), 2.12 (Spark 3.3-3.4) | 17+ (Spark 4.0), 8+ (Spark 3.x) |
 | 1.0.x  | 3.5.x (default build), 3.4.x, 3.3.x                      | 2.12/2.13 (Spark 3.5), 2.12 (Spark 3.3-3.4)                   | 8+                              |
