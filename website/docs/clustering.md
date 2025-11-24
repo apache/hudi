@@ -25,35 +25,28 @@ can take advantage of data locality.
 
 At a high level, Hudi provides different operations such as insert/upsert/bulk_insert through it’s write client API to be able to write data to a Hudi table. To be able to choose a trade-off between file size and ingestion speed, Hudi provides a knob `hoodie.parquet.small.file.limit` to be able to configure the smallest allowable file size. Users are able to configure the small file [soft limit](https://hudi.apache.org/docs/configurations/#hoodieparquetsmallfilelimit) to `0` to force new data to go into a new set of filegroups or set it to a higher value to ensure new data gets “padded” to existing files until it meets that limit that adds to ingestion latencies.
 
-
-
 To be able to support an architecture that allows for fast ingestion without compromising query performance, we have introduced a ‘clustering’ service to rewrite the data to optimize Hudi data lake file layout.
 
 Clustering table service can run asynchronously or synchronously adding a new action type called “REPLACE”, that will mark the clustering action in the Hudi metadata timeline.
 
-
-
 ### Overall, there are 2 steps to clustering
 
-1.  Scheduling clustering: Create a clustering plan using a pluggable clustering strategy.
-2.  Execute clustering: Process the plan using an execution strategy to create new files and replace old files.
-
+1. Scheduling clustering: Create a clustering plan using a pluggable clustering strategy.
+2. Execute clustering: Process the plan using an execution strategy to create new files and replace old files.
 
 ### Schedule clustering
 
 Following steps are followed to schedule clustering.
 
-1.  Identify files that are eligible for clustering: Depending on the clustering strategy chosen, the scheduling logic will identify the files eligible for clustering.
-2.  Group files that are eligible for clustering based on specific criteria. Each group is expected to have data size in multiples of ‘targetFileSize’. Grouping is done as part of ‘strategy’ defined in the plan. Additionally, there is an option to put a cap on group size to improve parallelism and avoid shuffling large amounts of data.
-3.  Finally, the clustering plan is saved to the timeline in an avro [metadata format](https://github.com/apache/hudi/blob/master/hudi-common/src/main/avro/HoodieClusteringPlan.avsc).
-
+1. Identify files that are eligible for clustering: Depending on the clustering strategy chosen, the scheduling logic will identify the files eligible for clustering.
+2. Group files that are eligible for clustering based on specific criteria. Each group is expected to have data size in multiples of ‘targetFileSize’. Grouping is done as part of ‘strategy’ defined in the plan. Additionally, there is an option to put a cap on group size to improve parallelism and avoid shuffling large amounts of data.
+3. Finally, the clustering plan is saved to the timeline in an avro [metadata format](https://github.com/apache/hudi/blob/master/hudi-common/src/main/avro/HoodieClusteringPlan.avsc).
 
 ### Execute clustering
 
-1.  Read the clustering plan and get the ‘clusteringGroups’ that mark the file groups that need to be clustered.
-2.  For each group, we instantiate appropriate strategy class with strategyParams (example: sortColumns) and apply that strategy to rewrite the data.
-3.  Create a “REPLACE” commit and update the metadata in [HoodieReplaceCommitMetadata](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/model/HoodieReplaceCommitMetadata.java).
-
+1. Read the clustering plan and get the ‘clusteringGroups’ that mark the file groups that need to be clustered.
+2. For each group, we instantiate appropriate strategy class with strategyParams (example: sortColumns) and apply that strategy to rewrite the data.
+3. Create a “REPLACE” commit and update the metadata in [HoodieReplaceCommitMetadata](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/model/HoodieReplaceCommitMetadata.java).
 
 Clustering Service builds on Hudi’s MVCC based design to allow for writers to continue to insert new data while clustering action runs in the background to reformat data layout, ensuring snapshot isolation between concurrent readers and writers.
 
@@ -108,11 +101,10 @@ clustering, tune the file size limits, maximum number of output groups. Please r
 , [hoodie.clustering.plan.strategy.target.file.max.bytes](https://hudi.apache.org/docs/next/configurations/#hoodieclusteringplanstrategytargetfilemaxbytes) for more details.
 
 | Config Name                                             | Default            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-|---------------------------------------------------------| -------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|---------------------------------------------------------|--------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | hoodie.clustering.plan.strategy.partition.selected      | N/A **(Required)** | Comma separated list of partitions to run clustering<br /><br />`Config Param: PARTITION_SELECTED`<br />`Since Version: 0.11.0`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | hoodie.clustering.plan.strategy.partition.regex.pattern | N/A **(Required)** | Filter clustering partitions that matched regex pattern<br /><br />`Config Param: PARTITION_REGEX_PATTERN`<br />`Since Version: 0.11.0`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | hoodie.clustering.plan.partition.filter.mode            | NONE (Optional)    | Partition filter mode used in the creation of clustering plan. Possible values:<br /><ul><li>`NONE`: Do not filter partitions. The clustering plan will include all partitions that have clustering candidates.</li><li>`RECENT_DAYS`: This filter assumes that your data is partitioned by date. The clustering plan will only include partitions from K days ago to N days ago, where K &gt;= N. K is determined by `hoodie.clustering.plan.strategy.daybased.lookback.partitions` and N is determined by `hoodie.clustering.plan.strategy.daybased.skipfromlatest.partitions`.</li><li>`SELECTED_PARTITIONS`: The clustering plan will include only partition paths with names that sort within the inclusive range [`hoodie.clustering.plan.strategy.cluster.begin.partition`, `hoodie.clustering.plan.strategy.cluster.end.partition`].</li><li>`DAY_ROLLING`: To determine the partitions in the clustering plan, the eligible partitions will be sorted in ascending order. Each partition will have an index i in that list. The clustering plan will only contain partitions such that i mod 24 = H, where H is the current hour of the day (from 0 to 23).</li></ul><br />`Config Param: PLAN_PARTITION_FILTER_MODE_NAME`<br />`Since Version: 0.11.0` |
-
 
 #### SparkSingleFileSortPlanStrategy
 
@@ -137,9 +129,9 @@ config [hoodie.clustering.execution.strategy.class](configurations/#hoodiecluste
 default, Hudi sorts the file groups in the plan by the specified columns, while meeting the configured target file
 sizes.
 
-| Config Name                                 | Default                                                                                         | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| --------------------------------------------| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| hoodie.clustering.execution.strategy.class  | org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy (Optional)     | Config to provide a strategy class (subclass of RunClusteringStrategy) to define how the  clustering plan is executed. By default, we sort the file groups in th plan by the specified columns, while  meeting the configured target file sizes.<br /><br />`Config Param: EXECUTION_STRATEGY_CLASS_NAME`<br />`Since Version: 0.7.0`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Config Name                                | Default                                                                                     | Description                                                                                                                                                                                                                                                                                                                           |
+|--------------------------------------------|---------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| hoodie.clustering.execution.strategy.class | org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy (Optional) | Config to provide a strategy class (subclass of RunClusteringStrategy) to define how the  clustering plan is executed. By default, we sort the file groups in th plan by the specified columns, while  meeting the configured target file sizes.<br /><br />`Config Param: EXECUTION_STRATEGY_CLASS_NAME`<br />`Since Version: 0.7.0` |
 
 The available strategies are as follows:
 
@@ -159,21 +151,21 @@ The available strategies are as follows:
 ### Update Strategy
 
 Currently, clustering can only be scheduled for tables/partitions not receiving any concurrent updates. By default,
-the config for update strategy - [`hoodie.clustering.updates.strategy`](configurations/#hoodieclusteringupdatesstrategy) is set to ***SparkRejectUpdateStrategy***. If some file group has updates during clustering then it will reject updates and throw an
+the config for update strategy - [`hoodie.clustering.updates.strategy`](configurations/#hoodieclusteringupdatesstrategy) is set to **SparkRejectUpdateStrategy**. If some file group has updates during clustering then it will reject updates and throw an
 exception. However, in some use-cases updates are very sparse and do not touch most file groups. The default strategy to
-simply reject updates does not seem fair. In such use-cases, users can set the config to ***SparkAllowUpdateStrategy***.
+simply reject updates does not seem fair. In such use-cases, users can set the config to **SparkAllowUpdateStrategy**.
 
 We discussed the critical strategy configurations. All other configurations related to clustering are
-listed [here](configurations/#Clustering-Configs). Out of this list, a few configurations that will be very useful
+listed [clustering configurations](configurations/#Clustering-Configs). Out of this list, a few configurations that will be very useful
 for inline or async clustering are shown below with code samples.
 
 ## Inline clustering
 
 Inline clustering happens synchronously with the regular ingestion writer or as part of the data ingestion pipeline. This means the next round of ingestion cannot proceed until the clustering is complete With inline clustering, Hudi will schedule, plan clustering operations after each commit is completed and execute the clustering plans after it’s created. This is the simplest deployment model to run because it’s easier to manage than running different asynchronous Spark jobs. This mode is supported on Spark Datasource, Flink, Spark-SQL and Hudi Streamer in a sync-once mode.
 
-For this deployment mode, please enable and set: `hoodie.clustering.inline` 
+For this deployment mode, please enable and set: `hoodie.clustering.inline`
 
-To choose how often clustering is triggered, also set: `hoodie.clustering.inline.max.commits`. 
+To choose how often clustering is triggered, also set: `hoodie.clustering.inline.max.commits`.
 
 Inline clustering can be setup easily using spark dataframe options.
 See sample below:
@@ -185,8 +177,6 @@ import org.apache.spark.sql.SaveMode._
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.config.HoodieWriteConfig._
-
-
 val df =  //generate data frame
 df.write.format("org.apache.hudi").
         options(getQuickstartWriteConfigs).
@@ -206,27 +196,29 @@ df.write.format("org.apache.hudi").
 
 ## Async Clustering
 
-Async clustering runs the clustering table service in the background without blocking the regular ingestions writers. There are three different ways to deploy an asynchronous clustering process: 
+Async clustering runs the clustering table service in the background without blocking the regular ingestions writers. There are three different ways to deploy an asynchronous clustering process:
 
-- **Asynchronous execution within the same process**: In this deployment mode, Hudi will schedule and plan the clustering operations after each commit is completed as part of the ingestion pipeline. Separately, Hudi spins up another thread within the same job and executes the clustering table service. This is supported by Spark Streaming, Flink and Hudi Streamer in continuous mode. For this deployment mode, please enable `hoodie.clustering.async.enabled` and `hoodie.clustering.async.max.commits​`. 
-- **Asynchronous scheduling and execution by a separate process**: In this deployment mode, the application will write data to a Hudi table as part of the ingestion pipeline. A separate clustering job will schedule, plan and execute the clustering operation. By running a different job for the clustering operation, it rebalances how Hudi uses compute resources: fewer compute resources are needed for the ingestion, which makes ingestion latency stable, and an independent set of compute resources are reserved for the clustering process. Please configure the lock providers for the concurrency control among all jobs (both writer and table service jobs). In general, configure lock providers when there are two different jobs or two different processes occurring. All writers support this deployment model. For this deployment mode, no clustering configs should be set for the ingestion writer. 
+- **Asynchronous execution within the same process**: In this deployment mode, Hudi will schedule and plan the clustering operations after each commit is completed as part of the ingestion pipeline. Separately, Hudi spins up another thread within the same job and executes the clustering table service. This is supported by Spark Streaming, Flink and Hudi Streamer in continuous mode. For this deployment mode, please enable `hoodie.clustering.async.enabled` and `hoodie.clustering.async.max.commits​`.
+- **Asynchronous scheduling and execution by a separate process**: In this deployment mode, the application will write data to a Hudi table as part of the ingestion pipeline. A separate clustering job will schedule, plan and execute the clustering operation. By running a different job for the clustering operation, it rebalances how Hudi uses compute resources: fewer compute resources are needed for the ingestion, which makes ingestion latency stable, and an independent set of compute resources are reserved for the clustering process. Please configure the lock providers for the concurrency control among all jobs (both writer and table service jobs). In general, configure lock providers when there are two different jobs or two different processes occurring. All writers support this deployment model. For this deployment mode, no clustering configs should be set for the ingestion writer.
 - **Scheduling inline and executing async**: In this deployment mode, the application ingests data and schedules the clustering in one job; in another, the application executes the clustering plan. The supported writers (see below) won’t be blocked from ingesting data. If the metadata table is enabled, a lock provider is not needed. However, if the metadata table is enabled, please ensure all jobs have the lock providers configured for concurrency control. All writers support this deployment option. For this deployment mode, please enable, `hoodie.clustering.schedule.inline` and `hoodie.clustering.async.enabled`.
 
 Hudi supports [multi-writers](https://hudi.apache.org/docs/concurrency_control#enabling-multi-writing) which provides
 snapshot isolation between multiple table services, thus allowing writers to continue with ingestion while clustering
 runs in the background.
 
-| Config Name                                                                                         | Default                                 | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| --------------------------------------------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| hoodie.clustering.async.enabled                                        | false (Optional)                        | Enable running of clustering service, asynchronously as inserts happen on the table.<br /><br />`Config Param: ASYNC_CLUSTERING_ENABLE`<br />`Since Version: 0.7.0`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| hoodie.clustering.async.max.commits                                                            | 4 (Optional)                                                                                    | Config to control frequency of async clustering<br /><br />`Config Param: ASYNC_CLUSTERING_MAX_COMMITS`<br />`Since Version: 0.9.0`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Config Name                         | Default          | Description                                                                                                                                                         |
+|-------------------------------------|------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| hoodie.clustering.async.enabled     | false (Optional) | Enable running of clustering service, asynchronously as inserts happen on the table.<br /><br />`Config Param: ASYNC_CLUSTERING_ENABLE`<br />`Since Version: 0.7.0` |
+| hoodie.clustering.async.max.commits | 4 (Optional)     | Config to control frequency of async clustering<br /><br />`Config Param: ASYNC_CLUSTERING_MAX_COMMITS`<br />`Since Version: 0.9.0`                                 |
 
 ## Setup Asynchronous Clustering
+
 Users can leverage [HoodieClusteringJob](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+19+Clustering+data+for+freshness+and+query+performance#RFC19Clusteringdataforfreshnessandqueryperformance-SetupforAsyncclusteringJob)
 to setup 2-step asynchronous clustering.
 
 ### HoodieClusteringJob
-By specifying the `scheduleAndExecute` mode both schedule as well as clustering can be achieved in the same step. 
+
+By specifying the `scheduleAndExecute` mode both schedule as well as clustering can be achieved in the same step.
 The appropriate mode can be specified using `-mode` or `-m` option. There are three modes:
 
 1. `schedule`: Make a clustering plan. This gives an instant which can be passed in execute mode.
@@ -234,7 +226,8 @@ The appropriate mode can be specified using `-mode` or `-m` option. There are th
 3. `scheduleAndExecute`: Make a clustering plan first and execute that plan immediately.
 
 Note that to run this job while the original writer is still running, please enable multi-writing:
-```
+
+```properties
 hoodie.write.concurrency.mode=optimistic_concurrency_control
 hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider
 ```
@@ -252,8 +245,10 @@ spark-submit \
 --table-name hudi_table_schedule_clustering \
 --spark-memory 1g
 ```
+
 A sample `clusteringjob.properties` file:
-```
+
+```properties
 hoodie.clustering.async.enabled=true
 hoodie.clustering.async.max.commits=4
 hoodie.clustering.plan.strategy.target.file.max.bytes=1073741824
@@ -269,7 +264,6 @@ Just set the `hoodie.clustering.async.enabled` config to true and specify other 
 whose location can be pased as `—props` when starting the Hudi Streamer (just like in the case of HoodieClusteringJob).
 
 A sample spark-submit command to setup Hudi Streamer is as below:
-
 
 ```bash
 spark-submit \
@@ -291,6 +285,7 @@ spark-submit \
 ### Spark Structured Streaming
 
 We can also enable asynchronous clustering with Spark structured streaming sink as shown below.
+
 ```scala
 val commonOpts = Map(
    "hoodie.insert.shuffle.parallelism" -> "4",
@@ -301,8 +296,8 @@ val commonOpts = Map(
    "hoodie.table.name" -> "hoodie_test"
 )
 
-def getAsyncClusteringOpts(isAsyncClustering: String, 
-                           clusteringNumCommit: String, 
+def getAsyncClusteringOpts(isAsyncClustering: String,
+                           clusteringNumCommit: String,
                            executionStrategy: String):Map[String, String] = {
    commonOpts + (DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE.key -> isAsyncClustering,
            HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS.key -> clusteringNumCommit,
@@ -347,5 +342,3 @@ out-of-the-box. Note that as of now only linear sort is supported in Java execut
 [Hudi Z-Order and Hilbert Space-filling Curves](https://medium.com/apache-hudi-blogs/hudi-z-order-and-hilbert-space-filling-curves-68fa28bffaf0)
 
 <h3>Videos</h3>
-
-* [Understanding Clustering in Apache Hudi and the Benefits of Asynchronous Clustering](https://www.youtube.com/watch?v=R_sm4wlGXuE)
