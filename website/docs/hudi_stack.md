@@ -20,12 +20,12 @@ like an independent table management service.
 Hudi then defined clear read/write APIs that help interact with the tables, from a variety of SQL engines and code written in many programming languages using their popular data
 processing frameworks. Hudi also comes with several platform services that help tune performance, operate tables, monitor tables, ingest data, import/export data, and more.
 
+![Hudi Stack](/assets/images/hudi-stack-1-x.png)
+<p align = "center">The Hudi stack</p>
+
 Thus, when all things considered, the Hudi stack expands out of being just a 'table format' to a comprehensive and robust [data lakehouse](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/) platform. In this section,
 we will explore the Hudi stack and deconstruct the layers of software components that constitute Hudi. The features marked with an asterisk (*) represent work in progress, and
 the dotted boxes indicate planned future work. These components collectively aim to fulfill the [vision](https://github.com/apache/hudi/blob/master/rfc/rfc-69/rfc-69.md) for the project.
-
-![Hudi Stack](/assets/images/hudi-stack-1-x.png)
-<p align = "center">Hudi Database Architecture</p>
 
 ## Lake Storage
 
@@ -63,7 +63,9 @@ the file-group is uniquely identified by the write that created its base file or
 It leverages a [SSTable](https://cassandra.apache.org/doc/stable/cassandra/architecture/storage-engine.html#sstables) based file format for quick, indexed key lookups,
 storing vital information like file paths, column statistics and schema. This approach streamlines operations by reducing the necessity for expensive cloud file listings.
 
-- **Pluggable Table Format** : Starting with Hudi 1.1, Hudi introduces a pluggable table format framework that extends Hudi's powerful storage engine capabilities beyond its native format to other table formats like Apache Iceberg and Delta Lake. This framework decouples Hudi's core capabilities—transaction management, indexing, concurrency control, and table services—from the specific storage format used for data files. Hudi provides native format support (configured via `hoodie.table.format=native` by default), while [Apache XTable](https://xtable.apache.org/) supplies pluggable format adapters for formats like Iceberg and Delta Lake. The framework enables organizations to choose the right format for each use case while maintaining a unified operational experience and leveraging Hudi's sophisticated storage engine across all formats. For example, you can write high-frequency updates to a Hudi table efficiently with Hudi's record-level indexing capability while maintaining Iceberg metadata through the Iceberg adapter, which supports a wide range of catalogs for reads. This architecture prevents vendor lock-in and embraces the open lakehouse ecosystem.
+### Pluggable Table format
+
+Starting with Hudi 1.1, Hudi introduces a pluggable table format framework that extends Hudi's powerful storage engine capabilities beyond its native format to other table formats like Apache Iceberg and Delta Lake. This framework decouples Hudi's core capabilities—transaction management, indexing, concurrency control, and table services—from the specific storage format used for data files. Hudi provides native format support (configured via `hoodie.table.format=native` by default), while [Apache XTable](https://xtable.apache.org/) supplies pluggable format adapters for formats like Iceberg and Delta Lake. The framework enables organizations to choose the right format for each use case while maintaining a unified operational experience and leveraging Hudi's sophisticated storage engine across all formats. For example, you can write high-frequency updates to a Hudi table efficiently with Hudi's record-level indexing capability while maintaining Iceberg metadata through the Iceberg adapter, which supports a wide range of catalogs for reads. This architecture prevents vendor lock-in and embraces the open lakehouse ecosystem.
 
 Hudi's approach of recording updates into Log Files is more efficient and involves low merge overhead than systems like Hive ACID, where merging all delta records against
 all Base Files is required. Read more about the various table types in Hudi [table types documentation](table_types).
