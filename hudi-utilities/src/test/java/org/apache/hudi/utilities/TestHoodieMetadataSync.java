@@ -665,7 +665,8 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     }
   }
 
-  private void triggerNInsertOverwriteToSource(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient, String partitionPath, int numCommits, Option<HoodieTestDataGenerator> dataGenOpt) throws IOException {
+  private void triggerNInsertOverwriteToSource(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient, String partitionPath,
+                                               int numCommits, Option<HoodieTestDataGenerator> dataGenOpt) throws IOException {
     HoodieTestDataGenerator dataGen = dataGenOpt.orElseGet(() -> new HoodieTestDataGenerator(new String[] {partitionPath}));
     for (int i = 0; i < numCommits; i++) {
       try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {

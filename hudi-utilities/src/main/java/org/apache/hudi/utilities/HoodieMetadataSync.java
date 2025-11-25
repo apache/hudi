@@ -46,6 +46,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -263,88 +264,7 @@ public class HoodieMetadataSync implements Serializable {
       if (cfg.boostrap) {
         runBootstrapSync(sparkTable, sourceTableMetaClient, targetTableMetaClient, writeClient, schema);
       } else {
-        Pair<TreeMap<HoodieInstant, Boolean>, Option<String>> instantsToSyncAndLastSyncCheckpointPair =
-            getInstantsToSyncAndLastSyncCheckpoint(cfg.sourceBasePath, targetTableMetaClient, sourceTableMetaClient);
-
-        TreeMap<HoodieInstant, Boolean> instantsStatusMap = instantsToSyncAndLastSyncCheckpointPair.getLeft();
-        Option<String> lastSyncCheckpoint = instantsToSyncAndLastSyncCheckpointPair.getRight();
-
-        for (Map.Entry<HoodieInstant, Boolean> entry : instantsStatusMap.entrySet()) {
-          HoodieInstant instant = entry.getKey();
-          boolean isCompleted = entry.getValue();
-          if (!isCompleted || !SUPPORTED_INSTANT_TYPES.contains(instant.getAction())) {
-            // if instant is pending state or not supported, skip it
-            LOG.info("Ignoring instant {} because it is incomplete or of an unsupported type",
-                instant.getTimestamp());
-            continue;
-          }
-
-          Option<byte[]> commitMetadataInBytes = Option.empty();
-          SyncMetadata syncMetadata = getTableSyncExtraMetadata(targetTableMetaClient.reloadActiveTimeline().getWriteTimeline().filterCompletedInstants().lastInstant(),
-              targetTableMetaClient, cfg.sourceBasePath, instant.getTimestamp(), instantsStatusMap, lastSyncCheckpoint, instant);
-
-          if (!getPendingWriteInstants(targetTableMetaClient.reloadActiveTimeline(), Option.empty()).isEmpty()) {
-            // rollback failing writes
-            writeClient.rollbackFailedWrites();
-          }
-
-          String commitTime = writeClient.startCommit(instant.getAction(), targetTableMetaClient);
-          targetTableMetaClient
-              .reloadActiveTimeline()
-              .transitionRequestedToInflight(
-                  instant.getAction(),
-                  commitTime);
-          HoodieTableMetadataWriter hoodieTableMetadataWriter =
-              (HoodieTableMetadataWriter) sparkTable.getMetadataWriter(commitTime).get();
-          // perform table services if required on metadata table
-          hoodieTableMetadataWriter.performTableServices(Option.of(commitTime));
-          switch (instant.getAction()) {
-            case HoodieTimeline.COMMIT_ACTION:
-              HoodieCommitMetadata sourceCommitMetadata = getHoodieCommitMetadata(instant.getTimestamp(), sourceTableMetaClient);
-              HoodieCommitMetadata tgtCommitMetadata = buildHoodieCommitMetadata(sourceCommitMetadata, commitTime);
-              hoodieTableMetadataWriter.update(tgtCommitMetadata, hoodieSparkEngineContext.emptyHoodieData(), commitTime);
-
-              // add metadata sync checkpoint info
-              tgtCommitMetadata.addMetadata(SyncMetadata.TABLE_SYNC_METADATA, syncMetadata.toJson());
-              commitMetadataInBytes = Option.of(tgtCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
-              break;
-            case HoodieTimeline.REPLACE_COMMIT_ACTION:
-
-              HoodieReplaceCommitMetadata srcReplaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(
-                  sourceTableMetaClient.getCommitsTimeline().getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
-              HoodieReplaceCommitMetadata tgtReplaceCommitMetadata = buildReplaceCommitMetadata(srcReplaceCommitMetadata, commitTime);
-              hoodieTableMetadataWriter.update(tgtReplaceCommitMetadata, hoodieSparkEngineContext.emptyHoodieData(), commitTime);
-
-              // add metadata sync checkpoint info
-              tgtReplaceCommitMetadata.addMetadata(SyncMetadata.TABLE_SYNC_METADATA, syncMetadata.toJson());
-              commitMetadataInBytes = Option.of(tgtReplaceCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
-              break;
-            case HoodieTimeline.CLEAN_ACTION:
-              HoodieCleanMetadata srcCleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(
-                  sourceTableMetaClient.getCommitsTimeline().getInstantDetails(instant).get());
-              HoodieCleanMetadata tgtCleanMetadata = reconstructHoodieCleanCommitMetadata(srcCleanMetadata,
-                  writeConfig, hoodieSparkEngineContext, targetTableMetaClient);
-              hoodieTableMetadataWriter.update(tgtCleanMetadata, commitTime);
-
-              commitMetadataInBytes = TimelineMetadataUtils.serializeCleanMetadata(tgtCleanMetadata);
-              break;
-            default:
-              throw new IllegalStateException("Found unsupported action type while metadata syncing " + instant.getAction()
-                  + ": Supported Action types are " + SUPPORTED_INSTANT_TYPES);
-          }
-
-          targetTableMetaClient
-              .reloadActiveTimeline()
-              .saveAsComplete(new HoodieInstant(true, instant.getAction(), commitTime), commitMetadataInBytes);
-
-          if (cfg.performTableMaintenance) {
-            runArchiver(sparkTable, writeClient.getConfig(), hoodieSparkEngineContext);
-          }
-
-          if (!lastSyncCheckpoint.isPresent() || instant.getTimestamp().compareTo(lastSyncCheckpoint.get()) > 0) {
-            lastSyncCheckpoint = Option.of(instant.getTimestamp());
-          }
-        }
+        runIncrementalSync(sparkTable, writeConfig, sourceTableMetaClient, targetTableMetaClient, hoodieSparkEngineContext, writeClient);
       }
     } finally {
       txnManager.endTransaction(Option.empty());
@@ -364,9 +284,10 @@ public class HoodieMetadataSync implements Serializable {
             HoodieTimeline.REPLACE_COMMIT_ACTION,
             commitTime);
 
-    SparkHoodieBackedMetadataSyncMetadataWriter metadataWriter =
-        (SparkHoodieBackedMetadataSyncMetadataWriter) sparkTable.getMetadataWriter(commitTime).get();
-    metadataWriter.bootstrap(sourceLastInstant.map(HoodieInstant::getTimestamp));
+    try (SparkHoodieBackedMetadataSyncMetadataWriter metadataWriter =
+             (SparkHoodieBackedMetadataSyncMetadataWriter) sparkTable.getMetadataWriter(commitTime).get()) {
+      metadataWriter.bootstrap(sourceLastInstant.map(HoodieInstant::getTimestamp));
+    }
     Option<HoodieInstant> targetTableLastInstant = targetTableMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
     List<String> pendingInstants = getPendingWriteInstants(sourceTableMetaClient.getActiveTimeline(), sourceLastInstant).stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     SyncMetadata syncMetadata = getTableSyncExtraMetadata(targetTableLastInstant, targetTableMetaClient,
@@ -377,6 +298,100 @@ public class HoodieMetadataSync implements Serializable {
         .reloadActiveTimeline()
         .saveAsComplete(new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime),
             Option.of(replaceCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+  }
+
+  private void runIncrementalSync(HoodieSparkTable sparkTable, HoodieWriteConfig writeConfig, HoodieTableMetaClient sourceTableMetaClient,
+                                  HoodieTableMetaClient targetTableMetaClient, HoodieSparkEngineContext hoodieSparkEngineContext, SparkRDDWriteClient writeClient) {
+    Pair<TreeMap<HoodieInstant, Boolean>, Option<String>> instantsToSyncAndLastSyncCheckpointPair;
+    try {
+      instantsToSyncAndLastSyncCheckpointPair =
+          getInstantsToSyncAndLastSyncCheckpoint(cfg.sourceBasePath, targetTableMetaClient, sourceTableMetaClient);
+    } catch (IOException e) {
+      throw new HoodieMetadataException("Failed to fetch instants for incremental sync ", e);
+    }
+
+    TreeMap<HoodieInstant, Boolean> instantsStatusMap = instantsToSyncAndLastSyncCheckpointPair.getLeft();
+    Option<String> lastSyncCheckpoint = instantsToSyncAndLastSyncCheckpointPair.getRight();
+
+    for (Map.Entry<HoodieInstant, Boolean> entry : instantsStatusMap.entrySet()) {
+      HoodieInstant instant = entry.getKey();
+      boolean isCompleted = entry.getValue();
+      if (!isCompleted || !SUPPORTED_INSTANT_TYPES.contains(instant.getAction())) {
+        // if instant is pending state or not supported, skip it
+        LOG.info("Ignoring instant {} because it is incomplete or of an unsupported type",
+            instant.getTimestamp());
+        continue;
+      }
+
+      Option<byte[]> commitMetadataInBytes;
+      SyncMetadata syncMetadata = getTableSyncExtraMetadata(targetTableMetaClient.reloadActiveTimeline().getWriteTimeline().filterCompletedInstants().lastInstant(),
+          targetTableMetaClient, cfg.sourceBasePath, instant.getTimestamp(), instantsStatusMap, lastSyncCheckpoint, instant);
+
+      if (!getPendingWriteInstants(targetTableMetaClient.reloadActiveTimeline(), Option.empty()).isEmpty()) {
+        // rollback failing writes
+        writeClient.rollbackFailedWrites();
+      }
+
+      String commitTime = writeClient.startCommit(instant.getAction(), targetTableMetaClient);
+      targetTableMetaClient
+          .reloadActiveTimeline()
+          .transitionRequestedToInflight(
+              instant.getAction(),
+              commitTime);
+      try (HoodieTableMetadataWriter hoodieTableMetadataWriter =
+               (HoodieTableMetadataWriter) sparkTable.getMetadataWriter(commitTime).get()) {
+        // perform table services if required on metadata table
+        hoodieTableMetadataWriter.performTableServices(Option.of(commitTime));
+        switch (instant.getAction()) {
+          case HoodieTimeline.COMMIT_ACTION:
+            HoodieCommitMetadata sourceCommitMetadata = getHoodieCommitMetadata(instant.getTimestamp(), sourceTableMetaClient);
+            HoodieCommitMetadata tgtCommitMetadata = buildHoodieCommitMetadata(sourceCommitMetadata, commitTime);
+            hoodieTableMetadataWriter.update(tgtCommitMetadata, hoodieSparkEngineContext.emptyHoodieData(), commitTime);
+
+            // add metadata sync checkpoint info
+            tgtCommitMetadata.addMetadata(SyncMetadata.TABLE_SYNC_METADATA, syncMetadata.toJson());
+            commitMetadataInBytes = Option.of(tgtCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+            break;
+          case HoodieTimeline.REPLACE_COMMIT_ACTION:
+
+            HoodieReplaceCommitMetadata srcReplaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(
+                sourceTableMetaClient.getCommitsTimeline().getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+            HoodieReplaceCommitMetadata tgtReplaceCommitMetadata = buildReplaceCommitMetadata(srcReplaceCommitMetadata, commitTime);
+            hoodieTableMetadataWriter.update(tgtReplaceCommitMetadata, hoodieSparkEngineContext.emptyHoodieData(), commitTime);
+
+            // add metadata sync checkpoint info
+            tgtReplaceCommitMetadata.addMetadata(SyncMetadata.TABLE_SYNC_METADATA, syncMetadata.toJson());
+            commitMetadataInBytes = Option.of(tgtReplaceCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+            break;
+          case HoodieTimeline.CLEAN_ACTION:
+            HoodieCleanMetadata srcCleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(
+                sourceTableMetaClient.getCommitsTimeline().getInstantDetails(instant).get());
+            HoodieCleanMetadata tgtCleanMetadata = reconstructHoodieCleanCommitMetadata(srcCleanMetadata,
+                writeConfig, hoodieSparkEngineContext, targetTableMetaClient);
+            hoodieTableMetadataWriter.update(tgtCleanMetadata, commitTime);
+
+            commitMetadataInBytes = TimelineMetadataUtils.serializeCleanMetadata(tgtCleanMetadata);
+            break;
+          default:
+            throw new IllegalStateException("Found unsupported action type while metadata syncing " + instant.getAction()
+                + ": Supported Action types are " + SUPPORTED_INSTANT_TYPES);
+        }
+      } catch (Exception e) {
+        throw new HoodieMetadataException("Failed to run incremental sync ", e);
+      }
+
+      targetTableMetaClient
+          .reloadActiveTimeline()
+          .saveAsComplete(new HoodieInstant(true, instant.getAction(), commitTime), commitMetadataInBytes);
+
+      if (cfg.performTableMaintenance) {
+        runArchiver(sparkTable, writeClient.getConfig(), hoodieSparkEngineContext);
+      }
+
+      if (!lastSyncCheckpoint.isPresent() || instant.getTimestamp().compareTo(lastSyncCheckpoint.get()) > 0) {
+        lastSyncCheckpoint = Option.of(instant.getTimestamp());
+      }
+    }
   }
 
   private HoodieReplaceCommitMetadata buildComprehensiveReplaceCommitMetadata(HoodieTableMetaClient sourceTableMetaClient, Schema schema) {
