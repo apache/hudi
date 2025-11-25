@@ -84,12 +84,12 @@ class TestDataHubSyncTool extends HoodieCommonTestHarness {
     HoodieTableConfig mockTableConfig = mock(HoodieTableConfig.class);
     when(mockTableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     when(mockMetaClient.getTableConfig()).thenReturn(mockTableConfig);
-    HoodieSchema messageType = HoodieSchema.createRecord("record", null, null,
+    HoodieSchema schema = HoodieSchema.createRecord("record", null, null,
         Collections.singletonList(HoodieSchemaField.of("int_field", HoodieSchema.create(HoodieSchemaType.INT))));
 
     try (MockedConstruction<DataHubSyncClient> mocked = org.mockito.Mockito.mockConstruction(DataHubSyncClient.class, (mock, context) -> {
       when(mock.getTableName()).thenReturn("test_table");
-      when(mock.getStorageSchema()).thenReturn(messageType);
+      when(mock.getStorageSchema()).thenReturn(schema);
     })) {
       DataHubSyncTool tool = new DataHubSyncTool(new Properties(), null, Option.of(mockMetaClient));
       tool.syncHoodieTable();

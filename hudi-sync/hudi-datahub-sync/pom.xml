@@ -40,6 +40,11 @@
 
   <dependencies>
     <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro</artifactId>
+    </dependency>
+
+    <dependency>
       <groupId>io.acryl</groupId>
       <artifactId>datahub-client-java8</artifactId>
       <version>${datahub.version}</version>
