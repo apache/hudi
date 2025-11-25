@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -86,6 +87,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
     BoundedRecordConsumer boundedConsumer = recordConsumer instanceof BoundedRecordConsumer
         ? (BoundedRecordConsumer) recordConsumer
         : null;
+    AtomicBoolean shouldStop = new AtomicBoolean(false);
     
     try {
       // List all files
@@ -96,7 +98,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
       entryList.sort(new ArchiveFileVersionComparator());
 
       for (StoragePathInfo fs : entryList) {
-        if (boundedConsumer != null && boundedConsumer.shouldStop()) {
+        if (shouldStop.get()) {
           break;
         }
         
@@ -109,7 +111,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
           int instantsInPreviousFile = instantsInRange.size();
           // Read the avro blocks
           while (reader.hasNext()) {
-            if (boundedConsumer != null && boundedConsumer.shouldStop()) {
+            if (shouldStop.get()) {
               break;
             }
             HoodieLogBlock block = reader.next();
@@ -124,6 +126,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
                     .filter(commitsFilter::apply)
                     .forEach(r -> {
                       if (boundedConsumer != null && boundedConsumer.shouldStop()) {
+                        shouldStop.set(true);
                         return;
                       }
                       String instantTime = r.get(HoodieTableMetaClient.COMMIT_TIME_KEY).toString();

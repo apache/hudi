@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
@@ -64,7 +65,7 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
           ? (BoundedRecordConsumer) recordConsumer
           : null;
 
-      // Filter files by time range
+      boolean needsReverseOrder = boundedConsumer != null && boundedConsumer.needsReverseOrder();
       List<String> filteredFiles = new ArrayList<>();
       for (String fileName : fileNames) {
         if (filter == null || LSMTimeline.isFileInRange(filter, fileName)) {
@@ -73,23 +74,20 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
       }
 
       // Sort files in reverse chronological order if needed (newest first for limit queries)
-      if (boundedConsumer != null && boundedConsumer.needsReverseOrder()) {
+      if (needsReverseOrder) {
         filteredFiles.sort(Comparator.comparing((String fileName) -> {
-          try {
-            return LSMTimeline.getMaxInstantTime(fileName);
-          } catch (Exception e) {
-            return "";
-          }
+          return LSMTimeline.getMaxInstantTime(fileName);
         }).reversed());
       }
 
       Schema readSchema = LSMTimeline.getReadSchema(loadMode);
       // Use serial stream when limit is involved (boundedConsumer with reverse order) to guarantee order
-      java.util.stream.Stream<String> fileStream = (boundedConsumer != null && boundedConsumer.needsReverseOrder())
+      java.util.stream.Stream<String> fileStream = needsReverseOrder
           ? filteredFiles.stream()
           : filteredFiles.parallelStream();
+      AtomicBoolean shouldStop = new AtomicBoolean(false);
       fileStream.forEach(fileName -> {
-        if (boundedConsumer != null && boundedConsumer.shouldStop()) {
+        if (shouldStop.get()) {
           return;
         }
         // Read the archived file
@@ -100,6 +98,7 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
             while (iterator.hasNext()) {
               // accept() is thread-safe (uses volatile + synchronized)
               if (boundedConsumer != null && boundedConsumer.shouldStop()) {
+                shouldStop.set(true);
                 break; // Stop reading this file
               }
               GenericRecord record = (GenericRecord) iterator.next();
