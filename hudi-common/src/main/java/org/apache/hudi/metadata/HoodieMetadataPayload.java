@@ -212,7 +212,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             filesystemMetadata.put(k, new HoodieMetadataFileInfo((Long) v.get("size"), (Boolean) v.get("isDeleted")));
           });
         }
-        if (record.get(SCHEMA_FIELD_ID_BASEPATH_PARTITION) != null) {
+        if (record.hasField(SCHEMA_FIELD_ID_BASEPATH_PARTITION) && record.get(SCHEMA_FIELD_ID_BASEPATH_PARTITION) != null) {
           String basePathOverride = record.get(SCHEMA_FIELD_ID_BASEPATH_PARTITION).toString();
           basePathOverrideOpt = basePathOverride.isEmpty() ? Option.empty() : Option.of(basePathOverride);
         }

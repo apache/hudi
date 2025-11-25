@@ -85,12 +85,12 @@ import static org.apache.hudi.utilities.MetadataSyncUtils.getPendingWriteInstant
 import static org.apache.hudi.utilities.MetadataSyncUtils.getTableSyncExtraMetadata;
 
 /**
- * Handles metadata table synchronization for a Hudi table.
- * <p>
- * This class initializes Spark context, loads configuration properties,
- * and provides utilities required to perform metadata sync between a
- * source Hudi table and a target Hudi table.
- * </p>
+ * Manages synchronization of metadata from one or more source Hudi tables into
+ * a unified target table. This helps maintain a single consolidated view of metadata.
+ *
+ * <p>This class sets up the required Spark context, loads configuration properties,
+ * and provides the utilities needed to execute metadata synchronization between
+ * source and target Hudi tables.</p>
  */
 public class HoodieMetadataSync implements Serializable {
 
