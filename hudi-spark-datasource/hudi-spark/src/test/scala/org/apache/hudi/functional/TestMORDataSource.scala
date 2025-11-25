@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport, SparkDatasetMixin}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport, SparkDatasetMixin}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -443,7 +443,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val hudiSnapshotDF6 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .load(basePath + "/2020/01/10/*")
+      .load(basePath).where("partition = '2020/01/10'")
     assertEquals(102, hudiSnapshotDF6.count())
     // validate incremental queries only for table version 8
     // 1.0 reader (table version 8) supports incremental query reads using completion time
@@ -994,124 +994,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testReadPathsForMergeOnReadTable(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
-
-    // Paths only baseFiles
-    val records1 = dataGen.generateInserts("001", 100)
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1).asScala.toSeq, 2))
-    inputDF1.write.format("org.apache.hudi")
-      .options(writeOpts)
-      .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
-    assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
-    val baseFilePath = storage.listDirectEntries(new StoragePath(basePath, dataGen.getPartitionPaths.head))
-      .asScala
-      .filter(_.getPath.getName.endsWith("parquet"))
-      .map(_.getPath.toString)
-      .mkString(",")
-    val records2 = dataGen.generateUniqueDeleteRecords("002", 100)
-    val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2).asScala.toSeq, 2))
-    inputDF2.write.format("org.apache.hudi")
-      .options(writeOpts)
-      .mode(SaveMode.Append)
-      .save(basePath)
-    val hudiReadPathDF1 = spark.read.options(readOpts).format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .option(DataSourceReadOptions.READ_PATHS.key, baseFilePath)
-      .load()
-
-    val expectedCount1 = records1.asScala.count(record => record.getPartitionPath == dataGen.getPartitionPaths.head)
-    assertEquals(expectedCount1, hudiReadPathDF1.count())
-
-    // Paths Contains both baseFile and log files
-    val logFilePath = storage.listDirectEntries(new StoragePath(basePath, dataGen.getPartitionPaths.head))
-      .asScala
-      .filter(_.getPath.getName.contains("log"))
-      .map(_.getPath.toString)
-      .mkString(",")
-
-    val readPaths = baseFilePath + "," + logFilePath
-    val hudiReadPathDF2 = spark.read.format("org.apache.hudi")
-      .options(readOpts)
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .option(DataSourceReadOptions.READ_PATHS.key, readPaths)
-      .load()
-
-    assertEquals(0, hudiReadPathDF2.count())
-  }
-
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
-  def testReadPathsForOnlyLogFiles(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
-    // enable column stats
-    val hudiOpts = writeOpts ++ Map(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key() -> "fare,city_to_state,rider")
-
-    initMetaClient(HoodieTableType.MERGE_ON_READ)
-    val records1 = dataGen.generateInsertsContainsAllPartitions("000", 20)
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1).asScala.toSeq, 2))
-    inputDF1.write.format("hudi")
-      .options(hudiOpts)
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-      // Use InMemoryIndex to generate log only mor table.
-      .option(HoodieIndexConfig.INDEX_TYPE.key, IndexType.INMEMORY.toString)
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
-    // There should no base file in the file list.
-    assertTrue(DataSourceTestUtils.isLogFileOnly(basePath))
-
-    val logFilePath = storage.listDirectEntries(new StoragePath(basePath, dataGen.getPartitionPaths.head))
-      .asScala
-      .filter(_.getPath.getName.contains("log"))
-      .map(_.getPath.toString)
-      .mkString(",")
-
-    val records2 = dataGen.generateInsertsContainsAllPartitions("000", 20)
-    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2).asScala.toSeq, 2))
-    inputDF2.write.format("hudi")
-      .options(hudiOpts)
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-      // Use InMemoryIndex to generate log only mor table.
-      .option(HoodieIndexConfig.INDEX_TYPE.key, IndexType.INMEMORY.toString)
-      .mode(SaveMode.Append)
-      .save(basePath)
-    // There should no base file in the file list.
-    assertTrue(DataSourceTestUtils.isLogFileOnly(basePath))
-
-    val expectedCount1 = records1.asScala.count(record => record.getPartitionPath == dataGen.getPartitionPaths.head)
-
-    val hudiReadPathDF = spark.read.options(readOpts).format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .option(DataSourceReadOptions.READ_PATHS.key, logFilePath)
-      .load()
-
-    assertEquals(expectedCount1, hudiReadPathDF.count())
-
-    if (recordType == HoodieRecordType.SPARK) {
-      metaClient = HoodieTableMetaClient.reload(metaClient)
-      val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).build()
-      val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(inputDF1.schema, "record", "")
-      val columnStatsIndex = new ColumnStatsIndexSupport(spark, inputDF1.schema, avroSchema, metadataConfig, metaClient)
-      columnStatsIndex.loadTransposed(Seq("fare","city_to_state", "rider"), shouldReadInMemory = true) { emptyTransposedColStatsDF =>
-        assertTrue(!emptyTransposedColStatsDF.columns.contains("fare"))
-        assertTrue(!emptyTransposedColStatsDF.columns.contains("city_to_state"))
-        // rider is a simple string field, so it should have a min/max value as well as nullCount
-        assertTrue(emptyTransposedColStatsDF.filter("rider_minValue IS NOT NULL").count() > 0)
-        assertTrue(emptyTransposedColStatsDF.filter("rider_maxValue IS NOT NULL").count() > 0)
-        assertTrue(emptyTransposedColStatsDF.filter("rider_nullCount IS NOT NULL").count() > 0)
-      }
-    }
-  }
-
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testReadLogOnlyMergeOnReadTable(recordType: HoodieRecordType): Unit = {
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
@@ -1128,8 +1010,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .save(basePath)
     // There should no base file in the file list.
     assertTrue(DataSourceTestUtils.isLogFileOnly(basePath))
-    // Test read logs only mor table with glob paths.
-    assertEquals(20, spark.read.format("hudi").load(basePath).count())
     // Test read log only mor table.
     assertEquals(20, spark.read.format("hudi").options(readOpts).load(basePath).count())
   }
@@ -1340,10 +1220,9 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
    * For MOR table, test all the three query modes.
    */
   @ParameterizedTest
-  @CsvSource(Array("true,AVRO", "true,SPARK", "false,AVRO", "false,SPARK"))
-  def testPrunePartitionForTimestampBasedKeyGenerator(enableFileIndex: Boolean,
-                                                      recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType, enableFileIndex = enableFileIndex)
+  @CsvSource(Array("AVRO", "SPARK"))
+  def testPrunePartitionForTimestampBasedKeyGenerator(recordType: HoodieRecordType): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
 
     val options = commonOpts ++ Map(
       "hoodie.compact.inline" -> "false",
@@ -1384,7 +1263,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val commit3Time = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
     val commit3CompletionTime = metaClient.getActiveTimeline.lastInstant().get().getCompletionTime
 
-    val pathForROQuery = getPathForROQuery(basePath, !enableFileIndex, 3)
     // snapshot query
     val snapshotQueryRes = spark.read.format("hudi").options(readOpts).load(basePath)
     assertEquals(snapshotQueryRes.where(s"_hoodie_commit_time = '$commit1Time'").count, 50)
@@ -1398,7 +1276,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val readOptimizedQueryRes = spark.read.format("hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-      .load(pathForROQuery)
+      .load(basePath)
     assertEquals(readOptimizedQueryRes.where("partition = '2022-01-01'").count, 50)
     assertEquals(readOptimizedQueryRes.where("partition = '2022-01-02'").count, 60)
 
@@ -1433,9 +1311,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
    *
    * The read-optimized query should read `fg1_dc1.parquet` only in this case.
    */
-  @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testReadOptimizedQueryAfterInflightCompactionAndCompletedDeltaCommit(enableFileIndex: Boolean): Unit = {
+  @Test
+  def testReadOptimizedQueryAfterInflightCompactionAndCompletedDeltaCommit(): Unit = {
     val (tableName, tablePath) = ("hoodie_mor_ro_read_test_table", s"${basePath}_mor_test_table")
     val orderingFields = "col3"
     val recordKeyField = "key"
@@ -1451,9 +1328,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       HoodieWriteConfig.TBL_NAME.key -> tableName,
       "hoodie.insert.shuffle.parallelism" -> "1",
       "hoodie.upsert.shuffle.parallelism" -> "1")
-    val pathForROQuery = getPathForROQuery(tablePath, !enableFileIndex, 0)
 
-    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, options, enableFileIndex)
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, options)
 
     // First batch with all inserts
     // Deltacommit1 (DC1, completed), writing file group 1 (fg1)
@@ -1521,7 +1397,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(
         DataSourceReadOptions.QUERY_TYPE.key,
         DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-      .load(pathForROQuery)
+      .load(tablePath)
 
     // The base file in the first file slice, i.e., fg1_dc1.parquet, should be read only
     assertEquals(10, roDf.count())
@@ -1531,8 +1407,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   }
 
   @ParameterizedTest
-  @CsvSource(value = Array("true,6", "true,8", "false,6", "false,8"))
-  def testSnapshotQueryAfterInflightDeltaCommit(enableFileIndex: Boolean, tableVersion: Int): Unit = {
+  @ValueSource(ints = Array(6, 8))
+  def testSnapshotQueryAfterInflightDeltaCommit(tableVersion: Int): Unit = {
     val (tableName, tablePath) = ("hoodie_mor_snapshot_read_test_table", s"${basePath}_mor_test_table")
     val orderingFields = "col3"
     val recordKeyField = "key"
@@ -1548,9 +1424,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       HoodieWriteConfig.TBL_NAME.key -> tableName,
       "hoodie.insert.shuffle.parallelism" -> "1",
       "hoodie.upsert.shuffle.parallelism" -> "1")
-    val pathForQuery = getPathForROQuery(tablePath, !enableFileIndex, 0)
 
-    var (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, options, enableFileIndex)
+    var (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, options)
     writeOpts = writeOpts ++ Map(
       HoodieTableConfig.VERSION.key() -> tableVersion.toString,
       HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString)
@@ -1573,7 +1448,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // Snapshot query on MOR
     val snapshotDf = spark.read.format("org.apache.hudi")
       .options(readOpts)
-      .load(pathForQuery)
+      .load(tablePath)
 
     // Delete last completed instant
     metaClient = createMetaClient(spark, tablePath)
@@ -1649,25 +1524,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   }
 
   def getWriterReaderOpts(recordType: HoodieRecordType = HoodieRecordType.AVRO,
-                          opt: Map[String, String] = commonOpts,
-                          enableFileIndex: Boolean = DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.defaultValue()):
+                          opt: Map[String, String] = commonOpts):
   (Map[String, String], Map[String, String]) = {
-    val fileIndexOpt: Map[String, String] =
-      Map(DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.key -> enableFileIndex.toString)
-
     recordType match {
-      case HoodieRecordType.SPARK => (opt ++ sparkOpts, sparkOpts ++ fileIndexOpt)
-      case _ => (opt, fileIndexOpt)
-    }
-  }
-
-  def getPathForROQuery(basePath: String, useGlobbing: Boolean, partitionPathLevel: Int): String = {
-    if (useGlobbing) {
-      // When explicitly using globbing or not using HoodieFileIndex, we fall back to the old way
-      // of reading Hudi table with globbed path
-      basePath + "/*" * (partitionPathLevel + 1)
-    } else {
-      basePath
+      case HoodieRecordType.SPARK => (opt ++ sparkOpts, sparkOpts)
+      case _ => (opt, Map.empty)
     }
   }
 
