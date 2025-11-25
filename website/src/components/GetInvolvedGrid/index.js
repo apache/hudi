@@ -1,6 +1,7 @@
 import React from 'react';
 import styles from './styles.module.css';
 import Title from "@site/src/components/Title";
+import { originalSlackUrl } from '../../../constants';
 
 const GetInvolvedGrid = () => {
   const data = [
@@ -43,7 +44,7 @@ const GetInvolvedGrid = () => {
       title: 'For quick pings & 1-1 chats',
       content: (
         <>
-          Join our <a href="https://hudi.apache.org/community/join-slack">Slack group</a>. Or drop an email to{' '}
+          Join our <a href={originalSlackUrl}>Slack space</a>. Or drop an email to{' '}
           <a href="mailto:dev@hudi.apache.org">dev@hudi.apache.org</a>.
         </>
       ),

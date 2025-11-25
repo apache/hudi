@@ -1,6 +1,6 @@
 const { themes } = require("prism-react-renderer");
 const versions = require("./versions.json");
-const { slackUrl } = require('./constants');
+const { originalSlackUrl } = require('./constants');
 const allDocHomesPaths = [
   "/docs/",
   "/docs/next/",
@@ -38,7 +38,7 @@ module.exports = {
         "CDC and indexes"
       ],
     },
-    slackUrl: slackUrl,
+    slackUrl: originalSlackUrl,
   },
   plugins: [
     [
@@ -266,15 +266,15 @@ module.exports = {
             },
             {
               label: 'Slack',
-              href: slackUrl,
+              href: originalSlackUrl,
             },
             {
-              label: 'Linkdin',
-              href: 'https://www.linkedin.com/company/apache-hudi/?viewAsMember=true',
+              label: 'LinkedIn',
+              href: 'https://www.linkedin.com/company/apache-hudi/',
             },
             {
-              label: 'Youtube',
-              href: 'https://www.youtube.com/channel/UCs7AhE0BWaEPZSChrBR-Muw',
+              label: 'YouTube',
+              href: 'https://www.youtube.com/@apachehudi',
             },
             {
               label: 'X',
@@ -282,9 +282,24 @@ module.exports = {
             },
           ],
         },
-        { to: "/ecosystem", label: "Ecosystem", position: "left" },
-        { to: "/powered-by", label: "Who's Using", position: "left" },
-        { to: "/roadmap", label: "Roadmap", position: "left" },
+        {
+          label: "Ecosystem",
+          position: "left",
+          items: [
+            {
+              label: "Adopters",
+              to: "/powered-by",
+            },
+            {
+              label: "Roadmap",
+              to: "/roadmap",
+            },
+            {
+              label: "Integrations",
+              to: "/ecosystem",
+            },
+          ],
+        },
         { to: "/releases/download", label: "Download", position: "left" },
       ],
     },
@@ -315,7 +330,7 @@ module.exports = {
               to: "/releases/download",
             },
             {
-              label: "Who's Using",
+              label: "Adopters",
               to: "powered-by",
             },
           ],
@@ -391,7 +406,7 @@ module.exports = {
             },
             {
               label: "Slack",
-              href: slackUrl,
+              href: originalSlackUrl,
             },
             {
               label: "GitHub",
@@ -583,9 +598,5 @@ module.exports = {
       "data-deep-thinking-button-active-text-color": "#FFFFFF",
       async: true,
     }
-  ],
-  stylesheets: [
-    "https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro",
-    "https://at-ui.github.io/feather-font/css/iconfont.css"
-  ],
+  ]
 };
