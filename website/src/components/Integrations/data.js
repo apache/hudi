@@ -57,7 +57,7 @@ export const cdcItems = [
   {title: "Apache Flink CDC", icon: FlinkIcon},
 ]
 
-export const rawDataItems = [
+export const fileFormatItems = [
   {title: "Parquet", icon: ParquetIcon},
   {title: "ORC", icon: OrcIcon},
   {title: "Avro", icon: AvroIcon},
