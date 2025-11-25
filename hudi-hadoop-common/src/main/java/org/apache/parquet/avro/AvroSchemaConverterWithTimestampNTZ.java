@@ -632,7 +632,11 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
         || !(avroVersion.startsWith("1.7.")
         || avroVersion.startsWith("1.8.")
         || avroVersion.startsWith("1.9.")
-        || avroVersion.startsWith("1.10."));
+        || avroVersion.startsWith("1.10.")
+        || avroVersion.startsWith("1.11.")
+        || avroVersion.startsWith("1.12.")
+        || avroVersion.startsWith("1.13.")
+        || avroVersion.startsWith("1.14."));
   }
 
   private static String getRuntimeAvroVersion() {
