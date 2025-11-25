@@ -311,7 +311,8 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     return null;
   }
 
-  private static Schema createRequestedSchema(Schema tableSchema, JobConf jobConf) {
+  @VisibleForTesting
+  public static Schema createRequestedSchema(Schema tableSchema, JobConf jobConf) {
     String readCols = jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR);
     if (StringUtils.isNullOrEmpty(readCols)) {
       Schema emptySchema = Schema.createRecord(tableSchema.getName(), tableSchema.getDoc(),
