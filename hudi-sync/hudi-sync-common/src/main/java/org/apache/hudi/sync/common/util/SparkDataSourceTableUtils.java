@@ -21,6 +21,7 @@ package org.apache.hudi.sync.common.util;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
 
@@ -61,9 +62,9 @@ public class SparkDataSourceTableUtils {
       }
     }
 
-    List<HoodieSchemaField> reOrderedFields = new ArrayList<>();
-    reOrderedFields.addAll(dataCols);
-    reOrderedFields.addAll(partitionCols);
+    List<HoodieSchemaField> reOrderedFields = new ArrayList<>(dataCols.size() + partitionCols.size());
+    dataCols.forEach(field -> reOrderedFields.add(HoodieSchemaUtils.createNewSchemaField(field)));
+    partitionCols.forEach(field -> reOrderedFields.add(HoodieSchemaUtils.createNewSchemaField(field)));
     HoodieSchema reOrderedSchema = HoodieSchema.createRecord(schema.getName(), null, null, reOrderedFields);
 
     Map<String, String> sparkProperties = new HashMap<>();
