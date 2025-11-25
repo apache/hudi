@@ -57,30 +57,6 @@ toc: true
   </details>
 
   <details>
-  <summary><strong>Platform Integrations</strong></summary>
-
-  * **AWS**
-    * [hudi-aws-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-aws-bundle/1.1.0/hudi-aws-bundle-1.1.0.jar)
-
-  * **Google Cloud**
-    * [hudi-gcp-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-gcp-bundle/1.1.0/hudi-gcp-bundle-1.1.0.jar)
-
-  * **Data Catalog**
-    * [hudi-hive-sync-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-hive-sync-bundle/1.1.0/hudi-hive-sync-bundle-1.1.0.jar)
-    * [hudi-datahub-sync-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-datahub-sync-bundle/1.1.0/hudi-datahub-sync-bundle-1.1.0.jar)
-  
-  * **Kafka Connect**
-    * [hudi-kafka-connect-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-kafka-connect-bundle/1.1.0/hudi-kafka-connect-bundle-1.1.0.jar)
-
-  * **Timeline Server**
-    * [hudi-timeline-server-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-timeline-server-bundle/1.1.0/hudi-timeline-server-bundle-1.1.0.jar)
-
-  * **Metaserver**
-    * [hudi-metaserver-server-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-metaserver-server-bundle/1.1.0/hudi-metaserver-server-bundle-1.1.0.jar)
-
-  </details>
-
-  <details>
   <summary><strong>Utilities & Tools</strong></summary>
 
   * **Hudi Utilities**
@@ -92,6 +68,30 @@ toc: true
   * **Hudi CLI**
     * [hudi-cli-bundle_2.13](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-cli-bundle_2.13/1.1.0/hudi-cli-bundle_2.13-1.1.0.jar)
     * [hudi-cli-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-cli-bundle_2.12/1.1.0/hudi-cli-bundle_2.12-1.1.0.jar)
+
+  </details>
+
+  <details>
+  <summary><strong>Platform Integrations</strong></summary>
+
+  * **AWS**
+    * [hudi-aws-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-aws-bundle/1.1.0/hudi-aws-bundle-1.1.0.jar)
+
+  * **Google Cloud**
+    * [hudi-gcp-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-gcp-bundle/1.1.0/hudi-gcp-bundle-1.1.0.jar)
+
+  * **Data Catalogs**
+    * [hudi-hive-sync-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-hive-sync-bundle/1.1.0/hudi-hive-sync-bundle-1.1.0.jar)
+    * [hudi-datahub-sync-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-datahub-sync-bundle/1.1.0/hudi-datahub-sync-bundle-1.1.0.jar)
+  
+  * **Kafka Connect**
+    * [hudi-kafka-connect-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-kafka-connect-bundle/1.1.0/hudi-kafka-connect-bundle-1.1.0.jar)
+
+  * **Timeline Server**
+    * [hudi-timeline-server-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-timeline-server-bundle/1.1.0/hudi-timeline-server-bundle-1.1.0.jar)
+
+  * **Metaserver**
+    * [hudi-metaserver-server-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-metaserver-server-bundle/1.1.0/hudi-metaserver-server-bundle-1.1.0.jar)
 
   </details>
 
