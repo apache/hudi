@@ -175,7 +175,7 @@ services:
       - "namenode"
 
   zookeeper:
-    image: 'bitnami/zookeeper:3.4.12-r68'
+    image: 'bitnamilegacy/zookeeper:3.4.12-r68'
     hostname: zookeeper
     container_name: zookeeper
     ports:
