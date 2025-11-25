@@ -326,7 +326,7 @@ public class InternalSchemaConverter {
         if (decimalSchema.isFixed()) {
           return Types.DecimalTypeFixed.get(decimalSchema.getPrecision(), decimalSchema.getScale(), decimalSchema.getFixedSize());
         }
-        return Types.DecimalType.get(decimalSchema.getPrecision(), decimalSchema.getScale());
+        return Types.DecimalTypeBytes.get(decimalSchema.getPrecision(), decimalSchema.getScale());
       case TIME:
         HoodieSchema.Time timeSchema = (HoodieSchema.Time) schema;
         if (timeSchema.getPrecision() == HoodieSchema.TimePrecision.MICROS) {
@@ -552,16 +552,12 @@ public class InternalSchemaConverter {
         // NOTE: All schemas corresponding to Hoodie's type [[FIXED]] are generated
         //       with the "fixed" name to stay compatible w/ [[SchemaConverters]]
         String name = recordName + FIELD_NAME_DELIMITER + "fixed";
-        Schema fixedSchema = Schema.createFixed(name,
-            null, null, decimal.getFixedSize());
-        return HoodieSchema.fromAvroSchema(LogicalTypes.decimal(decimal.precision(), decimal.scale())
-            .addToSchema(fixedSchema));
+        return HoodieSchema.createDecimal(name, null, null, decimal.precision(), decimal.scale(), decimal.getFixedSize());
       }
 
       case DECIMAL_BYTES: {
         Types.DecimalTypeBytes decimal = (Types.DecimalTypeBytes) primitive;
-        return HoodieSchema.fromAvroSchema(LogicalTypes.decimal(decimal.precision(), decimal.scale())
-            .addToSchema(Schema.create(Schema.Type.BYTES)));
+        return HoodieSchema.createDecimal(decimal.precision(), decimal.scale());
       }
 
       default:
