@@ -21,7 +21,7 @@ import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieFileIndex.{collectReferencedColumns, convertFilterForTimestampKeyGenerator, getConfigProperties, DataSkippingFailureMode}
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
@@ -591,21 +591,10 @@ object HoodieFileIndex extends Logging {
   }
 
   private def getQueryPaths(options: Map[String, String]): Seq[StoragePath] = {
-    // NOTE: To make sure that globbing is appropriately handled w/in the
-    //       `path`, we need to:
-    //          - First, probe whether requested globbed paths has been resolved (and `glob.paths` was provided
-    //          in options); otherwise
-    //          - Treat `path` as fully-qualified (ie non-globbed) path
-    val paths = options.get("glob.paths") match {
-      case Some(globbed) =>
-        globbed.split(",").toSeq
-      case None =>
-        val path = options.getOrElse("path",
+    // Treat `path` as fully-qualified (ie non-globbed) path
+    val path = options.getOrElse("path",
           throw new IllegalArgumentException("'path' or 'glob paths' option required"))
-        Seq(path)
-    }
-
-    paths.map(new StoragePath(_))
+    Seq(new StoragePath(path))
   }
 
   // if database name is not set, fall back to use 'default' instead of failing

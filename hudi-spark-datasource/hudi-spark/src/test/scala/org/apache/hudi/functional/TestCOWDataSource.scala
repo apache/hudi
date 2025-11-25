@@ -1174,7 +1174,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }
   }
 
-  // TODO: Should this be deleted?
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testSparkPartitionByWithCustomKeyGeneratorWithGlobbing(recordType: HoodieRecordType): Unit = {
@@ -1398,8 +1397,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("")).count() == 0)
   }
 
-  private def testPartitionPruning(enableFileIndex: Boolean,
-                                   partitionEncode: Boolean,
+  private def testPartitionPruning(partitionEncode: Boolean,
                                    isMetadataEnabled: Boolean,
                                    recordType: HoodieRecordType): Unit = {
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
@@ -1464,20 +1462,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   ))
   def testQueryCOWWithBasePathAndFileIndex(partitionEncode: Boolean, isMetadataEnabled: Boolean, recordType: HoodieRecordType): Unit = {
     testPartitionPruning(
-      enableFileIndex = true,
       partitionEncode = partitionEncode,
       isMetadataEnabled = isMetadataEnabled,
       recordType = recordType)
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testPartitionPruningWithoutFileIndex(partitionEncode: Boolean): Unit = {
-    testPartitionPruning(
-      enableFileIndex = false,
-      partitionEncode = partitionEncode,
-      isMetadataEnabled = HoodieMetadataConfig.ENABLE.defaultValue,
-      recordType = HoodieRecordType.SPARK)
   }
 
   @Test def testSchemaNotEqualData(): Unit = {
