@@ -90,7 +90,6 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
   static final String PARTITION_PATH_1 = "2020";
   static final String PARTITION_PATH_2 = "2021";
-  static final String PARTITION_PATH_3 = "2023";
   static final String TABLE_NAME = "testing";
 
   private static final HoodieTestDataGenerator DATA_GENERATOR = new HoodieTestDataGenerator(0L);
