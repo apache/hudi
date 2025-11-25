@@ -71,7 +71,7 @@ public class HoodieSparkWriteableTestTable extends HoodieWriteableTestTable {
 
   public static HoodieSparkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter,
                                                  HoodieTableMetadataWriter metadataWriter, Option<HoodieEngineContext> context) {
-    return new HoodieSparkWriteableTestTable(metaClient.getBasePath(), metaClient.getRawFs(),
+    return new HoodieSparkWriteableTestTable(metaClient.getBasePathV2().toUri().getPath(), metaClient.getRawFs(),
         metaClient, schema, filter, metadataWriter, context);
   }
 

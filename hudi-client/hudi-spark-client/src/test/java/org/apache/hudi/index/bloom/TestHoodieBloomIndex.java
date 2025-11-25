@@ -63,6 +63,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -74,8 +75,6 @@ import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResou
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
@@ -221,22 +220,13 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     assertEquals(4, filesList.size());
 
     if (rangePruning) {
-      // these files will not have the key ranges
-      assertNull(filesList.get(0).getRight().getMaxRecordKey());
-      assertNull(filesList.get(0).getRight().getMinRecordKey());
-      assertFalse(filesList.get(1).getRight().hasKeyRanges());
-      assertNotNull(filesList.get(2).getRight().getMaxRecordKey());
-      assertNotNull(filesList.get(2).getRight().getMinRecordKey());
-      assertTrue(filesList.get(3).getRight().hasKeyRanges());
-
-      // no longer sorted, but should have same files.
-
-      List<ImmutablePair<String, BloomIndexFileInfo>> expected =
-          Arrays.asList(new ImmutablePair<>("2016/04/01", new BloomIndexFileInfo("2")),
+      Set<ImmutablePair<String, BloomIndexFileInfo>> expected =
+          Stream.of(new ImmutablePair<>("2016/04/01", new BloomIndexFileInfo("2")),
               new ImmutablePair<>("2015/03/12", new BloomIndexFileInfo("1")),
               new ImmutablePair<>("2015/03/12", new BloomIndexFileInfo("3", "000", "000")),
-              new ImmutablePair<>("2015/03/12", new BloomIndexFileInfo("4", "001", "003")));
-      assertEquals(expected, filesList);
+              new ImmutablePair<>("2015/03/12", new BloomIndexFileInfo("4", "001", "003")))
+              .collect(Collectors.toSet());
+      assertEquals(expected, new HashSet<>(filesList));
     }
   }
 
