@@ -106,9 +106,22 @@ public class HoodieSchema implements Serializable {
    *
    * @param avroSchema the Avro schema to wrap
    * @return new HoodieSchema instance
-   * @throws IllegalArgumentException if avroSchema is null
    */
   public static HoodieSchema fromAvroSchema(Schema avroSchema) {
+    if (avroSchema == null) {
+      return null;
+    }
+    LogicalType logicalType = avroSchema.getLogicalType();
+    if (logicalType != null) {
+      if (logicalType instanceof LogicalTypes.Decimal) {
+        return new HoodieSchema.Decimal(avroSchema);
+      } else if (logicalType instanceof LogicalTypes.TimeMillis || logicalType instanceof LogicalTypes.TimeMicros) {
+        return new HoodieSchema.Time(avroSchema);
+      } else if (logicalType instanceof LogicalTypes.TimestampMillis || logicalType instanceof LogicalTypes.TimestampMicros
+          || logicalType instanceof LogicalTypes.LocalTimestampMillis || logicalType instanceof LogicalTypes.LocalTimestampMicros) {
+        return new HoodieSchema.Timestamp(avroSchema);
+      }
+    }
     return new HoodieSchema(avroSchema);
   }
 
@@ -150,6 +163,16 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
+   * Creates a nullable schema for the specified primitive type.
+   * @param type the primitive schema type
+   * @return new HoodieSchema representing a nullable version of the primitive type
+   */
+  public static HoodieSchema createNullable(HoodieSchemaType type) {
+    HoodieSchema nonNullSchema = create(type);
+    return createNullable(nonNullSchema);
+  }
+
+  /**
    * Creates a nullable schema (union of null and the specified schema).
    *
    * @param schema the schema to make nullable
@@ -171,14 +194,14 @@ public class HoodieSchema implements Serializable {
       }
 
       // Add null to existing union
-      List<Schema> newUnionTypes = new ArrayList<>();
+      List<Schema> newUnionTypes = new ArrayList<>(unionTypes.size() + 1);
       newUnionTypes.add(Schema.create(Schema.Type.NULL));
       newUnionTypes.addAll(unionTypes);
       Schema nullableSchema = Schema.createUnion(newUnionTypes);
       return new HoodieSchema(nullableSchema);
     } else {
       // Create new union with null
-      List<Schema> unionTypes = new ArrayList<>();
+      List<Schema> unionTypes = new ArrayList<>(2);
       unionTypes.add(Schema.create(Schema.Type.NULL));
       unionTypes.add(inputAvroSchema);
       Schema nullableSchema = Schema.createUnion(unionTypes);
@@ -493,19 +516,6 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
-   * Creates a nullable union (null + specified type).
-   *
-   * @param type the non-null type
-   * @return new HoodieSchema representing a nullable union
-   */
-  public static HoodieSchema createNullableSchema(HoodieSchema type) {
-    ValidationUtils.checkArgument(type != null, "Type cannot be null");
-
-    HoodieSchema nullSchema = HoodieSchema.create(HoodieSchemaType.NULL);
-    return createUnion(nullSchema, type);
-  }
-
-  /**
    * Returns the type of this schema.
    *
    * @return the schema type
@@ -515,15 +525,15 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
-   * Returns the name of this schema, if it has one.
+   * Returns the name of the schema if a record, otherwise it returns the name of the type.
    *
-   * @return Option containing the schema name, or Option.empty() if none
+   * @return the schema name
    */
-  public Option<String> getName() {
+  public String getName() {
     if (avroSchema.getLogicalType() != null) {
-      return Option.of(type.name().toLowerCase(Locale.ENGLISH));
+      return type.name().toLowerCase(Locale.ENGLISH);
     }
-    return Option.ofNullable(avroSchema.getName());
+    return avroSchema.getName();
   }
 
   /**
@@ -536,12 +546,12 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
-   * Returns the full name of this schema (namespace + name).
+   * Returns the full name of this schema (namespace + name) if a record, or the type name otherwise.
    *
-   * @return Option containing the full schema name, or Option.empty() if none
+   * @return The full schema name, or name of the type if not a record
    */
-  public Option<String> getFullName() {
-    return Option.ofNullable(avroSchema.getFullName());
+  public String getFullName() {
+    return avroSchema.getFullName();
   }
 
   /**
@@ -617,7 +627,7 @@ public class HoodieSchema implements Serializable {
       throw new IllegalStateException("Cannot get element type from non-array schema: " + type);
     }
 
-    return new HoodieSchema(avroSchema.getElementType());
+    return HoodieSchema.fromAvroSchema(avroSchema.getElementType());
   }
 
   /**
@@ -631,7 +641,7 @@ public class HoodieSchema implements Serializable {
       throw new IllegalStateException("Cannot get value type from non-map schema: " + type);
     }
 
-    return new HoodieSchema(avroSchema.getValueType());
+    return HoodieSchema.fromAvroSchema(avroSchema.getValueType());
   }
 
   /**
@@ -646,7 +656,7 @@ public class HoodieSchema implements Serializable {
     }
 
     return avroSchema.getTypes().stream()
-        .map(HoodieSchema::new)
+        .map(HoodieSchema::fromAvroSchema)
         .collect(Collectors.toList());
   }
 
@@ -736,14 +746,14 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
-   * If this is a union schema, returns the non-null type.
+   * If this is a union schema, returns the non-null type. Otherwise, returns this schema.
    *
-   * @return the non-null schema from a union
-   * @throws IllegalStateException if this is not a nullable union
+   * @return the non-null schema from a union or the current schema
+   * @throws IllegalStateException if the union has more than two types
    */
   public HoodieSchema getNonNullType() {
     if (type != HoodieSchemaType.UNION) {
-      throw new IllegalStateException("Cannot get non-null type from non-union schema: " + type);
+      return this;
     }
 
     List<HoodieSchema> types = getTypes();
@@ -1121,8 +1131,12 @@ public class HoodieSchema implements Serializable {
     }
 
     @Override
-    public Option<String> getName() {
-      return Option.of(String.format("decimal(%d,%d)", precision, scale));
+    public String getName() {
+      return String.format("decimal(%d,%d)", precision, scale);
+    }
+
+    public boolean isFixed() {
+      return fixedSize.isPresent();
     }
 
     @Override
@@ -1193,18 +1207,18 @@ public class HoodieSchema implements Serializable {
     }
 
     @Override
-    public Option<String> getName() {
+    public String getName() {
       if (isUtcAdjusted) {
         if (precision == TimePrecision.MILLIS) {
-          return Option.of("timestamp-millis");
+          return "timestamp-millis";
         } else {
-          return Option.of("timestamp-micros");
+          return "timestamp-micros";
         }
       } else {
         if (precision == TimePrecision.MILLIS) {
-          return Option.of("local-timestamp-millis");
+          return "local-timestamp-millis";
         } else {
-          return Option.of("local-timestamp-micros");
+          return "local-timestamp-micros";
         }
       }
     }
@@ -1255,11 +1269,11 @@ public class HoodieSchema implements Serializable {
     }
 
     @Override
-    public Option<String> getName() {
+    public String getName() {
       if (precision == TimePrecision.MILLIS) {
-        return Option.of("time-millis");
+        return "time-millis";
       } else {
-        return Option.of("time-micros");
+        return "time-micros";
       }
     }
 
