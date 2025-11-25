@@ -79,8 +79,11 @@ import java.util.stream.Collectors;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME_SOURCE1;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME_SOURCE2;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_COMMITS_RETAINED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -138,180 +141,94 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH_1});
 
     triggerNCommitsToSource(writeConfig1, PARTITION_PATH_1, 1, Option.of(dataGen));
-    triggerNUpdatesToSource(writeConfig1, 1, 5, dataGen);
+    triggerNUpdatesToSource(writeConfig1, 1, 1, dataGen);
 
     sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
 
     HoodieWriteConfig writeConfig2 = getHoodieWriteConfig(sourcePath2);
     dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH_2});
     triggerNCommitsToSource(writeConfig2, PARTITION_PATH_2, 1, Option.of(dataGen));
-    triggerNUpdatesToSource(writeConfig2, 1, 5, dataGen);
+    triggerNUpdatesToSource(writeConfig2, 1, 1, dataGen);
 
     syncMetadata(sourcePath1, sourceMetaClient1, targetPath);
-
     assertDataFromSourcesToTarget(singletonList(sourcePath1), targetPath, true);
 
     syncMetadata(sourcePath2, sourceMetaClient2, targetPath);
-
     assertDataFromSourcesToTarget(asList(sourcePath1, sourcePath2), targetPath, true);
   }
 
-  @Test
-  void testHoodieMetadataSyncWithBulkInsert() throws Exception {
-    Properties props = getTableProps();
-    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
-
-    HoodieWriteConfig writeConfig1 = getHoodieWriteConfig(sourcePath1);
-    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH_1});
-
-    triggerNCommitsToSource(writeConfig1, PARTITION_PATH_1, 1, Option.of(dataGen));
-    triggerNUpdatesToSource(writeConfig1, 1, 5, dataGen);
-
-    sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
-
-    HoodieWriteConfig writeConfig2 = getHoodieWriteConfig(sourcePath2);
-    dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH_2});
-    triggerNCommitsToSource(writeConfig2, PARTITION_PATH_2, 1, Option.of(dataGen));
-    triggerNBulkInsertsToSource(writeConfig2, PARTITION_PATH_2, 1, 5, Option.of(dataGen));
-
-    syncMetadata(sourcePath1, sourceMetaClient1, targetPath);
-
-    assertDataFromSourcesToTarget(singletonList(sourcePath1), targetPath, true);
-
-    syncMetadata(sourcePath2, sourceMetaClient2, targetPath);
-
-    assertDataFromSourcesToTarget(asList(sourcePath1, sourcePath2), targetPath, true);
-  }
-
-  @Test
-  void testHoodieMetadataSyncWithClustering() throws Exception {
-    Properties props = getTableProps();
-    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
-
-    HoodieWriteConfig writeConfig1 = getHoodieWriteConfig(sourcePath1);
-    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH_1});
-
-    triggerNCommitsToSource(writeConfig1, PARTITION_PATH_1, 1, Option.of(dataGen));
-    triggerNUpdatesToSource(writeConfig1, 1, 5, dataGen);
-
-    sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
-
-    HoodieWriteConfig writeConfig2 = getHoodieWriteConfig(sourcePath2);
-    dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH_2});
-    triggerNCommitsToSource(writeConfig2, PARTITION_PATH_2, 1, Option.of(dataGen));
-    triggerNBulkInsertsToSource(writeConfig2, PARTITION_PATH_2, 1, 5, Option.of(dataGen));
-
-    //perform clustering
-    triggerClustering(sourcePath1);
-
-    syncMetadata(sourcePath1, sourceMetaClient1, targetPath);
-
-    assertDataFromSourcesToTarget(singletonList(sourcePath1), targetPath, true);
-
-    syncMetadata(sourcePath2, sourceMetaClient2, targetPath);
-
-    assertDataFromSourcesToTarget(asList(sourcePath1, sourcePath2), targetPath, true);
-  }
-
+  /**
+   * Validates syncing metadata to a target table for different write operations
+   * with and without bootstrap. This ensures metadata and file system view stay
+   * consistent across operations such as commit, update, clustering, delete, etc.
+   */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void testHoodieMetadataSyncWithInsertOverwrite(boolean performaBootstrap) throws Exception {
-    Properties props = getTableProps();
-    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
-    HoodieWriteConfig writeConfig1 = getHoodieWriteConfig(sourcePath1);
-    // Trigger Insert Overwrite Commits to source table 1
-    triggerNInsertOverwriteToSource(writeConfig1, sourceMetaClient1, PARTITION_PATH_1, 2);
+  void testMetadataSync_WithMultipleActions(boolean performBootstrap) throws Exception {
+    // Initialize source table metadata and test config
+    Properties tableProps = getTableProps();
+    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(
+        hadoopConf(), sourcePath1, tableProps);
 
-    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, performaBootstrap);
+    HoodieWriteConfig writeConfig = getHoodieWriteConfig(sourcePath1);
+    HoodieTestDataGenerator genP1 = new HoodieTestDataGenerator(new String[] {PARTITION_PATH_1});
+    HoodieTestDataGenerator genP2 = new HoodieTestDataGenerator(new String[] {PARTITION_PATH_2});
 
-    // validate commit on target table
-    assertDataFromSourcesToTarget(singletonList(sourcePath1), targetPath, true);
+    // 1. Initial commit
+    triggerNCommitsToSource(writeConfig, PARTITION_PATH_1, 1, Option.of(genP1));
+    maybeSyncAndAssert(performBootstrap, singletonMap(PARTITION_PATH_1, sourcePath1));
 
-    sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
-    HoodieWriteConfig writeConfig2 = getHoodieWriteConfig(sourcePath2);
-    // trigger Insert Overwrite commits to source table 2
-    triggerNInsertOverwriteToSource(writeConfig2, sourceMetaClient2, PARTITION_PATH_2, 2);
+    // 2. Update existing records
+    triggerNUpdatesToSource(writeConfig, 2, 1, genP1);
+    maybeSyncAndAssert(performBootstrap, singletonMap(PARTITION_PATH_1, sourcePath1));
 
-    syncMetadata(sourcePath2, sourceMetaClient2, targetPath, performaBootstrap);
+    // 3. Bulk insert to same partition
+    triggerNBulkInsertsToSource(writeConfig, PARTITION_PATH_1, 1, 10, Option.of(genP1));
+    maybeSyncAndAssert(performBootstrap, singletonMap(PARTITION_PATH_1, sourcePath1));
 
-    assertDataFromSourcesToTarget(asList(sourcePath1, sourcePath2), targetPath, true);
+    // 4. Clustering operation
+    triggerClustering(sourcePath1);
+    maybeSyncAndAssert(performBootstrap, singletonMap(PARTITION_PATH_1, sourcePath1));
+
+    // 5. Deletes
+    triggerNDeletesToSource(writeConfig, 1, 5, genP1);
+    maybeSyncAndAssert(performBootstrap, singletonMap(PARTITION_PATH_1, sourcePath1));
+
+    // 6. Insert overwrite to another partition
+    triggerNInsertOverwriteToSource(writeConfig, sourceMetaClient1, PARTITION_PATH_2,
+        2, Option.of(genP2));
+
+    Map<String, String> partitionToSourceMap = new HashMap<>();
+    partitionToSourceMap.put(PARTITION_PATH_1, sourcePath1);
+    partitionToSourceMap.put(PARTITION_PATH_2, sourcePath1);
+    maybeSyncAndAssert(performBootstrap, partitionToSourceMap);
+
+    // 7. Clean old instants
+    triggerCleanToSource(getHoodieCleanConfig(sourcePath1, 2));
+    maybeSyncAndAssert(performBootstrap, partitionToSourceMap);
+
+    // Run bootstrap only once at the end if enabled
+    if (performBootstrap) {
+      syncAndAssert(partitionToSourceMap, true);
+    }
+
+    // 8. Delete one partition and verify read-consistency
+    triggerDeletePartition(writeConfig, singletonList(PARTITION_PATH_2));
+    partitionToSourceMap.remove(PARTITION_PATH_2);
+    syncAndAssert(partitionToSourceMap, false);
   }
 
-  @Test
-  void testHoodieMetadataSyncWithDeletePartitions() throws Exception {
-    Properties props = HoodieTableMetaClient.withPropertyBuilder()
-        .setTableName(RAW_TRIPS_TEST_NAME)
-        .setTableType(HoodieTableType.COPY_ON_WRITE)
-        .setPayloadClass(HoodieAvroPayload.class)
-        .fromProperties(new Properties())
-        .build();
-    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
-
-    HoodieWriteConfig writeConfig1 = getHoodieWriteConfig(sourcePath1);
-    triggerNCommitsToSource(writeConfig1, PARTITION_PATH_1, 2);
-    triggerDeletePartition(writeConfig1, singletonList(PARTITION_PATH_1));
-
-    sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
-
-    triggerNCommitsToSource(getHoodieWriteConfig(sourcePath2), PARTITION_PATH_2, 2);
-
-    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
-
+  private void syncAndAssert(Map<String, String> partitions, boolean isBootstrap) {
+    syncMetadata(sourcePath1, sourceMetaClient1, targetPath, isBootstrap);
     assertDataFromSourcesToTarget(singletonList(sourcePath1), targetPath, true);
-
-    syncMetadata(sourcePath2, sourceMetaClient2, targetPath, false);
-
-    assertDataFromSourcesToTarget(asList(sourcePath1, sourcePath2), targetPath, true);
+    assertFSV(singletonList(sourcePath1), targetPath, partitions, isBootstrap);
   }
 
-  @Test
-  void testHoodieMetadataSyncWithDelete() throws Exception {
-    Properties props = getTableProps();
-    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
-
-    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH_1});
-
-    triggerNCommitsToSource(getHoodieWriteConfig(sourcePath1), PARTITION_PATH_1, 2, Option.of(dataGen));
-    triggerNDeletesToSource(getHoodieWriteConfig(sourcePath1), 2, 5, dataGen);
-
-    sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
-    triggerNCommitsToSource(getHoodieWriteConfig(sourcePath2), PARTITION_PATH_2, 1);
-
-    syncMetadata(sourcePath1, sourceMetaClient1, targetPath);
-
-    assertDataFromSourcesToTarget(singletonList(sourcePath1), targetPath, true);
-
-    syncMetadata(sourcePath2, sourceMetaClient2, targetPath);
-
-    assertDataFromSourcesToTarget(asList(sourcePath1, sourcePath2), targetPath, true);
-  }
-
-  @Test
-  void testHoodieMetadataSyncWithClean() throws Exception {
-    Properties props = getTableProps();
-    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
-
-    HoodieWriteConfig writeConfig1 = getHoodieWriteConfig(sourcePath1);
-    triggerNCommitsToSource(writeConfig1, PARTITION_PATH_1, 5);
-
-    HoodieWriteConfig cleanConfig1 = getHoodieCleanConfig(sourcePath1);
-    triggerCleanToSource(cleanConfig1);
-
-    sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
-
-    HoodieWriteConfig writeConfig2 = getHoodieWriteConfig(sourcePath2);
-    triggerNCommitsToSource(writeConfig2, PARTITION_PATH_2, 5);
-
-    HoodieWriteConfig cleanConfig2 = getHoodieCleanConfig(sourcePath2);
-    triggerCleanToSource(cleanConfig2);
-
-    syncMetadata(sourcePath1, sourceMetaClient1, targetPath);
-    assertDataFromSourcesToTarget(singletonList(sourcePath1), targetPath, true);
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList(PARTITION_PATH_1), false);
-
-    syncMetadata(sourcePath2, sourceMetaClient2, targetPath);
-    assertDataFromSourcesToTarget(asList(sourcePath1, sourcePath2), targetPath, true);
-    assertFSV(asList(sourcePath1, sourcePath2), targetPath, asList(PARTITION_PATH_1, PARTITION_PATH_2), false);
+  private void maybeSyncAndAssert(boolean performBootstrap,
+                                  Map<String, String> partitions) {
+    if (!performBootstrap) {
+      syncAndAssert(partitions, false);
+    }
   }
 
   @Test
@@ -352,7 +269,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
   }
 
   @Test
-  void testHoodieMetadataSync_Bootstrap() throws Exception {
+  void testHoodieMetadataSync_BootstrapMultipleSources() throws Exception {
     Properties props = getTableProps();
     sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
 
@@ -366,7 +283,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     syncMetadata(sourcePath1, sourceMetaClient1, targetPath, true);
     assertDataFromSourcesToTarget(singletonList(sourcePath1), targetPath, true);
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList(PARTITION_PATH_1), true);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonMap(PARTITION_PATH_1, sourcePath1), true);
 
     // write data to 2nd table
     sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
@@ -374,13 +291,17 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     syncMetadata(sourcePath2, sourceMetaClient2, targetPath, true);
     assertDataFromSourcesToTarget(asList(sourcePath1, sourcePath2), targetPath, true);
-    assertFSV(asList(sourcePath1, sourcePath2), targetPath, asList(PARTITION_PATH_1, PARTITION_PATH_2), true);
+
+    Map<String, String> partitionToSourceMap = new HashMap<>();
+    partitionToSourceMap.put(PARTITION_PATH_1, sourcePath1);
+    partitionToSourceMap.put(PARTITION_PATH_2, sourcePath2);
+    assertFSV(asList(sourcePath1, sourcePath2), targetPath, partitionToSourceMap, true);
 
     triggerNCommitsToSource(getHoodieWriteConfig(sourcePath2), PARTITION_PATH_2, 1);
 
     syncMetadata(sourcePath2, sourceMetaClient2, targetPath);
     assertDataFromSourcesToTarget(asList(sourcePath1, sourcePath2), targetPath, true);
-    assertFSV(asList(sourcePath1, sourcePath2), targetPath, asList(PARTITION_PATH_1, PARTITION_PATH_2), true);
+    assertFSV(asList(sourcePath1, sourcePath2), targetPath, partitionToSourceMap, true);
   }
 
   @ParameterizedTest
@@ -405,7 +326,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
         singletonList("p1"), 2, false, true)));
 
     syncMetadata(sourcePath1, sourceMetaClient1, targetPath, performBootstrap);
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), performBootstrap);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonMap("p1", sourcePath1), performBootstrap);
 
     // move inflight commit 105 to completed state
     testTable.moveInflightCommitToComplete(instant2, testTable.doWriteOperation(instant2, INSERT, emptyList(),
@@ -413,7 +334,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     // it should pick up the commit 105 and sync to target table
     syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), performBootstrap);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonMap("p1", sourcePath1), performBootstrap);
 
     sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
     HoodieTestTable testTable2 = HoodieTestTable.of(sourceMetaClient2);
@@ -423,7 +344,10 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
         singletonList("p2"), 2, false, true)));
 
     syncMetadata(sourcePath2, sourceMetaClient2, targetPath, performBootstrap);
-    assertFSV(asList(sourcePath1, sourcePath2), targetPath, asList("p1", "p2"), true);
+    Map<String, String> partitionToSourceMap = new HashMap<>();
+    partitionToSourceMap.put("p1", sourcePath1);
+    partitionToSourceMap.put("p2", sourcePath2);
+    assertFSV(asList(sourcePath1, sourcePath2), targetPath, partitionToSourceMap, true);
   }
 
   @Test
@@ -450,7 +374,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
         singletonList("p1"), 2, false, true)));
 
     syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), true);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonMap("p1", sourcePath1), true);
 
     // move inflight commit 105 to completed state
     testTable.moveInflightCommitToComplete(instant2, testTable.doWriteOperation(instant2, INSERT, emptyList(),
@@ -458,7 +382,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     // it should pick up the commit 105 and sync to target table
     syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), false);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonMap("p1", sourcePath1), false);
 
     // move inflight commit 110 to completed state
     testTable.moveInflightCommitToComplete(instant3, testTable.doWriteOperation(instant3, INSERT, emptyList(),
@@ -470,7 +394,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
         singletonList("p1"), 2, false, true)));
 
     syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), false);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonMap("p1", sourcePath1), false);
   }
 
   @Test
@@ -489,7 +413,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
         singletonList("p1"), 2, false, true)));
 
     syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), true);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonMap("p1", sourcePath1), true);
 
     String rollbackInstant = "110";
     HoodieRollbackMetadata rollbackMetadata = getHoodieRollbackMetadata(instant2);
@@ -504,7 +428,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
         singletonList("p1"), 2, false, true)));
 
     syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), false);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonMap("p1", sourcePath1), false);
   }
 
   private HoodieRollbackPlan getHoodieRollbackPlan(String commitToRollback) {
@@ -552,30 +476,30 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testHoodieMetadataSync_SameInstantsOnDifferentSourceTables(boolean performBootstrap) throws Exception {
-    Properties props = getTableProps();
-    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
+    sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, getTableProps(RAW_TRIPS_TEST_NAME_SOURCE1));
     HoodieTestTable testTable = HoodieTestTable.of(sourceMetaClient1);
-
-    sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, props);
-    HoodieTestTable testTable2 = HoodieTestTable.of(sourceMetaClient2);
 
     String instant1 = "100";
     testTable.addCommit(instant1, Option.of(testTable.doWriteOperation(instant1, INSERT, singletonList("p1"),
         singletonList("p1"), 2, false, true)));
 
     String instant2 = "105";
-    testTable.addCommit(instant2, Option.of(testTable.doWriteOperation(instant1, INSERT, singletonList("p2"),
+    testTable.addCommit(instant2, Option.of(testTable.doWriteOperation(instant2, INSERT, emptyList(),
+        singletonList("p1"), 2, false, true)));
+
+    sourceMetaClient2 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath2, getTableProps(RAW_TRIPS_TEST_NAME_SOURCE2));
+    HoodieTestTable testTable2 = HoodieTestTable.of(sourceMetaClient2);
+
+    testTable2.addCommit(instant1, Option.of(testTable2.doWriteOperation(instant1, INSERT, singletonList("p2"),
         singletonList("p2"), 2, false, true)));
-
-    String instant3 = "100";
-    testTable2.addCommit(instant3, Option.of(testTable2.doWriteOperation(instant1, INSERT, singletonList("p3"),
-        singletonList("p3"), 2, false, true)));
-
 
     syncMetadata(sourcePath1, sourceMetaClient1, targetPath, performBootstrap);
     syncMetadata(sourcePath2, sourceMetaClient2, targetPath, performBootstrap);
 
-    assertFSV(asList(sourcePath1, sourcePath2), targetPath, asList("p1", "p2", "p3"), true);
+    Map<String, String> partitionToSourceMap = new HashMap<>();
+    partitionToSourceMap.put("p1", sourcePath1);
+    partitionToSourceMap.put("p2", sourcePath2);
+    assertFSV(asList(sourcePath1, sourcePath2), targetPath, partitionToSourceMap, true);
   }
 
   @Test
@@ -590,7 +514,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     // bootstrap target table
     syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false);
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), true);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonMap("p1", sourcePath1), true);
 
     HoodieTableMetaClient targetTableMetaClient = HoodieTableMetaClient.builder().setBasePath(targetPath)
         .setConf(hadoopConf()).build();
@@ -623,7 +547,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     assertFalse(targetTableMetaClient.reloadActiveTimeline().getInstants().stream().anyMatch(instant -> instant.getTimestamp().equals(pendingInstant)));
     assertFalse(targetMetadataTableMetaClient.reloadActiveTimeline().containsInstant(pendingInstant));
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), true);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonMap("p1", sourcePath1), true);
   }
 
   @Test
@@ -666,7 +590,11 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     executor.shutdown();
 
     // Validate target is fully synced
-    assertFSV(asList(sourcePath1, sourcePath2, sourcePath3), targetPath, asList("p1", "p2", "p3"), false);
+    Map<String, String> partitionToSourceMap = new HashMap<>();
+    partitionToSourceMap.put("p1", sourcePath1);
+    partitionToSourceMap.put("p2", sourcePath2);
+    partitionToSourceMap.put("p3", sourcePath3);
+    assertFSV(asList(sourcePath1, sourcePath2, sourcePath3), targetPath, partitionToSourceMap, false);
   }
 
   private void syncMetadata(String sourcePath, HoodieTableMetaClient sourceMetaClient, String targetPath) {
@@ -737,8 +665,8 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     }
   }
 
-  private void triggerNInsertOverwriteToSource(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient, String partitionPath, int numCommits) throws IOException {
-    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {partitionPath});
+  private void triggerNInsertOverwriteToSource(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient, String partitionPath, int numCommits, Option<HoodieTestDataGenerator> dataGenOpt) throws IOException {
+    HoodieTestDataGenerator dataGen = dataGenOpt.orElseGet(() -> new HoodieTestDataGenerator(new String[] {partitionPath}));
     for (int i = 0; i < numCommits; i++) {
       try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
         String instant2 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
@@ -811,15 +739,19 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
   }
 
   private Properties getTableProps() {
+    return getTableProps(RAW_TRIPS_TEST_NAME);
+  }
+
+  private Properties getTableProps(String tableName) {
     return HoodieTableMetaClient.withPropertyBuilder()
-        .setTableName(RAW_TRIPS_TEST_NAME)
+        .setTableName(tableName)
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setPayloadClass(HoodieAvroPayload.class)
         .fromProperties(new Properties())
         .build();
   }
 
-  private void assertFSV(List<String> sourcePaths, String targetPath, List<String> partitions, boolean matchLatestFileGroups) {
+  private void assertFSV(List<String> sourcePaths, String targetPath, Map<String, String> partitionToSourceMap, boolean matchLatestFileGroups) {
     HoodieTableMetaClient targetTableMetaClient = HoodieTableMetaClient.builder().setBasePath(targetPath)
         .setConf(hadoopConf()).build();
 
@@ -839,10 +771,10 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     targetFSV.loadAllPartitions();
     Set<Path> targetPartitions = new HashSet<>(targetFSV.getPartitionPaths());
-    // ToDo - validate full partition paths
-    assertEquals(partitions.size(), targetPartitions.size());
+    Set<Path> sourcePartitions = partitionToSourceMap.entrySet().stream().map(e -> new Path(e.getValue(), e.getKey())).collect(Collectors.toSet());
+    assertEquals(sourcePartitions, targetPartitions);
 
-    partitions.forEach(partition -> {
+    partitionToSourceMap.keySet().forEach(partition -> {
       Set<HoodieBaseFile> sourceBaseFiles = new HashSet<>();
       sourceFSVs.forEach(fsv ->
           sourceBaseFiles.addAll(
@@ -894,9 +826,9 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     return config;
   }
 
-  private HoodieWriteConfig getHoodieCleanConfig(String basePath) {
+  private HoodieWriteConfig getHoodieCleanConfig(String basePath, int retainCommits) {
     Properties props = new Properties();
-    props.put(CLEANER_COMMITS_RETAINED.key(), "2");
+    props.put(CLEANER_COMMITS_RETAINED.key(), String.valueOf(retainCommits));
     return HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withEmbeddedTimelineServerEnabled(false)
