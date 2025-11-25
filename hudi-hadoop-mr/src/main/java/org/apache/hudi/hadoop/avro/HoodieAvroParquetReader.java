@@ -19,9 +19,13 @@
 package org.apache.hudi.hadoop.avro;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.HoodieColumnProjectionUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -31,10 +35,6 @@ import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
-
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -68,11 +68,11 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
       if (internalSchemaOption.isPresent()) {
         // do schema reconciliation in case there exists read column which is not in the file schema.
         InternalSchema mergedInternalSchema = new InternalSchemaMerger(
-            AvroInternalSchemaConverter.convert(baseSchema),
+            InternalSchemaConverter.convert(HoodieSchema.fromAvroSchema(baseSchema)),
             internalSchemaOption.get(),
             true,
             true).mergeSchema();
-        baseSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema, baseSchema.getFullName());
+        baseSchema = InternalSchemaConverter.convert(mergedInternalSchema, baseSchema.getFullName()).getAvroSchema();
       }
 
       // if exists read columns, we need to filter columns.

@@ -43,7 +43,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -843,7 +843,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient);
     InternalSchema mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
         true, false).mergeSchema();
-    Schema mergedAvroSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema, readerSchema.getFullName());
+    Schema mergedAvroSchema = InternalSchemaConverter.convert(mergedInternalSchema, readerSchema.getFullName()).toAvroSchema();
 
     return Option.of(Pair.of((record) -> {
       return record.rewriteRecordWithNewSchema(

@@ -32,7 +32,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
@@ -182,7 +182,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       if (fileSchema.isEmptySchema() && writeConfig.getBoolean(HoodieCommonConfig.RECONCILE_SCHEMA)) {
         TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
         try {
-          fileSchema = AvroInternalSchemaConverter.convert(tableSchemaResolver.getTableAvroSchema(true));
+          fileSchema = InternalSchemaConverter.convert(HoodieSchema.fromAvroSchema(tableSchemaResolver.getTableAvroSchema(true)));
         } catch (Exception e) {
           throw new HoodieException(String.format("Failed to get InternalSchema for given versionId: %s", commitInstantTime), e);
         }
@@ -203,8 +203,8 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
           .collect(Collectors.toList());
       InternalSchema mergedSchema = new InternalSchemaMerger(writeInternalSchema, querySchema,
           true, false, false).mergeSchema();
-      Schema newWriterSchema = AvroInternalSchemaConverter.convert(mergedSchema, writerSchema.getFullName());
-      Schema writeSchemaFromFile = AvroInternalSchemaConverter.convert(writeInternalSchema, newWriterSchema.getFullName());
+      Schema newWriterSchema = InternalSchemaConverter.convert(mergedSchema, writerSchema.getFullName()).getAvroSchema();
+      Schema writeSchemaFromFile = InternalSchemaConverter.convert(writeInternalSchema, newWriterSchema.getFullName()).getAvroSchema();
       boolean needToReWriteRecord = sameCols.size() != colNamesFromWriteSchema.size()
           || SchemaCompatibility.checkReaderWriterCompatibility(newWriterSchema, writeSchemaFromFile).getType() == org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
       if (needToReWriteRecord) {
