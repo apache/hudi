@@ -37,7 +37,7 @@ public class DummySchemaPostProcessor extends SchemaPostProcessor {
   @Override
   public HoodieSchema processSchema(HoodieSchema schema) {
     return HoodieSchema.createRecord("test", null, null,
-        Collections.singletonList(HoodieSchemaField.of("testString", HoodieSchema.createNullableSchema(HoodieSchema.create(HoodieSchemaType.STRING)))));
+        Collections.singletonList(HoodieSchemaField.of("testString", HoodieSchema.createNullable(HoodieSchemaType.STRING))));
   }
 
 }

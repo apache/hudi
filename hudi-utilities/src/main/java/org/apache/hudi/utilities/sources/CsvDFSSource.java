@@ -86,7 +86,7 @@ public class CsvDFSSource extends RowSource {
     super(props, sparkContext, sparkSession, schemaProvider);
     this.pathSelector = DFSPathSelector.createSourceSelector(props, sparkContext.hadoopConfiguration());
     if (schemaProvider != null) {
-      sourceSchema = (StructType) SchemaConverters.toSqlType(schemaProvider.getSourceSchema())
+      sourceSchema = (StructType) SchemaConverters.toSqlType(schemaProvider.getSourceSchema().toAvroSchema())
           .dataType();
     } else {
       sourceSchema = null;

@@ -82,7 +82,7 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
 
     HoodieSchema schema = provider.getSourceSchema();
     assertEquals(HoodieSchemaType.RECORD, schema.getType());
-    assertEquals("test", schema.getName().get());
+    assertEquals("test", schema.getName());
     assertNotNull(schema.getField("testString"));
   }
 
@@ -98,7 +98,7 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
 
     HoodieSchema schema = provider.getSourceSchema();
     assertEquals(HoodieSchemaType.RECORD, schema.getType());
-    assertEquals("test", schema.getFullName().get());
+    assertEquals("test", schema.getFullName());
     assertNotNull(schema.getField("day"));
   }
 

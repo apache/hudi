@@ -30,6 +30,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -43,7 +44,6 @@ import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.streamer.BaseErrorTableWriter;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -226,9 +226,11 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
   protected void addData(Dataset<Row> df, Boolean isFirst) {
     if (useSchemaProvider) {
-      TestSchemaProvider.sourceSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE);
+      TestSchemaProvider.sourceSchema = HoodieSchema.fromAvroSchema(
+          AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE));
       if (withErrorTable && isFirst) {
-        TestSchemaProvider.setTargetSchema(AvroConversionUtils.convertStructTypeToAvroSchema(TestHoodieSparkUtils.getSchemaColumnNotNullable(df.schema(), "_row_key"),"idk", "idk"));
+        TestSchemaProvider.setTargetSchema(HoodieSchema.fromAvroSchema(
+            AvroConversionUtils.convertStructTypeToAvroSchema(TestHoodieSparkUtils.getSchemaColumnNotNullable(df.schema(), "_row_key"),"idk", "idk")));
       }
     }
     if (useKafkaSource) {
@@ -312,24 +314,24 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
   public static class TestSchemaProvider extends SchemaProvider {
 
-    public static Schema sourceSchema;
-    public static Schema targetSchema = null;
+    public static HoodieSchema sourceSchema;
+    public static HoodieSchema targetSchema = null;
 
     public TestSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
       super(props, jssc);
     }
 
     @Override
-    public Schema getSourceSchema() {
+    public HoodieSchema getSourceSchema() {
       return sourceSchema;
     }
 
     @Override
-    public Schema getTargetSchema() {
+    public HoodieSchema getTargetSchema() {
       return targetSchema != null ? targetSchema : sourceSchema;
     }
 
-    public static void setTargetSchema(Schema targetSchema) {
+    public static void setTargetSchema(HoodieSchema targetSchema) {
       TestSchemaProvider.targetSchema = targetSchema;
     }
 

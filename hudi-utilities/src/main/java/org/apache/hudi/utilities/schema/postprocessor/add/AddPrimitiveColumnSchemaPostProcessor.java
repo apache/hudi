@@ -78,7 +78,7 @@ public class AddPrimitiveColumnSchemaPostProcessor extends SchemaPostProcessor {
     // add new column to the end
     targetFields.add(buildNewColumn());
 
-    return HoodieSchema.createRecord(schema.getName().get(), schema.getDoc().orElse(null), schema.getNamespace().orElse(null), false, targetFields);
+    return HoodieSchema.createRecord(schema.getName(), schema.getDoc().orElse(null), schema.getNamespace().orElse(null), false, targetFields);
   }
 
   private HoodieSchemaField buildNewColumn() {
@@ -102,7 +102,7 @@ public class AddPrimitiveColumnSchemaPostProcessor extends SchemaPostProcessor {
   private HoodieSchema createSchema(String type, boolean nullable) {
     HoodieSchema schema = HoodieSchema.create(HoodieSchemaType.valueOf(type));
     if (nullable) {
-      return HoodieSchema.createNullableSchema(schema);
+      return HoodieSchema.createNullable(schema);
     }
     return schema;
   }

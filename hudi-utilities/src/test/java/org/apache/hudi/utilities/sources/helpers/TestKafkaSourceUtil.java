@@ -19,12 +19,12 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.hash.HashID;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import com.google.crypto.tink.subtle.Base64;
-import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -54,7 +54,7 @@ public class TestKafkaSourceUtil {
         "{\"type\":\"record\",\"name\":\"Person\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"},"
             + "{\"name\":\"age\",\"type\":\"int\"},{\"name\":\"email\",\"type\":[\"null\",\"string\"],\"default\":null},"
             + "{\"name\":\"isEmployed\",\"type\":\"boolean\"}]}";
-    Schema schema = new Schema.Parser().parse(avroSchemaJson);
+    HoodieSchema schema = HoodieSchema.parse(avroSchemaJson);
     when(schemaProvider.getSourceSchema()).thenReturn(schema);
     KafkaSourceUtil.configureSchemaDeserializer(schemaProvider, props);
     assertTrue(props.containsKey(NATIVE_KAFKA_CONSUMER_GROUP_ID));

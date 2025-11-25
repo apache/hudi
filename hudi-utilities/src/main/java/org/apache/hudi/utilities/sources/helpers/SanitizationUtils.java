@@ -21,13 +21,13 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.avro.Schema;
 import org.apache.avro.SchemaParseException;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -130,16 +130,16 @@ public class SanitizationUtils {
    * This way we can improve our parsing capabilities without breaking existing functionality.
    * For example, we don't yet support multiple named schemas defined in a file.
    */
-  public static Schema parseAvroSchema(String schemaStr, boolean shouldSanitize, String invalidCharMask) {
+  public static HoodieSchema parseAvroSchema(String schemaStr, boolean shouldSanitize, String invalidCharMask) {
     try {
-      return new Schema.Parser().parse(schemaStr);
+      return HoodieSchema.parse(schemaStr);
     } catch (SchemaParseException spe) {
       // if sanitizing is not enabled rethrow the exception.
       if (!shouldSanitize) {
         throw spe;
       }
       // Rename avro fields and try parsing once again.
-      Option<Schema> parseResult = parseSanitizedAvroSchemaNoThrow(schemaStr, invalidCharMask);
+      Option<HoodieSchema> parseResult = parseSanitizedAvroSchemaNoThrow(schemaStr, invalidCharMask);
       if (!parseResult.isPresent()) {
         // throw original exception.
         throw spe;
@@ -193,12 +193,12 @@ public class SanitizationUtils {
   /**
    * Sanitizes illegal field names in the schema using recursive calls to transformMap and transformList
    */
-  private static Option<Schema> parseSanitizedAvroSchemaNoThrow(String schemaStr, String invalidCharMask) {
+  private static Option<HoodieSchema> parseSanitizedAvroSchemaNoThrow(String schemaStr, String invalidCharMask) {
     try {
       OM.enable(JsonParser.Feature.ALLOW_COMMENTS);
       Map<String, Object> objMap = OM.readValue(schemaStr, Map.class);
       Map<String, Object> modifiedMap = transformMap(objMap, invalidCharMask);
-      return Option.of(new Schema.Parser().parse(OM.writeValueAsString(modifiedMap)));
+      return Option.of(HoodieSchema.parse(OM.writeValueAsString(modifiedMap)));
     } catch (Exception ex) {
       return Option.empty();
     }

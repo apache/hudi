@@ -26,69 +26,63 @@ import org.apache.hudi.utilities.test.proto.Parent;
 import org.apache.hudi.utilities.test.proto.Sample;
 import org.apache.hudi.utilities.test.proto.WithOneOf;
 
-import org.apache.avro.Schema;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
+import static org.apache.hudi.common.testutils.SchemaTestUtil.getHoodieSchemaFromResource;
 
 public class TestProtoClassBasedSchemaProvider {
 
   @Test
-  public void validateDefaultSchemaGeneration() throws IOException {
+  public void validateDefaultSchemaGeneration() {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), Sample.class.getName());
     ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
     HoodieSchema convertedSchema = protoToAvroSchemaProvider.getSourceSchema();
-    Schema.Parser parser = new Schema.Parser();
-    HoodieSchema expectedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_defaults.avsc"));
+    HoodieSchema expectedSchema = getHoodieSchemaFromResource(TestProtoClassBasedSchemaProvider.class, "schema-provider/proto/sample_schema_defaults.avsc");
     Assertions.assertEquals(expectedSchema, convertedSchema);
   }
 
   @Test
-  public void validateWrappedPrimitiveAndTimestampsAsRecordSchemaGeneration() throws IOException {
+  public void validateWrappedPrimitiveAndTimestampsAsRecordSchemaGeneration() {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), Sample.class.getName());
     properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
     properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS.key(), "true");
     ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
-    Schema convertedSchema = protoToAvroSchemaProvider.getSourceSchema();
-    Schema.Parser parser = new Schema.Parser();
-    Schema expectedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_wrapped_and_timestamp_as_record.avsc"));
+    HoodieSchema convertedSchema = protoToAvroSchemaProvider.getSourceSchema();
+    HoodieSchema expectedSchema = getHoodieSchemaFromResource(TestProtoClassBasedSchemaProvider.class, "schema-provider/proto/sample_schema_wrapped_and_timestamp_as_record.avsc");
     Assertions.assertEquals(expectedSchema, convertedSchema);
   }
 
   @Test
-  public void validateRecursiveSchemaGeneration_depth2() throws IOException {
+  public void validateRecursiveSchemaGeneration_depth2() {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), Parent.class.getName());
     properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_MAX_RECURSION_DEPTH.key(), String.valueOf(2));
     ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
     HoodieSchema convertedSchema = protoToAvroSchemaProvider.getSourceSchema();
-    Schema.Parser parser = new Schema.Parser();
-    HoodieSchema expectedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive_depth_2.avsc"));
+    HoodieSchema expectedSchema = getHoodieSchemaFromResource(TestProtoClassBasedSchemaProvider.class, "schema-provider/proto/parent_schema_recursive_depth_2.avsc");
     Assertions.assertEquals(expectedSchema, convertedSchema);
   }
 
   @Test
-  public void validateRecursiveSchemaGeneration_defaultDepth() throws IOException {
+  public void validateRecursiveSchemaGeneration_defaultDepth() {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), Parent.class.getName());
     ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
     HoodieSchema convertedSchema = protoToAvroSchemaProvider.getSourceSchema();
-    Schema.Parser parser = new Schema.Parser();
-    HoodieSchema expectedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive_default_limit.avsc"));
+    HoodieSchema expectedSchema = getHoodieSchemaFromResource(TestProtoClassBasedSchemaProvider.class, "schema-provider/proto/parent_schema_recursive_default_limit.avsc");
     Assertions.assertEquals(expectedSchema, convertedSchema);
   }
 
   @Test
-  public void validateOneOfSchemaGeneration() throws IOException {
+  public void validateOneOfSchemaGeneration() {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), WithOneOf.class.getName());
     ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
     HoodieSchema protoSchema = protoToAvroSchemaProvider.getSourceSchema();
-    Schema.Parser parser = new Schema.Parser();
-    HoodieSchema expectedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/oneof_schema.avsc"));
+    HoodieSchema expectedSchema = getHoodieSchemaFromResource(TestProtoClassBasedSchemaProvider.class, "schema-provider/proto/oneof_schema.avsc");
     Assertions.assertEquals(expectedSchema, protoSchema);
   }
 }

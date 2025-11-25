@@ -92,7 +92,7 @@ public class DropColumnSchemaPostProcessor extends SchemaPostProcessor {
       throw new HoodieSchemaPostProcessException("Target schema is empty, you can not remove all columns!");
     }
 
-    return HoodieSchema.createRecord(schema.getName().get(), schema.getDoc().orElse(null), schema.getNamespace().orElse(null), false, targetFields);
+    return HoodieSchema.createRecord(schema.getName(), schema.getDoc().orElse(null), schema.getNamespace().orElse(null), false, targetFields);
   }
 
 }

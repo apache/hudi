@@ -24,6 +24,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
@@ -39,7 +40,6 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.transform.Transformer;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -232,8 +232,8 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
 
   private SchemaProvider getSchemaProvider(String name, boolean isNullTargetSchema) {
     SchemaProvider schemaProvider = mock(SchemaProvider.class);
-    Schema sourceSchema = mock(Schema.class);
-    Schema targetSchema = isNullTargetSchema ? InputBatch.NULL_SCHEMA : mock(Schema.class);
+    HoodieSchema sourceSchema = mock(HoodieSchema.class);
+    HoodieSchema targetSchema = isNullTargetSchema ? InputBatch.NULL_SCHEMA : mock(HoodieSchema.class);
     when(schemaProvider.getSourceSchema()).thenReturn(sourceSchema);
     when(schemaProvider.getTargetSchema()).thenReturn(targetSchema);
     when(sourceSchema.toString()).thenReturn(name + "SourceSchema");

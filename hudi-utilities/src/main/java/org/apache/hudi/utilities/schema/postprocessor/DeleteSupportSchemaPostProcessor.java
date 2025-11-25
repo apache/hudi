@@ -63,7 +63,7 @@ public class DeleteSupportSchemaPostProcessor extends SchemaPostProcessor {
     // add _hoodie_is_deleted column
     targetFields.add(HoodieSchemaField.of(HoodieRecord.HOODIE_IS_DELETED_FIELD, HoodieSchema.create(HoodieSchemaType.BOOLEAN), null, false));
 
-    return HoodieSchema.createRecord(schema.getName().get(), schema.getDoc().orElse(null), schema.getNamespace().orElse(null), false, targetFields);
+    return HoodieSchema.createRecord(schema.getName(), schema.getDoc().orElse(null), schema.getNamespace().orElse(null), false, targetFields);
   }
 
 }

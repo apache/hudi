@@ -226,7 +226,7 @@ public class UtilHelpers {
 
   public static StructType getSourceSchema(SchemaProvider schemaProvider) {
     if (schemaProvider != null && schemaProvider.getSourceSchema() != null && schemaProvider.getSourceSchema() != InputBatch.NULL_SCHEMA) {
-      return AvroConversionUtils.convertAvroSchemaToStructType(schemaProvider.getSourceSchema());
+      return AvroConversionUtils.convertAvroSchemaToStructType(schemaProvider.getSourceSchema().toAvroSchema());
     }
     return null;
   }
@@ -535,7 +535,7 @@ public class UtilHelpers {
             structType = SparkAdapterSupport$.MODULE$.sparkAdapter().getSchemaUtils()
                 .getSchema(conn, rs, dialect, false, false);
           }
-          return AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table);
+          return HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table));
         }
       }
     } catch (HoodieException e) {
