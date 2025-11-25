@@ -114,7 +114,7 @@ public class ITTestDataStreamV2Write {
 
     // Read from file source
     RowType rowType =
-        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
+        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf).getAvroSchema())
             .getLogicalType();
 
     String sourcePath = Objects.requireNonNull(Thread.currentThread()

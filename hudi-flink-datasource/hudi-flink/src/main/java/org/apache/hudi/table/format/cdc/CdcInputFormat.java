@@ -183,7 +183,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         return new RemoveBaseFileIterator(tableState, getFileSliceIterator(inputSplit));
       case AS_IS:
         HoodieSchema dataSchema = HoodieSchemaUtils.removeMetadataFields(new HoodieSchema.Parser().parse(tableState.getAvroSchema()));
-        Schema cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(mode, dataSchema);
+        Schema cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(mode, dataSchema.getAvroSchema());
         switch (mode) {
           case DATA_BEFORE_AFTER:
             return new BeforeAfterImageIterator(tablePath, tableState, hadoopConf, cdcSchema, fileSplit);
@@ -574,7 +574,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     protected RowData resolveAvro(RowKind rowKind, GenericRecord avroRecord) {
       GenericRecord requiredAvroRecord = buildAvroRecordBySchema(
           avroRecord,
-          requiredSchema,
+          HoodieSchema.fromAvroSchema(requiredSchema),
           requiredPos,
           recordBuilder);
       RowData resolved = (RowData) avroToRowDataConverter.convert(requiredAvroRecord);
