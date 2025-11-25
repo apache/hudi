@@ -64,7 +64,7 @@ public class SparkDataSourceTableUtils {
     List<HoodieSchemaField> reOrderedFields = new ArrayList<>();
     reOrderedFields.addAll(dataCols);
     reOrderedFields.addAll(partitionCols);
-    HoodieSchema reOrderedSchema = HoodieSchema.createRecord(schema.getName().get(), null, null, reOrderedFields);
+    HoodieSchema reOrderedSchema = HoodieSchema.createRecord(schema.getName(), null, null, reOrderedFields);
 
     Map<String, String> sparkProperties = new HashMap<>();
     sparkProperties.put("spark.sql.sources.provider", "hudi");
