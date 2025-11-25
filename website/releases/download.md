@@ -57,17 +57,7 @@ toc: true
   </details>
 
   <details>
-  <summary><strong>Utilities & Tools</strong></summary>
-
-  * **Hudi Utilities**
-    * [hudi-utilities-bundle_2.13](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-bundle_2.13/1.1.0/hudi-utilities-bundle_2.13-1.1.0.jar)
-    * [hudi-utilities-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-bundle_2.12/1.1.0/hudi-utilities-bundle_2.12-1.1.0.jar)
-    * [hudi-utilities-slim-bundle_2.13](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-slim-bundle_2.13/1.1.0/hudi-utilities-slim-bundle_2.13-1.1.0.jar)
-    * [hudi-utilities-slim-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-slim-bundle_2.12/1.1.0/hudi-utilities-slim-bundle_2.12-1.1.0.jar)
-
-  * **Hudi CLI**
-    * [hudi-cli-bundle_2.13](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-cli-bundle_2.13/1.1.0/hudi-cli-bundle_2.13-1.1.0.jar)
-    * [hudi-cli-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-cli-bundle_2.12/1.1.0/hudi-cli-bundle_2.12-1.1.0.jar)
+  <summary><strong>Platform Integrations</strong></summary>
 
   * **AWS**
     * [hudi-aws-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-aws-bundle/1.1.0/hudi-aws-bundle-1.1.0.jar)
@@ -87,6 +77,21 @@ toc: true
 
   * **Metaserver**
     * [hudi-metaserver-server-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-metaserver-server-bundle/1.1.0/hudi-metaserver-server-bundle-1.1.0.jar)
+
+  </details>
+
+  <details>
+  <summary><strong>Utilities & Tools</strong></summary>
+
+  * **Hudi Utilities**
+    * [hudi-utilities-bundle_2.13](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-bundle_2.13/1.1.0/hudi-utilities-bundle_2.13-1.1.0.jar)
+    * [hudi-utilities-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-bundle_2.12/1.1.0/hudi-utilities-bundle_2.12-1.1.0.jar)
+    * [hudi-utilities-slim-bundle_2.13](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-slim-bundle_2.13/1.1.0/hudi-utilities-slim-bundle_2.13-1.1.0.jar)
+    * [hudi-utilities-slim-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-utilities-slim-bundle_2.12/1.1.0/hudi-utilities-slim-bundle_2.12-1.1.0.jar)
+
+  * **Hudi CLI**
+    * [hudi-cli-bundle_2.13](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-cli-bundle_2.13/1.1.0/hudi-cli-bundle_2.13-1.1.0.jar)
+    * [hudi-cli-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-cli-bundle_2.12/1.1.0/hudi-cli-bundle_2.12-1.1.0.jar)
 
   </details>
 
