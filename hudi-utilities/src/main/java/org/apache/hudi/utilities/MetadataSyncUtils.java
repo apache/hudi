@@ -47,11 +47,13 @@ public class MetadataSyncUtils {
     if (latestCommitOpt.isPresent()) {
       pendingHoodieInstants =
           activeTimeline.getWriteTimeline()
-              .filterInflightsAndRequested().findInstantsBefore(latestCommitOpt.get().getTimestamp())
+              .filterInflightsAndRequested()
+              .findInstantsBefore(latestCommitOpt.get().getTimestamp())
               .getInstants();
     } else {
       pendingHoodieInstants =
           activeTimeline
+              .getWriteTimeline()
               .filterInflightsAndRequested()
               .getInstants();
     }
@@ -237,8 +239,12 @@ public class MetadataSyncUtils {
       HoodieActiveTimeline timeline,
       TreeMap<HoodieInstant, Boolean> map
   ) {
+    // completed write commits
     List<HoodieInstant> completed =
-        timeline.filterCompletedInstants().getInstants();
+        timeline.getWriteTimeline().filterCompletedInstants().getInstants();
+
+    // completed clean commits
+    completed.addAll(timeline.getCleanerTimeline().filterCompletedInstants().getInstants());
 
     List<HoodieInstant> pending =
         getPendingWriteInstants(timeline, Option.empty());

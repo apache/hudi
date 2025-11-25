@@ -265,7 +265,7 @@ public class HoodieMetadataSync implements Serializable {
         TreeMap<HoodieInstant, Boolean> instantsStatusMap = instantsToSyncAndLastSyncCheckpointPair.getLeft();
         Option<String> lastSyncCheckpoint = instantsToSyncAndLastSyncCheckpointPair.getRight();
 
-        for (Map.Entry<HoodieInstant, Boolean> entry : instantsToSyncAndLastSyncCheckpointPair.getKey().entrySet()) {
+        for (Map.Entry<HoodieInstant, Boolean> entry : instantsStatusMap.entrySet()) {
           HoodieInstant instant = entry.getKey();
           boolean isCompleted = entry.getValue();
           if (!isCompleted) {

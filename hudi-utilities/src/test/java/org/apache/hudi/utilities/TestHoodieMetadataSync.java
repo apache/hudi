@@ -21,7 +21,6 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -64,7 +63,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -290,53 +288,6 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
   }
 
   @Test
-  public void testCompareHudiTables() {
-    String path1 = "file:///Users/vamsi/pg/unified_view/source1";
-    String path2 = "file:///Users/vamsi/pg/unified_view/source2";
-    String pathGlobal = "file:///Users/vamsi/pg/unified_view/target";
-
-    // Load all 3 tables
-    Dataset<Row> df1 = spark().read()
-        .format("hudi")
-        .load(path1);
-
-    Dataset<Row> df2 = spark().read()
-        .format("hudi")
-        .load(path2);
-
-    Dataset<Row> dfGlobal = spark().read()
-        .format("hudi")
-        .option("hoodie.metadata.enable", "true")
-        .load(pathGlobal);
-
-    // Filter out Hudi metadata columns
-    List<String> metaCols = df1.columns() != null ?
-        Arrays.stream(df1.columns())
-            .filter(c -> c.startsWith("_hoodie_"))
-            .collect(Collectors.toList())
-        : Collections.emptyList();
-
-    Dataset<Row> df1Clean = df1.drop(metaCols.toArray(new String[0]));
-    Dataset<Row> df2Clean = df2.drop(metaCols.toArray(new String[0]));
-    Dataset<Row> dfGlobalClean = dfGlobal.drop(metaCols.toArray(new String[0]));
-
-    // UNION ALL
-    Dataset<Row> unionDf = df1Clean.unionByName(df2Clean);
-
-    // EXCEPT ALL → union minus global
-    Dataset<Row> resultDf = unionDf.exceptAll(dfGlobalClean);
-
-    df1Clean.show(false);
-    System.out.println("=== Result ===");
-    resultDf.show(false);
-
-    // Optionally: assert if mismatched rows > 0
-    long mismatches = resultDf.count();
-    assertEquals(0, mismatches, "Mismatched rows found!");
-  }
-
-
-  @Test
   void testHoodieMetadataSyncWithClean() throws Exception {
     Properties props = getTableProps();
     sourceMetaClient1 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath1, props);
@@ -357,9 +308,11 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     syncMetadata(sourcePath1, sourceMetaClient1, targetPath);
     assertDataFromSourcesToTarget(singletonList(sourcePath1), targetPath, true);
+    assertFSV(singletonList(sourcePath1), targetPath, singletonList(PARTITION_PATH_1), false);
 
     syncMetadata(sourcePath2, sourceMetaClient2, targetPath);
     assertDataFromSourcesToTarget(asList(sourcePath1, sourcePath2), targetPath, true);
+    assertFSV(asList(sourcePath1, sourcePath2), targetPath, asList(PARTITION_PATH_1, PARTITION_PATH_2), false);
   }
 
   @Test
