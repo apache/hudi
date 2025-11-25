@@ -127,6 +127,18 @@ public abstract class StorageConfiguration<T> implements Serializable {
   }
 
   /**
+   * Gets the int value of a property key if present, or the default value if not.
+   *
+   * @param key          property key in String.
+   * @param defaultValue default value is the property does not exist.
+   * @return the property value if present, or the default value.
+   */
+  public final int getInt(String key, int defaultValue) {
+    Option<String> value = getString(key);
+    return value.isPresent() ? Integer.parseInt(value.get()) : defaultValue;
+  }
+
+  /**
    * Gets the Enum value of a property key if present, or the default value if not.
    *
    * @param key          property key in String.

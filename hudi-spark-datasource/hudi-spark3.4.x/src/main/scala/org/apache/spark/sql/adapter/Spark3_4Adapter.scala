@@ -170,4 +170,8 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
   override def getRebaseSpec(policy: String): RebaseDateTime.RebaseSpec = {
     RebaseDateTime.RebaseSpec(LegacyBehaviorPolicy.withName(policy))
   }
+
+  override def enableParquetFilterPushDownStringPredicate(conf: SQLConf): Boolean = {
+    conf.parquetFilterPushDownStringPredicate
+  }
 }

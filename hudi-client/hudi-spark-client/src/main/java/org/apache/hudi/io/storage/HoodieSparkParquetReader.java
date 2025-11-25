@@ -39,22 +39,30 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.filter2.predicate.FilterApi;
+import org.apache.parquet.filter2.predicate.FilterPredicate;
+import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.parquet.hadoop.ParquetReader;
+import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.SchemaRepair;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
+import org.apache.spark.sql.catalyst.util.RebaseDateTime;
 import org.apache.spark.sql.execution.datasources.parquet.HoodieParquetReadSupport;
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFilters;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetReadSupport;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetToSparkSchemaConverter;
 import org.apache.spark.sql.execution.datasources.parquet.SparkBasicSchemaEvolution;
 import org.apache.spark.sql.internal.SQLConf;
+import org.apache.spark.sql.sources.Filter;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -63,6 +71,7 @@ import scala.Option$;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.parquet.avro.AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS;
 import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
+import static org.apache.parquet.hadoop.ParquetInputFormat.RECORD_FILTERING_ENABLED;
 
 public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
@@ -121,6 +130,16 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   }
 
   public ClosableIterator<UnsafeRow> getUnsafeRowIterator(Schema requestedSchema) throws IOException {
+    return getUnsafeRowIterator(requestedSchema, Collections.emptyList());
+  }
+
+  /**
+   * Read parquet with requested schema and filters.
+   * WARN:
+   * Currently, the filter must only contain field references related to the primary key, as the primary key does not involve schema evolution.
+   * If it is necessary to expand to push down more fields in the future, please consider the issue of schema evolution carefully
+   */
+  public ClosableIterator<UnsafeRow> getUnsafeRowIterator(Schema requestedSchema, List<Filter> readFilters) throws IOException {
     Schema nonNullSchema = AvroSchemaUtils.getNonNullTypeFromUnion(requestedSchema);
     StructType structSchema = HoodieInternalRowUtils.getCachedSchema(nonNullSchema);
     Option<MessageType> messageSchema = Option.of(getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(nonNullSchema));
@@ -128,13 +147,44 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     StructType dataStructType = convertToStruct(enableTimestampFieldRepair ? SchemaRepair.repairLogicalTypes(getFileSchema(), messageSchema) : getFileSchema());
     SparkBasicSchemaEvolution evolution = new SparkBasicSchemaEvolution(dataStructType, structSchema, SQLConf.get().sessionLocalTimeZone());
     String readSchemaJson = evolution.getRequestSchema().json();
+    SQLConf sqlConf = SQLConf.get();
     storage.getConf().set(ParquetReadSupport.PARQUET_READ_SCHEMA, readSchemaJson);
     storage.getConf().set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA(), readSchemaJson);
-    storage.getConf().set(SQLConf.PARQUET_BINARY_AS_STRING().key(), SQLConf.get().getConf(SQLConf.PARQUET_BINARY_AS_STRING()).toString());
-    storage.getConf().set(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), SQLConf.get().getConf(SQLConf.PARQUET_INT96_AS_TIMESTAMP()).toString());
+    storage.getConf().set(SQLConf.PARQUET_BINARY_AS_STRING().key(), sqlConf.getConf(SQLConf.PARQUET_BINARY_AS_STRING()).toString());
+    storage.getConf().set(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), sqlConf.getConf(SQLConf.PARQUET_INT96_AS_TIMESTAMP()).toString());
+    RebaseDateTime.RebaseSpec rebaseDateSpec = SparkAdapterSupport$.MODULE$.sparkAdapter().getRebaseSpec("CORRECTED");
+    boolean parquetFilterPushDown = storage.getConf().getBoolean(SQLConf.PARQUET_RECORD_FILTER_ENABLED().key(), sqlConf.parquetRecordFilterEnabled());
+    if (parquetFilterPushDown && readFilters != null && !readFilters.isEmpty()) {
+      ParquetMetadata parquetMetadataWithoutRowGroup = getParquetMetadataWithoutRowGroup();
+      ParquetFilters parquetFilters = new ParquetFilters(
+          parquetMetadataWithoutRowGroup.getFileMetaData().getSchema(),
+          storage.getConf().getBoolean(SQLConf.PARQUET_FILTER_PUSHDOWN_DATE_ENABLED().key(), sqlConf.parquetFilterPushDownDate()),
+          storage.getConf().getBoolean(SQLConf.PARQUET_FILTER_PUSHDOWN_TIMESTAMP_ENABLED().key(), sqlConf.parquetFilterPushDownTimestamp()),
+          storage.getConf().getBoolean(SQLConf.PARQUET_FILTER_PUSHDOWN_DECIMAL_ENABLED().key(), sqlConf.parquetFilterPushDownDecimal()),
+          storage.getConf().getBoolean(SQLConf.PARQUET_FILTER_PUSHDOWN_STRING_STARTSWITH_ENABLED().key(),
+              SparkAdapterSupport$.MODULE$.sparkAdapter().enableParquetFilterPushDownStringPredicate(sqlConf)),
+          storage.getConf().getInt(SQLConf.PARQUET_FILTER_PUSHDOWN_INFILTERTHRESHOLD().key(), sqlConf.parquetFilterPushDownInFilterThreshold()),
+          storage.getConf().getBoolean(SQLConf.CASE_SENSITIVE().key(), sqlConf.caseSensitiveAnalysis()),
+          rebaseDateSpec
+      );
+      Option<FilterPredicate> predicateOpt = Option.fromJavaOptional(readFilters
+          .stream()
+          .map(filter -> parquetFilters.createFilter(filter))
+          .filter(opt -> opt.isDefined())
+          .map(opt -> opt.get())
+          .reduce(FilterApi::and));
+      predicateOpt
+          .ifPresent(predicate -> {
+            // set the filter predicate, it will be used to filter row groups and records(may be)
+            ParquetInputFormat.setFilterPredicate(storage.getConf().unwrapAs(Configuration.class), predicate);
+            // explicitly specify whether to filter records
+            storage.getConf().set(RECORD_FILTERING_ENABLED.toString(),
+                String.valueOf(storage.getConf().getBoolean(SQLConf.PARQUET_RECORD_FILTER_ENABLED().key(), sqlConf.parquetRecordFilterEnabled())));
+          });
+    }
     ParquetReader<InternalRow> reader = ParquetReader.builder(new HoodieParquetReadSupport(Option$.MODULE$.empty(), true, true,
-            SparkAdapterSupport$.MODULE$.sparkAdapter().getRebaseSpec("CORRECTED"),
-            SparkAdapterSupport$.MODULE$.sparkAdapter().getRebaseSpec("LEGACY"), messageSchema),
+                rebaseDateSpec,
+                SparkAdapterSupport$.MODULE$.sparkAdapter().getRebaseSpec("LEGACY"), messageSchema),
             new Path(path.toUri()))
         .withConf(storage.getConf().unwrapAs(Configuration.class))
         .build();
@@ -166,6 +216,10 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
           .toAvroType(structType, true, messageType.getName(), StringUtils.EMPTY_STRING));
     }
     return schemaOption.get();
+  }
+
+  private ParquetMetadata getParquetMetadataWithoutRowGroup() {
+    return ((ParquetUtils) parquetUtils).readMetadata(storage, path);
   }
 
   protected StructType getStructSchema() {
