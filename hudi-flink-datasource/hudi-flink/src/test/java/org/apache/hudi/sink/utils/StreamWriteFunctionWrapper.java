@@ -143,7 +143,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     resetCoordinatorToCheckpoint();
     this.coordinator.start();
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
-    toHoodieFunction = new RowDataToHoodieFunction<>(rowType, conf);
+    toHoodieFunction = new RowDataToHoodieFunction<>(rowType, rowType, conf);
     toHoodieFunction.setRuntimeContext(runtimeContext);
     toHoodieFunction.open(conf);
 

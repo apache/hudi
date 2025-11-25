@@ -22,7 +22,6 @@ package org.apache.hudi.utilities.streamer;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.HoodieConversionUtils;
 import org.apache.hudi.HoodieSchemaUtils;
 import org.apache.hudi.HoodieSparkSqlWriter;
 import org.apache.hudi.HoodieSparkUtils;
@@ -91,6 +90,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.util.HoodieSchemaUtil;
 import org.apache.hudi.util.JavaScalaConverters;
 import org.apache.hudi.util.SparkKeyGenUtils;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -791,9 +791,8 @@ public class StreamSync implements Serializable, Closeable {
   @VisibleForTesting
   SchemaProvider getDeducedSchemaProvider(Schema incomingSchema, SchemaProvider sourceSchemaProvider, HoodieTableMetaClient metaClient) {
     Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(hoodieSparkContext.jsc(), storage, cfg.targetBasePath, metaClient);
-    Option<InternalSchema> internalSchemaOpt = HoodieConversionUtils.toJavaOption(
-        HoodieSchemaUtils.getLatestTableInternalSchema(
-            HoodieStreamer.Config.getProps(conf, cfg), metaClient));
+    Option<InternalSchema> internalSchemaOpt =
+        HoodieSchemaUtil.getLatestTableInternalSchema(HoodieStreamer.Config.getProps(conf, cfg), metaClient);
     // Deduce proper target (writer's) schema for the input dataset, reconciling its
     // schema w/ the table's one
     Schema targetSchema = HoodieSchemaUtils.deduceWriterSchema(

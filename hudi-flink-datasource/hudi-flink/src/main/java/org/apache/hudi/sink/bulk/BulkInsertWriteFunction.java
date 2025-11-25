@@ -68,7 +68,7 @@ public class BulkInsertWriteFunction<I>
   private final Configuration config;
 
   /**
-   * Table row type.
+   * record row type.
    */
   private final RowType rowType;
 

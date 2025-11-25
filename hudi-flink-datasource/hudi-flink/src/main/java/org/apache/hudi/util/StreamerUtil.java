@@ -59,6 +59,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
@@ -73,6 +74,7 @@ import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.avro.Schema;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -147,6 +149,29 @@ public class StreamerUtil {
               + "should be specified for avro schema deserialization",
           FlinkOptions.SOURCE_AVRO_SCHEMA_PATH.key(), FlinkOptions.SOURCE_AVRO_SCHEMA.key());
       throw new HoodieException(errorMsg);
+    }
+  }
+
+  // NOTE: Target writer's schema is deduced based on
+  //       - Source's schema
+  //       - Existing table's schema (including its Hudi's [[InternalSchema]] representation)
+  public static Schema deduceWriterSchema(Configuration conf) {
+    org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
+    final String basePath = conf.get(FlinkOptions.PATH);
+    HoodieTableMetaClient metaClient;
+    if (tableExists(basePath, hadoopConf)) {
+      metaClient = createMetaClient(conf, hadoopConf);
+    } else {
+      metaClient = null;
+    }
+    Schema inputSchema = getSourceSchema(conf);
+    Option<InternalSchema> internalSchemaOpt = metaClient == null ? Option.empty() : HoodieSchemaUtil.getLatestTableInternalSchema(flinkConf2TypedProperties(conf), metaClient);
+    try {
+      Option<Schema> latestTableSchemaOpt = metaClient == null ? Option.empty() : Option.ofNullable(getTableAvroSchema(metaClient, false));
+      boolean shouldCanonicalizeSchema = conf.get(FlinkOptions.CANONICALIZE_SCHEMA);
+      return HoodieSchemaUtil.deduceWriterSchema(inputSchema, latestTableSchemaOpt, internalSchemaOpt, false, shouldCanonicalizeSchema, conf.toMap());
+    } catch (Exception e) {
+      throw new HoodieException("Failed to deduce writer schema.", e);
     }
   }
 
@@ -711,5 +736,26 @@ public class StreamerUtil {
         throw new HoodieException(String.format("Write failure occurs with hoodie key %s at Instant [%s] in append write function", entry.getKey(), currentInstant), entry.getValue());
       });
     }
+  }
+
+  /**
+   * Create row transform to rewrite record into target writer schema.
+   */
+  public static RowProjection createRecordTransform(RowType recordRowType, RowType writerRowType) {
+    if (recordRowType.equals(writerRowType)) {
+      return RowProjection.IDENTITY;
+    }
+    // comparing two schemas ignoring the nullability of fields.
+    Schema recordSchema = AvroSchemaConverter.convertToSchema(DataTypeUtils.asNullable(recordRowType));
+    Schema writerSchema = AvroSchemaConverter.convertToSchema(DataTypeUtils.asNullable(writerRowType));
+    if (recordSchema.equals(writerSchema)) {
+      return RowProjection.IDENTITY;
+    }
+    // deal with cases like VARCHAR(10), which will be converted to STRING type in Avro schema; here RowType is converted
+    // to Avro schema and then converted back to solve such case.
+    LOG.info("Schema discrepancy detected between latest table schema: {} and records schema: {}", writerSchema, recordSchema);
+    recordRowType = (RowType) AvroSchemaConverter.convertToDataType(recordSchema).getLogicalType();
+    writerRowType = (RowType) AvroSchemaConverter.convertToDataType(writerSchema).getLogicalType();
+    return SchemaEvolvingRowDataProjection.instance(recordRowType, writerRowType, Collections.emptyMap());
   }
 }

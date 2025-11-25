@@ -208,7 +208,7 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   // -------------------------------------------------------------------------
 
   private void setupWriteFunction() throws Exception {
-    writeFunction = AppendWriteFunctions.create(conf, rowType);
+    writeFunction = AppendWriteFunctions.create(conf, rowType, rowType);
     writeFunction.setRuntimeContext(runtimeContext);
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);

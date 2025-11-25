@@ -63,8 +63,8 @@ public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T>
   private final long writeBufferSize;
   private transient BinaryInMemorySortBuffer buffer;
 
-  public AppendWriteFunctionWithBufferSort(Configuration config, RowType rowType) {
-    super(config, rowType);
+  public AppendWriteFunctionWithBufferSort(Configuration config, RowType recordRowType, RowType writerRowType) {
+    super(config, recordRowType, writerRowType);
     this.writeBufferSize = config.get(FlinkOptions.WRITE_BUFFER_SIZE);
   }
 
@@ -90,7 +90,7 @@ public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T>
 
   @Override
   public void processElement(T value, Context ctx, Collector<RowData> out) throws Exception {
-    RowData data = (RowData) value;
+    RowData data = recordTransform.project((RowData) value);
 
     // 1.try to write data into memory pool
     boolean success = buffer.write(data);

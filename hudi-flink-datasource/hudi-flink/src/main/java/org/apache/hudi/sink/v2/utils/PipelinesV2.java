@@ -36,7 +36,10 @@ import org.apache.hudi.sink.v2.CleanFunctionV2;
 import org.apache.hudi.sink.v2.clustering.ClusteringCommitSinkV2;
 import org.apache.hudi.sink.v2.compact.CompactionCommitSinkV2;
 import org.apache.hudi.sink.v2.HoodieSink;
+import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.StreamerUtil;
 
+import org.apache.avro.Schema;
 import org.apache.flink.FlinkVersion;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
@@ -103,22 +106,27 @@ public class PipelinesV2 {
       RowType rowType,
       boolean overwrite,
       boolean isBounded) {
+    Schema writerSchema = StreamerUtil.deduceWriterSchema(conf);
+    // setup write avro schema
+    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, writerSchema.toString());
+    RowType writerRowType = (RowType) AvroSchemaConverter.convertToDataType(writerSchema).getLogicalType();
+
     // bulk_insert mode
     if (OptionsResolver.isBulkInsertOperation(conf)) {
       if (!isBounded) {
         throw new HoodieException(
             "The bulk insert should be run in batch execution mode.");
       }
-      return Pipelines.bulkInsert(conf, rowType, dataStream);
+      return Pipelines.bulkInsert(conf, rowType, writerRowType, dataStream);
     }
 
     // Append mode
     if (OptionsResolver.isAppendMode(conf)) {
       // close compaction for append mode
       conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
-      DataStream<RowData> pipeline = Pipelines.append(conf, rowType, dataStream);
+      DataStream<RowData> pipeline = Pipelines.append(conf, rowType, writerRowType, dataStream);
       if (OptionsResolver.needsAsyncClustering(conf)) {
-        return clusterV2(conf, rowType, pipeline);
+        return clusterV2(conf, writerRowType, pipeline);
       } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
         // add clean function to rollback failed writes for lazy failed writes cleaning policy
         return cleanV2(conf, pipeline);
@@ -129,8 +137,9 @@ public class PipelinesV2 {
 
     // process dataStream and write corresponding files
     DataStream<RowData> pipeline;
-    final DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream, isBounded, overwrite);
-    pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
+    final DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream =
+        Pipelines.bootstrap(conf, rowType, writerRowType, dataStream, isBounded, overwrite);
+    pipeline = Pipelines.hoodieStreamWrite(conf, writerRowType, hoodieRecordDataStream);
     // compaction
     if (OptionsResolver.needsAsyncCompaction(conf)) {
       // use synchronous compaction for bounded source.

@@ -111,11 +111,6 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
   private transient String prevCompactInstant = "";
 
   /**
-   * Whether FileGroup reader based compaction should be used;
-   */
-  private transient boolean useFileGroupReaderBasedCompaction;
-
-  /**
    * InternalSchema manager used for handling schema evolution.
    */
   private transient InternalSchemaManager internalSchemaManager;

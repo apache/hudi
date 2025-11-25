@@ -436,6 +436,15 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(WriteOperationType.UPSERT.value())
       .withDescription("The write operation, that this write should do");
 
+  public static final ConfigOption<Boolean> CANONICALIZE_SCHEMA = ConfigOptions
+      .key("write.schema.canonicalize")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Controls whether incoming batch's schema's nullability constraints should be canonicalized"
+          + " relative to the table's schema. For ex, in case field A is marked as null-able in table's schema, but is marked"
+          + " as non-null in the incoming batch, w/o canonicalization such write might fail as we won't be able to read existing"
+          + " null records from the table (for updating, for ex).");
+
   @AdvancedConfig
   public static final ConfigOption<Integer> WRITE_TABLE_VERSION = ConfigOptions
       .key(HoodieWriteConfig.WRITE_TABLE_VERSION.key())
