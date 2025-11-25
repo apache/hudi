@@ -58,9 +58,9 @@ export const cdcItems = [
 ]
 
 export const fileFormatItems = [
-  {title: "Parquet", icon: ParquetIcon},
-  {title: "ORC", icon: OrcIcon},
-  {title: "Avro", icon: AvroIcon},
+  {title: "Apache Parquet", icon: ParquetIcon},
+  {title: "Apache ORC", icon: OrcIcon},
+  {title: "Apache Avro", icon: AvroIcon},
   {title: "CSV", icon: CsvIcon},
   {title: "JSON", icon: JSONIcon},
 ]

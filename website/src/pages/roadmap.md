@@ -2,6 +2,7 @@
 title: Roadmap
 last_modified_at: 2025-02-19T12:00:00-08:00
 ---
+
 # Roadmap
 
 Hudi community strives to deliver major releases every 3 months, while offering minor releases every 1-2 months!
@@ -10,16 +11,14 @@ down by areas on our [stack](/docs/hudi_stack).
 
 ## Recent Release(s)
 
-[1.0.2](/releases/release-1.0.2) (May 2025)
+[1.1.0](/releases/release-1.1.0) (Nov 2025)
 
 ## Future Releases
 
 | Release | Timeline  |
 |---------|-----------|
-| 1.1.0   | Jun 2025  |
-| 1.2.0   | Aug 2025  |
-| 2.0.0   | Nov 2025  |
-
+| 1.2.0   | Jan 2026  |
+| 2.0.0   | Jun 2026  |
 
 ## Storage Engine
 

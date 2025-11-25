@@ -69,13 +69,18 @@ toc: true
     * [hudi-cli-bundle_2.13](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-cli-bundle_2.13/1.1.0/hudi-cli-bundle_2.13-1.1.0.jar)
     * [hudi-cli-bundle_2.12](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-cli-bundle_2.12/1.1.0/hudi-cli-bundle_2.12-1.1.0.jar)
 
+  </details>
+
+  <details>
+  <summary><strong>Platform Integrations</strong></summary>
+
   * **AWS**
     * [hudi-aws-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-aws-bundle/1.1.0/hudi-aws-bundle-1.1.0.jar)
 
   * **Google Cloud**
     * [hudi-gcp-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-gcp-bundle/1.1.0/hudi-gcp-bundle-1.1.0.jar)
 
-  * **Data Catalog**
+  * **Data Catalogs**
     * [hudi-hive-sync-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-hive-sync-bundle/1.1.0/hudi-hive-sync-bundle-1.1.0.jar)
     * [hudi-datahub-sync-bundle](https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-datahub-sync-bundle/1.1.0/hudi-datahub-sync-bundle-1.1.0.jar)
   
