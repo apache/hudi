@@ -909,20 +909,11 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * @return true if rollback was triggered. false otherwise.
    */
   protected Boolean rollbackFailedWrites() {
-    return rollbackFailedWrites(false);
-  }
-
-  /**
-   * Rollback all failed writes.
-   *
-   * @return true if rollback was triggered. false otherwise.
-   */
-  protected Boolean rollbackFailedWrites(boolean skipLocking) {
     HoodieTable table = createTable(config, hadoopConf);
     List<String> instantsToRollback = getInstantsToRollback(table.getMetaClient(), config.getFailedWritesCleanPolicy(), Option.empty());
     Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(table.getMetaClient());
     instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
-    rollbackFailedWrites(pendingRollbacks, skipLocking);
+    rollbackFailedWrites(pendingRollbacks);
     return !pendingRollbacks.isEmpty();
   }
 

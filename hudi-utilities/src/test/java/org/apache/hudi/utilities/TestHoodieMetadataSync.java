@@ -375,13 +375,13 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
 
     syncMetadata(sourcePath2, sourceMetaClient2, targetPath, true);
     assertDataFromSourcesToTarget(asList(sourcePath1, sourcePath2), targetPath, true);
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList(PARTITION_PATH_1), true);
+    assertFSV(asList(sourcePath1, sourcePath2), targetPath, asList(PARTITION_PATH_1, PARTITION_PATH_2), true);
 
     triggerNCommitsToSource(getHoodieWriteConfig(sourcePath2), PARTITION_PATH_2, 1);
 
     syncMetadata(sourcePath2, sourceMetaClient2, targetPath);
     assertDataFromSourcesToTarget(asList(sourcePath1, sourcePath2), targetPath, true);
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList(PARTITION_PATH_1), true);
+    assertFSV(asList(sourcePath1, sourcePath2), targetPath, asList(PARTITION_PATH_1, PARTITION_PATH_2), true);
   }
 
   @ParameterizedTest
@@ -645,7 +645,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
         instant2, INSERT, emptyList(), singletonList("p2"), 2, false, true)));
 
 
-    String sourcePath3 = Paths.get(basePath(), "source2").toString();
+    String sourcePath3 = Paths.get(basePath(), "source3").toString();
     HoodieTableMetaClient sourceMetaClient3 = HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf(), sourcePath3, props);
 
     HoodieTestTable testTable3 = HoodieTestTable.of(sourceMetaClient3);
@@ -653,7 +653,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     testTable3.addCommit(instant3, Option.of(testTable3.doWriteOperation(
         instant3, INSERT, emptyList(), singletonList("p3"), 2, false, true)));
 
-    ExecutorService executor = Executors.newFixedThreadPool(2);
+    ExecutorService executor = Executors.newFixedThreadPool(3);
 
     Future<?> sync1 = executor.submit(() -> syncMetadata(sourcePath1, sourceMetaClient1, targetPath, false));
     Future<?> sync2 = executor.submit(() -> syncMetadata(sourcePath2, sourceMetaClient2, targetPath, false));
@@ -667,7 +667,7 @@ public class TestHoodieMetadataSync extends SparkClientFunctionalTestHarness imp
     executor.shutdown();
 
     // Validate target is fully synced
-    assertFSV(singletonList(sourcePath1), targetPath, singletonList("p1"), false);
+    assertFSV(asList(sourcePath1, sourcePath2, sourcePath3), targetPath, asList("p1", "p2", "p3"), false);
   }
 
   private void syncMetadata(String sourcePath, HoodieTableMetaClient sourceMetaClient, String targetPath) {

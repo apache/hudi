@@ -44,7 +44,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
@@ -69,14 +68,15 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Properties;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.config.HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME;
 import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
 import static org.apache.hudi.utilities.MetadataSyncUtils.getHoodieCommitMetadata;
 import static org.apache.hudi.utilities.MetadataSyncUtils.getInstantsToSyncAndLastSyncCheckpoint;
@@ -97,9 +97,12 @@ public class HoodieMetadataSync implements Serializable {
   // Spark context
   private transient JavaSparkContext jsc;
   // config
-  private Config cfg;
+  private final Config cfg;
   // Properties with source, hoodie client, key generator etc.
   private TypedProperties props;
+
+  private static final List<String> SUPPORTED_INSTANT_TYPES = Arrays.asList(
+      HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLEAN_ACTION);
 
   public HoodieMetadataSync(JavaSparkContext jsc, Config cfg) {
     this.jsc = jsc;
@@ -249,9 +252,10 @@ public class HoodieMetadataSync implements Serializable {
   }
 
   private void runMetadataSync(HoodieTableMetaClient sourceTableMetaClient, HoodieTableMetaClient targetTableMetaClient, Schema schema) throws Exception {
-    HoodieWriteConfig writeConfig = getWriteConfig(schema, targetTableMetaClient, cfg.sourceBasePath, cfg.boostrap);
+    HoodieWriteConfig writeConfig = getWriteConfig(schema, targetTableMetaClient, cfg.sourceBasePath, cfg.boostrap, false);
     HoodieSparkEngineContext hoodieSparkEngineContext = new HoodieSparkEngineContext(jsc);
-    TransactionManager txnManager = new TransactionManager(writeConfig, FSUtils.getFs(writeConfig.getBasePath(), hoodieSparkEngineContext.getHadoopConf().get()));
+    TransactionManager txnManager = new TransactionManager(getWriteConfig(schema, targetTableMetaClient, cfg.sourceBasePath, cfg.boostrap, true),
+        FSUtils.getFs(writeConfig.getBasePath(), hoodieSparkEngineContext.getHadoopConf().get()));
 
     HoodieSparkTable sparkTable = HoodieSparkTable.create(writeConfig, hoodieSparkEngineContext, targetTableMetaClient);
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(hoodieSparkEngineContext, writeConfig)) {
@@ -268,8 +272,10 @@ public class HoodieMetadataSync implements Serializable {
         for (Map.Entry<HoodieInstant, Boolean> entry : instantsStatusMap.entrySet()) {
           HoodieInstant instant = entry.getKey();
           boolean isCompleted = entry.getValue();
-          if (!isCompleted) {
-            // if instant is pending state, skip it
+          if (!isCompleted || !SUPPORTED_INSTANT_TYPES.contains(instant.getAction())) {
+            // if instant is pending state or not supported, skip it
+            LOG.info("Ignoring instant {} because it is incomplete or of an unsupported type",
+                instant.getTimestamp());
             continue;
           }
 
@@ -279,7 +285,7 @@ public class HoodieMetadataSync implements Serializable {
 
           if (!getPendingWriteInstants(targetTableMetaClient.reloadActiveTimeline(), Option.empty()).isEmpty()) {
             // rollback failing writes
-            writeClient.rollbackFailedWrites(true);
+            writeClient.rollbackFailedWrites();
           }
 
           String commitTime = writeClient.startCommit(instant.getAction(), targetTableMetaClient);
@@ -323,7 +329,8 @@ public class HoodieMetadataSync implements Serializable {
               commitMetadataInBytes = TimelineMetadataUtils.serializeCleanMetadata(tgtCleanMetadata);
               break;
             default:
-              break;
+              throw new IllegalStateException("Found unsupported action type while metadata syncing " + instant.getAction()
+                  + ": Supported Action types are " + SUPPORTED_INSTANT_TYPES);
           }
 
           targetTableMetaClient
@@ -407,7 +414,7 @@ public class HoodieMetadataSync implements Serializable {
     // trigger archiver manually
     try {
       HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
-      archiver.archiveIfRequired(engineContext, false);
+      archiver.archiveIfRequired(engineContext);
     } catch (IOException ex) {
       throw new HoodieException("Unable to archive Hudi timeline", ex);
     }
@@ -517,15 +524,17 @@ public class HoodieMetadataSync implements Serializable {
       Schema schema,
       HoodieTableMetaClient metaClient,
       String basePathOverride,
-      boolean enableBoostrapSync) {
-    Properties properties = new Properties();
-    properties.setProperty(HoodieMetadataConfig.AUTO_INITIALIZE.key(), "false");
-    properties.putAll(this.props);
+      boolean enableBoostrapSync,
+      boolean enableLock) {
+    if (enableLock) {
+      // add default lock provider if it doesn't contain any
+      props.putIfAbsent(LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName());
+    } else {
+      // for write configs do not include locks
+      this.props.remove(LOCK_PROVIDER_CLASS_NAME.key());
+    }
+    props.setProperty(HoodieMetadataConfig.AUTO_INITIALIZE.key(), "false");
     return HoodieWriteConfig.newBuilder()
-        .withLockConfig(
-            HoodieLockConfig.newBuilder()
-                .withLockProvider(InProcessLockProvider.class)
-                .build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
         .withPath(metaClient.getBasePathV2().toString())
         .withPopulateMetaFields(metaClient.getTableConfig().populateMetaFields())
@@ -539,7 +548,7 @@ public class HoodieMetadataSync implements Serializable {
                 .withEnableBootstrapMetadataSync(enableBoostrapSync)
                 .withBasePathOverride(basePathOverride)
                 .build())
-        .withProps(properties)
+        .withProps(props)
         .build();
   }
 }
