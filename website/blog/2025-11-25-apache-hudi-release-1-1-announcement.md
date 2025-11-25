@@ -211,7 +211,7 @@ Flink is a popular choice for real-time data pipelines, and Hudi 1.1 brings subs
 
 ### Flink 2.0 Support
 
-Hudi 1.1 provides full support for Flink 2.0, the first major Flink release in nine years. This brings disaggregated state storage (ForSt) that decouples state from compute for unlimited scalability, asynchronous state execution for improved resource utilization, adaptive broadcast joins for efficient query processing, and materialized tables for simplified stream-batch unification. Use the new `hudi-flink2.0-bundle:1.1.0` artifact to get started.
+Hudi 1.1 brings support for Flink 2.0, the first major Flink release in nine years. Flink 2.0 introduced disaggregated state storage (ForSt) that decouples state from compute for unlimited scalability, asynchronous state execution for improved resource utilization, adaptive broadcast join for efficient query processing, and materialized tables for simplified stream-batch unification. Use the new `hudi-flink2.0-bundle:1.1.0` artifact to get started.
 
 ### Engine-Native Record Support
 
@@ -223,7 +223,7 @@ The above shows a benchmark that inserted 500 million records with a schema of 1
 
 ### Buffer Sort
 
-For append-only tables, Hudi 1.1 introduces in-memory buffer sorting that pre-sorts records before flushing to Parquet. This delivers 15-30% better compression (via improved dictionary/run-length encoding) and faster queries through better min/max filtering. Enable with `write.buffer.sort.enabled=true` and specify sort keys via `write.buffer.sort.keys` (e.g., "timestamp,event_type"), ensuring sufficient task manager memory via `write.buffer.size` (default 128MB).
+For append-only tables, Hudi 1.1 introduces in-memory buffer sorting that pre-sorts records before flushing to Parquet. This delivers 15-30% better compression and faster queries through better min/max filtering. You can enable this feature with `write.buffer.sort.enabled=true` and specify sort keys via `write.buffer.sort.keys` (e.g., "timestamp,event_type"). You may also adjust the buffer size for sorting via `write.buffer.size` (default 1000 records).
 
 ## New Integration: Apache Polaris (Incubating)
 
