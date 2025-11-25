@@ -137,3 +137,81 @@ We can write normal junit tests using testcontainers with GCS and S3 to simulate
 ### Unit tests
 
 We will add some high contention, high usage unit tests that create hundreds of threads to try and acquire locks simultaneously on the testcontainers to simulate load and contention. We can also use thread-unsafe structures like Arraylists to ensure concurrent modifications do not occur.
+
+
+## RFC-91-update Nov 2025: Storage LP conditional write retry handling
+
+Conditional writes with s3 which are retried due to transient issues are not idempotent, meaning that a successful PUT can go through but a retry can turn the response into a 412. This is an extremely, extremely rare case. It was not able to be reproduced, but was observed in production.
+
+To reproduce, we needed a PUT request to succeed on S3 (changing the lock owner) while the client never receives the success response (thinks it failed). However, with artifical network-level toxics between the client and S3, we face a dilemma: blocking/delaying responses either prevents the PUT from completing on S3 (timeout toxic stops everything), or the SDK's aggressive retry logic eventually succeeds after waiting through the delays (latency toxic). We can't surgically "lose" just the response after the PUT completes because TCP requires bidirectional communication for the operation to succeed on S3.
+
+![dfs-retry](./dfs-retry.png)
+
+The lock provider must assume that any 412 received can indicate a successful write, but the 412 is a transient retry which failed.
+
+We need to handle this separately in 3 cases:
+
+### during tryLock
+Any check we do upon 412 after attempting to acquire the lock immediately becomes a safety violation.
+
+#### Why Checking After Is Unsafe
+
+The key insight is the time window between the write and any verification check:
+```
+  Time    Client A                S3 State                Client B
+  ----    --------                --------                --------
+  T0      PUT if-none-match:*     
+  T1                              File created (A's data) 
+  T2                              Returns 412 to A        
+  T3      Receives 412            
+  T4      Thinks: "I failed"      
+          
+          !!! IF CLIENT A CHECKS HERE:
+  T5      GET to verify           
+          
+          BUT between T1 and T5, what could have happened?
+          
+          Scenario 1: Lock expired, Client B acquired it
+                                                          Acquired lock (B's data)
+  T5      Reads lock              Lock = Client B
+          Sees Client B's data
+          
+          Scenario 2: Lock still has A's data
+  T5      Reads lock              Lock = Client A
+          Sees own data
+```
+
+Therefore, we have to live with this bad scenario which will produce dangling locks. Hopefully AWS can fix it. Note, we can add logic improvements to conditionally reject the transaction:
+
+```
+412 received, waiting for current owner to release the lock
+- oh wait, we are the owner! How did this happen?
+- Conditionally release the ghost lock and return false from tryLock()
+  - If we are unable to release the lock that's fine. This is the exact safety violation we are trying to prevent.
+  - emit a metric that indicates this inconsistency
+- This avoids the 5min lock orphaning.
+```
+
+### during renewLock
+Within the renewal section of the storage based lock provider, we assume that any 412 error means someone else has taken the lock. This scenario is irrecoverable, as we do not know the latest lock's ETag. Therefore, we have to handle this in renewLock()
+
+The best way forward here, is to fetch the lock again after renew lock fails with 412.
+
+#### If the owner in s3 does not match our owner
+The lock provider has failed as two writers acquired the lock and there is nothing we can do other than set off alarm bells and exit the transaction.
+
+#### When the owner in s3 still matches our owner
+we can update the current state to reflect that we still own the lock rather than exiting with errors, **but we should renew again to ensure that we fully hold the lock.**
+
+#### Why is this not a safety violation?
+
+- This is not a safety violation assuming ETags/UUIDs always stay unique. It introduces additional places where long network timeouts or gc pauses can have severe effects, but as long as we are able to succeed the 2nd renewal, then we can be confident that no one else has acquired the lock.
+
+
+### during unlock
+
+This is where we have to be careful about detecting violations. If we go to release our lock and end up with 412, we can make a best effort check of the lock owner to see if we released it successfully, but there is a scenario where we unlock the lock successfully, get 412 → then the other writer comes in and successfully acquires the lock (happy path), but how do we distinguish this from a concurrent writer scenario?
+
+Obviously logs will be clear and tell us exactly what happened, but from a client standpoint, it has to assume the worst, and therefore we could end up with noisy metrics. In a multiwriter scenario where we don't have access to the other writer's logs this becomes even more dangerous → this is where audit logs can step in to solve things, but audit logging should not be used at all times, only when validating correctness.
+
+One approach is that we can add more metadata to the lock file that tells us the previous state of the lock. This does not solve all cases, as there can be a GC pause of any length, so there can be multiple acquisitions and releases in that timespan, but it at least gives a longer window for the 412 on lock release to not result in an unknown state.
