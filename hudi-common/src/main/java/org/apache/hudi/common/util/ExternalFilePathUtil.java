@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.util;
 
+import java.util.Arrays;
+
 /**
  * Utility methods for handling externally created files.
  */
@@ -33,6 +35,18 @@ public class ExternalFilePathUtil {
    */
   public static String appendCommitTimeAndExternalFileMarker(String filePath, String commitTime) {
     return filePath + "_" + commitTime + EXTERNAL_FILE_SUFFIX;
+  }
+
+  public static String appendCommitTimeAndExternalFileMarker(String filePath, String commitTime, String partitionPath) {
+    return filePath + "_" + commitTime + "_" + getNumPartitionLevels(partitionPath) + "_uv" + EXTERNAL_FILE_SUFFIX;
+  }
+
+  private static int getNumPartitionLevels(String partitionPath) {
+    if (StringUtils.isNullOrEmpty(partitionPath)) {
+      return 0;
+    }
+
+    return (int) Arrays.stream(partitionPath.split("/")).filter(p -> !StringUtils.isNullOrEmpty(p)).count();
   }
 
   /**

@@ -95,7 +95,6 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     this.urlEncodePartitioningEnabled = Boolean.parseBoolean(dataMetaClient.getTableConfig().getUrlEncodePartitioning());
     this.metadataConfig = metadataConfig;
     this.isMetadataTableInitialized = dataMetaClient.getTableConfig().isMetadataTableAvailable();
-
     if (metadataConfig.enableMetrics()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(Registry.getRegistry("HoodieMetadata")));
     } else {
@@ -353,7 +352,10 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
       HoodieMetadataPayload metadataPayload = record.getData();
       checkForSpuriousDeletes(metadataPayload, recordKey);
       try {
-        return metadataPayload.getFileStatuses(getHadoopConf(), partitionPath);
+        Path partitionPathToUseForDataFiles = metadataPayload.getBasePathOverrideOpt()
+            .map(basePathOverride -> new Path(basePathOverride, relativePartitionPath))
+            .orElse(partitionPath);
+        return metadataPayload.getFileStatuses(getHadoopConf(), partitionPathToUseForDataFiles);
       } catch (IOException e) {
         throw new HoodieIOException("Failed to extract file-statuses from the payload", e);
       }
@@ -365,8 +367,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   Map<String, FileStatus[]> fetchAllFilesInPartitionPaths(List<Path> partitionPaths) throws IOException {
-    Map<String, Path> partitionIdToPathMap =
-        partitionPaths.parallelStream()
+    Map<String, Path> partitionIdToPathMap = partitionPaths.parallelStream()
             .collect(
                 Collectors.toMap(partitionPath -> {
                   String partitionId = FSUtils.getRelativePartitionPath(dataBasePath.get(), partitionPath);
@@ -384,10 +385,13 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     Map<String, FileStatus[]> partitionPathToFilesMap = partitionIdRecordPairs.entrySet().stream()
         .map(e -> {
           final String partitionId = e.getKey();
-          Path partitionPath = partitionIdToPathMap.get(partitionId);
 
           HoodieMetadataPayload metadataPayload = e.getValue().getData();
           checkForSpuriousDeletes(metadataPayload, partitionId);
+
+          Path partitionPath = metadataPayload.getBasePathOverrideOpt()
+              .map(basePathOverride -> new Path(basePathOverride, partitionId))
+              .orElse(partitionIdToPathMap.get(partitionId));
 
           FileStatus[] files = metadataPayload.getFileStatuses(fs, partitionPath);
           return Pair.of(partitionPath.toString(), files);
@@ -414,7 +418,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     }
   }
 
-  protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
+  public abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
 
   protected abstract Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys, String partitionName);
 

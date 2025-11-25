@@ -57,7 +57,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
 
   public static HoodieTestTable of(HoodieTableMetaClient metaClient, HoodieTableMetadataWriter writer, Option<HoodieEngineContext> context) {
     testTableState = HoodieTestTableState.of();
-    return new HoodieMetadataTestTable(metaClient.getBasePath(), metaClient.getRawFs(), metaClient, writer, context);
+    return new HoodieMetadataTestTable(metaClient.getBasePathV2().toUri().getPath(), metaClient.getRawFs(), metaClient, writer, context);
   }
 
   /**
@@ -96,7 +96,13 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
   }
 
   public HoodieTestTable moveInflightCommitToComplete(String instantTime, HoodieCommitMetadata metadata, boolean ignoreWriter) throws IOException {
-    super.moveInflightCommitToComplete(instantTime, metadata);
+    return this.moveInflightCommitToComplete(instantTime, metadata, ignoreWriter, false);
+  }
+
+  public HoodieTestTable moveInflightCommitToComplete(String instantTime, HoodieCommitMetadata metadata, boolean ignoreWriter, boolean ignoreDataTable) throws IOException {
+    if (!ignoreDataTable) {
+      super.moveInflightCommitToComplete(instantTime, metadata);
+    }
     if (!ignoreWriter && writer != null) {
       writer.update(metadata, context.get().emptyHoodieData(), instantTime);
     }
