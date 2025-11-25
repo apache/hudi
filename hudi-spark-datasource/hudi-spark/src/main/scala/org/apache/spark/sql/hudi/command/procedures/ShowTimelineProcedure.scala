@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.TimelineLayout
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
@@ -195,21 +196,19 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
       val maxActiveInstantTime = {
         val lastInstantOpt = metaClient.getActiveTimeline
           .filterCompletedInstants()
-          .lastInstant()
+          .firstInstant()
         if (lastInstantOpt.isPresent) {
           lastInstantOpt.get().requestedTime()
         } else {
-          ""
+          HoodieTimeline.INIT_INSTANT_TS
         }
       }
       // Create archived timeline starting from max active instant time
-      // This will be empty if all archived instants are older than active timeline
+      // This will be empty as all archived instants are older than active timeline
       val timeline = if (maxActiveInstantTime.nonEmpty) {
         metaClient.getTableFormat().getTimelineFactory()
           .createArchivedTimeline(metaClient, maxActiveInstantTime)
-//        metaClient.getArchivedTimeline()
       } else {
-        // If no active instants, create empty timeline
         metaClient.getArchivedTimeline()
       }
       // Load the required details with appropriate LoadMode (METADATA for commits, PLAN for compactions)
@@ -228,44 +227,38 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
       (null, Map.empty[String, List[String]])
     }
 
-    val activeEntries = getTimelineEntriesFromTimeline(
-      metaClient.getActiveTimeline, "ACTIVE", metaClient, instantInfoMap, activeRollbackInfoMap, limit, startTime, endTime
-    )
-
     val finalEntries = if (showArchived) {
-      val archivedEntries = getTimelineEntriesFromTimeline(
-        archivedTimeline, "ARCHIVED", metaClient, instantInfoMap, archivedRollbackInfoMap, limit, startTime, endTime
+      // Collect instants from both timelines, sort using RequestedTimeBasedComparator, then convert to rows
+      val activeInstants = getTimelineEntriesFromTimeline(
+        metaClient.getActiveTimeline, "ACTIVE", metaClient, instantInfoMap, activeRollbackInfoMap, limit, startTime, endTime, returnInstants = true
       )
-      val combinedEntries = (activeEntries ++ archivedEntries)
-        .sortWith((a, b) => {
-          val timePriorityOrder = a.getString(0).compareTo(b.getString(0))
-          if (timePriorityOrder != 0) {
-            timePriorityOrder > 0
-          } else {
-            val statePriorityOrder = Map("COMPLETED" -> 3, "INFLIGHT" -> 2, "REQUESTED" -> 1)
-            val state1 = a.getString(2)
-            val state2 = b.getString(2)
-            val priority1 = statePriorityOrder.getOrElse(state1, 0)
-            val priority2 = statePriorityOrder.getOrElse(state2, 0)
-            priority1 > priority2
-          }
-        })
+      val archivedInstants = getTimelineEntriesFromTimeline(
+        archivedTimeline, "ARCHIVED", metaClient, instantInfoMap, archivedRollbackInfoMap, limit, startTime, endTime, returnInstants = true
+      )
+      val layout = TimelineLayout.fromVersion(metaClient.getActiveTimeline.getTimelineLayoutVersion)
+      val comparator = layout.getInstantComparator.requestedTimeOrderedComparator.reversed()
+      val sortedInstants = (activeInstants ++ archivedInstants)
+        .asInstanceOf[Seq[(HoodieInstant, String)]]
+        .sortWith((a, b) => comparator.compare(a._1, b._1) < 0)
 
-      if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
-        combinedEntries
-      } else {
-        combinedEntries.take(limit)
+      sortedInstants.map { case (instant, timelineType) =>
+        createTimelineEntry(instant, timelineType, metaClient, instantInfoMap,
+          if (timelineType == "ACTIVE") activeRollbackInfoMap else archivedRollbackInfoMap)
       }
     } else {
-      if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
-        activeEntries
-      } else {
-        activeEntries.take(limit)
-      }
+      getTimelineEntriesFromTimeline(
+        metaClient.getActiveTimeline, "ACTIVE", metaClient, instantInfoMap, activeRollbackInfoMap, limit, startTime, endTime, returnInstants = false
+      ).asInstanceOf[Seq[Row]]
     }
 
-    finalEntries
+    // Apply limit if time range is not fully specified
+    if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
+      finalEntries
+    } else {
+      finalEntries.take(limit)
+    }
   }
+
 
   /**
    * Extracts timeline entries from a specific timeline (active or archived) and converts them to Row objects.
@@ -310,8 +303,8 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
                                              rollbackInfoMap: Map[String, List[String]],
                                              limit: Int,
                                              startTime: String,
-                                             endTime: String): Seq[Row] = {
-
+                                             endTime: String,
+                                             returnInstants: Boolean = false): Seq[Any] = {
     // Use timeline's built-in filtering methods for better performance and consistency
     val filteredTimeline = {
       val startTimeTrimmed = startTime.trim
@@ -343,11 +336,38 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
       sortedInstants.take(limit)
     }
 
-    limitedInstants.map { instant =>
-      createTimelineEntry(instant, timelineType, metaClient, instantInfoMap, rollbackInfoMap)
+    if (returnInstants) {
+      // Return instants with timeline type for sorting across multiple timelines
+      limitedInstants.map((_, timelineType))
+    } else {
+      // Convert to rows immediately
+      limitedInstants.map { instant =>
+        createTimelineEntry(instant, timelineType, metaClient, instantInfoMap, rollbackInfoMap)
+      }
     }
   }
 
+  /**
+   * Builds a map of rollback information by scanning rollback instants in the given timeline.
+   *
+   * This method processes all rollback instants in the timeline and extracts information about
+   * which instants were rolled back by each rollback operation. For each rollback instant:
+   * - If the rollback is INFLIGHT or REQUESTED: reads the rollback plan to get the instant that will be rolled back
+   * - If the rollback is COMPLETED: reads the rollback metadata to get all instants that were rolled back
+   *
+   * The resulting map has:
+   * - Key: The timestamp of the instant that was rolled back
+   * - Value: List of rollback instant timestamps that rolled back this instant
+   *
+   * @param timeline The timeline to scan for rollback instants (can be active or archived timeline)
+   * @param metaClient The Hudi table metadata client for creating instant objects
+   * @return Map from rolled-back instant timestamp to list of rollback instant timestamps.
+   *         Returns empty map if no rollback instants are found or if scanning fails.
+   *
+   * @note Invalid or corrupted rollback instants are silently skipped
+   * @note This method handles both inflight/requested rollbacks (which have plans) and
+   *       completed rollbacks (which have metadata)
+   */
   private def getRolledBackInstantInfo(timeline: HoodieTimeline, metaClient: HoodieTableMetaClient): Map[String, List[String]] = {
     val rollbackInfoMap = scala.collection.mutable.Map[String, scala.collection.mutable.ListBuffer[String]]()
 
@@ -356,7 +376,7 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
 
     rollbackInstants.asScala.foreach { rollbackInstant =>
       try {
-        if (rollbackInstant.isInflight) {
+        if (!rollbackInstant.isCompleted) {
           val instantToUse = metaClient.createNewInstant(
             HoodieInstant.State.REQUESTED, rollbackInstant.getAction, rollbackInstant.requestedTime())
           val metadata = timeline.readRollbackPlan(instantToUse)
@@ -377,10 +397,32 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
     rollbackInfoMap.map { case (k, v) => k -> v.toList }.toMap
   }
 
+  /**
+   * Gets rollback information string for a given instant.
+   *
+   * This method determines the rollback information to display for an instant:
+   * - If the instant is a rollback action:
+   *   - For INFLIGHT or REQUESTED rollbacks: returns "Rolls back {instantTime}" by reading the rollback plan
+   *   - For COMPLETED rollbacks: returns "Rolled back: {list of rolled back instants}" by reading rollback metadata
+   * - If the instant was rolled back by another rollback operation:
+   *   - Returns "Rolled back by: {list of rollback instant timestamps}" from the rollbackInfoMap
+   * - Otherwise: returns null (no rollback information)
+   *
+   * @param instant The instant to get rollback information for
+   * @param timeline The timeline containing the instant (used to read rollback plans/metadata)
+   * @param rollbackInfoMap Map of instant timestamps to list of rollback instant timestamps that rolled them back.
+   *                       This is built by [[getRolledBackInstantInfo]]
+   * @param metaClient The Hudi table metadata client for creating instant objects
+   * @return Rollback information string, or null if there is no rollback information for this instant
+   *
+   * @note Invalid or corrupted rollback metadata is handled gracefully by returning null
+   * @note This method handles both inflight/requested rollbacks (which have plans) and
+   *       completed rollbacks (which have metadata)
+   */
   private def getRollbackInfo(instant: HoodieInstant, timeline: HoodieTimeline, rollbackInfoMap: Map[String, List[String]], metaClient: HoodieTableMetaClient): String = {
     try {
       if (HoodieTimeline.ROLLBACK_ACTION.equalsIgnoreCase(instant.getAction)) {
-        if (instant.isInflight) {
+        if (!instant.isCompleted) {
           val instantToUse = metaClient.createNewInstant(
             HoodieInstant.State.REQUESTED, instant.getAction, instant.requestedTime())
           val metadata = timeline.readRollbackPlan(instantToUse)

@@ -24,7 +24,7 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.StoppableRecordConsumer;
+import org.apache.hudi.common.table.timeline.AbstractInstantsLoaderWithLimit;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -283,8 +283,9 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     timelineLoader.loadInstants(
         metaClient, null, Option.empty(), LoadMode.PLAN, commitsFilter, loader);
     List<HoodieInstant> collectedInstants = loader.getCollectedInstants();
+    List<HoodieInstant> existingInstants = getInstants();
     List<HoodieInstant> newInstants = collectedInstants.stream()
-        .filter(instant -> !getInstants().contains(instant))
+        .filter(instant -> !existingInstants.contains(instant))
         .collect(Collectors.toList());
     if (!newInstants.isEmpty()) {
       appendInstants(newInstants);
@@ -316,43 +317,32 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     }
   }
 
-  public class InstantsLoaderWithLimit implements StoppableRecordConsumer {
+  public class InstantsLoaderWithLimit extends AbstractInstantsLoaderWithLimit {
     private final Map<String, List<HoodieInstant>> instantsInRange = new ConcurrentHashMap<>();
     private final boolean loadInstantDetails;
-    private final int limit;
-    private volatile int loadedCount = 0;
 
     private InstantsLoaderWithLimit(boolean loadInstantDetails, int limit) {
+      super(limit);
       this.loadInstantDetails = loadInstantDetails;
-      this.limit = limit;
     }
 
     @Override
-    public boolean shouldStop() {
-      return loadedCount >= limit;
+    protected HoodieInstant readCommit(String instantTime, GenericRecord record) {
+      Option<HoodieInstant> instant = ArchivedTimelineV1.this.readCommit(instantTime, record, loadInstantDetails, null);
+      return instant.orElse(null);
     }
 
     @Override
-    public void accept(String instantTime, GenericRecord record) {
-      if (shouldStop()) {
-        return;
-      }
-      Option<HoodieInstant> instant = readCommit(instantTime, record, loadInstantDetails, null);
-      if (instant.isPresent()) {
-        synchronized (this) {
-          if (loadedCount < limit) {
-            instantsInRange.computeIfAbsent(instant.get().requestedTime(), s -> new ArrayList<>())
-                .add(instant.get());
-            loadedCount++;
-          }
-        }
-      }
+    protected void addInstant(String instantTime, HoodieInstant instant) {
+      instantsInRange.computeIfAbsent(instant.requestedTime(), s -> new ArrayList<>())
+          .add(instant);
     }
 
     public Map<String, List<HoodieInstant>> getInstantsInRangeCollected() {
       return instantsInRange;
     }
 
+    @Override
     public List<HoodieInstant> getCollectedInstants() {
       // V1 needs to flatten because the map values are lists, while V2 can use the values directly. 
       // V1 can have multiple instants with the same timestamp but different states (REQUESTED, INFLIGHT, COMPLETED).

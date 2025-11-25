@@ -24,7 +24,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.LSMTimeline;
-import org.apache.hudi.common.table.timeline.StoppableRecordConsumer;
+import org.apache.hudi.common.table.timeline.BoundedRecordConsumer;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
@@ -60,8 +60,8 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
       List<String> fileNames = LSMTimeline.latestSnapshotManifest(metaClient, metaClient.getArchivePath()).getFileNames();
 
       // Check if consumer supports early termination
-      StoppableRecordConsumer stoppable = recordConsumer instanceof StoppableRecordConsumer
-          ? (StoppableRecordConsumer) recordConsumer
+      BoundedRecordConsumer boundedConsumer = recordConsumer instanceof BoundedRecordConsumer
+          ? (BoundedRecordConsumer) recordConsumer
           : null;
 
       // Filter files by time range
@@ -73,7 +73,7 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
       }
 
       // Sort files in reverse chronological order if needed (newest first for limit queries)
-      if (stoppable != null && stoppable.needsReverseOrder()) {
+      if (boundedConsumer != null && boundedConsumer.needsReverseOrder()) {
         filteredFiles.sort(Comparator.comparing((String fileName) -> {
           try {
             return LSMTimeline.getMaxInstantTime(fileName);
@@ -84,8 +84,12 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
       }
 
       Schema readSchema = LSMTimeline.getReadSchema(loadMode);
-      filteredFiles.parallelStream().forEach(fileName -> {
-        if (stoppable != null && stoppable.shouldStop()) {
+      // Use serial stream when limit is involved (boundedConsumer with reverse order) to guarantee order
+      java.util.stream.Stream<String> fileStream = (boundedConsumer != null && boundedConsumer.needsReverseOrder())
+          ? filteredFiles.stream()
+          : filteredFiles.parallelStream();
+      fileStream.forEach(fileName -> {
+        if (boundedConsumer != null && boundedConsumer.shouldStop()) {
           return;
         }
         // Read the archived file
@@ -95,7 +99,7 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
           try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieLSMTimelineInstant.getClassSchema(), readSchema)) {
             while (iterator.hasNext()) {
               // accept() is thread-safe (uses volatile + synchronized)
-              if (stoppable != null && stoppable.shouldStop()) {
+              if (boundedConsumer != null && boundedConsumer.shouldStop()) {
                 break; // Stop reading this file
               }
               GenericRecord record = (GenericRecord) iterator.next();

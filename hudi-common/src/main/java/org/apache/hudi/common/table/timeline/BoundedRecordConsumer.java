@@ -35,7 +35,7 @@ import java.util.function.BiConsumer;
  * The loader will check {@link #shouldStop()} between files and stop reading once the limit is reached,
  * avoiding unnecessary I/O and decoding of records.
  */
-public interface StoppableRecordConsumer extends BiConsumer<String, GenericRecord> {
+public interface BoundedRecordConsumer extends BiConsumer<String, GenericRecord> {
   /**
    * Returns true if the consumer has reached its limit and no more records should be processed.
    * The loader should check this between files and stop reading if true.

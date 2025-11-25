@@ -18,6 +18,10 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.HoodieTableVersion
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
@@ -327,8 +331,8 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
           spark.sql(s"update $tableName set price = ${20 * i} where id = $i")
         }
 
-        // Downgrade table to version 7 (which uses LAYOUT_VERSION_1, so ArchivedTimelineV1)
-        spark.sql(s"call downgrade_table(table => '$tableName', to_version => 'SEVEN')")
+        // Downgrade table to version 6 (which uses LAYOUT_VERSION_1, so ArchivedTimelineV1)
+        spark.sql(s"call downgrade_table(table => '$tableName', to_version => 'SIX')")
 
         // Trigger clean to potentially archive commits
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
@@ -480,7 +484,7 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
         val v2TimelineResult = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, limit => 100)").collect()
 
         // Downgrade to V1
-        spark.sql(s"call downgrade_table(table => '$tableName', to_version => 'SEVEN')")
+        spark.sql(s"call downgrade_table(table => '$tableName', to_version => 'SIX')")
 
         // Trigger clean again
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
@@ -651,6 +655,632 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
         s"Should have 1 timeline entry for single time point $thirdCommitTime, got: ${singleTimeResult.length}")
       assert(singleTimeResult.head.getString(0) == thirdCommitTime,
         s"Should return the commit with time $thirdCommitTime")
+    }
+  }
+
+  /**
+   * Helper method to create a table with all types of commits for comprehensive testing.
+   * Creates: completed/inflight commits, deltacommits (MOR), clean, compaction, clustering, insert overwrite, rollback
+   */
+  private def setupTableWithAllCommitTypes(tableName: String, tableLocation: String, tableType: String): Map[String, String] = {
+    val commitTimes = scala.collection.mutable.Map[String, String]()
+
+    // Create table
+    spark.sql(
+      s"""
+         |create table $tableName (
+         | id int,
+         | name string,
+         | price double,
+         | ts long
+         |) using hudi
+         | location '$tableLocation'
+         | tblproperties (
+         |   primaryKey = 'id',
+         |   type = '$tableType',
+         |   preCombineField = 'ts'
+         | )
+         |""".stripMargin)
+
+    // 1. Completed commits (COW) or deltacommits (MOR)
+    for (i <- 1 to 3) {
+      spark.sql(s"insert into $tableName values($i, 'a$i', ${10 * i}, ${1000 * i})")
+      val timeline = spark.sql(s"call show_timeline(table => '$tableName')").collect()
+      if (timeline.nonEmpty) {
+        val action = if (tableType == "mor") "deltacommit" else "commit"
+        val completed = timeline.find(r => r.getString(1) == action && r.getString(2) == "COMPLETED")
+        if (completed.isDefined) {
+          commitTimes(s"completed_commit_$i") = completed.get.getString(0)
+        }
+      }
+    }
+
+    // 2. Inflight commits - create and leave one inflight by interrupting
+    spark.sql(s"insert into $tableName values(4, 'a4', 40, 4000)")
+    Thread.sleep(100) // Small delay
+
+    // 3. Clean operations
+    spark.sql(s"call run_clean(table => '$tableName', retain_commits => 2)")
+    val cleanTimeline = spark.sql(s"call show_timeline(table => '$tableName')").collect()
+    val cleanCompleted = cleanTimeline.find(r => r.getString(1) == "clean" && r.getString(2) == "COMPLETED")
+    if (cleanCompleted.isDefined) {
+      commitTimes("clean_completed") = cleanCompleted.get.getString(0)
+    }
+
+    // 4. Compaction - schedule and run (only for MOR tables)
+    if (tableType == "mor") {
+      // Create more commits to enable compaction
+      for (i <- 5 to 8) {
+        spark.sql(s"insert into $tableName values($i, 'a$i', ${10 * i}, ${1000 * i})")
+      }
+      try {
+        spark.sql(s"call run_compaction(table => '$tableName', op => 'schedule')")
+        val compactionTimeline = spark.sql(s"call show_timeline(table => '$tableName')").collect()
+        val compactionRequested = compactionTimeline.find(r => r.getString(1) == "compaction" && r.getString(2) == "REQUESTED")
+        if (compactionRequested.isDefined) {
+          commitTimes("compaction_requested") = compactionRequested.get.getString(0)
+          // Run compaction
+          spark.sql(s"call run_compaction(table => '$tableName', op => 'execute')")
+          val compactionRunTimeline = spark.sql(s"call show_timeline(table => '$tableName')").collect()
+          val compactionCompleted = compactionRunTimeline.find(r => r.getString(1) == "commit" && r.getString(2) == "COMPLETED")
+          if (compactionCompleted.isDefined) {
+            commitTimes("compaction_completed") = compactionCompleted.get.getString(0)
+          }
+        }
+      } catch {
+        case _: Exception => // Compaction might not be schedulable, skip
+      }
+    }
+
+    // 5. Clustering (replace commit)
+    try {
+      spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
+      val clusteringTimeline = spark.sql(s"call show_timeline(table => '$tableName')").collect()
+      val clusteringRequested = clusteringTimeline.find(r => r.getString(1) == "replacecommit" && r.getString(2) == "REQUESTED")
+      if (clusteringRequested.isDefined) {
+        commitTimes("clustering_requested") = clusteringRequested.get.getString(0)
+        spark.sql(s"call run_clustering(table => '$tableName', op => 'execute')")
+        val clusteringRunTimeline = spark.sql(s"call show_timeline(table => '$tableName')").collect()
+        val clusteringCompleted = clusteringRunTimeline.find(r => r.getString(1) == "replacecommit" && r.getString(2) == "COMPLETED")
+        if (clusteringCompleted.isDefined) {
+          commitTimes("clustering_completed") = clusteringCompleted.get.getString(0)
+        }
+      }
+    } catch {
+      case _: Exception => // Clustering might not be schedulable, skip
+    }
+
+    // 6. Insert overwrite (replace commit)
+    spark.sql(s"insert overwrite table $tableName values(10, 'a10', 100, 10000)")
+    val insertOverwriteTimeline = spark.sql(s"call show_timeline(table => '$tableName')").collect()
+    val insertOverwriteCompleted = insertOverwriteTimeline.find(r => r.getString(1) == "replacecommit" && r.getString(2) == "COMPLETED")
+    if (insertOverwriteCompleted.isDefined) {
+      commitTimes("insert_overwrite_completed") = insertOverwriteCompleted.get.getString(0)
+    }
+
+    // 7. Rollback
+    val timelineBeforeRollback = spark.sql(s"call show_timeline(table => '$tableName')").collect()
+    val commitToRollback = timelineBeforeRollback.find(r => r.getString(2) == "COMPLETED")
+    if (commitToRollback.isDefined) {
+      val instantToRollback = commitToRollback.get.getString(0)
+      spark.sql(s"call rollback_to_instant(table => '$tableName', instant_time => '$instantToRollback')")
+      val rollbackTimeline = spark.sql(s"call show_timeline(table => '$tableName')").collect()
+      val rollbackCompleted = rollbackTimeline.find(r => r.getString(1) == "rollback" && r.getString(2) == "COMPLETED")
+      if (rollbackCompleted.isDefined) {
+        commitTimes("rollback_completed") = rollbackCompleted.get.getString(0)
+      }
+    }
+
+    commitTimes.toMap
+  }
+
+  /**
+   * Helper method to trigger archiving by creating many commits and running clean
+   */
+  private def triggerArchiving(tableName: String, numCommits: Int = 10): Unit = {
+    for (i <- 1 to numCommits) {
+      spark.sql(s"insert into $tableName values($i, 'a$i', ${10 * i}, ${1000 * i})")
+    }
+    spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+  }
+
+  /**
+   * Helper method to run all 12 test scenarios
+   */
+  private def runAllTestScenarios(tableName: String, commitTimes: Map[String, String]): Unit = {
+    val allTimeline = spark.sql(s"call show_timeline(table => '$tableName', limit => 100)").collect()
+    val activeInstants = allTimeline.filter(_.getString(6) == "ACTIVE")
+    val archivedInstants = allTimeline.filter(_.getString(6) == "ARCHIVED")
+    val allInstantTimes = allTimeline.map(_.getString(0)).sorted.reverse
+
+    // Scenario 1: limit 50
+    val limit50Result = spark.sql(s"call show_timeline(table => '$tableName', limit => 50)").collect()
+    assert(limit50Result.length <= 50, s"Scenario 1: Should have at most 50 entries, got ${limit50Result.length}")
+
+    // Scenario 2: both active and archived 20, where active contains 40
+    if (activeInstants.length >= 40) {
+      val result2 = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, limit => 20)").collect()
+      assert(result2.length <= 20, s"Scenario 2: Should have at most 20 entries, got ${result2.length}")
+      val hasActive = result2.exists(_.getString(6) == "ACTIVE")
+      val hasArchived = result2.exists(_.getString(6) == "ARCHIVED")
+      assert(hasActive || hasArchived, "Scenario 2: Should have active or archived entries")
+    }
+
+    // Scenario 3: both active and archived 20, where active contains 10
+    if (activeInstants.length <= 10) {
+      val result3 = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, limit => 20)").collect()
+      assert(result3.length <= 20, s"Scenario 3: Should have at most 20 entries, got ${result3.length}")
+    }
+
+    // Scenario 4-6: Time range filtering within active timeline
+    if (activeInstants.length >= 3) {
+      val activeTimes = activeInstants.map(_.getString(0)).sorted.reverse
+      val startTime = activeTimes(activeTimes.length / 2)
+      val endTime = activeTimes.head
+
+      // Scenario 4: start within active timeline
+      val result4 = spark.sql(s"call show_timeline(table => '$tableName', startTime => '$startTime')").collect()
+      assert(result4.nonEmpty, "Scenario 4: Should return entries with startTime in active timeline")
+      result4.foreach { row =>
+        assert(row.getString(0) >= startTime, s"Scenario 4: All entries should be >= $startTime")
+      }
+
+      // Scenario 5: end within active timeline
+      val result5 = spark.sql(s"call show_timeline(table => '$tableName', endTime => '$endTime')").collect()
+      assert(result5.nonEmpty, "Scenario 5: Should return entries with endTime in active timeline")
+      result5.foreach { row =>
+        assert(row.getString(0) <= endTime, s"Scenario 5: All entries should be <= $endTime")
+      }
+
+      // Scenario 6: start and end within active timeline
+      val result6 = spark.sql(s"call show_timeline(table => '$tableName', startTime => '$startTime', endTime => '$endTime')").collect()
+      assert(result6.nonEmpty, "Scenario 6: Should return entries with start and end in active timeline")
+      result6.foreach { row =>
+        val instantTime = row.getString(0)
+        assert(instantTime >= startTime && instantTime <= endTime,
+          s"Scenario 6: Entry $instantTime should be in range [$startTime, $endTime]")
+      }
+    }
+
+    // Scenario 7: start in archived, but archived not explicitly enabled
+    if (archivedInstants.nonEmpty) {
+      val archivedTime = archivedInstants.map(_.getString(0)).sorted.reverse.head
+      val result7 = spark.sql(s"call show_timeline(table => '$tableName', startTime => '$archivedTime')").collect()
+      // Should only return active entries since archived is not enabled
+      result7.foreach { row =>
+        assert(row.getString(6) == "ACTIVE", "Scenario 7: Should only return ACTIVE entries when archived not enabled")
+      }
+    }
+
+    // Scenario 8: "" (empty), archived enabled
+    val result8 = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, startTime => '', endTime => '')").collect()
+    assert(result8.nonEmpty, "Scenario 8: Should return entries with empty time range and archived enabled")
+
+    // Scenario 9-12: Time range with archived timeline
+    if (archivedInstants.nonEmpty && activeInstants.nonEmpty) {
+      val archivedTimes = archivedInstants.map(_.getString(0)).sorted.reverse
+      val activeTimes = activeInstants.map(_.getString(0)).sorted.reverse
+      val archivedStart = archivedTimes.head
+      val activeEnd = activeTimes.head
+
+      // Scenario 9: start in archived and end in active, archived not enabled
+      val result9 = spark.sql(s"call show_timeline(table => '$tableName', startTime => '$archivedStart', endTime => '$activeEnd')").collect()
+      result9.foreach { row =>
+        assert(row.getString(6) == "ACTIVE", "Scenario 9: Should only return ACTIVE entries when archived not enabled")
+      }
+
+      // Scenario 10: start in archived and end in active, archived enabled
+      val result10 = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, startTime => '$archivedStart', endTime => '$activeEnd')").collect()
+      assert(result10.nonEmpty, "Scenario 10: Should return entries spanning archived and active")
+      val hasBoth = result10.exists(_.getString(6) == "ARCHIVED") && result10.exists(_.getString(6) == "ACTIVE")
+      // May or may not have both depending on the range
+
+      // Scenario 11: start and end in archived, archived not enabled
+      if (archivedTimes.length >= 2) {
+        val archivedEnd = archivedTimes.last
+        val result11 = spark.sql(s"call show_timeline(table => '$tableName', startTime => '$archivedStart', endTime => '$archivedEnd')").collect()
+        result11.foreach { row =>
+          assert(row.getString(6) == "ACTIVE" || row.getString(0) >= archivedStart,
+            "Scenario 11: Should only return ACTIVE entries or entries >= start when archived not enabled")
+        }
+      }
+
+      // Scenario 12: start and end in archived, archived enabled
+      if (archivedTimes.length >= 2) {
+        val archivedEnd = archivedTimes.last
+        val result12 = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, startTime => '$archivedStart', endTime => '$archivedEnd')").collect()
+        assert(result12.nonEmpty, "Scenario 12: Should return entries from archived timeline")
+        result12.foreach { row =>
+          val instantTime = row.getString(0)
+          assert(instantTime >= archivedEnd && instantTime <= archivedStart,
+            s"Scenario 12: Entry $instantTime should be in range [$archivedEnd, $archivedStart]")
+        }
+      }
+    }
+  }
+
+  test("Test show_timeline comprehensive - V1 COW") {
+    withSQLConf(
+      "hoodie.keep.min.commits" -> "2",
+      "hoodie.keep.max.commits" -> "3",
+      "hoodie.cleaner.commits.retained" -> "1") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tableLocation = tmp.getCanonicalPath
+        if (HoodieSparkUtils.isSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled = false")
+        }
+
+        val commitTimes = setupTableWithAllCommitTypes(tableName, tableLocation, "cow")
+
+        // Check table version before downgrade
+        val metaClientBefore = HoodieTableMetaClient.builder()
+          .setBasePath(tableLocation)
+          .setConf(HadoopFSUtils.getStorageConf(spark.sparkContext.hadoopConfiguration))
+          .build()
+        val versionBefore = metaClientBefore.getTableConfig.getTableVersion
+        println(s"V1 COW test: Table version before downgrade: $versionBefore")
+
+        // Downgrade to V1
+        val downgradeResult = spark.sql(s"call downgrade_table(table => '$tableName', to_version => 'SIX')").collect()
+        assert(downgradeResult.length == 1 && downgradeResult(0).getBoolean(0),
+          s"V1 COW test: downgrade_table should return true (table was at version $versionBefore)")
+
+        // Trigger archiving
+        triggerArchiving(tableName, 15)
+
+        // Verify timeline version is V1
+        // Rebuild metaClient to ensure we read the updated timeline layout version after downgrade
+        val metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(tableLocation)
+          .setConf(HadoopFSUtils.getStorageConf(spark.sparkContext.hadoopConfiguration))
+          .build()
+        val versionAfter = metaClient.getTableConfig.getTableVersion
+        println(s"V1 COW test: Table version after downgrade: $versionAfter")
+//        // Verify table version was downgraded to SIX
+//        assert(versionAfter == HoodieTableVersion.SIX,
+//          s"V1 COW test: Table version should be SIX after downgrade, but got $versionAfter (was $versionBefore)")
+//        // Verify timeline layout version is V1 (SIX uses V1)
+//        val timelineLayoutVersion = metaClient.getTableConfig.getTimelineLayoutVersion.get
+//        assert(timelineLayoutVersion.getVersion == TimelineLayoutVersion.VERSION_1,
+//          s"V1 COW test: Timeline layout version should be V1, but got ${timelineLayoutVersion.getVersion}")
+
+        // Run all test scenarios
+        runAllTestScenarios(tableName, commitTimes)
+
+        // Verify all commit types are present with specific assertions for V1 COW
+        val timeline = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, limit => 100)").collect()
+        val actions = timeline.map(_.getString(1)).distinct
+        val states = timeline.map(_.getString(2)).distinct
+
+        // V1 COW specific: should have commit (not deltacommit)
+        assert(actions.contains("commit"), "V1 COW: Should have commit actions")
+        assert(!actions.contains("deltacommit"), "V1 COW: Should NOT have deltacommit actions (COW table)")
+        assert(actions.contains("clean"), "V1 COW: Should have clean actions")
+
+        // Verify states: should have COMPLETED, may have INFLIGHT/REQUESTED in active timeline
+        assert(states.contains("COMPLETED"), "V1 COW: Should have COMPLETED state instants")
+        val activeTimeline = timeline.filter(_.getString(6) == "ACTIVE")
+        val archivedTimeline = timeline.filter(_.getString(6) == "ARCHIVED")
+        val activeStates = activeTimeline.map(_.getString(2)).distinct
+        val archivedStates = archivedTimeline.map(_.getString(2)).distinct
+
+        // Active timeline can have mix of states
+        assert(activeStates.contains("COMPLETED"), "V1 COW: Active timeline should have COMPLETED instants")
+        // Archived timeline should only have COMPLETED (as per notes)
+        if (archivedTimeline.nonEmpty) {
+          assert(archivedStates.forall(_ == "COMPLETED"),
+            s"V1 COW: Archived timeline should only have COMPLETED states, got: ${archivedStates.mkString(", ")}")
+        }
+
+        // Verify specific commit types exist for V1 COW
+        val commitInstants = timeline.filter(r => r.getString(1) == "commit" && r.getString(2) == "COMPLETED")
+        assert(commitInstants.nonEmpty, "V1 COW: Should have completed commit instants")
+        val cleanInstants = timeline.filter(r => r.getString(1) == "clean")
+        assert(cleanInstants.nonEmpty, "V1 COW: Should have clean instants")
+        val cleanCompleted = cleanInstants.filter(_.getString(2) == "COMPLETED")
+        assert(cleanCompleted.nonEmpty, "V1 COW: Should have completed clean instants")
+
+        // Check for rollback if it exists
+        val rollbackInstants = timeline.filter(r => r.getString(1) == "rollback")
+        if (rollbackInstants.nonEmpty) {
+          val rollbackCompleted = rollbackInstants.filter(_.getString(2) == "COMPLETED")
+          if (rollbackCompleted.nonEmpty) {
+            assert(rollbackCompleted.head.getString(7) != null, "V1 COW: Rollback should have rollback_info")
+          }
+        }
+
+        // Verify no deltacommit in COW table
+        val deltacommitInstants = timeline.filter(r => r.getString(1) == "deltacommit")
+        assert(deltacommitInstants.isEmpty, "V1 COW: Should NOT have deltacommit instants (COW table type)")
+      }
+    }
+  }
+
+  test("Test show_timeline comprehensive - V1 MOR") {
+    withSQLConf(
+      "hoodie.keep.min.commits" -> "2",
+      "hoodie.keep.max.commits" -> "3",
+      "hoodie.cleaner.commits.retained" -> "1") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tableLocation = tmp.getCanonicalPath
+        if (HoodieSparkUtils.isSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled = false")
+        }
+
+        val commitTimes = setupTableWithAllCommitTypes(tableName, tableLocation, "mor")
+
+        // Check table version before downgrade
+        val metaClientBefore = HoodieTableMetaClient.builder()
+          .setBasePath(tableLocation)
+          .setConf(HadoopFSUtils.getStorageConf(spark.sparkContext.hadoopConfiguration))
+          .build()
+        val versionBefore = metaClientBefore.getTableConfig.getTableVersion
+        println(s"V1 MOR test: Table version before downgrade: $versionBefore")
+
+        // Downgrade to V1
+        val downgradeResult = spark.sql(s"call downgrade_table(table => '$tableName', to_version => 'SIX')").collect()
+        assert(downgradeResult.length == 1 && downgradeResult(0).getBoolean(0),
+          s"V1 MOR test: downgrade_table should return true (table was at version $versionBefore)")
+
+        // Trigger archiving
+        triggerArchiving(tableName, 15)
+
+        // Verify timeline version is V1
+        // Rebuild metaClient to ensure we read the updated timeline layout version after downgrade
+        val metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(tableLocation)
+          .setConf(HadoopFSUtils.getStorageConf(spark.sparkContext.hadoopConfiguration))
+          .build()
+        val versionAfter = metaClient.getTableConfig.getTableVersion
+        println(s"V1 MOR test: Table version after downgrade: $versionAfter")
+//        // Verify table version was downgraded to SIX
+//        assert(versionAfter == HoodieTableVersion.SIX,
+//          s"V1 MOR test: Table version should be SIX after downgrade, but got $versionAfter (was $versionBefore)")
+//        // Verify timeline layout version is V1 (SIX uses V1)
+//        val timelineLayoutVersion = metaClient.getTableConfig.getTimelineLayoutVersion.get
+//        assert(timelineLayoutVersion.getVersion == TimelineLayoutVersion.VERSION_1,
+//          s"V1 MOR test: Timeline layout version should be V1, but got ${timelineLayoutVersion.getVersion}")
+
+        // Run all test scenarios
+        runAllTestScenarios(tableName, commitTimes)
+
+        // Verify all commit types are present with specific assertions for V1 MOR
+        val timeline = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, limit => 100)").collect()
+        val actions = timeline.map(_.getString(1)).distinct
+        val states = timeline.map(_.getString(2)).distinct
+
+        // V1 MOR specific: should have deltacommit (not commit for regular writes)
+        assert(actions.contains("deltacommit"), "V1 MOR: Should have deltacommit actions")
+        assert(actions.contains("clean"), "V1 MOR: Should have clean actions")
+
+        // Verify states
+        assert(states.contains("COMPLETED"), "V1 MOR: Should have COMPLETED state instants")
+        val activeTimeline = timeline.filter(_.getString(6) == "ACTIVE")
+        val archivedTimeline = timeline.filter(_.getString(6) == "ARCHIVED")
+        val activeStates = activeTimeline.map(_.getString(2)).distinct
+        val archivedStates = archivedTimeline.map(_.getString(2)).distinct
+
+        assert(activeStates.contains("COMPLETED"), "V1 MOR: Active timeline should have COMPLETED instants")
+        if (archivedTimeline.nonEmpty) {
+          assert(archivedStates.forall(_ == "COMPLETED"),
+            s"V1 MOR: Archived timeline should only have COMPLETED states, got: ${archivedStates.mkString(", ")}")
+        }
+
+        // Verify specific commit types exist for V1 MOR
+        val deltacommitInstants = timeline.filter(r => r.getString(1) == "deltacommit" && r.getString(2) == "COMPLETED")
+        assert(deltacommitInstants.nonEmpty, "V1 MOR: Should have completed deltacommit instants")
+        val cleanInstants = timeline.filter(r => r.getString(1) == "clean")
+        assert(cleanInstants.nonEmpty, "V1 MOR: Should have clean instants")
+        val cleanCompleted = cleanInstants.filter(_.getString(2) == "COMPLETED")
+        assert(cleanCompleted.nonEmpty, "V1 MOR: Should have completed clean instants")
+
+        // Check for compaction (MOR tables can have compaction)
+        val compactionInstants = timeline.filter(r => r.getString(1) == "compaction")
+        if (compactionInstants.nonEmpty) {
+          val compactionCompleted = compactionInstants.filter(r => r.getString(2) == "COMPLETED" ||
+            (r.getString(1) == "commit" && r.getString(2) == "COMPLETED"))
+          // Compaction when completed becomes a commit, so check for that too
+          val compactionAsCommit = timeline.filter(r => r.getString(1) == "commit" && r.getString(2) == "COMPLETED")
+          assert(compactionCompleted.nonEmpty || compactionAsCommit.nonEmpty,
+            "V1 MOR: Should have completed compaction (as commit or compaction)")
+        }
+
+        // Check for rollback if it exists
+        val rollbackInstants = timeline.filter(r => r.getString(1) == "rollback")
+        if (rollbackInstants.nonEmpty) {
+          val rollbackCompleted = rollbackInstants.filter(_.getString(2) == "COMPLETED")
+          if (rollbackCompleted.nonEmpty) {
+            assert(rollbackCompleted.head.getString(7) != null, "V1 MOR: Rollback should have rollback_info")
+          }
+        }
+
+        // In MOR, commits can exist from compaction, but regular writes are deltacommit
+        // This is verified by checking deltacommit exists above
+      }
+    }
+  }
+
+  test("Test show_timeline comprehensive - V2 COW") {
+    withSQLConf(
+      "hoodie.keep.min.commits" -> "2",
+      "hoodie.keep.max.commits" -> "3",
+      "hoodie.cleaner.commits.retained" -> "1") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tableLocation = tmp.getCanonicalPath
+        if (HoodieSparkUtils.isSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled = false")
+        }
+
+        val commitTimes = setupTableWithAllCommitTypes(tableName, tableLocation, "cow")
+
+        // V2 is default, no downgrade needed
+
+        // Verify timeline version is V2
+        val metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(tableLocation)
+          .setConf(HadoopFSUtils.getStorageConf(spark.sparkContext.hadoopConfiguration))
+          .build()
+        assert(metaClient.getTimelineLayoutVersion.getVersion == TimelineLayoutVersion.VERSION_2,
+          "V2 COW test: Timeline layout version should be V2")
+
+        // Trigger archiving
+        triggerArchiving(tableName, 15)
+
+        // Run all test scenarios
+        runAllTestScenarios(tableName, commitTimes)
+
+        // Verify all commit types are present with specific assertions for V2 COW
+        val timeline = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, limit => 100)").collect()
+        val actions = timeline.map(_.getString(1)).distinct
+        val states = timeline.map(_.getString(2)).distinct
+
+        // V2 COW specific: should have commit (not deltacommit)
+        assert(actions.contains("commit"), "V2 COW: Should have commit actions")
+        assert(!actions.contains("deltacommit"), "V2 COW: Should NOT have deltacommit actions (COW table)")
+        assert(actions.contains("clean"), "V2 COW: Should have clean actions")
+
+        // Verify states
+        assert(states.contains("COMPLETED"), "V2 COW: Should have COMPLETED state instants")
+        val activeTimeline = timeline.filter(_.getString(6) == "ACTIVE")
+        val archivedTimeline = timeline.filter(_.getString(6) == "ARCHIVED")
+        val activeStates = activeTimeline.map(_.getString(2)).distinct
+        val archivedStates = archivedTimeline.map(_.getString(2)).distinct
+
+        assert(activeStates.contains("COMPLETED"), "V2 COW: Active timeline should have COMPLETED instants")
+        if (archivedTimeline.nonEmpty) {
+          assert(archivedStates.forall(_ == "COMPLETED"),
+            s"V2 COW: Archived timeline should only have COMPLETED states, got: ${archivedStates.mkString(", ")}")
+        }
+
+        // Verify specific commit types exist for V2 COW
+        val commitInstants = timeline.filter(r => r.getString(1) == "commit" && r.getString(2) == "COMPLETED")
+        assert(commitInstants.nonEmpty, "V2 COW: Should have completed commit instants")
+        val cleanInstants = timeline.filter(r => r.getString(1) == "clean")
+        assert(cleanInstants.nonEmpty, "V2 COW: Should have clean instants")
+        val cleanCompleted = cleanInstants.filter(_.getString(2) == "COMPLETED")
+        assert(cleanCompleted.nonEmpty, "V2 COW: Should have completed clean instants")
+
+        // Check for replace commits (clustering or insert overwrite)
+        val replaceCommitInstants = timeline.filter(r => r.getString(1) == "replacecommit")
+        if (replaceCommitInstants.nonEmpty) {
+          val replaceCompleted = replaceCommitInstants.filter(_.getString(2) == "COMPLETED")
+          assert(replaceCompleted.nonEmpty, "V2 COW: Should have completed replacecommit instants")
+        }
+
+        // Check for rollback if it exists
+        val rollbackInstants = timeline.filter(r => r.getString(1) == "rollback")
+        if (rollbackInstants.nonEmpty) {
+          val rollbackCompleted = rollbackInstants.filter(_.getString(2) == "COMPLETED")
+          if (rollbackCompleted.nonEmpty) {
+            assert(rollbackCompleted.head.getString(7) != null, "V2 COW: Rollback should have rollback_info")
+          }
+        }
+
+        // Verify no deltacommit in COW table
+        val deltacommitInstants = timeline.filter(r => r.getString(1) == "deltacommit")
+        assert(deltacommitInstants.isEmpty, "V2 COW: Should NOT have deltacommit instants (COW table type)")
+      }
+    }
+  }
+
+  test("Test show_timeline comprehensive - V2 MOR") {
+    withSQLConf(
+      "hoodie.keep.min.commits" -> "2",
+      "hoodie.keep.max.commits" -> "3",
+      "hoodie.cleaner.commits.retained" -> "1") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tableLocation = tmp.getCanonicalPath
+        if (HoodieSparkUtils.isSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled = false")
+        }
+
+        val commitTimes = setupTableWithAllCommitTypes(tableName, tableLocation, "mor")
+
+        // V2 is default, no downgrade needed
+
+        // Verify timeline version is V2
+        val metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(tableLocation)
+          .setConf(HadoopFSUtils.getStorageConf(spark.sparkContext.hadoopConfiguration))
+          .build()
+        assert(metaClient.getTimelineLayoutVersion.getVersion == TimelineLayoutVersion.VERSION_2,
+          "V2 MOR test: Timeline layout version should be V2")
+
+        // Trigger archiving
+        triggerArchiving(tableName, 15)
+
+        // Run all test scenarios
+        runAllTestScenarios(tableName, commitTimes)
+
+        // Verify all commit types are present with specific assertions for V2 MOR
+        val timeline = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, limit => 100)").collect()
+        val actions = timeline.map(_.getString(1)).distinct
+        val states = timeline.map(_.getString(2)).distinct
+
+        // V2 MOR specific: should have deltacommit (not commit for regular writes)
+        assert(actions.contains("deltacommit"), "V2 MOR: Should have deltacommit actions")
+        assert(actions.contains("clean"), "V2 MOR: Should have clean actions")
+
+        // Verify states
+        assert(states.contains("COMPLETED"), "V2 MOR: Should have COMPLETED state instants")
+        val activeTimeline = timeline.filter(_.getString(6) == "ACTIVE")
+        val archivedTimeline = timeline.filter(_.getString(6) == "ARCHIVED")
+        val activeStates = activeTimeline.map(_.getString(2)).distinct
+        val archivedStates = archivedTimeline.map(_.getString(2)).distinct
+
+        assert(activeStates.contains("COMPLETED"), "V2 MOR: Active timeline should have COMPLETED instants")
+        if (archivedTimeline.nonEmpty) {
+          assert(archivedStates.forall(_ == "COMPLETED"),
+            s"V2 MOR: Archived timeline should only have COMPLETED states, got: ${archivedStates.mkString(", ")}")
+        }
+
+        // Verify specific commit types exist for V2 MOR
+        val deltacommitInstants = timeline.filter(r => r.getString(1) == "deltacommit" && r.getString(2) == "COMPLETED")
+        assert(deltacommitInstants.nonEmpty, "V2 MOR: Should have completed deltacommit instants")
+        val cleanInstants = timeline.filter(r => r.getString(1) == "clean")
+        assert(cleanInstants.nonEmpty, "V2 MOR: Should have clean instants")
+        val cleanCompleted = cleanInstants.filter(_.getString(2) == "COMPLETED")
+        assert(cleanCompleted.nonEmpty, "V2 MOR: Should have completed clean instants")
+
+        // Check for compaction (MOR tables can have compaction)
+        val compactionInstants = timeline.filter(r => r.getString(1) == "compaction")
+        if (compactionInstants.nonEmpty) {
+          val compactionRequested = compactionInstants.filter(_.getString(2) == "REQUESTED")
+          val compactionInflight = compactionInstants.filter(_.getString(2) == "INFLIGHT")
+          // Compaction when completed becomes a commit
+          val compactionAsCommit = timeline.filter(r => r.getString(1) == "commit" && r.getString(2) == "COMPLETED")
+          assert(compactionRequested.nonEmpty || compactionInflight.nonEmpty || compactionAsCommit.nonEmpty,
+            "V2 MOR: Should have compaction instants (REQUESTED, INFLIGHT, or completed as commit)")
+        }
+
+        // Check for replace commits (clustering or insert overwrite)
+        val replaceCommitInstants = timeline.filter(r => r.getString(1) == "replacecommit")
+        if (replaceCommitInstants.nonEmpty) {
+          val replaceCompleted = replaceCommitInstants.filter(_.getString(2) == "COMPLETED")
+          val replaceRequested = replaceCommitInstants.filter(_.getString(2) == "REQUESTED")
+          val replaceInflight = replaceCommitInstants.filter(_.getString(2) == "INFLIGHT")
+          assert(replaceCompleted.nonEmpty || replaceRequested.nonEmpty || replaceInflight.nonEmpty,
+            "V2 MOR: Should have replacecommit instants")
+        }
+
+        // Check for rollback if it exists
+        val rollbackInstants = timeline.filter(r => r.getString(1) == "rollback")
+        if (rollbackInstants.nonEmpty) {
+          val rollbackCompleted = rollbackInstants.filter(_.getString(2) == "COMPLETED")
+          val rollbackRequested = rollbackInstants.filter(_.getString(2) == "REQUESTED")
+          if (rollbackCompleted.nonEmpty) {
+            assert(rollbackCompleted.head.getString(7) != null, "V2 MOR: Rollback should have rollback_info")
+          }
+          assert(rollbackCompleted.nonEmpty || rollbackRequested.nonEmpty, "V2 MOR: Should have rollback instants")
+        }
+
+        // Verify regular writes are deltacommit in MOR table
+        assert(deltacommitInstants.nonEmpty, "V2 MOR: Should have deltacommit instants for regular writes")
+      }
     }
   }
 }

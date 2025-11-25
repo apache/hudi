@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
-import org.apache.hudi.common.table.timeline.StoppableRecordConsumer;
+import org.apache.hudi.common.table.timeline.BoundedRecordConsumer;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -83,8 +83,8 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
                            Function<GenericRecord, Boolean> commitsFilter,
                            BiConsumer<String, GenericRecord> recordConsumer) {
     Set<String> instantsInRange = new HashSet<>();    
-    StoppableRecordConsumer stoppable = recordConsumer instanceof StoppableRecordConsumer
-        ? (StoppableRecordConsumer) recordConsumer
+    BoundedRecordConsumer boundedConsumer = recordConsumer instanceof BoundedRecordConsumer
+        ? (BoundedRecordConsumer) recordConsumer
         : null;
     
     try {
@@ -96,7 +96,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
       entryList.sort(new ArchiveFileVersionComparator());
 
       for (StoragePathInfo fs : entryList) {
-        if (stoppable != null && stoppable.shouldStop()) {
+        if (boundedConsumer != null && boundedConsumer.shouldStop()) {
           break;
         }
         
@@ -109,7 +109,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
           int instantsInPreviousFile = instantsInRange.size();
           // Read the avro blocks
           while (reader.hasNext()) {
-            if (stoppable != null && stoppable.shouldStop()) {
+            if (boundedConsumer != null && boundedConsumer.shouldStop()) {
               break;
             }
             HoodieLogBlock block = reader.next();
@@ -123,7 +123,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
                     .map(r -> (GenericRecord) r.getData())
                     .filter(commitsFilter::apply)
                     .forEach(r -> {
-                      if (stoppable != null && stoppable.shouldStop()) {
+                      if (boundedConsumer != null && boundedConsumer.shouldStop()) {
                         return;
                       }
                       String instantTime = r.get(HoodieTableMetaClient.COMMIT_TIME_KEY).toString();
