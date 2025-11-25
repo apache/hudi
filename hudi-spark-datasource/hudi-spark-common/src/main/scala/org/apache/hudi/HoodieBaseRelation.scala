@@ -29,6 +29,7 @@ import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.model.HoodieFileFormat.HFILE
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieTimeline, TimelineLayout}
 import org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf
@@ -852,7 +853,8 @@ object HoodieBaseRelation extends SparkAdapterSupport {
       val requiredAvroSchema = new Schema.Parser().parse(requiredDataSchema.avroSchemaStr)
       val avroToRowConverter = AvroConversionUtils.createAvroToInternalRowConverter(requiredAvroSchema, requiredRowSchema)
 
-      reader.getRecordIterator(requiredAvroSchema).asScala
+      //TODO boundary to revisit in later pr to use HoodieSchema directly
+      reader.getRecordIterator(HoodieSchema.fromAvroSchema(requiredAvroSchema)).asScala
         .map(record => {
           avroToRowConverter.apply(record.getData.asInstanceOf[GenericRecord]).get
         })

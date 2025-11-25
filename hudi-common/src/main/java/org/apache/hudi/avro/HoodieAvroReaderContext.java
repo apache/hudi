@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.InstantRange;
@@ -216,21 +217,25 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       renamedColumns = requiredSchemaForFileAndRenamedColumns.getRight();
     }
     if (keyFilterOpt.isEmpty()) {
-      return reader.getIndexedRecordIterator(dataSchema, fileOutputSchema, renamedColumns);
+      //TODO boundary to revisit in later pr to use HoodieSchema directly
+      return reader.getIndexedRecordIterator(HoodieSchema.fromAvroSchema(dataSchema), HoodieSchema.fromAvroSchema(fileOutputSchema), renamedColumns);
     }
     if (reader.supportKeyPredicate()) {
       List<String> keys = reader.extractKeys(keyFilterOpt);
       if (!keys.isEmpty()) {
-        return reader.getIndexedRecordsByKeysIterator(keys, requiredSchema);
+        //TODO boundary to revisit in later pr to use HoodieSchema directly
+        return reader.getIndexedRecordsByKeysIterator(keys, HoodieSchema.fromAvroSchema(requiredSchema));
       }
     }
     if (reader.supportKeyPrefixPredicate()) {
       List<String> keyPrefixes = reader.extractKeyPrefixes(keyFilterOpt);
       if (!keyPrefixes.isEmpty()) {
-        return reader.getIndexedRecordsByKeyPrefixIterator(keyPrefixes, requiredSchema);
+        //TODO boundary to revisit in later pr to use HoodieSchema directly
+        return reader.getIndexedRecordsByKeyPrefixIterator(keyPrefixes, HoodieSchema.fromAvroSchema(requiredSchema));
       }
     }
-    return reader.getIndexedRecordIterator(dataSchema, fileOutputSchema, renamedColumns);
+    //TODO boundary to revisit in later pr to use HoodieSchema directly
+    return reader.getIndexedRecordIterator(HoodieSchema.fromAvroSchema(dataSchema), HoodieSchema.fromAvroSchema(fileOutputSchema), renamedColumns);
   }
 
   @Override

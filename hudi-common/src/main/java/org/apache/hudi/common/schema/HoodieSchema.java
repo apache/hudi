@@ -27,7 +27,10 @@ import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.hudi.exception.HoodieIOException;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -847,6 +850,26 @@ public class HoodieSchema implements Serializable {
         return new HoodieSchema(avroSchema);
       } catch (Exception e) {
         throw new HoodieAvroSchemaException("Failed to parse schema: " + jsonSchema, e);
+      }
+    }
+
+    /**
+     * Parses a schema from an InputStream.
+     *
+     * @param inputStream the InputStream containing the JSON schema
+     * @return parsed HoodieSchema
+     * @throws HoodieIOException if reading from the stream fails
+     */
+    public HoodieSchema parse(InputStream inputStream) {
+      ValidationUtils.checkArgument(inputStream != null, "InputStream cannot be null");
+
+      try {
+        Schema avroSchema = avroParser.parse(inputStream);
+        return new HoodieSchema(avroSchema);
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to parse schema from InputStream", e);
+      } catch (Exception e) {
+        throw new HoodieAvroSchemaException("Failed to parse schema", e);
       }
     }
   }

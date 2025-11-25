@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.InternalSchemaCache;
@@ -86,7 +87,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     HoodieFileReader bootstrapFileReader = null;
 
     Schema writerSchema = mergeHandle.getWriterSchemaWithMetaFields();
-    Schema readerSchema = baseFileReader.getSchema();
+    Schema readerSchema = baseFileReader.getSchema().getAvroSchema();
 
     // In case Advanced Schema Evolution is enabled we might need to rewrite currently
     // persisted records to adhere to an evolved schema
@@ -120,12 +121,13 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
             mergeHandle.getPartitionFields(),
             mergeHandle.getPartitionValues());
         recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
-        recordIterator = (ClosableIterator<HoodieRecord>) bootstrapFileReader.getRecordIterator(recordSchema);
+        //TODO boundary to revisit in later pr to use HoodieSchema directly
+        recordIterator = (ClosableIterator<HoodieRecord>) bootstrapFileReader.getRecordIterator(HoodieSchema.fromAvroSchema(recordSchema));
       } else {
         // In case writer's schema is simply a projection of the reader's one we can read
         // the records in the projected schema directly
         recordSchema = isPureProjection ? writerSchema : readerSchema;
-        recordIterator = (ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(recordSchema);
+        recordIterator = (ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(HoodieSchema.fromAvroSchema(recordSchema));
       }
 
       boolean isBufferingRecords = ExecutorFactory.isBufferingRecords(writeConfig);

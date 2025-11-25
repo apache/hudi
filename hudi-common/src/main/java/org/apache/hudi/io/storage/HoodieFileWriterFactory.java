@@ -26,10 +26,9 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -46,7 +45,7 @@ public class HoodieFileWriterFactory {
   }
 
   public static <T, I, K, O> HoodieFileWriter getFileWriter(
-      String instantTime, StoragePath path, HoodieStorage storage, HoodieConfig config, Schema schema,
+      String instantTime, StoragePath path, HoodieStorage storage, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier, HoodieRecordType recordType) throws IOException {
     final String extension = FSUtils.getFileExtension(path.getName());
     HoodieFileWriterFactory factory = HoodieIOFactory.getIOFactory(storage).getWriterFactory(recordType);
@@ -54,14 +53,14 @@ public class HoodieFileWriterFactory {
   }
 
   public static <T, I, K, O> HoodieFileWriter getFileWriter(HoodieFileFormat format, OutputStream outputStream,
-                                                            HoodieStorage storage, HoodieConfig config, Schema schema, HoodieRecordType recordType)
+                                                            HoodieStorage storage, HoodieConfig config, HoodieSchema schema, HoodieRecordType recordType)
       throws IOException {
     HoodieFileWriterFactory factory = HoodieIOFactory.getIOFactory(storage).getWriterFactory(recordType);
     return factory.getFileWriterByFormat(format, outputStream, config, schema);
   }
 
   protected <T, I, K, O> HoodieFileWriter getFileWriterByFormat(
-      String extension, String instantTime, StoragePath path, HoodieConfig config, Schema schema,
+      String extension, String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     if (PARQUET.getFileExtension().equals(extension)) {
       return newParquetFileWriter(instantTime, path, config, schema, taskContextSupplier);
@@ -76,7 +75,7 @@ public class HoodieFileWriterFactory {
   }
 
   protected <T, I, K, O> HoodieFileWriter getFileWriterByFormat(HoodieFileFormat format, OutputStream outputStream,
-                                                                HoodieConfig config, Schema schema) throws IOException {
+                                                                HoodieConfig config, HoodieSchema schema) throws IOException {
     switch (format) {
       case PARQUET:
         return newParquetFileWriter(outputStream, config, schema);
@@ -86,24 +85,24 @@ public class HoodieFileWriterFactory {
   }
 
   protected HoodieFileWriter newParquetFileWriter(
-      String instantTime, StoragePath path, HoodieConfig config, Schema schema,
+      String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     throw new UnsupportedOperationException();
   }
 
   protected HoodieFileWriter newParquetFileWriter(
-      OutputStream outputStream, HoodieConfig config, Schema schema) throws IOException {
+      OutputStream outputStream, HoodieConfig config, HoodieSchema schema) throws IOException {
     throw new UnsupportedOperationException();
   }
 
   protected HoodieFileWriter newHFileFileWriter(
-      String instantTime, StoragePath path, HoodieConfig config, Schema schema,
+      String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     throw new UnsupportedOperationException();
   }
 
   protected HoodieFileWriter newOrcFileWriter(
-      String instantTime, StoragePath path, HoodieConfig config, Schema schema,
+      String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     throw new UnsupportedOperationException();
   }
