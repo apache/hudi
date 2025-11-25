@@ -50,12 +50,12 @@ import static org.mockito.Mockito.when;
 class TestFlinkRowDataReaderContext {
   private final StorageConfiguration<?> storageConfig = mock(StorageConfiguration.class);
   private final HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
-  List<HoodieSchemaField> fields = Arrays.asList(
+  private static final List<HoodieSchemaField> FIELDS = Arrays.asList(
           HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
           HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
           HoodieSchemaField.of("active", HoodieSchema.create(HoodieSchemaType.BOOLEAN))
   );
-  private final HoodieSchema HOODIE_SCHEMA = HoodieSchema.createRecord("TestRecord", null, null, fields);
+  private static final HoodieSchema HOODIE_SCHEMA = HoodieSchema.createRecord("TestRecord", null, null, FIELDS);
 
   private FlinkRowDataReaderContext readerContext;
 

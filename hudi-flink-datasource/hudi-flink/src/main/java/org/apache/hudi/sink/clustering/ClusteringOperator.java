@@ -18,10 +18,8 @@
 
 package org.apache.hudi.sink.clustering;
 
-import org.apache.hadoop.yarn.webapp.hamlet.Hamlet;
 import org.apache.hudi.adapter.MaskingOutputAdapter;
 import org.apache.hudi.adapter.Utils;
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.CloseableConcatenatingIterator;
