@@ -5,6 +5,8 @@ import MySqlIcon from "./Icons/mysql-sq.png";
 import ParquetIcon from "./Icons/parquet-sq.png";
 import AvroIcon from "./Icons/avro.png";
 import CsvIcon from "./Icons/csv-sq.png";
+import JSONIcon from "./Icons/json-sq.png";
+import OrcIcon from "./Icons/orc-sq.png";
 import RayIcon from "./Icons/ray-sq.png";
 import OracleIcon from "./Icons/oracle-sq.png";
 import HadoopIcon from "./Icons/hadoop-sq.png"
@@ -27,6 +29,10 @@ import TrinoIcon from "./Icons/trino-sq.png";
 import AthenaIcon from "./Icons/athena-sq.png";
 import PrestoIcopn from "./Icons/presto.png";
 import SparkIcon from "./Icons/spark-sq.png";
+import OnehouseIcon from "./Icons/onehouse-sq.png";
+import EMRIcon from "./Icons/aws-emr-sq.png";
+import DatabricksIcon from "./Icons/databricks-sq.png";
+import HDInsightIcon from "./Icons/hdinsight-sq.png";
 import ImpalaIcon from "./Icons/impala-sq.png";
 import StarRocksIcon from "./Icons/starrocks-sq.png";
 import FlinkIcon from "./Icons/flink-sq.png";
@@ -53,8 +59,10 @@ export const cdcItems = [
 
 export const rawDataItems = [
   {title: "Parquet", icon: ParquetIcon},
+  {title: "ORC", icon: OrcIcon},
   {title: "Avro", icon: AvroIcon},
   {title: "CSV", icon: CsvIcon},
+  {title: "JSON", icon: JSONIcon},
 ]
 
 export const lakeStorageItems = [
@@ -96,6 +104,10 @@ export const interactiveAnalyticsItems = [
 export const dataProcessingItems = [
   {title: "Apache Spark", icon: SparkIcon},
   {title: "Apache Flink", icon: FlinkIcon},
+  {title: "Databricks", icon: DatabricksIcon},
+  {title: "AWS EMR", icon: EMRIcon},
+  {title: "Azure HDInsight", icon: HDInsightIcon},
+  {title: "Onehouse", icon: OnehouseIcon},
   {title: "Ray", icon: RayIcon},
   {title: "Daft", icon: DaftIcon},
 ]
