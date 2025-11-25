@@ -22,6 +22,8 @@ export HUDI_VERSION_TAG=${HUDI_VERSION}
 export SPARK_VERSION=3.5.7
 export HIVE_VERSION=3.1.3
 export HIVE_VERSION_TAG=${HIVE_VERSION}
+export TRINO_VERSION=477
+export TRINO_VERSION_TAG=${TRINO_VERSION}
 
 SCRIPT_DIR=$(cd $(dirname $0); pwd)
 
@@ -43,3 +45,11 @@ docker build \
     -t apachehudi/hive:latest \
     -t apachehudi/hive:"$HIVE_VERSION_TAG" \
     -f "$SCRIPT_DIR"/Dockerfile.hive .
+
+echo "Building Trino Docker image using Trino version: $TRINO_VERSION"
+
+docker build \
+    --build-arg TRINO_VERSION="$TRINO_VERSION" \
+    -t apachehudi/trino:latest \
+    -t apachehudi/trino:"$TRINO_VERSION_TAG" \
+    -f "$SCRIPT_DIR"/Dockerfile.trino .
