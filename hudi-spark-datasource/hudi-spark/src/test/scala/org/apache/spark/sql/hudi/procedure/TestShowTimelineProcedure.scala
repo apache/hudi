@@ -788,7 +788,7 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
    * Helper method to run all 12 test scenarios
    */
   private def runAllTestScenarios(tableName: String, commitTimes: Map[String, String]): Unit = {
-    val allTimeline = spark.sql(s"call show_timeline(table => '$tableName', limit => 100)").collect()
+    val allTimeline = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, limit => 100)").collect()
     val activeInstants = allTimeline.filter(_.getString(6) == "ACTIVE")
     val archivedInstants = allTimeline.filter(_.getString(6) == "ARCHIVED")
     val allInstantTimes = allTimeline.map(_.getString(0)).sorted.reverse
@@ -878,9 +878,9 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
       // Scenario 11: start and end in archived, archived not enabled
       if (archivedTimes.length >= 2) {
         val archivedEnd = archivedTimes.last
-        val result11 = spark.sql(s"call show_timeline(table => '$tableName', startTime => '$archivedStart', endTime => '$archivedEnd')").collect()
+        val result11 = spark.sql(s"call show_timeline(table => '$tableName', startTime => '$archivedEnd', endTime => '$archivedStart')").collect()
         result11.foreach { row =>
-          assert(row.getString(6) == "ACTIVE" || row.getString(0) >= archivedStart,
+          assert(row.getString(6) == "ACTIVE" || row.getString(0) >= archivedEnd,
             "Scenario 11: Should only return ACTIVE entries or entries >= start when archived not enabled")
         }
       }
@@ -888,7 +888,7 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
       // Scenario 12: start and end in archived, archived enabled
       if (archivedTimes.length >= 2) {
         val archivedEnd = archivedTimes.last
-        val result12 = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, startTime => '$archivedStart', endTime => '$archivedEnd')").collect()
+        val result12 = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, startTime => '$archivedEnd', endTime => '$archivedStart')").collect()
         assert(result12.nonEmpty, "Scenario 12: Should return entries from archived timeline")
         result12.foreach { row =>
           val instantTime = row.getString(0)
@@ -937,13 +937,6 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
           .build()
         val versionAfter = metaClient.getTableConfig.getTableVersion
         println(s"V1 COW test: Table version after downgrade: $versionAfter")
-//        // Verify table version was downgraded to SIX
-//        assert(versionAfter == HoodieTableVersion.SIX,
-//          s"V1 COW test: Table version should be SIX after downgrade, but got $versionAfter (was $versionBefore)")
-//        // Verify timeline layout version is V1 (SIX uses V1)
-//        val timelineLayoutVersion = metaClient.getTableConfig.getTimelineLayoutVersion.get
-//        assert(timelineLayoutVersion.getVersion == TimelineLayoutVersion.VERSION_1,
-//          s"V1 COW test: Timeline layout version should be V1, but got ${timelineLayoutVersion.getVersion}")
 
         // Run all test scenarios
         runAllTestScenarios(tableName, commitTimes)
@@ -1035,13 +1028,6 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
           .build()
         val versionAfter = metaClient.getTableConfig.getTableVersion
         println(s"V1 MOR test: Table version after downgrade: $versionAfter")
-//        // Verify table version was downgraded to SIX
-//        assert(versionAfter == HoodieTableVersion.SIX,
-//          s"V1 MOR test: Table version should be SIX after downgrade, but got $versionAfter (was $versionBefore)")
-//        // Verify timeline layout version is V1 (SIX uses V1)
-//        val timelineLayoutVersion = metaClient.getTableConfig.getTimelineLayoutVersion.get
-//        assert(timelineLayoutVersion.getVersion == TimelineLayoutVersion.VERSION_1,
-//          s"V1 MOR test: Timeline layout version should be V1, but got ${timelineLayoutVersion.getVersion}")
 
         // Run all test scenarios
         runAllTestScenarios(tableName, commitTimes)

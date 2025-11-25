@@ -45,7 +45,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.getInputStreamOptionLegacy;
@@ -133,10 +132,11 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
 
   public void loadCompactionDetailsInMemory(String startTs, String endTs) {
     // load compactionPlan
-    loadInstants(new HoodieArchivedTimeline.TimeRangeFilter(startTs, endTs), HoodieArchivedTimeline.LoadMode.PLAN,
+    List<HoodieInstant> loadedInstants = loadInstants(new HoodieArchivedTimeline.TimeRangeFilter(startTs, endTs), HoodieArchivedTimeline.LoadMode.PLAN,
         record -> record.get(ACTION_ARCHIVED_META_FIELD).toString().equals(COMMIT_ACTION)
             && record.get(PLAN_ARCHIVED_META_FIELD) != null
     );
+    appendLoadedInstants(loadedInstants);
   }
 
   @Override
@@ -149,7 +149,8 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
 
   @Override
   public void loadCompletedInstantDetailsInMemory(String startTs, String endTs) {
-    loadInstants(new HoodieArchivedTimeline.TimeRangeFilter(startTs, endTs), HoodieArchivedTimeline.LoadMode.METADATA);
+    List<HoodieInstant> loadedInstants = loadInstants(new HoodieArchivedTimeline.TimeRangeFilter(startTs, endTs), HoodieArchivedTimeline.LoadMode.METADATA);
+    appendLoadedInstants(loadedInstants);
   }
 
   @Override
@@ -271,13 +272,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     InstantsLoaderWithLimit loader = new InstantsLoaderWithLimit(limit, loadMode);
     timelineLoader.loadInstants(metaClient, null, loadMode, commitsFilter, loader);
     List<HoodieInstant> collectedInstants = loader.getCollectedInstants();
-    List<HoodieInstant> existingInstants = getInstants();
-    List<HoodieInstant> newInstants = collectedInstants.stream()
-        .filter(instant -> !existingInstants.contains(instant))
-        .collect(Collectors.toList());
-    if (!newInstants.isEmpty()) {
-      appendInstants(newInstants);
-    }
+    appendLoadedInstants(collectedInstants);
   }
 
   /**

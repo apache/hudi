@@ -210,40 +210,43 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
   @Override
   public void loadCompactionDetailsInMemory(String startTs, String endTs) {
     // load compactionPlan
-    loadInstants(new ClosedClosedTimeRangeFilter(startTs, endTs), null, true,
+    List<HoodieInstant> loadedInstants = loadInstants(new ClosedClosedTimeRangeFilter(startTs, endTs), null, true,
         record -> {
           // Older files don't have action state set.
           Object action = record.get(ACTION_STATE);
           return record.get(ACTION_TYPE_KEY).toString().equals(HoodieTimeline.COMPACTION_ACTION)
               && (action == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT.toString().equals(action.toString()));
         });
+    appendLoadedInstants(loadedInstants);
   }
 
   @Override
   public void loadCompactionDetailsInMemory(int limit) {
     loadInstantsWithLimit(limit, true,
         record -> {
-          Object action = record.get(ACTION_STATE);
+          Object actionState = record.get(ACTION_STATE);
+          // Older files & archivedTimelineV2 don't have action state set.
           return record.get(ACTION_TYPE_KEY).toString().equals(HoodieTimeline.COMPACTION_ACTION)
-              && (action == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT.toString().equals(action.toString()));
+              && (actionState == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT.toString().equals(actionState.toString()));
         });
   }
 
   @Override
   public void loadCompletedInstantDetailsInMemory(String startTs, String endTs) {
-    loadInstants(new ClosedClosedTimeRangeFilter(startTs, endTs), null, true,
+    List<HoodieInstant> loadedInstants = loadInstants(new ClosedClosedTimeRangeFilter(startTs, endTs), null, true,
         record -> {
-          Object action = record.get(ACTION_STATE);
-          return action == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED.toString().equals(action.toString());
+          Object actionState = record.get(ACTION_STATE);
+          return actionState == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED.toString().equals(actionState.toString());
         });
+    appendLoadedInstants(loadedInstants);
   }
 
   @Override
   public void loadCompletedInstantDetailsInMemory(int limit) {
     loadInstantsWithLimit(limit, true,
         record -> {
-          Object action = record.get(ACTION_STATE);
-          return action == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED.toString().equals(action.toString());
+          Object actionState = record.get(ACTION_STATE);
+          return actionState == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED.toString().equals(actionState.toString());
         });
   }
 
@@ -283,13 +286,7 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     timelineLoader.loadInstants(
         metaClient, null, Option.empty(), LoadMode.PLAN, commitsFilter, loader);
     List<HoodieInstant> collectedInstants = loader.getCollectedInstants();
-    List<HoodieInstant> existingInstants = getInstants();
-    List<HoodieInstant> newInstants = collectedInstants.stream()
-        .filter(instant -> !existingInstants.contains(instant))
-        .collect(Collectors.toList());
-    if (!newInstants.isEmpty()) {
-      appendInstants(newInstants);
-    }
+    appendLoadedInstants(collectedInstants);
   }
 
   /**
