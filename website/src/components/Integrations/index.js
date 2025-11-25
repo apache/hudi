@@ -1,9 +1,7 @@
 import React from "react";
 import {
   dataProcessingItems,
-  rawDataItems,
   fileFormatItems,
-  tableFormatItems,
   databaseItems,
   streamingItems,
   datawarehouseItems,
@@ -12,7 +10,6 @@ import {
   dataCatalogItems, 
   orchestrationItems, 
   cdcItems,
-  streamingProcessingItems
 } from "./data";
 import Services from "./Services";
 import styles from "./styles.module.css";
@@ -29,7 +26,7 @@ return(
             <Services name={"Data Streaming"} serviceData={streamingItems}/>
             <Services name={"Databases"} serviceData={databaseItems}/>
             <Services name={"CDC"} serviceData={cdcItems}/>
-            <Services name={"Raw Data"} serviceData={rawDataItems}/>
+            <Services name={"File Formats"} serviceData={fileFormatItems}/>
           </div>
           </div>
         <div className={styles.serviceGroup}>
