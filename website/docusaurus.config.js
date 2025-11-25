@@ -1,6 +1,6 @@
 const { themes } = require("prism-react-renderer");
 const versions = require("./versions.json");
-const { slackUrl } = require('./constants');
+const { originalSlackUrl } = require('./constants');
 const allDocHomesPaths = [
   "/docs/",
   "/docs/next/",
@@ -38,7 +38,7 @@ module.exports = {
         "CDC and indexes"
       ],
     },
-    slackUrl: slackUrl,
+    slackUrl: originalSlackUrl,
   },
   plugins: [
     [
@@ -266,15 +266,15 @@ module.exports = {
             },
             {
               label: 'Slack',
-              href: slackUrl,
+              href: originalSlackUrl,
             },
             {
-              label: 'Linkdin',
-              href: 'https://www.linkedin.com/company/apache-hudi/?viewAsMember=true',
+              label: 'LinkedIn',
+              href: 'https://www.linkedin.com/company/apache-hudi/',
             },
             {
-              label: 'Youtube',
-              href: 'https://www.youtube.com/channel/UCs7AhE0BWaEPZSChrBR-Muw',
+              label: 'YouTube',
+              href: 'https://www.youtube.com/@apachehudi',
             },
             {
               label: 'X',
@@ -406,7 +406,7 @@ module.exports = {
             },
             {
               label: "Slack",
-              href: slackUrl,
+              href: originalSlackUrl,
             },
             {
               label: "GitHub",
