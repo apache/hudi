@@ -25,7 +25,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
-import org.apache.hudi.common.table.timeline.AbstractInstantsLoaderWithLimit;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 
@@ -257,7 +256,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();
     Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer = Option.ofNullable(getInstantDetailsFunc(loadMode));
     timelineLoader.loadInstants(metaClient, filter, loadMode, commitsFilter,
-        (instantTime, avroRecord) -> instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, instantDetailsConsumer)));
+        (instantTime, avroRecord) -> instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, instantDetailsConsumer)), -1);
     List<HoodieInstant> result = new ArrayList<>(instantsInRange.values());
     Collections.sort(result);
     return result;
@@ -269,43 +268,13 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
    */
   private void loadInstantsWithLimit(int limit, HoodieArchivedTimeline.LoadMode loadMode,
       Function<GenericRecord, Boolean> commitsFilter) {
-    InstantsLoaderWithLimit loader = new InstantsLoaderWithLimit(limit, loadMode);
-    timelineLoader.loadInstants(metaClient, null, loadMode, commitsFilter, loader);
-    List<HoodieInstant> collectedInstants = loader.getCollectedInstants();
+    Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();
+    Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer = Option.ofNullable(getInstantDetailsFunc(loadMode));
+    timelineLoader.loadInstants(metaClient, null, loadMode, commitsFilter,
+        (instantTime, avroRecord) -> instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, instantDetailsConsumer)), limit);
+    List<HoodieInstant> collectedInstants = new ArrayList<>(instantsInRange.values());
+    Collections.sort(collectedInstants);
     appendLoadedInstants(collectedInstants);
-  }
-
-  /**
-   * Callback to read instant details with a limit on the number of instants to load.
-   * Extends AbstractInstantsLoaderWithLimit to reuse common limit-based loading logic.
-   */
-  private class InstantsLoaderWithLimit extends AbstractInstantsLoaderWithLimit {
-    private final HoodieArchivedTimeline.LoadMode loadMode;
-    private final Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();
-
-    private InstantsLoaderWithLimit(int limit, HoodieArchivedTimeline.LoadMode loadMode) {
-      super(limit);
-      this.loadMode = loadMode;
-    }
-
-    @Override
-    protected HoodieInstant readCommit(String instantTime, GenericRecord record) {
-      Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer = Option.ofNullable(getInstantDetailsFunc(loadMode));
-      return ArchivedTimelineV2.this.readCommit(instantTime, record, instantDetailsConsumer);
-    }
-
-    @Override
-    protected void addInstant(String instantTime, HoodieInstant instant) {
-      instantsInRange.putIfAbsent(instantTime, instant);
-    }
-
-    @Override
-    public List<HoodieInstant> getCollectedInstants() {
-      // V2 stores one instant per timestamp (typically COMPLETED).
-      List<HoodieInstant> result = new ArrayList<>(instantsInRange.values());
-      Collections.sort(result);
-      return result;
-    }
   }
 
   @Override

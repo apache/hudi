@@ -24,7 +24,6 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.AbstractInstantsLoaderWithLimit;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -276,16 +275,20 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
   private List<HoodieInstant> loadInstants(HoodieArchivedTimeline.TimeRangeFilter filter, LogFileFilter logFileFilter, boolean loadInstantDetails, Function<GenericRecord, Boolean> commitsFilter) {
     InstantsLoader loader = new InstantsLoader(loadInstantDetails);
     timelineLoader.loadInstants(
-        metaClient, filter, Option.ofNullable(logFileFilter), LoadMode.PLAN, commitsFilter, loader);
+        metaClient, filter, Option.ofNullable(logFileFilter), LoadMode.PLAN, commitsFilter, loader, -1);
     return loader.getInstantsInRangeCollected().values()
         .stream().flatMap(Collection::stream).sorted().collect(Collectors.toList());
   }
 
   private void loadInstantsWithLimit(int limit, boolean loadInstantDetails, Function<GenericRecord, Boolean> commitsFilter) {
-    InstantsLoaderWithLimit loader = new InstantsLoaderWithLimit(loadInstantDetails, limit);
+    InstantsLoader loader = new InstantsLoader(loadInstantDetails);
     timelineLoader.loadInstants(
-        metaClient, null, Option.empty(), LoadMode.PLAN, commitsFilter, loader);
-    List<HoodieInstant> collectedInstants = loader.getCollectedInstants();
+        metaClient, null, Option.empty(), LoadMode.PLAN, commitsFilter, loader, limit);
+    List<HoodieInstant> collectedInstants = loader.getInstantsInRangeCollected().values()
+        .stream()
+        .flatMap(Collection::stream)
+        .sorted()
+        .collect(Collectors.toList());
     appendLoadedInstants(collectedInstants);
   }
 
@@ -311,43 +314,6 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
 
     public Map<String, List<HoodieInstant>> getInstantsInRangeCollected() {
       return instantsInRange;
-    }
-  }
-
-  public class InstantsLoaderWithLimit extends AbstractInstantsLoaderWithLimit {
-    private final Map<String, List<HoodieInstant>> instantsInRange = new ConcurrentHashMap<>();
-    private final boolean loadInstantDetails;
-
-    private InstantsLoaderWithLimit(boolean loadInstantDetails, int limit) {
-      super(limit);
-      this.loadInstantDetails = loadInstantDetails;
-    }
-
-    @Override
-    protected HoodieInstant readCommit(String instantTime, GenericRecord record) {
-      Option<HoodieInstant> instant = ArchivedTimelineV1.this.readCommit(instantTime, record, loadInstantDetails, null);
-      return instant.orElse(null);
-    }
-
-    @Override
-    protected void addInstant(String instantTime, HoodieInstant instant) {
-      instantsInRange.computeIfAbsent(instant.requestedTime(), s -> new ArrayList<>())
-          .add(instant);
-    }
-
-    public Map<String, List<HoodieInstant>> getInstantsInRangeCollected() {
-      return instantsInRange;
-    }
-
-    @Override
-    public List<HoodieInstant> getCollectedInstants() {
-      // V1 needs to flatten because the map values are lists, while V2 can use the values directly. 
-      // V1 can have multiple instants with the same timestamp but different states (REQUESTED, INFLIGHT, COMPLETED).
-      return instantsInRange.values()
-          .stream()
-          .flatMap(Collection::stream)
-          .sorted()
-          .collect(Collectors.toList());
     }
   }
 

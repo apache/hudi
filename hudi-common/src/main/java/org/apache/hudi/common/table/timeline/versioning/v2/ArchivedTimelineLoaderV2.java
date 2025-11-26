@@ -24,7 +24,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.LSMTimeline;
-import org.apache.hudi.common.table.timeline.BoundedRecordConsumer;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
@@ -40,7 +39,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
@@ -56,16 +55,23 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
                            HoodieArchivedTimeline.LoadMode loadMode,
                            Function<GenericRecord, Boolean> commitsFilter,
                            BiConsumer<String, GenericRecord> recordConsumer) {
+    loadInstants(metaClient, filter, loadMode, commitsFilter, recordConsumer, -1);
+  }
+
+  @Override
+  public void loadInstants(HoodieTableMetaClient metaClient,
+                           @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
+                           HoodieArchivedTimeline.LoadMode loadMode,
+                           Function<GenericRecord, Boolean> commitsFilter,
+                           BiConsumer<String, GenericRecord> recordConsumer,
+                           int limit) {
     try {
       // List all files
       List<String> fileNames = LSMTimeline.latestSnapshotManifest(metaClient, metaClient.getArchivePath()).getFileNames();
 
-      // Check if consumer supports early termination
-      BoundedRecordConsumer boundedConsumer = recordConsumer instanceof BoundedRecordConsumer
-          ? (BoundedRecordConsumer) recordConsumer
-          : null;
-
-      boolean needsReverseOrder = boundedConsumer != null && boundedConsumer.needsReverseOrder();
+      boolean hasLimit = limit > 0;
+      AtomicInteger loadedCount = new AtomicInteger(0);
+      
       List<String> filteredFiles = new ArrayList<>();
       for (String fileName : fileNames) {
         if (filter == null || LSMTimeline.isFileInRange(filter, fileName)) {
@@ -73,21 +79,20 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
         }
       }
 
-      // Sort files in reverse chronological order if needed (newest first for limit queries)
-      if (needsReverseOrder) {
+      // Sort files in reverse chronological order if limit is specified (newest first for limit queries)
+      if (hasLimit) {
         filteredFiles.sort(Comparator.comparing((String fileName) -> {
           return LSMTimeline.getMaxInstantTime(fileName);
         }).reversed());
       }
 
       Schema readSchema = LSMTimeline.getReadSchema(loadMode);
-      // Use serial stream when limit is involved (boundedConsumer with reverse order) to guarantee order
-      java.util.stream.Stream<String> fileStream = needsReverseOrder
+      // Use serial stream when limit is involved to guarantee order
+      java.util.stream.Stream<String> fileStream = hasLimit
           ? filteredFiles.stream()
           : filteredFiles.parallelStream();
-      AtomicBoolean shouldStop = new AtomicBoolean(false);
       fileStream.forEach(fileName -> {
-        if (shouldStop.get()) {
+        if (hasLimit && loadedCount.get() >= limit) {
           return;
         }
         // Read the archived file
@@ -96,9 +101,7 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
             .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, new StoragePath(metaClient.getArchivePath(), fileName))) {
           try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieLSMTimelineInstant.getClassSchema(), readSchema)) {
             while (iterator.hasNext()) {
-              // accept() is thread-safe (uses volatile + synchronized)
-              if (boundedConsumer != null && boundedConsumer.shouldStop()) {
-                shouldStop.set(true);
+              if (hasLimit && loadedCount.get() >= limit) {
                 break; // Stop reading this file
               }
               GenericRecord record = (GenericRecord) iterator.next();
@@ -106,6 +109,9 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
               if ((filter == null || filter.isInRange(instantTime))
                   && commitsFilter.apply(record)) {
                 recordConsumer.accept(instantTime, record);
+                if (hasLimit) {
+                  loadedCount.incrementAndGet();
+                }
               }
             }
           }
