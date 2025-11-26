@@ -132,18 +132,18 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
         .getLatestFileSlicesStateless(partitionPath)
         .filter(slice -> filterFileSlice(slice, lastCompletedInstantTime, fgIdsInPendingCompactionAndClustering, instantRange))
         .map(s -> {
-              // ==============================================================
-              // IMPORTANT
-              // ==============================================================
-              // Currently, our filesystem view could return a file slice with pending log files there,
-              // these files should be excluded from the plan, let's say we have such a sequence of actions
+          // ==============================================================
+          // IMPORTANT
+          // ==============================================================
+          // Currently, our filesystem view could return a file slice with pending log files there,
+          // these files should be excluded from the plan, let's say we have such a sequence of actions
 
-              // t10: a delta commit starts,
-              // t20: the compaction is scheduled and the t10 delta commit is still pending, and the "fg_10.log" is included in the plan
-              // t25: the delta commit 10 finishes,
-              // t30: the compaction execution starts, now the reader considers the log file "fg_10.log" as valid.
+          // t10: a delta commit starts,
+          // t20: the compaction is scheduled and the t10 delta commit is still pending, and the "fg_10.log" is included in the plan
+          // t25: the delta commit 10 finishes,
+          // t30: the compaction execution starts, now the reader considers the log file "fg_10.log" as valid.
 
-              // for both OCC and NB-CC, this is in-correct.
+          // for both OCC and NB-CC, this is in-correct.
           return s.filterLogFiles(logFile -> completionTimeQueryView.isCompletedBefore(compactionInstant, logFile.getDeltaCommitTime()));
         })
         .filter(FileSlice::hasLogFiles) // compaction is not needed if there is no log file.
