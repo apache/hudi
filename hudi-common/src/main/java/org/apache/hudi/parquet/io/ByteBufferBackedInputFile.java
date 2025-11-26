@@ -18,7 +18,7 @@
 
 package org.apache.hudi.parquet.io;
 
-import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
+import org.apache.hudi.io.ByteBufferBackedInputStream;
 
 import org.apache.parquet.io.DelegatingSeekableInputStream;
 import org.apache.parquet.io.InputFile;
@@ -27,6 +27,7 @@ import org.apache.parquet.io.SeekableInputStream;
 /**
  * Implementation of {@link InputFile} backed by {@code byte[]} buffer
  */
+@Deprecated
 public class ByteBufferBackedInputFile implements InputFile {
   private final byte[] buffer;
   private final int offset;

@@ -27,7 +27,6 @@ import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.hash.MurmurHash;
-import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.hfile.CachingHFileReaderImpl;
@@ -110,11 +109,11 @@ public class HFileReaderFactory {
           buffer = new byte[(int) storage.getPathInfo(path).getLength()];
           stream.readFully(buffer);
         }
-        return new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(buffer));
+        return new ByteArraySeekableDataInputStream(storage.openByteArray(buffer));
       }
       return storage.openSeekable(fileSource.asLeft(), false);
     }
-    return new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(fileSource.asRight()));
+    return new ByteArraySeekableDataInputStream(storage.openByteArray(fileSource.asRight()));
   }
 
   public static Builder builder() {

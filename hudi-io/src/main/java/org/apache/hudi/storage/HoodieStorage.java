@@ -24,6 +24,7 @@ import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
 
 import org.slf4j.Logger;
@@ -435,6 +436,14 @@ public abstract class HoodieStorage implements Closeable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public SeekableDataInputStream openSeekable(StoragePath path, boolean wrapStream) throws IOException {
     return openSeekable(path, getDefaultBlockSize(path), wrapStream);
+  }
+
+  /**
+   * todo doc
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public ByteBufferBackedInputStream openByteArray(byte[] array) {
+    return new ByteBufferBackedInputStream(array);
   }
 
   /**
