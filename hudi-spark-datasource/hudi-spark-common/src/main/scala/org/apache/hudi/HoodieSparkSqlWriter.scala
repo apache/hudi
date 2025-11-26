@@ -37,7 +37,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
-import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
@@ -66,7 +66,6 @@ import org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncExcepti
 import org.apache.hudi.util.{SparkConfigUtils, SparkKeyGenUtils}
 import org.apache.hudi.util.SparkConfigUtils.getStringWithAltKeys
 
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
@@ -126,7 +125,7 @@ object HoodieSparkSqlWriter {
             sourceDf: DataFrame,
             streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
             hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty,
-            schemaFromCatalog: Option[Schema] = Option.empty):
+            schemaFromCatalog: Option[HoodieSchema] = Option.empty):
   (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
     new HoodieSparkSqlWriterInternal().write(sqlContext, mode, optParams, sourceDf, streamingWritesParamsOpt, hoodieWriteClient,
       schemaFromCatalog = schemaFromCatalog)
@@ -146,7 +145,7 @@ object HoodieSparkSqlWriter {
     Metrics.shutdownAllMetrics()
   }
 
-  def getBulkInsertRowConfig(writerSchema: org.apache.hudi.common.util.Option[Schema], hoodieConfig: HoodieConfig,
+  def getBulkInsertRowConfig(writerSchema: org.apache.hudi.common.util.Option[HoodieSchema ], hoodieConfig: HoodieConfig,
                              basePath: String, tblName: String): HoodieWriteConfig = {
     var writerSchemaStr: String = null
     if (writerSchema.isPresent) {
@@ -177,7 +176,7 @@ class HoodieSparkSqlWriterInternal {
             sourceDf: DataFrame,
             streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
             hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty,
-            schemaFromCatalog: Option[Schema] = Option.empty):
+            schemaFromCatalog: Option[HoodieSchema ] = Option.empty):
   (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
 
     val retryWrite: () => (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = () => {
@@ -216,7 +215,7 @@ class HoodieSparkSqlWriterInternal {
                             sourceDf: DataFrame,
                             streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
                             hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty,
-                            schemaFromCatalog: Option[Schema] = Option.empty):
+                            schemaFromCatalog: Option[HoodieSchema ] = Option.empty):
   (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
 
     assert(optParams.get("path").exists(!StringUtils.isNullOrEmpty(_)), "'path' must be set")
@@ -353,7 +352,7 @@ class HoodieSparkSqlWriterInternal {
       // Register Avro classes ([[Schema]], [[GenericData]]) w/ Kryo
       sparkContext.getConf.registerKryoClasses(
         Array(classOf[GenericData],
-          classOf[Schema]))
+          classOf[HoodieSchema ]))
 
       val shouldReconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
       val latestTableSchemaOpt = getLatestTableSchema(tableMetaClient, schemaFromCatalog)
@@ -365,16 +364,24 @@ class HoodieSparkSqlWriterInternal {
       // NOTE: We need to make sure that upon conversion of the schemas b/w Catalyst's [[StructType]] and
       //       Avro's [[Schema]] we're preserving corresponding "record-name" and "record-namespace" that
       //       play crucial role in establishing compatibility b/w schemas
-      val (avroRecordName, avroRecordNamespace) = latestTableSchemaOpt.map(s => (s.getName, s.getNamespace))
+      val (avroRecordName, avroRecordNamespace) = latestTableSchemaOpt.map(s => (s.getName.toString, s.getNamespace.toString))
         .getOrElse(getAvroRecordNameAndNamespace(tblName))
 
-      val sourceSchema = convertStructTypeToAvroSchema(df.schema, avroRecordName, avroRecordNamespace)
+      val sourceSchema = HoodieSchema.fromAvroSchema(
+        convertStructTypeToAvroSchema(df.schema, avroRecordName, avroRecordNamespace)
+      )
       val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient).orElse {
         // In case we need to reconcile the schema and schema evolution is enabled,
         // we will force-apply schema evolution to the writer's schema
         if (shouldReconcileSchema && hoodieConfig.getBooleanOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
           val allowOperationMetaDataField = parameters.getOrElse(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key(), "false").toBoolean
-          Some(InternalSchemaConverter.convert(HoodieSchema.fromAvroSchema(HoodieAvroUtils.addMetadataFields(latestTableSchemaOpt.getOrElse(sourceSchema), allowOperationMetaDataField))))
+          //TODO need to rename the spark schema class to something else to not have this be so confusing
+          Some(InternalSchemaConverter.convert(
+            org.apache.hudi.common.schema.HoodieSchemaUtils.addMetadataFields(
+              latestTableSchemaOpt.getOrElse(sourceSchema),
+              allowOperationMetaDataField
+            )
+          ))
         } else {
           None
         }
@@ -457,7 +464,12 @@ class HoodieSparkSqlWriterInternal {
             // NOTE: Target writer's schema is deduced based on
             //         - Source's schema
             //         - Existing table's schema (including its Hudi's [[InternalSchema]] representation)
-            val writerSchema = HoodieSchemaUtils.deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, parameters)
+            val writerSchema = HoodieSchemaUtils.deduceWriterSchema(
+              sourceSchema,
+              latestTableSchemaOpt,
+              internalSchemaOpt,
+              parameters
+            )
 
             validateSchemaForHoodieIsDeleted(writerSchema)
             mayBeValidateParamsForAutoGenerationOfRecordKeys(parameters, hoodieConfig)
@@ -479,7 +491,7 @@ class HoodieSparkSqlWriterInternal {
 
             // Remove meta columns from writerSchema if isPrepped is true.
             val processedDataSchema = if (preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation) {
-              HoodieAvroUtils.removeMetadataFields(dataFileSchema)
+              HoodieSchema.fromAvroSchema(HoodieAvroUtils.removeMetadataFields(dataFileSchema.toAvroSchema()))
             } else {
               dataFileSchema
             }
@@ -640,12 +652,14 @@ class HoodieSparkSqlWriterInternal {
       .toSeq
   }
 
-  def generateSchemaWithoutPartitionColumns(partitionParam: String, schema: Schema): Schema = {
+  def generateSchemaWithoutPartitionColumns(partitionParam: String, schema: HoodieSchema): HoodieSchema = {
     val partitionColumns = getPartitionColumns(partitionParam)
-    HoodieAvroUtils.removeFields(schema, partitionColumns.toSet.asJava)
+    HoodieSchema.fromAvroSchema(
+      HoodieAvroUtils.removeFields(schema.toAvroSchema(), partitionColumns.toSet.asJava)
+    )
   }
 
-  def addSchemaEvolutionParameters(parameters: Map[String, String], internalSchemaOpt: Option[InternalSchema], writeSchemaOpt: Option[Schema] = None): Map[String, String] = {
+  def addSchemaEvolutionParameters(parameters: Map[String, String], internalSchemaOpt: Option[InternalSchema], writeSchemaOpt: Option[HoodieSchema] = None): Map[String, String] = {
     val schemaEvolutionEnable = if (internalSchemaOpt.isDefined) "true" else "false"
 
     val schemaValidateEnable = if (schemaEvolutionEnable.toBoolean && parameters.getOrElse(DataSourceWriteOptions.RECONCILE_SCHEMA.key(), "false").toBoolean) {
@@ -658,7 +672,7 @@ class HoodieSparkSqlWriterInternal {
     val correctInternalSchema = internalSchemaOpt.map { internalSchema =>
       if (internalSchema.findField(HoodieRecord.RECORD_KEY_METADATA_FIELD) == null && writeSchemaOpt.isDefined) {
         val allowOperationMetaDataField = parameters.getOrElse(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key(), "false").toBoolean
-        InternalSchemaConverter.convert(HoodieSchema.fromAvroSchema(HoodieAvroUtils.addMetadataFields(writeSchemaOpt.get, allowOperationMetaDataField)))
+        InternalSchemaConverter.convert(org.apache.hudi.common.schema.HoodieSchemaUtils.addMetadataFields(writeSchemaOpt.get, allowOperationMetaDataField))
       } else {
         internalSchema
       }
@@ -668,13 +682,14 @@ class HoodieSparkSqlWriterInternal {
       HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key() -> schemaValidateEnable)
   }
 
-  private def registerAvroSchemasWithKryo(sparkContext: SparkContext, targetAvroSchemas: Schema*): Unit = {
-    sparkContext.getConf.registerAvroSchemas(targetAvroSchemas: _*)
+  private def registerAvroSchemasWithKryo(sparkContext: SparkContext, targetSchemas: HoodieSchema*): Unit = {
+    sparkContext.getConf.registerAvroSchemas(targetSchemas.map(_.toAvroSchema()): _*)
   }
 
-  private def getLatestTableSchema(tableMetaClient: HoodieTableMetaClient, schemaFromCatalog: Option[Schema]): Option[Schema] = {
+  private def getLatestTableSchema(tableMetaClient: HoodieTableMetaClient, schemaFromCatalog: Option[HoodieSchema]): Option[HoodieSchema] = {
     val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
     toScalaOption(tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false))
+      .map(HoodieSchema.fromAvroSchema)
       .orElse(schemaFromCatalog)
   }
 
@@ -788,11 +803,12 @@ class HoodieSparkSqlWriterInternal {
     }
   }
 
-  def validateSchemaForHoodieIsDeleted(schema: Schema): Unit = {
+  def validateSchemaForHoodieIsDeleted(schema: HoodieSchema): Unit = {
     if (schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) != null &&
-      getNonNullTypeFromUnion(schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD).schema()).getType != Schema.Type.BOOLEAN) {
+      //TODO revisit this to see if this correct
+      getNonNullTypeFromUnion(schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD).get().schema().toAvroSchema).getType != HoodieSchemaType.BOOLEAN) {
       throw new HoodieException(HoodieRecord.HOODIE_IS_DELETED_FIELD + " has to be BOOLEAN type. Passed in dataframe's schema has type "
-        + schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD).schema().getType)
+        + schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD).get().schema().getType)
     }
   }
 
@@ -803,7 +819,7 @@ class HoodieSparkSqlWriterInternal {
                       mode: SaveMode,
                       tblName: String,
                       basePath: Path,
-                      writerSchema: Schema,
+                      writerSchema: HoodieSchema,
                       tableConfig: HoodieTableConfig):
   (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
     if (hoodieConfig.getBoolean(INSERT_DROP_DUPS)) {
