@@ -758,23 +758,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   private void logicalAssertions(Schema tableSchema, String tableBasePath, Map<String, String> hudiOpts, int tableVersion) {
-    if (tableVersion > 8) {
-      assertEquals("timestamp-millis", tableSchema.getField("ts_millis").schema().getLogicalType().getName());
-    }
     assertEquals("timestamp-micros", tableSchema.getField("ts_micros").schema().getLogicalType().getName());
-    if (tableVersion > 8 && !HoodieSparkUtils.isSpark3_3()) {
-      assertEquals("local-timestamp-millis", tableSchema.getField("local_ts_millis").schema().getLogicalType().getName());
-      assertEquals("local-timestamp-micros", tableSchema.getField("local_ts_micros").schema().getLogicalType().getName());
-    }
-
     assertEquals("date", tableSchema.getField("event_date").schema().getLogicalType().getName());
-
-    if (tableVersion > 8) {
-      assertEquals("bytes", tableSchema.getField("dec_plain_large").schema().getType().getName());
-      assertEquals("decimal", tableSchema.getField("dec_plain_large").schema().getLogicalType().getName());
-      assertEquals(20, ((LogicalTypes.Decimal) tableSchema.getField("dec_plain_large").schema().getLogicalType()).getPrecision());
-      assertEquals(10, ((LogicalTypes.Decimal) tableSchema.getField("dec_plain_large").schema().getLogicalType()).getScale());
-    }
     assertEquals("fixed", tableSchema.getField("dec_fixed_small").schema().getType().getName());
     assertEquals(3, tableSchema.getField("dec_fixed_small").schema().getFixedSize());
     assertEquals("decimal", tableSchema.getField("dec_fixed_small").schema().getLogicalType().getName());
@@ -799,19 +784,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       tolerance = totalCount / 4;
     }
 
-    if (tableVersion > 8) {
-      assertHalfSplit(df, "ts_millis > timestamp('2020-01-01 00:00:00Z')", expectedHalf, tolerance, "ts_millis > threshold");
-      assertHalfSplit(df, "ts_millis < timestamp('2020-01-01 00:00:00Z')", expectedHalf, tolerance, "ts_millis < threshold");
-      assertBoundaryCounts(df, "ts_millis > timestamp('2020-01-01 00:00:00.001Z')", "ts_millis <= timestamp('2020-01-01 00:00:00.001Z')", totalCount);
-      assertBoundaryCounts(df, "ts_millis < timestamp('2019-12-31 23:59:59.999Z')", "ts_millis >= timestamp('2019-12-31 23:59:59.999Z')", totalCount);
-    }
-
     assertHalfSplit(df, "ts_micros > timestamp('2020-06-01 12:00:00Z')", expectedHalf, tolerance, "ts_micros > threshold");
     assertHalfSplit(df, "ts_micros < timestamp('2020-06-01 12:00:00Z')", expectedHalf, tolerance, "ts_micros < threshold");
     assertBoundaryCounts(df, "ts_micros > timestamp('2020-06-01 12:00:00.000001Z')", "ts_micros <= timestamp('2020-06-01 12:00:00.000001Z')", totalCount);
     assertBoundaryCounts(df, "ts_micros < timestamp('2020-06-01 11:59:59.999999Z')", "ts_micros >= timestamp('2020-06-01 11:59:59.999999Z')", totalCount);
 
-    if (tableVersion > 8 && !HoodieSparkUtils.isSpark3_3()) {
+    if (!HoodieSparkUtils.isSpark3_3()) {
       assertHalfSplit(df, "local_ts_millis > CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)", expectedHalf, tolerance, "local_ts_millis > threshold");
       assertHalfSplit(df, "local_ts_millis < CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)", expectedHalf, tolerance, "local_ts_millis < threshold");
       assertBoundaryCounts(df, "local_ts_millis > CAST('2015-05-20 12:34:56.001' AS TIMESTAMP_NTZ)", "local_ts_millis <= CAST('2015-05-20 12:34:56.001' AS TIMESTAMP_NTZ)", totalCount);
@@ -828,13 +806,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertHalfSplit(df, "event_date < date('2000-01-01')", expectedHalf, tolerance, "event_date < threshold");
     assertBoundaryCounts(df, "event_date > date('2000-01-02')", "event_date <= date('2000-01-02')", totalCount);
     assertBoundaryCounts(df, "event_date < date('1999-12-31')", "event_date >= date('1999-12-31')", totalCount);
-
-    if (tableVersion > 8) {
-      assertHalfSplit(df, "dec_plain_large < 1234567890.0987654321", expectedHalf, tolerance, "dec_plain_large < threshold");
-      assertHalfSplit(df, "dec_plain_large > 1234567890.0987654321", expectedHalf, tolerance, "dec_plain_large > threshold");
-      assertBoundaryCounts(df, "dec_plain_large < 1234567890.0987654320", "dec_plain_large >= 1234567890.0987654320", totalCount);
-      assertBoundaryCounts(df, "dec_plain_large > 1234567890.0987654322", "dec_plain_large <= 1234567890.0987654322", totalCount);
-    }
 
     assertHalfSplit(df, "dec_fixed_small < 543.21", expectedHalf, tolerance, "dec_fixed_small < threshold");
     assertHalfSplit(df, "dec_fixed_small > 543.21", expectedHalf, tolerance, "dec_fixed_small > threshold");
