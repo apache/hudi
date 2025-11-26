@@ -86,7 +86,7 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
         new AvroFileDeltaInputWriter(jsc.hadoopConfiguration(), basePath + "/input", schemaProvider.getSourceSchema()
             .toString(), 1024 * 1024L);
     GenericRecordFullPayloadGenerator payloadGenerator =
-        new GenericRecordFullPayloadGenerator(schemaProvider.getSourceSchema());
+        new GenericRecordFullPayloadGenerator(schemaProvider.getSourceSchema().toAvroSchema());
     // 2. Generate 100 avro payloads and write them to an avro file
     IntStream.range(0, 100).forEach(a -> {
       try {
@@ -124,7 +124,7 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
             schemaProvider.getSourceSchema().toString(),
             1024 * 1024L);
     GenericRecordFullPayloadGenerator payloadGenerator =
-        new GenericRecordFullPayloadGenerator(schemaProvider.getSourceSchema());
+        new GenericRecordFullPayloadGenerator(schemaProvider.getSourceSchema().toAvroSchema());
     // 2. Generate 100 avro payloads and write them to an avro file
     IntStream.range(0, 100).forEach(a -> {
       try {

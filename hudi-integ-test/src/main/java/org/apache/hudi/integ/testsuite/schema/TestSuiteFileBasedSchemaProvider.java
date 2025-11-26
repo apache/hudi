@@ -19,12 +19,12 @@
 package org.apache.hudi.integ.testsuite.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.integ.testsuite.dag.WriterContext;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 
-import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
-import org.apache.avro.Schema.Type;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,7 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
+import static org.apache.hudi.common.schema.HoodieSchemaUtils.createNewSchemaField;
 
 /**
  * Appends source ordering field to both source and target schemas. This is required to assist in validation to differentiate records written in different batches.
@@ -48,21 +48,19 @@ public class TestSuiteFileBasedSchemaProvider extends FilebasedSchemaProvider {
     this.targetSchema = addSourceOrderingFieldToSchema(targetSchema);
   }
 
-  private Schema addSourceOrderingFieldToSchema(Schema schema) {
-    List<Field> fields = new ArrayList<>();
-    for (Schema.Field field : schema.getFields()) {
-      Schema.Field newField = createNewSchemaField(field);
+  private HoodieSchema addSourceOrderingFieldToSchema(HoodieSchema schema) {
+    List<HoodieSchemaField> fields = new ArrayList<>();
+    for (HoodieSchemaField field : schema.getFields()) {
+      HoodieSchemaField newField = createNewSchemaField(field);
       for (Map.Entry<String, Object> prop : field.getObjectProps().entrySet()) {
         newField.addProp(prop.getKey(), prop.getValue());
       }
       fields.add(newField);
     }
-    Schema.Field sourceOrderingField =
-        new Schema.Field(SchemaUtils.SOURCE_ORDERING_FIELD, Schema.create(Type.INT), "", 0);
+    HoodieSchemaField sourceOrderingField =
+        HoodieSchemaField.of(SchemaUtils.SOURCE_ORDERING_FIELD, HoodieSchema.create(HoodieSchemaType.INT), "", 0);
     fields.add(sourceOrderingField);
-    Schema mergedSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
-    mergedSchema.setFields(fields);
-    return mergedSchema;
+    return HoodieSchema.createRecord(schema.getName(), schema.getDoc().orElse(null), schema.getNamespace().orElse(null), fields);
   }
 
 }
