@@ -70,15 +70,15 @@
         <version>3.5.0</version>
         <executions>
           <execution>
-            <id>add-spark3-avro-sources</id>
+            <id>add-spark32plus-avro-sources</id>
             <phase>generate-sources</phase>
             <goals>
               <goal>add-source</goal>
             </goals>
             <configuration>
-              <!-- Only add the source directory if a Spark 3.x profile is active -->
+              <skipAddSource>${spark31orEarlier}</skipAddSource>
               <sources>
-                <source condition="${spark3.active}">src/avro/java</source>
+                <source>src/avro/java</source>
               </sources>
             </configuration>
           </execution>
