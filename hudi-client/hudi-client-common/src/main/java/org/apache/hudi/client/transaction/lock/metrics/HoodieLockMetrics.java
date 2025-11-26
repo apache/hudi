@@ -50,6 +50,7 @@ public class HoodieLockMetrics {
   public static final String LOCK_EXPIRATION_DEADLINE_COUNTER_NAME = "lock.expiration.deadline";
   public static final String LOCK_DANGLING_COUNTER_NAME = "lock.dangling";
   public static final String LOCK_INTERRUPTED_COUNTER_NAME = "lock.interrupted";
+  public static final String LOCK_RENEWAL_SELF_HEAL_COUNTER_NAME = "lock.renewal.self.heal";
   private final HoodieWriteConfig writeConfig;
   private final boolean isMetricsEnabled;
   private final int keepLastNtimes = 100;
@@ -66,6 +67,7 @@ public class HoodieLockMetrics {
   private transient Counter lockReleaseFailure;
   private transient Counter lockDangling;
   private transient Counter lockInterrupted;
+  private transient Counter lockRenewalSelfHeal;
   private transient Timer lockDuration;
   private transient Timer lockApiRequestDuration;
   private static final Object REGISTRY_LOCK = new Object();
@@ -90,6 +92,7 @@ public class HoodieLockMetrics {
       lockReleaseFailure = registry.counter(getMetricsName(LOCK_RELEASE_FAILURE_COUNTER_NAME));
       lockDangling = registry.counter(getMetricsName(LOCK_DANGLING_COUNTER_NAME));
       lockInterrupted = registry.counter(getMetricsName(LOCK_INTERRUPTED_COUNTER_NAME));
+      lockRenewalSelfHeal = registry.counter(getMetricsName(LOCK_RENEWAL_SELF_HEAL_COUNTER_NAME));
       lockDuration = createTimerForMetrics(registry, LOCK_ACQUIRE_DURATION_TIMER_NAME);
       lockApiRequestDuration = createTimerForMetrics(registry, LOCK_REQUEST_LATENCY_TIMER_NAME);
     }
@@ -201,6 +204,12 @@ public class HoodieLockMetrics {
   public void updateLockInterruptedMetric() {
     if (isMetricsEnabled) {
       this.lockInterrupted.inc();
+    }
+  }
+
+  public void updateLockRenewalSelfHealMetric() {
+    if (isMetricsEnabled) {
+      this.lockRenewalSelfHeal.inc();
     }
   }
 }

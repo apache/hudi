@@ -526,13 +526,17 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       // 1. Happy case: lock has not expired yet, we extend the lease to a longer
       // period.
       // 2. Corner case 1: lock is expired and is acquired by others, lock renewal
-      // failed with ACQUIRED_BY_OTHERS.
+      // failed with ACQUIRED_BY_OTHERS. See corner case 3 for further handling.
       // 3. Corner case 2: lock is expired but no one has acquired it yet, lock
       // renewal "revived" the expired lock.
       // Please note we expect the corner cases almost never happens.
       // Action taken for corner case 2 is just a best effort mitigation. At least it
       // prevents further data corruption by
       // letting someone else acquire the lock.
+      // 4. Corner case 3: lock is renewed successfully but due to not non-idempotent 
+      // SDK retry (very rare), the request returns ACQUIRED_BY_OTHERS.
+      // In this scenario we attempt self-heal. Only when the ownerId has definitely 
+      // changed do we then accept failure.
       long acquisitionTimestamp = getCurrentEpochMs();
       long lockExpirationMs = calculateLockExpiration(acquisitionTimestamp);
       Pair<LockUpsertResult, Option<StorageLockFile>> currentLock = this.storageLockClient.tryUpsertLockFile(
@@ -540,10 +544,9 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           Option.of(getLock()));
       switch (currentLock.getLeft()) {
         case ACQUIRED_BY_OTHERS:
-          logger.error("Owner {}: Unable to renew lock as it is acquired by others.", ownerId);
-          hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockAcquiredByOthersErrorMetric);
-          // No need to extend lock lease anymore.
-          return false;
+          // Could be S3 false negative - attempt self-healing
+          logger.warn("Owner {}: Got 412 during renewal, attempting self-heal", ownerId);
+          return attemptSelfHealAfter412(getLock());
         case UNKNOWN_ERROR:
           // This could be transient, but unclear, we will let the heartbeat continue
           // normally.
@@ -570,6 +573,74 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockProviderFatalErrorMetric);
       return false;
     }
+  }
+
+  /**
+   * Attempts to self-heal after receiving a 412 (ACQUIRED_BY_OTHERS) response during lock renewal.
+   *
+   * <p>This handles the case where S3 conditional PUT returns 412 even though we still own the lock.
+   * This false negative can occur when:
+   * <ol>
+   *   <li>First renewal request succeeds on S3 (lock updated with new ETag)</li>
+   *   <li>Network timeout before client receives success response</li>
+   *   <li>AWS SDK retries with stale ETag</li>
+   *   <li>Retry gets 412 because ETag changed, but we still own the lock</li>
+   * </ol>
+   *
+   * <p>Self-healing process:
+   * <ol>
+   *   <li>Read current lock state to verify ownership</li>
+   *   <li>If we still own it: retry renewal with current (correct) ETag</li>
+   *   <li>If someone else owns it: stop heartbeat (definitive failure)</li>
+   *   <li>If can't read state: continue heartbeat to retry later</li>
+   * </ol>
+   *
+   * @param staleLock The lock object with stale ETag that caused the 412
+   * @return true to continue heartbeat (self-heal succeeded or transient failure),
+   *         false to stop heartbeat (lock definitively stolen by another owner)
+   */
+  private boolean attemptSelfHealAfter412(StorageLockFile staleLock) {
+    // Read current lock state to verify ownership
+    Pair<LockGetResult, Option<StorageLockFile>> verification =
+        this.storageLockClient.readCurrentLockFile();
+
+    if (verification.getLeft() != LockGetResult.SUCCESS
+        || verification.getRight().isEmpty()) {
+      // Can't read state - let heartbeat retry
+      logger.warn("Owner {}: Cannot read lock state after 412, will retry next heartbeat", ownerId);
+      hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockStateUnknownMetric);
+      return true; // Continue heartbeat
+    }
+
+    StorageLockFile verifiedLock = verification.getRight().get();
+
+    // DEFINITIVE FAILURE: Someone else owns it
+    if (!verifiedLock.getOwner().equals(ownerId)) {
+      logger.error("Owner {}: Lock acquired by {}", ownerId, verifiedLock.getOwner());
+      hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockAcquiredByOthersErrorMetric);
+      return false; // Stop heartbeat
+    }
+
+    // Still our lock - try renewal with correct etag
+    logger.info("Owner {}: Lock still ours, attempting renewal with current etag", ownerId);
+    long selfHealTimestamp = getCurrentEpochMs();
+    long selfHealExpiration = calculateLockExpiration(selfHealTimestamp);
+    Pair<LockUpsertResult, Option<StorageLockFile>> renewalResult =
+        this.storageLockClient.tryUpsertLockFile(
+            new StorageLockData(false, selfHealExpiration, ownerId),
+            Option.of(verifiedLock));
+
+    if (renewalResult.getLeft() == LockUpsertResult.SUCCESS) {
+      logger.info("Owner {}: Self-healed after 412", ownerId);
+      this.setLock(renewalResult.getRight().get());
+      hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockRenewalSelfHealMetric);
+      recordAuditOperation(AuditOperationState.RENEW, selfHealTimestamp);
+      return true; // Success
+    }
+
+    // Renewal failed again - let next heartbeat retry
+    logger.warn("Owner {}: Self-heal failed, will retry next heartbeat", ownerId);
+    return true; // Continue heartbeat, don't give up yet
   }
 
   // ---------
