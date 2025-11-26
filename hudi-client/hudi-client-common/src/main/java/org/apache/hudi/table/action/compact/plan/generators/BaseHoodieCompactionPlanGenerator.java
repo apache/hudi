@@ -132,8 +132,6 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
         .getLatestFileSlicesStateless(partitionPath)
         .filter(slice -> filterFileSlice(slice, lastCompletedInstantTime, fgIdsInPendingCompactionAndClustering, instantRange))
         .map(s -> {
-          // filter out the log files which are completed after the compaction instant
-          List<HoodieLogFile> logFiles = s.getLogFiles()
               // ==============================================================
               // IMPORTANT
               // ==============================================================
@@ -146,14 +144,11 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
               // t30: the compaction execution starts, now the reader considers the log file "fg_10.log" as valid.
 
               // for both OCC and NB-CC, this is in-correct.
-              .filter(logFile -> completionTimeQueryView.isCompletedBefore(compactionInstant, logFile.getDeltaCommitTime()))
-              .sorted(HoodieLogFile.getLogFileComparator()).collect(toList());
-          return new FileSlice(s.getFileGroupId(), s.getBaseInstantTime(), s.getBaseFile().orElse(null), logFiles);
+          return s.filterLogFiles(logFile -> completionTimeQueryView.isCompletedBefore(compactionInstant, logFile.getDeltaCommitTime()));
         })
-        // only pick file slices with log files to compact
-        .filter(FileSlice::hasLogFiles)
+        .filter(FileSlice::hasLogFiles) // compaction is not needed if there is no log file.
         .map(s -> {
-          List<HoodieLogFile> logFiles = s.getLogFiles().collect(toList());
+          List<HoodieLogFile> logFiles = s.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(toList());
           totalLogFiles.add(logFiles.size());
           totalFileSlices.add(1L);
           // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
