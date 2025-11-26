@@ -53,7 +53,6 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -133,6 +132,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
         .getLatestFileSlicesStateless(partitionPath)
         .filter(slice -> filterFileSlice(slice, lastCompletedInstantTime, fgIdsInPendingCompactionAndClustering, instantRange))
         .map(s -> {
+          // filter out the log files which are completed after the compaction instant
           List<HoodieLogFile> logFiles = s.getLogFiles()
               // ==============================================================
               // IMPORTANT
@@ -148,10 +148,12 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
               // for both OCC and NB-CC, this is in-correct.
               .filter(logFile -> completionTimeQueryView.isCompletedBefore(compactionInstant, logFile.getDeltaCommitTime()))
               .sorted(HoodieLogFile.getLogFileComparator()).collect(toList());
-          if (logFiles.isEmpty()) {
-            // compaction is not needed if there is no log file.
-            return null;
-          }
+          return new FileSlice(s.getFileGroupId(), s.getBaseInstantTime(), s.getBaseFile().orElse(null), logFiles);
+        })
+        // only pick file slices with log files to compact
+        .filter(FileSlice::hasLogFiles)
+        .map(s -> {
+          List<HoodieLogFile> logFiles = s.getLogFiles().collect(toList());
           totalLogFiles.add(logFiles.size());
           totalFileSlices.add(1L);
           // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
@@ -160,7 +162,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
           Option<HoodieBaseFile> dataFile = s.getBaseFile();
           return new CompactionOperation(dataFile, partitionPath, logFiles,
               writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s));
-        }).filter(Objects::nonNull), partitionPaths.size()).stream()
+        }), partitionPaths.size()).stream()
         .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
 
     LOG.info("Total of {} compaction operations are retrieved for table {}", operations.size(), hoodieTable.getConfig().getBasePath());
@@ -194,7 +196,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
 
   protected abstract List<String> getPartitions();
 
-  protected abstract HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations, Pair<List<String>,List<String>> partitionPair);
+  protected abstract HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations, Pair<List<String>, List<String>> partitionPair);
 
   protected abstract boolean filterLogCompactionOperations();
 
