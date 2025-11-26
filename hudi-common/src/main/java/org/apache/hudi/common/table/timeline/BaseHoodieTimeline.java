@@ -251,7 +251,7 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   @Override
   public HoodieTimeline findInstantsInRange(String startTs, String endTs) {
     return factory.createDefaultTimeline(
-        getInstantsAsStream().filter(s -> InstantComparison.isInRange(s.requestedTime(), startTs, endTs)), getInstantReader());
+        getInstantsAsStream().filter(s -> InstantComparison.isInOpenClosedInRange(s.requestedTime(), startTs, endTs)), getInstantReader());
   }
 
   @Override
@@ -263,7 +263,7 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   @Override
   public HoodieTimeline findInstantsInRangeByCompletionTime(String startTs, String endTs) {
     return factory.createDefaultTimeline(
-        getInstantsAsStream().filter(s -> s.getCompletionTime() != null && InstantComparison.isInRange(s.getCompletionTime(), startTs, endTs)),
+        getInstantsAsStream().filter(s -> s.getCompletionTime() != null && InstantComparison.isInOpenClosedInRange(s.getCompletionTime(), startTs, endTs)),
         getInstantReader());
   }
 

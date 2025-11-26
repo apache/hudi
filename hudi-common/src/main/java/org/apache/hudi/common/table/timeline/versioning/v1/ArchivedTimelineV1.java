@@ -234,7 +234,7 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
   }
 
   private List<HoodieInstant> loadInstants(String startTs, String endTs) {
-    return loadInstants(new HoodieArchivedTimeline.TimeRangeFilter(startTs, endTs), true);
+    return loadInstants(new HoodieArchivedTimeline.OpenClosedTimeRangeFilter(startTs, endTs), true);
   }
 
   private List<HoodieInstant> loadInstants(HoodieArchivedTimeline.TimeRangeFilter filter, boolean loadInstantDetails) {

@@ -131,7 +131,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
 
   public void loadCompactionDetailsInMemory(String startTs, String endTs) {
     // load compactionPlan
-    loadInstants(new HoodieArchivedTimeline.TimeRangeFilter(startTs, endTs), HoodieArchivedTimeline.LoadMode.PLAN,
+    loadInstants(new HoodieArchivedTimeline.OpenClosedTimeRangeFilter(startTs, endTs), HoodieArchivedTimeline.LoadMode.PLAN,
         record -> record.get(ACTION_ARCHIVED_META_FIELD).toString().equals(COMMIT_ACTION)
             && record.get(PLAN_ARCHIVED_META_FIELD) != null
     );
@@ -216,7 +216,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
   }
 
   private List<HoodieInstant> loadInstants(String startTs, String endTs) {
-    return loadInstants(new HoodieArchivedTimeline.TimeRangeFilter(startTs, endTs), HoodieArchivedTimeline.LoadMode.METADATA);
+    return loadInstants(new HoodieArchivedTimeline.OpenClosedTimeRangeFilter(startTs, endTs), HoodieArchivedTimeline.LoadMode.METADATA);
   }
 
   private List<HoodieInstant> loadInstants(HoodieArchivedTimeline.TimeRangeFilter filter, HoodieArchivedTimeline.LoadMode loadMode) {

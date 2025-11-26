@@ -140,9 +140,9 @@ public class LSMTimeline {
    * Returns whether the given file is located in the filter.
    */
   public static boolean isFileInRange(HoodieArchivedTimeline.TimeRangeFilter filter, String fileName) {
-    String minInstant = getMinInstantTime(fileName);
-    String maxInstant = getMaxInstantTime(fileName);
-    return filter.isInRange(minInstant) || filter.isInRange(maxInstant);
+    HoodieArchivedTimeline.TimeRangeFilter dataFileRange = new HoodieArchivedTimeline.ClosedClosedTimeRangeFilter(
+        getMinInstantTime(fileName), getMaxInstantTime(fileName));
+    return filter.intersects(dataFileRange);
   }
 
   /**

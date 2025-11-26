@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
 import java.util.Objects;
@@ -76,26 +77,46 @@ public class InstantComparison {
   }
 
   /**
+   * Return true if specified timestamp is in range with given interval types.
+   *
+   * @param timestamp specified timestamp
+   * @param startTs   range start timestamp, optional, if not present, means unbounded start
+   * @param startType open/closed type for start boundary
+   * @param endTs     range end timestamp, optional, if not present, means unbounded end
+   * @param endType   open/closed type for end boundary
+   * @return true if specified timestamp is in range
+   */
+  public static boolean isInRangeWithIntervalType(String timestamp, Option<String> startTs, IntervalType startType, Option<String> endTs, IntervalType endType) {
+    boolean validAgainstStart = startTs.map(s -> startType == IntervalType.CLOSED
+        ? compareTimestamps(timestamp, GREATER_THAN_OR_EQUALS, s)
+        : compareTimestamps(timestamp, GREATER_THAN, s)).orElse(true);
+
+    boolean validAgainstEnd = endTs.map(e -> endType == IntervalType.CLOSED
+        ? compareTimestamps(timestamp, LESSER_THAN_OR_EQUALS, e)
+        : compareTimestamps(timestamp, LESSER_THAN, e)).orElse(true);
+
+    return validAgainstStart && validAgainstEnd;
+  }
+
+  /**
    * Return true if specified timestamp is in range (startTs, endTs].
    */
-  public static boolean isInRange(String timestamp, String startTs, String endTs) {
-    return compareTimestamps(timestamp, GREATER_THAN, startTs)
-        && compareTimestamps(timestamp, LESSER_THAN_OR_EQUALS, endTs);
+  public static boolean isInOpenClosedInRange(String timestamp, String startTs, String endTs) {
+    return isInRangeWithIntervalType(timestamp, Option.of(startTs), IntervalType.OPEN, Option.of(endTs), IntervalType.CLOSED);
   }
 
   /**
    * Return true if specified timestamp is in range [startTs, endTs).
    */
   public static boolean isInClosedOpenRange(String timestamp, String startTs, String endTs) {
-    return compareTimestamps(timestamp, GREATER_THAN_OR_EQUALS, startTs)
-        && compareTimestamps(timestamp, LESSER_THAN, endTs);
+    return isInRangeWithIntervalType(timestamp, Option.of(startTs), IntervalType.CLOSED, Option.of(endTs), IntervalType.OPEN);
   }
 
   /**
    * Return true if specified timestamp is in range [startTs, endTs].
    */
   public static boolean isInClosedRange(String timestamp, String startTs, String endTs) {
-    return compareTimestamps(timestamp, GREATER_THAN_OR_EQUALS, startTs)
-        && compareTimestamps(timestamp, LESSER_THAN_OR_EQUALS, endTs);
+    return isInRangeWithIntervalType(timestamp, Option.of(startTs), IntervalType.CLOSED, Option.of(endTs), IntervalType.CLOSED);
   }
+
 }
