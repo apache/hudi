@@ -28,6 +28,8 @@ down by areas on our [stack](/docs/hudi_stack).
 | Variant type support on Spark 4                      | 1.2.0          | [HUDI-9046](https://issues.apache.org/jira/browse/HUDI-9046) |
 | Non-blocking updates during clustering               | 1.2.0          | [HUDI-1045](https://issues.apache.org/jira/browse/HUDI-1045)                                                                                                                   |
 | Enable partial updates for CDC workload payload      | 1.2.0          | [HUDI-7229](https://issues.apache.org/jira/browse/HUDI-7229)                                                                                                                   |
+| Schema tracking in metadata table                    | 1.2.0          | [HUDI-6778](https://issues.apache.org/jira/browse/HUDI-6778) |
+| NBCC for MDT writes                                  | 1.2.0          | [HUDI-8480](https://issues.apache.org/jira/browse/HUDI-8480) |
 | Index abstraction for writer and reader              | 1.2.0          | [HUDI-9176](https://issues.apache.org/jira/browse/HUDI-9176) |
 | Vector search index                                  | 1.2.0          | [HUDI-9047](https://issues.apache.org/jira/browse/HUDI-9047) |
 | Bitmap index                                         | 1.2.0          | [HUDI-9048](https://issues.apache.org/jira/browse/HUDI-9048) |
@@ -77,5 +79,4 @@ down by areas on our [stack](/docs/hudi_stack).
 ## Developer Experience
 | Feature                                                 | Target Release | Tracking                                 |
 |---------------------------------------------------------|----------------|------------------------------------------|
-| Support code coverage report and improve test coverage  | 1.2.0          | [HUDI-9015](https://issues.apache.org/jira/browse/HUDI-9015) |
 | Clean up tech debt and deprecate unused code            | 1.2.0          | [HUDI-9054](https://issues.apache.org/jira/browse/HUDI-9054) |
