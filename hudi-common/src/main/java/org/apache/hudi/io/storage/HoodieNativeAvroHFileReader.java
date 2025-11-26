@@ -43,6 +43,7 @@ import org.apache.hudi.io.hfile.UTF8StringKey;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -599,7 +600,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
             if (!isPrefixOfKey(lookUpKeyPrefix, keyValue.getKey())) {
               return false;
             }
-            next = SerializableMetadataIndexedRecord.fromHFileKeyValueBytes(writerSchema, datumReader, keyFieldSchema, keyValue);
+            next = SerializableMetadataIndexedRecord.fromHFileKeyValueBytes(writerSchema.getAvroSchema(), datumReader, keyFieldSchema, keyValue);
             // In case scanner is not able to advance, it means we reached EOF
             eof = !reader.next();
           } catch (IOException e) {

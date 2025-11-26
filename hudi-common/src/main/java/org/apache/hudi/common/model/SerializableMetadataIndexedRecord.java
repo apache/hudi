@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieIOException;
@@ -46,8 +48,8 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.KEY_FIELD_NAME;
 
 public class SerializableMetadataIndexedRecord implements GenericRecord, KryoSerializable, Serializable {
   private static final long serialVersionUID = 1L;
-  private static final ConcurrentHashMap<Schema, GenericDatumReader<GenericRecord>> CACHED_DATUM_READER_MAP = new ConcurrentHashMap<>();
-  private static final ConcurrentHashMap<Schema, Schema.Field> CACHED_KEY_SCHEMA_MAP = new ConcurrentHashMap<>();
+  private static final ConcurrentHashMap<HoodieSchema, GenericDatumReader<GenericRecord>> CACHED_DATUM_READER_MAP = new ConcurrentHashMap<>();
+  private static final ConcurrentHashMap<Schema, HoodieSchemaField> CACHED_KEY_SCHEMA_MAP = new ConcurrentHashMap<>();
   private IndexedRecord record;
   private Schema schema;
   // TODO(yihua): need to have a better way of referencing this reader
@@ -74,7 +76,7 @@ public class SerializableMetadataIndexedRecord implements GenericRecord, KryoSer
 
   public static SerializableMetadataIndexedRecord fromHFileKeyValueBytes(Schema schema,
                                                                          GenericDatumReader<GenericRecord> datumReader,
-                                                                         Schema.Field keyFieldSchema,
+                                                                         HoodieSchemaField keyFieldSchema,
                                                                          KeyValue hfileKeyValue) {
     CACHED_KEY_SCHEMA_MAP.computeIfAbsent(schema, k -> keyFieldSchema);
     return new SerializableMetadataIndexedRecord(
