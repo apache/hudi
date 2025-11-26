@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -48,6 +49,7 @@ import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Conversions;
 import org.apache.avro.Conversions.DecimalConversion;
 import org.apache.avro.JsonProperties;
+import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.LogicalTypes.Decimal;
 import org.apache.avro.Schema;
@@ -1040,11 +1042,32 @@ public class HoodieAvroUtils {
         case NULL:
         case BOOLEAN:
         case INT:
-        case LONG:
         case FLOAT:
         case DOUBLE:
         case BYTES:
         case STRING:
+          return oldValue;
+        case LONG:
+          if (oldSchema.getLogicalType() != newSchema.getLogicalType()) {
+            if (oldSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
+              if (newSchema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
+                return DateTimeUtils.millisToMicros((Long) oldValue);
+              }
+            } else if (oldSchema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
+              if (newSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
+                return DateTimeUtils.microsToMillis((Long) oldValue);
+              }
+            } else if (isLocalTimestampMillis(oldSchema.getLogicalType())) {
+              if (isLocalTimestampMicros(newSchema.getLogicalType())) {
+                return DateTimeUtils.millisToMicros((Long) oldValue);
+              }
+            } else if (isLocalTimestampMicros(oldSchema.getLogicalType())) {
+              if (isLocalTimestampMillis(newSchema.getLogicalType())) {
+                return DateTimeUtils.microsToMillis((Long) oldValue);
+              }
+            }
+            throw new HoodieAvroSchemaException("Long type logical change from " + oldSchema.getLogicalType() + " to " + newSchema.getLogicalType() + " is not supported");
+          }
           return oldValue;
         case FIXED:
           if (oldSchema.getFixedSize() != newSchema.getFixedSize()) {
@@ -1433,6 +1456,40 @@ public class HoodieAvroUtils {
       return (Comparable<?>) record.get("value");
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
+    }
+  }
+
+  /**
+   * Checks if a logical type is an instance of LocalTimestampMillis using reflection.
+   * Returns false if the class doesn't exist (e.g., in Avro 1.8.2).
+   */
+  private static boolean isLocalTimestampMillis(LogicalType logicalType) {
+    if (logicalType == null) {
+      return false;
+    }
+    try {
+      Class<?> localTimestampMillisClass = Class.forName("org.apache.avro.LogicalTypes$LocalTimestampMillis");
+      return localTimestampMillisClass.isInstance(logicalType);
+    } catch (ClassNotFoundException e) {
+      // Class doesn't exist (e.g., Avro 1.8.2)
+      return false;
+    }
+  }
+
+  /**
+   * Checks if a logical type is an instance of LocalTimestampMicros using reflection.
+   * Returns false if the class doesn't exist (e.g., in Avro 1.8.2).
+   */
+  private static boolean isLocalTimestampMicros(LogicalType logicalType) {
+    if (logicalType == null) {
+      return false;
+    }
+    try {
+      Class<?> localTimestampMicrosClass = Class.forName("org.apache.avro.LogicalTypes$LocalTimestampMicros");
+      return localTimestampMicrosClass.isInstance(logicalType);
+    } catch (ClassNotFoundException e) {
+      // Class doesn't exist (e.g., Avro 1.8.2)
+      return false;
     }
   }
 

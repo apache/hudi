@@ -37,7 +37,7 @@ import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_5ExtendedSqlParser}
-import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
+import org.apache.spark.sql.types.{DataType, DataTypes, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.sql._
 import org.apache.spark.storage.StorageLevel
@@ -68,6 +68,10 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
     new MetadataBuilder()
       .putBoolean(METADATA_COL_ATTR_KEY, value = true)
       .build()
+
+  override def isTimestampNTZType(dataType: DataType): Boolean = {
+    dataType == DataTypes.TimestampNTZType
+  }
 
   override def getCatalogUtils: HoodieSpark3CatalogUtils = HoodieSpark35CatalogUtils
 
