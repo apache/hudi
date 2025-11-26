@@ -59,6 +59,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.refEq;
@@ -350,6 +351,68 @@ class TestStorageBasedLockProvider {
     when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
     when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true);
     assertThrows(HoodieLockException.class, () -> lockProvider.tryLock());
+  }
+
+  @Test
+  void testTryLockDetectAndCleanupDanglingLock() {
+    // Simulates: initial tryLock() attempt gets 412 (false negative),
+    // then on retry we detect dangling lock and cleanup succeeds
+    doReturn(null).when(lockProvider).getLock();
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(false);
+
+    // On retry: GET shows we're the owner (dangling lock detected)
+    StorageLockData danglingData = new StorageLockData(false,
+        System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile danglingLock = new StorageLockFile(danglingData, "v1");
+    when(mockLockService.readCurrentLockFile())
+        .thenReturn(Pair.of(LockGetResult.SUCCESS, Option.of(danglingLock)));
+
+    // Cleanup succeeds
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(danglingLock))))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(danglingLock)));
+
+    // tryLock() should return false (let retry loop continue)
+    assertFalse(lockProvider.tryLock());
+  }
+
+  @Test
+  void testTryLockDanglingLockCleanupFails() {
+    // Dangling lock detected but cleanup fails
+    doReturn(null).when(lockProvider).getLock();
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(false);
+
+    StorageLockData danglingData = new StorageLockData(false,
+        System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile danglingLock = new StorageLockFile(danglingData, "v1");
+    when(mockLockService.readCurrentLockFile())
+        .thenReturn(Pair.of(LockGetResult.SUCCESS, Option.of(danglingLock)));
+
+    // Cleanup fails (another 412 or unknown error)
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(danglingLock))))
+        .thenReturn(Pair.of(LockUpsertResult.UNKNOWN_ERROR, Option.empty()));
+
+    // Should still return false, let retry loop continue
+    assertFalse(lockProvider.tryLock());
+  }
+
+  @Test
+  void testTryLockHeldByDifferentOwner() {
+    // Normal case: lock held by different owner, no cleanup attempted
+    doReturn(null).when(lockProvider).getLock();
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(false);
+
+    StorageLockData otherData = new StorageLockData(false,
+        System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, "other-owner");
+    StorageLockFile otherLock = new StorageLockFile(otherData, "v1");
+    when(mockLockService.readCurrentLockFile())
+        .thenReturn(Pair.of(LockGetResult.SUCCESS, Option.of(otherLock)));
+
+    // Should return false, no cleanup attempted
+    assertFalse(lockProvider.tryLock());
+
+    // Verify cleanup was NOT called (verify no tryUpsertLockFile with expired=true)
+    verify(mockLockService, never()).tryUpsertLockFile(
+        argThat(data -> data != null && data.isExpired()), any());
   }
 
   @Test

@@ -333,8 +333,19 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     }
 
     if (latestLock.getLeft() == LockGetResult.SUCCESS && isLockStillValid(latestLock.getRight().get())) {
-      String msg = String.format("Lock already held by %s", latestLock.getRight().get().getOwner());
-      // Lock held by others.
+      StorageLockFile existingLock = latestLock.getRight().get();
+      String existingOwner = existingLock.getOwner();
+
+      // Check if we're the owner (dangling lock from false 412)
+      if (existingOwner.equals(ownerId)) {
+        // DANGLING LOCK DETECTED: We own the lock but client thinks acquisition failed
+        logger.warn("Owner {}: Dangling lock detected - we are the owner despite previous 412, attempting cleanup",
+            ownerId);
+        return attemptCleanupDanglingLockInTryLock(existingLock);
+      }
+
+      // Normal case: lock held by different owner
+      String msg = String.format("Lock already held by %s", existingOwner);
       logInfoLockState(FAILED_TO_ACQUIRE, msg);
       return false;
     }
@@ -570,6 +581,66 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockProviderFatalErrorMetric);
       return false;
     }
+  }
+
+  /**
+   * Attempts to clean up a dangling lock detected during tryLock().
+   *
+   * <p>This handles the rare case where S3 conditional PUT returns 412 during initial
+   * lock acquisition, but the lock was actually created with our owner ID. This false
+   * negative can occur when:
+   * <ol>
+   *   <li>Initial PUT succeeds on S3 (lock created with our owner ID)</li>
+   *   <li>Network timeout before client receives 200 response</li>
+   *   <li>AWS SDK retries with if-match:*</li>
+   *   <li>Retry gets 412 because lock already exists</li>
+   *   <li>Client thinks acquisition failed, but lock exists with our ID</li>
+   * </ol>
+   *
+   * <p><b>CRITICAL SAFETY NOTE:</b>
+   * We CANNOT safely claim acquisition success after detecting our owner ID on the lock
+   * because the lock may have expired and been acquired by another client between our
+   * write and this verification. Therefore, this method ALWAYS returns false (acquisition
+   * failed), but attempts best-effort cleanup to reduce lock orphan duration.
+   *
+   * <p>Cleanup process:
+   * <ol>
+   *   <li>Dangling lock detected (we're the owner despite getting 412)</li>
+   *   <li>Attempt to expire the lock with conditional write</li>
+   *   <li>If cleanup succeeds: reduced orphan duration from 5min to ~50ms</li>
+   *   <li>If cleanup fails: acceptable (preserves safety over availability)</li>
+   *   <li>Always return false to let retry loop continue naturally</li>
+   * </ol>
+   *
+   * <p>This method is called during the retry loop, approximately 50ms after the 412,
+   * which provides natural timing for S3 state to stabilize.
+   *
+   * @param danglingLock The lock file showing our owner ID despite 412
+   * @return always false (tryLock must fail to preserve safety)
+   */
+  private boolean attemptCleanupDanglingLockInTryLock(StorageLockFile danglingLock) {
+    // Best-effort cleanup: try to expire the dangling lock
+    StorageLockData expiredData = new StorageLockData(
+        true,  // expired=true
+        danglingLock.getValidUntilMs(),
+        ownerId);
+
+    Pair<LockUpsertResult, Option<StorageLockFile>> cleanupResult =
+        this.storageLockClient.tryUpsertLockFile(expiredData, Option.of(danglingLock));
+
+    if (cleanupResult.getLeft() == LockUpsertResult.SUCCESS) {
+      logger.info("Owner {}: Successfully cleaned up dangling lock", ownerId);
+      hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockDanglingCleanupSuccessMetric);
+    } else {
+      logger.warn("Owner {}: Failed to clean up dangling lock (result: {})",
+          ownerId, cleanupResult.getLeft());
+      hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockDanglingCleanupFailureMetric);
+    }
+
+    // CRITICAL: Always return false to preserve safety
+    // We cannot claim acquisition success because lock state may have changed
+    // Let the retry loop continue and attempt acquisition again
+    return false;
   }
 
   // ---------
