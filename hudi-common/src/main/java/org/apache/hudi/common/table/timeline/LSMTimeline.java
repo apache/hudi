@@ -142,17 +142,7 @@ public class LSMTimeline {
   public static boolean isFileInRange(HoodieArchivedTimeline.TimeRangeFilter filter, String fileName) {
     String minInstant = getMinInstantTime(fileName);
     String maxInstant = getMaxInstantTime(fileName);
-    return  // min instant hits the range
-        filter.isInRange(minInstant)
-            ||
-            // max instant hits the range
-            filter.isInRange(maxInstant)
-            ||
-            // the [min, max] covers the whole filter range, filter's start/end can't be null here,
-            // because min and max are a finite set. We hope that the boundary of the filter is within this finite set, so it naturally cannot be infinite
-            (filter.startTs != null && InstantComparison.compareTimestamps(filter.startTs, InstantComparison.GREATER_THAN_OR_EQUALS, minInstant)
-                &&
-                (filter.endTs != null && InstantComparison.compareTimestamps(filter.endTs, InstantComparison.LESSER_THAN_OR_EQUALS, maxInstant)));
+    return filter.hasOverlappingInRange(minInstant, maxInstant);
   }
 
   /**
