@@ -1,3 +1,4 @@
+import {useDateTimeFormat} from "@docusaurus/theme-common/internal";
 import React, {useState, useMemo, useEffect, useRef} from 'react';
 import Link from '@docusaurus/Link';
 import { useBaseUrlUtils } from '@docusaurus/core/lib/client/exports/useBaseUrl';
@@ -200,12 +201,15 @@ export default function BlogList() {
             return null;
           }
 
-          const dateObj = date ? new Date(date) : null;
-          const formattedDate = dateObj ? dateObj.toLocaleDateString('en-US', {
-            year: 'numeric',
+          const dateTimeFormat = useDateTimeFormat({
+            day: 'numeric',
             month: 'long',
-            day: 'numeric'
-          }) : '';
+            year: 'numeric',
+            timeZone: 'UTC',
+          });
+
+          const formatDate = (blogDate) => dateTimeFormat.format(new Date(blogDate));
+          const formattedDate = date ? formatDate(date) : '';
 
           return (
             <article

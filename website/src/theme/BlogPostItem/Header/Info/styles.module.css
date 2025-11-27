@@ -1,6 +1,7 @@
 .container {
   color: #1c1e21;
   display: flex;
+  gap:10px;
   flex-direction: row;
   font-size: 1.1rem;
   margin-left: 2px;
