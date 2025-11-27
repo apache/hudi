@@ -19,6 +19,7 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
@@ -27,7 +28,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.expressions.GenericRow;
 
@@ -41,7 +41,7 @@ import java.util.List;
 public class LogFileColStatsTestUtil {
 
   public static Option<Row> getLogFileColumnRangeMetadata(String filePath, HoodieTableMetaClient datasetMetaClient, String latestCommitTime,
-                                                          List<String> columnsToIndex, Option<Schema> writerSchemaOpt,
+                                                          List<String> columnsToIndex, Option<HoodieSchema> writerSchemaOpt,
                                                           int maxBufferSize) throws IOException {
     if (writerSchemaOpt.isPresent()) {
       String partitionPath = FSUtils.getRelativePartitionPath(datasetMetaClient.getBasePath(), new StoragePath(filePath).getParent());
@@ -68,9 +68,9 @@ public class LogFileColStatsTestUtil {
     return new GenericRow(values);
   }
 
-  public static Option<Schema> getSchemaForTable(HoodieTableMetaClient metaClient) throws Exception {
+  public static Option<HoodieSchema> getSchemaForTable(HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-    return Option.of(schemaResolver.getTableAvroSchema());
+    return Option.of(HoodieSchema.fromAvroSchema(schemaResolver.getTableAvroSchema()));
   }
 }
 

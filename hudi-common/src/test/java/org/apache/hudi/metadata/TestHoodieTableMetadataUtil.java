@@ -21,6 +21,8 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -188,7 +190,7 @@ class TestHoodieTableMetadataUtil {
         .build();
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getTableInitialVersion()).thenReturn(HoodieTableVersion.NINE);
-    List<String> result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema, tableConfig);
+    List<String> result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, HoodieSchema.fromAvroSchema(tableSchema), tableConfig);
     assertEquals(Arrays.asList("name", "age"), result);
     assertFalse(result.contains("created_at"), "Timestamp-millis field should be excluded");
 
@@ -199,13 +201,13 @@ class TestHoodieTableMetadataUtil {
         .withIndexName(PARTITION_NAME_COLUMN_STATS)
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .build();
-    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema, tableConfig);
+    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, HoodieSchema.fromAvroSchema(tableSchema), tableConfig);
     assertEquals(Arrays.asList("name", "created_at", "age"), result);
 
     // Case 3: Verify timestamp-millis field is excluded for initial table version < 9.
     HoodieTableConfig newTableConfig = mock(HoodieTableConfig.class);
     when(newTableConfig.getTableInitialVersion()).thenReturn(HoodieTableVersion.SIX);
-    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema, newTableConfig);
+    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, HoodieSchema.fromAvroSchema(tableSchema), newTableConfig);
     assertEquals(Arrays.asList("name", "age"), result);
 
     // Case 4: Non-timestamp columns should remain unchanged
@@ -216,7 +218,7 @@ class TestHoodieTableMetadataUtil {
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .withSourceFields(inputCols)
         .build();
-    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema, tableConfig);
+    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, HoodieSchema.fromAvroSchema(tableSchema), tableConfig);
     assertEquals(inputCols, result, "Non-timestamp columns should remain unchanged");
 
     // Case 5: Empty input should return empty output
@@ -226,7 +228,7 @@ class TestHoodieTableMetadataUtil {
         .withIndexName(PARTITION_NAME_COLUMN_STATS)
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .build();
-    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema, tableConfig);
+    result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, HoodieSchema.fromAvroSchema(tableSchema), tableConfig);
     assertTrue(result.isEmpty(), "Expected empty output for empty input");
   }
 
@@ -268,7 +270,7 @@ class TestHoodieTableMetadataUtil {
         .build();
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getTableInitialVersion()).thenReturn(HoodieTableVersion.NINE);
-    List<String> result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, nestedSchema, tableConfig);
+    List<String> result = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, HoodieSchema.fromAvroSchema(nestedSchema), tableConfig);
 
     // should filter out only the timestamp millis field
     assertEquals(
@@ -281,37 +283,27 @@ class TestHoodieTableMetadataUtil {
   @Test
   void testIsTimestampMillisField() {
     // Test timestamp-millis
-    Schema timestampMillisSchema = Schema.create(Schema.Type.LONG);
-    LogicalTypes.timestampMillis().addToSchema(timestampMillisSchema);
+    HoodieSchema timestampMillisSchema = HoodieSchema.createTimestampMillis();
     assertTrue(HoodieTableMetadataUtil.isTimestampMillisField(timestampMillisSchema),
         "Should return true for timestamp-millis");
 
-    // Test local-timestamp-millis
-    Schema localTimestampMillisSchema = Schema.create(Schema.Type.LONG);
-    LogicalTypes.localTimestampMillis().addToSchema(localTimestampMillisSchema);
-    assertTrue(HoodieTableMetadataUtil.isTimestampMillisField(localTimestampMillisSchema),
-        "Should return true for local-timestamp-millis");
-
     // Test nullable timestamp-millis
-    Schema nullableTimestampMillisSchema = Schema.createUnion(
-        Schema.create(Schema.Type.NULL),
-        timestampMillisSchema);
+    HoodieSchema nullableTimestampMillisSchema = HoodieSchema.createNullable(HoodieSchema.createTimestampMillis());
     assertTrue(HoodieTableMetadataUtil.isTimestampMillisField(nullableTimestampMillisSchema),
         "Should return true for nullable timestamp-millis");
 
     // Test timestamp-micros (should return false)
-    Schema timestampMicrosSchema = Schema.create(Schema.Type.LONG);
-    LogicalTypes.timestampMicros().addToSchema(timestampMicrosSchema);
+    HoodieSchema timestampMicrosSchema = HoodieSchema.createTimestampMicros();
     assertFalse(HoodieTableMetadataUtil.isTimestampMillisField(timestampMicrosSchema),
         "Should return false for timestamp-micros");
 
     // Test regular long (should return false)
-    Schema longSchema = Schema.create(Schema.Type.LONG);
+    HoodieSchema longSchema = HoodieSchema.create(HoodieSchemaType.LONG);
     assertFalse(HoodieTableMetadataUtil.isTimestampMillisField(longSchema),
         "Should return false for regular long");
 
     // Test string (should return false)
-    Schema stringSchema = Schema.create(Schema.Type.STRING);
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
     assertFalse(HoodieTableMetadataUtil.isTimestampMillisField(stringSchema),
         "Should return false for string");
   }

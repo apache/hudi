@@ -25,6 +25,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
@@ -484,8 +485,8 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
 
     var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + ("path" -> basePath), includeLogFiles = true)
     val metadataConfig = HoodieMetadataConfig.newBuilder.withMetadataIndexColumnStats(true).enable(true).build
-    val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(fileIndex.schema, "record", "")
-    val cis = new ColumnStatsIndexSupport(spark, fileIndex.schema, avroSchema,  metadataConfig, metaClient)
+    val hoodieSchema = HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(fileIndex.schema, "record", ""))
+    val cis = new ColumnStatsIndexSupport(spark, fileIndex.schema, hoodieSchema,  metadataConfig, metaClient)
     // unpartitioned table - get all file slices
     val fileSlices = fileIndex.prunePartitionsAndGetFileSlices(Seq.empty, Seq())
     var files = cis.getPrunedPartitionsAndFileNames(fileIndex, fileSlices._2)._2

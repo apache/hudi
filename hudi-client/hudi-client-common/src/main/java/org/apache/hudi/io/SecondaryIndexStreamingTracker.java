@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -71,7 +72,7 @@ public class SecondaryIndexStreamingTracker {
    */
   static void trackSecondaryIndexStats(String partitionPath, String fileId, Option<FileSlice> fileSliceOpt, List<String> newLogFiles, WriteStatus status,
                                        HoodieTable hoodieTable, List<HoodieIndexDefinition> secondaryIndexDefns,
-                                       HoodieWriteConfig config, String instantTime, Schema writeSchemaWithMetaFields) {
+                                       HoodieWriteConfig config, String instantTime, HoodieSchema writeSchemaWithMetaFields) {
     // TODO: @see <a href="https://issues.apache.org/jira/browse/HUDI-9533">HUDI-9533</a> Optimise the computation for multiple secondary indexes
     HoodieReaderContext readerContext = hoodieTable.getContext().getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
 

@@ -51,6 +51,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -314,88 +316,82 @@ public class HoodieMetadataTableValidator implements Serializable {
     public String basePath = null;
 
     @Parameter(names = {"--continuous"}, description = "Running MetadataTableValidator in continuous. "
-        + "Can use --min-validate-interval-seconds to control validation frequency", required = false)
+        + "Can use --min-validate-interval-seconds to control validation frequency")
     public boolean continuous = false;
 
-    @Parameter(names = {"--skip-data-files-for-cleaning"}, description = "Skip to compare the data files which are under deletion by cleaner", required = false)
+    @Parameter(names = {"--skip-data-files-for-cleaning"}, description = "Skip to compare the data files which are under deletion by cleaner")
     public boolean skipDataFilesForCleaning = false;
 
-    @Parameter(names = {"--validate-latest-file-slices"}, description = "Validate latest file slices for all partitions.", required = false)
+    @Parameter(names = {"--validate-latest-file-slices"}, description = "Validate latest file slices for all partitions.")
     public boolean validateLatestFileSlices = false;
 
-    @Parameter(names = {"--validate-latest-base-files"}, description = "Validate latest base files for all partitions.", required = false)
+    @Parameter(names = {"--validate-latest-base-files"}, description = "Validate latest base files for all partitions.")
     public boolean validateLatestBaseFiles = false;
 
-    @Parameter(names = {"--validate-all-file-groups"}, description = "Validate all file groups, and all file slices within file groups.", required = false)
+    @Parameter(names = {"--validate-all-file-groups"}, description = "Validate all file groups, and all file slices within file groups.")
     public boolean validateAllFileGroups = false;
 
-    @Parameter(names = {"--validate-last-n-file-slices"}, description = "Validate just the last N file slices for all file groups. Specify N.", required = false)
+    @Parameter(names = {"--validate-last-n-file-slices"}, description = "Validate just the last N file slices for all file groups. Specify N.")
     public Integer validateLastNFileSlices = null;
 
-    @Parameter(names = {"--validate-all-column-stats"}, description = "Validate column stats for all columns in the schema", required = false)
+    @Parameter(names = {"--validate-all-column-stats"}, description = "Validate column stats for all columns in the schema")
     public boolean validateAllColumnStats = false;
 
-    @Parameter(names = {"--validate-partition-stats"}, description = "Validate partition stats for all columns in the schema", required = false)
+    @Parameter(names = {"--validate-partition-stats"}, description = "Validate partition stats for all columns in the schema")
     public boolean validatePartitionStats = false;
 
-    @Parameter(names = {"--validate-bloom-filters"}, description = "Validate bloom filters of base files", required = false)
+    @Parameter(names = {"--validate-bloom-filters"}, description = "Validate bloom filters of base files")
     public boolean validateBloomFilters = false;
 
     @Parameter(names = {"--validate-record-index-count"},
         description = "Validate the number of entries in the record index, which should be equal "
-            + "to the number of record keys in the latest snapshot of the table",
-        required = false)
+            + "to the number of record keys in the latest snapshot of the table")
     public boolean validateRecordIndexCount = true;
 
     @Parameter(names = {"--validate-record-index-content"},
         description = "Validate the content of the record index so that each record key should "
-            + "have the correct location, and there is no additional or missing entry",
-        required = false)
+            + "have the correct location, and there is no additional or missing entry")
     public boolean validateRecordIndexContent = true;
 
     @Parameter(names = {"--validate-secondary-index"},
-        description = "Validate the entries in secondary index match the primary key for the records",
-        required = false)
+        description = "Validate the entries in secondary index match the primary key for the records")
     public boolean validateSecondaryIndex = false;
 
     @Parameter(names = {"--num-record-index-error-samples"},
-        description = "Number of error samples to show for record index validation",
-        required = false)
+        description = "Number of error samples to show for record index validation")
     public int numRecordIndexErrorSamples = 100;
 
     @Parameter(names = {"--view-storage-type-fs-listing"},
         description = "View storage type to use for File System based listing. "
-            + "Supported values are MEMORY (by default) and SPILLABLE_DISK.",
-        required = false)
+            + "Supported values are MEMORY (by default) and SPILLABLE_DISK.")
     public String viewStorageTypeForFSListing = FileSystemViewStorageType.MEMORY.name();
 
     @Parameter(names = {"--view-storage-type-mdt"},
         description = "View storage type to use for metadata table based listing. "
-            + "Supported values are MEMORY (by default) and SPILLABLE_DISK.",
-        required = false)
+            + "Supported values are MEMORY (by default) and SPILLABLE_DISK.")
     public String viewStorageTypeForMetadata = FileSystemViewStorageType.MEMORY.name();
 
     @Parameter(names = {"--min-validate-interval-seconds"},
         description = "the min validate interval of each validate when set --continuous, default is 10 minutes.")
     public Integer minValidateIntervalSeconds = 10 * 60;
 
-    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for valuation", required = false)
+    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for valuation")
     public int parallelism = 200;
 
-    @Parameter(names = {"--record-index-parallelism", "-rpl"}, description = "Parallelism for validating record index", required = false)
+    @Parameter(names = {"--record-index-parallelism", "-rpl"}, description = "Parallelism for validating record index")
     public int recordIndexParallelism = 100;
 
-    @Parameter(names = {"--ignore-failed", "-ig"}, description = "Ignore metadata validate failure and continue.", required = false)
+    @Parameter(names = {"--ignore-failed", "-ig"}, description = "Ignore metadata validate failure and continue.")
     public boolean ignoreFailed = false;
 
-    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
+    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master")
     public String sparkMaster = null;
 
-    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
+    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use")
     public String sparkMemory = "1g";
 
     @Parameter(names = {"--assume-date-partitioning"}, description = "Should HoodieWriteClient assume the data is partitioned by dates, i.e three levels from base path."
-        + "This is a stop-gap to support tables created by versions < 0.3.1. Will be removed eventually", required = false)
+        + "This is a stop-gap to support tables created by versions < 0.3.1. Will be removed eventually")
     public Boolean assumeDatePartitioning = false;
 
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
@@ -1009,9 +1005,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   private List<HoodieBaseFile> filterBaseFileBasedOnInflightCleaning(List<HoodieBaseFile> sortedBaseFileList, Set<String> baseDataFilesForCleaning) {
     return sortedBaseFileList.stream()
-        .filter(baseFile -> {
-          return !baseDataFilesForCleaning.contains(baseFile.getFileName());
-        }).collect(Collectors.toList());
+        .filter(baseFile -> !baseDataFilesForCleaning.contains(baseFile.getFileName())).collect(Collectors.toList());
   }
 
   @SuppressWarnings("rawtypes")
@@ -1025,7 +1019,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     validate(metadataBasedColStats, fsBasedColStats, partitionPath, "column stats");
   }
 
-  private void validatePartitionStats(HoodieMetadataValidationContext metadataTableBasedContext, Set<String> baseDataFilesForCleaning, List<String> allPartitions) throws Exception {
+  private void validatePartitionStats(HoodieMetadataValidationContext metadataTableBasedContext, Set<String> baseDataFilesForCleaning, List<String> allPartitions) {
 
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     HoodieData<HoodieMetadataColumnStats> partitionStatsUsingColStats = getPartitionStatsUsingColStats(metadataTableBasedContext,
@@ -1033,7 +1027,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
 
     PartitionStatsIndexSupport partitionStatsIndexSupport = new PartitionStatsIndexSupport(engineContext.getSqlContext().sparkSession(),
-        AvroConversionUtils.convertAvroSchemaToStructType(metadataTableBasedContext.getSchema()),
+        AvroConversionUtils.convertAvroSchemaToStructType(metadataTableBasedContext.getSchema().toAvroSchema()),
         metadataTableBasedContext.getSchema(),
         metadataTableBasedContext.getMetadataConfig(),
         metaClientOpt.get(), false);
@@ -1819,7 +1813,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     private final Properties props;
     private final HoodieTableMetaClient metaClient;
     private final HoodieMetadataConfig metadataConfig;
-    private final Schema schema;
+    private final HoodieSchema schema;
     private final HoodieTableFileSystemView fileSystemView;
     private final HoodieTableMetadata tableMetadata;
     private final boolean enableMetadataTable;
@@ -1832,7 +1826,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         this.props = new Properties();
         this.props.putAll(props);
         this.metaClient = metaClient;
-        this.schema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+        this.schema = HoodieSchema.fromAvroSchema(new TableSchemaResolver(metaClient).getTableAvroSchema());
         this.enableMetadataTable = enableMetadataTable;
         this.metadataConfig = HoodieMetadataConfig.newBuilder()
             .enable(enableMetadataTable)
@@ -1880,7 +1874,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       return metadataConfig;
     }
 
-    public Schema getSchema() {
+    public HoodieSchema getSchema() {
       return schema;
     }
 
@@ -1904,7 +1898,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    public List<HoodieColumnRangeMetadata<Comparable>> getSortedColumnStatsList(String partitionPath, List<String> fileNames, Schema readerSchema) throws Exception {
+    public List<HoodieColumnRangeMetadata<Comparable>> getSortedColumnStatsList(String partitionPath, List<String> fileNames, HoodieSchema readerSchema) {
       LOG.info("All column names for getting column stats: {}", allColumnNameList);
       if (enableMetadataTable) {
         List<Pair<String, String>> partitionFileNameList = fileNames.stream()
@@ -1920,7 +1914,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       } else {
         FileFormatUtils formatUtils = HoodieIOFactory.getIOFactory(metaClient.getStorage()).getFileFormatUtils(HoodieFileFormat.PARQUET);
         HoodieIndexVersion indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, metaClient);
-        return (List<HoodieColumnRangeMetadata<Comparable>>) fileNames.stream().flatMap(filename -> {
+        return fileNames.stream().flatMap(filename -> {
           if (filename.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
             return formatUtils.readColumnStatsFromMetadata(
                 metaClient.getStorage(),
@@ -1973,7 +1967,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     private List<String> getAllColumnNames() {
       try {
         return schema.getFields().stream().filter(field -> META_COL_SET_TO_INDEX.contains(field.name()))
-            .map(Schema.Field::name).collect(Collectors.toList());
+            .map(HoodieSchemaField::name).collect(Collectors.toList());
       } catch (Exception e) {
         throw new HoodieException("Failed to get all column names for " + metaClient.getBasePath());
       }

@@ -35,6 +35,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
@@ -434,16 +436,20 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     updateWriteStatus(result, stat);
 
     if (config.isMetadataColumnStatsIndexEnabled()) {
+      HoodieSchema writerHoodieSchemaWithMetaFields = HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields);
       HoodieIndexVersion indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, hoodieTable.getMetaClient());
       Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil
           .getColumnsToIndex(hoodieTable.getMetaClient().getTableConfig(),
-              config.getMetadataConfig(), Lazy.eagerly(Option.of(writeSchemaWithMetaFields)),
+              config.getMetadataConfig(), Lazy.eagerly(Option.of(writerHoodieSchemaWithMetaFields)),
               Option.of(this.recordMerger.getRecordType()), indexVersion).keySet());
-      final List<Pair<String, Schema.Field>> fieldsToIndex = columnsToIndexSet.stream()
-          .map(fieldName -> HoodieAvroUtils.getSchemaForField(writeSchemaWithMetaFields, fieldName)).collect(Collectors.toList());
+      final List<Pair<String, HoodieSchemaField>> fieldsToIndex = columnsToIndexSet.stream()
+          .map(fieldName -> {
+            Pair<String, Schema.Field> avroFieldPair = HoodieAvroUtils.getSchemaForField(writeSchemaWithMetaFields, fieldName);
+            return Pair.of(avroFieldPair.getKey(), new HoodieSchemaField(avroFieldPair.getValue()));
+          }).collect(Collectors.toList());
       try {
         Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
-            collectColumnRangeMetadata(recordList.iterator(), fieldsToIndex, stat.getPath(), writeSchemaWithMetaFields, storage.getConf(),
+            collectColumnRangeMetadata(recordList.iterator(), fieldsToIndex, stat.getPath(), writerHoodieSchemaWithMetaFields, storage.getConf(),
                 indexVersion);
         stat.putRecordsStats(columnRangeMetadataMap);
       } catch (HoodieException e) {
@@ -569,7 +575,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         // secondary index considering all the log files.
         SecondaryIndexStreamingTracker.trackSecondaryIndexStats(partitionPath, fileId, getReadFileSlice(),
             statuses.stream().map(status -> status.getStat().getPath()).collect(Collectors.toList()),
-            statuses.get(statuses.size() - 1), hoodieTable, secondaryIndexDefns, config, instantTime, writeSchemaWithMetaFields);
+            statuses.get(statuses.size() - 1), hoodieTable, secondaryIndexDefns, config, instantTime, HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields));
       }
 
       return statuses;

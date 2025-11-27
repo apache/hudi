@@ -23,8 +23,9 @@ import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.avro.model.DecimalWrapper
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig, HoodieStorageConfig}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieFileGroup, HoodieLogFile, HoodieTableType}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
@@ -47,11 +48,9 @@ import java.math.{BigDecimal => JBigDecimal, BigInteger}
 import java.nio.ByteBuffer
 import java.sql.{Date, Timestamp}
 import java.util
-import java.util.List
 import java.util.stream.Collectors
 
 import scala.collection.JavaConverters._
-import scala.collection.convert.ImplicitConversions.`map AsJavaMap`
 import scala.collection.immutable.TreeSet
 import scala.util.Random
 
@@ -59,7 +58,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
   var dfList: Seq[DataFrame] = Seq()
 
-  val sourceTableSchema =
+  val sourceTableSchema: StructType =
     new StructType()
       .add("c1", IntegerType)
       .add("c2", StringType)
@@ -70,10 +69,10 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .add("c7", StringType) // HUDI-8909. To support Byte w/ partition stats index.
       .add("c8", ByteType)
 
-  val sourceTableAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(sourceTableSchema, "reocrd", "")
+  val sourceTableHoodieSchema: HoodieSchema = HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(sourceTableSchema, "record", ""))
 
   @BeforeEach
-  override def setUp() {
+  override def setUp(): Unit = {
     initPath()
     initQueryIndexConf()
     initSparkContexts()
@@ -86,7 +85,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
   }
 
   @AfterEach
-  override def tearDown() = {
+  override def tearDown(): Unit = {
     cleanupFileSystem()
     cleanupSparkContexts()
   }
@@ -246,16 +245,16 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
         baseFilesDf.union(getColStatsFromLogFiles(allLogFiles, latestCompletedCommit,
           scala.collection.JavaConverters.seqAsJavaList(colsToGenerateStats),
           metaClient,
-          writerSchemaOpt: org.apache.hudi.common.util.Option[Schema],
+          writerSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
           HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue(),
           indexSchema))
       }
     }
   }
 
-  protected def getColStatsFromLogFiles(logFiles: List[HoodieLogFile], latestCommit: String, columnsToIndex: util.List[String],
+  protected def getColStatsFromLogFiles(logFiles: util.List[HoodieLogFile], latestCommit: String, columnsToIndex: util.List[String],
                                         datasetMetaClient: HoodieTableMetaClient,
-                                        writerSchemaOpt: org.apache.hudi.common.util.Option[Schema],
+                                        writerSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
                                         maxBufferSize: Integer,
                                         indexSchema: StructType): DataFrame = {
     val colStatsEntries = logFiles.stream().map[org.apache.hudi.common.util.Option[Row]](logFile => {
@@ -273,7 +272,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
                                        latestCommit: String,
                                        columnsToIndex: util.List[String],
                                        datasetMetaClient: HoodieTableMetaClient,
-                                       writerSchemaOpt: org.apache.hudi.common.util.Option[Schema],
+                                       writerSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
                                        maxBufferSize: Integer
                                       ): org.apache.hudi.common.util.Option[Row] = {
     LogFileColStatsTestUtil.getLogFileColumnRangeMetadata(logFilePath, datasetMetaClient, latestCommit,
@@ -299,8 +298,8 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .build()
     metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     val schemaUtil = new TableSchemaResolver(metaClient)
-    val tableSchema = schemaUtil.getTableAvroSchema(false)
-    val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
+    val tableSchema = HoodieSchema.fromAvroSchema(schemaUtil.getTableAvroSchema(false))
+    val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema.toAvroSchema)
 
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, localSourceTableSchema, tableSchema, metadataConfig, metaClient)
     val indexedColumnswithMeta: Set[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSet
@@ -341,8 +340,8 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .fromProperties(toProperties(metadataOpts))
       .build()
     val schemaUtil = new TableSchemaResolver(metaClient)
-    val tableSchema = schemaUtil.getTableAvroSchema(false)
-    val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
+    val tableSchema = HoodieSchema.fromAvroSchema(schemaUtil.getTableAvroSchema(false))
+    val localSourceTableSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema.toAvroSchema)
 
     val pStatsIndex = new PartitionStatsIndexSupport(spark, localSourceTableSchema, tableSchema, metadataConfig, metaClient)
     val indexedColumnswithMeta: Set[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSet
@@ -423,7 +422,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     spark.createDataFrame(rdd, sourceTableSchema)
   }
 
-  protected def asJson(df: DataFrame) =
+  protected def asJson(df: DataFrame): String =
     df.toJSON
       .select("value")
       .collect()
@@ -557,7 +556,7 @@ object ColumnStatIndexTestBase {
     }
 
     java.util.stream.Stream.of(
-      (v6Seq ++ Seq(
+      v6Seq ++ Seq(
         // Table version 8
         Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "c8", "8"),
         Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "", "8"),
@@ -569,7 +568,7 @@ object ColumnStatIndexTestBase {
         Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "", currentVersionCode),
         Arguments.arguments(HoodieTableType.MERGE_ON_READ, "c8", currentVersionCode),
         Arguments.arguments(HoodieTableType.MERGE_ON_READ, "", currentVersionCode)
-      )): _*
+      ): _*
     )
   }
 

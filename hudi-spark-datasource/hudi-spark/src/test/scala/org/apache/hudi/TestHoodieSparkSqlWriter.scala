@@ -21,6 +21,7 @@ import org.apache.hudi.DataSourceWriteOptions.{DROP_INSERT_DUP_POLICY, FAIL_INSE
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieReplaceCommitMetadata, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
@@ -107,7 +108,7 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
     // fetch all records from parquet files generated from write to hudi
     val actualDf = sqlContext.read.parquet(fullPartitionPaths(0), fullPartitionPaths(1), fullPartitionPaths(2))
     if (!populateMetaFields) {
-      List(0, 1, 2, 3, 4).foreach(i => assertEquals(0, actualDf.select(HoodieRecord.HOODIE_META_COLUMNS.get(i)).filter(entry => !(entry.mkString(",").equals(""))).count()))
+      List(0, 1, 2, 3, 4).foreach(i => assertEquals(0, actualDf.select(HoodieRecord.HOODIE_META_COLUMNS.get(i)).filter(entry => !entry.mkString(",").equals("")).count()))
     }
     // remove metadata columns so that expected and actual DFs can be compared as is
     val trimmedDf = dropMetaFields(actualDf)
@@ -245,7 +246,7 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
   @Test
   def testChangeWriteTableVersion(): Unit = {
     Seq(6, 8).foreach { tableVersion =>
-      val tempPath = s"$tempBasePath/${tableVersion}"
+      val tempPath = s"$tempBasePath/$tableVersion"
       val tableModifier1 = Map(
         "path" -> tempPath,
         HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
@@ -276,7 +277,7 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
 
   @Test
   def testBulkInsertForSortModeWithOCC(): Unit = {
-    testBulkInsertWithSortMode(BulkInsertSortMode.GLOBAL_SORT, populateMetaFields = true, true)
+    testBulkInsertWithSortMode(BulkInsertSortMode.GLOBAL_SORT, enableOCCConfigs = true)
   }
 
   /**
@@ -300,7 +301,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       (1695091554788L, "e96c4396-3fad-413a-a942-4cb36106d721", "rider-C", "driver-M", 27.70, "san_francisco"),
       (1695046462179L, "9909a8b1-2d15-4d3d-8ec9-efc48c536a00", "rider-D", "driver-L", 33.90, "san_francisco"),
       (1695516137016L, "e3cf430c-889d-4015-bc98-59bdce1e530c", "rider-F", "driver-P", 34.15, "sao_paulo"),
-      (1695115999911L, "c8abbe79-8d89-47ea-b4ce-4d224bae5bfa", "rider-J", "driver-T", 17.85, "chennai"));
+      (1695115999911L, "c8abbe79-8d89-47ea-b4ce-4d224bae5bfa", "rider-J", "driver-T", 17.85, "chennai"))
 
   val inserts = spark.createDataFrame(data).toDF(columns: _*)
   inserts.write.format("hudi").
@@ -895,7 +896,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val partitionStatsIndex = new PartitionStatsIndexSupport(
       spark,
       inputDf.schema,
-      AvroConversionUtils.convertStructTypeToAvroSchema(inputDf.schema, "record", ""),
+      HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(inputDf.schema, "record", "")),
       HoodieMetadataConfig.newBuilder().enable(true).build(),
       metaClient)
     val partitionStats = partitionStatsIndex.loadColumnStatsIndexRecords(List("partition", "ts"), shouldReadInMemory = true).collectAsList()

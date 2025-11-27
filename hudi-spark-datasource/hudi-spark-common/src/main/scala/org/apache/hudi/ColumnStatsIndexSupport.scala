@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
 import org.apache.hudi.common.function.SerializableFunction
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.BinaryUtil.toBytes
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -38,7 +39,6 @@ import org.apache.hudi.stats.ValueMetadata.getValueMetadata
 import org.apache.hudi.util.JFunction
 
 import org.apache.avro.Conversions.DecimalConversion
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -57,7 +57,7 @@ import scala.collection.parallel.mutable.ParHashMap
 
 class ColumnStatsIndexSupport(spark: SparkSession,
                               tableSchema: StructType,
-                              avroSchema: Schema,
+                              hoodieSchema: HoodieSchema,
                               @transient metadataConfig: HoodieMetadataConfig,
                               @transient metaClient: HoodieTableMetaClient,
                               allowCaching: Boolean = false)
@@ -67,13 +67,13 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 
   // NOTE: Since [[metadataConfig]] is transient this has to be eagerly persisted, before this will be passed
   //       on to the executor
-  protected val inMemoryProjectionThreshold = metadataConfig.getColumnStatsIndexInMemoryProjectionThreshold
+  protected val inMemoryProjectionThreshold: Integer = metadataConfig.getColumnStatsIndexInMemoryProjectionThreshold
 
   private lazy val indexedColumns: Set[String] = getIndexedColsWithColStats(metaClient)
 
   override def getIndexName: String = ColumnStatsIndexSupport.INDEX_NAME
 
-  def getIndexedColsWithColStats(metaClient: HoodieTableMetaClient) : Set[String] = {
+  private def getIndexedColsWithColStats(metaClient: HoodieTableMetaClient) : Set[String] = {
     val indexDefOpt = metaClient.getIndexForMetadataPartition(PARTITION_NAME_COLUMN_STATS)
     if (indexDefOpt.isPresent) {
       indexDefOpt.get().getSourceFields.asScala.toSet
@@ -95,7 +95,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
       //       when loading the Column Statistics Index
       val prunedFileNamesOpt = if (shouldPushDownFilesFilter) Some(prunedFileNames) else None
       val getValidIndexedColumnsFunc: HoodieIndexDefinition => Seq[String] = { indexDefinition =>
-        getValidIndexedColumns(indexDefinition, avroSchema, metaClient.getTableConfig).asScala.toSeq
+        getValidIndexedColumns(indexDefinition, hoodieSchema, metaClient.getTableConfig).asScala.toSeq
       }
       loadTransposed(queryReferencedColumns, readInMemory, Some(prunedPartitions), prunedFileNamesOpt) { transposedColStatsDF =>
         Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames, getValidIndexedColumnsFunc))
@@ -384,7 +384,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 
     val requiredIndexColumns =
       targetColumnStatsIndexColumns.map(colName =>
-        col(s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.${colName}"))
+        col(s"${HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS}.$colName"))
 
     colStatsDF.where(col(HoodieMetadataPayload.SCHEMA_FIELD_ID_COLUMN_STATS).isNotNull)
       .select(requiredIndexColumns: _*)
@@ -449,10 +449,10 @@ object ColumnStatsIndexSupport {
     String.format("%s_%s", col, statName)
   }
 
-  @inline def composeColumnStatStructType(col: String, statName: String, dataType: DataType) =
+  @inline def composeColumnStatStructType(col: String, statName: String, dataType: DataType): StructField =
     StructField(formatColName(col, statName), dataType, nullable = true, Metadata.empty)
 
-  def extractColStatsValue(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata, useJava8api: Boolean): Any = {
+  private def extractColStatsValue(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata, useJava8api: Boolean): Any = {
     valueMetadata.getValueType match {
       case ValueType.V1 => extractWrapperValueV1(valueWrapper, dataType)
       case _ => extractColStatsValueV2(valueWrapper, dataType, valueMetadata, useJava8api)

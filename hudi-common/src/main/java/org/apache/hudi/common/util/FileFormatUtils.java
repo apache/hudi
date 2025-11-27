@@ -124,14 +124,14 @@ public abstract class FileFormatUtils {
             return HoodieColumnRangeMetadata.merge(a, b);
           } else {
             // schema is evolving for the column of interest.
-            HoodieSchema hoodieSchema = colsToIndexSchemaMap.get(a.getColumnName());
+            HoodieSchema schema = colsToIndexSchemaMap.get(a.getColumnName());
             HoodieColumnRangeMetadata<T> left = HoodieColumnRangeMetadata.create(a.getFilePath(), a.getColumnName(),
-                (T) HoodieTableMetadataUtil.coerceToComparable(hoodieSchema, a.getMinValue()),
-                (T) HoodieTableMetadataUtil.coerceToComparable(hoodieSchema, a.getMaxValue()), a.getNullCount(),
+                (T) HoodieTableMetadataUtil.coerceToComparable(schema, a.getMinValue()),
+                (T) HoodieTableMetadataUtil.coerceToComparable(schema, a.getMaxValue()), a.getNullCount(),
                 a.getValueCount(), a.getTotalSize(), a.getTotalUncompressedSize(), a.getValueMetadata());
             HoodieColumnRangeMetadata<T> right = HoodieColumnRangeMetadata.create(b.getFilePath(), b.getColumnName(),
-                (T) HoodieTableMetadataUtil.coerceToComparable(hoodieSchema, b.getMinValue()),
-                (T) HoodieTableMetadataUtil.coerceToComparable(hoodieSchema, b.getMaxValue()), b.getNullCount(),
+                (T) HoodieTableMetadataUtil.coerceToComparable(schema, b.getMinValue()),
+                (T) HoodieTableMetadataUtil.coerceToComparable(schema, b.getMaxValue()), b.getNullCount(),
                 b.getValueCount(), b.getTotalSize(), b.getTotalUncompressedSize(), b.getValueMetadata());
             return HoodieColumnRangeMetadata.merge(left, right);
           }
