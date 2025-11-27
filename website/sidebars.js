@@ -4,7 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-const { slackUrl } = require('./constants');
+const { originalSlackUrl } = require('./constants');
 module.exports = {
     docs: [
         {
@@ -84,9 +84,9 @@ module.exports = {
             label: 'Data Catalogs',
             items: [
                  'syncing_aws_glue_data_catalog',
+                 'gcp_bigquery',
                  'syncing_datahub',
                  'syncing_metastore',
-                 'gcp_bigquery',
                  'syncing_xtable',
                  'catalog_polaris',
             ],
@@ -152,7 +152,7 @@ module.exports = {
         {
             type: 'link',
             label: 'Chat with us on Slack',
-            href: slackUrl
+            href: originalSlackUrl
         },
     ],
 };

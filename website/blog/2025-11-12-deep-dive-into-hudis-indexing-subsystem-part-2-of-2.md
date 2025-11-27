@@ -12,9 +12,9 @@ tags:
   - data skipping
 ---
 
-In [Part 1](https://hudi.apache.org/blog/2025/10/29/deep-dive-into-hudis-indexing-subsystem-part-1-of-2/), we explored how Hudi's metadata table functions as a self-managed, multimodal indexing subsystem. We covered its internal architecture—a partitioned Hudi Merge-on-Read (MOR) table using HFile format for efficient key lookups—and how the files, column stats, and partition stats indexes work together to implement powerful data skipping. These indexes dramatically reduce I/O by pruning partitions and files that don't contain the data your query needs.
+In [part 1](https://hudi.apache.org/blog/2025/10/29/deep-dive-into-hudis-indexing-subsystem-part-1-of-2/), we explored how Hudi's metadata table functions as a self-managed, multimodal indexing subsystem. We covered its internal architecture—a partitioned Hudi Merge-on-Read (MOR) table using HFile format for efficient key lookups—and how the files, column stats, and partition stats indexes work together to implement powerful data skipping. These indexes dramatically reduce I/O by pruning partitions and files that don't contain the data your query needs.
 
-Now in Part 2, we'll dive into more specialized indexes that handle different query patterns. We'll look at the record and secondary indexes, which provide exact file locations for equality-matching predicates rather than just skipping irrelevant files. We'll explore expression indexes that optimize queries with inline transformations like `from_unixtime()` or `substring()`. Finally, we'll cover async indexing, which lets you build resource-intensive indexes in the background without blocking your active read and write operations.
+Now in part 2, we'll dive into more specialized indexes that handle different query patterns. We'll look at the record and secondary indexes, which provide exact file locations for equality-matching predicates rather than just skipping irrelevant files. We'll explore expression indexes that optimize queries with inline transformations like `from_unixtime()` or `substring()`. Finally, we'll cover async indexing, which lets you build resource-intensive indexes in the background without blocking your active read and write operations.
 
 ## Equality Matching with Record and Secondary Indexes
 
@@ -129,7 +129,7 @@ To manage this concurrency, a lock provider must be configured for both the inde
 
 ## Summary
 
-Throughout this two-part series, we've explored how Hudi's indexing subsystem brings database-grade performance to the data lakehouse. In Part 1, we examined the metadata table's architecture and how files, column stats, and partition stats indexes work together to skip irrelevant data. In Part 2, we covered specialized indexes—record, secondary, and expression indexes—that provide exact file locations for equality matching and handle transformed predicates. We also looked at async indexing, which lets you add resource-intensive indexes without blocking ongoing operations.
+Throughout this two-part series, we've explored how Hudi's indexing subsystem brings database-grade performance to the data lakehouse. In [part 1](https://hudi.apache.org/blog/2025/10/29/deep-dive-into-hudis-indexing-subsystem-part-1-of-2/), we examined the metadata table's architecture and how files, column stats, and partition stats indexes work together to skip irrelevant data. In part 2, we covered specialized indexes—record, secondary, and expression indexes—that provide exact file locations for equality matching and handle transformed predicates. We also looked at async indexing, which lets you add resource-intensive indexes without blocking ongoing operations.
 
 Here's a quick guide for choosing the right indexes for your workload:
 

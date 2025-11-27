@@ -1,6 +1,6 @@
 const { themes } = require("prism-react-renderer");
 const versions = require("./versions.json");
-const { slackUrl } = require('./constants');
+const { originalSlackUrl } = require('./constants');
 const allDocHomesPaths = [
   "/docs/",
   "/docs/next/",
@@ -38,7 +38,7 @@ module.exports = {
         "CDC and indexes"
       ],
     },
-    slackUrl: slackUrl,
+    slackUrl: originalSlackUrl,
   },
   plugins: [
     [
@@ -146,11 +146,11 @@ module.exports = {
           },
           {
             from: ["/docs/releases", "/docs/next/releases"],
-            to: "/releases/release-1.0.2",
+            to: "/releases/release-1.1.0",
           },
           {
             from: ["/releases"],
-            to: "/releases/release-1.0.2",
+            to: "/releases/release-1.1.0",
           },
         ],
       },
@@ -266,15 +266,15 @@ module.exports = {
             },
             {
               label: 'Slack',
-              href: slackUrl,
+              href: originalSlackUrl,
             },
             {
-              label: 'Linkdin',
-              href: 'https://www.linkedin.com/company/apache-hudi/?viewAsMember=true',
+              label: 'LinkedIn',
+              href: 'https://www.linkedin.com/company/apache-hudi/',
             },
             {
-              label: 'Youtube',
-              href: 'https://www.youtube.com/channel/UCs7AhE0BWaEPZSChrBR-Muw',
+              label: 'YouTube',
+              href: 'https://www.youtube.com/@apachehudi',
             },
             {
               label: 'X',
@@ -323,7 +323,7 @@ module.exports = {
             },
             {
               label: "Releases",
-              to: "/releases/release-1.0.2",
+              to: "/releases/release-1.1.0",
             },
             {
               label: "Download",
@@ -406,7 +406,7 @@ module.exports = {
             },
             {
               label: "Slack",
-              href: slackUrl,
+              href: originalSlackUrl,
             },
             {
               label: "GitHub",
@@ -508,8 +508,8 @@ module.exports = {
               path: "next",
               banner: "unreleased",
             },
-            "1.0.2": {
-              label: "1.0.2",
+            "1.1.0": {
+              label: "1.1.0",
               path: "",
             },
           },
@@ -553,16 +553,16 @@ module.exports = {
       "data-website-id": "9e4444ba-93cc-45ea-b143-783ae0fbeb6f",
       "data-project-name": "Apache Hudi",
       "data-project-color": "#FFFFFF",
-      "data-project-logo": "https://hudi.apache.org/assets/images/logo-big.png",
+      "data-project-logo": "/assets/images/logo-big.png",
       "data-modal-disclaimer": "This AI assistant answers Apache Hudi questions using your [documentation](https://hudi.apache.org/docs/quick-start-guide/), [dev setup](https://hudi.apache.org/contribute/developer-setup/), the [tech specs](https://hudi.apache.org/tech-specs-1point0/) and open GitHub Issues from the last year.",
       "data-modal-title": "Apache Hudi AI Assistant",
       "data-modal-example-questions-title": "Try asking me...",
       "data-modal-example-questions": "How can I convert an existing COW table to MOR?,How do I set up incremental queries with Hudi tables?",
-      "data-modal-image" : "https://hudi.apache.org/assets/images/logo-big-2.png",
-      "data-modal-image-ask-ai" : "https://hudi.apache.org/assets/images/logo-big-2.png",
+      "data-modal-image" : "/assets/images/logo-small.png",
+      "data-modal-image-ask-ai" : "/assets/images/logo-small.png",
       "data-modal-header-min-height" : "64px",
-      "data-modal-image-height": "40",
-      "data-modal-image-width": "40",
+      "data-modal-image-height": "44",
+      "data-modal-image-width": "64",
       "data-modal-header-bg-color": "#f8f9fa",
       "data-modal-title-color": "#0db1f9",
       "data-button-text-color": "#29557a",

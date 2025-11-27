@@ -1,10 +1,9 @@
 import React, { useEffect } from 'react';
-import { Redirect } from '@docusaurus/router';
-import { slackUrl } from '../../constants';
+import { originalSlackUrl } from '../../constants';
 
 export default function SlackRedirect() {
   useEffect(() => {
-    window.location.href =  slackUrl;
+    window.location.href = originalSlackUrl;
   }, []);
   return <p>Redirecting to Slack...</p>;
 }
