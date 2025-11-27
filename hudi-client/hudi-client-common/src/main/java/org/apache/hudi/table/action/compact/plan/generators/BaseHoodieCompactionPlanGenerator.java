@@ -53,7 +53,6 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -133,25 +132,23 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
         .getLatestFileSlicesStateless(partitionPath)
         .filter(slice -> filterFileSlice(slice, lastCompletedInstantTime, fgIdsInPendingCompactionAndClustering, instantRange))
         .map(s -> {
-          List<HoodieLogFile> logFiles = s.getLogFiles()
-              // ==============================================================
-              // IMPORTANT
-              // ==============================================================
-              // Currently, our filesystem view could return a file slice with pending log files there,
-              // these files should be excluded from the plan, let's say we have such a sequence of actions
+          // ==============================================================
+          // IMPORTANT
+          // ==============================================================
+          // Currently, our filesystem view could return a file slice with pending log files there,
+          // these files should be excluded from the plan, let's say we have such a sequence of actions
 
-              // t10: a delta commit starts,
-              // t20: the compaction is scheduled and the t10 delta commit is still pending, and the "fg_10.log" is included in the plan
-              // t25: the delta commit 10 finishes,
-              // t30: the compaction execution starts, now the reader considers the log file "fg_10.log" as valid.
+          // t10: a delta commit starts,
+          // t20: the compaction is scheduled and the t10 delta commit is still pending, and the "fg_10.log" is included in the plan
+          // t25: the delta commit 10 finishes,
+          // t30: the compaction execution starts, now the reader considers the log file "fg_10.log" as valid.
 
-              // for both OCC and NB-CC, this is in-correct.
-              .filter(logFile -> completionTimeQueryView.isCompletedBefore(compactionInstant, logFile.getDeltaCommitTime()))
-              .sorted(HoodieLogFile.getLogFileComparator()).collect(toList());
-          if (logFiles.isEmpty()) {
-            // compaction is not needed if there is no log file.
-            return null;
-          }
+          // for both OCC and NB-CC, this is in-correct.
+          return s.filterLogFiles(logFile -> completionTimeQueryView.isCompletedBefore(compactionInstant, logFile.getDeltaCommitTime()));
+        })
+        .filter(FileSlice::hasLogFiles) // compaction is not needed if there is no log file.
+        .map(s -> {
+          List<HoodieLogFile> logFiles = s.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(toList());
           totalLogFiles.add(logFiles.size());
           totalFileSlices.add(1L);
           // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
@@ -160,7 +157,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
           Option<HoodieBaseFile> dataFile = s.getBaseFile();
           return new CompactionOperation(dataFile, partitionPath, logFiles,
               writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s));
-        }).filter(Objects::nonNull), partitionPaths.size()).stream()
+        }), partitionPaths.size()).stream()
         .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
 
     LOG.info("Total of {} compaction operations are retrieved for table {}", operations.size(), hoodieTable.getConfig().getBasePath());
@@ -194,7 +191,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
 
   protected abstract List<String> getPartitions();
 
-  protected abstract HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations, Pair<List<String>,List<String>> partitionPair);
+  protected abstract HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations, Pair<List<String>, List<String>> partitionPair);
 
   protected abstract boolean filterLogCompactionOperations();
 
