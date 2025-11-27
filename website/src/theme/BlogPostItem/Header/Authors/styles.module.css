@@ -1,3 +1,6 @@
+.wrapper {
+  margin: 0;
+}
 .authorCol {
   max-width: inherit !important;
 }
@@ -13,7 +16,9 @@
 }
 
 .authorWrapper {
-  margin-left: 10px;
+  display: flex;
+  gap: 10px;
+  padding: 0;
   .avatar__name {
     span {
       font-weight: 600 !important;
