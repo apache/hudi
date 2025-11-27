@@ -243,6 +243,17 @@ object HoodieSchemaUtils {
   }
 
   /**
+   * Converts an Option of Avro Schema to an Option of HoodieSchema.
+   * This is a convenience method for Java callers working with Hudi's Option type.
+   *
+   * @param avroSchemaOpt Optional Avro Schema (Hudi's Option type)
+   * @return Optional HoodieSchema (Hudi's Option type)
+   */
+  def toHoodieSchemaOption(avroSchemaOpt: org.apache.hudi.common.util.Option[Schema]): org.apache.hudi.common.util.Option[HoodieSchema] = {
+    avroSchemaOpt.map(HoodieSchema.fromAvroSchema(_))
+  }
+
+  /**
    * Canonicalizes [[sourceSchema]] by reconciling it w/ [[latestTableSchema]] in following
    *
    * <ol>

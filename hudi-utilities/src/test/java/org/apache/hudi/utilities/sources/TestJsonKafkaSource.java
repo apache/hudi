@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
@@ -277,11 +278,11 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     List<GenericRecord> recs = fetch1.getBatch().get().collect();
     assertEquals(10, recs.size());
 
-    Schema deducedSchema =
-        HoodieSchemaUtils.deduceWriterSchema(schemaProvider.getSourceSchema(), Option.empty(), Option.empty(), props);
-    verifyDecimalValue(recs, deducedSchema, "decfield");
-    verifyDecimalValue(recs, deducedSchema, "lowprecision");
-    verifyDecimalValue(recs, deducedSchema, "highprecision");
+    HoodieSchema deducedSchema =
+        HoodieSchemaUtils.deduceWriterSchema(HoodieSchema.fromAvroSchema(schemaProvider.getSourceSchema()), Option.empty(), Option.empty(), props);
+    verifyDecimalValue(recs, deducedSchema.getAvroSchema(), "decfield");
+    verifyDecimalValue(recs, deducedSchema.getAvroSchema(), "lowprecision");
+    verifyDecimalValue(recs, deducedSchema.getAvroSchema(), "highprecision");
 
     testUtils.sendMessages(topic, jsonifyRecords(
         dataGenerator.generateInsertsAsPerSchema("001", 20, HoodieTestDataGenerator.TRIP_ENCODED_DECIMAL_SCHEMA)));

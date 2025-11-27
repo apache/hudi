@@ -49,6 +49,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -797,8 +798,11 @@ public class StreamSync implements Serializable, Closeable {
     // Deduce proper target (writer's) schema for the input dataset, reconciling its
     // schema w/ the table's one
     Schema targetSchema = HoodieSchemaUtils.deduceWriterSchema(
-        HoodieAvroUtils.removeMetadataFields(incomingSchema),
-          latestTableSchemaOpt, internalSchemaOpt, props);
+        HoodieSchema.fromAvroSchema(HoodieAvroUtils.removeMetadataFields(incomingSchema)),
+        HoodieSchemaUtils.toHoodieSchemaOption(latestTableSchemaOpt),
+        internalSchemaOpt,
+        props
+    ).toAvroSchema();
 
     // Override schema provider with the reconciled target schema
     return new DelegatingSchemaProvider(props, hoodieSparkContext.jsc(), sourceSchemaProvider,
@@ -822,7 +826,10 @@ public class StreamSync implements Serializable, Closeable {
     }
     hoodieConfig.setValue(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props));
     hoodieConfig.setValue("path", cfg.targetBasePath);
-    return HoodieSparkSqlWriter.getBulkInsertRowConfig(writerSchema != InputBatch.NULL_SCHEMA ? Option.of(writerSchema) : Option.empty(),
+    return HoodieSparkSqlWriter.getBulkInsertRowConfig(
+        writerSchema != InputBatch.NULL_SCHEMA
+            ? Option.of(HoodieSchema.fromAvroSchema(writerSchema))
+            : Option.empty(),
         hoodieConfig, cfg.targetBasePath, cfg.targetTableName);
   }
 
