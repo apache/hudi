@@ -76,7 +76,7 @@
               <goal>add-source</goal>
             </goals>
             <configuration>
-              <skipAddSource>${spark31orEarlier}</skipAddSource>
+              <skipAddSource>${spark32orEarlier}</skipAddSource>
               <sources>
                 <source>src/avro/java</source>
               </sources>
