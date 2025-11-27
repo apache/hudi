@@ -96,7 +96,6 @@ import org.apache.hudi.utilities.util.BloomFilterData;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkException;
@@ -1641,14 +1640,14 @@ public class HoodieMetadataTableValidator implements Serializable {
     for (String logFilePathStr : logFilePathSet) {
       HoodieLogFormat.Reader reader = null;
       try {
-        Schema readerSchema =
-            TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePathStr));
+        HoodieSchema readerSchema =
+            HoodieSchema.fromAvroSchema(TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePathStr)));
         if (readerSchema == null) {
           LOG.warn("Cannot read schema from log file {}. Skip the check as it's likely being written by an inflight instant.", logFilePathStr);
           continue;
         }
         reader =
-            HoodieLogFormat.newReader(storage, new HoodieLogFile(logFilePathStr), readerSchema, false);
+            HoodieLogFormat.newReader(storage, new HoodieLogFile(logFilePathStr), readerSchema.toAvroSchema(), false);
         // read the avro blocks
         if (reader.hasNext()) {
           HoodieLogBlock block = reader.next();

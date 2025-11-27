@@ -61,7 +61,8 @@ import java.util.stream.Collectors;
  */
 public abstract class FileFormatUtils {
   /**
-   * Aggregate column range statistics across files in a partition using HoodieSchema.
+   * Aggregate column range statistics across files in a partition. HoodieSchema is used to properly
+   * extract and compare statistics values based on their data types (including logical types).
    * This method uses HoodieSchema for in-memory processing while maintaining
    * compatibility with existing Avro-based serialization.
    *

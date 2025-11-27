@@ -1907,50 +1907,52 @@ public class HoodieTableMetadataUtil {
    * <p>
    * NOTE: This method has to stay compatible with the semantic of {@link FileFormatUtils#readColumnStatsFromMetadata} as they are used in tandem
    *
-   * @param hoodieSchema the HoodieSchema to use for type coercion
+   * @param schema       the HoodieSchema to use for type coercion
    * @param val          the value to coerce
    * @return the coerced value as a Comparable
    * @since 1.2.0
    */
-  public static Comparable<?> coerceToComparable(HoodieSchema hoodieSchema, Object val) {
-    Schema schema = hoodieSchema.toAvroSchema();
-
+  public static Comparable<?> coerceToComparable(HoodieSchema schema, Object val) {
     if (val == null) {
       return null;
     }
 
-    switch (schema.getType()) {
+    HoodieSchemaType schemaType = schema.getType();
+
+    switch (schemaType) {
       case UNION:
         // TODO we need to handle unions in general case as well
-        return coerceToComparable(hoodieSchema.getNonNullType(), val);
+        return coerceToComparable(schema.getNonNullType(), val);
 
       case FIXED:
       case BYTES:
-        if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
-          return (Comparable<?>) val;
-        }
         return (ByteBuffer) val;
-
-
+      case DECIMAL:
+        return (Comparable<?>) val;
       case INT:
-        if (schema.getLogicalType() == LogicalTypes.date()
-            || schema.getLogicalType() == LogicalTypes.timeMillis()) {
-          // NOTE: This type will be either {@code java.sql.Date} or {org.joda.LocalDate}
-          //       depending on the Avro version. Hence, we simply cast it to {@code Comparable<?>}
+        return castToInteger(val);
+      case DATE:
+        // NOTE: This type will be either {@code java.sql.Date} or {org.joda.LocalDate}
+        //       depending on the Avro version. Hence, we simply cast it to {@code Comparable<?>}
+        return (Comparable<?>) val;
+      case TIME:
+        HoodieSchema.Time timeSchema = (HoodieSchema.Time) schema;
+        TimePrecision precision = timeSchema.getPrecision();
+        if (precision.equals(TimePrecision.MILLIS) || precision.equals(TimePrecision.MICROS)) {
           return (Comparable<?>) val;
         }
         return castToInteger(val);
-
       case LONG:
-        if (schema.getLogicalType() == LogicalTypes.timeMicros()
-            || schema.getLogicalType() == LogicalTypes.timestampMicros()
-            || schema.getLogicalType() == LogicalTypes.timestampMillis()) {
+        return castToLong(val);
+      case TIMESTAMP:
+        HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) schema;
+        TimePrecision tsPrecision = timestampSchema.getPrecision();
+        if (tsPrecision.equals(TimePrecision.MILLIS) || tsPrecision.equals(TimePrecision.MICROS)) {
           // NOTE: This type will be either {@code java.sql.Date} or {org.joda.LocalDate}
           //       depending on the Avro version. Hence, we simply cast it to {@code Comparable<?>}
           return (Comparable<?>) val;
         }
         return castToLong(val);
-
       case STRING:
         // unpack the avro Utf8 if possible
         return val.toString();

@@ -253,34 +253,26 @@ public enum ValueType {
    * @since 1.2.0
    */
   public static ValueType fromSchema(HoodieSchema schema) {
-    // Handle logical types first using instanceof checks on specialized classes
-    if (schema instanceof HoodieSchema.Decimal) {
-      return ValueType.DECIMAL;
-    }
-
-    if (schema instanceof HoodieSchema.Time) {
-      HoodieSchema.Time time = (HoodieSchema.Time) schema;
-      return time.getPrecision() == HoodieSchema.TimePrecision.MILLIS
-          ? ValueType.TIME_MILLIS
-          : ValueType.TIME_MICROS;
-    }
-
-    if (schema instanceof HoodieSchema.Timestamp) {
-      HoodieSchema.Timestamp timestamp = (HoodieSchema.Timestamp) schema;
-      if (timestamp.isUtcAdjusted()) {
-        return timestamp.getPrecision() == HoodieSchema.TimePrecision.MILLIS
-            ? ValueType.TIMESTAMP_MILLIS
-            : ValueType.TIMESTAMP_MICROS;
-      } else {
-        return timestamp.getPrecision() == HoodieSchema.TimePrecision.MILLIS
-            ? ValueType.LOCAL_TIMESTAMP_MILLIS
-            : ValueType.LOCAL_TIMESTAMP_MICROS;
-      }
-    }
-
-    // Handle primitive types and remaining logical types
     HoodieSchemaType type = schema.getType();
     switch (type) {
+      case DECIMAL:
+        return ValueType.DECIMAL;
+      case TIME:
+        HoodieSchema.Time time = (HoodieSchema.Time) schema;
+        return time.getPrecision() == HoodieSchema.TimePrecision.MILLIS
+            ? ValueType.TIME_MILLIS
+            : ValueType.TIME_MICROS;
+      case TIMESTAMP:
+        HoodieSchema.Timestamp timestamp = (HoodieSchema.Timestamp) schema;
+        if (timestamp.isUtcAdjusted()) {
+          return timestamp.getPrecision() == HoodieSchema.TimePrecision.MILLIS
+              ? ValueType.TIMESTAMP_MILLIS
+              : ValueType.TIMESTAMP_MICROS;
+        } else {
+          return timestamp.getPrecision() == HoodieSchema.TimePrecision.MILLIS
+              ? ValueType.LOCAL_TIMESTAMP_MILLIS
+              : ValueType.LOCAL_TIMESTAMP_MICROS;
+        }
       case NULL:
         return ValueType.NULL;
       case BOOLEAN:

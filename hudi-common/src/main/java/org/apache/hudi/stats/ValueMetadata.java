@@ -26,8 +26,6 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.parquet.schema.PrimitiveType;
 
@@ -147,7 +145,7 @@ public class ValueMetadata implements Serializable {
       return new DecimalMetadata(data.getLeft(), data.getRight());
     }
 
-    static DecimalMetadata create(LogicalTypes.Decimal decimal) {
+    static DecimalMetadata create(HoodieSchema.Decimal decimal) {
       return new DecimalMetadata(decimal.getPrecision(), decimal.getScale());
     }
 
@@ -256,11 +254,9 @@ public class ValueMetadata implements Serializable {
     HoodieSchema valueSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(fieldSchema);
     ValueType valueType = ValueType.fromSchema(valueSchema);
     if (valueType == ValueType.V1) {
-      Schema avroSchema = valueSchema.toAvroSchema();
-      throw new IllegalArgumentException("Unsupported logical type for: " + avroSchema.getLogicalType());
+      throw new IllegalArgumentException("Unsupported logical type for: " + valueSchema.getType());
     } else if (valueType == ValueType.DECIMAL) {
-      Schema avroSchema = valueSchema.toAvroSchema();
-      return DecimalMetadata.create((LogicalTypes.Decimal) avroSchema.getLogicalType());
+      return DecimalMetadata.create((HoodieSchema.Decimal) valueSchema);
     } else {
       return new ValueMetadata(valueType);
     }
