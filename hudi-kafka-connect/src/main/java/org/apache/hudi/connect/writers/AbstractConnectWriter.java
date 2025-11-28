@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.keygen.KeyGenerator;
@@ -66,7 +67,7 @@ public abstract class AbstractConnectWriter implements ConnectWriter<WriteStatus
 
   @Override
   public void writeRecord(SinkRecord record) throws IOException {
-    AvroConvertor convertor = new AvroConvertor(schemaProvider.getSourceSchema());
+    AvroConvertor convertor = new AvroConvertor(HoodieSchema.fromAvroSchema(schemaProvider.getSourceSchema()));
     Option<GenericRecord> avroRecord;
     switch (connectConfigs.getKafkaValueConverter()) {
       case KAFKA_AVRO_CONVERTER:
