@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.common
 import org.apache.hudi.{DataSourceWriteOptions, ScalaAssertionSupport}
 
 import org.apache.spark.sql.AnalysisException
+import org.apache.spark.sql.hudi.common.ErrorMessageChecker.isIncompatibleDataException
 
 class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
