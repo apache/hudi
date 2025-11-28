@@ -44,7 +44,6 @@ import org.apache.parquet.filter2.predicate.FilterApi;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.parquet.hadoop.ParquetReader;
-import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.SchemaRepair;
 import org.apache.spark.sql.HoodieInternalRowUtils;
@@ -157,17 +156,10 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     RebaseDateTime.RebaseSpec rebaseDateSpec = SparkAdapterSupport$.MODULE$.sparkAdapter().getRebaseSpec("CORRECTED");
     boolean parquetFilterPushDown = storage.getConf().getBoolean(SQLConf.PARQUET_FILTER_PUSHDOWN_ENABLED().key(), sqlConf.parquetFilterPushDown());
     if (parquetFilterPushDown && readFilters != null && !readFilters.isEmpty()) {
-      ParquetMetadata parquetMetadataWithoutRowGroup = getParquetMetadataWithoutRowGroup();
-      ParquetFilters parquetFilters = new ParquetFilters(
-          parquetMetadataWithoutRowGroup.getFileMetaData().getSchema(),
-          storage.getConf().getBoolean(SQLConf.PARQUET_FILTER_PUSHDOWN_DATE_ENABLED().key(), sqlConf.parquetFilterPushDownDate()),
-          storage.getConf().getBoolean(SQLConf.PARQUET_FILTER_PUSHDOWN_TIMESTAMP_ENABLED().key(), sqlConf.parquetFilterPushDownTimestamp()),
-          storage.getConf().getBoolean(SQLConf.PARQUET_FILTER_PUSHDOWN_DECIMAL_ENABLED().key(), sqlConf.parquetFilterPushDownDecimal()),
-          storage.getConf().getBoolean(SQLConf.PARQUET_FILTER_PUSHDOWN_STRING_STARTSWITH_ENABLED().key(),
-              SparkAdapterSupport$.MODULE$.sparkAdapter().enableParquetFilterPushDownStringPredicate(sqlConf)),
-          storage.getConf().getInt(SQLConf.PARQUET_FILTER_PUSHDOWN_INFILTERTHRESHOLD().key(), sqlConf.parquetFilterPushDownInFilterThreshold()),
-          storage.getConf().getBoolean(SQLConf.CASE_SENSITIVE().key(), sqlConf.caseSensitiveAnalysis()),
-          rebaseDateSpec
+      ParquetFilters parquetFilters = SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFilters(
+          getFileSchema(),
+          storage.getConf(),
+          sqlConf
       );
       Option<FilterPredicate> predicateOpt = Option.fromJavaOptional(readFilters
           .stream()
@@ -219,10 +211,6 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     }
     //TODO boundary to revisit using HoodieSchema directly
     return HoodieSchema.fromAvroSchema(schemaOption.get());
-  }
-
-  private ParquetMetadata getParquetMetadataWithoutRowGroup() {
-    return ((ParquetUtils) parquetUtils).readMetadata(storage, path);
   }
 
   protected StructType getStructSchema() {
