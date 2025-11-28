@@ -2084,7 +2084,8 @@ public class HoodieTableMetadataUtil {
     // if record Type is not set or if recordType is SPARK then we cannot support AVRO, MAP, ARRAY, RECORD, ENUM and FIXED and BYTES type as well.
     // HUDI-8585 will add support for BYTES and FIXED
     return type != HoodieSchemaType.RECORD && type != HoodieSchemaType.ARRAY && type != HoodieSchemaType.MAP
-        && type != HoodieSchemaType.ENUM && type != HoodieSchemaType.BYTES && type != HoodieSchemaType.FIXED;
+        && type != HoodieSchemaType.ENUM && type != HoodieSchemaType.BYTES && type != HoodieSchemaType.FIXED
+        && type != HoodieSchemaType.DECIMAL; // DECIMAL's underlying type is BYTES
   }
 
   private static boolean isColumnTypeSupportedV2(HoodieSchema schema) {
