@@ -395,6 +395,11 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     }
 
     @Override
+    public TestWriteClient createNewClient() {
+      return this;
+    }
+
+    @Override
     protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
 
     }
