@@ -23,7 +23,7 @@ import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.hudi.ErrorMessageChecker.isIncompatibleDataException
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
-class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase {
+class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
   test("Test Spark successful implicit type casting behaviors") {
     withTempDir { tmp =>
