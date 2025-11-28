@@ -164,8 +164,6 @@ public class HoodieTableSource implements
   private PartitionPruners.PartitionPruner partitionPruner;
   private Option<Function<Integer, Integer>> dataBucketFunc; // numBuckets -> bucketId
   private transient FileIndex fileIndex;
-  private transient TableSchemaResolver tableSchemaResolver;
-  private transient Map<String, DataType> readableMetaData;
 
   public HoodieTableSource(
       SerializableSchema schema,
@@ -652,19 +650,13 @@ public class HoodieTableSource implements
   @VisibleForTesting
   public Schema getTableAvroSchema() {
     try {
-      return getTableSchemaResolver().getTableAvroSchema();
+      TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
+      return schemaResolver.getTableAvroSchema();
     } catch (Throwable e) {
       // table exists but has no written data
       LOG.warn("Unable to resolve schema from table, using schema from the DDL", e);
       return inferSchemaFromDdl();
     }
-  }
-
-  private TableSchemaResolver getTableSchemaResolver() {
-    if (this.tableSchemaResolver == null) {
-      this.tableSchemaResolver = new TableSchemaResolver(metaClient);
-    }
-    return this.tableSchemaResolver;
   }
 
   @VisibleForTesting
@@ -730,16 +722,7 @@ public class HoodieTableSource implements
 
   @Override
   public Map<String, DataType> listReadableMetadata() {
-    // flink planner would call this method multiple times, cache the result to avoid redundant costs
-    if (readableMetaData == null) {
-      if (metaClient != null && metaClient.getTableConfig().populateMetaFields()) {
-        readableMetaData = getTableSchemaResolver().hasOperationField()
-            ? DataTypeUtils.METADATA_COLUMNS_WITH_OPERATION : DataTypeUtils.METADATA_COLUMNS;
-      } else {
-        readableMetaData = Collections.emptyMap();
-      }
-    }
-    return readableMetaData;
+    return conf.get(FlinkOptions.CHANGELOG_ENABLED) ? DataTypeUtils.METADATA_COLUMNS_WITH_OPERATION : DataTypeUtils.METADATA_COLUMNS;
   }
 
   @Override
