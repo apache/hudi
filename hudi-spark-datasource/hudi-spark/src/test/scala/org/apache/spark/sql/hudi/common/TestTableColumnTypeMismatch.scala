@@ -553,7 +553,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
         primaryKey = "id",
         orderingFields = "ts",
         tableType = "mor",
-        expectedErrorPattern = "Invalid MERGE INTO matching condition: s0.id: can't cast s0.id (of LongType) to IntegerType"
+        expectedErrorPattern = "Primary key data type mismatch between source table and target table. Target table uses IntegerType for column 'id', source table uses LongType for 's0.id'"
       ),
       TypeMismatchTestCase(
         description = "Precombine field type mismatch",
@@ -688,8 +688,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
              |location '${tmp.getCanonicalPath}/$targetTable'
              |tblproperties (
              |  type = 'cow',
-             |  primaryKey = 'id',
-             |  orderingFields = 'ts'
+             |  primaryKey = 'id'
              |)
          """.stripMargin)
 
