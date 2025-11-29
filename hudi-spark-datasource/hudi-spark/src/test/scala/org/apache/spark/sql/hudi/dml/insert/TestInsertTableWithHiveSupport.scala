@@ -17,13 +17,12 @@
  * under the License.
  */
 
-package org.apache.spark.sql.hudi.hive.dml
+package org.apache.spark.sql.hudi.dml.insert
 
 import org.apache.hudi.sync.common.HoodieSyncTool
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.hudi.dml.insert.TestInsertTable
 import org.apache.spark.util.Utils
 
 import java.io.File
