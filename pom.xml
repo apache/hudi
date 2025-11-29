@@ -236,7 +236,7 @@
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
     <moto.port>5002</moto.port>
     <moto.endpoint>http://localhost:${moto.port}</moto.endpoint>
-    <springboot.version>2.7.3</springboot.version>
+    <springboot.version>2.7.10</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>
     <snappy.version>1.1.10.7</snappy.version>
     <!-- The following properties are only used for Jacoco coverage report aggregation -->
