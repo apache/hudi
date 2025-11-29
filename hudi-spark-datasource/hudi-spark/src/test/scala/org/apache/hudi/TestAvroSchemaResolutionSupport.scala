@@ -18,7 +18,7 @@
  */
 package org.apache.hudi
 
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.SchemaCompatibilityException
@@ -848,10 +848,10 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     upsertData(df2, tempRecordPath, tableType)
 
     // after implicit type change, read the table with vectorized read enabled
-    if (HoodieSparkUtils.gteqSpark3_4 || !useFileGroupReader) {
+    if (HoodieSparkUtils.gteqSpark3_4) {
       assertThrows(classOf[SparkException]) {
         withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
-          readTable(tempRecordPath, useFileGroupReader)
+          readTable(tempRecordPath)
         }
       }
     } else {
