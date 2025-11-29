@@ -22,7 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableConfig}
 import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
 import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
@@ -30,10 +30,9 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-import org.apache.hudi.storage.HoodieStorageUtils
+import org.apache.hudi.storage.{HoodieStorageUtils, HoodieStorage}
 import org.apache.hudi.util.SparkConfigUtils
 import org.apache.hudi.util.SparkConfigUtils.getStringWithAltKeys
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.avro.SchemaConverters
@@ -45,7 +44,6 @@ import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.types.{StructField, StructType}
 
 import java.util.Locale
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
@@ -82,10 +80,14 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   val tableLocation: String = getTableLocation(table, spark)
 
   /**
+   * hoodie storage based off table's location.
+   */
+  val storage: HoodieStorage = HoodieStorageUtils.getStorage(tableLocation, storageConf)
+
+  /**
    * A flag to whether the hoodie table exists.
    */
-  val hoodieTableExists: Boolean =
-    tableExistsInPath(tableLocation, HoodieStorageUtils.getStorage(tableLocation, storageConf))
+  val hoodieTableExists: Boolean = tableExistsInPath(tableLocation, storage)
 
   /**
    * Meta Client.
@@ -93,6 +95,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   lazy val metaClient: HoodieTableMetaClient = HoodieTableMetaClient.builder()
     .setBasePath(tableLocation)
     .setConf(storageConf)
+    .setStorage(storage)
     .build()
 
   /**
