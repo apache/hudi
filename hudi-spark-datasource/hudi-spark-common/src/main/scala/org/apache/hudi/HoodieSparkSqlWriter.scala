@@ -804,11 +804,11 @@ class HoodieSparkSqlWriterInternal {
   }
 
   def validateSchemaForHoodieIsDeleted(schema: HoodieSchema): Unit = {
-    if (schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) != null &&
-      //TODO revisit this to see if this correct
-      getNonNullTypeFromUnion(schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD).get().schema().toAvroSchema).getType != HoodieSchemaType.BOOLEAN) {
+    val fieldOpt = schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD)
+    if (fieldOpt.isPresent &&
+        getNonNullTypeFromUnion(fieldOpt.get().schema().toAvroSchema).getType != HoodieSchemaType.BOOLEAN) {
       throw new HoodieException(HoodieRecord.HOODIE_IS_DELETED_FIELD + " has to be BOOLEAN type. Passed in dataframe's schema has type "
-        + schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD).get().schema().getType)
+        + fieldOpt.get().schema().getType)
     }
   }
 
