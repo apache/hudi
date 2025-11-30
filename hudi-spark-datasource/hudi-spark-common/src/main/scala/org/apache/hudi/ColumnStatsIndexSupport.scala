@@ -24,7 +24,7 @@ import org.apache.hudi.avro.model._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
 import org.apache.hudi.common.function.SerializableFunction
-import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
+import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.BinaryUtil.toBytes
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -32,11 +32,13 @@ import org.apache.hudi.common.util.collection
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieIndexVersion, HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.getValidIndexedColumns
 import org.apache.hudi.stats.{SparkValueMetadataUtils, ValueMetadata, ValueType}
 import org.apache.hudi.stats.ValueMetadata.getValueMetadata
 import org.apache.hudi.util.JFunction
 
 import org.apache.avro.Conversions.DecimalConversion
+import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -55,6 +57,7 @@ import scala.collection.parallel.mutable.ParHashMap
 
 class ColumnStatsIndexSupport(spark: SparkSession,
                               tableSchema: StructType,
+                              avroSchema: Schema,
                               @transient metadataConfig: HoodieMetadataConfig,
                               @transient metaClient: HoodieTableMetaClient,
                               allowCaching: Boolean = false)
@@ -91,9 +94,11 @@ class ColumnStatsIndexSupport(spark: SparkSession,
       // NOTE: If partition pruning doesn't prune any files, then there's no need to apply file filters
       //       when loading the Column Statistics Index
       val prunedFileNamesOpt = if (shouldPushDownFilesFilter) Some(prunedFileNames) else None
-
+      val getValidIndexedColumnsFunc: HoodieIndexDefinition => Seq[String] = { indexDefinition =>
+        getValidIndexedColumns(indexDefinition, avroSchema, metaClient.getTableConfig).asScala.toSeq
+      }
       loadTransposed(queryReferencedColumns, readInMemory, Some(prunedPartitions), prunedFileNamesOpt) { transposedColStatsDF =>
-        Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames))
+        Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames, getValidIndexedColumnsFunc))
       }
     } else {
       Option.empty
@@ -493,45 +498,50 @@ object ColumnStatsIndexSupport {
   val decConv = new DecimalConversion()
 
   def deserialize(value: Any, dataType: DataType): Any = {
-    dataType match {
-      // NOTE: Since we can't rely on Avro's "date", and "timestamp-micros" logical-types, we're
-      //       manually encoding corresponding values as int and long w/in the Column Stats Index and
-      //       here we have to decode those back into corresponding logical representation.
-      case TimestampType => DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
-      case DateType => DateTimeUtils.toJavaDate(value.asInstanceOf[Int])
-      // Standard types
-      case StringType => value
-      case BooleanType => value
-      // Numeric types
-      case FloatType => value
-      case DoubleType => value
-      case LongType => value
-      case IntegerType => value
-      // NOTE: All integral types of size less than Int are encoded as Ints in MT
-      case ShortType => value.asInstanceOf[Int].toShort
-      case ByteType => value.asInstanceOf[Int].toByte
+    // Handle TimestampNTZType separately since it does not exist in version lower than spark3.5
+    if (SparkAdapterSupport.sparkAdapter.isTimestampNTZType(dataType)) {
+      DateTimeUtils.microsToLocalDateTime(value.asInstanceOf[Long])
+    } else {
+      dataType match {
+        // NOTE: Since we can't rely on Avro's "date", and "timestamp-micros" logical-types, we're
+        //       manually encoding corresponding values as int and long w/in the Column Stats Index and
+        //       here we have to decode those back into corresponding logical representation.
+        case TimestampType => DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
+        case DateType => DateTimeUtils.toJavaDate(value.asInstanceOf[Int])
+        // Standard types
+        case StringType => value
+        case BooleanType => value
+        // Numeric types
+        case FloatType => value
+        case DoubleType => value
+        case LongType => value
+        case IntegerType => value
+        // NOTE: All integral types of size less than Int are encoded as Ints in MT
+        case ShortType => value.asInstanceOf[Int].toShort
+        case ByteType => value.asInstanceOf[Int].toByte
 
-      case dt: DecimalType =>
-        value match {
-          case buffer: ByteBuffer =>
-            val logicalType = DecimalWrapper.SCHEMA$.getField("value").schema().getLogicalType
-            decConv.fromBytes(buffer, null, logicalType).setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
-          case bd: BigDecimal =>
-            // Scala BigDecimal: convert to java.math.BigDecimal and enforce the scale
-            bd.bigDecimal.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
-          case bd: java.math.BigDecimal =>
-            bd.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
-          case other =>
-            throw new UnsupportedOperationException(s"Cannot deserialize value for DecimalType: unexpected type ${other.getClass.getName}")
-        }
-      case BinaryType =>
-        value match {
-          case b: ByteBuffer => toBytes(b)
-          case other => other
-        }
+        case dt: DecimalType =>
+          value match {
+            case buffer: ByteBuffer =>
+              val logicalType = DecimalWrapper.SCHEMA$.getField("value").schema().getLogicalType
+              decConv.fromBytes(buffer, null, logicalType).setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
+            case bd: BigDecimal =>
+              // Scala BigDecimal: convert to java.math.BigDecimal and enforce the scale
+              bd.bigDecimal.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
+            case bd: java.math.BigDecimal =>
+              bd.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
+            case other =>
+              throw new UnsupportedOperationException(s"Cannot deserialize value for DecimalType: unexpected type ${other.getClass.getName}")
+          }
+        case BinaryType =>
+          value match {
+            case b: ByteBuffer => toBytes(b)
+            case other => other
+          }
 
-      case _ =>
-        throw new UnsupportedOperationException(s"Data type for the statistic value is not recognized $dataType")
+        case _ =>
+          throw new UnsupportedOperationException(s"Data type for the statistic value is not recognized $dataType")
+      }
     }
   }
 }

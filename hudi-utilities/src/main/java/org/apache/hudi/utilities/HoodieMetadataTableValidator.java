@@ -1031,8 +1031,11 @@ public class HoodieMetadataTableValidator implements Serializable {
     HoodieData<HoodieMetadataColumnStats> partitionStatsUsingColStats = getPartitionStatsUsingColStats(metadataTableBasedContext,
         baseDataFilesForCleaning, allPartitions, engineContext);
 
+
     PartitionStatsIndexSupport partitionStatsIndexSupport = new PartitionStatsIndexSupport(engineContext.getSqlContext().sparkSession(),
-        AvroConversionUtils.convertAvroSchemaToStructType(metadataTableBasedContext.getSchema()), metadataTableBasedContext.getMetadataConfig(),
+        AvroConversionUtils.convertAvroSchemaToStructType(metadataTableBasedContext.getSchema()),
+        metadataTableBasedContext.getSchema(),
+        metadataTableBasedContext.getMetadataConfig(),
         metaClientOpt.get(), false);
     HoodieData<HoodieMetadataColumnStats> partitionStats =
         partitionStatsIndexSupport.loadColumnStatsIndexRecords(JavaConverters.asScalaBufferConverter(

@@ -19,12 +19,12 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.spark.sql.internal.SQLConf;
 
 import java.io.IOException;
@@ -51,7 +51,7 @@ public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
   @Override
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
                                                 StoragePath path,
-                                                Option<Schema> schemaOption) throws IOException {
+                                                Option<HoodieSchema> schemaOption) throws IOException {
     throw new HoodieIOException("Not support read HFile");
   }
 

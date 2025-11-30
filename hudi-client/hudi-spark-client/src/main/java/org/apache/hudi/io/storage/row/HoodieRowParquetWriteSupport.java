@@ -20,15 +20,15 @@ package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkAdapterSupport$;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 
 import org.apache.avro.LogicalType;
@@ -76,7 +76,7 @@ import java.util.Map;
 import scala.Enumeration;
 import scala.Function1;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_FIELD_ID_WRITE_ENABLED;
 import static org.apache.hudi.config.HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD;
 import static org.apache.hudi.config.HoodieWriteConfig.AVRO_SCHEMA_STRING;
@@ -132,12 +132,12 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
         || Boolean.parseBoolean(config.getStringOrDefault(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "false"));
     this.structType = structType;
     // The avro schema is used to determine the precision for timestamps
-    this.avroSchema = SerDeHelper.fromJson(config.getString(INTERNAL_SCHEMA_STRING)).map(internalSchema -> AvroInternalSchemaConverter.convert(internalSchema, "spark_schema"))
+    this.avroSchema = SerDeHelper.fromJson(config.getString(INTERNAL_SCHEMA_STRING)).map(internalSchema -> InternalSchemaConverter.convert(internalSchema, "spark_schema"))
         .orElseGet(() -> {
           String schemaString = Option.ofNullable(config.getString(WRITE_SCHEMA_OVERRIDE)).orElseGet(() -> config.getString(AVRO_SCHEMA_STRING));
-          Schema parsedSchema = new Schema.Parser().parse(schemaString);
-          return HoodieAvroUtils.addMetadataFields(parsedSchema, config.getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD));
-        });
+          HoodieSchema parsedSchema = HoodieSchema.parse(schemaString);
+          return HoodieSchema.addMetadataFields(parsedSchema, config.getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD));
+        }).toAvroSchema();
     ParquetWriteSupport.setSchema(structType, hadoopConf);
     this.rootFieldWriters = getFieldWriters(structType, avroSchema);
     this.hadoopConf = hadoopConf;
@@ -226,7 +226,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   }
 
   private ValueWriter makeWriter(Schema avroSchema, DataType dataType) {
-    Schema resolvedSchema = avroSchema == null ? null : resolveNullableSchema(avroSchema);
+    Schema resolvedSchema = avroSchema == null ? null : getNonNullTypeFromUnion(avroSchema);
     LogicalType logicalType = resolvedSchema != null ? resolvedSchema.getLogicalType() : null;
 
     if (dataType == DataTypes.BooleanType) {
@@ -429,7 +429,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
   }
 
   private Type convertField(Schema avroFieldSchema, StructField structField, Type.Repetition repetition) {
-    Schema resolvedSchema = avroFieldSchema == null ? null : resolveNullableSchema(avroFieldSchema);
+    Schema resolvedSchema = avroFieldSchema == null ? null : getNonNullTypeFromUnion(avroFieldSchema);
     LogicalType logicalType = resolvedSchema != null ? resolvedSchema.getLogicalType() : null;
 
     DataType dataType = structField.dataType();

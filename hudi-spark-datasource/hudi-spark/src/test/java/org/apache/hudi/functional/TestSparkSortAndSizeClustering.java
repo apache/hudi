@@ -271,8 +271,8 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
   private List<HoodieRecord> generateInserts(String instant, long ts, int count) {
     Schema schema = getSchema();
     Schema decimalSchema = schema.getField("decimal_field").schema();
-    Schema nestedSchema = AvroSchemaUtils.resolveNullableSchema(schema.getField("nested_record").schema());
-    Schema enumSchema = AvroSchemaUtils.resolveNullableSchema(schema.getField("enum_field").schema());
+    Schema nestedSchema = AvroSchemaUtils.getNonNullTypeFromUnion(schema.getField("nested_record").schema());
+    Schema enumSchema = AvroSchemaUtils.getNonNullTypeFromUnion(schema.getField("enum_field").schema());
     Random random = new Random(0);
     return IntStream.range(0, count)
         .mapToObj(i -> {

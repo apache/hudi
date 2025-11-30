@@ -31,7 +31,7 @@ import org.apache.parquet.schema.PrimitiveType;
 
 import java.io.Serializable;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE_ADDITIONAL_INFO;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE_ORDINAL;
@@ -241,7 +241,7 @@ public class ValueMetadata implements Serializable {
     if (fieldSchema == null) {
       throw new IllegalArgumentException("Field schema cannot be null");
     }
-    Schema valueSchema = resolveNullableSchema(fieldSchema);
+    Schema valueSchema = getNonNullTypeFromUnion(fieldSchema);
     ValueType valueType = ValueType.fromSchema(valueSchema);
     if (valueType == ValueType.V1) {
       throw new IllegalArgumentException("Unsupported logical type for: " + valueSchema.getLogicalType());
