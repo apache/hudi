@@ -28,7 +28,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.junit.jupiter.api.Assertions.assertEquals
 
-class TestInsertTable3 extends HoodieSparkSqlTestBase{
+class TestInsertTable3 extends HoodieSparkSqlTestBase {
   test("Test Insert Into With Catalog Identifier") {
     Seq("hudi", "parquet").foreach { format =>
       withTempDir { tmp =>
@@ -71,47 +71,47 @@ class TestInsertTable3 extends HoodieSparkSqlTestBase{
   }
 
   test("Test enable hoodie.merge.allow.duplicate.on.inserts when write") {
-    spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
-    spark.sql("set hoodie.datasource.write.operation = insert")
-    Seq("mor", "cow").foreach { tableType =>
-      withTempDir { tmp =>
-        val tableName = generateTableName
-        spark.sql(
-          s"""
-             | create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long,
-             |  dt string
-             | ) using hudi
-             | partitioned by (dt)
-             | location '${tmp.getCanonicalPath}/$tableName'
-             | tblproperties (
-             |  primaryKey = 'id',
-             |  preCombineField = 'ts',
-             |  type = '$tableType'
-             | )
+    withSQLConf("hoodie.datasource.write.operation" -> "insert") {
+      Seq("mor", "cow").foreach { tableType =>
+        withTempDir { tmp =>
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               | create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long,
+               |  dt string
+               | ) using hudi
+               | partitioned by (dt)
+               | location '${tmp.getCanonicalPath}/$tableName'
+               | tblproperties (
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts',
+               |  type = '$tableType'
+               | )
         """.stripMargin)
-        spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (1, 'a1', 10, 1000)")
-        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-          Seq(1, "a1", 10, 1000, "2021-12-25")
-        )
-        spark.sql("set hoodie.merge.allow.duplicate.on.inserts = false")
-        spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (1, 'a2', 20, 1001)")
-        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-          Seq(1, "a2", 20, 1001, "2021-12-25")
-        )
-        spark.sql("set hoodie.merge.allow.duplicate.on.inserts = true")
-        spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (1, 'a3', 30, 1002)")
-        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-          Seq(1, "a2", 20, 1001, "2021-12-25"),
-          Seq(1, "a3", 30, 1002, "2021-12-25")
-        )
+          spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (1, 'a1', 10, 1000)")
+          checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+            Seq(1, "a1", 10, 1000, "2021-12-25")
+          )
+          withSQLConf("hoodie.merge.allow.duplicate.on.inserts" -> "false") {
+            spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (1, 'a2', 20, 1001)")
+            checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+              Seq(1, "a2", 20, 1001, "2021-12-25")
+            )
+          }
+          withSQLConf("hoodie.merge.allow.duplicate.on.inserts" -> "true") {
+            spark.sql(s"insert into $tableName partition(dt='2021-12-25') values (1, 'a3', 30, 1002)")
+            checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+              Seq(1, "a2", 20, 1001, "2021-12-25"),
+              Seq(1, "a3", 30, 1002, "2021-12-25")
+            )
+          }
+        }
       }
     }
-    spark.sql("set hoodie.merge.allow.duplicate.on.inserts = false")
-    spark.sql("set hoodie.datasource.write.operation = upsert")
   }
 
   test("Test INSERT INTO preserves duplicates by default") {
@@ -252,18 +252,19 @@ class TestInsertTable3 extends HoodieSparkSqlTestBase{
           Seq(3, "a3", 30.0, 3000, "2021-01-07")
         )
 
-        spark.sql("set hoodie.merge.allow.duplicate.on.inserts = false")
-        spark.sql(
-          s"""
-             | insert into $tableName values
-             | (1, 'a1,1', 10, 1000, "2021-01-05")
+        withSQLConf("hoodie.merge.allow.duplicate.on.inserts" -> "false") {
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1, 'a1,1', 10, 1000, "2021-01-05")
               """.stripMargin)
 
-        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-          Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
-          Seq(2, "a2", 20.0, 2000, "2021-01-06"),
-          Seq(3, "a3", 30.0, 3000, "2021-01-07")
-        )
+          checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+            Seq(1, "a1,1", 10.0, 1000, "2021-01-05"),
+            Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+            Seq(3, "a3", 30.0, 3000, "2021-01-07")
+          )
+        }
       }
     }
   }
@@ -516,17 +517,12 @@ class TestInsertTable3 extends HoodieSparkSqlTestBase{
    * hoodie.bulkinsert.user.defined.partitioner.sort.columns doesn't start with the partition columns
    *
    * NOTE: Additionally, this test serves as a smoke test making sure that all of the bulk-insert
-   *       modes work
+   * modes work
    */
   test(s"Test Bulk Insert with all sort-modes") {
     withTempDir { basePath =>
       BulkInsertSortMode.values().foreach { sortMode =>
         val tableName = generateTableName
-        // Remove these with [HUDI-5419]
-        spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
-        spark.sessionState.conf.unsetConf("hoodie.datasource.write.insert.drop.duplicates")
-        spark.sessionState.conf.unsetConf("hoodie.merge.allow.duplicate.on.inserts")
-        spark.sessionState.conf.unsetConf("hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled")
         // Default parallelism is 200 which means in global sort, each record will end up in a different spark partition so
         // 9 files would be created. Setting parallelism to 3 so that each spark partition will contain a hudi partition.
         val parallelism = if (sortMode.name.equals(BulkInsertSortMode.GLOBAL_SORT.name())) {
@@ -553,24 +549,24 @@ class TestInsertTable3 extends HoodieSparkSqlTestBase{
              | location '${basePath.getCanonicalPath}/$tableName'
                 """.stripMargin)
 
-        spark.sql("set hoodie.sql.bulk.insert.enable = true")
-        spark.sql("set hoodie.sql.insert.mode = non-strict")
+        withSQLConf("hoodie.sql.bulk.insert.enable" -> "true",
+          "hoodie.sql.insert.mode" -> "non-strict") {
+          spark.sql(
+            s"""insert into $tableName  values
+               |(5, 'a', 35, '2021-05-21'),
+               |(1, 'a', 31, '2021-01-21'),
+               |(3, 'a', 33, '2021-03-21'),
+               |(4, 'b', 16, '2021-05-21'),
+               |(2, 'b', 18, '2021-01-21'),
+               |(6, 'b', 17, '2021-03-21'),
+               |(8, 'a', 21, '2021-05-21'),
+               |(9, 'a', 22, '2021-01-21'),
+               |(7, 'a', 23, '2021-03-21')
+               |""".stripMargin)
 
-        spark.sql(
-          s"""insert into $tableName  values
-             |(5, 'a', 35, '2021-05-21'),
-             |(1, 'a', 31, '2021-01-21'),
-             |(3, 'a', 33, '2021-03-21'),
-             |(4, 'b', 16, '2021-05-21'),
-             |(2, 'b', 18, '2021-01-21'),
-             |(6, 'b', 17, '2021-03-21'),
-             |(8, 'a', 21, '2021-05-21'),
-             |(9, 'a', 22, '2021-01-21'),
-             |(7, 'a', 23, '2021-03-21')
-             |""".stripMargin)
-
-        // TODO re-enable
-        //assertResult(3)(spark.sql(s"select distinct _hoodie_file_name from $tableName").count())
+          // TODO re-enable
+          //assertResult(3)(spark.sql(s"select distinct _hoodie_file_name from $tableName").count())
+        }
       }
     }
   }
@@ -755,7 +751,7 @@ class TestInsertTable3 extends HoodieSparkSqlTestBase{
       )
       val df = spark.read.format("hudi").load(tmp.getCanonicalPath)
       assertEquals(3, df.select(HoodieRecord.RECORD_KEY_METADATA_FIELD).count())
-      assertResult(WriteOperationType.BULK_INSERT) {
+      assertResult(WriteOperationType.INSERT) {
         getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}").getOperationType
       }
     }

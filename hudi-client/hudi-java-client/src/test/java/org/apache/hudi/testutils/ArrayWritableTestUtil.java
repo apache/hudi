@@ -23,6 +23,7 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.hadoop.hive.serde2.io.DateWritable;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
+import org.apache.hadoop.hive.serde2.io.TimestampWritable;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.io.BytesWritable;
@@ -268,7 +269,11 @@ public class ArrayWritableTestUtil {
         break;
 
       case LONG:
-        assertInstanceOf(LongWritable.class, writable);
+        if (schema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
+          assertInstanceOf(TimestampWritable.class, writable);
+        } else  {
+          assertInstanceOf(LongWritable.class, writable);
+        }
         break;
 
       case FLOAT:

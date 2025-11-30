@@ -33,6 +33,9 @@ import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
+
+import org.apache.parquet.avro.AvroSchemaConverter
+import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
@@ -42,6 +45,8 @@ import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{LongType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+
+import scala.collection.JavaConverters._
 
 /**
  * Implementation of [[HoodieReaderContext]] to read [[InternalRow]]s with
@@ -70,7 +75,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
   override def getFileRecordIterator(filePath: StoragePath,
                                      start: Long,
                                      length: Long,
-                                     dataSchema: Schema,
+                                     dataSchema: Schema, // dataSchema refers to table schema in most cases(non log file reads).
                                      requiredSchema: Schema,
                                      storage: HoodieStorage): ClosableIterator[InternalRow] = {
     val hasRowIndexField = AvroSchemaUtils.containsFieldInSchema(requiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME)
@@ -78,19 +83,28 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       assert(getRecordContext.supportsParquetRowIndex())
     }
     val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
+    val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
     if (FSUtils.isLogFile(filePath)) {
-      // TODO: introduce pk filter in log file reader
+      // NOTE: now only primary key based filtering is supported for log files
       new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
-        .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(structType).asInstanceOf[ClosableIterator[InternalRow]]
+        .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(requiredSchema, readFilters.asJava).asInstanceOf[ClosableIterator[InternalRow]]
     } else {
       // partition value is empty because the spark parquet reader will append the partition columns to
       // each row if they are given. That is the only usage of the partition values in the reader.
       val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
-      val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
+
+      // Convert Avro dataSchema to Parquet MessageType for timestamp precision conversion
+      val tableSchemaOpt = if (dataSchema != null) {
+        val hadoopConf = storage.getConf.unwrapAs(classOf[Configuration])
+        val parquetSchema = getAvroSchemaConverter(hadoopConf).convert(dataSchema)
+        org.apache.hudi.common.util.Option.of(parquetSchema)
+      } else {
+        org.apache.hudi.common.util.Option.empty[org.apache.parquet.schema.MessageType]()
+      }
       new CloseableInternalRowIterator(baseFileReader.read(fileInfo,
         readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
-        readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
+        readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]], tableSchemaOpt))
     }
   }
 

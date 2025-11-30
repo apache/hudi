@@ -113,7 +113,7 @@ import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.sanitizeName;
 import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
@@ -923,7 +923,7 @@ public class TestHoodieAvroUtils {
   @Test
   void testConvertBytesToFixed() {
     Random rand = new Random();
-    //size calculated using AvroInternalSchemaConverter.computeMinBytesForPrecision
+    //size calculated using InternalSchemaConverter.computeMinBytesForPrecision
     testConverBytesToFixedHelper(rand.nextDouble(), 13, 7, 6);
     testConverBytesToFixedHelper(rand.nextDouble(), 4, 2, 2);
     testConverBytesToFixedHelper(rand.nextDouble(), 32, 12, 14);
@@ -1076,7 +1076,7 @@ public class TestHoodieAvroUtils {
   public void testGetSchemaForFieldNested(String colName, Schema.Type schemaType) {
     Pair<String, Schema.Field> actualColNameAndSchemaFile = HoodieAvroUtils.getSchemaForField(SCHEMA_WITH_NESTED_FIELD_LARGE, colName);
     assertEquals(colName, actualColNameAndSchemaFile.getKey());
-    assertEquals(schemaType, resolveNullableSchema(actualColNameAndSchemaFile.getValue().schema()).getType());
+    assertEquals(schemaType, getNonNullTypeFromUnion(actualColNameAndSchemaFile.getValue().schema()).getType());
   }
 
   public static Stream<Arguments> getExpectedSchemaForFields() {
@@ -1315,7 +1315,7 @@ public class TestHoodieAvroUtils {
       // Handle Union type.
       Schema actualSchema = schema;
       try {
-        actualSchema = resolveNullableSchema(schema);
+        actualSchema = getNonNullTypeFromUnion(schema);
       } catch (Exception e) {
         // If we can't resolve the schema, just use the original
         // Op.

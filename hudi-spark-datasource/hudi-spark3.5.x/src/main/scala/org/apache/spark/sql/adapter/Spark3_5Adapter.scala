@@ -18,9 +18,11 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.hudi.Spark35HoodieFileScanRDD
+import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
+import org.apache.parquet.schema.MessageType
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
@@ -35,7 +37,7 @@ import org.apache.spark.sql.catalyst.util.{METADATA_COL_ATTR_KEY, RebaseDateTime
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.orc.Spark35OrcReader
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark35LegacyHoodieParquetFileFormat, Spark35ParquetReader}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, ParquetFilters, Spark35LegacyHoodieParquetFileFormat, Spark35ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
@@ -185,5 +187,17 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
 
   override def getRebaseSpec(policy: String): RebaseDateTime.RebaseSpec = {
     RebaseDateTime.RebaseSpec(LegacyBehaviorPolicy.withName(policy))
+  }
+
+  override def createParquetFilters(schema: MessageType, storageConf: StorageConfiguration[_], sqlConf: SQLConf): ParquetFilters = {
+    new ParquetFilters(
+      schema,
+      storageConf.getBoolean(SQLConf.PARQUET_FILTER_PUSHDOWN_DATE_ENABLED.key, sqlConf.parquetFilterPushDownDate),
+      storageConf.getBoolean(SQLConf.PARQUET_FILTER_PUSHDOWN_TIMESTAMP_ENABLED.key, sqlConf.parquetFilterPushDownTimestamp),
+      storageConf.getBoolean(SQLConf.PARQUET_FILTER_PUSHDOWN_DECIMAL_ENABLED.key, sqlConf.parquetFilterPushDownDecimal),
+      storageConf.getBoolean(SQLConf.PARQUET_FILTER_PUSHDOWN_STRING_PREDICATE_ENABLED.key, sqlConf.parquetFilterPushDownStringPredicate),
+      storageConf.getInt(SQLConf.PARQUET_FILTER_PUSHDOWN_INFILTERTHRESHOLD.key, sqlConf.parquetFilterPushDownInFilterThreshold),
+      storageConf.getBoolean(SQLConf.CASE_SENSITIVE.key, sqlConf.caseSensitiveAnalysis),
+      getRebaseSpec("CORRECTED"))
   }
 }

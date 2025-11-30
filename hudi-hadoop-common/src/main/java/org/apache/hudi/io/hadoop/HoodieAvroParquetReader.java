@@ -24,6 +24,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
@@ -46,6 +47,7 @@ import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.avro.HoodieAvroParquetReaderBuilder;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.parquet.hadoop.ParquetReader;
+import org.apache.parquet.schema.AvroSchemaRepair;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -55,6 +57,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 /**
  * {@link HoodieFileReader} implementation for parquet format.
@@ -77,7 +80,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
   }
 
   @Override
-  public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordIterator(Schema readerSchema) throws IOException {
+  public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordIterator(HoodieSchema readerSchema) throws IOException {
     // TODO(HUDI-4588) remove after HUDI-4588 is resolved
     // NOTE: This is a workaround to avoid leveraging projection w/in [[AvroParquetReader]],
     //       until schema handling issues (nullability canonicalization, etc) are resolved
@@ -101,26 +104,29 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
   }
 
   @Override
-  protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema schema) throws IOException {
-    return getIndexedRecordIteratorInternal(schema, Collections.emptyMap());
+  protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema schema) throws IOException {
+    //TODO boundary for now to revisit in later pr to use HoodieSchema
+    return getIndexedRecordIteratorInternal(schema.getAvroSchema(), Collections.emptyMap());
   }
 
   @Override
-  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
-    return getIndexedRecordIteratorInternal(requestedSchema, Collections.emptyMap());
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema) throws IOException {
+    //TODO boundary for now to revisit in later pr to use HoodieSchema
+    return getIndexedRecordIteratorInternal(requestedSchema.getAvroSchema(), Collections.emptyMap());
   }
 
   @Override
-  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema, Map<String, String> renamedColumns) throws IOException {
-    return getIndexedRecordIteratorInternal(requestedSchema, renamedColumns);
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema, Map<String, String> renamedColumns) throws IOException {
+    //TODO boundary for now to revisit in later pr to use HoodieSchema
+    return getIndexedRecordIteratorInternal(requestedSchema.getAvroSchema(), renamedColumns);
   }
 
   @Override
-  public Schema getSchema() {
+  public HoodieSchema getSchema() {
     if (fileSchema.isEmpty()) {
       fileSchema = Option.ofNullable(parquetUtils.readAvroSchema(storage, path));
     }
-    return fileSchema.get();
+    return HoodieSchema.fromAvroSchema(fileSchema.get());
   }
 
   @Override
@@ -178,17 +184,21 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     //       sure that in case the file-schema is not equal to read-schema we'd still
     //       be able to read that file (in case projection is a proper one)
     Configuration hadoopConf = storage.getConf().unwrapCopyAs(Configuration.class);
+    //TODO boundary for now to revisit in later pr to use HoodieSchema
+    Schema repairedFileSchema = AvroSchemaRepair.repairLogicalTypes(getSchema().getAvroSchema(), schema);
     Option<Schema> promotedSchema = Option.empty();
-    if (!renamedColumns.isEmpty() || HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(getSchema(), schema)) {
-      AvroReadSupport.setAvroReadSchema(hadoopConf, getSchema());
-      AvroReadSupport.setRequestedProjection(hadoopConf, getSchema());
+    if (!renamedColumns.isEmpty() || HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(repairedFileSchema, schema)) {
+      AvroReadSupport.setAvroReadSchema(hadoopConf, repairedFileSchema);
+      AvroReadSupport.setRequestedProjection(hadoopConf, repairedFileSchema);
       promotedSchema = Option.of(schema);
     } else {
       AvroReadSupport.setAvroReadSchema(hadoopConf, schema);
       AvroReadSupport.setRequestedProjection(hadoopConf, schema);
     }
     ParquetReader<IndexedRecord> reader =
-        new HoodieAvroParquetReaderBuilder<IndexedRecord>(path).withConf(hadoopConf)
+        new HoodieAvroParquetReaderBuilder<IndexedRecord>(path)
+            .withTableSchema(getAvroSchemaConverter(hadoopConf).convert(schema))
+            .withConf(hadoopConf)
             .set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, hadoopConf.get(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS))
             .set(ParquetInputFormat.STRICT_TYPE_CHECKING, hadoopConf.get(ParquetInputFormat.STRICT_TYPE_CHECKING))
             .build();
@@ -201,7 +211,8 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
 
   @Override
   public ClosableIterator<String> getRecordKeyIterator() throws IOException {
-    ClosableIterator<IndexedRecord> recordKeyIterator = getIndexedRecordIterator(HoodieAvroUtils.getRecordKeySchema());
+    //TODO boundary for now to revisit in later pr to use HoodieSchema
+    ClosableIterator<IndexedRecord> recordKeyIterator = getIndexedRecordIterator(HoodieSchema.fromAvroSchema(HoodieAvroUtils.getRecordKeySchema()));
     return new ClosableIterator<String>() {
       @Override
       public boolean hasNext() {
@@ -223,13 +234,13 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
 
   @Override
   public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> sortedKeys,
-                                                                         Schema readerSchema) {
+                                                                         HoodieSchema readerSchema) {
     throw new UnsupportedOperationException("Not supported operation: getIndexedRecordsByKeysIterator");
   }
 
   @Override
   public ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes,
-                                                                              Schema readerSchema) {
+                                                                              HoodieSchema readerSchema) {
     throw new UnsupportedOperationException("Not supported operation: getIndexedRecordsByKeyPrefixIterator");
   }
 }

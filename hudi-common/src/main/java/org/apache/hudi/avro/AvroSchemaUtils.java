@@ -18,6 +18,7 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
@@ -48,7 +49,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.util.CollectionUtils.reduce;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
-import static org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter.convert;
+import static org.apache.hudi.internal.schema.convert.InternalSchemaConverter.convert;
 
 /**
  * Utils for Avro Schema.
@@ -180,8 +181,8 @@ public class AvroSchemaUtils {
 
   private static boolean isAtomicTypeProjectable(Schema source, Schema target) {
     // ignore nullability for projectable checking
-    source = resolveNullableSchema(source);
-    target = resolveNullableSchema(target);
+    source = getNonNullTypeFromUnion(source);
+    target = getNonNullTypeFromUnion(target);
     if (source.getType() == Schema.Type.ENUM && target.getType() == Schema.Type.STRING
         || source.getType() == Schema.Type.STRING && target.getType() == Schema.Type.ENUM) {
       return true;
@@ -238,7 +239,7 @@ public class AvroSchemaUtils {
     String[] parts = fieldName.split("\\.");
 
     for (String part : parts) {
-      Schema.Field foundField = resolveNullableSchema(schema).getField(part);
+      Schema.Field foundField = getNonNullTypeFromUnion(schema).getField(part);
       if (foundField == null) {
         if (allowsMissingField) {
           return Option.empty();
@@ -247,7 +248,7 @@ public class AvroSchemaUtils {
       }
       schema = foundField.schema();
     }
-    return Option.of(resolveNullableSchema(schema));
+    return Option.of(getNonNullTypeFromUnion(schema));
   }
 
   public static Option<Schema.Type> findNestedFieldType(Schema schema, String fieldName) {
@@ -274,7 +275,7 @@ public class AvroSchemaUtils {
 
   private static Option<Schema.Field> findNestedField(Schema schema, String[] fieldParts, int index) {
     if (schema.getType().equals(Schema.Type.UNION)) {
-      Option<Schema.Field> notUnion = findNestedField(resolveNullableSchema(schema), fieldParts, index);
+      Option<Schema.Field> notUnion = findNestedField(getNonNullTypeFromUnion(schema), fieldParts, index);
       if (!notUnion.isPresent()) {
         return Option.empty();
       }
@@ -302,7 +303,7 @@ public class AvroSchemaUtils {
     boolean isUnion = false;
     if (foundSchema.getType().equals(Schema.Type.UNION)) {
       isUnion = true;
-      foundSchema = resolveNullableSchema(foundSchema);
+      foundSchema = getNonNullTypeFromUnion(foundSchema);
     }
     Schema newSchema = createNewSchemaFromFieldsWithReference(foundSchema, Collections.singletonList(nestedPart.get()));
     return Option.of(createNewSchemaField(foundField.name(), isUnion ? createNullableSchema(newSchema) : newSchema, foundField.doc(), foundField.defaultVal()));
@@ -424,7 +425,7 @@ public class AvroSchemaUtils {
    *         data schema metadata where possible
    */
   public static Schema pruneDataSchema(Schema dataSchema, Schema requiredSchema, Set<String> mandatoryFields) {
-    Schema prunedDataSchema = pruneDataSchemaInternal(resolveNullableSchema(dataSchema), resolveNullableSchema(requiredSchema), mandatoryFields);
+    Schema prunedDataSchema = pruneDataSchemaInternal(getNonNullTypeFromUnion(dataSchema), getNonNullTypeFromUnion(requiredSchema), mandatoryFields);
     if (dataSchema.isNullable() && !prunedDataSchema.isNullable()) {
       return createNullableSchema(prunedDataSchema);
     }
@@ -494,7 +495,7 @@ public class AvroSchemaUtils {
     List<Schema> innerTypes = schema.getTypes();
     if (innerTypes.size() == 2 && isNullable(schema)) {
       // this is a basic nullable field so handle it more efficiently
-      return resolveNullableSchema(schema);
+      return getNonNullTypeFromUnion(schema);
     }
 
     Schema nonNullType =
@@ -528,7 +529,7 @@ public class AvroSchemaUtils {
    * Resolves typical Avro's nullable schema definition: {@code Union(Schema.Type.NULL, <NonNullType>)},
    * decomposing union and returning the target non-null type
    */
-  public static Schema resolveNullableSchema(Schema schema) {
+  public static Schema getNonNullTypeFromUnion(Schema schema) {
     if (schema.getType() != Schema.Type.UNION) {
       return schema;
     }
@@ -722,10 +723,10 @@ public class AvroSchemaUtils {
     if (filterCols.isEmpty()) {
       return schema;
     }
-    InternalSchema internalSchema = convert(schema);
+    InternalSchema internalSchema = convert(HoodieSchema.fromAvroSchema(schema));
     TableChanges.ColumnUpdateChange schemaChange = TableChanges.ColumnUpdateChange.get(internalSchema);
     schemaChange = reduce(filterCols, schemaChange,
             (change, field) -> change.updateColumnNullability(field, true));
-    return convert(SchemaChangeUtils.applyTableChanges2Schema(internalSchema, schemaChange), schema.getFullName());
+    return convert(SchemaChangeUtils.applyTableChanges2Schema(internalSchema, schemaChange), schema.getFullName()).toAvroSchema();
   }
 }

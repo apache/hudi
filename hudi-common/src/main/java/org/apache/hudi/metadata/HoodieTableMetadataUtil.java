@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.ConvertingGenericData;
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
@@ -158,7 +159,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.toList;
-import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.projectSchema;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
@@ -285,7 +286,7 @@ public class HoodieTableMetadataUtil {
       // with the values from this record
       targetFields.forEach(fieldNameFieldPair -> {
         String fieldName = fieldNameFieldPair.getKey();
-        Schema fieldSchema = resolveNullableSchema(fieldNameFieldPair.getValue().schema());
+        Schema fieldSchema = getNonNullTypeFromUnion(fieldNameFieldPair.getValue().schema());
         ColumnStats colStats = allColumnStats.computeIfAbsent(fieldName, ignored -> new ColumnStats(getValueMetadata(fieldSchema, indexVersion)));
         Object fieldValue = collectColumnRangeFieldValue(record, colStats.valueMetadata, fieldName, fieldSchema, recordSchema, properties);
 
@@ -680,6 +681,45 @@ public class HoodieTableMetadataUtil {
     } else {
       throw new HoodieMetadataException("Expression index metadata not found");
     }
+  }
+
+  /**
+   * Fetch list of columns that can be considered for col stats pruning. The impl accounts for timestamp logical type fixes for V1 index definition.
+   * @param indexDefinition instance of {@link HoodieIndexDefinition}.
+   * @param tableSchema latest table schema of interest.
+   * @return list of valid indexed columns that can be considered for pruning.
+   */
+  public static List<String> getValidIndexedColumns(HoodieIndexDefinition indexDefinition,
+                                                    Schema tableSchema,
+                                                    HoodieTableConfig tableConfig) {
+    if (indexDefinition.getVersion() != HoodieIndexVersion.V1
+        && tableConfig.getTableInitialVersion().greaterThanOrEquals(HoodieTableVersion.NINE)) {
+      return indexDefinition.getSourceFields();
+    }
+
+    return indexDefinition.getSourceFields().stream()
+        .filter(indexCol -> {
+          Pair<String, Schema.Field> fieldSchemaPair = HoodieAvroUtils.getSchemaForField(tableSchema, indexCol);
+          Schema.Field fieldSchema = fieldSchemaPair.getRight();
+          return fieldSchema != null && !isTimestampMillisField(fieldSchema.schema());
+        })
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * Checks if a schema field is of type timestamp_millis (timestamp-millis or local-timestamp-millis).
+   *
+   * @param fieldSchema The schema of the field to check
+   * @return true if the field is of type timestamp_millis, false otherwise
+   */
+  static boolean isTimestampMillisField(Schema fieldSchema) {
+    Schema nonNullableSchema = AvroSchemaUtils.getNonNullTypeFromUnion(fieldSchema);
+    if (nonNullableSchema.getType() == Schema.Type.LONG) {
+      LogicalType logicalType = nonNullableSchema.getLogicalType();
+      return logicalType instanceof LogicalTypes.TimestampMillis
+          || logicalType instanceof LogicalTypes.LocalTimestampMillis;
+    }
+    return false;
   }
 
   /**
@@ -1856,7 +1896,7 @@ public class HoodieTableMetadataUtil {
     switch (schema.getType()) {
       case UNION:
         // TODO we need to handle unions in general case as well
-        return coerceToComparable(resolveNullableSchema(schema), val);
+        return coerceToComparable(getNonNullTypeFromUnion(schema), val);
 
       case FIXED:
       case BYTES:
@@ -1989,7 +2029,7 @@ public class HoodieTableMetadataUtil {
   }
 
   public static boolean isColumnTypeSupported(Schema schema, Option<HoodieRecordType> recordType, HoodieIndexVersion indexVersion) {
-    Schema schemaToCheck = resolveNullableSchema(schema);
+    Schema schemaToCheck = getNonNullTypeFromUnion(schema);
     if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
       return isColumnTypeSupportedV1(schemaToCheck, recordType);
     }
@@ -2325,7 +2365,7 @@ public class HoodieTableMetadataUtil {
    * Estimates the file group count to use for a MDT partition.
    *
    * @param partitionType         Type of the partition for which the file group count is to be estimated.
-   * @param recordCount           The number of records expected to be written.
+   * @param recordCountSupplier   Supplies the number of records expected to be written.
    * @param averageRecordSize     Average size of each record to be written.
    * @param minFileGroupCount     Minimum number of file groups to use.
    * @param maxFileGroupCount     Maximum number of file groups to use.
@@ -2333,14 +2373,16 @@ public class HoodieTableMetadataUtil {
    * @param maxFileGroupSizeBytes Maximum size of the file group.
    * @return The estimated number of file groups.
    */
-  public static int estimateFileGroupCount(MetadataPartitionType partitionType, long recordCount, int averageRecordSize, int minFileGroupCount,
+  public static int estimateFileGroupCount(MetadataPartitionType partitionType, Supplier<Long> recordCountSupplier, int averageRecordSize, int minFileGroupCount,
                                            int maxFileGroupCount, float growthFactor, int maxFileGroupSizeBytes) {
     int fileGroupCount;
 
+    long recordCount = -1;
     // If a fixed number of file groups are desired
     if ((minFileGroupCount == maxFileGroupCount) && (minFileGroupCount != 0)) {
       fileGroupCount = minFileGroupCount;
     } else {
+      recordCount = recordCountSupplier.get();
       // Number of records to estimate for
       final long expectedNumRecords = (long) Math.ceil((float) recordCount * growthFactor);
       // Maximum records that should be written to each file group so that it does not go over the size limit required

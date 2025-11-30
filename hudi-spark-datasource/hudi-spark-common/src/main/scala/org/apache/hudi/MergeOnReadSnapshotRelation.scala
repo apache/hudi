@@ -42,10 +42,9 @@ case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
 case class MergeOnReadSnapshotRelation(override val sqlContext: SQLContext,
                                        override val optParams: Map[String, String],
                                        override val metaClient: HoodieTableMetaClient,
-                                       private val globPaths: Seq[StoragePath],
                                        private val userSchema: Option[StructType],
                                        private val prunedDataSchema: Option[StructType] = None)
-  extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, globPaths, userSchema, prunedDataSchema) {
+  extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, userSchema, prunedDataSchema) {
 
   override type Relation = MergeOnReadSnapshotRelation
 
@@ -68,7 +67,6 @@ case class MergeOnReadSnapshotRelation(override val sqlContext: SQLContext,
 abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
                                                optParams: Map[String, String],
                                                metaClient: HoodieTableMetaClient,
-                                               globPaths: Seq[StoragePath],
                                                userSchema: Option[StructType],
                                                prunedDataSchema: Option[StructType])
   extends HoodieBaseRelation(sqlContext, metaClient, optParams, userSchema, prunedDataSchema) {
@@ -133,14 +131,8 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
   protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
     val convertedPartitionFilters =
       HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters)
-
-    if (globPaths.isEmpty) {
-      val fileSlices = fileIndex.filterFileSlices(dataFilters, convertedPartitionFilters).flatMap(s => s._2)
-      buildSplits(fileSlices)
-    } else {
-      val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
-      buildSplits(fileSlices)
-    }
+    val fileSlices = fileIndex.filterFileSlices(dataFilters, convertedPartitionFilters).flatMap(s => s._2)
+    buildSplits(fileSlices)
   }
 
   protected def buildSplits(fileSlices: Seq[FileSlice]): List[HoodieMergeOnReadFileSplit] = {

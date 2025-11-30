@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil}
 import org.apache.hudi.storage.StoragePath
 
+import org.apache.avro.Schema
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.command.procedures.ShowColumnStatsOverlapProcedure.{MAX_VALUE_TYPE, MIN_VALUE_TYPE}
@@ -109,8 +110,9 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     val basePath = getBasePath(tableName, tablePath)
     val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build
     val metaClient = createMetaClient(jsc, basePath)
-    val schema = getSchema(metaClient)
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
+    val avroSchema = getAvroSchema(metaClient)
+    val structSchema = getStructSchema(avroSchema)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, structSchema, avroSchema, metadataConfig, metaClient)
     val fsView = buildFileSystemView(basePath)
     val engineCtx = new HoodieSparkEngineContext(jsc)
     val metaTable = metaClient.getTableFormat.getMetadataFactory.create(engineCtx, metaClient.getStorage, metadataConfig, basePath)
@@ -118,9 +120,9 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     val fileSlicesSizeByPartition = allFileSlices.groupBy(_.getPartitionPath).mapValues(_.size)
 
     val allFileNamesMap = getAllFileNamesMap(allFileSlices)
-    val colStatsRecords = getColStatsRecords(targetColumnsSeq, columnStatsIndex, schema)
+    val colStatsRecords = getColStatsRecords(targetColumnsSeq, columnStatsIndex, structSchema)
 
-    val pointList = getPointList(colStatsRecords, allFileNamesMap, schema)
+    val pointList = getPointList(colStatsRecords, allFileNamesMap, structSchema)
 
     // Group points by column name
     val groupedPoints = pointList.groupBy(p => (p.partitionPath, p.columnName))
@@ -142,9 +144,12 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     }
   }
 
-  def getSchema(metaClient: HoodieTableMetaClient): StructType = {
-    val schemaUtil = new TableSchemaResolver(metaClient)
-    AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
+  def getAvroSchema(metaClient: HoodieTableMetaClient): Schema = {
+    new TableSchemaResolver(metaClient).getTableAvroSchema
+  }
+
+  def getStructSchema(avroSchema: Schema): StructType = {
+    AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
   }
 
 
