@@ -107,7 +107,7 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
     List<String> paths = Arrays.asList(fs.globStatus(new Path(basePath + "/*/*.avro")))
         .stream().map(f -> f.getPath().toString()).collect(Collectors.toList());
     JavaRDD<GenericRecord> writtenRecords =
-        SparkBasedReader.readAvro(sparkSession, schemaProvider.getSourceSchema().toString(), paths, Option.empty(),
+        SparkBasedReader.readAvro(sparkSession, schemaProvider.getSourceHoodieSchema().toString(), paths, Option.empty(),
             Option.empty());
     // Number of records written should be 100
     assertEquals(writtenRecords.count(), 100);

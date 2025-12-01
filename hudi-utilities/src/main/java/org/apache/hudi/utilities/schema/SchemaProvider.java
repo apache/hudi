@@ -49,6 +49,10 @@ public abstract class SchemaProvider implements Serializable {
     this.jssc = jssc;
   }
 
+  /**
+   * Fetches the source schema from the provider.
+   * @return Source schema as a HoodieSchema object.
+   */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public HoodieSchema getSourceHoodieSchema() {
     Schema schema = getSourceSchema();
@@ -66,10 +70,21 @@ public abstract class SchemaProvider implements Serializable {
     throw new UnsupportedOperationException("getSourceSchema() is deprecated and is not implemented for this SchemaProvider. Use getSourceHoodieSchema() instead.");
   }
 
+  /**
+   * Fetches the target schema from the provider, defaults to the source schema.
+   * @return Target schema as a HoodieSchema object.
+   */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public HoodieSchema getTargetHoodieSchema() {
-    Schema schema = getTargetSchema();
-    return schema == null ? getSourceHoodieSchema() : HoodieSchema.fromAvroSchema(schema);
+    try {
+      // By default, delegate to legacy getTargetSchema() method
+      Schema schema = getTargetSchema();
+      return schema == null ? null : HoodieSchema.fromAvroSchema(schema);
+    } catch (UnsupportedOperationException e) {
+      // If the legacy getTargetSchema() calls getSourceSchema() which is not implemented,
+      // fall back to using getSourceHoodieSchema as target schema
+      return getSourceHoodieSchema();
+    }
   }
 
   /**
