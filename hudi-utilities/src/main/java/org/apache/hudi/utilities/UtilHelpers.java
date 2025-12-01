@@ -225,8 +225,8 @@ public class UtilHelpers {
   }
 
   public static StructType getSourceSchema(SchemaProvider schemaProvider) {
-    if (schemaProvider != null && schemaProvider.getSourceSchema() != null && schemaProvider.getSourceSchema() != InputBatch.NULL_SCHEMA) {
-      return AvroConversionUtils.convertAvroSchemaToStructType(schemaProvider.getSourceSchema().toAvroSchema());
+    if (schemaProvider != null && schemaProvider.getSourceHoodieSchema() != null && schemaProvider.getSourceHoodieSchema() != InputBatch.NULL_SCHEMA) {
+      return AvroConversionUtils.convertAvroSchemaToStructType(schemaProvider.getSourceHoodieSchema().toAvroSchema());
     }
     return null;
   }

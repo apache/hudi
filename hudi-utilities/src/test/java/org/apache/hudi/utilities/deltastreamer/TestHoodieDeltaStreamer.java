@@ -4226,7 +4226,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
 
     @Override
-    public HoodieSchema getTargetSchema() {
+    public HoodieSchema getTargetHoodieSchema() {
       return null;
     }
   }
@@ -4250,7 +4250,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
 
     @Override
-    public HoodieSchema getSourceSchema() {
+    public HoodieSchema getSourceHoodieSchema() {
       return null;
     }
   }

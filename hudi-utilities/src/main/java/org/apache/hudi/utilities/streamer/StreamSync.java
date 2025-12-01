@@ -338,7 +338,7 @@ public class StreamSync implements Serializable, Closeable {
     Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, metrics, streamContext);
     this.formatAdapter = new SourceFormatAdapter(source, this.errorTableWriter, Option.of(props));
 
-    Supplier<Option<Schema>> schemaSupplier = schemaProvider == null ? Option::empty : () -> Option.ofNullable(schemaProvider.getSourceSchema().toAvroSchema());
+    Supplier<Option<Schema>> schemaSupplier = schemaProvider == null ? Option::empty : () -> Option.ofNullable(schemaProvider.getSourceHoodieSchema().toAvroSchema());
     this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames), schemaSupplier, this.errorTableWriter.isPresent());
   }
 
@@ -538,8 +538,8 @@ public class StreamSync implements Serializable, Closeable {
       // Setup HoodieWriteClient and compaction now that we decided on schema
       setupWriteClient(inputBatch.getBatch(), metaClient);
     } else {
-      HoodieSchema newSourceSchema = inputBatch.getSchemaProvider().getSourceSchema();
-      HoodieSchema newTargetSchema = inputBatch.getSchemaProvider().getTargetSchema();
+      HoodieSchema newSourceSchema = inputBatch.getSchemaProvider().getSourceHoodieSchema();
+      HoodieSchema newTargetSchema = inputBatch.getSchemaProvider().getTargetHoodieSchema();
       if ((newSourceSchema != null && !processedSchema.isSchemaPresent(newSourceSchema.toAvroSchema()))
           || (newTargetSchema != null && !processedSchema.isSchemaPresent(newTargetSchema.toAvroSchema()))) {
         String sourceStr = newSourceSchema == null ? NULL_PLACEHOLDER : newSourceSchema.toString(true);
@@ -563,7 +563,7 @@ public class StreamSync implements Serializable, Closeable {
         HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = writeClient.compact(pendingCompactionInstant.get());
         writeClient.commitCompaction(pendingCompactionInstant.get(), writeMetadata, Option.empty());
         initializeMetaClientAndRefreshTimeline();
-        reInitWriteClient(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema(), null, metaClient);
+        reInitWriteClient(schemaProvider.getSourceHoodieSchema(), schemaProvider.getTargetHoodieSchema(), null, metaClient);
       }
     } else if (cfg.retryLastPendingInlineClusteringJob && writeClient.getConfig().inlineClusteringEnabled()) {
       // complete the pending clustering before writing to sink
@@ -691,11 +691,11 @@ public class StreamSync implements Serializable, Closeable {
           ErrorEvent.ErrorReason.CUSTOM_TRANSFORMER_FAILURE);
 
       checkpoint = dataAndCheckpoint.getCheckpointForNextBatch();
-      if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null
-          && this.userProvidedSchemaProvider.getTargetSchema() != InputBatch.NULL_SCHEMA) {
+      if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetHoodieSchema() != null
+          && this.userProvidedSchemaProvider.getTargetHoodieSchema() != InputBatch.NULL_SCHEMA) {
         // Let's deduce the schema provider for writer side first!
-        schemaProvider = getDeducedSchemaProvider(this.userProvidedSchemaProvider.getTargetSchema(), this.userProvidedSchemaProvider, metaClient);
-        boolean useRowWriter = canUseRowWriter(schemaProvider.getTargetSchema());
+        schemaProvider = getDeducedSchemaProvider(this.userProvidedSchemaProvider.getTargetHoodieSchema(), this.userProvidedSchemaProvider, metaClient);
+        boolean useRowWriter = canUseRowWriter(schemaProvider.getTargetHoodieSchema());
         if (useRowWriter) {
           inputBatchForWriter = new InputBatch(transformed, checkpoint, schemaProvider);
         } else {
@@ -713,7 +713,7 @@ public class StreamSync implements Serializable, Closeable {
                 rowDataset -> {
                   Tuple2<RDD<GenericRecord>, RDD<String>> safeCreateRDDs = HoodieSparkUtils.safeCreateRDD(rowDataset,
                       HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
-                      Option.of(finalSchemaProvider.getTargetSchema().toAvroSchema()));
+                      Option.of(finalSchemaProvider.getTargetHoodieSchema().toAvroSchema()));
                   errorTableWriter.get().addErrorEvents(safeCreateRDDs._2().toJavaRDD()
                       .map(evStr -> new ErrorEvent<>(evStr,
                           ErrorEvent.ErrorReason.AVRO_DESERIALIZATION_FAILURE)));
@@ -721,7 +721,7 @@ public class StreamSync implements Serializable, Closeable {
                 });
           } else {
             avroRDDOptional = transformed.map(
-                rowDataset -> getTransformedRDD(rowDataset, reconcileSchema, finalSchemaProvider.getTargetSchema().toAvroSchema()));
+                rowDataset -> getTransformedRDD(rowDataset, reconcileSchema, finalSchemaProvider.getTargetHoodieSchema().toAvroSchema()));
           }
         }
       } else {
@@ -729,23 +729,23 @@ public class StreamSync implements Serializable, Closeable {
         // schema w/ the table's one
         HoodieSchema incomingSchema = transformed.map(df ->
                 HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), getAvroRecordQualifiedName(cfg.targetTableName))))
-            .orElseGet(dataAndCheckpoint.getSchemaProvider()::getTargetSchema);
+            .orElseGet(dataAndCheckpoint.getSchemaProvider()::getTargetHoodieSchema);
         schemaProvider = getDeducedSchemaProvider(incomingSchema, dataAndCheckpoint.getSchemaProvider(), metaClient);
 
-        if (canUseRowWriter(schemaProvider.getTargetSchema())) {
+        if (canUseRowWriter(schemaProvider.getTargetHoodieSchema())) {
           inputBatchForWriter = new InputBatch(transformed, checkpoint, schemaProvider);
         } else {
           // Rewrite transformed records into the expected target schema
           SchemaProvider finalSchemaProvider = schemaProvider;
-          avroRDDOptional = transformed.map(t -> getTransformedRDD(t, reconcileSchema, finalSchemaProvider.getTargetSchema().toAvroSchema()));
+          avroRDDOptional = transformed.map(t -> getTransformedRDD(t, reconcileSchema, finalSchemaProvider.getTargetHoodieSchema().toAvroSchema()));
         }
       }
     } else {
       if (isRowWriterEnabled()) {
         InputBatch inputBatchNeedsDeduceSchema = formatAdapter.fetchNewDataInRowFormat(resumeCheckpoint, cfg.sourceLimit);
-        if (canUseRowWriter(inputBatchNeedsDeduceSchema.getSchemaProvider().getTargetSchema())) {
+        if (canUseRowWriter(inputBatchNeedsDeduceSchema.getSchemaProvider().getTargetHoodieSchema())) {
           inputBatchForWriter = new InputBatch<>(inputBatchNeedsDeduceSchema.getBatch(), inputBatchNeedsDeduceSchema.getCheckpointForNextBatch(),
-              getDeducedSchemaProvider(inputBatchNeedsDeduceSchema.getSchemaProvider().getTargetSchema(), inputBatchNeedsDeduceSchema.getSchemaProvider(), metaClient));
+              getDeducedSchemaProvider(inputBatchNeedsDeduceSchema.getSchemaProvider().getTargetHoodieSchema(), inputBatchNeedsDeduceSchema.getSchemaProvider(), metaClient));
         } else {
           LOG.warn("Row-writer is enabled but cannot be used due to the target schema");
         }
@@ -756,8 +756,8 @@ public class StreamSync implements Serializable, Closeable {
         InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint = formatAdapter.fetchNewDataInAvroFormat(resumeCheckpoint, cfg.sourceLimit);
         checkpoint = dataAndCheckpoint.getCheckpointForNextBatch();
         // Rewrite transformed records into the expected target schema
-        schemaProvider = getDeducedSchemaProvider(dataAndCheckpoint.getSchemaProvider().getTargetSchema(), dataAndCheckpoint.getSchemaProvider(), metaClient);
-        String serializedTargetSchema = schemaProvider.getTargetSchema().toString();
+        schemaProvider = getDeducedSchemaProvider(dataAndCheckpoint.getSchemaProvider().getTargetHoodieSchema(), dataAndCheckpoint.getSchemaProvider(), metaClient);
+        String serializedTargetSchema = schemaProvider.getTargetHoodieSchema().toString();
         if (errorTableWriter.isPresent()
             && props.getBoolean(HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.key(),
             HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.defaultValue())) {
@@ -951,7 +951,7 @@ public class StreamSync implements Serializable, Closeable {
 
     if (useRowWriter) {
       Dataset<Row> df = (Dataset<Row>) inputBatch.getBatch().orElseGet(() -> hoodieSparkContext.getSqlContext().emptyDataFrame());
-      HoodieWriteConfig hoodieWriteConfig = prepareHoodieConfigForRowWriter(inputBatch.getSchemaProvider().getTargetSchema());
+      HoodieWriteConfig hoodieWriteConfig = prepareHoodieConfigForRowWriter(inputBatch.getSchemaProvider().getTargetHoodieSchema());
       BaseDatasetBulkInsertCommitActionExecutor executor = new HoodieStreamerDatasetBulkInsertCommitActionExecutor(hoodieWriteConfig, writeClient, instantTime);
       writeClientWriteResult = new WriteClientWriteResult(executor.execute(df, !HoodieStreamerUtils.getPartitionColumns(props).isEmpty()).getWriteStatuses());
     } else {
@@ -1076,8 +1076,8 @@ public class StreamSync implements Serializable, Closeable {
    */
   private void setupWriteClient(Option<JavaRDD<HoodieRecord>> recordsOpt, HoodieTableMetaClient metaClient) throws IOException {
     if (null != schemaProvider) {
-      HoodieSchema sourceSchema = schemaProvider.getSourceSchema();
-      HoodieSchema targetSchema = schemaProvider.getTargetSchema();
+      HoodieSchema sourceSchema = schemaProvider.getSourceHoodieSchema();
+      HoodieSchema targetSchema = schemaProvider.getTargetHoodieSchema();
       reInitWriteClient(sourceSchema, targetSchema, recordsOpt, metaClient);
     }
   }
@@ -1247,7 +1247,7 @@ public class StreamSync implements Serializable, Closeable {
    */
   private void registerAvroSchemas(SchemaProvider schemaProvider) {
     if (null != schemaProvider) {
-      registerAvroSchemas(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema());
+      registerAvroSchemas(schemaProvider.getSourceHoodieSchema(), schemaProvider.getTargetHoodieSchema());
     }
   }
 

@@ -65,7 +65,7 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarnessWith
   public void testSourceSchema() throws Exception {
     try {
       createSchemaTable(SOURCE_SCHEMA_TABLE_NAME);
-      HoodieSchema sourceSchema = UtilHelpers.createSchemaProvider(HiveSchemaProvider.class.getName(), PROPS, jsc()).getSourceSchema();
+      HoodieSchema sourceSchema = UtilHelpers.createSchemaProvider(HiveSchemaProvider.class.getName(), PROPS, jsc()).getSourceHoodieSchema();
 
       HoodieSchema originalSchema = HoodieSchema.parse(
               UtilitiesTestBase.Helpers.readFile("streamer-config/hive_schema_provider_source.avsc")
@@ -89,7 +89,7 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarnessWith
       PROPS.setProperty("hoodie.streamer.schemaprovider.target.schema.hive.table", dbAndTableName.getRight());
       createSchemaTable(SOURCE_SCHEMA_TABLE_NAME);
       createSchemaTable(TARGET_SCHEMA_TABLE_NAME);
-      HoodieSchema targetSchema = UtilHelpers.createSchemaProvider(HiveSchemaProvider.class.getName(), PROPS, jsc()).getTargetSchema();
+      HoodieSchema targetSchema = UtilHelpers.createSchemaProvider(HiveSchemaProvider.class.getName(), PROPS, jsc()).getTargetHoodieSchema();
       HoodieSchema originalSchema = HoodieSchema.parse(
           UtilitiesTestBase.Helpers.readFile("streamer-config/hive_schema_provider_target.avsc"));
       for (HoodieSchemaField field : targetSchema.getFields()) {
@@ -109,7 +109,7 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarnessWith
     PROPS.setProperty("hoodie.streamer.schemaprovider.source.schema.hive.table", wrongName);
     Assertions.assertThrows(NoSuchTableException.class, () -> {
       try {
-        UtilHelpers.createSchemaProvider(HiveSchemaProvider.class.getName(), PROPS, jsc()).getSourceSchema();
+        UtilHelpers.createSchemaProvider(HiveSchemaProvider.class.getName(), PROPS, jsc()).getSourceHoodieSchema();
       } catch (Throwable exception) {
         while (exception.getCause() != null) {
           exception = exception.getCause();

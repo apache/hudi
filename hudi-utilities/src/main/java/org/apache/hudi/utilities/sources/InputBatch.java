@@ -89,7 +89,7 @@ public class InputBatch<T> {
     }
 
     @Override
-    public HoodieSchema getSourceSchema() {
+    public HoodieSchema getSourceHoodieSchema() {
       return NULL_SCHEMA;
     }
   }

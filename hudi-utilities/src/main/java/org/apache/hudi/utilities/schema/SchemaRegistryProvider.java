@@ -308,7 +308,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
   }
 
   @Override
-  public HoodieSchema getSourceSchema() {
+  public HoodieSchema getSourceHoodieSchema() {
     String registryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL);
     try {
       return parseSchemaFromRegistry(registryUrl);
@@ -321,7 +321,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
   }
 
   @Override
-  public HoodieSchema getTargetSchema() {
+  public HoodieSchema getTargetHoodieSchema() {
     String registryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL);
     String targetRegistryUrl =
         getStringWithAltKeys(config, HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL, registryUrl);

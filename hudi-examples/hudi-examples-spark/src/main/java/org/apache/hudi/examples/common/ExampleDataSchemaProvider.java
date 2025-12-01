@@ -34,7 +34,7 @@ public class ExampleDataSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public HoodieSchema getSourceSchema() {
+  public HoodieSchema getSourceHoodieSchema() {
     return HoodieExampleDataGenerator.HOODIE_SCHEMA;
   }
 }

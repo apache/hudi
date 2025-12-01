@@ -64,7 +64,7 @@ public class TestJdbcbasedSchemaProvider extends SparkClientFunctionalTestHarnes
   public void testJdbcbasedSchemaProvider() throws Exception {
     try {
       initH2Database();
-      HoodieSchema sourceSchema = UtilHelpers.createSchemaProvider(JdbcbasedSchemaProvider.class.getName(), PROPS, jsc()).getSourceSchema();
+      HoodieSchema sourceSchema = UtilHelpers.createSchemaProvider(JdbcbasedSchemaProvider.class.getName(), PROPS, jsc()).getSourceHoodieSchema();
       assertEquals(sourceSchema.toString().toUpperCase(), HoodieSchema.parse(UtilitiesTestBase.Helpers.readFile("streamer-config/source-jdbc.avsc")).toString().toUpperCase());
     } catch (HoodieException e) {
       LOG.error("Failed to get connection through jdbc. ", e);

@@ -37,15 +37,15 @@ public class SchemaProviderWithPostProcessor extends SchemaProvider {
   }
 
   @Override
-  public HoodieSchema getSourceSchema() {
-    HoodieSchema sourceSchema = schemaProvider.getSourceSchema();
+  public HoodieSchema getSourceHoodieSchema() {
+    HoodieSchema sourceSchema = schemaProvider.getSourceHoodieSchema();
     return schemaPostProcessor.map(processor -> processor.processSchema(sourceSchema))
         .orElse(sourceSchema);
   }
 
   @Override
-  public HoodieSchema getTargetSchema() {
-    HoodieSchema targetSchema = schemaProvider.getTargetSchema();
+  public HoodieSchema getTargetHoodieSchema() {
+    HoodieSchema targetSchema = schemaProvider.getTargetHoodieSchema();
     return schemaPostProcessor.map(processor -> processor.processSchema(targetSchema))
         .orElse(targetSchema);
   }

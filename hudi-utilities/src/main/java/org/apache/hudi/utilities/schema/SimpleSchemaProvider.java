@@ -33,7 +33,7 @@ public class SimpleSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public HoodieSchema getSourceSchema() {
+  public HoodieSchema getSourceHoodieSchema() {
     return sourceSchema;
   }
 }

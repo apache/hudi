@@ -37,7 +37,7 @@ public class SchemaTestProvider extends SchemaProvider {
   }
 
   @Override
-  public HoodieSchema getSourceSchema() {
+  public HoodieSchema getSourceHoodieSchema() {
     return schemaToReturn.get();
   }
 

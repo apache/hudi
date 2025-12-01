@@ -57,7 +57,7 @@ public class JdbcbasedSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public HoodieSchema getSourceSchema() {
+  public HoodieSchema getSourceHoodieSchema() {
     if (this.sourceSchema != null) {
       return sourceSchema;
     }

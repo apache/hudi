@@ -123,7 +123,7 @@ public class TestSourceFormatAdapter {
     assertEquals(sanitizedSchema, ds.schema());
     if (inputBatch.getSchemaProvider() instanceof RowBasedSchemaProvider) {
       assertEquals(HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(sanitizedSchema,
-          "hoodie_source", "hoodie.source")), inputBatch.getSchemaProvider().getSourceSchema());
+          "hoodie_source", "hoodie.source")), inputBatch.getSchemaProvider().getSourceHoodieSchema());
     }
     assertEquals(expectedRDD.collect(), ds.toJSON().collectAsList());
   }
@@ -187,7 +187,7 @@ public class TestSourceFormatAdapter {
     }
 
     @Override
-    public HoodieSchema getSourceSchema() {
+    public HoodieSchema getSourceHoodieSchema() {
       return schema;
     }
   }

@@ -152,7 +152,7 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
     verify(spy, times(1)).getDeducedSchemaProvider(any(), any(), any());
 
     //make sure the deduced schema is actually used
-    assertEquals(deducedSchemaProvider.getTargetSchema(), batch.getSchemaProvider().getTargetSchema());
+    assertEquals(deducedSchemaProvider.getTargetHoodieSchema(), batch.getSchemaProvider().getTargetHoodieSchema());
 
     //make sure we use error table when we should
     verify(propsSpy, shouldTryWriteToErrorTable ? times(1) : never())
@@ -234,8 +234,8 @@ public class TestStreamSync extends SparkClientFunctionalTestHarness {
     SchemaProvider schemaProvider = mock(SchemaProvider.class);
     HoodieSchema sourceSchema = mock(HoodieSchema.class);
     HoodieSchema targetSchema = isNullTargetSchema ? InputBatch.NULL_SCHEMA : mock(HoodieSchema.class);
-    when(schemaProvider.getSourceSchema()).thenReturn(sourceSchema);
-    when(schemaProvider.getTargetSchema()).thenReturn(targetSchema);
+    when(schemaProvider.getSourceHoodieSchema()).thenReturn(sourceSchema);
+    when(schemaProvider.getTargetHoodieSchema()).thenReturn(targetSchema);
     when(sourceSchema.toString()).thenReturn(name + "SourceSchema");
     if (!isNullTargetSchema) {
       when(targetSchema.toString()).thenReturn(name + "TargetSchema");

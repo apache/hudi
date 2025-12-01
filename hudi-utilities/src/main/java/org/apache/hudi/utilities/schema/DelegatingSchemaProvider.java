@@ -40,13 +40,13 @@ public class DelegatingSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public HoodieSchema getSourceSchema() {
-    return sourceSchemaProvider.getSourceSchema();
+  public HoodieSchema getSourceHoodieSchema() {
+    return sourceSchemaProvider.getSourceHoodieSchema();
   }
 
   @Override
-  public HoodieSchema getTargetSchema() {
-    return targetSchemaProvider.getTargetSchema();
+  public HoodieSchema getTargetHoodieSchema() {
+    return targetSchemaProvider.getTargetHoodieSchema();
   }
 
   public SchemaProvider getSourceSchemaProvider() {

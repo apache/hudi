@@ -963,7 +963,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
 
     @Override
-    public HoodieSchema getSourceSchema() {
+    public HoodieSchema getSourceHoodieSchema() {
       return schema;
     }
   }

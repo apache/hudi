@@ -34,7 +34,7 @@ public class NullTargetSchemaRegistryProvider extends SchemaRegistryProvider {
   }
 
   @Override
-  public HoodieSchema getTargetSchema() {
+  public HoodieSchema getTargetHoodieSchema() {
     return null;
   }
 }

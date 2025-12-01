@@ -59,7 +59,7 @@ class TestFilebasedSchemaProvider extends UtilitiesTestBase {
   void properlyFormattedNestedSchemaTest() throws IOException {
     this.schemaProvider = new FilebasedSchemaProvider(
         Helpers.setupSchemaOnDFS("streamer-config", "file_schema_provider_valid.avsc"), jsc);
-    assertEquals(this.schemaProvider.getSourceSchema(), generateProperFormattedSchema());
+    assertEquals(this.schemaProvider.getSourceHoodieSchema(), generateProperFormattedSchema());
   }
 
   @Test
@@ -67,7 +67,7 @@ class TestFilebasedSchemaProvider extends UtilitiesTestBase {
     TypedProperties props = Helpers.setupSchemaOnDFS("streamer-config", "file_schema_provider_invalid.avsc");
     props.put(SANITIZE_SCHEMA_FIELD_NAMES.key(), "true");
     this.schemaProvider = new FilebasedSchemaProvider(props, jsc);
-    assertEquals(this.schemaProvider.getSourceSchema(), generateRenamedSchemaWithDefaultReplacement());
+    assertEquals(this.schemaProvider.getSourceHoodieSchema(), generateRenamedSchemaWithDefaultReplacement());
   }
 
   @Test
@@ -84,7 +84,7 @@ class TestFilebasedSchemaProvider extends UtilitiesTestBase {
     props.put(SANITIZE_SCHEMA_FIELD_NAMES.key(), "true");
     props.put(SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), "_");
     this.schemaProvider = new FilebasedSchemaProvider(props, jsc);
-    assertEquals(this.schemaProvider.getSourceSchema(), generateRenamedSchemaWithConfiguredReplacement());
+    assertEquals(this.schemaProvider.getSourceHoodieSchema(), generateRenamedSchemaWithConfiguredReplacement());
   }
 
   @Test
@@ -95,6 +95,6 @@ class TestFilebasedSchemaProvider extends UtilitiesTestBase {
     FilebasedSchemaProvider filebasedSchemaProvider = new FilebasedSchemaProvider(
         Helpers.setupSchemaOnDFS("streamer-config", "source_uber_encoded_decimal.avsc"), jsc);
 
-    assertEquals(filebasedSchemaProvider.getSourceSchema(), jsonFilebasedSchemaProvider.getSourceSchema());
+    assertEquals(filebasedSchemaProvider.getSourceHoodieSchema(), jsonFilebasedSchemaProvider.getSourceHoodieSchema());
   }
 }

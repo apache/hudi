@@ -31,7 +31,7 @@ public class DummySchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public HoodieSchema getSourceSchema() {
+  public HoodieSchema getSourceHoodieSchema() {
     return HoodieSchema.create(HoodieSchemaType.NULL);
   }
 }

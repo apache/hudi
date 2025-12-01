@@ -80,7 +80,7 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
             UtilHelpers.createSchemaProvider(DummySchemaProvider.class.getName(), properties, jsc),
             properties, jsc, null);
 
-    HoodieSchema schema = provider.getSourceSchema();
+    HoodieSchema schema = provider.getSourceHoodieSchema();
     assertEquals(HoodieSchemaType.RECORD, schema.getType());
     assertEquals("test", schema.getName());
     assertNotNull(schema.getField("testString").orElse(null));
@@ -96,7 +96,7 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
             UtilHelpers.createSchemaProvider(SparkAvroSchemaProvider.class.getName(), properties, jsc),
             properties, jsc, transformerClassNames);
 
-    HoodieSchema schema = provider.getSourceSchema();
+    HoodieSchema schema = provider.getSourceHoodieSchema();
     assertEquals(HoodieSchemaType.RECORD, schema.getType());
     assertEquals("test", schema.getFullName());
     assertNotNull(schema.getField("day").orElse(null));

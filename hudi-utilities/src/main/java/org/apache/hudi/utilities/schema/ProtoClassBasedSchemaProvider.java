@@ -79,7 +79,7 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public HoodieSchema getSourceSchema() {
+  public HoodieSchema getSourceHoodieSchema() {
     if (schema == null) {
       try {
         schema = HoodieSchema.parse(schemaString);
@@ -92,7 +92,7 @@ public class ProtoClassBasedSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public HoodieSchema getTargetSchema() {
-    return getSourceSchema();
+  public HoodieSchema getTargetHoodieSchema() {
+    return getSourceHoodieSchema();
   }
 }

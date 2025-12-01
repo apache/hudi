@@ -288,7 +288,7 @@ public class CloudObjectsSelectorCommon {
 
     StructType rowSchema = null;
     if (schemaProviderOption.isPresent()) {
-      HoodieSchema sourceSchema = schemaProviderOption.get().getSourceSchema();
+      HoodieSchema sourceSchema = schemaProviderOption.get().getSourceHoodieSchema();
       if (sourceSchema != null && !sourceSchema.equals(InputBatch.NULL_SCHEMA)) {
         Schema sourceAvroSchema = sourceSchema.toAvroSchema();
         rowSchema = AvroConversionUtils.convertAvroSchemaToStructType(sourceAvroSchema);
@@ -329,7 +329,7 @@ public class CloudObjectsSelectorCommon {
     }
 
     if (schemaProviderOption.isPresent()) {
-      HoodieSchema sourceSchema = schemaProviderOption.get().getSourceSchema();
+      HoodieSchema sourceSchema = schemaProviderOption.get().getSourceHoodieSchema();
       if (isCoalesceRequired(properties, sourceSchema)) {
         dataset = spark.createDataFrame(coalesceAliasFields(dataset, sourceSchema.toAvroSchema()).rdd(), rowSchema);
       }

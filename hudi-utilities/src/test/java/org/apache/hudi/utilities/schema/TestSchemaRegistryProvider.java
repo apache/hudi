@@ -102,7 +102,7 @@ class TestSchemaRegistryProvider {
   @Test
   public void testGetSourceSchemaShouldRequestSchemaWithCreds() throws Exception {
     SchemaRegistryProvider underTest = getUnderTest(getProps(), -1, true);
-    HoodieSchema actual = underTest.getSourceSchema();
+    HoodieSchema actual = underTest.getSourceHoodieSchema();
     assertNotNull(actual);
     assertEquals(getExpectedConvertedSchema(), actual);
     verify(mockRestService).setHttpHeaders(Collections.singletonMap("Authorization", "Basic " + Base64.getEncoder().encodeToString(BASIC_AUTH.getBytes())));
@@ -111,7 +111,7 @@ class TestSchemaRegistryProvider {
   @Test
   public void testGetTargetSchemaShouldRequestSchemaWithCreds() throws Exception {
     SchemaRegistryProvider underTest = getUnderTest(getProps(), -1, true);
-    HoodieSchema actual = underTest.getTargetSchema();
+    HoodieSchema actual = underTest.getTargetHoodieSchema();
     assertNotNull(actual);
     assertEquals(getExpectedConvertedSchema(), actual);
     verify(mockRestService).setHttpHeaders(Collections.singletonMap("Authorization", "Basic " + Base64.getEncoder().encodeToString(BASIC_AUTH.getBytes())));
@@ -122,7 +122,7 @@ class TestSchemaRegistryProvider {
     TypedProperties props = getProps();
     props.put("hoodie.deltastreamer.schemaprovider.registry.url", "http://localhost/subjects/test/versions/latest");
     SchemaRegistryProvider underTest = getUnderTest(props, -1, true);
-    HoodieSchema actual = underTest.getSourceSchema();
+    HoodieSchema actual = underTest.getSourceHoodieSchema();
     assertNotNull(actual);
     assertEquals(getExpectedConvertedSchema(), actual);
     verify(mockRestService, never()).setHttpHeaders(any());
@@ -133,7 +133,7 @@ class TestSchemaRegistryProvider {
     TypedProperties props = getProps();
     props.put("hoodie.deltastreamer.schemaprovider.registry.url", "http://localhost/subjects/test/versions/latest");
     SchemaRegistryProvider underTest = getUnderTest(props, -1, true);
-    HoodieSchema actual = underTest.getTargetSchema();
+    HoodieSchema actual = underTest.getTargetHoodieSchema();
     assertNotNull(actual);
     assertEquals(getExpectedConvertedSchema(), actual);
     verify(mockRestService, never()).setHttpHeaders(any());
@@ -144,7 +144,7 @@ class TestSchemaRegistryProvider {
     TypedProperties props = getProps();
     props.put("hoodie.deltastreamer.schemaprovider.registry.url", "http://localhost/subjects/test/versions/latest");
     SchemaRegistryProvider underTest = getUnderTest(props, -1, false);
-    HoodieSchema actual = underTest.getTargetSchema();
+    HoodieSchema actual = underTest.getTargetHoodieSchema();
     assertNotNull(actual);
     assertEquals(getExpectedSchema(), actual);
     verify(mockRestService, never()).setHttpHeaders(any());
@@ -155,7 +155,7 @@ class TestSchemaRegistryProvider {
     TypedProperties props = getProps();
     props.put("hoodie.deltastreamer.schemaprovider.registry.url", "http://localhost/subjects/test/versions/3");
     SchemaRegistryProvider underTest = getUnderTest(props, 3, false);
-    HoodieSchema actual = underTest.getTargetSchema();
+    HoodieSchema actual = underTest.getTargetHoodieSchema();
     assertNotNull(actual);
     assertEquals(getExpectedSchema(), actual);
     verify(mockRestService, never()).setHttpHeaders(any());
@@ -177,7 +177,7 @@ class TestSchemaRegistryProvider {
     final String FALLBACK_SCHEMA = "{\"type\": \"record\", \"namespace\": \"example.fallback\", \"name\": \"Fallback\", \"fields\": []}";
     doReturn(FALLBACK_SCHEMA).when(spyProvider).fetchSchemaUsingLegacyMethod(anyString());
     // Invoke the method; the IllegalAccessError should be caught and fallback used.
-    HoodieSchema schema = spyProvider.getSourceSchema();
+    HoodieSchema schema = spyProvider.getSourceHoodieSchema();
     // Verify that the fallback schema is returned.
     assertEquals(HoodieSchema.parse(FALLBACK_SCHEMA), schema);
   }

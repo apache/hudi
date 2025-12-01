@@ -55,7 +55,7 @@ public class TestKafkaSourceUtil {
             + "{\"name\":\"age\",\"type\":\"int\"},{\"name\":\"email\",\"type\":[\"null\",\"string\"],\"default\":null},"
             + "{\"name\":\"isEmployed\",\"type\":\"boolean\"}]}";
     HoodieSchema schema = HoodieSchema.parse(avroSchemaJson);
-    when(schemaProvider.getSourceSchema()).thenReturn(schema);
+    when(schemaProvider.getSourceHoodieSchema()).thenReturn(schema);
     KafkaSourceUtil.configureSchemaDeserializer(schemaProvider, props);
     assertTrue(props.containsKey(NATIVE_KAFKA_CONSUMER_GROUP_ID));
     assertTrue(props.getString(NATIVE_KAFKA_CONSUMER_GROUP_ID, "").length() <= GROUP_ID_MAX_BYTES_LENGTH);

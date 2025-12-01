@@ -322,12 +322,12 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     }
 
     @Override
-    public HoodieSchema getSourceSchema() {
+    public HoodieSchema getSourceHoodieSchema() {
       return sourceSchema;
     }
 
     @Override
-    public HoodieSchema getTargetSchema() {
+    public HoodieSchema getTargetHoodieSchema() {
       return targetSchema != null ? targetSchema : sourceSchema;
     }
 
