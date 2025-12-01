@@ -63,7 +63,7 @@ public abstract class SchemaProvider implements Serializable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
   @Deprecated
   public Schema getSourceSchema() {
-    return null;
+    throw new UnsupportedOperationException("getSourceSchema() is deprecated and is not implemented for this SchemaProvider. Use getSourceHoodieSchema() instead.");
   }
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
