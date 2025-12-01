@@ -141,7 +141,7 @@ public class StreamerUtil {
       return new FilebasedSchemaProvider(conf).getSourceSchema();
     } else if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA).isPresent()) {
       final String schemaStr = conf.get(FlinkOptions.SOURCE_AVRO_SCHEMA);
-      return new HoodieSchema.Parser().parse(schemaStr);
+      return HoodieSchema.parse(schemaStr);
     } else {
       final String errorMsg = String.format("Either option '%s' or '%s' "
               + "should be specified for avro schema deserialization",

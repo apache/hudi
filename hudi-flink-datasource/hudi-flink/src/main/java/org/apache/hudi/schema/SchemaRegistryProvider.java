@@ -111,7 +111,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
   }
 
   private HoodieSchema getSchema(String registryUrl) throws IOException {
-    return new HoodieSchema.Parser().parse(fetchSchemaFromRegistry(registryUrl));
+    return HoodieSchema.parse(fetchSchemaFromRegistry(registryUrl));
   }
 
   @Override

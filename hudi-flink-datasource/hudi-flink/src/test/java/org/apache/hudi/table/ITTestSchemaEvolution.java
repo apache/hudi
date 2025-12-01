@@ -248,10 +248,10 @@ public class ITTestSchemaEvolution {
       }
 
       // Create nullable primitive types using HoodieSchema
-      HoodieSchema intType = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.INT));
-      HoodieSchema longType = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.LONG));
-      HoodieSchema doubleType = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.DOUBLE));
-      HoodieSchema stringType = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING));
+      HoodieSchema intType = HoodieSchema.createNullable(HoodieSchemaType.INT);
+      HoodieSchema longType = HoodieSchema.createNullable(HoodieSchemaType.LONG);
+      HoodieSchema doubleType = HoodieSchema.createNullable(HoodieSchemaType.DOUBLE);
+      HoodieSchema stringType = HoodieSchema.createNullable(HoodieSchemaType.STRING);
 
       // Create struct type with fields
       List<HoodieSchemaField> structFields = Arrays.asList(

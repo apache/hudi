@@ -53,10 +53,10 @@ import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.HoodieRowDataParquetReader;
 import org.apache.hudi.table.format.InternalSchemaManager;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.FlinkTaskContextSupplier;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -169,8 +169,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     this.table = writeClient.getHoodieTable();
 
-    //TODO make a converter class for HoodieSchemaConverter
-    this.schema = HoodieSchema.fromAvroSchema(AvroSchemaConverter.convertToSchema(rowType));
+    this.schema = HoodieSchemaConverter.convertToSchema(rowType);
     // Since there exists discrepancies between flink and spark dealing with nullability of primary key field,
     // and there may be some files written by spark, force update schema as nullable to make sure clustering
     // scan successfully without schema validating exception.

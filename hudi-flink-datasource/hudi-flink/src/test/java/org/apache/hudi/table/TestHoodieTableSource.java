@@ -145,7 +145,7 @@ public class TestHoodieTableSource {
   void testGetTableAvroSchema() {
     HoodieTableSource tableSource = getEmptyStreamingSource();
     assertNull(tableSource.getMetaClient(), "Streaming source with empty table path is allowed");
-    final String schemaFields = tableSource.getTableHoodieSchema().getFields().stream()
+    final String schemaFields = tableSource.getTableSchema().getFields().stream()
         .map(HoodieSchemaField::name)
         .collect(Collectors.joining(","));
     final String expected = "_hoodie_commit_time,"
