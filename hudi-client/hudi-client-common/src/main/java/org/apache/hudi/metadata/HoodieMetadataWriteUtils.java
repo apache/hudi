@@ -224,6 +224,7 @@ public class HoodieMetadataWriteUtils {
             .logFileMaxSize(maxLogFileSizeBytes)
             // Keeping the log blocks as large as the log files themselves reduces the number of HFile blocks to be checked for
             // presence of keys
+            .hfileBlockSize(writeConfig.getHFileBlockSize())
             .logFileDataBlockMaxSize(maxLogFileSizeBytes)
                                .withBloomFilterType(writeConfig.getMetadataConfig().getBloomFilterType())
                                .withBloomFilterNumEntries(writeConfig.getMetadataConfig().getBloomFilterNumEntries())
