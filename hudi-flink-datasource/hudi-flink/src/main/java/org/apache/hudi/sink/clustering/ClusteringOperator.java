@@ -173,7 +173,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     // Since there exists discrepancies between flink and spark dealing with nullability of primary key field,
     // and there may be some files written by spark, force update schema as nullable to make sure clustering
     // scan successfully without schema validating exception.
-    this.readerSchema = HoodieSchemaUtils.createNullableSchema(schema);
+    this.readerSchema = HoodieSchemaUtils.asNullable(schema);
 
     this.binarySerializer = new BinaryRowDataSerializer(rowType.getFieldCount());
 

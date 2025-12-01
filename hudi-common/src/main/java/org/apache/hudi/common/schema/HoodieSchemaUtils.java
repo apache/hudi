@@ -139,6 +139,21 @@ public final class HoodieSchemaUtils {
   }
 
   /**
+   * Create a new schema by force changing all the fields as nullable.
+   * This is equivalent to AvroSchemaUtils.asNullable() but operates on HoodieSchema.
+   *
+   * @return a new schema with all the fields updated as nullable
+   * @throws IllegalArgumentException if schema is null
+   */
+  public static HoodieSchema asNullable(HoodieSchema schema) {
+    ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
+
+    // Delegate to AvroSchemaUtils
+    Schema nullableAvro = AvroSchemaUtils.asNullable(schema.toAvroSchema());
+    return HoodieSchema.fromAvroSchema(nullableAvro);
+  }
+
+  /**
    * Extracts the non-null type from a union schema.
    * This is equivalent to AvroSchemaUtils.getNonNullTypeFromUnion() but operates on HoodieSchema.
    *
