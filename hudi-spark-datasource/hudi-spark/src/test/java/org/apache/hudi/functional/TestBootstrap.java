@@ -184,7 +184,8 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
                 .orElse(null).get().getPath()).toString();
     HoodieAvroParquetReader parquetReader =
         new HoodieAvroParquetReader(metaClient.getStorage(), new StoragePath(filePath));
-    return parquetReader.getSchema();
+    //TODO boundary to revisit in later pr to use HoodieSchema directly
+    return parquetReader.getSchema().toAvroSchema();
   }
 
   @Test

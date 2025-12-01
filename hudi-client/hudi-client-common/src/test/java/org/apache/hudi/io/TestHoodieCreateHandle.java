@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
@@ -80,6 +81,7 @@ public class TestHoodieCreateHandle extends HoodieCommonTestHarness {
   private static final String TEST_INSTANT_TIME = "20231201120000";
   private static final String TEST_FILE_ID = "file-001";
   private static final Schema TEST_SCHEMA = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
+  private static final HoodieSchema HOODIE_SCHEMA = HoodieSchema.fromAvroSchema(TEST_SCHEMA);
   private static final String TEST_PARTITION_PATH = DEFAULT_FIRST_PARTITION_PATH;
 
   private HoodieWriteConfig writeConfig;
@@ -381,10 +383,10 @@ public class TestHoodieCreateHandle extends HoodieCommonTestHarness {
     // Verify that write operations fail as expected
     HoodieRecord testRecord = dataGen.generateInserts(TEST_INSTANT_TIME, 1).get(0);
     IOException writeException = assertThrows(IOException.class, () ->
-        createHandle.fileWriter.write("key1", testRecord, TEST_SCHEMA, new Properties()));
+        createHandle.fileWriter.write("key1", testRecord, HOODIE_SCHEMA, new Properties()));
     assertEquals("Simulated file writer write failure", writeException.getMessage());
     IOException writeWithMetadataException = assertThrows(IOException.class, () ->
-        createHandle.fileWriter.writeWithMetadata(testRecord.getKey(), testRecord, TEST_SCHEMA, new Properties()));
+        createHandle.fileWriter.writeWithMetadata(testRecord.getKey(), testRecord, HOODIE_SCHEMA, new Properties()));
     assertEquals("Simulated file writer write failure", writeWithMetadataException.getMessage());
 
     assertDoesNotThrow(() -> createHandle.fileWriter.close());

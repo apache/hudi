@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
@@ -179,7 +180,8 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       // Create the writer for writing the new version file
       fileWriter = HoodieFileWriterFactory.getFileWriter(
           instantTime, newFilePath, hoodieTable.getStorage(),
-          config, writeSchemaWithMetaFields, taskContextSupplier, getRecordType());
+
+          config, HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields), taskContextSupplier, getRecordType());
     } catch (IOException io) {
       LOG.error("Error in update task at commit {}", instantTime, io);
       writeStatus.setGlobalError(io);
@@ -412,11 +414,13 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
       //       file holding this record even in cases when overall metadata is preserved
       HoodieRecord populatedRecord = record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, newFilePath.getName());
-      fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields, props);
+      //TODO boundary to follow up in later pr to use HoodieSchema directly
+      fileWriter.write(key.getRecordKey(), populatedRecord, HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields), props);
     } else {
       // rewrite the record to include metadata fields in schema, and the values will be set later.
+      //TODO boundary to follow up in later pr to use HoodieSchema directly
       record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
-      fileWriter.writeWithMetadata(key, record, writeSchemaWithMetaFields, props);
+      fileWriter.writeWithMetadata(key, record, HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields), props);
     }
   }
 

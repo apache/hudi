@@ -20,6 +20,7 @@
 package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.storage.HFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieAvroBootstrapFileReader;
@@ -29,8 +30,6 @@ import org.apache.hudi.io.storage.HoodieNativeAvroHFileReader;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 
@@ -48,7 +47,7 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
   @Override
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
                                                 StoragePath path,
-                                                Option<Schema> schemaOption) throws IOException {
+                                                Option<HoodieSchema> schemaOption) throws IOException {
     HFileReaderFactory readerFactory = HFileReaderFactory.builder()
         .withStorage(storage).withProps(hoodieConfig.getProps())
         .withPath(path).build();
@@ -57,7 +56,7 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
   }
 
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig, StoragePathInfo pathInfo,
-                                                Option<Schema> schemaOption) {
+                                                Option<HoodieSchema> schemaOption) {
     HFileReaderFactory readerFactory = HFileReaderFactory.builder()
         .withStorage(storage).withProps(hoodieConfig.getProps())
         .withPath(pathInfo.getPath()).withFileSize(pathInfo.getLength()).build();
@@ -70,7 +69,7 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
                                                 StoragePath path,
                                                 HoodieStorage storage,
                                                 byte[] content,
-                                                Option<Schema> schemaOption) throws IOException {
+                                                Option<HoodieSchema> schemaOption) throws IOException {
     HFileReaderFactory readerFactory = HFileReaderFactory.builder()
         .withStorage(storage).withProps(hoodieConfig.getProps())
         .withContent(content).build();

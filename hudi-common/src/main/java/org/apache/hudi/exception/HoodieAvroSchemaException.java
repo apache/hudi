@@ -28,4 +28,8 @@ public class HoodieAvroSchemaException extends SchemaCompatibilityException {
   public HoodieAvroSchemaException(String message) {
     super(message);
   }
+
+  public HoodieAvroSchemaException(String message, Throwable cause) {
+    super(message, cause);
+  }
 }

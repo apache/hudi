@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -332,6 +333,19 @@ public final class SchemaTestUtil {
 
   public static Schema getSchemaFromResource(Class<?> clazz, String name) {
     return getSchemaFromResource(clazz, name, false);
+  }
+
+  public static HoodieSchema getHoodieSchemaFromResource(Class<?> clazz, String name) {
+    return getHoodieSchemaFromResource(clazz, name, false);
+  }
+
+  public static HoodieSchema getHoodieSchemaFromResource(Class<?> clazz, String name, boolean withHoodieMetadata) {
+    try (InputStream schemaInputStream = clazz.getResourceAsStream(name)) {
+      HoodieSchema schema = new HoodieSchema.Parser().parse(schemaInputStream);
+      return withHoodieMetadata ? HoodieSchema.addMetadataFields(schema, false) : schema;
+    } catch (IOException e) {
+      throw new RuntimeException(String.format("Failed to get schema from resource `%s` for class `%s`", name, clazz.getName()));
+    }
   }
 
   public static List<IndexedRecord> generateTestRecordsForSchema(Schema schema) {
