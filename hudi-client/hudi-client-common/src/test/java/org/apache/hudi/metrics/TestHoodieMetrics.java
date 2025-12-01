@@ -46,6 +46,8 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.metrics.HoodieMetrics.SOURCE_READ_AND_INDEX_ACTION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -317,5 +319,37 @@ public class TestHoodieMetrics {
       super();
       this.setInstants(Arrays.asList(instants));
     }
+  }
+
+  @Test
+  public void testRollbackFailureMetric() {
+    // Test that rollback failure metric is emitted correctly
+    String exceptionReason = "FileNotFoundException";
+    hoodieMetrics.emitRollbackFailure(exceptionReason);
+
+    // Verify the failure metric is registered with value 1
+    String metricName = hoodieMetrics.getMetricsName("rollback", "failure");
+    assertEquals(1, (long) metrics.getRegistry().getGauges().get(metricName).getValue());
+
+    // Verify a specific metric is registered for this exception reason
+    String reasonMetricName = hoodieMetrics.getMetricsName("rollback", exceptionReason);
+    assertEquals(1, (long) metrics.getRegistry().getGauges().get(reasonMetricName).getValue());
+  }
+
+  @Test
+  public void testRollbackFailureMetricWithNullMessage() {
+    // Test that rollback failure metric is emitted correctly even with null message
+    hoodieMetrics.emitRollbackFailure(null);
+
+    // Verify the failure metric is registered with value 1
+    String metricName = hoodieMetrics.getMetricsName("rollback", "failure");
+    assertEquals(1, (long) metrics.getRegistry().getGauges().get(metricName).getValue());
+
+    // When exception reason is null, only the general failure metric should be registered
+    // Verify no metric with "null" as part of the name exists
+    boolean hasNullMetric = metrics.getRegistry().getGauges().keySet().stream()
+        .anyMatch(key -> key.contains("null"));
+    assertFalse(hasNullMetric, 
+        "No metric should be created with null in the name when exception reason is null");
   }
 }

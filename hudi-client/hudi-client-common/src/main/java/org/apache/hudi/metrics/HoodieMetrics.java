@@ -360,6 +360,15 @@ public class HoodieMetrics {
     }
   }
 
+  public void emitRollbackFailure(String exceptionReason) {
+    if (config.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("rollback", "failure"), 1);
+      if (exceptionReason != null) {
+        metrics.registerGauge(getMetricsName("rollback", exceptionReason), 1);
+      }
+    }
+  }
+
   public void updateFinalizeWriteMetrics(long durationInMs, long numFilesFinalized) {
     if (config.isMetricsOn()) {
       log.debug("Sending finalize write metrics ({}={}, {}={})", DURATION_STR, durationInMs,
