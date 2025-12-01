@@ -44,6 +44,8 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.metrics.HoodieMetrics.COUNTER_METRIC_EXTENSION;
+import static org.apache.hudi.metrics.HoodieMetrics.FAILURE_COUNTER;
 import static org.apache.hudi.metrics.HoodieMetrics.SOURCE_READ_AND_INDEX_ACTION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -324,16 +326,21 @@ public class TestHoodieMetrics {
   @Test
   public void testRollbackFailureMetric() {
     // Test that rollback failure metric is emitted correctly
-    String exceptionReason = "FileNotFoundException";
-    hoodieMetrics.emitRollbackFailure(exceptionReason);
+    String exceptionType = "FileNotFoundException";
+    hoodieMetrics.emitRollbackFailure(exceptionType);
 
-    // Verify the failure metric is registered with value 1
-    String metricName = hoodieMetrics.getMetricsName("rollback", "failure");
-    assertEquals(1, (long) metrics.getRegistry().getGauges().get(metricName).getValue());
+    // Verify the failure counter is incremented
+    String metricName = hoodieMetrics.getMetricsName("rollback", FAILURE_COUNTER);
+    assertEquals(1, metrics.getRegistry().getCounters().get(metricName).getCount());
 
-    // Verify a specific metric is registered for this exception reason
-    String reasonMetricName = hoodieMetrics.getMetricsName("rollback", exceptionReason);
-    assertEquals(1, (long) metrics.getRegistry().getGauges().get(reasonMetricName).getValue());
+    // Verify a specific counter is incremented for this exception type
+    String exceptionMetricName = hoodieMetrics.getMetricsName("rollback", exceptionType + COUNTER_METRIC_EXTENSION);
+    assertEquals(1, metrics.getRegistry().getCounters().get(exceptionMetricName).getCount());
+
+    // Emit another failure and verify counter increments
+    hoodieMetrics.emitRollbackFailure(exceptionType);
+    assertEquals(2, metrics.getRegistry().getCounters().get(metricName).getCount());
+    assertEquals(2, metrics.getRegistry().getCounters().get(exceptionMetricName).getCount());
   }
 
   @Test
@@ -341,15 +348,15 @@ public class TestHoodieMetrics {
     // Test that rollback failure metric is emitted correctly even with null message
     hoodieMetrics.emitRollbackFailure(null);
 
-    // Verify the failure metric is registered with value 1
-    String metricName = hoodieMetrics.getMetricsName("rollback", "failure");
-    assertEquals(1, (long) metrics.getRegistry().getGauges().get(metricName).getValue());
+    // Verify the failure counter is incremented
+    String metricName = hoodieMetrics.getMetricsName("rollback", FAILURE_COUNTER);
+    assertEquals(1, metrics.getRegistry().getCounters().get(metricName).getCount());
 
-    // When exception reason is null, only the general failure metric should be registered
-    // Verify no metric with "null" as part of the name exists
-    boolean hasNullMetric = metrics.getRegistry().getGauges().keySet().stream()
+    // When exception type is null, only the general failure counter should be incremented
+    // Verify no counter with "null" as part of the name exists
+    boolean hasNullMetric = metrics.getRegistry().getCounters().keySet().stream()
         .anyMatch(key -> key.contains("null"));
-    assertFalse(hasNullMetric, 
-        "No metric should be created with null in the name when exception reason is null");
+    assertFalse(hasNullMetric,
+        "No counter should be created with null in the name when exception type is null");
   }
 }
