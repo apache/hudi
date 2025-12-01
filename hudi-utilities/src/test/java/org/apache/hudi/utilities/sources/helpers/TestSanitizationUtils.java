@@ -21,11 +21,11 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.testutils.SanitizationTestUtils;
 
-import org.apache.avro.SchemaParseException;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -117,10 +117,9 @@ public class TestSanitizationUtils {
   @Test
   public void testBadAvroSchemaDisabledTest() {
     String badJson = getJson("src/test/resources/streamer-config/file_schema_provider_invalid.avsc");
-    assertThrows(SchemaParseException.class, () -> testSanitizeSchema(badJson, generateRenamedSchemaWithDefaultReplacement(), false));
+    assertThrows(HoodieAvroSchemaException.class, () -> testSanitizeSchema(badJson, generateRenamedSchemaWithDefaultReplacement(), false));
   }
 
-  @Test
   String getJson(String path) {
     FileSystem fs = HadoopFSUtils.getFs(path, jsc.hadoopConfiguration(), true);
     String schemaStr;

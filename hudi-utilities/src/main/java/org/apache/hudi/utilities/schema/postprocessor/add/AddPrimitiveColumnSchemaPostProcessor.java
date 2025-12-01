@@ -63,7 +63,7 @@ public class AddPrimitiveColumnSchemaPostProcessor extends SchemaPostProcessor {
   public HoodieSchema processSchema(HoodieSchema schema) {
     String newColumnName = getStringWithAltKeys(this.config, SCHEMA_POST_PROCESSOR_ADD_COLUMN_NAME_PROP);
 
-    if (schema.getField(newColumnName) != null) {
+    if (schema.getField(newColumnName).isPresent()) {
       throw new HoodieSchemaPostProcessException(String.format("Column %s already exist!", newColumnName));
     }
 

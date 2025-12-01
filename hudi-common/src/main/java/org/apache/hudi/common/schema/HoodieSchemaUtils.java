@@ -232,7 +232,7 @@ public final class HoodieSchemaUtils {
    * @return a new HoodieSchemaField with the same properties but properly formatted default value
    */
   public static HoodieSchemaField createNewSchemaField(HoodieSchemaField field) {
-    return createNewSchemaField(field.name(), field.schema(), field.doc().orElse(null), field.defaultVal());
+    return createNewSchemaField(field.name(), field.schema(), field.doc().orElse(null), field.defaultVal().orElse(null));
   }
 
   /**

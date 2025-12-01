@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 
 import com.fasterxml.jackson.core.JsonParser;
@@ -133,7 +134,7 @@ public class SanitizationUtils {
   public static HoodieSchema parseAvroSchema(String schemaStr, boolean shouldSanitize, String invalidCharMask) {
     try {
       return HoodieSchema.parse(schemaStr);
-    } catch (SchemaParseException spe) {
+    } catch (HoodieAvroSchemaException | SchemaParseException spe) {
       // if sanitizing is not enabled rethrow the exception.
       if (!shouldSanitize) {
         throw spe;

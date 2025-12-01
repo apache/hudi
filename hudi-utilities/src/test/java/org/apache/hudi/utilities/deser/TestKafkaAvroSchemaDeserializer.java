@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.deser;
 
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.hudi.utilities.sources.helpers.SchemaTestProvider;
@@ -34,8 +33,6 @@ import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
-import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -52,7 +49,7 @@ public class TestKafkaAvroSchemaDeserializer {
   private final String topic;
   private final HoodieSchema origSchema = createUserSchema();
   private final HoodieSchema evolSchema = createExtendUserSchema();
-  private Properties config = new Properties();
+  private final Properties config = new Properties();
 
   public TestKafkaAvroSchemaDeserializer() {
     config.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
@@ -116,7 +113,7 @@ public class TestKafkaAvroSchemaDeserializer {
     // record is serialized w/ evolved schema, and deserialized w/ evolved schema
     IndexedRecord avroRecordWithAllFieldActual = (IndexedRecord) avroDeserializer.deserialize(topic, false, bytesExtendedRecord, evolSchema.toAvroSchema());
     assertEquals(avroRecordWithAllField, avroRecordWithAllFieldActual);
-    assertEquals(avroRecordWithAllFieldActual.getSchema(), evolSchema);
+    assertEquals(HoodieSchema.fromAvroSchema(avroRecordWithAllFieldActual.getSchema()), evolSchema);
 
     // read old record w/ evolved schema.
     IndexedRecord actualRec = (IndexedRecord) avroDeserializer.deserialize(topic, false, bytesOrigRecord, origSchema.toAvroSchema());
@@ -125,15 +122,7 @@ public class TestKafkaAvroSchemaDeserializer {
     GenericRecord genericRecord = (GenericRecord) actualRec;
     GenericRecord origGenRec = (GenericRecord) avroRecord;
     assertEquals(genericRecord.get("name").toString(), origGenRec.get("name").toString());
-    assertEquals(actualRec.getSchema(), evolSchema);
+    assertEquals(HoodieSchema.fromAvroSchema(actualRec.getSchema()), evolSchema);
     assertNull(genericRecord.get("age"));
-  }
-
-  protected TypedProperties getConvertToTypedProperties(Map<String, ?> configs) {
-    TypedProperties typedProperties = new TypedProperties();
-    for (Entry<String, ?> entry : configs.entrySet()) {
-      typedProperties.put(entry.getKey(), entry.getValue());
-    }
-    return typedProperties;
   }
 }

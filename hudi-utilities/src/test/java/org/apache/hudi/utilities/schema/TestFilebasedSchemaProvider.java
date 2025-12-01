@@ -19,11 +19,11 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.schema.converter.JsonToAvroSchemaConverter;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
-import org.apache.avro.SchemaParseException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -72,7 +72,7 @@ class TestFilebasedSchemaProvider extends UtilitiesTestBase {
 
   @Test
   void renameBadlyFormattedSchemaWithPropertyDisabledTest() {
-    assertThrows(SchemaParseException.class, () -> {
+    assertThrows(HoodieAvroSchemaException.class, () -> {
       new FilebasedSchemaProvider(
           Helpers.setupSchemaOnDFS("streamer-config", "file_schema_provider_invalid.avsc"), jsc);
     });

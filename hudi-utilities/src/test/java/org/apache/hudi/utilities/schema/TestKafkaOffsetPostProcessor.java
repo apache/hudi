@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.schema;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 
-import org.apache.avro.Schema;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -52,16 +51,16 @@ class TestKafkaOffsetPostProcessor {
     String timestampField = "{\"name\": \"_hoodie_kafka_source_timestamp\", \"type\": \"long\", \"doc\": \"timestamp column\", \"default\": 0}";
     String keyField = "{\"name\": \"_hoodie_kafka_source_key\", \"type\": [\"null\", \"string\"], \"doc\": \"kafka key column\", \"default\": null}";
     return Stream.of(
-        Arguments.of(new Schema.Parser().parse("{\"type\": \"record\", \"name\": \"example\", \"fields\": [{\"name\": \"existing_field\", \"type\": \"string\"}]}")),
-        Arguments.of(new Schema.Parser().parse("{\"type\": \"record\", \"name\": \"example\", \"fields\": [{\"name\": \"existing_field\", \"type\": \"string\"}, "
+        Arguments.of(HoodieSchema.parse("{\"type\": \"record\", \"name\": \"example\", \"fields\": [{\"name\": \"existing_field\", \"type\": \"string\"}]}")),
+        Arguments.of(HoodieSchema.parse("{\"type\": \"record\", \"name\": \"example\", \"fields\": [{\"name\": \"existing_field\", \"type\": \"string\"}, "
                 + offsetField + "]}")),
-        Arguments.of(new Schema.Parser().parse("{\"type\": \"record\", \"name\": \"example\", \"fields\": [{\"name\": \"existing_field\", \"type\": \"string\"}, "
+        Arguments.of(HoodieSchema.parse("{\"type\": \"record\", \"name\": \"example\", \"fields\": [{\"name\": \"existing_field\", \"type\": \"string\"}, "
                 + offsetField + ", " + partitionField + "]}")),
         Arguments.of(
-            new Schema.Parser().parse("{\"type\": \"record\", \"name\": \"example\", \"fields\": [{\"name\": \"existing_field\", \"type\": \"string\"}, "
+            HoodieSchema.parse("{\"type\": \"record\", \"name\": \"example\", \"fields\": [{\"name\": \"existing_field\", \"type\": \"string\"}, "
                 + offsetField + ", " + partitionField + ", " + timestampField + "]}")),
         Arguments.of(
-            new Schema.Parser().parse("{\"type\": \"record\", \"name\": \"example\", \"fields\": [{\"name\": \"existing_field\", \"type\": \"string\"}, "
+            HoodieSchema.parse("{\"type\": \"record\", \"name\": \"example\", \"fields\": [{\"name\": \"existing_field\", \"type\": \"string\"}, "
                 + offsetField + ", " + partitionField + ", " + timestampField + ", " + keyField + "]}"))
     );
   }

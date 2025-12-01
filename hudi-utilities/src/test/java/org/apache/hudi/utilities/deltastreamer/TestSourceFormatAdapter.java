@@ -122,8 +122,8 @@ public class TestSourceFormatAdapter {
     assertEquals(2, ds.collectAsList().size());
     assertEquals(sanitizedSchema, ds.schema());
     if (inputBatch.getSchemaProvider() instanceof RowBasedSchemaProvider) {
-      assertEquals(AvroConversionUtils.convertStructTypeToAvroSchema(sanitizedSchema,
-          "hoodie_source", "hoodie.source"), inputBatch.getSchemaProvider().getSourceSchema());
+      assertEquals(HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(sanitizedSchema,
+          "hoodie_source", "hoodie.source")), inputBatch.getSchemaProvider().getSourceSchema());
     }
     assertEquals(expectedRDD.collect(), ds.toJSON().collectAsList());
   }
@@ -135,7 +135,6 @@ public class TestSourceFormatAdapter {
     SchemaProvider schemaProvider = InputBatch.NullSchemaProvider.getInstance();
     verifySanitization(fetchRowData(unsanitizedRDD, unsanitizedSchema, schemaProvider), sanitizedDataFile, sanitizedSchema);
     verifySanitization(fetchRowData(unsanitizedRDD, unsanitizedSchema, null), sanitizedDataFile, sanitizedSchema);
-
   }
 
   @ParameterizedTest
