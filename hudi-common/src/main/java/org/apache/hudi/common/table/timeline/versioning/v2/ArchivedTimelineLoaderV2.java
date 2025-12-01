@@ -102,7 +102,7 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
             .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, new StoragePath(metaClient.getArchivePath(), fileName))) {
           //TODO boundary to revisit in later pr to use HoodieSchema directly
           try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema()),
-          HoodieSchema.fromAvroSchema(readSchema))) {            
+                  HoodieSchema.fromAvroSchema(readSchema))) {            
             while (iterator.hasNext()) {
               if (hasLimit && loadedCount.get() >= limit) {
                 break; // Stop reading this file
