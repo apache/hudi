@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
@@ -151,14 +152,14 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
       if (isSecondaryIndexStatsStreamingWritesEnabled) {
         SecondaryIndexStreamingTracker.trackSecondaryIndexStats(populatedRecord, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, config);
       }
-      fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields, config.getProps());
+      fileWriter.write(record.getRecordKey(), populatedRecord, HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields), config.getProps());
     } else {
       // rewrite the record to include metadata fields in schema, and the values will be set later.
       record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
       if (isSecondaryIndexStatsStreamingWritesEnabled) {
         SecondaryIndexStreamingTracker.trackSecondaryIndexStats(record, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, config);
       }
-      fileWriter.writeWithMetadata(record.getKey(), record, writeSchemaWithMetaFields, config.getProps());
+      fileWriter.writeWithMetadata(record.getKey(), record, HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields), config.getProps());
     }
   }
 

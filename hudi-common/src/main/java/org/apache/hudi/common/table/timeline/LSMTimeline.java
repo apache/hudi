@@ -142,7 +142,7 @@ public class LSMTimeline {
   public static boolean isFileInRange(HoodieArchivedTimeline.TimeRangeFilter filter, String fileName) {
     String minInstant = getMinInstantTime(fileName);
     String maxInstant = getMaxInstantTime(fileName);
-    return filter.isInRange(minInstant) || filter.isInRange(maxInstant);
+    return filter.hasOverlappingInRange(minInstant, maxInstant);
   }
 
   /**

@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -234,7 +235,7 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     when(partitionSupplier.get()).thenReturn(10);
 
     return (HoodieAvroHFileWriter) HoodieFileWriterFactory.getFileWriter(
-        instantTime, getFilePath(), storage, HoodieStorageConfig.newBuilder().fromProperties(props).build(), avroSchema,
+        instantTime, getFilePath(), storage, HoodieStorageConfig.newBuilder().fromProperties(props).build(), HoodieSchema.fromAvroSchema(avroSchema),
         mockTaskContextSupplier, HoodieRecord.HoodieRecordType.AVRO);
   }
 

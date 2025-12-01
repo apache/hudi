@@ -88,6 +88,19 @@ public interface HoodieArchivedTimeline extends HoodieTimeline {
     public boolean isInRange(String instantTime) {
       return InstantComparison.isInRange(instantTime, this.startTs, this.endTs);
     }
+
+    /**
+     * Returns whether the given instant time range has overlapping with the current range.
+     */
+    public boolean hasOverlappingInRange(String startInstant, String endInstant) {
+      return isInRange(startInstant) || isInRange(endInstant) || isContained(startInstant, endInstant);
+    }
+
+    private boolean isContained(String startInstant, String endInstant) {
+      // the given range is finite and expected to be covered by the current range which naturally cannot be infinite.
+      return startTs != null && InstantComparison.compareTimestamps(startTs, InstantComparison.GREATER_THAN_OR_EQUALS, startInstant)
+          && endTs != null && InstantComparison.compareTimestamps(endTs, InstantComparison.LESSER_THAN_OR_EQUALS, endInstant);
+    }
   }
 
   /**
