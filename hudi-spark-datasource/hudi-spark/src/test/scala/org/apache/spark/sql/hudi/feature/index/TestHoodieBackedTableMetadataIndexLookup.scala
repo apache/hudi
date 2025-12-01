@@ -653,8 +653,7 @@ class HoodieBackedTableMetadataIndexLookupV9Test1Fg extends HoodieBackedTableMet
     }
   }
 
-  // Need to implement fg reader support for mdt
-  disabledTest("Exhaustive test for readSecondaryIndexResult - Version 9") {
+  test("Exhaustive test for readSecondaryIndexResult - Version 9") {
     withRDDPersistenceValidation {
       testReadSecondaryIndexLocations()
     }
@@ -678,8 +677,7 @@ class HoodieBackedTableMetadataIndexLookupV9Test10Fg extends HoodieBackedTableMe
     }
   }
 
-  // Need to implement fg reader support for mdt
-  disabledTest("Exhaustive test for readSecondaryIndexResult - Version 9") {
+  test("Exhaustive test for readSecondaryIndexResult - Version 9") {
     withRDDPersistenceValidation {
       testReadSecondaryIndexLocations()
     }

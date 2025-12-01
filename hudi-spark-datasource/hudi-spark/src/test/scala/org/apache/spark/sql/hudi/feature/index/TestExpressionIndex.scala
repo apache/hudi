@@ -476,8 +476,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
-  // Need to implement fg reader support for mdt
-  disabledTest("Test Expression Index File-level Stats Update") {
+  test("Test Expression Index File-level Stats Update") {
     withTempDir { tmp =>
       // create a simple partitioned mor table and insert some records
       val tableName = generateTableName
@@ -535,8 +534,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
-  // Need to implement fg reader support for mdt
-  disabledTest("Test Multiple Expression Index Update") {
+  test("Test Multiple Expression Index Update") {
     withTempDir { tmp =>
       // create a simple partitioned mor table and insert some records
       val tableName = generateTableName
@@ -614,8 +612,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
-  // Need to implement fg reader support for mdt
-  disabledTest("Test Enable and Disable Expression Index") {
+  test("Test Enable and Disable Expression Index") {
     withTempDir { tmp =>
       // create a simple partitioned mor table and insert some records
       val tableName = generateTableName
@@ -691,8 +688,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
   }
 
   // Test expression index using column stats and bloom filters, and then clean older version, and check index is correct.
-  // Need to implement fg reader support for mdt
-  disabledTest("Test Expression Index With Cleaning") {
+  test("Test Expression Index With Cleaning") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         Seq(true, false).foreach { isPartitioned =>
@@ -774,8 +770,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
-  // Need to implement fg reader support for mdt
-  disabledTest("Test expression index with inflight compaction") {
+  test("Test expression index with inflight compaction") {
     withTempDir { tmp =>
       val tableName = generateTableName + "_expr_compact"
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -1125,8 +1120,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
-  // Need to implement fg reader support for mdt
-  disabledTest("Test expression index partition pruning with unpartitioned table") {
+  test("Test expression index partition pruning with unpartitioned table") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName + s"_partition_pruning_with_unpartitioned_$tableType"
@@ -1321,8 +1315,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
-  // Need to implement fg reader support for mdt
-  disabledTest("Test expression index pruning after update with partition stats") {
+  test("Test expression index pruning after update with partition stats") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val isTableMOR = tableType.equals("mor")
@@ -1454,8 +1447,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
-  // Need to implement fg reader support for mdt
-  disabledTest("Test expression index pruning after delete with partition stats") {
+  test("Test expression index pruning after delete with partition stats") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val isTableMOR = tableType.equals("mor")
@@ -1874,8 +1866,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
-  // Need to implement fg reader support for mdt
-  disabledTest("Test bloom filters index pruning") {
+  test("Test bloom filters index pruning") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName + s"_bloom_pruning_$tableType"
@@ -2001,8 +1992,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     assertResult(expectedTableName)(catalogTable.identifier.table)
   }
 
-  // Need to implement fg reader support for mdt
-  disabledTest("Test Expression Index Insert after Initialization") {
+  test("Test Expression Index Insert after Initialization") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val isPartitioned = true
@@ -2033,8 +2023,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
-  // Need to implement fg reader support for mdt
-  disabledTest("Test Expression Index Rollback") {
+  test("Test Expression Index Rollback") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val isPartitioned = true

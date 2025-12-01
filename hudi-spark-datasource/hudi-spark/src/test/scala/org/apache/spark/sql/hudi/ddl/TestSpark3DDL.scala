@@ -818,8 +818,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     }
   }
 
-  // Needs to be fixed, probably in the 1.1 release
-  disabledTest("Test schema auto evolution complex") {
+  test("Test schema auto evolution complex") {
     withRecordType()(withTempDir { tmp =>
       Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
         val tableName = generateTableName

@@ -558,8 +558,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
     }
   }
 
-  // Need to implement mdt read for fg reader
-  disabledTest(s"Test hudi_metadata Table-Valued Function") {
+  test(s"Test hudi_metadata Table-Valued Function") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
@@ -630,8 +629,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
     }
   }
 
-  // Need to implement mdt read for fg reader
-  disabledTest(s"Test hudi_metadata Table-Valued Function For PARTITION_STATS index") {
+  test(s"Test hudi_metadata Table-Valued Function For PARTITION_STATS index") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName

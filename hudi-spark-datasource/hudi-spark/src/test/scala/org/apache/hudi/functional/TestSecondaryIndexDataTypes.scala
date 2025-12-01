@@ -47,8 +47,7 @@ class TestSecondaryIndexDataTypes extends HoodieSparkSqlTestBase {
    * Then: Should succeed for supported types and fail with exception for unsupported types
    *       Queries using secondary index should return correct results
    */
-  // Need to implement mdt read for fg reader
-  disabledTest("test Secondary Index With All DataTypes") {
+  test("test Secondary Index With All DataTypes") {
     withTempDir { tmpPath =>
       val tableName = "test_si_all_data_types"
       // Create table with all data types
@@ -269,8 +268,7 @@ class TestSecondaryIndexDataTypes extends HoodieSparkSqlTestBase {
    * When: Creating secondary indexes on logical type columns
    * Then: Should succeed for timestamp/date logical types and fail for others
    */
-  // Need to implement mdt read for fg reader
-  disabledTest("test Secondary Index With logical DataTypes") {
+  test("test Secondary Index With logical DataTypes") {
     withTempDir { tmpPath =>
       val tableName = "test_si_logical_types"
       // Create table with focus on timestamp logical types

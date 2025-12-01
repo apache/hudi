@@ -37,7 +37,7 @@ import org.apache.spark.sql.types.{DoubleType, StringType}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 
 import java.util.function.Consumer
 
@@ -69,9 +69,8 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
-  def testPartialUpdatesAvroPayloadPrecombine(tableType: String): Unit = {
-    val hoodieTableType = HoodieTableType.valueOf(tableType)
+  @EnumSource(value = classOf[HoodieTableType])
+  def testPartialUpdatesAvroPayloadPrecombine(hoodieTableType: HoodieTableType): Unit = {
     val dataGenerator = new QuickstartUtils.DataGenerator()
     val records = convertToStringList(dataGenerator.generateInserts(1))
     val recordsRDD = spark.sparkContext.parallelize(records.asScala.toSeq, 2)

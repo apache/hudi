@@ -28,7 +28,8 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.internal.SQLConf;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Map;
 
@@ -37,11 +38,11 @@ import java.util.Map;
  * Ensure that parquet filters are not being pushed down when they shouldn't be
  */
 @Tag("functional")
-//TODO: Since we got rid of non-fg reader, we might need to increase the validation
 class TestFiltersInFileGroupReader extends TestBootstrapReadBase {
 
-  @Test
-  void testFiltersInFileFormat() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testFiltersInFileFormat(boolean mergeUseRecordPositions) {
     this.bootstrapType = "mixed";
     this.dashPartitions = true;
     this.tableType = HoodieTableType.MERGE_ON_READ;
@@ -58,31 +59,31 @@ class TestFiltersInFileGroupReader extends TestBootstrapReadBase {
         .options(options)
         .mode(SaveMode.Overwrite)
         .save(bootstrapTargetPath);
-    runComparison();
+    runComparison(mergeUseRecordPositions);
 
 
     options = basicOptions();
-    options.put(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key(), "true");
-    options.put(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), "true");
+    options.put(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key(), String.valueOf(mergeUseRecordPositions));
+    options.put(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), String.valueOf(mergeUseRecordPositions));
 
     doUpdate(options, "001");
-    runComparison();
+    runComparison(mergeUseRecordPositions);
 
     doInsert(options, "002");
-    runComparison();
+    runComparison(mergeUseRecordPositions);
 
     doDelete(options, "003");
-    runComparison();
+    runComparison(mergeUseRecordPositions);
   }
 
-  protected void runComparison() {
-    compareDf(createDf(hudiBasePath, true), createDf(hudiBasePath, false));
-    compareDf(createDf(bootstrapTargetPath, true), createDf(bootstrapTargetPath, false));
-    compareDf(createDf2(hudiBasePath, true), createDf2(hudiBasePath, false));
-    compareDf(createDf2(bootstrapTargetPath, true), createDf2(bootstrapTargetPath, false));
+  protected void runComparison(boolean mergeUseRecordPositions) {
+    compareDf(createDf(hudiBasePath, mergeUseRecordPositions), createDf(hudiBasePath, false));
+    compareDf(createDf(bootstrapTargetPath, mergeUseRecordPositions), createDf(bootstrapTargetPath, false));
+    compareDf(createDf2(hudiBasePath, mergeUseRecordPositions), createDf2(hudiBasePath, false));
+    compareDf(createDf2(bootstrapTargetPath, mergeUseRecordPositions), createDf2(bootstrapTargetPath, false));
   }
 
-  protected Dataset<Row> createDf(String tableBasePath, Boolean mergeUseRecordPositions) {
+  protected Dataset<Row> createDf(String tableBasePath, boolean mergeUseRecordPositions) {
     //The chances of a uuid containing 00 with the 8-4-4-4-12 format is around 90%
     //for bootstrap, _hoodie_record_key is in the skeleton while begin_lat is in the data
     //We have a record key filter so that tests MORs filter pushdown with position based merging
@@ -93,7 +94,7 @@ class TestFiltersInFileGroupReader extends TestBootstrapReadBase {
         .where("begin_lat > 0.5 and _hoodie_record_key LIKE '%00%'");
   }
 
-  protected Dataset<Row> createDf2(String tableBasePath, Boolean mergeUseRecordPositions) {
+  protected Dataset<Row> createDf2(String tableBasePath, boolean mergeUseRecordPositions) {
     //The chances of a uuid containing 00 with the 8-4-4-4-12 format is around 90%
     //for bootstrap, _hoodie_record_key is in the skeleton while begin_lat is in the data
     //We have a record key filter so that tests MORs filter pushdown with position based merging

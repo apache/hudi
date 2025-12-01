@@ -46,7 +46,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
 import org.apache.spark.sql.types.StringType
-import org.junit.jupiter.api.{BeforeEach, Disabled, Tag, Test}
+import org.junit.jupiter.api.{BeforeEach, Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource, ValueSource}
@@ -125,7 +125,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
     }
   }
 
-  @Disabled("Need to implement MDT read with fg reader")
+  @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
   def testSecondaryIndexWithFilters(hoodieTableType: HoodieTableType): Unit = {
     val tableType = hoodieTableType.name()
@@ -230,7 +230,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
     }
   }
 
-  @Disabled("Need to implement MDT read with fg reader")
+  @Test
   def testCreateAndDropSecondaryIndex(): Unit = {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts ++ Map(
@@ -288,7 +288,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
     }
   }
 
-  @Disabled("Need to implement MDT read with fg reader")
+  @ParameterizedTest
   @MethodSource(Array("testSecondaryIndexPruningStreamingParameters"))
   def testSecondaryIndexPruningWithUpdates(testCase: SecondaryIndexStreamingWritesTestCase): Unit = {
     val tableType = testCase.tableType
@@ -387,7 +387,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
     }
   }
 
-  @Disabled("Need to implement MDT read with fg reader")
+  @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testSecondaryIndexWithAsyncCompaction(isStreamingWritesEnabled: Boolean): Unit = {
     val tableType = "MERGE_ON_READ"
@@ -515,7 +515,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
     }
   }
 
-  @Disabled("Need to implement MDT read with fg reader")
+  @ParameterizedTest
   @MethodSource(Array("testSecondaryIndexPruningParameters"))
   def testSecondaryIndexWithPartitionStatsIndex(testCase: SecondaryIndexTestCase): Unit = {
     val tableType = testCase.tableType
@@ -610,7 +610,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
   /**
    * Test case to write with updates and validate secondary index with multiple writers.
    */
-  @Disabled("Need to implement MDT read with fg reader")
+  @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testSecondaryIndexWithConcurrentWrites(tableType: HoodieTableType): Unit = {
     val tableName = "hudi_multi_writer_table_" + tableType.name()
@@ -705,7 +705,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
   /**
    * Test case to write with updates and validate secondary index with multiple writers.
    */
-  @Disabled("Need to implement MDT read with fg reader")
+  @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testSecondaryIndexWithCompactionAndCleaning(tableType: HoodieTableType): Unit = {
     var hudiOpts = commonOpts
@@ -805,7 +805,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
    * Test case to write with updates and validate secondary index with multiple writers.
    * Any one table type is enough to test this as we are validating the metadata table.
    */
-  @Disabled("Need to implement MDT read with fg reader")
+  @Test
   def testSecondaryIndexWithMDTCompaction(): Unit = {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts ++ Map(
@@ -887,7 +887,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
   /**
    * Test case to write with updates and validate secondary index with EVENT_TIME_ORDERING merge mode.
    */
-  @Disabled("Need to implement MDT read with fg reader")
+  @Test
   def testSecondaryIndexWithEventTimeOrderingMerge(): Unit = {
     val tableName = "test_secondary_index_with_event_time_ordering_merge"
 
@@ -963,7 +963,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
   /**
    * Test case to write with updates and validate secondary index with CUSTOM merge mode using CDC payload.
    */
-  @Disabled("Need to implement MDT read with fg reader")
+  @Test
   def testSecondaryIndexWithCustomMergeMode(): Unit = {
     val tableName = "test_secondary_index_with_custom_merge"
 
@@ -1036,7 +1036,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
     }
   }
 
-  @Disabled("Need to implement MDT read with fg reader")
+  @Test
   def testSecondaryIndexWithMultipleUpdatesForSameRecord(): Unit = {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts ++ Map(
@@ -1109,7 +1109,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
     }
   }
 
-  @Disabled("Need to implement MDT read with fg reader")
+  @Test
   def testSecondaryIndexWithOnlyDeleteLogs(): Unit = {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts ++ Map(
@@ -1175,7 +1175,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
     }
   }
 
-  @Disabled("Need to implement MDT read with fg reader")
+  @Test
   def testSecondaryIndexWithUpdateFollowedByDelete(): Unit = {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts ++ Map(
@@ -1252,7 +1252,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
     }
   }
 
-  @Disabled("Need to implement MDT read with fg reader")
+  @Test
   def testSecondaryIndexWithSameSecondaryKeyUpdatesForMultipleRecords(): Unit = {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts ++ Map(
@@ -1325,7 +1325,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
   /**
    * Test case to write with updates and validate secondary index with clustering.
    */
-  @Disabled("Need to implement MDT read with fg reader")
+  @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testSecondaryIndexWithClusteringAndCleaning(tableType: HoodieTableType): Unit = {
     var hudiOpts = commonOpts
@@ -1460,7 +1460,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
    * 4. Do a savepoint and restore, and validate secondary index deleted.
    * 5. Do an update and validate the secondary index is recreated.
    */
-  @Disabled("Need to implement MDT read with fg reader")
+  @Test
   def testSecondaryIndexWithSavepointAndRestore(): Unit = {
     val tableName = "test_secondary_index_with_savepoint_and_restore"
     val hudiOpts = commonOpts ++ Map(
@@ -1682,7 +1682,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
     }
   }
 
-  @Disabled("Need to implement MDT read with fg reader")
+  @Test
   def testSecondaryIndexWithNestedFields(): Unit = {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts ++ Map(
@@ -1751,7 +1751,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarnessScala {
    * 4. Fail the commit partially
    * 5. Validate the secondary index records
    */
-  @Disabled("Need to implement MDT read with fg reader")
+  @Test
   def testSecondaryIndexWithPartiallyFailedCommit(): Unit = {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts ++ Map(

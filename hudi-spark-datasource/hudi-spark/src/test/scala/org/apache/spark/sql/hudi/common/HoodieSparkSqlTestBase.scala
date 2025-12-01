@@ -108,10 +108,6 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     new File(sparkWareHouse, tableName).getCanonicalPath
   }
 
-  protected def disabledTest(testName: String, testTags: Tag*)(testFun: => Any /* Assertion */)(implicit pos: source.Position): Unit = {
-   // no-op
-  }
-
   override protected def test(testName: String, testTags: Tag*)(testFun: => Any /* Assertion */)(implicit pos: source.Position): Unit = {
     super.test(testName, testTags: _*)(
       try {

@@ -83,7 +83,6 @@ import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -255,7 +254,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     assertTrue(validator.getThrowables().isEmpty());
   }
 
-  @Disabled("Need to add support for mdt to fg reader")
+  @Test
   void missingLogFileFailsValidation() throws Exception {
     FileSystem fs = HadoopFSUtils.getFs(tempDir.toString(), new Configuration(false));
 
@@ -1287,7 +1286,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         fileId, HoodieLogFile.DELTA_EXTENSION, instantTime, 1, "1-0-1"));
   }
 
-  @Disabled("Need to add support for mdt to fg reader")
+  @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testRecordIndexMismatch(boolean ignoreFailed) throws IOException {
     Map<String, String> writeOptions = new HashMap<>();
