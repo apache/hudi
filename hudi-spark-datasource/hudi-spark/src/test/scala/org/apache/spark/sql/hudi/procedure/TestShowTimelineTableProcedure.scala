@@ -847,7 +847,7 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
       writeArchivedInstantsV2(metaClient, archivedInstants, testTable)
 
       // Run all test cases
-      // Expected total: 41 (29 active + 5 archived, but compaction creates additional instants?)
+      // Expected total: 34 (29 active + 5 archived, but compaction creates additional instants?)
       runShowTimelineTestCases(tableName, activeInstants, archivedInstants, 34, initTs)
     }
   }
