@@ -316,6 +316,7 @@ public class HoodieMetadataWriteUtils {
             .parquetCompressionCodec(writeConfig.getParquetCompressionCodec())
             // Keeping the log blocks as large as the log files themselves reduces the number of HFile blocks to be checked for
             // presence of keys
+            .hfileBlockSize(writeConfig.getHFileBlockSize())
             .logFileDataBlockMaxSize(maxLogFileSizeBytes)
             .hfileBloomFilterEnable(writeConfig.hfileBloomFilterEnabled())
             .withBloomFilterType(writeConfig.getMetadataConfig().getBloomFilterType())
