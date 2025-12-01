@@ -49,7 +49,7 @@ import scala.collection.JavaConverters._
  * Uses direct timeline setup similar to TestArchivedTimelineV1 and TestArchivedTimelineV2
  * instead of end-to-end table operations for creating timeline.
  */
-class TestShowTimelineProcedureLightweight extends HoodieSparkSqlTestBase {
+class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
 
   /**
    * Helper: Create ActiveAction with embedded plan to avoid reading from active timeline.
