@@ -789,6 +789,28 @@ class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
    */
   private def runAllTestScenarios(tableName: String, commitTimes: Map[String, String]): Unit = {
     val allTimeline = spark.sql(s"call show_timeline(table => '$tableName', showArchived => true, limit => 100)").collect()
+    // Start the array definition
+    print("val testAllTimeline: Array[Row] = Array(\n")
+
+    // Iterate through the collected data and print each row as a Row constructor call
+    allTimeline.foreach { row =>
+      // Assuming all fields are Strings, except for the last one which can be null.
+      // We use Option[String] and map to print "null" instead of a string.
+      val v0 = Option(row.get(0)).map(v => s""""${v.toString}"""").getOrElse("null")
+      val v1 = Option(row.get(1)).map(v => s""""${v.toString}"""").getOrElse("null")
+      val v2 = Option(row.get(2)).map(v => s""""${v.toString}"""").getOrElse("null")
+      val v3 = Option(row.get(3)).map(v => s""""${v.toString}"""").getOrElse("null")
+      val v4 = Option(row.get(4)).map(v => s""""${v.toString}"""").getOrElse("null")
+      val v5 = Option(row.get(5)).map(v => s""""${v.toString}"""").getOrElse("null")
+      val v6 = Option(row.get(6)).map(v => s""""${v.toString}"""").getOrElse("null")
+      val v7 = "null" // Explicitly setting the last field to null based on your screenshot
+
+      val formattedRow = s"  Row($v0, $v1, $v2, $v3, $v4, $v5, $v6, $v7),"
+      print(formattedRow + "\n")
+    }
+
+    // Close the array definition
+    print(")\n")
     val activeInstants = allTimeline.filter(_.getString(6) == "ACTIVE")
     val archivedInstants = allTimeline.filter(_.getString(6) == "ARCHIVED")
     val allInstantTimes = allTimeline.map(_.getString(0)).sorted.reverse
