@@ -449,7 +449,7 @@ public class TestHoodieSchemaCompatibility {
 
   @Test
   void testAreSchemasProjectionEquivalentNullableSchemaComparison() {
-    HoodieSchema s1 = HoodieSchema.createNullableSchema(HoodieSchema.create(HoodieSchemaType.INT));
+    HoodieSchema s1 = HoodieSchema.createNullable(HoodieSchemaType.INT);
     HoodieSchema s2 = HoodieSchema.create(HoodieSchemaType.INT);
     s2.addProp("prop1", "value1"); // prevent Objects.equals from returning true
     assertTrue(HoodieSchemaCompatibility.areSchemasProjectionEquivalent(s1, s2));

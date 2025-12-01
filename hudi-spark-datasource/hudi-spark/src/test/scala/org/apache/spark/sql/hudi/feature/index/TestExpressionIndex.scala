@@ -2288,7 +2288,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
         .fromProperties(toProperties(metadataOpts))
         .build()
       val fileIndex = new HoodieFileIndex(spark, metaClient, None,
-        opts ++ metadataOpts ++ Map("glob.paths" -> s"$basePath/9", DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true"), includeLogFiles = true)
+        opts ++ metadataOpts ++ Map("path" -> basePath, DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true"), includeLogFiles = true)
       val expressionIndexSupport = new ExpressionIndexSupport(spark, null, metadataConfig, metaClient)
       val partitionFilter: Expression = EqualTo(AttributeReference("c8", IntegerType)(), Literal(9))
       val (isPruned, prunedPaths) = fileIndex.prunePartitionsAndGetFileSlices(Seq.empty, Seq(partitionFilter))

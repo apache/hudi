@@ -923,7 +923,7 @@ public class TestHoodieAvroUtils {
   @Test
   void testConvertBytesToFixed() {
     Random rand = new Random();
-    //size calculated using AvroInternalSchemaConverter.computeMinBytesForPrecision
+    //size calculated using InternalSchemaConverter.computeMinBytesForPrecision
     testConverBytesToFixedHelper(rand.nextDouble(), 13, 7, 6);
     testConverBytesToFixedHelper(rand.nextDouble(), 4, 2, 2);
     testConverBytesToFixedHelper(rand.nextDouble(), 32, 12, 14);

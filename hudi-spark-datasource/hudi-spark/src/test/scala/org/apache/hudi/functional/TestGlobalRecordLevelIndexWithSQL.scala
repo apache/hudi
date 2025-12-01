@@ -278,8 +278,7 @@ class TestGlobalRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
         numUpdates = df.collect().length,
         onlyUpdates = true)
     }
-    val globbedPaths = basePath + "/2015/03/16," + basePath + "/2015/03/17," + basePath + "/2016/03/15"
-    val fileIndex = new HoodieFileIndex(sparkSession, metaClient, Option.empty, Map("glob.paths" -> globbedPaths), includeLogFiles = includeLogFiles)
+    val fileIndex = new HoodieFileIndex(sparkSession, metaClient, Option.empty, Map("path" -> basePath), includeLogFiles = includeLogFiles)
     val selectedPartition = "2016/03/15"
     val partitionFilter: Expression = EqualTo(AttributeReference("partition", StringType)(), Literal(selectedPartition))
     val (isPruned, prunedPaths) = fileIndex.prunePartitionsAndGetFileSlices(Seq.empty, Seq(partitionFilter))

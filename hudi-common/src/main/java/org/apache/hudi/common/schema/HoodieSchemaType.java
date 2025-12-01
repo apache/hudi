@@ -18,10 +18,9 @@
 
 package org.apache.hudi.common.schema;
 
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
-
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * Enumeration of all schema types supported by Hudi schema system.
@@ -106,19 +105,20 @@ public enum HoodieSchemaType {
    */
   BOOLEAN(Schema.Type.BOOLEAN),
 
+  DECIMAL(Schema.Type.BYTES),
+
+  TIME(Schema.Type.INT),
+
+  TIMESTAMP(Schema.Type.LONG),
+
+  DATE(Schema.Type.INT),
+
+  UUID(Schema.Type.STRING),
+
   /**
    * Null type - represents the absence of a value
    */
   NULL(Schema.Type.NULL);
-
-  // Cache for efficient reverse lookup
-  private static final Map<Schema.Type, HoodieSchemaType> AVRO_TO_HUDI_MAP = new HashMap<>();
-
-  static {
-    for (HoodieSchemaType hoodieType : values()) {
-      AVRO_TO_HUDI_MAP.put(hoodieType.avroType, hoodieType);
-    }
-  }
 
   private final Schema.Type avroType;
 
@@ -127,18 +127,63 @@ public enum HoodieSchemaType {
   }
 
   /**
-   * Converts an Avro schema type to the corresponding Hudi schema type.
+   * Converts an Avro schema to the corresponding Hudi schema type.
    *
-   * @param avroType the Avro schema type to convert
+   * @param avroSchema the Avro schema to convert
    * @return the equivalent HoodieSchemaType
    * @throws IllegalArgumentException if the Avro type is not supported
    */
-  public static HoodieSchemaType fromAvroType(Schema.Type avroType) {
-    HoodieSchemaType hoodieType = AVRO_TO_HUDI_MAP.get(avroType);
-    if (hoodieType == null) {
-      throw new IllegalArgumentException("Unsupported Avro schema type: " + avroType);
+  public static HoodieSchemaType fromAvro(Schema avroSchema) {
+    if (avroSchema == null) {
+      throw new IllegalArgumentException("Null schema provided");
     }
-    return hoodieType;
+    LogicalType logicalType = avroSchema.getLogicalType();
+    if (logicalType != null) {
+      if (logicalType instanceof LogicalTypes.Decimal) {
+        return DECIMAL;
+      } else if (logicalType instanceof LogicalTypes.TimeMillis || logicalType instanceof LogicalTypes.TimeMicros) {
+        return TIME;
+      } else if (logicalType instanceof LogicalTypes.TimestampMillis || logicalType instanceof LogicalTypes.TimestampMicros
+          || logicalType instanceof LogicalTypes.LocalTimestampMillis || logicalType instanceof LogicalTypes.LocalTimestampMicros) {
+        return TIMESTAMP;
+      } else if (logicalType instanceof LogicalTypes.Date) {
+        return DATE;
+      } else if (logicalType == LogicalTypes.uuid()) {
+        return UUID;
+      }
+    }
+    switch (avroSchema.getType()) {
+      case RECORD:
+        return RECORD;
+      case ENUM:
+        return ENUM;
+      case ARRAY:
+        return ARRAY;
+      case MAP:
+        return MAP;
+      case UNION:
+        return UNION;
+      case FIXED:
+        return FIXED;
+      case STRING:
+        return STRING;
+      case BYTES:
+        return BYTES;
+      case INT:
+        return INT;
+      case LONG:
+        return LONG;
+      case FLOAT:
+        return FLOAT;
+      case DOUBLE:
+        return DOUBLE;
+      case BOOLEAN:
+        return BOOLEAN;
+      case NULL:
+        return NULL;
+      default:
+        throw new IllegalArgumentException("Unsupported Avro schema type: " + avroSchema.getType());
+    }
   }
 
   /**
@@ -156,20 +201,7 @@ public enum HoodieSchemaType {
    * @return true if this type is a primitive type (not RECORD, ENUM, ARRAY, MAP, or UNION)
    */
   public boolean isPrimitive() {
-    switch (this) {
-      case STRING:
-      case BYTES:
-      case INT:
-      case LONG:
-      case FLOAT:
-      case DOUBLE:
-      case BOOLEAN:
-      case NULL:
-      case FIXED:
-        return true;
-      default:
-        return false;
-    }
+    return !isComplex();
   }
 
   /**
@@ -178,7 +210,16 @@ public enum HoodieSchemaType {
    * @return true if this type is a complex type (RECORD, ENUM, ARRAY, MAP, or UNION)
    */
   public boolean isComplex() {
-    return !isPrimitive();
+    switch (this) {
+      case RECORD:
+      case ENUM:
+      case ARRAY:
+      case MAP:
+      case UNION:
+        return true;
+      default:
+        return false;
+    }
   }
 
   /**
@@ -192,6 +233,7 @@ public enum HoodieSchemaType {
       case LONG:
       case FLOAT:
       case DOUBLE:
+      case DECIMAL:
         return true;
       default:
         return false;

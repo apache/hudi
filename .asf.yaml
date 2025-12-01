@@ -46,6 +46,7 @@ github:
     - ad1happy2go
     - rangareddy
     - deepakpanda93
+    - hudi-bot
 notifications:
   commits:      commits@hudi.apache.org
   issues:       commits@hudi.apache.org

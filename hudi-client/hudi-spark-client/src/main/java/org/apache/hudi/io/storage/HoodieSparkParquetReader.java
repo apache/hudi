@@ -25,6 +25,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
@@ -43,7 +44,6 @@ import org.apache.parquet.filter2.predicate.FilterApi;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.parquet.hadoop.ParquetReader;
-import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.SchemaRepair;
 import org.apache.spark.sql.HoodieInternalRowUtils;
@@ -109,13 +109,14 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   }
 
   @Override
-  public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+  public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema) throws IOException {
     return getRecordIterator(requestedSchema);
   }
 
   @Override
-  public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema schema) throws IOException {
-    ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator(schema);
+  public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(HoodieSchema schema) throws IOException {
+    //TODO boundary to revisit in later pr to use HoodieSchema directly
+    ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator(schema.getAvroSchema());
     return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieSparkRecord(data)));
   }
 
@@ -153,19 +154,12 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     storage.getConf().set(SQLConf.PARQUET_BINARY_AS_STRING().key(), sqlConf.getConf(SQLConf.PARQUET_BINARY_AS_STRING()).toString());
     storage.getConf().set(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), sqlConf.getConf(SQLConf.PARQUET_INT96_AS_TIMESTAMP()).toString());
     RebaseDateTime.RebaseSpec rebaseDateSpec = SparkAdapterSupport$.MODULE$.sparkAdapter().getRebaseSpec("CORRECTED");
-    boolean parquetFilterPushDown = storage.getConf().getBoolean(SQLConf.PARQUET_RECORD_FILTER_ENABLED().key(), sqlConf.parquetRecordFilterEnabled());
+    boolean parquetFilterPushDown = storage.getConf().getBoolean(SQLConf.PARQUET_FILTER_PUSHDOWN_ENABLED().key(), sqlConf.parquetFilterPushDown());
     if (parquetFilterPushDown && readFilters != null && !readFilters.isEmpty()) {
-      ParquetMetadata parquetMetadataWithoutRowGroup = getParquetMetadataWithoutRowGroup();
-      ParquetFilters parquetFilters = new ParquetFilters(
-          parquetMetadataWithoutRowGroup.getFileMetaData().getSchema(),
-          storage.getConf().getBoolean(SQLConf.PARQUET_FILTER_PUSHDOWN_DATE_ENABLED().key(), sqlConf.parquetFilterPushDownDate()),
-          storage.getConf().getBoolean(SQLConf.PARQUET_FILTER_PUSHDOWN_TIMESTAMP_ENABLED().key(), sqlConf.parquetFilterPushDownTimestamp()),
-          storage.getConf().getBoolean(SQLConf.PARQUET_FILTER_PUSHDOWN_DECIMAL_ENABLED().key(), sqlConf.parquetFilterPushDownDecimal()),
-          storage.getConf().getBoolean(SQLConf.PARQUET_FILTER_PUSHDOWN_STRING_STARTSWITH_ENABLED().key(),
-              SparkAdapterSupport$.MODULE$.sparkAdapter().enableParquetFilterPushDownStringPredicate(sqlConf)),
-          storage.getConf().getInt(SQLConf.PARQUET_FILTER_PUSHDOWN_INFILTERTHRESHOLD().key(), sqlConf.parquetFilterPushDownInFilterThreshold()),
-          storage.getConf().getBoolean(SQLConf.CASE_SENSITIVE().key(), sqlConf.caseSensitiveAnalysis()),
-          rebaseDateSpec
+      ParquetFilters parquetFilters = SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFilters(
+          getFileSchema(),
+          storage.getConf(),
+          sqlConf
       );
       Option<FilterPredicate> predicateOpt = Option.fromJavaOptional(readFilters
           .stream()
@@ -204,7 +198,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   }
 
   @Override
-  public Schema getSchema() {
+  public HoodieSchema getSchema() {
     if (schemaOption.isEmpty()) {
       // Some types in avro are not compatible with parquet.
       // Avro only supports representing Decimals as fixed byte array
@@ -215,11 +209,8 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
           .getAvroSchemaConverters()
           .toAvroType(structType, true, messageType.getName(), StringUtils.EMPTY_STRING));
     }
-    return schemaOption.get();
-  }
-
-  private ParquetMetadata getParquetMetadataWithoutRowGroup() {
-    return ((ParquetUtils) parquetUtils).readMetadata(storage, path);
+    //TODO boundary to revisit using HoodieSchema directly
+    return HoodieSchema.fromAvroSchema(schemaOption.get());
   }
 
   protected StructType getStructSchema() {

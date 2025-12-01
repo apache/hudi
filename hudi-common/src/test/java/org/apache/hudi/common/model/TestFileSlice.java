@@ -127,4 +127,39 @@ public class TestFileSlice {
     List<String> allFiles = fileSlice.getAllFileNames();
     assertEquals(0, allFiles.size());
   }
+
+  @Test
+  public void testFilterLogFiles() {
+    // Create a FileSlice with both base file and log files
+    HoodieBaseFile baseFile = new HoodieBaseFile(
+        "file://" + PARTITION_PATH + "/test_base_file.parquet");
+    // Log files must follow the proper naming convention: .{fileId}_{instant}.log.{version}
+    HoodieLogFile logFile1 = new HoodieLogFile(new StoragePath(PARTITION_PATH + "/." + FILE_ID + "_004.log.1"));
+    HoodieLogFile logFile2 = new HoodieLogFile(new StoragePath(PARTITION_PATH + "/." + FILE_ID + "_005.log.2"));
+    FileSlice fileSlice = new FileSlice(
+        new HoodieFileGroupId(PARTITION_PATH, FILE_ID),
+        BASE_INSTANT,
+        baseFile,
+        Arrays.asList(logFile1, logFile2)
+    );
+    // test filter log files that matches one log file
+    FileSlice fileSliceAfterFilterPart = fileSlice.filterLogFiles(logFile -> logFile.getFileName().endsWith("_004.log.1"));
+    assertEquals(1, fileSliceAfterFilterPart.getLogFiles().count());
+    assertEquals(fileSlice.getFileGroupId(), fileSliceAfterFilterPart.getFileGroupId());
+    assertEquals(fileSlice.getBaseFile(), fileSliceAfterFilterPart.getBaseFile());
+    assertEquals(fileSlice.getBaseInstantTime(), fileSliceAfterFilterPart.getBaseInstantTime());
+
+    // test filter log files that matches all log files
+    FileSlice fileSliceAfterFilterAll = fileSlice.filterLogFiles(logFile -> true);
+    assertEquals(fileSlice, fileSliceAfterFilterAll);
+    // if all log files matches, the new file slice will share the same object references with the original file slice
+    assertTrue(fileSlice == fileSliceAfterFilterAll);
+
+    // test filter log files that matches no log files
+    FileSlice fileSliceAfterFilterNone = fileSlice.filterLogFiles(logFile -> false);
+    assertEquals(0, fileSliceAfterFilterNone.getLogFiles().count());
+    assertEquals(fileSlice.getFileGroupId(), fileSliceAfterFilterPart.getFileGroupId());
+    assertEquals(fileSlice.getBaseFile(), fileSliceAfterFilterPart.getBaseFile());
+    assertEquals(fileSlice.getBaseInstantTime(), fileSliceAfterFilterPart.getBaseInstantTime());
+  }
 }

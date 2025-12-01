@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
@@ -35,7 +36,7 @@ import org.apache.hudi.hadoop.SchemaEvolutionContext;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -131,7 +132,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     HoodieCommitMetadata commitMetadataOne = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
     // mock the latest schema to the commit metadata
-    InternalSchema internalSchema = AvroInternalSchemaConverter.convert(schema);
+    InternalSchema internalSchema = InternalSchemaConverter.convert(HoodieSchema.fromAvroSchema(schema));
     commitMetadataOne.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(internalSchema));
     FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, path1.toString(), commitTime, Option.of(commitMetadataOne));
     // Create 3 parquet files with 10 records each for partition 2

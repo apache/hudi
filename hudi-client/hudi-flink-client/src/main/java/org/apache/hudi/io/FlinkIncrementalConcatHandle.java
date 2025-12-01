@@ -20,6 +20,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.storage.StoragePath;
@@ -61,7 +62,8 @@ public class FlinkIncrementalConcatHandle<T, I, K, O>
     Schema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
     String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
     try {
-      fileWriter.write(key, oldRecord, writeSchema);
+      //TODO boundary to revisit in follow up to use HoodieSchema directly
+      fileWriter.write(key, oldRecord, HoodieSchema.fromAvroSchema(writeSchema));
     } catch (IOException | RuntimeException e) {
       String errMsg = String.format(
           "Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",

@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -264,7 +265,7 @@ public class HoodieFileSliceTestUtils {
 
     try (HoodieAvroFileWriter writer = (HoodieAvroFileWriter) HoodieFileWriterFactory
         .getFileWriter(baseInstantTime, new StoragePath(baseFilePath), storage, cfg,
-            schema, new LocalTaskContextSupplier(), HoodieRecord.HoodieRecordType.AVRO)) {
+                HoodieSchema.fromAvroSchema(schema), new LocalTaskContextSupplier(), HoodieRecord.HoodieRecordType.AVRO)) {
       for (IndexedRecord record : records) {
         writer.writeAvro(
             (String) record.get(schema.getField(ROW_KEY).pos()), record);
