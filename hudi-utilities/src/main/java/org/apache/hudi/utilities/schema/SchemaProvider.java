@@ -69,7 +69,7 @@ public abstract class SchemaProvider implements Serializable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public HoodieSchema getTargetHoodieSchema() {
     Schema schema = getTargetSchema();
-    return schema == null ? null : HoodieSchema.fromAvroSchema(schema);
+    return schema == null ? getSourceHoodieSchema() : HoodieSchema.fromAvroSchema(schema);
   }
 
   /**
