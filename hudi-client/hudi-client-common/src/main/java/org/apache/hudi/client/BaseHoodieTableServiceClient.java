@@ -1195,7 +1195,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime);
       }
     } catch (Exception e) {
-      metrics.emitRollbackFailure(e.getMessage());
+      metrics.emitRollbackFailure(e.getClass().getSimpleName());
       throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime, e);
     }
   }
