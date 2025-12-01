@@ -82,6 +82,22 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
   }
 
   /**
+   * Creates an archived timeline without loading any instants.
+   * Instants can be loaded later using methods like loadCompletedInstantDetailsInMemory, loadCompactionDetailsInMemory, etc.
+   */
+  public ArchivedTimelineV2(HoodieTableMetaClient metaClient, boolean shouldLoadInstants) {
+    this.metaClient = metaClient;
+    if (shouldLoadInstants) {
+      setInstants(this.loadInstants());
+      this.cursorInstant = firstInstant().map(HoodieInstant::requestedTime).orElse(null);
+    } else {
+      setInstants(new ArrayList<>());
+      this.cursorInstant = null;
+    }
+    this.instantReader = this;
+  }
+
+  /**
    * Loads completed instants from startTs(inclusive).
    * Note that there is no lazy loading, so this may not work if really early startTs is specified.
    */

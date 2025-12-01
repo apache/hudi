@@ -186,34 +186,13 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
 
     val activeRollbackInfoMap = getRolledBackInstantInfo(metaClient.getActiveTimeline, metaClient)
 
-    // Create archived timeline starting from the maximum instant time in active timeline
-    // This way, if all archived instants are older than the active timeline's max instant,
-    // the archived timeline will be empty and won't load anything, avoiding unnecessary loading.
-    // Instead of getArchivedTimeline() which loads with LoadMode.ACTION, we use the startTs
-    // constructor which loads with LoadMode.METADATA, and then load specific details (PLAN for compactions).
-    val (archivedTimeline, archivedRollbackInfoMap) = if (showArchived) {
-      // Get the maximum instant time from active timeline
-      val maxActiveInstantTime = {
-        val lastInstantOpt = metaClient.getActiveTimeline
-          .filterCompletedInstants()
-          .firstInstant()
-        if (lastInstantOpt.isPresent) {
-          lastInstantOpt.get().requestedTime()
-        } else {
-          HoodieTimeline.INIT_INSTANT_TS
-        }
-      }
-      // Create archived timeline starting from max active instant time
-      // This will be empty as all archived instants are older than active timeline
-      val timeline = if (maxActiveInstantTime.nonEmpty) {
-        metaClient.getTableFormat().getTimelineFactory()
-          .createArchivedTimeline(metaClient, maxActiveInstantTime)
-      } else {
-        metaClient.getArchivedTimeline()
-      }
+    // Create archived timeline with lazy loading to avoid eager loading of all archived instants.
+    // We create an empty timeline first, then load instants only as needed based on the time range or limit.
+    val (archivedTimeline, archivedRollbackInfoMap): (HoodieTimeline, Map[String, List[String]]) = if (showArchived) {
+      // Create archived timeline without loading any instants (lazy loading)
+      val timeline = metaClient.getTableFormat().getTimelineFactory()
+        .createArchivedTimeline(metaClient, false)
       // Load the required details with appropriate LoadMode (METADATA for commits, PLAN for compactions)
-      // Note: loadCompletedInstantDetailsInMemory may have already loaded METADATA via constructor,
-      // but we call it again to ensure we have the data for the specified time range or limit.
       if (startTime.nonEmpty && endTime.nonEmpty) {
         timeline.loadCompletedInstantDetailsInMemory(startTime, endTime)
         timeline.loadCompactionDetailsInMemory(startTime, endTime)
@@ -224,7 +203,7 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
       val rollbackInfoMap = getRolledBackInstantInfo(timeline, metaClient)
       (timeline, rollbackInfoMap)
     } else {
-      (null, Map.empty[String, List[String]])
+      (null.asInstanceOf[HoodieTimeline], Map.empty[String, List[String]])
     }
 
     val finalEntries = if (showArchived) {

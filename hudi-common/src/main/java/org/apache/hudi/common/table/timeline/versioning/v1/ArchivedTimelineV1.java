@@ -78,6 +78,19 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
   }
 
+  /**
+   * Creates an archived timeline without loading any instants.
+   * Instants can be loaded later using methods like loadCompletedInstantDetailsInMemory, loadCompactionDetailsInMemory, etc.
+   */
+  public ArchivedTimelineV1(HoodieTableMetaClient metaClient, boolean shouldLoadInstants) {
+    this.metaClient = metaClient;
+    if (shouldLoadInstants) {
+      setInstants(this.loadInstants(false));
+    } else {
+      setInstants(new ArrayList<>());
+    }
+  }
+
   private ArchivedTimelineV1(HoodieTableMetaClient metaClient, TimeRangeFilter timeRangeFilter) {
     this(metaClient, timeRangeFilter, null, Option.of(HoodieInstant.State.COMPLETED));
   }
