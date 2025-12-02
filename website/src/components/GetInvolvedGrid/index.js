@@ -9,12 +9,10 @@ const GetInvolvedGrid = () => {
       title: 'For development discussions',
       content: (
         <>
-          <a href="https://github.com/apache/hudi/discussions">Github Discussions</a> or Dev Mailing list (
+          <a href="https://github.com/apache/hudi/discussions">Github Discussions</a>{' '}
+          and <a href="https://lists.apache.org/list?dev@hudi.apache.org">Dev Mailing list</a> (
           <a href="mailto:dev-subscribe@hudi.apache.org">Subscribe</a>,{' '}
-          <a href="mailto:dev-unsubscribe@hudi.apache.org">Unsubscribe</a>,{' '}
-          <a href="https://lists.apache.org/list?dev@hudi.apache.org">Archives</a>).
-          <br />
-          Empty email works for subscribe/unsubscribe.
+          <a href="mailto:dev-unsubscribe@hudi.apache.org">Unsubscribe</a>{' '}by sending an empty email).
         </>
       ),
     },
@@ -22,12 +20,10 @@ const GetInvolvedGrid = () => {
       title: 'For any general questions, user support',
       content: (
         <>
-          <a href="https://github.com/apache/hudi/discussions">Github Discussions</a> or Users Mailing list (
+          <a href="https://github.com/apache/hudi/discussions">Github Discussions</a>{' '}
+          and <a href="https://lists.apache.org/list?users@hudi.apache.org">Users Mailing list</a> (
           <a href="mailto:users-subscribe@hudi.apache.org">Subscribe</a>,{' '}
-          <a href="mailto:users-unsubscribe@hudi.apache.org">Unsubscribe</a>,{' '}
-          <a href="https://lists.apache.org/list?users@hudi.apache.org">Archives</a>).
-          <br />
-          Empty email works for subscribe/unsubscribe.
+          <a href="mailto:users-unsubscribe@hudi.apache.org">Unsubscribe</a>{' '}by sending an empty email).
         </>
       ),
     },
@@ -69,10 +65,9 @@ const GetInvolvedGrid = () => {
       title: 'For stream of commits, pull requests etc',
       content: (
         <>
-          Commits Mailing list (
+          <a href="https://lists.apache.org/list?commits@hudi.apache.org">Commits Mailing list</a> (
           <a href="mailto:commits-subscribe@hudi.apache.org">Subscribe</a>,{' '}
-          <a href="mailto:commits-unsubscribe@hudi.apache.org">Unsubscribe</a>,{' '}
-          <a href="https://lists.apache.org/list?commits@hudi.apache.org">Archives</a>).
+          <a href="mailto:commits-unsubscribe@hudi.apache.org">Unsubscribe</a>,{' '} by sending an empty email).
         </>
       ),
     },
