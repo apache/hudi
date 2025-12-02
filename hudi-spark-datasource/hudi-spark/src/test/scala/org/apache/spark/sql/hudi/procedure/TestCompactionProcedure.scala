@@ -113,12 +113,6 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
           .collect()
           .map(row => Seq(row.getString(0), row.getInt(5), row.getString(2)))
         assertResult(2)(resultC.length)
-      // A compaction action eventually becomes commit when completed, so show_compaction
-      // can only see the first scheduled compaction instant
-      val resultC = spark.sql(s"call show_compaction('$tableName')")
-        .collect()
-        .map(row => Seq(row.getString(0), row.getInt(5), row.getString(2)))
-      assertResult(2)(resultC.length)
 
         checkAnswer(s"call run_compaction(op => 'run', table => '$tableName', timestamp => ${timestamps(0)})")(
           Seq(resultA(0).head, resultA(0)(1), HoodieInstant.State.COMPLETED.name())
@@ -422,7 +416,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
   }
 
   test("Test show_compaction procedure") {
-    withSQLConf("hoodie.compact.inline" -> "false", "hoodie.parquet.max.file.size" -> "10000") {
+    withSQLConf("hoodie.compact.inline" -> "false", "hoodie.compact.inline.max.delta.commits" -> "1", "hoodie.parquet.max.file.size" -> "10000") {
       withTempDir { tmp =>
         val tableName = generateTableName
         spark.sql(

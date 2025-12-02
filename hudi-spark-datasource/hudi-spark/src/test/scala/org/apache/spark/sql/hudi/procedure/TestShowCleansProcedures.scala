@@ -94,6 +94,7 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
           afterStartFilter.show(false)
           val afterStartRows = afterStartFilter.collect()
           assertResult(afterStartRows.length)(1)
+        }
       }
     }
   }
@@ -175,6 +176,7 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
             // Plan-specific fields should be null for completed operations
             assert(completedClean.get(17) == null) // total_partitions_to_clean
             assert(completedClean.get(18) == null) // total_partitions_to_delete
+          }
         }
       }
     }
@@ -234,24 +236,25 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
             assert(completedClean.getString(3) == "clean") // action
             assert(completedClean.getString(5) != null) // start_clean_time
 
-          // For partitioned tables, partition metadata should be available
-          if (completedClean.getString(6) != null) { // partition_path
-            assert(completedClean.getString(7) != null) // policy
-            assert(completedClean.get(8) != null) // delete_path_patterns
-            assert(completedClean.get(9) != null) // success_delete_files
-            assert(completedClean.get(10) != null) // failed_delete_files
-            // is_partition_deleted can be true/false/null
+            // For partitioned tables, partition metadata should be available
+            if (completedClean.getString(6) != null) { // partition_path
+              assert(completedClean.getString(7) != null) // policy
+              assert(completedClean.get(8) != null) // delete_path_patterns
+              assert(completedClean.get(9) != null) // success_delete_files
+              assert(completedClean.get(10) != null) // failed_delete_files
+              // is_partition_deleted can be true/false/null
+            }
+
+            assert(completedClean.getLong(12) >= 0) // time_taken_in_millis
+            assert(completedClean.getInt(13) >= 0) // total_files_deleted
+            assert(completedClean.getString(14) != null) // earliest_commit_to_retain
+            assert(completedClean.getString(15) != null) // last_completed_commit_timestamp
+            assert(completedClean.getInt(16) >= 1) // version
+
+            // plan specific fields should be null for completed operations
+            assert(completedClean.get(17) == null) // total_partitions_to_clean
+            assert(completedClean.get(18) == null) // total_partitions_to_delete
           }
-
-          assert(completedClean.getLong(12) >= 0) // time_taken_in_millis
-          assert(completedClean.getInt(13) >= 0) // total_files_deleted
-          assert(completedClean.getString(14) != null) // earliest_commit_to_retain
-          assert(completedClean.getString(15) != null) // last_completed_commit_timestamp
-          assert(completedClean.getInt(16) >= 1) // version
-
-          // plan specific fields should be null for completed operations
-          assert(completedClean.get(17) == null) // total_partitions_to_clean
-          assert(completedClean.get(18) == null) // total_partitions_to_delete
         }
 
         val completedOnly = spark.sql(
