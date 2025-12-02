@@ -67,10 +67,10 @@ const HomepageFeatures = () => {
     },
     {
       icon: MultiModalIndexes,
-      title: "Query acceleration through multi-modal indexes.",
+      title: "Query acceleration through multimodal indexes.",
       description:
-        "Experience faster write transactions on huge/wide tables & faster query performance with first-of-its kind multi-modal indexing subsystem.",
-      link: "/blog/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi",
+        "Experience faster write transactions on huge/wide tables & faster query performance with first-of-its kind multimodal indexing subsystem.",
+      link: "/blog/2025/10/29/deep-dive-into-hudis-indexing-subsystem-part-1-of-2/",
     },
     {
       icon: SchemaEvolution,

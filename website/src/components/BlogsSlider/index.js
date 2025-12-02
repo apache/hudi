@@ -102,7 +102,7 @@ const BlogsSlider = () => {
           />
         </div>
         <div className={styles.blogViewAllBtnWrapper}>
-          <LinkButton to="/blog" className={styles.blogBtn}>
+          <LinkButton to="/learn/blog" className={styles.blogBtn}>
             View All
           </LinkButton>
         </div>

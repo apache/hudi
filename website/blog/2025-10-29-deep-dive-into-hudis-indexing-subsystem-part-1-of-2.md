@@ -13,7 +13,7 @@ tags:
 
 For decades, databases have relied on indexes—specialized data structures—to dramatically improve read and write performance by quickly locating specific records. Apache Hudi extends this fundamental principle to the data lakehouse with a unique and powerful approach. Every Hudi table contains a self-managed metadata table that functions as an indexing subsystem, enabling efficient data skipping and fast record lookups across a wide range of read and write scenarios.
 
-This two-part series dives into Hudi’s indexing subsystem. Part 1 explains the internal layout and data-skipping capabilities. [part 2](https://hudi.apache.org/blog/2025/11/12/deep-dive-into-hudis-indexing-subsystem-part-2-of-2/) covers advanced features—record, secondary, and expression indexes—and asynchronous index maintenance. By the end, you’ll know how to leverage Hudi’s multimodal index to build more efficient lakehouse tables.
+This two-part series dives into Hudi’s indexing subsystem. Part 1 explains the internal layout and data-skipping capabilities. [Part 2](https://hudi.apache.org/blog/2025/11/12/deep-dive-into-hudis-indexing-subsystem-part-2-of-2/) covers advanced features—record, secondary, and expression indexes—and asynchronous index maintenance. By the end, you’ll know how to leverage Hudi’s multimodal index to build more efficient lakehouse tables.
 
 ## The Metadata Table
 
