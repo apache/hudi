@@ -66,12 +66,13 @@ import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -112,7 +113,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     Random random = new Random();
     // create a data table which will auto create mdt table as well
     HoodieWriteConfig cfg = getConfig();
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
       writeData(client, InProcessTimeGenerator.createNewInstantTime(), 100, false);
     }
 
@@ -140,7 +141,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     // Timestamp
     minMaxValues.add(Pair.of(new Timestamp(1000 * 60 * 60 * 10), new Timestamp(1000 * 60 * 60 * 60)));
     minMaxValues.add(generateRandomMinMaxValue(random, (Functions.Function1<Random, Comparable>) random1
-        -> new Timestamp((long) random1.nextInt(1000) * 60 * 60 * 1000)));
+        -> new Timestamp(random1.nextInt(1000) * 60 * 60 * 1000)));
 
     //Bytes
     byte[] bytes1 = new byte[10];
@@ -169,21 +170,33 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata = new ArrayList<>();
     AtomicInteger counter = new AtomicInteger();
     AtomicInteger finalCounter1 = counter;
-    minMaxValues.forEach(entry -> columnRangeMetadata.add(HoodieColumnRangeMetadata.<Comparable>create(fileName, targetColNamePrefix + "_" + (finalCounter1.getAndIncrement()),
-        entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456, ValueMetadata.V1EmptyMetadata.get())));
+    minMaxValues.forEach(entry -> {
+      columnRangeMetadata.add(HoodieColumnRangeMetadata.<Comparable>create(fileName, targetColNamePrefix + "_" + (finalCounter1.getAndIncrement()),
+          entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456, ValueMetadata.V1EmptyMetadata.get()));
+    });
 
     // create mdt records
     List<HoodieRecord<HoodieMetadataPayload>> columnStatsRecords =
         HoodieMetadataPayload.createColumnStatsRecords("p1", columnRangeMetadata, false)
             .map(record -> (HoodieRecord<HoodieMetadataPayload>) record).collect(Collectors.toList());
 
-    Collections.sort(columnStatsRecords, (o1, o2) -> o1.getRecordKey().compareTo(o2.getRecordKey()));
+    Collections.sort(columnStatsRecords, new Comparator<HoodieRecord<HoodieMetadataPayload>>() {
+      @Override
+      public int compare(HoodieRecord<HoodieMetadataPayload> o1, HoodieRecord<HoodieMetadataPayload> o2) {
+        return o1.getRecordKey().compareTo(o2.getRecordKey());
+      }
+    });
 
     List<HoodieRecord<HoodieMetadataPayload>> expectedColumnStatsRecords =
         HoodieMetadataPayload.createColumnStatsRecords("p1", columnRangeMetadata, false)
             .map(record -> (HoodieRecord<HoodieMetadataPayload>) record).collect(Collectors.toList());
 
-    Collections.sort(expectedColumnStatsRecords, (o1, o2) -> o1.getRecordKey().compareTo(o2.getRecordKey()));
+    Collections.sort(expectedColumnStatsRecords, new Comparator<HoodieRecord<HoodieMetadataPayload>>() {
+      @Override
+      public int compare(HoodieRecord<HoodieMetadataPayload> o1, HoodieRecord<HoodieMetadataPayload> o2) {
+        return o1.getRecordKey().compareTo(o2.getRecordKey());
+      }
+    });
 
     HoodieWriteConfig mdtWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(cfg, HoodieFailedWritesCleaningPolicy.EAGER, HoodieTableVersion.EIGHT);
     HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder().setBasePath(mdtWriteConfig.getBasePath()).setConf(context.getStorageConf().newInstance()).build();
@@ -241,33 +254,33 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     generateNColStatsEntriesAndValidateMerge((Functions.Function1<Random, Comparable>) random -> {
       byte[] bytes = new byte[10];
       random.nextBytes(bytes);
-      return new String(bytes, StandardCharsets.UTF_8);
+      return new String(bytes, Charset.forName("UTF-8"));
     });
   }
 
   @Test
   public void testColsStatsMergeInt() throws Exception {
-    generateNColStatsEntriesAndValidateMerge((Functions.Function1<Random, Comparable>) Random::nextInt);
+    generateNColStatsEntriesAndValidateMerge((Functions.Function1<Random, Comparable>) random -> random.nextInt());
   }
 
   @Test
   public void testColsStatsMergeLong() throws Exception {
-    generateNColStatsEntriesAndValidateMerge((Functions.Function1<Random, Comparable>) Random::nextLong);
+    generateNColStatsEntriesAndValidateMerge((Functions.Function1<Random, Comparable>) random -> random.nextLong());
   }
 
   @Test
   public void testColsStatsMergeDouble() throws Exception {
-    generateNColStatsEntriesAndValidateMerge((Functions.Function1<Random, Comparable>) Random::nextDouble);
+    generateNColStatsEntriesAndValidateMerge((Functions.Function1<Random, Comparable>) random -> random.nextDouble());
   }
 
   @Test
   public void testColsStatsMergeBoolean() throws Exception {
-    generateNColStatsEntriesAndValidateMerge((Functions.Function1<Random, Comparable>) Random::nextBoolean);
+    generateNColStatsEntriesAndValidateMerge((Functions.Function1<Random, Comparable>) random -> random.nextBoolean());
   }
 
   @Test
   public void testColsStatsMergeFloat() throws Exception {
-    generateNColStatsEntriesAndValidateMerge((Functions.Function1<Random, Comparable>) Random::nextFloat);
+    generateNColStatsEntriesAndValidateMerge((Functions.Function1<Random, Comparable>) random -> random.nextFloat());
   }
 
   @Test
@@ -474,7 +487,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
         entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456, ValueMetadata.V1EmptyMetadata.get())));
 
     HoodieColumnRangeMetadata<Comparable> mergedColStatsRangeMetadata = (HoodieColumnRangeMetadata<Comparable>) columnRangeMetadata.stream()
-        .reduce(HoodieColumnRangeMetadata::merge).get();
+        .reduce((left, right) -> HoodieColumnRangeMetadata.merge(left, right)).get();
 
     Object finalMin = getExpectedMinValue(allMinValues);
     Object finalMax = getExpectedMaxValue(allMaxValues);
@@ -529,7 +542,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     return writeStatuses;
   }
 
-  static class PhoneyTaskContextSupplier extends TaskContextSupplier {
+  class PhoneyTaskContextSupplier extends TaskContextSupplier {
 
     @Override
     public Supplier<Integer> getPartitionIdSupplier() {

@@ -58,7 +58,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
   var dfList: Seq[DataFrame] = Seq()
 
-  val sourceTableSchema: StructType =
+  val sourceTableSchema =
     new StructType()
       .add("c1", IntegerType)
       .add("c2", StringType)
@@ -72,7 +72,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
   val sourceTableHoodieSchema: HoodieSchema = HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(sourceTableSchema, "record", ""))
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp() = {
     initPath()
     initQueryIndexConf()
     initSparkContexts()
@@ -85,7 +85,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
   }
 
   @AfterEach
-  override def tearDown(): Unit = {
+  override def tearDown() = {
     cleanupFileSystem()
     cleanupSparkContexts()
   }
@@ -422,7 +422,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     spark.createDataFrame(rdd, sourceTableSchema)
   }
 
-  protected def asJson(df: DataFrame): String =
+  protected def asJson(df: DataFrame) =
     df.toJSON
       .select("value")
       .collect()
@@ -556,7 +556,7 @@ object ColumnStatIndexTestBase {
     }
 
     java.util.stream.Stream.of(
-      v6Seq ++ Seq(
+      (v6Seq ++ Seq(
         // Table version 8
         Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "c8", "8"),
         Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "", "8"),
@@ -568,7 +568,7 @@ object ColumnStatIndexTestBase {
         Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "", currentVersionCode),
         Arguments.arguments(HoodieTableType.MERGE_ON_READ, "c8", currentVersionCode),
         Arguments.arguments(HoodieTableType.MERGE_ON_READ, "", currentVersionCode)
-      ): _*
+      )): _*
     )
   }
 

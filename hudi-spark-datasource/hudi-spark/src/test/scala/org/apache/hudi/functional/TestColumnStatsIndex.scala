@@ -719,7 +719,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString
     ) ++ metadataOpts
 
-    val structSchema = StructType(StructField("c1", IntegerType, nullable = false) :: StructField("c2", StringType, nullable = true) :: Nil)
+    val structSchema = StructType(StructField("c1", IntegerType, false) :: StructField("c2", StringType, true) :: Nil)
     val hoodieSchema = HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(structSchema, "record", ""))
     val inputDF = spark.createDataFrame(
       spark.sparkContext.parallelize(Seq(Row(1, "v1"), Row(2, "v2"), Row(3, null), Row(4, "v4"))),
@@ -937,7 +937,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
 
       val requestedColumns = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS)
-        .getSourceFields.toSeq.filterNot(colName => colName.startsWith("_hoodie")).toSeq.sorted
+        .getSourceFields.toSeq.filterNot(colName => colName.startsWith("_hoodie")).sorted.toSeq
 
       val (expectedColStatsSchema, _) = composeIndexSchema(requestedColumns, targetColumnsToIndex.toSeq, sourceTableSchema)
       val expectedColStatsIndexUpdatedDF =
