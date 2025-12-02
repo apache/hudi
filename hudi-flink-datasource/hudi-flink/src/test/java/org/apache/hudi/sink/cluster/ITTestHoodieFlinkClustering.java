@@ -180,7 +180,7 @@ public class ITTestHoodieFlinkClustering {
       HoodieInstant instant = INSTANT_GENERATOR.getClusteringCommitRequestedInstant(clusteringInstantTime.get());
       table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
 
-      final HoodieSchema tableSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
+      final HoodieSchema tableSchema = StreamerUtil.getTableSchema(table.getMetaClient(), false);
       final DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableSchema);
       final RowType rowType = (RowType) rowDataType.getLogicalType();
 
@@ -383,7 +383,7 @@ public class ITTestHoodieFlinkClustering {
       HoodieInstant instant = INSTANT_GENERATOR.getClusteringCommitRequestedInstant(firstClusteringInstant.get());
       table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
 
-      final HoodieSchema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
+      final HoodieSchema tableAvroSchema = StreamerUtil.getTableSchema(table.getMetaClient(), false);
       final DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableAvroSchema);
       final RowType rowType = (RowType) rowDataType.getLogicalType();
 
@@ -752,7 +752,7 @@ public class ITTestHoodieFlinkClustering {
       HoodieInstant instant = INSTANT_GENERATOR.getClusteringCommitRequestedInstant(clusteringInstantTime.get());
       table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
 
-      final HoodieSchema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
+      final HoodieSchema tableAvroSchema = StreamerUtil.getTableSchema(table.getMetaClient(), false);
       final DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableAvroSchema);
       final RowType rowType = (RowType) rowDataType.getLogicalType();
 

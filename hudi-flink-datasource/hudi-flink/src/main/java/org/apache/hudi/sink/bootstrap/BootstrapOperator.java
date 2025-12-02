@@ -217,8 +217,8 @@ public class BootstrapOperator
     Option<HoodieInstant> latestCommitTime = commitsTimeline.filterCompletedAndCompactionInstants().lastInstant();
 
     if (latestCommitTime.isPresent()) {
-      HoodieSchema schema = HoodieSchema.fromAvroSchema(
-          new TableSchemaResolver(this.hoodieTable.getMetaClient()).getTableAvroSchema());
+      HoodieSchema schema =
+          new TableSchemaResolver(this.hoodieTable.getMetaClient()).getTableSchema();
 
       List<FileSlice> fileSlices = this.hoodieTable.getSliceView()
           .getLatestMergedFileSlicesBeforeOrOn(partitionPath, latestCommitTime.get().requestedTime())

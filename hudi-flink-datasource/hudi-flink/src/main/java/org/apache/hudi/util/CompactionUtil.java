@@ -75,7 +75,7 @@ public class CompactionUtil {
    */
   public static void setAvroSchema(Configuration conf, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-    HoodieSchema tableAvroSchema = HoodieSchema.fromAvroSchema(tableSchemaResolver.getTableAvroSchema(false));
+    HoodieSchema tableAvroSchema = tableSchemaResolver.getTableSchema(false);
     conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, tableAvroSchema.toString());
   }
 
@@ -87,7 +87,7 @@ public class CompactionUtil {
    */
   public static void setAvroSchema(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-    HoodieSchema tableAvroSchema = HoodieSchema.fromAvroSchema(tableSchemaResolver.getTableAvroSchema(false));
+    HoodieSchema tableAvroSchema = tableSchemaResolver.getTableSchema(false);
     writeConfig.setSchema(tableAvroSchema.toString());
   }
 

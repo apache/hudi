@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.adapter.DataStreamScanProviderAdapter;
 import org.apache.hudi.adapter.InputFormatSourceFunctionAdapter;
 import org.apache.hudi.adapter.TableFunctionProviderAdapter;
@@ -653,8 +652,7 @@ public class HoodieTableSource implements
   public HoodieSchema getTableSchema() {
     try {
       TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-      Schema avroSchema = schemaResolver.getTableAvroSchema();
-      return HoodieSchema.fromAvroSchema(avroSchema);
+      return schemaResolver.getTableSchema();
     } catch (Throwable e) {
       // table exists but has no written data
       LOG.warn("Unable to resolve schema from table, using schema from the DDL", e);
