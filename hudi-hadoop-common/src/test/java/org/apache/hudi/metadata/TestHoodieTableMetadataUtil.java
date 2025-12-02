@@ -31,6 +31,8 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -47,10 +49,6 @@ import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
-import org.apache.avro.JsonProperties;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,7 +69,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_AVRO_TYPES_STR;
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_NESTED_FIELD_STR;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
@@ -432,18 +429,25 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("col_11");
     expected.add("col_12.col12_1");
 
-    Schema avroSchema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .requiredString("col_1")
-        .requiredString("col_7")
-        .requiredString("col_11")
-        .name("col_12").type().record("NestedRecord")
-        .fields()
-        .requiredString("col12_1")
-        .endRecord()
-        .noDefault()
-        .endRecord();
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(avroSchema);
+    HoodieSchema nestedRecordSchema = HoodieSchema.createRecord(
+        "NestedRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("col12_1", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("col_1", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("col_7", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("col_11", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("col_12", nestedRecordSchema)
+        )
+    );
 
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
         Lazy.eagerly(Option.of(schema)), false, V1).keySet()));
@@ -479,7 +483,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         Lazy.eagerly(Option.of(getTableSchema(expected))), false, V1).keySet()));
 
     //test with avro schema
-    schema = HoodieSchema.fromAvroSchema(new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES_STR));
+    schema = HoodieSchema.parse(SCHEMA_WITH_AVRO_TYPES_STR);
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
         .withColumnStatsIndexForColumns("booleanField,decimalField,localTimestampMillisField")
@@ -492,7 +496,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         Lazy.eagerly(Option.of(schema)), true, V1).keySet()));
 
     //test with avro schema and nested fields and unsupported types
-    schema = HoodieSchema.fromAvroSchema(new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_STR));
+    schema = HoodieSchema.parse(SCHEMA_WITH_NESTED_FIELD_STR);
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
         .withColumnStatsIndexForColumns("firstname,student.lastnameNested,student")
@@ -504,7 +508,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         Lazy.eagerly(Option.of(schema)), false, V1).keySet()));
 
     //test with avro schema with max cols set
-    schema = HoodieSchema.fromAvroSchema(new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES_STR));
+    schema = HoodieSchema.parse(SCHEMA_WITH_AVRO_TYPES_STR);
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
         .withMaxColumnsToIndexForColStats(2)
@@ -599,35 +603,42 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
   }
 
   private HoodieSchema getTableSchema(List<String> fieldNames) {
-    List<Schema.Field> fields = fieldNames.stream()
-        .map(fieldName -> new Schema.Field(fieldName, createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE)).collect(Collectors.toList());
-    return HoodieSchema.fromAvroSchema(Schema.createRecord("Test_Hoodie_Record", "", "", false, fields));
+    List<HoodieSchemaField> fields = fieldNames.stream()
+        .map(fieldName -> HoodieSchemaField.of(fieldName, HoodieSchema.createNullable(HoodieSchemaType.STRING), "", HoodieSchema.NULL_VALUE))
+        .collect(Collectors.toList());
+    return HoodieSchema.createRecord("Test_Hoodie_Record", "", "", false, fields);
   }
 
   @Test
   public void testValidateDataTypeForPartitionStats() {
     // Create a dummy schema with both complex and primitive types
-    Schema avroSchema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .requiredString("stringField")
-        .optionalInt("intField")
-        .optionalBoolean("booleanField")
-        .optionalFloat("floatField")
-        .optionalDouble("doubleField")
-        .optionalLong("longField")
-        .optionalBytes("bytesField")
-        .name("unionIntField").type().unionOf().nullType().and().intType().endUnion().noDefault()
-        .name("arrayField").type().array().items().stringType().noDefault()
-        .name("mapField").type().map().values().intType().noDefault()
-        .name("structField").type().record("NestedRecord")
-        .fields()
-        .requiredString("nestedString")
-        .endRecord()
-        .noDefault()
-        .endRecord();
+    HoodieSchema nestedRecordSchema = HoodieSchema.createRecord(
+        "NestedRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("nestedString", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
 
-    // Convert to HoodieSchema
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(avroSchema);
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("stringField", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("intField", HoodieSchema.createNullable(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("booleanField", HoodieSchema.createNullable(HoodieSchemaType.BOOLEAN)),
+            HoodieSchemaField.of("floatField", HoodieSchema.createNullable(HoodieSchemaType.FLOAT)),
+            HoodieSchemaField.of("doubleField", HoodieSchema.createNullable(HoodieSchemaType.DOUBLE)),
+            HoodieSchemaField.of("longField", HoodieSchema.createNullable(HoodieSchemaType.LONG)),
+            HoodieSchemaField.of("bytesField", HoodieSchema.createNullable(HoodieSchemaType.BYTES)),
+            HoodieSchemaField.of("unionIntField", HoodieSchema.createNullable(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("arrayField", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING))),
+            HoodieSchemaField.of("mapField", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT))),
+            HoodieSchemaField.of("structField", nestedRecordSchema)
+        )
+    );
 
     // Test for primitive fields
     assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("stringField").get().schema(), Option.empty(), V1));
@@ -645,12 +656,15 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("bytesField").get().schema(), Option.of(HoodieRecord.HoodieRecordType.SPARK), V1));
 
     // Test for logical types
-    Schema dateFieldSchema = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
-    schema = HoodieSchema.fromAvroSchema(
-        SchemaBuilder.record("TestRecord")
-            .fields()
-            .name("dateField").type(dateFieldSchema).noDefault()
-            .endRecord());
+    HoodieSchema dateFieldSchema = HoodieSchema.createDate();
+    schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("dateField", dateFieldSchema)
+        )
+    );
 
     assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("dateField").get().schema(), Option.empty(), V1));
 
