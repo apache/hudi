@@ -71,7 +71,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     })
   }
 
-  val DEFAULT_COLUMNS_TO_INDEX: Seq[String] = Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
+  val DEFAULT_COLUMNS_TO_INDEX = Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
     HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c7","c8")
 
   @ParameterizedTest
@@ -287,7 +287,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
-      shouldValidateColStats = false,
+      false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -298,7 +298,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidateColStats = false,
+      false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -309,7 +309,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      shouldValidateColStats = false,
+      false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -535,7 +535,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       expectedColStatsSourcePath = null,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
-      shouldValidateColStats = false,
+      false,
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
@@ -741,7 +741,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       .build()
 
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, structSchema, hoodieSchema, metadataConfig, metaClient)
-    columnStatsIndex.loadTransposed(Seq("c2"), shouldReadInMemory = false) { transposedDF =>
+    columnStatsIndex.loadTransposed(Seq("c2"), false) { transposedDF =>
       val result = transposedDF.select("valueCount", "c2_nullCount")
         .collect().head
 

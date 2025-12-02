@@ -142,8 +142,8 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
   @Test
   def testIndexWithUpsertNonPartitioned(): Unit = {
     val hudiOpts = commonOpts - PARTITIONPATH_FIELD.key + (DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL)
-    doWriteAndValidateDataAndPartitionStats(hudiOpts, operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL, saveMode = SaveMode.Overwrite, validate = false)
-    doWriteAndValidateDataAndPartitionStats(hudiOpts, operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL, saveMode = SaveMode.Append, validate = false)
+    doWriteAndValidateDataAndPartitionStats(hudiOpts, operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL, saveMode = SaveMode.Overwrite, false)
+    doWriteAndValidateDataAndPartitionStats(hudiOpts, operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL, saveMode = SaveMode.Append, false)
     // there should not be any partition stats
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertFalse(metaClient.getTableConfig.getMetadataPartitions.contains(MetadataPartitionType.PARTITION_STATS.getPartitionPath))
@@ -230,7 +230,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
     val executor = Executors.newFixedThreadPool(2)
     implicit val executorContext: ExecutionContext = ExecutionContext.fromExecutor(executor)
-    val function = new (mutable.Buffer[String] => Boolean) {
+    val function = new Function1[mutable.Buffer[String], Boolean] {
       def apply(records: mutable.Buffer[String]): Boolean = {
         try {
           doWriteAndValidateDataAndPartitionStats(
@@ -430,7 +430,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       HoodieCleanConfig.CLEAN_MAX_COMMITS.key -> "1",
       HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key -> "2")
     // Do three more ingestion to trigger clean operation.
-    for (_ <- 0 until 3) {
+    for (i <- 0 until 3) {
       doWriteAndValidateDataAndPartitionStats(
         writeOpt,
         operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -563,19 +563,19 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
   @Test
   def testTranslateIntoColumnStatsIndexFilterExpr(): Unit = {
     var dataFilter: Expression = EqualTo(attribute("c1"), literal("619sdc"))
-    validateContainsNullAndValueFilters(dataFilter, Seq("c1"), expectedValue = false)
+    validateContainsNullAndValueFilters(dataFilter, Seq("c1"), false)
 
     // c1 = 619sdc and c2 = 100, where both c1 and c2 are indexed.
     val dataFilter1 = And(dataFilter, EqualTo(attribute("c2"), literal("100")))
-    validateContainsNullAndValueFilters(dataFilter1, Seq("c1","c2"), expectedValue = false)
+    validateContainsNullAndValueFilters(dataFilter1, Seq("c1","c2"), false)
 
     // add contains null
     val dataFilter2 = And(dataFilter, IsNull(attribute("c3")))
-    validateContainsNullAndValueFilters(dataFilter2, Seq("c1","c2","c3"), expectedValue = true)
+    validateContainsNullAndValueFilters(dataFilter2, Seq("c1","c2","c3"), true)
 
     // checks for not null
     val dataFilter3 = And(dataFilter, IsNotNull(attribute("c4")))
-    validateContainsNullAndValueFilters(dataFilter3, Seq("c1","c2","c3","c4"), expectedValue = true)
+    validateContainsNullAndValueFilters(dataFilter3, Seq("c1","c2","c3","c4"), true)
 
     // nested And and Or case
     val dataFilter4 = And(
@@ -585,7 +585,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       ),
       EqualTo(attribute("c4"), literal("300"))
     )
-    validateContainsNullAndValueFilters(dataFilter4, Seq("c1","c2","c3","c4"), expectedValue = false)
+    validateContainsNullAndValueFilters(dataFilter4, Seq("c1","c2","c3","c4"), false)
 
     // embed a null filter and validate
     val dataFilter5 = Or(dataFilter4, And(
@@ -595,23 +595,23 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       ),
       IsNotNull(attribute("c4"))
     ))
-    validateContainsNullAndValueFilters(dataFilter5, Seq("c1","c2","c3","c4"), expectedValue = true)
+    validateContainsNullAndValueFilters(dataFilter5, Seq("c1","c2","c3","c4"), true)
 
     // unsupported filter type
     val dataFilter6 = BitwiseOr(
       EqualTo(attribute("c1"), literal("619sdc")),
       EqualTo(attribute("c2"), literal("100"))
     )
-    validateContainsNullAndValueFilters(dataFilter6, Seq("c1","c2","c3","c4"), expectedValue = false)
+    validateContainsNullAndValueFilters(dataFilter6, Seq("c1","c2","c3","c4"), false)
 
     // too many filters, out of which only half are indexed.
     val largeFilter = (1 to 100).map(i => EqualTo(attribute(s"c$i"), literal("value"))).reduce(And)
     val indexedColumns = (1 to 50).map(i => s"c$i")
-    validateContainsNullAndValueFilters(largeFilter, indexedColumns, expectedValue = false)
+    validateContainsNullAndValueFilters(largeFilter, indexedColumns, false)
 
     // add just 1 null check
     val largeFilter1 = And(largeFilter, IsNull(attribute("c10")))
-    validateContainsNullAndValueFilters(largeFilter1, indexedColumns, expectedValue = true)
+    validateContainsNullAndValueFilters(largeFilter1, indexedColumns, true)
 
     // Not(IsNull(...)) → IsNotNull(...)
     dataFilter = Not(IsNull(attribute("c1")))
@@ -679,11 +679,11 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
     // validate that if filter contains null filters, there is no data skipping
     val dataFilter1 = IsNotNull(attribute("_row_key"))
-    verifyFilePruning(hudiOpts, dataFilter1, shouldSkipFiles = false)
+    verifyFilePruning(hudiOpts, dataFilter1, false)
   }
 
   private def attribute(partition: String): AttributeReference = {
-    AttributeReference(partition, StringType, nullable = true)()
+    AttributeReference(partition, StringType, true)()
   }
 
   private def createTempTable(hudiOpts: Map[String, String]): Unit = {
