@@ -233,7 +233,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     // InternalSchemaMerger#buildRecordType() for details.
     // Delete and add a field with the same name, reads should not return previously inserted datum of dropped field of the same name,
     // so we use `mergedAvroSchema` as the target schema for record projecting.
-    return Option.of(Pair.of(readerContext.getRecordContext().projectRecord(dataBlock.getSchema(), mergedAvroSchema, mergedInternalSchema.getRight()), mergedAvroSchema));
+    return Option.of(Pair.of(readerContext.getRecordContext().projectRecord(dataBlock.getSchema().toAvroSchema(), mergedAvroSchema, mergedInternalSchema.getRight()), mergedAvroSchema));
   }
 
   protected boolean hasNextBaseRecord(T baseRecord, BufferedRecord<T> logRecordInfo) throws IOException {
@@ -279,7 +279,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
             .orElse(Function.identity());
 
     Schema evolvedSchema = schemaEvolutionTransformerOpt.map(Pair::getRight)
-        .orElseGet(dataBlock::getSchema);
+        .orElseGet(() -> dataBlock.getSchema().toAvroSchema());
     return Pair.of(transformer, evolvedSchema);
   }
 

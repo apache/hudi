@@ -252,7 +252,7 @@ public abstract class HoodieReaderContext<T> {
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
   public abstract ClosableIterator<T> getFileRecordIterator(
-      StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema,
+      StoragePath filePath, long start, long length, HoodieSchema dataSchema, HoodieSchema requiredSchema,
       HoodieStorage storage) throws IOException;
 
   /**
@@ -268,51 +268,9 @@ public abstract class HoodieReaderContext<T> {
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
   public ClosableIterator<T> getFileRecordIterator(
-      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
-      HoodieStorage storage) throws IOException {
-    return getFileRecordIterator(storagePathInfo.getPath(), start, length, dataSchema, requiredSchema, storage);
-  }
-
-  /**
-   * Gets the record iterator based on the type of engine-specific record representation from the
-   * file using HoodieSchema.
-   * This method uses HoodieSchema for in-memory processing while maintaining
-   * compatibility with existing Avro-based file reading.
-   *
-   * @param filePath       {@link StoragePath} instance of a file.
-   * @param start          Starting byte to start reading.
-   * @param length         Bytes to read.
-   * @param dataSchema     Schema of records in the file in {@link HoodieSchema}.
-   * @param requiredSchema Schema containing required fields to read in {@link HoodieSchema} for projection.
-   * @param storage        {@link HoodieStorage} for reading records.
-   * @return {@link ClosableIterator<T>} that can return all records through iteration.
-   * @since 1.2.0
-   */
-  public ClosableIterator<T> getFileRecordIterator(
-      StoragePath filePath, long start, long length, HoodieSchema dataSchema, HoodieSchema requiredSchema,
-      HoodieStorage storage) throws IOException {
-    return getFileRecordIterator(filePath, start, length, dataSchema.toAvroSchema(), requiredSchema.toAvroSchema(), storage);
-  }
-
-  /**
-   * Gets the record iterator based on the type of engine-specific record representation from the
-   * file using HoodieSchema.
-   * This method uses HoodieSchema for in-memory processing while maintaining
-   * compatibility with existing Avro-based file reading.
-   *
-   * @param storagePathInfo {@link StoragePathInfo} instance of a file.
-   * @param start           Starting byte to start reading.
-   * @param length          Bytes to read.
-   * @param dataSchema      Schema of records in the file in {@link HoodieSchema}.
-   * @param requiredSchema  Schema containing required fields to read in {@link HoodieSchema} for projection.
-   * @param storage         {@link HoodieStorage} for reading records.
-   * @return {@link ClosableIterator<T>} that can return all records through iteration.
-   * @since 1.2.0
-   */
-  public ClosableIterator<T> getFileRecordIterator(
       StoragePathInfo storagePathInfo, long start, long length, HoodieSchema dataSchema, HoodieSchema requiredSchema,
       HoodieStorage storage) throws IOException {
-    return getFileRecordIterator(storagePathInfo.getPath(), start, length, dataSchema.toAvroSchema(), requiredSchema.toAvroSchema(), storage);
+    return getFileRecordIterator(storagePathInfo.getPath(), start, length, dataSchema, requiredSchema, storage);
   }
 
   /**

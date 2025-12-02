@@ -412,8 +412,8 @@ public class ParquetUtils extends FileFormatUtils {
   @Override
   public ByteArrayOutputStream serializeRecordsToLogBlock(HoodieStorage storage,
                                                           List<HoodieRecord> records,
-                                                          Schema writerSchema,
-                                                          Schema readerSchema,
+                                                          HoodieSchema writerSchema,
+                                                          HoodieSchema readerSchema,
                                                           String keyFieldName,
                                                           Map<String, String> paramsMap) throws IOException {
     if (records.size() == 0) {
@@ -428,13 +428,12 @@ public class ParquetUtils extends FileFormatUtils {
     config.setValue(PARQUET_MAX_FILE_SIZE.key(), String.valueOf(1024 * 1024 * 1024));
     config.setValue("hoodie.avro.schema", writerSchema.toString());
     HoodieRecord.HoodieRecordType recordType = records.iterator().next().getRecordType();
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(writerSchema);
     try (HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(
         //TODO boundary to revisit in follow up to use HoodieSchema directly
-        HoodieFileFormat.PARQUET, outputStream, storage, config, schema, recordType)) {
+        HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType)) {
       for (HoodieRecord<?> record : records) {
-        String recordKey = record.getRecordKey(readerSchema, keyFieldName);
-        parquetWriter.write(recordKey, record, schema);
+        String recordKey = record.getRecordKey(readerSchema.toAvroSchema(), keyFieldName);
+        parquetWriter.write(recordKey, record, writerSchema);
       }
       outputStream.flush();
     }

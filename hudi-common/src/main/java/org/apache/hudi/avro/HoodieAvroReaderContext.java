@@ -148,7 +148,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public ClosableIterator<IndexedRecord> getFileRecordIterator(
-      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
+      StoragePathInfo storagePathInfo, long start, long length, HoodieSchema dataSchema, HoodieSchema requiredSchema,
       HoodieStorage storage) throws IOException {
     boolean isLogFile = FSUtils.isLogFile(storagePathInfo.getPath());
     HoodieAvroFileReader reader = getOrCreateFileReader(storagePathInfo.getPath(), isLogFile, format -> {
@@ -169,8 +169,8 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       StoragePath filePath,
       long start,
       long length,
-      Schema dataSchema,
-      Schema requiredSchema,
+      HoodieSchema dataSchema,
+      HoodieSchema requiredSchema,
       HoodieStorage storage) throws IOException {
     boolean isLogFile = FSUtils.isLogFile(filePath);
     HoodieAvroFileReader reader = getOrCreateFileReader(filePath, isLogFile, format -> {
@@ -204,38 +204,34 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       HoodieAvroFileReader reader,
       StoragePath filePath,
       boolean isLogFile,
-      Schema dataSchema,
-      Schema requiredSchema) throws IOException {
-    Schema fileOutputSchema;
+      HoodieSchema dataSchema,
+      HoodieSchema requiredSchema) throws IOException {
+    HoodieSchema fileOutputSchema;
     Map<String, String> renamedColumns;
     if (isLogFile) {
       fileOutputSchema = requiredSchema;
       renamedColumns = Collections.emptyMap();
     } else {
       Pair<Schema, Map<String, String>> requiredSchemaForFileAndRenamedColumns = getSchemaHandler().getRequiredSchemaForFileAndRenamedColumns(filePath);
-      fileOutputSchema = requiredSchemaForFileAndRenamedColumns.getLeft();
+      fileOutputSchema = HoodieSchema.fromAvroSchema(requiredSchemaForFileAndRenamedColumns.getLeft());
       renamedColumns = requiredSchemaForFileAndRenamedColumns.getRight();
     }
     if (keyFilterOpt.isEmpty()) {
-      //TODO boundary to revisit in later pr to use HoodieSchema directly
-      return reader.getIndexedRecordIterator(HoodieSchema.fromAvroSchema(dataSchema), HoodieSchema.fromAvroSchema(fileOutputSchema), renamedColumns);
+      return reader.getIndexedRecordIterator(dataSchema, fileOutputSchema, renamedColumns);
     }
     if (reader.supportKeyPredicate()) {
       List<String> keys = reader.extractKeys(keyFilterOpt);
       if (!keys.isEmpty()) {
-        //TODO boundary to revisit in later pr to use HoodieSchema directly
-        return reader.getIndexedRecordsByKeysIterator(keys, HoodieSchema.fromAvroSchema(requiredSchema));
+        return reader.getIndexedRecordsByKeysIterator(keys, requiredSchema);
       }
     }
     if (reader.supportKeyPrefixPredicate()) {
       List<String> keyPrefixes = reader.extractKeyPrefixes(keyFilterOpt);
       if (!keyPrefixes.isEmpty()) {
-        //TODO boundary to revisit in later pr to use HoodieSchema directly
-        return reader.getIndexedRecordsByKeyPrefixIterator(keyPrefixes, HoodieSchema.fromAvroSchema(requiredSchema));
+        return reader.getIndexedRecordsByKeyPrefixIterator(keyPrefixes, requiredSchema);
       }
     }
-    //TODO boundary to revisit in later pr to use HoodieSchema directly
-    return reader.getIndexedRecordIterator(HoodieSchema.fromAvroSchema(dataSchema), HoodieSchema.fromAvroSchema(fileOutputSchema), renamedColumns);
+    return reader.getIndexedRecordIterator(dataSchema, fileOutputSchema, renamedColumns);
   }
 
   @Override

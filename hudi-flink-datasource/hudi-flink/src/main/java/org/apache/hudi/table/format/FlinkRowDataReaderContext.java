@@ -96,8 +96,8 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       StoragePath filePath,
       long start,
       long length,
-      Schema dataSchema,
-      Schema requiredSchema,
+      HoodieSchema dataSchema,
+      HoodieSchema requiredSchema,
       HoodieStorage storage) throws IOException {
     boolean isLogFile = FSUtils.isLogFile(filePath);
     // disable schema evolution in fileReader if it's log file, since schema evolution for log file is handled in `FileGroupRecordBuffer`
@@ -107,8 +107,8 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
         (HoodieRowDataParquetReader) HoodieIOFactory.getIOFactory(storage)
             .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
             .getFileReader(tableConfig, filePath, HoodieFileFormat.PARQUET, Option.empty());
-    DataType rowType = RowDataAvroQueryContexts.fromAvroSchema(dataSchema).getRowType();
-    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, getSafePredicates(requiredSchema));
+    DataType rowType = RowDataAvroQueryContexts.fromAvroSchema(dataSchema.toAvroSchema()).getRowType();
+    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema.toAvroSchema(), getSafePredicates(requiredSchema.toAvroSchema()));
   }
 
   @Override

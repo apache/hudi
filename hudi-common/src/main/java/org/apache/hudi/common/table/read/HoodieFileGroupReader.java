@@ -157,13 +157,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     if (baseFileStoragePathInfo != null) {
       recordIterator = readerContext.getFileRecordIterator(
           baseFileStoragePathInfo, inputSplit.getStart(), inputSplit.getLength(),
-          readerContext.getSchemaHandler().getTableSchema(),
-          readerContext.getSchemaHandler().getRequiredSchema(), storage);
+          HoodieSchema.fromAvroSchema(readerContext.getSchemaHandler().getTableSchema()),
+          HoodieSchema.fromAvroSchema(readerContext.getSchemaHandler().getRequiredSchema()), storage);
     } else {
       recordIterator = readerContext.getFileRecordIterator(
           baseFile.getStoragePath(), inputSplit.getStart(), inputSplit.getLength(),
-          readerContext.getSchemaHandler().getTableSchema(),
-          readerContext.getSchemaHandler().getRequiredSchema(), storage);
+          HoodieSchema.fromAvroSchema(readerContext.getSchemaHandler().getTableSchema()),
+          HoodieSchema.fromAvroSchema(readerContext.getSchemaHandler().getRequiredSchema()), storage);
     }
     return readerContext.getInstantRange().isPresent()
         ? readerContext.applyInstantRangeFilter(recordIterator)
@@ -225,14 +225,14 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     StoragePathInfo fileStoragePathInfo = file.getPathInfo();
     if (fileStoragePathInfo != null) {
       return Option.of(Pair.of(readerContext.getFileRecordIterator(fileStoragePathInfo, 0, file.getFileLen(),
-          readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
+          HoodieSchema.fromAvroSchema(readerContext.getSchemaHandler().createSchemaFromFields(allFields)), HoodieSchema.fromAvroSchema(requiredSchema), storage), requiredSchema));
     } else {
       // If the base file length passed in is invalid, i.e., -1,
       // the file group reader fetches the length from the file system
       long fileLength = file.getFileLen() >= 0
           ? file.getFileLen() : storage.getPathInfo(file.getStoragePath()).getLength();
       return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, fileLength,
-          readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
+          HoodieSchema.fromAvroSchema(readerContext.getSchemaHandler().createSchemaFromFields(allFields)), HoodieSchema.fromAvroSchema(requiredSchema), storage), requiredSchema));
     }
   }
 
