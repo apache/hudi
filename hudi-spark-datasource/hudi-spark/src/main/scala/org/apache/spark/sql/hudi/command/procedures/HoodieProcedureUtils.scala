@@ -23,7 +23,10 @@ import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.hudi.command.procedures.ShowFileHistoryProcedureUtils.log
 
+import java.time.LocalDate
+import java.time.format.{DateTimeFormatter, DateTimeParseException}
 import java.util
 
 import scala.collection.JavaConverters._
@@ -127,5 +130,28 @@ object HoodieProcedureUtils {
       throw new HoodieException (s"specific ${noneInstants.mkString(",")} instants is not exist")
     }
     instants.sortBy(f => f).toSeq
+  }
+
+  def normalizeTimeFormat(timeInput: String, isEndTime: Boolean = false): String = {
+    if (timeInput.isEmpty) {
+      timeInput
+    }
+    else if (timeInput.matches("^\\d{17}$")) {
+      timeInput
+    } else if (timeInput.matches("^\\d{14}$")) {
+      timeInput + "000"
+    } else if (timeInput.matches("^\\d{4}-\\d{2}-\\d{2}$")) {
+      val date = LocalDate.parse(timeInput, DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+      val datePrefix = date.format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+      if (isEndTime) datePrefix + "235959999" else datePrefix + "000000000"
+    } else if (timeInput.matches("^\\d{4}/\\d{2}/\\d{2}$")) {
+      val date = LocalDate.parse(timeInput, DateTimeFormatter.ofPattern("yyyy/MM/dd"))
+      val datePrefix = date.format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+      if (isEndTime) datePrefix + "235959999" else datePrefix + "000000000"
+    } else if (timeInput.matches("^\\d{8}$")) {
+      if (isEndTime) timeInput + "235959999" else timeInput + "000000000"
+    } else {
+      throw new DateTimeParseException(s"Unsupported time format: $timeInput", timeInput, 0)
+    }
   }
 }

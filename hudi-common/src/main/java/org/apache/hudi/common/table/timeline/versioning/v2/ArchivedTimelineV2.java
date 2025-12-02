@@ -137,6 +137,21 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     );
   }
 
+  public void loadCompactionDetailsInMemory(int limit) {
+    loadInstantsWithLimit(limit, HoodieArchivedTimeline.LoadMode.PLAN,
+        record -> record.get(ACTION_ARCHIVED_META_FIELD).toString().equals(COMMIT_ACTION)
+            && record.get(PLAN_ARCHIVED_META_FIELD) != null
+    );
+  }
+
+  public void loadCompletedInstantDetailsInMemory(String startTs, String endTs) {
+    loadInstants(new HoodieArchivedTimeline.TimeRangeFilter(startTs, endTs), HoodieArchivedTimeline.LoadMode.METADATA);
+  }
+
+  public void loadCompletedInstantDetailsInMemory(int limit) {
+    loadInstantsWithLimit(limit, HoodieArchivedTimeline.LoadMode.METADATA);
+  }
+
   @Override
   public void clearInstantDetailsFromMemory(String instantTime) {
     this.readCommits.remove(instantTime);
@@ -240,6 +255,42 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     List<HoodieInstant> result = new ArrayList<>(instantsInRange.values());
     Collections.sort(result);
     return result;
+  }
+
+  private void loadInstantsWithLimit(int limit, HoodieArchivedTimeline.LoadMode loadMode) {
+    loadInstantsWithLimit(limit, loadMode, recordFilter -> true);
+  }
+
+  private void loadInstantsWithLimit(int limit, HoodieArchivedTimeline.LoadMode loadMode, Function<GenericRecord, Boolean> commitsFilter) {
+    Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer = Option.ofNullable(getInstantDetailsFunc(loadMode));
+
+    InstantsLoaderWithLimit loaderWithLimit = new InstantsLoaderWithLimit(instantDetailsConsumer, limit);
+    timelineLoader.loadInstants(metaClient, null, loadMode, commitsFilter, loaderWithLimit);
+  }
+
+  private class InstantsLoaderWithLimit implements BiConsumer<String, GenericRecord> {
+    private final Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer;
+    private final int maxLimit;
+    private volatile int loadedCount = 0;
+
+    public InstantsLoaderWithLimit(Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer, int maxLimit) {
+      this.instantDetailsConsumer = instantDetailsConsumer;
+      this.maxLimit = maxLimit;
+    }
+
+    @Override
+    public void accept(String instantTime, GenericRecord avroRecord) {
+      if (loadedCount >= maxLimit) {
+        return;
+      }
+
+      synchronized (this) {
+        if (loadedCount < maxLimit) {
+          readCommit(instantTime, avroRecord, instantDetailsConsumer);
+          loadedCount++;
+        }
+      }
+    }
   }
 
   @Override
