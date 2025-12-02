@@ -72,7 +72,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
   val sourceTableHoodieSchema: HoodieSchema = HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(sourceTableSchema, "record", ""))
 
   @BeforeEach
-  override def setUp() = {
+  override def setUp() {
     initPath()
     initQueryIndexConf()
     initSparkContexts()

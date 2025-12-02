@@ -57,7 +57,7 @@ import scala.collection.parallel.mutable.ParHashMap
 
 class ColumnStatsIndexSupport(spark: SparkSession,
                               tableSchema: StructType,
-                              hoodieSchema: HoodieSchema,
+                              schema: HoodieSchema,
                               @transient metadataConfig: HoodieMetadataConfig,
                               @transient metaClient: HoodieTableMetaClient,
                               allowCaching: Boolean = false)
@@ -67,13 +67,13 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 
   // NOTE: Since [[metadataConfig]] is transient this has to be eagerly persisted, before this will be passed
   //       on to the executor
-  protected val inMemoryProjectionThreshold: Integer = metadataConfig.getColumnStatsIndexInMemoryProjectionThreshold
+  protected val inMemoryProjectionThreshold = metadataConfig.getColumnStatsIndexInMemoryProjectionThreshold
 
   private lazy val indexedColumns: Set[String] = getIndexedColsWithColStats(metaClient)
 
   override def getIndexName: String = ColumnStatsIndexSupport.INDEX_NAME
 
-  private def getIndexedColsWithColStats(metaClient: HoodieTableMetaClient) : Set[String] = {
+  def getIndexedColsWithColStats(metaClient: HoodieTableMetaClient) : Set[String] = {
     val indexDefOpt = metaClient.getIndexForMetadataPartition(PARTITION_NAME_COLUMN_STATS)
     if (indexDefOpt.isPresent) {
       indexDefOpt.get().getSourceFields.asScala.toSet
@@ -95,7 +95,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
       //       when loading the Column Statistics Index
       val prunedFileNamesOpt = if (shouldPushDownFilesFilter) Some(prunedFileNames) else None
       val getValidIndexedColumnsFunc: HoodieIndexDefinition => Seq[String] = { indexDefinition =>
-        getValidIndexedColumns(indexDefinition, hoodieSchema, metaClient.getTableConfig).asScala.toSeq
+        getValidIndexedColumns(indexDefinition, schema, metaClient.getTableConfig).asScala.toSeq
       }
       loadTransposed(queryReferencedColumns, readInMemory, Some(prunedPartitions), prunedFileNamesOpt) { transposedColStatsDF =>
         Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames, getValidIndexedColumnsFunc))
@@ -449,10 +449,10 @@ object ColumnStatsIndexSupport {
     String.format("%s_%s", col, statName)
   }
 
-  @inline def composeColumnStatStructType(col: String, statName: String, dataType: DataType): StructField =
+  @inline def composeColumnStatStructType(col: String, statName: String, dataType: DataType) =
     StructField(formatColName(col, statName), dataType, nullable = true, Metadata.empty)
 
-  private def extractColStatsValue(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata, useJava8api: Boolean): Any = {
+  def extractColStatsValue(valueWrapper: AnyRef, dataType: DataType, valueMetadata: ValueMetadata, useJava8api: Boolean): Any = {
     valueMetadata.getValueType match {
       case ValueType.V1 => extractWrapperValueV1(valueWrapper, dataType)
       case _ => extractColStatsValueV2(valueWrapper, dataType, valueMetadata, useJava8api)

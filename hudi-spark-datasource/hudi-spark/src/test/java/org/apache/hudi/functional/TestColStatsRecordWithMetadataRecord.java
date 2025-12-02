@@ -483,8 +483,10 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     }
 
     List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata = new ArrayList<>();
-    minMaxValues.forEach(entry -> columnRangeMetadata.add(HoodieColumnRangeMetadata.<Comparable>create(fileName, colName,
-        entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456, ValueMetadata.V1EmptyMetadata.get())));
+    minMaxValues.forEach(entry -> {
+      columnRangeMetadata.add(HoodieColumnRangeMetadata.<Comparable>create(fileName, colName,
+          entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456, ValueMetadata.V1EmptyMetadata.get()));
+    });
 
     HoodieColumnRangeMetadata<Comparable> mergedColStatsRangeMetadata = (HoodieColumnRangeMetadata<Comparable>) columnRangeMetadata.stream()
         .reduce((left, right) -> HoodieColumnRangeMetadata.merge(left, right)).get();

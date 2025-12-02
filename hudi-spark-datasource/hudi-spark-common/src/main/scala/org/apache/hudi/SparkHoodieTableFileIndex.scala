@@ -116,7 +116,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     AvroConversionUtils.convertAvroSchemaToStructType(rawHoodieSchema.toAvroSchema)
   }
 
-  protected lazy val shouldFastBootstrap: Boolean = configProperties.getBoolean(DATA_QUERIES_ONLY.key, false)
+  protected lazy val shouldFastBootstrap = configProperties.getBoolean(DATA_QUERIES_ONLY.key, false)
 
   /**
    * Get the partition schema from the hoodie.properties.

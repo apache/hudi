@@ -93,7 +93,6 @@ import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.conve
 import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.readSecondaryKeysFromFileSlices;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -131,7 +130,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       Map<String, String> recordKeyToPartitionMapping1 = new HashMap<>();
       Map<String, String> fileIdToFileNameMapping1 = new HashMap<>();
       writeStatusList1.forEach(writeStatus -> {
-        assertEquals(0, writeStatus.getStat().getNumDeletes());
+        assertEquals(writeStatus.getStat().getNumDeletes(), 0);
         // Fetch record keys for all
         String writeStatFileId = writeStatus.getFileId();
         if (!fileIdToFileNameMapping1.containsKey(writeStatFileId)) {
@@ -237,7 +236,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       Map<String, String> recordKeyToPartitionMapping1 = new HashMap<>();
       Map<String, String> fileIdToFileNameMapping1 = new HashMap<>();
       writeStatusList.forEach(writeStatus -> {
-        assertEquals(0, writeStatus.getStat().getNumDeletes());
+        assertEquals(writeStatus.getStat().getNumDeletes(), 0);
         // Fetch record keys for all
         String writeStatFileId = writeStatus.getFileId();
         if (!fileIdToFileNameMapping1.containsKey(writeStatFileId)) {
@@ -385,7 +384,9 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       // filter delete records from secondaryIndexRecords
       List<HoodieRecord> deletedSecondaryIndexRecords = new ArrayList<>();
       List<HoodieRecord> validSecondaryIndexRecords = new ArrayList<>();
-      secondaryIndexRecords.forEach(record -> populateValidAndDeletedSecondaryIndexRecords(record, deletedSecondaryIndexRecords, validSecondaryIndexRecords));
+      secondaryIndexRecords.forEach(record -> {
+        populateValidAndDeletedSecondaryIndexRecords(record, deletedSecondaryIndexRecords, validSecondaryIndexRecords);
+      });
       assertListEquality(validSecondaryIndexKeys, validSecondaryIndexRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
       assertTrue(expectedSecondaryIndexKeys.containsAll(deletedSecondaryIndexRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList())));
 
@@ -393,7 +394,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       commitTime = client.startCommit();
       List<HoodieRecord> deletes = dataGen.generateUniqueDeleteRecords(commitTime, 1);
       List<String> expectedDeletedIndexKeys = deletes.stream().map(TestMetadataUtilRLIandSIRecordGeneration::getSecondaryIndexKey).collect(Collectors.toList());
-      List<HoodieRecord> records3 = new ArrayList<>(deletes);
+      List<HoodieRecord> records3 = new ArrayList<>();
+      records3.addAll(deletes);
       List<WriteStatus> writeStatusList3 = client.upsert(jsc.parallelize(records3, 1), commitTime).collect();
       assertNoWriteErrors(writeStatusList3);
 
@@ -412,7 +414,9 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       // filter insert records from secondaryIndexRecords
       List<HoodieRecord> validSecondaryIndexRecords2 = new ArrayList<>();
       List<HoodieRecord> deletedSecondaryIndexRecords2 = new ArrayList<>();
-      secondaryIndexRecords.forEach(record -> populateValidAndDeletedSecondaryIndexRecords(record, deletedSecondaryIndexRecords2, validSecondaryIndexRecords2));
+      secondaryIndexRecords.forEach(record -> {
+        populateValidAndDeletedSecondaryIndexRecords(record, deletedSecondaryIndexRecords2, validSecondaryIndexRecords2);
+      });
       assertTrue(validSecondaryIndexRecords2.isEmpty());
       assertEquals(1, deletedSecondaryIndexRecords2.size());
       assertEquals(getRecordKeyFromSecondaryIndexKey(expectedDeletedIndexKeys.get(0)), getRecordKeyFromSecondaryIndexKey(deletedSecondaryIndexRecords2.get(0).getRecordKey()));
@@ -421,7 +425,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       commitTime = client.startCommit();
       List<HoodieRecord> inserts4 = dataGen.generateSameKeyInserts(commitTime, deletes);
       List<String> expectedRevivedIndexKeys = inserts4.stream().map(TestMetadataUtilRLIandSIRecordGeneration::getSecondaryIndexKey).collect(Collectors.toList());
-      List<HoodieRecord> records4 = new ArrayList<>(inserts4);
+      List<HoodieRecord> records4 = new ArrayList<>();
+      records4.addAll(inserts4);
       List<WriteStatus> writeStatusList4 = client.upsert(jsc.parallelize(records4, 1), commitTime).collect();
       assertNoWriteErrors(writeStatusList4);
 
@@ -443,7 +448,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       commitTime = client.startCommit();
       List<HoodieRecord> updates5 = dataGen.generateUpdatesWithTimestamp(fourthCommitTime, inserts4, Long.parseLong(commitTime));
       List<String> expectedUpdatedIndexKeys2 = updates5.stream().map(TestMetadataUtilRLIandSIRecordGeneration::getSecondaryIndexKey).collect(Collectors.toList());
-      List<HoodieRecord> records5 = new ArrayList<>(updates5);
+      List<HoodieRecord> records5 = new ArrayList<>();
+      records5.addAll(updates5);
       List<WriteStatus> writeStatusList5 = client.upsert(jsc.parallelize(records5, 1), commitTime).collect();
       assertNoWriteErrors(writeStatusList5);
 
@@ -477,7 +483,9 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       // Get valid and deleted secondary index records
       List<HoodieRecord> validSecondaryIndexRecords3 = new ArrayList<>();
       List<HoodieRecord> deletedSecondaryIndexRecords3 = new ArrayList<>();
-      secondaryIndexRecords.forEach(record -> populateValidAndDeletedSecondaryIndexRecords(record, deletedSecondaryIndexRecords3, validSecondaryIndexRecords3));
+      secondaryIndexRecords.forEach(record -> {
+        populateValidAndDeletedSecondaryIndexRecords(record, deletedSecondaryIndexRecords3, validSecondaryIndexRecords3);
+      });
       // There should 0 deleted records because compaction does not update any records.
       assertEquals(0, deletedSecondaryIndexRecords3.size());
       assertEquals(initialRecordsCount, dataGen.getNumExistingKeys(TRIP_EXAMPLE_SCHEMA));
@@ -551,8 +559,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
     String commitTime = WriteClientTestUtils.createNewInstantTime();
     List<HoodieRecord> inserts = dataGen.generateInserts(commitTime, 100);
     List<HoodieRecord> deletes = dataGen.generateUniqueDeleteRecords(commitTime, 20);
-    String randomFileId = UUID.randomUUID() + "-0";
-    List<String> deletedRecordKeys = deletes.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList());
+    String randomFileId = UUID.randomUUID().toString() + "-0";
+    List<String> deletedRecordKeys = deletes.stream().map(record -> record.getRecordKey()).collect(Collectors.toList());
     List<HoodieRecord> adjustedInserts = inserts.stream().filter(record -> !deletedRecordKeys.contains(record.getRecordKey())).collect(Collectors.toList());
 
     List<HoodieRecord> insertRecords =
@@ -573,7 +581,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
     recordsToTest.addAll(insertRecords);
     recordsToTest.addAll(deleteRecords);
     actualRecords = reduceByKeys(context.parallelize(recordsToTest, 2), 2, false).collectAsList();
-    List<HoodieRecord> expectedList = new ArrayList<>(insertRecords);
+    List<HoodieRecord> expectedList = new ArrayList<>();
+    expectedList.addAll(insertRecords);
     assertHoodieRecordListEquality(actualRecords, expectedList);
 
     // few deletes are duplicates. we are allowed to have duplicate deletes.
@@ -596,7 +605,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       fail("Should not have reached here");
     } catch (Exception e) {
       // expected. no-op
-      assertInstanceOf(HoodieIOException.class, e.getCause());
+      assertTrue(e.getCause() instanceof HoodieIOException);
     }
   }
 
@@ -604,14 +613,14 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
     DeleteContext deleteContext = new DeleteContext(CollectionUtils.emptyProps(), AVRO_SCHEMA).withReaderSchema(AVRO_SCHEMA);
     assertEquals(expectedList.size(), actualList.size());
     List<String> expectedInsertRecordKeys = expectedList.stream().filter(record -> !record.isDelete(deleteContext, CollectionUtils.emptyProps()))
-        .map(HoodieRecord::getRecordKey).collect(Collectors.toList());
+        .map(record -> record.getRecordKey()).collect(Collectors.toList());
     List<String> expectedDeletedRecordKeys = expectedList.stream().filter(record -> record.isDelete(deleteContext, CollectionUtils.emptyProps()))
-        .map(HoodieRecord::getRecordKey).collect(Collectors.toList());
+        .map(record -> record.getRecordKey()).collect(Collectors.toList());
 
     List<String> actualInsertRecordKeys = actualList.stream().filter(record -> !record.isDelete(deleteContext, CollectionUtils.emptyProps()))
-        .map(HoodieRecord::getRecordKey).collect(Collectors.toList());
+        .map(record -> record.getRecordKey()).collect(Collectors.toList());
     List<String> actualDeletedRecordKeys = actualList.stream().filter(record -> record.isDelete(deleteContext, CollectionUtils.emptyProps()))
-        .map(HoodieRecord::getRecordKey).collect(Collectors.toList());
+        .map(record -> record.getRecordKey()).collect(Collectors.toList());
 
     assertListEquality(expectedInsertRecordKeys, actualInsertRecordKeys);
     assertListEquality(expectedDeletedRecordKeys, actualDeletedRecordKeys);
