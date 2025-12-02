@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -62,6 +63,7 @@ import static org.apache.hudi.common.testutils.HoodieCommonTestHarness.getDataBl
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -108,6 +110,29 @@ class TestTableSchemaResolver {
     } catch (HoodieSchemaException e) {
       assertTrue(e.getMessage().contains("Partial partition fields are still in the schema"));
     }
+  }
+
+  @Test
+  void testGetTableSchema() throws Exception {
+    // Setup: Create mock metaClient and configure behavior
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    Schema expectedSchema = getSimpleSchema();
+
+    // Mock table setup
+    when(metaClient.getTableConfig().populateMetaFields()).thenReturn(true);
+    when(metaClient.getTableConfig().getTableCreateSchema())
+        .thenReturn(Option.of(expectedSchema));
+
+    when(metaClient.getActiveTimeline().getLastCommitMetadataWithValidSchema())
+        .thenReturn(Option.empty());
+
+    // Create resolver and call both methods
+    TableSchemaResolver resolver = new TableSchemaResolver(metaClient);
+    Schema avroSchema = resolver.getTableAvroSchema();
+    HoodieSchema hoodieSchema = resolver.getTableSchema();
+
+    assertNotNull(hoodieSchema);
+    assertEquals(avroSchema, hoodieSchema.getAvroSchema());
   }
 
   @Test
