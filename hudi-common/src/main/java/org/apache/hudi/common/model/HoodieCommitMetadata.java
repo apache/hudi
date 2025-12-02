@@ -193,7 +193,7 @@ public class HoodieCommitMetadata implements Serializable {
           long blockSize = storage.getDefaultBlockSize(fullPath);
           StoragePathInfo pathInfo = new StoragePathInfo(
               fullPath, stat.getFileSizeInBytes(), false, (short) 0, blockSize, 0);
-          fullPathToInfoMap.put(fullPath.getName(), pathInfo);
+          fullPathToInfoMap.put(fullPath.toString(), pathInfo);
         }
       }
     }
@@ -297,6 +297,10 @@ public class HoodieCommitMetadata implements Serializable {
       }
     }
     return totalFilesUpdated;
+  }
+
+  public long fetchTotalFiles() {
+    return partitionToWriteStats.values().stream().mapToLong(List::size).sum();
   }
 
   public long fetchTotalUpdateRecordsWritten() {

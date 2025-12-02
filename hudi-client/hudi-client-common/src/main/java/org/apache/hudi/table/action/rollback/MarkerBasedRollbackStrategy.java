@@ -143,7 +143,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
       Map<String, Long> logBlocksToBeDeleted = new HashMap<>();
       // Old marker files may be generated from base file name before HUDI-1517. keep compatible with them.
       if (FSUtils.isBaseFile(fullFilePath)) {
-        LOG.warn("Find old marker type for log file: {}", filePathToRollback);
+        LOG.info("Found old marker type for log file: {}", filePathToRollback);
         baseCommitTime = FSUtils.getCommitTime(fullFilePath.getName());
         StoragePath partitionPath = FSUtils.constructAbsolutePath(config.getBasePath(), relativePartitionPath);
 

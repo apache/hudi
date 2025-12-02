@@ -22,6 +22,7 @@ import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.ActionType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -70,6 +71,7 @@ class TestSparkReaderContextFactory extends HoodieClientTestBase {
     when(metaClient.getBasePath()).thenReturn(new StoragePath(basePath));
     when(metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants()).thenReturn(timeline);
     when(metaClient.getTimelineLayout().getInstantFileNameGenerator()).thenReturn(fileNameGenerator);
+    when(metaClient.getTableConfig()).thenReturn(new HoodieTableConfig());
 
     InstantGeneratorV2 instantGen = new InstantGeneratorV2();
     Types.RecordType record = Types.RecordType.get(Collections.singletonList(
@@ -90,7 +92,7 @@ class TestSparkReaderContextFactory extends HoodieClientTestBase {
             .$plus(new Tuple2<>(FileFormat.OPTION_RETURNING_BATCH(), Boolean.toString(true)));
     ArgumentCaptor<Configuration> configurationArgumentCaptor = ArgumentCaptor.forClass(Configuration.class);
     SparkColumnarFileReader sparkParquetReader = mock(SparkColumnarFileReader.class);
-    when(sparkAdapter.createParquetFileReader(eq(false), eq(context.getSqlContext().sessionState().conf()), eq(options), configurationArgumentCaptor.capture()))
+    when(sparkAdapter.createParquetFileReader(eq(false), eq(context.getSqlContext().sparkSession().sessionState().conf()), eq(options), configurationArgumentCaptor.capture()))
         .thenReturn(sparkParquetReader);
 
     SparkReaderContextFactory sparkHoodieReaderContextFactory = new SparkReaderContextFactory(context, metaClient, schemaResolver, sparkAdapter);

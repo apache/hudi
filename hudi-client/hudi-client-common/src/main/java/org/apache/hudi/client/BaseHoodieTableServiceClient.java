@@ -235,7 +235,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     logCompactionTimer = metrics.getLogCompactionCtx();
     WriteMarkersFactory.get(config.getMarkersType(), table, logCompactionInstantTime);
     HoodieWriteMetadata<T> writeMetadata = table.logCompact(context, logCompactionInstantTime);
-    HoodieWriteMetadata<T> updatedWriteMetadata = partialUpdateTableMetadata(table, writeMetadata, logCompactionInstantTime);
+    HoodieWriteMetadata<T> updatedWriteMetadata = partialUpdateTableMetadata(table, writeMetadata, logCompactionInstantTime, WriteOperationType.LOG_COMPACT);
     HoodieWriteMetadata<O> logCompactionMetadata = convertToOutputMetadata(updatedWriteMetadata);
     if (shouldComplete) {
       commitLogCompaction(logCompactionInstantTime, logCompactionMetadata, Option.of(table));
@@ -318,7 +318,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     }
     compactionTimer = metrics.getCompactionCtx();
     HoodieWriteMetadata<T> writeMetadata = table.compact(context, compactionInstantTime);
-    HoodieWriteMetadata<T> updatedWriteMetadata = partialUpdateTableMetadata(table, writeMetadata, compactionInstantTime);
+    HoodieWriteMetadata<T> updatedWriteMetadata = partialUpdateTableMetadata(table, writeMetadata, compactionInstantTime, WriteOperationType.COMPACT);
     HoodieWriteMetadata<O> compactionWriteMetadata = convertToOutputMetadata(updatedWriteMetadata);
     if (shouldComplete) {
       commitCompaction(compactionInstantTime, compactionWriteMetadata, Option.of(table));
@@ -331,7 +331,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    *
    * @return The passed in {@code HoodieWriteMetadata} with probable partially updated write statuses.
    */
-  protected HoodieWriteMetadata<T> partialUpdateTableMetadata(HoodieTable table, HoodieWriteMetadata<T> writeMetadata, String instantTime) {
+  protected HoodieWriteMetadata<T> partialUpdateTableMetadata(HoodieTable table, HoodieWriteMetadata<T> writeMetadata, String instantTime, WriteOperationType writeOperationType) {
     return writeMetadata;
   }
 
@@ -487,7 +487,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     clusteringTimer = metrics.getClusteringCtx();
     LOG.info("Starting clustering at {} for table {}", clusteringInstant, table.getConfig().getBasePath());
     HoodieWriteMetadata<T> writeMetadata = table.cluster(context, clusteringInstant);
-    HoodieWriteMetadata<T> updatedWriteMetadata = partialUpdateTableMetadata(table, writeMetadata, clusteringInstant);
+    HoodieWriteMetadata<T> updatedWriteMetadata = partialUpdateTableMetadata(table, writeMetadata, clusteringInstant, WriteOperationType.CLUSTER);
     HoodieWriteMetadata<O> clusteringMetadata = convertToOutputMetadata(updatedWriteMetadata);
 
     // TODO : Where is shouldComplete used ?
@@ -734,7 +734,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   protected HoodieTable createTableAndValidate(HoodieWriteConfig config,
                                                BiFunction<HoodieWriteConfig,
-                                                   HoodieEngineContext, HoodieTable> createTableFn,
+                                               HoodieEngineContext, HoodieTable> createTableFn,
                                                boolean skipValidation) {
     HoodieTable table = createTableFn.apply(config, context);
     if (!skipValidation) {
@@ -825,7 +825,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       }
 
       if (shouldDelegateToTableServiceManager(config, ActionType.clean)) {
-        LOG.warn("Cleaning is not yet supported with Table Service Manager.");
+        LOG.info("Cleaning is not yet supported with Table Service Manager.");
         return null;
       }
     }
@@ -942,17 +942,17 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         rollbackPlan = RollbackUtils.getRollbackPlan(metaClient, rollbackInstant);
       } catch (Exception e) {
         if (rollbackInstant.isRequested()) {
-          LOG.warn("Fetching rollback plan failed for " + rollbackInstant + ", deleting the plan since it's in REQUESTED state", e);
+          LOG.warn("Fetching rollback plan failed for {}, deleting the plan since it's in REQUESTED state", rollbackInstant, e);
           try {
             metaClient.getActiveTimeline().deletePending(rollbackInstant);
           } catch (HoodieIOException he) {
-            LOG.warn("Cannot delete " + rollbackInstant, he);
+            LOG.warn("Cannot delete {}", rollbackInstant, he);
             continue;
           }
         } else {
           // Here we assume that if the rollback is inflight, the rollback plan is intact
           // in instant.rollback.requested.  The exception here can be due to other reasons.
-          LOG.warn("Fetching rollback plan failed for " + rollbackInstant + ", skip the plan", e);
+          LOG.error("Fetching rollback plan failed for {}, skip the plan", rollbackInstant, e);
         }
         continue;
       }
@@ -973,7 +973,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           infoMap.putIfAbsent(instantToRollback, Option.of(new HoodiePendingRollbackInfo(rollbackInstant, rollbackPlan)));
         }
       } catch (Exception e) {
-        LOG.warn("Processing rollback plan failed for " + rollbackInstant + ", skip the plan", e);
+        LOG.warn("Processing rollback plan failed for {}, skip the plan", rollbackInstant, e);
       }
     }
     return infoMap;
@@ -1157,7 +1157,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         rollbackInstantTime = pendingRollbackInfo.get().getRollbackInstant().requestedTime();
       } else {
         if (commitInstantOpt.isEmpty()) {
-          LOG.warn("Cannot find instant {} in the timeline of table {} for rollback", commitInstantTime, config.getBasePath());
+          LOG.error("Cannot find instant {} in the timeline of table {} for rollback", commitInstantTime, config.getBasePath());
           return false;
         }
         if (!skipLocking) {

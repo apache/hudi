@@ -38,6 +38,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -88,7 +89,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
   private final Option<CompactionOperation> compactionOperation;
   private final String maxInstantTime;
-  private HoodieReaderContext<T> readerContext;
   private HoodieReadStats readStats;
   private HoodieRecord.HoodieRecordType recordType;
   private Option<HoodieCDCLogger> cdcLogger;
@@ -133,7 +133,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
                                          TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, baseFile, keyGeneratorOpt);
     this.compactionOperation = Option.empty();
-    this.readerContext = hoodieTable.getReaderContextFactoryForWrite().getContext();
     TypedProperties properties = config.getProps();
     properties.putAll(hoodieTable.getMetaClient().getTableConfig().getProps());
     this.maxInstantTime = instantTime;
@@ -214,9 +213,10 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           hoodieTable.getPartitionMetafileFormat());
       partitionMetadata.trySave();
 
-      String newFileName = FSUtils.makeBaseFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
-      makeOldAndNewFilePaths(partitionPath,
-          latestValidFilePath.isPresent() ? latestValidFilePath.get() : null, newFileName);
+      String oldFileName = latestValidFilePath.isPresent() ? latestValidFilePath.get() : null;
+      String newFileName = createNewFileName(oldFileName);
+      oldFilePath = makeNewFilePath(partitionPath, oldFileName);
+      newFilePath = makeNewFilePath(partitionPath, newFileName);
 
       LOG.info("Merging data from file group {}, to a new base file {}", fileId, newFilePath);
       // file name is same for all records, in this bunch
@@ -233,7 +233,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
       // Create the writer for writing the new version file
       fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, newFilePath, hoodieTable.getStorage(),
-          config, writeSchemaWithMetaFields, taskContextSupplier, recordType);
+            //TODO boundary to revisit in follow up to use HoodieSchema directly
+            config, HoodieSchema.fromAvroSchema(writeSchemaWithMetaFields), taskContextSupplier, recordType);
     } catch (IOException io) {
       writeStatus.setGlobalError(io);
       throw new HoodieUpsertException("Failed to initialize HoodieUpdateHandle for FileId: " + fileId + " on commit "
@@ -244,14 +245,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   @Override
   protected void populateIncomingRecordsMap(Iterator<HoodieRecord<T>> newRecordsItr) {
     // no op.
-  }
-
-  /**
-   * This is only for spark, the engine context fetched from a serialized hoodie table is always local,
-   * overrides it to spark specific reader context.
-   */
-  public void setReaderContext(HoodieReaderContext<T> readerContext) {
-    this.readerContext = readerContext;
   }
 
   /**
@@ -268,7 +261,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema())
         .map(internalSchema -> AvroSchemaEvolutionUtils.reconcileSchema(writeSchemaWithMetaFields, internalSchema,
             config.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS)));
-    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
+    long maxMemoryPerCompaction = getMaxMemoryForMerge();
     props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction));
     Option<Stream<HoodieLogFile>> logFilesStreamOpt = compactionOperation.map(op -> op.getDeltaFileNames().stream().map(logFileName ->
         new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
@@ -317,8 +310,13 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     }
   }
 
+  protected long getMaxMemoryForMerge() {
+    return compactionOperation.isPresent() ? IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config)
+        : IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
+  }
+
   private HoodieFileGroupReader<T> getFileGroupReader(boolean usePosition, Option<InternalSchema> internalSchemaOption, TypedProperties props,
-                                                      Option<Stream<HoodieLogFile>> logFileStreamOpt, Iterator<HoodieRecord<T>> incomingRecordsItr) {
+                                                        Option<Stream<HoodieLogFile>> logFileStreamOpt, Iterator<HoodieRecord<T>> incomingRecordsItr) {
     HoodieFileGroupReader.Builder<T> fileGroupBuilder = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withLatestCommitTime(maxInstantTime).withPartitionPath(partitionPath).withBaseFileOption(Option.ofNullable(baseFileToMerge))
         .withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)

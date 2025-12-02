@@ -48,7 +48,7 @@ public class SparkTempViewProvider implements TempViewProvider {
       SparkConf sparkConf = SparkUtil.getDefaultConf(appName, Option.of("local[8]"));
 
       jsc = new JavaSparkContext(sparkConf);
-      sqlContext = new SQLContext(jsc);
+      sqlContext = SQLContext.getOrCreate(jsc.sc());
     } catch (Throwable ex) {
       // log full stack trace and rethrow. Without this its difficult to debug failures, if any
       LOG.warn("unable to initialize spark context ", ex);

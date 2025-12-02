@@ -21,6 +21,7 @@ package org.apache.hudi.hadoop;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -63,14 +64,15 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
     reader = HoodieIOFactory.getIOFactory(new HoodieHadoopStorage(path, storageConf)).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, path, HoodieFileFormat.HFILE, Option.empty());
 
-    schema = reader.getSchema();
+    //TODO boundary for now to revisit in later pr to use HoodieSchema
+    schema = reader.getSchema().getAvroSchema();
     valueObj = new ArrayWritable(Writable.class, new Writable[schema.getFields().size()]);
   }
 
   @Override
   public boolean next(NullWritable key, ArrayWritable value) throws IOException {
     if (recordIterator == null) {
-      recordIterator = reader.getRecordIterator(schema);
+      recordIterator = reader.getRecordIterator(HoodieSchema.fromAvroSchema(schema));
     }
 
     if (!recordIterator.hasNext()) {

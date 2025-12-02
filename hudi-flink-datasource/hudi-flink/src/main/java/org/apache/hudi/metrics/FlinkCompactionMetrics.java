@@ -98,7 +98,7 @@ public class FlinkCompactionMetrics extends FlinkWriteMetrics {
         this.compactionDelay = Duration.between(start, Instant.now()).getSeconds();
       }
     } catch (ParseException e) {
-      LOG.warn("Invalid input compaction instant" + firstPendingCompactionInstant);
+      LOG.warn("Invalid input compaction instant: {}", firstPendingCompactionInstant);
     }
   }
 

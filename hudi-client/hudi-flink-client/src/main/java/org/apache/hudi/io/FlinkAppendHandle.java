@@ -119,7 +119,7 @@ public class FlinkAppendHandle<T, I, K, O>
     } catch (Throwable throwable) {
       // The intermediate log file can still append based on the incremental MERGE semantics,
       // there is no need to delete the file.
-      LOG.warn("Error while trying to dispose the APPEND handle", throwable);
+      LOG.warn("Failed to close the APPEND handle", throwable);
     }
   }
 

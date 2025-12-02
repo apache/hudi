@@ -23,7 +23,6 @@ package org.apache.hudi;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -39,6 +38,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -49,7 +49,6 @@ import org.apache.hudi.testutils.SparkDatasetTestUtils;
 import org.apache.avro.Schema;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -113,7 +112,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
 
   public List<HoodieRecord> generateRecords(int numOfRecords, String commitTime) throws Exception {
     Dataset<Row> rows = SparkDatasetTestUtils.getRandomRowsWithCommitTime(
-        new SQLContext(jsc()), numOfRecords, getPartitionPath(), false, commitTime);
+        sqlContext(), numOfRecords, getPartitionPath(), false, commitTime);
     List<InternalRow> internalRows = SparkDatasetTestUtils.toInternalRows(rows, SparkDatasetTestUtils.ENCODER);
     return internalRows.stream()
         .map(r -> new HoodieSparkRecord(new HoodieKey(r.getString(2), r.getString(3)),
@@ -124,7 +123,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
 
   public List<HoodieRecord> generateRecordUpdates(List<HoodieKey> keys, String commitTime) throws Exception {
     Dataset<Row> rows = SparkDatasetTestUtils.getRandomRowsWithKeys(
-        new SQLContext(jsc()), keys, false, commitTime);
+        sqlContext(), keys, false, commitTime);
     List<InternalRow> internalRows = SparkDatasetTestUtils.toInternalRows(rows, SparkDatasetTestUtils.ENCODER);
     return internalRows.stream()
         .map(r -> new HoodieSparkRecord(new HoodieKey(r.getString(2), r.getString(3)),
@@ -136,7 +135,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   public List<HoodieRecord> generateEmptyRecords(List<HoodieKey> keys) {
     List<HoodieRecord> records = new ArrayList<>();
     for (HoodieKey key : keys) {
-      records.add(new HoodieEmptyRecord(key, HoodieOperation.DELETE, key.getRecordKey(), HoodieRecord.HoodieRecordType.SPARK));
+      records.add(new HoodieEmptyRecord(key, HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecord.HoodieRecordType.SPARK));
     }
     return records;
   }
@@ -300,22 +299,6 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   }
 
   public static class DefaultMerger extends DefaultSparkRecordMerger {
-    @Override
-    public boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) {
-      return true;
-    }
-  }
-
-  public static class NoFlushMerger extends DefaultSparkRecordMerger {
-    @Override
-    public boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) {
-      return false;
-    }
-
-    @Override
-    public String getMergingStrategy() {
-      return HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
-    }
   }
 
   public static class CustomMerger extends DefaultSparkRecordMerger {

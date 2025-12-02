@@ -20,12 +20,10 @@
 package org.apache.spark.execution.datasources.parquet
 
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext
-import org.apache.hudi.SparkFileFormatInternalRowReaderContext.filterIsSafeForBootstrap
+import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, filterIsSafeForPrimaryKey}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
-import org.apache.hudi.keygen.CustomKeyGenerator
-import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
@@ -66,6 +64,32 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
   }
 
   @Test
+  def testPKFilter(): Unit = {
+    val recordKeyField = HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName
+    val pk1 = "pk1"
+    val pk2 = "pk2"
+    val dataField = "data_col"
+    val pkFieldsSet = Set(pk1, pk2)
+
+    // case1: only record key or pk fields
+    val recordKeyFilter = IsNotNull(recordKeyField)
+    assertTrue(filterIsSafeForPrimaryKey(recordKeyFilter, pkFieldsSet))
+    val pkFieldFilter = IsNotNull(pk1)
+    assertTrue(filterIsSafeForPrimaryKey(pkFieldFilter, pkFieldsSet))
+    val pkFieldsFilter = And(IsNotNull(pk1), IsNotNull(pk2))
+    assertTrue(filterIsSafeForPrimaryKey(pkFieldsFilter, pkFieldsSet))
+    val pkAndRecordKeyFilter = And(And(IsNotNull(recordKeyField), IsNotNull(pk1)), IsNotNull(pk2))
+    assertTrue(filterIsSafeForPrimaryKey(pkAndRecordKeyFilter, pkFieldsSet))
+    // case2: with data field
+    val dataFieldFilter = IsNotNull(dataField)
+    assertFalse(filterIsSafeForPrimaryKey(dataFieldFilter, pkFieldsSet))
+    val illegalComplexFilter = Or(recordKeyFilter, dataFieldFilter)
+    assertFalse(filterIsSafeForPrimaryKey(illegalComplexFilter, pkFieldsSet))
+    val illegalNestedFilter = And(illegalComplexFilter, pkFieldFilter)
+    assertFalse(filterIsSafeForPrimaryKey(illegalNestedFilter, pkFieldsSet))
+  }
+
+  @Test
   def testGetAppliedRequiredSchema(): Unit = {
     val fields = Array(
       StructField("column_a", LongType, nullable = false),
@@ -90,8 +114,9 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
     assertEquals(1.1f, sparkReaderContext.getRecordContext().convertValueToEngineType(1.1f))
     assertEquals(1.1d, sparkReaderContext.getRecordContext().convertValueToEngineType(1.1d))
     assertEquals(UTF8String.fromString(stringValue),
-      sparkReaderContext.getRecordContext().convertValueToEngineType(stringValue))
-    assertEquals(UTF8String.fromString(stringValue),
-      sparkReaderContext.getRecordContext().convertValueToEngineType(UTF8String.fromString(stringValue)))
+      sparkReaderContext.getRecordContext().convertPartitionValueToEngineType(stringValue))
+    val utf8StringValue = UTF8String.fromString(stringValue)
+    assertEquals(utf8StringValue,
+      sparkReaderContext.getRecordContext().convertPartitionValueToEngineType(utf8StringValue))
   }
 }

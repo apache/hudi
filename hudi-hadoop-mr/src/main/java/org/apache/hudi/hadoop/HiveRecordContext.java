@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
-import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.hadoop.utils.HiveJavaTypeConverter;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
@@ -50,6 +49,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.UnaryOperator;
 
 public class HiveRecordContext extends RecordContext<ArrayWritable> {
+  private static final HiveRecordContext FIELD_ACCESSOR_INSTANCE = new HiveRecordContext();
+
+  public static HiveRecordContext getFieldAccessorInstance() {
+    return FIELD_ACCESSOR_INSTANCE;
+  }
 
   private final Map<Schema, HiveAvroSerializer> serializerCache = new ConcurrentHashMap<>();
 
@@ -59,6 +63,10 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
 
   public HiveRecordContext(HoodieTableConfig tableConfig) {
     super(tableConfig, new HiveJavaTypeConverter());
+  }
+
+  private HiveRecordContext() {
+    super(new HiveJavaTypeConverter());
   }
 
   @Override
@@ -78,12 +86,12 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
       return new HoodieEmptyRecord<>(
           key,
           bufferedRecord.getHoodieOperation(),
-          OrderingValues.getDefault(),
+          bufferedRecord.getOrderingValue(),
           HoodieRecord.HoodieRecordType.HIVE);
     }
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     ArrayWritable writable = bufferedRecord.getRecord();
-    return new HoodieHiveRecord(key, writable, schema, getHiveAvroSerializer(schema), bufferedRecord.getHoodieOperation(), bufferedRecord.isDelete());
+    return new HoodieHiveRecord(key, writable, schema, getHiveAvroSerializer(schema), bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), bufferedRecord.isDelete());
   }
 
   @Override

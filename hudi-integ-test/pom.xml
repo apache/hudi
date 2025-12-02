@@ -21,7 +21,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>1.1.0-SNAPSHOT</version>
+    <version>1.2.0-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
   <artifactId>hudi-integ-test</artifactId>
@@ -471,7 +471,7 @@
               <executable>/bin/bash</executable>
               <arguments>
                 <argument>-c</argument>
-                <argument>export HUDI_WS=`dirname ${project.basedir}`; docker compose -f ${dockerCompose.file} up -d</argument>
+                <argument>export HUDI_WS=`dirname ${project.basedir}`; docker compose -f ${dockerCompose.file} up -d --quiet-pull</argument>
               </arguments>
             </configuration>
           </execution>

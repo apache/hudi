@@ -97,7 +97,7 @@ public class HoodieLogFile implements Serializable {
 
   private void parseFieldsFromPath() {
     Matcher matcher = LOG_FILE_PATTERN.matcher(getPath().getName());
-    if (!matcher.find()) {
+    if (!matcher.matches()) {
       throw new InvalidHoodiePathException(path, "LogFile");
     }
     this.fileId = matcher.group(1);

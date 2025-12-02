@@ -45,7 +45,7 @@ import java.util.List;
  * the new file would then rename to this file name,
  * behaves like each mini-batch data are appended to the same file.
  *
- * @see FlinkMergeAndReplaceHandle
+ * @see FlinkIncrementalMergeHandle
  */
 public class FlinkCreateHandle<T, I, K, O>
     extends HoodieCreateHandle<T, I, K, O> implements MiniBatchHandle {
@@ -118,7 +118,7 @@ public class FlinkCreateHandle<T, I, K, O>
       while (storage.exists(path)) {
         StoragePath existing = path;
         path = newFilePathWithRollover(rollNumber++);
-        LOG.warn("Duplicate write for INSERT bucket with path: " + existing + ", rolls over to new path: " + path);
+        LOG.warn("Duplicate write for INSERT bucket with path: {}. Will write to new path [{}] instead", existing, path);
       }
       return path;
     } catch (IOException e) {
@@ -157,13 +157,13 @@ public class FlinkCreateHandle<T, I, K, O>
     try {
       close();
     } catch (Throwable throwable) {
-      LOG.warn("Error while trying to dispose the CREATE handle", throwable);
+      LOG.error("Failed to close the CREATE handle", throwable);
       try {
         storage.deleteFile(path);
-        LOG.info("Deleting the intermediate CREATE data file: " + path + " success!");
+        LOG.info("Successfully deleted the intermediate CREATE data file: {}", path);
       } catch (IOException e) {
         // logging a warning and ignore the exception.
-        LOG.warn("Deleting the intermediate CREATE data file: " + path + " failed", e);
+        LOG.warn("Failed to delete the intermediate CREATE data file: {}", path, e);
       }
     }
   }

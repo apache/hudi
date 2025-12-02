@@ -135,13 +135,13 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue("")
       .withDescription("Insert partitioner to use aiming to re-balance records and reducing small file number "
           + "in the scenario of multi-level partitioning. For example dt/hour/eventID"
-          + "Currently support org.apache.hudi.sink.partitioner.DefaultInsertPartitioner");
+          + "Currently support org.apache.hudi.sink.partitioner.GroupedInsertPartitioner");
 
   public static final ConfigOption<Integer> DEFAULT_PARALLELISM_PER_PARTITION = ConfigOptions
       .key("write.insert.partitioner.default_parallelism_per_partition")
       .intType()
       .defaultValue(30)
-      .withDescription("The parallelism to use in each partition when using DefaultInsertPartitioner.");
+      .withDescription("The parallelism to use in each partition when using GroupedInsertPartitioner.");
 
   @AdvancedConfig
   public static final ConfigOption<String> RECORD_MERGER_IMPLS = ConfigOptions
@@ -630,6 +630,30 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(1024D) // 1GB
       .withDescription("Maximum memory in MB for a write task, when the threshold hits,\n"
           + "it flushes the max size data bucket to avoid OOM, default 1GB");
+
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> WRITE_BUFFER_SORT_ENABLED = ConfigOptions
+      .key("write.buffer.sort.enabled")
+      .booleanType()
+      .defaultValue(false) // default no sort
+      .withDescription("Whether to enable buffer sort within append write function. Data is sorted within the buffer configured by number of records or buffer size."
+          + " The order of entire parquet file is not guaranteed.");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> WRITE_BUFFER_SORT_KEYS = ConfigOptions
+      .key("write.buffer.sort.keys")
+      .stringType()
+      .noDefaultValue() // default no sort key
+      .withDescription("Sort keys concatenated by comma for buffer sort in append write function. Data is sorted within the buffer configured by number of records or buffer size."
+          + " The order of entire parquet file is not guaranteed.");
+
+  @AdvancedConfig
+  public static final ConfigOption<Long> WRITE_BUFFER_SIZE = ConfigOptions
+      .key("write.buffer.size")
+      .longType()
+      .defaultValue(1000L) // 1000 records
+      .withDescription("Buffer size of each partition key for buffer sort in append write function. Data is sorted within the buffer configured by number of records."
+          +  " The order of entire parquet file is not guaranteed.");
 
   @AdvancedConfig
   public static final ConfigOption<Long> WRITE_RATE_LIMIT = ConfigOptions

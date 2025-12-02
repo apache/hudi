@@ -53,7 +53,7 @@ public class TestNewHoodieParquetFileFormat extends TestBootstrapReadBase {
 
   @ParameterizedTest
   @MethodSource("testArgs")
-  public void testNewParquetFileFormat(HoodieTableType tableType, Integer nPartitions) {
+  void testNewParquetFileFormat(HoodieTableType tableType, Integer nPartitions) {
     this.bootstrapType = nPartitions == 0 ? "metadata" : "mixed";
     this.dashPartitions = true;
     this.tableType = tableType;

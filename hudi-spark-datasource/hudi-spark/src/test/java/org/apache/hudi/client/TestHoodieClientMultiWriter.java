@@ -1198,7 +1198,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder()
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withMetadataIndexColumnStats(true)
-            .withEnableRecordIndex(true).build())
+            .withEnableGlobalRecordLevelIndex(true).build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
             .withAutoArchive(false).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)

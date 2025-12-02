@@ -73,7 +73,7 @@ class HiveSyncProcedure extends BaseProcedure with ProcedureBuilder
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, tableName)
     val hadoopConf = sparkSession.sparkContext.hadoopConfiguration
     val hiveConf = new HiveConf
-    val sqlConf = sparkSession.sqlContext.conf
+    val sqlConf = sparkSession.sessionState.conf
 
     if (metastoreUri.nonEmpty) hadoopConf.set(HiveConf.ConfVars.METASTOREURIS.varname, metastoreUri)
     if (username.nonEmpty) sqlConf.setConfString(HiveSyncConfig.HIVE_USER.key, username)

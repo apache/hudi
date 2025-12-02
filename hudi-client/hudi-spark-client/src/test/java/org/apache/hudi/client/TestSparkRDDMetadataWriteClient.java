@@ -88,7 +88,7 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
   public void testWritesViaMetadataWriteClient() throws Exception {
 
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(false).withEnableRecordIndex(true)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(false).withEnableGlobalRecordLevelIndex(true)
             .withRecordIndexFileGroupCount(1, 1).withStreamingWriteEnabled(true).build()).build();
 
     // trigger end to end write to data table so that metadata table is also initialized.

@@ -21,6 +21,7 @@ import org.apache.hudi.{DataSourceUtils, HoodieWriterUtils}
 import org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, WriteOperationType}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.util.{CommitUtils, Option}
@@ -29,7 +30,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.TableChange.ColumnChangeID
 import org.apache.hudi.internal.schema.action.TableChanges
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager
 import org.apache.hudi.internal.schema.utils.{SchemaChangeUtils, SerDeHelper}
 import org.apache.hudi.table.HoodieSparkTable
@@ -188,7 +189,7 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     // ignore NonExist unset
     propKeys.foreach { k =>
       if (!table.properties.contains(k) && k != TableCatalog.PROP_COMMENT) {
-        logWarning(s"find non exist unset property: ${k} , ignore it")
+        logWarning(s"Cannot remove property [$k] because it is not currently set for the table.")
       }
     }
     val tableComment = if (propKeys.contains(TableCatalog.PROP_COMMENT)) None else table.comment
@@ -219,7 +220,7 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     val schemaUtil = new TableSchemaResolver(metaClient)
 
     val schema = schemaUtil.getTableInternalSchemaFromCommitMetadata().orElse {
-      AvroInternalSchemaConverter.convert(schemaUtil.getTableAvroSchema)
+      InternalSchemaConverter.convert(HoodieSchema.fromAvroSchema(schemaUtil.getTableAvroSchema))
     }
 
     val historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata.orElse("")
@@ -250,7 +251,7 @@ object AlterTableCommand extends Logging {
     * @param sparkSession The spark session.
     */
   def commitWithSchema(internalSchema: InternalSchema, historySchemaStr: String, table: CatalogTable, sparkSession: SparkSession): Unit = {
-    val schema = AvroInternalSchemaConverter.convert(internalSchema, getAvroRecordQualifiedName(table.identifier.table))
+    val schema = InternalSchemaConverter.convert(internalSchema, getAvroRecordQualifiedName(table.identifier.table))
     val path = getTableLocation(table, sparkSession)
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
     val client = DataSourceUtils.createHoodieClient(
@@ -260,7 +261,7 @@ object AlterTableCommand extends Logging {
       table.identifier.table,
       HoodieWriterUtils.parametersWithWriteDefaults(
         HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(table.storage.properties ++ table.properties) ++
-        sparkSession.sqlContext.conf.getAllConfs ++ Map(
+        sparkSession.sessionState.conf.getAllConfs ++ Map(
         HoodieCleanConfig.AUTO_CLEAN.key -> "false",
         HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key -> HoodieFailedWritesCleaningPolicy.NEVER.name,
         HoodieArchivalConfig.AUTO_ARCHIVE.key -> "false"

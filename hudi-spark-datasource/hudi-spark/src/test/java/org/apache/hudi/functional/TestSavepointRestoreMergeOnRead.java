@@ -481,13 +481,14 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       String inflightCommit = client.startCommit();
       List<HoodieRecord> records = dataGen.generateUniqueUpdates(inflightCommit, numRecords);
       JavaRDD<WriteStatus> writeStatus = writeClient.upsert(jsc.parallelize(records, 1), inflightCommit);
+      List<WriteStatus> writeStatusList = writeStatus.collect();
 
       // Run compaction while delta-commit is in-flight
       Option<String> compactionInstant = client.scheduleCompaction(Option.empty());
       HoodieWriteMetadata result = client.compact(compactionInstant.get());
       client.commitCompaction(compactionInstant.get(), result, Option.empty());
       // commit the inflight delta commit
-      client.commit(inflightCommit, writeStatus);
+      client.commit(inflightCommit, jsc.parallelize(writeStatusList, 2));
 
       client.savepoint(inflightCommit, "user1", "Savepoint for commit that completed after compaction");
 

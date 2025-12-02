@@ -107,8 +107,8 @@ public class TestPartialUpdateAvroPayload {
     // Test preCombine: since payload2's ordering val is larger, so payload2 will overwrite payload1 with its non-default field's value
     PartialUpdateAvroPayload payload1 = new PartialUpdateAvroPayload(record1, 0L);
     PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(record2, 1L);
-    assertArrayEquals(payload1.preCombine(payload2, schema, properties).recordBytes, new PartialUpdateAvroPayload(record4, 1L).recordBytes);
-    assertArrayEquals(payload2.preCombine(payload1, schema, properties).recordBytes, new PartialUpdateAvroPayload(record4, 1L).recordBytes);
+    assertArrayEquals(payload1.preCombine(payload2, schema, properties).getRecordBytes(), new PartialUpdateAvroPayload(record4, 1L).getRecordBytes());
+    assertArrayEquals(payload2.preCombine(payload1, schema, properties).getRecordBytes(), new PartialUpdateAvroPayload(record4, 1L).getRecordBytes());
 
     assertEquals(record1, payload1.getInsertValue(schema).get());
     assertEquals(record2, payload2.getInsertValue(schema).get());
@@ -125,8 +125,8 @@ public class TestPartialUpdateAvroPayload {
     record1.put("ts", 2L);
     payload1 = new PartialUpdateAvroPayload(record1, 2L);
     payload2 = new PartialUpdateAvroPayload(record2, 1L);
-    assertArrayEquals(payload1.preCombine(payload2, schema, properties).recordBytes, new PartialUpdateAvroPayload(record3, 2L).recordBytes);
-    assertArrayEquals(payload2.preCombine(payload1, schema, properties).recordBytes, new PartialUpdateAvroPayload(record3, 2L).recordBytes);
+    assertArrayEquals(payload1.preCombine(payload2, schema, properties).getRecordBytes(), new PartialUpdateAvroPayload(record3, 2L).getRecordBytes());
+    assertArrayEquals(payload2.preCombine(payload1, schema, properties).getRecordBytes(), new PartialUpdateAvroPayload(record3, 2L).getRecordBytes());
   }
 
   @Test
@@ -160,20 +160,20 @@ public class TestPartialUpdateAvroPayload {
     PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(record2, 2L);
 
     PartialUpdateAvroPayload mergedPayload = payload1.preCombine(delPayload, schema, new Properties());
-    assertTrue(HoodieAvroUtils.bytesToAvro(mergedPayload.recordBytes, schema).get("_hoodie_is_deleted").equals(true));
-    assertArrayEquals(mergedPayload.recordBytes, delPayload.recordBytes);
+    assertTrue(HoodieAvroUtils.bytesToAvro(mergedPayload.getRecordBytes(), schema).get("_hoodie_is_deleted").equals(true));
+    assertArrayEquals(mergedPayload.getRecordBytes(), delPayload.getRecordBytes());
 
     mergedPayload = delPayload.preCombine(payload1, schema, new Properties());
-    assertTrue(HoodieAvroUtils.bytesToAvro(mergedPayload.recordBytes, schema).get("_hoodie_is_deleted").equals(true));
-    assertArrayEquals(mergedPayload.recordBytes, delPayload.recordBytes);
+    assertTrue(HoodieAvroUtils.bytesToAvro(mergedPayload.getRecordBytes(), schema).get("_hoodie_is_deleted").equals(true));
+    assertArrayEquals(mergedPayload.getRecordBytes(), delPayload.getRecordBytes());
 
     mergedPayload = payload2.preCombine(delPayload, schema, new Properties());
-    assertTrue(HoodieAvroUtils.bytesToAvro(mergedPayload.recordBytes, schema).get("_hoodie_is_deleted").equals(false));
-    assertArrayEquals(mergedPayload.recordBytes, payload2.recordBytes);
+    assertTrue(HoodieAvroUtils.bytesToAvro(mergedPayload.getRecordBytes(), schema).get("_hoodie_is_deleted").equals(false));
+    assertArrayEquals(mergedPayload.getRecordBytes(), payload2.getRecordBytes());
 
     mergedPayload = delPayload.preCombine(payload2, schema, new Properties());
-    assertTrue(HoodieAvroUtils.bytesToAvro(mergedPayload.recordBytes, schema).get("_hoodie_is_deleted").equals(false));
-    assertArrayEquals(mergedPayload.recordBytes, payload2.recordBytes);
+    assertTrue(HoodieAvroUtils.bytesToAvro(mergedPayload.getRecordBytes(), schema).get("_hoodie_is_deleted").equals(false));
+    assertArrayEquals(mergedPayload.getRecordBytes(), payload2.getRecordBytes());
 
     assertEquals(record1, payload1.getInsertValue(schema).get());
     assertFalse(delPayload.getInsertValue(schema).isPresent());

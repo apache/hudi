@@ -62,19 +62,20 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           )
 
           // test with optimized sql writes enabled / disabled.
-          spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
+          withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> sparkSqlOptimizedWrites.toString) {
 
-          // update data
-          spark.sql(s"update $tableName set price = 20 where id = 1")
-          checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(1, "a1", 20.0, 1000)
-          )
+            // update data
+            spark.sql(s"update $tableName set price = 20 where id = 1")
+            checkAnswer(s"select id, name, price, ts from $tableName")(
+              Seq(1, "a1", 20.0, 1000)
+            )
 
-          // update data
-          spark.sql(s"update $tableName set price = price * 2 where id = 1")
-          checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(1, "a1", 40.0, 1000)
-          )
+            // update data
+            spark.sql(s"update $tableName set price = price * 2 where id = 1")
+            checkAnswer(s"select id, name, price, ts from $tableName")(
+              Seq(1, "a1", 40.0, 1000)
+            )
+          }
         }
       }
     })
@@ -114,28 +115,29 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           )
 
           // test with optimized sql writes enabled.
-          spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
+          withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> "true") {
 
-          // update data
-          spark.sql(s"update $tableName set price = 20 where id = 1")
-          checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(1, "a1", 20.0, 1000)
-          )
+            // update data
+            spark.sql(s"update $tableName set price = 20 where id = 1")
+            checkAnswer(s"select id, name, price, ts from $tableName")(
+              Seq(1, "a1", 20.0, 1000)
+            )
 
-          // update data
-          spark.sql(s"update $tableName set price = price * 2 where id = 1")
-          checkAnswer(s"select id, name, price, ts from $tableName")(
-            Seq(1, "a1", 40.0, 1000)
-          )
+            // update data
+            spark.sql(s"update $tableName set price = price * 2 where id = 1")
+            checkAnswer(s"select id, name, price, ts from $tableName")(
+              Seq(1, "a1", 40.0, 1000)
+            )
 
-          // verify default compaction w/ MOR
-          if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
-            spark.sql(s"update $tableName set price = price * 2 where id = 1")
-            spark.sql(s"update $tableName set price = price * 2 where id = 1")
-            spark.sql(s"update $tableName set price = price * 2 where id = 1")
-            // verify compaction is complete
-            val metaClient = createMetaClient(spark, tmp.getCanonicalPath + "/" + tableName)
-            assertEquals(metaClient.getActiveTimeline.getLastCommitMetadataWithValidData.get.getLeft.getAction, "commit")
+            // verify default compaction w/ MOR
+            if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
+              spark.sql(s"update $tableName set price = price * 2 where id = 1")
+              spark.sql(s"update $tableName set price = price * 2 where id = 1")
+              spark.sql(s"update $tableName set price = price * 2 where id = 1")
+              // verify compaction is complete
+              val metaClient = createMetaClient(spark, tmp.getCanonicalPath + "/" + tableName)
+              assertEquals(metaClient.getActiveTimeline.getLastCommitMetadataWithValidData.get.getLeft.getAction, "commit")
+            }
           }
         }
       }
@@ -301,12 +303,12 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
         )
 
         // test with optimized sql writes enabled / disabled.
-        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
-
-        spark.sql(s"update $tableName set price = 22 where id = 1")
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 22.0, 1000)
-        )
+        withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> sparkSqlOptimizedWrites.toString) {
+          spark.sql(s"update $tableName set price = 22 where id = 1")
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a1", 22.0, 1000)
+          )
+        }
       }
     }
   }
@@ -463,31 +465,32 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
              |""".stripMargin)
 
         // test with optimized sql writes enabled.
-        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=true")
+        withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> "true") {
 
-        // insert data to table
-        spark.sql(
-          s"""
-             |insert into $tableName
-             |values
-             |  (1, 'a1', cast(10.0 as double), 1000),
-             |  (2, 'a2', cast(20.0 as double), 1000),
-             |  (3, 'a2', cast(30.0 as double), 1000)
-             |""".stripMargin)
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 10.0, 1000),
-          Seq(2, "a2", 20.0, 1000),
-          Seq(3, "a2", 30.0, 1000)
-        )
+          // insert data to table
+          spark.sql(
+            s"""
+               |insert into $tableName
+               |values
+               |  (1, 'a1', cast(10.0 as double), 1000),
+               |  (2, 'a2', cast(20.0 as double), 1000),
+               |  (3, 'a2', cast(30.0 as double), 1000)
+               |""".stripMargin)
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a1", 10.0, 1000),
+            Seq(2, "a2", 20.0, 1000),
+            Seq(3, "a2", 30.0, 1000)
+          )
 
-        // Update the row with id = 2 by setting price to 25.0
-        spark.sql(s"update $tableName set price = cast(25.0 as double) where id = 2")
+          // Update the row with id = 2 by setting price to 25.0
+          spark.sql(s"update $tableName set price = cast(25.0 as double) where id = 2")
 
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 10.0, 1000),
-          Seq(2, "a2", 25.0, 1000),
-          Seq(3, "a2", 30.0, 1000)
-        )
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a1", 10.0, 1000),
+            Seq(2, "a2", 25.0, 1000),
+            Seq(3, "a2", 30.0, 1000)
+          )
+        }
       }
     }
   }

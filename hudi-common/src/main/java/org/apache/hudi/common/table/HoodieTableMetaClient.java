@@ -27,10 +27,12 @@ import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.BootstrapIndexType;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -57,6 +59,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -85,8 +88,11 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.VERSION;
@@ -98,6 +104,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
+import static org.apache.hudi.keygen.constant.KeyGeneratorType.USER_PROVIDED;
 import static org.apache.hudi.metadata.HoodieIndexVersion.isValidIndexDefinition;
 
 /**
@@ -180,7 +187,7 @@ public class HoodieTableMetaClient implements Serializable {
   protected HoodieTableMetaClient(HoodieStorage storage, String basePath, boolean loadActiveTimelineOnLoad,
                                   ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
                                   HoodieTimeGeneratorConfig timeGeneratorConfig, FileSystemRetryConfig fileSystemRetryConfig) {
-    LOG.info("Loading HoodieTableMetaClient from " + basePath);
+    LOG.debug("Loading HoodieTableMetaClient from " + basePath);
     this.timeGeneratorConfig = timeGeneratorConfig;
     this.consistencyGuardConfig = consistencyGuardConfig;
     this.fileSystemRetryConfig = fileSystemRetryConfig;
@@ -206,7 +213,7 @@ public class HoodieTableMetaClient implements Serializable {
     this.timelinePath = timelineLayout.getTimelinePathProvider().getTimelinePath(tableConfig, this.basePath);
     this.timelineHistoryPath = timelineLayout.getTimelinePathProvider().getTimelineHistoryPath(tableConfig, this.basePath);
     this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
-    LOG.info("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ") from " + basePath);
+    LOG.debug("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ") from " + basePath);
     if (loadActiveTimelineOnLoad) {
       LOG.info("Loading Active commit timeline for " + basePath);
       getActiveTimeline();
@@ -259,6 +266,13 @@ public class HoodieTableMetaClient implements Serializable {
     }
     if (updateIndexDefn) {
       writeIndexMetadataToStorage();
+      String indexMetaPath = getIndexDefinitionPath();
+      // update table config if necessary
+      if (!tableConfig.getProps().containsKey(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key())
+          || !tableConfig.getRelativeIndexDefinitionPath().isPresent()) {
+        tableConfig.setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH, FSUtils.getRelativePartitionPath(basePath, new StoragePath(indexMetaPath)));
+        HoodieTableConfig.update(storage, metaPath, tableConfig.getProps());
+      }
     }
     return updateIndexDefn;
   }
@@ -311,6 +325,7 @@ public class HoodieTableMetaClient implements Serializable {
       // Ensure we write out valid index metadata.
       indexMetadata.getIndexDefinitions().values().forEach(d ->
           ValidationUtils.checkArgument(isValidIndexDefinition(tableVersion, d), "Found invalid index definition " + d));
+      HoodieIndexMetadata.validateIndexMetadata(indexMetadata);
       // TODO[HUDI-9094]: should not write byte array directly
       FileIOUtils.createFileInPath(storage, new StoragePath(indexDefinitionPath),
           Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes(indexMetadata.toJson()))));
@@ -1068,6 +1083,7 @@ public class HoodieTableMetaClient implements Serializable {
 
     private String indexDefinitionPath;
     private String tableFormat;
+    private Pair<String, String> deleteFieldAndMarker;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -1276,6 +1292,21 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    /**
+     * When the value in the specified field matches the marker value, the record is considered a deletion.
+     * @param deleteFieldName the field name which should be checked for deletion marker value
+     * @param markerValue the value to compare against
+     * @return the builder instance
+     */
+    public TableBuilder setRecordDeleteFieldAndMarker(String deleteFieldName, String markerValue) {
+      // check that parameters are not null or empty
+      if (StringUtils.isNullOrEmpty(deleteFieldName) || StringUtils.isNullOrEmpty(markerValue)) {
+        return this;
+      }
+      this.deleteFieldAndMarker = Pair.of(deleteFieldName, markerValue);
+      return this;
+    }
+
     public TableBuilder set(Map<String, Object> props) {
       for (ConfigProperty<String> configProperty : HoodieTableConfig.PERSISTED_CONFIG_LIST) {
         if (containsConfigProperty(props, configProperty)) {
@@ -1432,6 +1463,19 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH)) {
         setIndexDefinitionPath(hoodieConfig.getString(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH));
       }
+      // set delete field and marker value, if both are present
+      // check if config is prefixed for the table config or passed in from older write config properties
+      if (hoodieConfig.contains(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY)) {
+        String deleteFieldName = hoodieConfig.getString(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY);
+        String markerValue = hoodieConfig.getString(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER);
+        setRecordDeleteFieldAndMarker(deleteFieldName, markerValue);
+      }
+      // Check if legacy payload configs are provided. The delete key and marker were only used with the DefaultHoodieRecordPayload.
+      if (hoodieConfig.getStringOrDefault(HoodieTableConfig.PAYLOAD_CLASS_NAME, "").equals(DefaultHoodieRecordPayload.class.getName()) && hoodieConfig.contains(DELETE_KEY)) {
+        String deleteFieldName = hoodieConfig.getString(DELETE_KEY);
+        String markerValue = hoodieConfig.getString(DELETE_MARKER);
+        setRecordDeleteFieldAndMarker(deleteFieldName, markerValue);
+      }
       return this;
     }
 
@@ -1456,23 +1500,6 @@ public class HoodieTableMetaClient implements Serializable {
 
       tableConfig.setTableVersion(tableVersion);
       tableConfig.setInitialVersion(tableVersion);
-
-      // For table version <= 8
-      if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
-        Triple<RecordMergeMode, String, String> mergeConfigs =
-            inferMergingConfigsForPreV9Table(
-                recordMergeMode, payloadClassName, recordMergerStrategyId, orderingFields,
-                tableVersion);
-        tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());
-        tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
-        tableConfig.setValue(RECORD_MERGE_STRATEGY_ID, mergeConfigs.getRight());
-      } else { // For table version >= 9
-        Map<String, String> mergeConfigs = inferMergingConfigsForV9TableCreation(
-            recordMergeMode, payloadClassName, recordMergerStrategyId, orderingFields, tableVersion);
-        for (Map.Entry<String, String> config : mergeConfigs.entrySet()) {
-          tableConfig.setValue(config.getKey(), config.getValue());
-        }
-      }
 
       if (null != tableCreateSchema) {
         tableConfig.setValue(HoodieTableConfig.CREATE_SCHEMA, tableCreateSchema);
@@ -1537,9 +1564,17 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       }
       if (null != keyGeneratorClassProp) {
-        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, KeyGeneratorType.fromClassName(keyGeneratorClassProp).name());
+        KeyGeneratorType type = KeyGeneratorType.fromClassName(keyGeneratorClassProp);
+        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, type.name());
+        if (USER_PROVIDED == type) {
+          tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGeneratorClassProp);
+        }
       } else if (null != keyGeneratorType) {
-        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, keyGeneratorType);
+        checkArgument(!keyGeneratorType.equals(USER_PROVIDED.name()),
+            String.format("When key generator type is %s, the key generator class must be set properly",
+                USER_PROVIDED.name()));
+        KeyGeneratorType type = KeyGeneratorType.valueOf(keyGeneratorType);
+        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, type.name());
       }
       if (null != hiveStylePartitioningEnable) {
         tableConfig.setValue(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE, Boolean.toString(hiveStylePartitioningEnable));
@@ -1574,6 +1609,27 @@ public class HoodieTableMetaClient implements Serializable {
       if (null != tableFormat) {
         tableConfig.setValue(HoodieTableConfig.TABLE_FORMAT, tableFormat);
       }
+      // For table version <= 8
+      if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+        Triple<RecordMergeMode, String, String> mergeConfigs =
+            inferMergingConfigsForPreV9Table(
+                recordMergeMode, payloadClassName, recordMergerStrategyId, orderingFields,
+                tableVersion);
+        tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());
+        tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
+        tableConfig.setValue(RECORD_MERGE_STRATEGY_ID, mergeConfigs.getRight());
+      } else { // For table version >= 9
+        Map<String, String> mergeConfigs = inferMergingConfigsForV9TableCreation(
+            recordMergeMode, payloadClassName, recordMergerStrategyId, orderingFields, tableVersion);
+        for (Map.Entry<String, String> config : mergeConfigs.entrySet()) {
+          tableConfig.setValue(config.getKey(), config.getValue());
+        }
+      }
+      if (null != deleteFieldAndMarker) {
+        tableConfig.setValue(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, deleteFieldAndMarker.getLeft());
+        tableConfig.setValue(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, deleteFieldAndMarker.getRight());
+      }
+
       return tableConfig.getProps();
     }
 

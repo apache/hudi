@@ -17,10 +17,13 @@
 
 package org.apache.hudi;
 
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
@@ -181,7 +184,8 @@ public class ColumnStatsIndexHelper {
                           return utils.readColumnStatsFromMetadata(
                                   storage,
                                   new StoragePath(path),
-                                  columnNames
+                                  columnNames,
+                                  HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), MetadataPartitionType.COLUMN_STATS.getPartitionPath())
                               )
                               .stream();
                         }

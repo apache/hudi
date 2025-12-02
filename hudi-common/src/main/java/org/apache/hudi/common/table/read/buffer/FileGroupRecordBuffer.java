@@ -47,7 +47,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 
 import org.apache.avro.Schema;
 
@@ -117,7 +117,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
     this.bufferedRecordMerger = BufferedRecordMergerFactory.create(
-        readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldNames, readerSchema, payloadClasses, props, partialUpdateModeOpt);
+        readerContext, recordMergeMode, enablePartialMerging, recordMerger, readerSchema, payloadClasses, props, partialUpdateModeOpt);
     this.deleteContext = readerContext.getSchemaHandler().getDeleteContext().withReaderSchema(this.readerSchema);
     this.bufferedRecordConverter = BufferedRecordConverter.createConverter(readerContext.getIteratorMode(), readerSchema, readerContext.getRecordContext(), orderingFieldNames);
   }
@@ -193,15 +193,19 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
    */
   protected Pair<ClosableIterator<T>, Schema> getRecordsIterator(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) {
     ClosableIterator<T> blockRecordsIterator;
-    if (keySpecOpt.isPresent()) {
-      KeySpec keySpec = keySpecOpt.get();
-      blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext, keySpec.getKeys(), keySpec.isFullKey());
-    } else {
-      blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext);
+    try {
+      if (keySpecOpt.isPresent()) {
+        KeySpec keySpec = keySpecOpt.get();
+        blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext, keySpec.getKeys(), keySpec.isFullKey());
+      } else {
+        blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext);
+      }
+      Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
+      return Pair.of(new CloseableMappingIterator<>(
+          blockRecordsIterator, schemaTransformerWithEvolvedSchema.getLeft()), schemaTransformerWithEvolvedSchema.getRight());
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to deser records from log files ", e);
     }
-    Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
-    return Pair.of(new CloseableMappingIterator<>(
-        blockRecordsIterator, schemaTransformerWithEvolvedSchema.getLeft()), schemaTransformerWithEvolvedSchema.getRight());
   }
 
   /**
@@ -223,7 +227,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient);
     Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
         true, false, false).mergeSchemaGetRenamed();
-    Schema mergedAvroSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema.getLeft(), readerSchema.getFullName());
+    Schema mergedAvroSchema = InternalSchemaConverter.convert(mergedInternalSchema.getLeft(), readerSchema.getFullName()).getAvroSchema();
     // `mergedAvroSchema` maybe not equal with `readerSchema`, case: drop a column `f_x`, and then add a new column with same name `f_x`,
     // then the new added column in `mergedAvroSchema` will have a suffix: `f_xsuffix`, distinguished from the original column `f_x`, see
     // InternalSchemaMerger#buildRecordType() for details.

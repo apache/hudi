@@ -368,7 +368,7 @@ public class HoodieDataTableValidator implements Serializable {
     if (finalResult) {
       LOG.info("Data table validation succeeded.");
     } else {
-      LOG.warn("Data table validation failed.");
+      LOG.error("Data table validation failed.");
     }
   }
 

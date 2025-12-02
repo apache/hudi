@@ -100,7 +100,7 @@ public class LegacyArchivedMetaEntryReader {
       Object actionData = record.get(key);
       if (actionData != null) {
         if (actionData instanceof IndexedRecord) {
-          return HoodieAvroUtils.avroToBytes((IndexedRecord) actionData);
+          return HoodieAvroUtils.avroToFileBytes((IndexedRecord) actionData);
         } else {
           // should be json bytes.
           try {
@@ -328,7 +328,7 @@ public class LegacyArchivedMetaEntryReader {
       }
     } catch (NumberFormatException e) {
       // log and ignore any format warnings
-      LOG.warn("error getting suffix for archived file: " + f.getPath());
+      LOG.warn("error getting suffix for archived file: {}", f.getPath());
     }
     // return default value in case of any errors
     return 0;

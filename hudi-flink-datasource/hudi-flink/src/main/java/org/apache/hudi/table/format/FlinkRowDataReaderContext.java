@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.model.BootstrapRowData;
 import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
@@ -43,6 +44,7 @@ import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.util.Lazy;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
 import org.apache.hudi.util.RecordKeyToRowDataConverter;
 
@@ -54,32 +56,38 @@ import org.apache.flink.table.types.logical.RowType;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME;
 
 /**
  * Implementation of {@link HoodieReaderContext} to read {@link RowData}s from base files or
  * log files with Flink parquet reader.
  */
 public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
-  private final List<ExpressionPredicates.Predicate> predicates;
+  private final List<ExpressionPredicates.Predicate> allPredicates;
+  private final Lazy<List<ExpressionPredicates.Predicate>> lazyBootstrapSafeFilters;
+  private final Lazy<List<ExpressionPredicates.Predicate>> lazyMorSafeFilters;
+  private final Lazy<List<String>> lazyRecordKeys;
   private final Supplier<InternalSchemaManager> internalSchemaManager;
-  private final HoodieTableConfig tableConfig;
 
   public FlinkRowDataReaderContext(
       StorageConfiguration<?> storageConfiguration,
       Supplier<InternalSchemaManager> internalSchemaManager,
-      List<ExpressionPredicates.Predicate> predicates,
+      List<ExpressionPredicates.Predicate> allPredicates,
       HoodieTableConfig tableConfig,
       Option<InstantRange> instantRangeOpt) {
     super(storageConfiguration, tableConfig, instantRangeOpt, Option.empty(), new FlinkRecordContext(tableConfig, storageConfiguration));
-    this.tableConfig = tableConfig;
     this.internalSchemaManager = internalSchemaManager;
-    this.predicates = predicates;
+    this.allPredicates = allPredicates;
+    this.lazyBootstrapSafeFilters = Lazy.lazily(() -> allPredicates.stream().filter(this::filterIsSafeForBootstrap).collect(Collectors.toList()));
+    this.lazyMorSafeFilters = Lazy.lazily(() -> allPredicates.stream().filter(this::filterIsSafeForMorMerging).collect(Collectors.toList()));
+    this.lazyRecordKeys = Lazy.lazily(() -> tableConfig.getRecordKeyFields().map(keys -> Arrays.stream(keys).collect(Collectors.toList())).orElse(Collections.emptyList()));
   }
 
   @Override
@@ -99,7 +107,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
             .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
             .getFileReader(tableConfig, filePath, HoodieFileFormat.PARQUET, Option.empty());
     DataType rowType = RowDataAvroQueryContexts.fromAvroSchema(dataSchema).getRowType();
-    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, predicates);
+    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, getSafePredicates(requiredSchema));
   }
 
   @Override
@@ -171,6 +179,9 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   @Override
   public void setSchemaHandler(FileGroupReaderSchemaHandler<RowData> schemaHandler) {
     super.setSchemaHandler(schemaHandler);
+    // init ordering value converter: java -> engine type
+    List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(getMergeMode(), tableConfig);
+    ((FlinkRecordContext) recordContext).initOrderingValueConverter(schemaHandler.getTableSchema(), orderingFieldNames);
 
     Option<String[]> recordKeysOpt = tableConfig.getRecordKeyFields();
     if (recordKeysOpt.isEmpty()) {
@@ -181,8 +192,8 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     if (pkSemanticLost) {
       return;
     }
-    // get primary key field position in required schema.
     Schema requiredSchema = schemaHandler.getRequiredSchema();
+    // get primary key field position in required schema.
     int[] pkFieldsPos = Arrays.stream(recordKeysOpt.get())
         .map(k -> Option.ofNullable(requiredSchema.getField(k)).map(Schema.Field::pos).orElse(-1))
         .mapToInt(Integer::intValue)
@@ -194,5 +205,34 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     RecordKeyToRowDataConverter recordKeyRowConverter = new RecordKeyToRowDataConverter(
         pkFieldsPos, (RowType) RowDataAvroQueryContexts.fromAvroSchema(requiredSchema).getRowType().getLogicalType());
     ((FlinkRecordContext) recordContext).setRecordKeyRowConverter(recordKeyRowConverter);
+  }
+
+  private List<ExpressionPredicates.Predicate> getSafePredicates(Schema requiredSchema) {
+    boolean hasRowIndexField = AvroSchemaUtils.containsFieldInSchema(requiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME);
+    if (!getHasLogFiles() && !getNeedsBootstrapMerge()) {
+      return allPredicates;
+    } else if (!getHasLogFiles() && hasRowIndexField) {
+      return lazyBootstrapSafeFilters.get();
+    } else {
+      return lazyMorSafeFilters.get();
+    }
+  }
+
+  /**
+   * Only valid if there is support for RowIndexField and no log files
+   * Filters are safe for bootstrap if meta col filters are independent from data col filters.
+   */
+  private boolean filterIsSafeForBootstrap(ExpressionPredicates.Predicate predicate) {
+    long metaRefCount = predicate.references().stream().filter(c -> HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(c.toLowerCase())).count();
+    return metaRefCount == predicate.references().size() || metaRefCount == 0;
+  }
+
+  /**
+   * Only valid if the filter's references only include primary key columns or {@link HoodieRecord#RECORD_KEY_METADATA_FIELD},
+   * because it's necessary to ensure both records with the same record key in the base file and log file are either filtered out
+   * or retained, to make the later mering process correct.
+   */
+  private boolean filterIsSafeForMorMerging(ExpressionPredicates.Predicate predicate) {
+    return predicate.references().stream().allMatch(c -> lazyRecordKeys.get().contains(c.toLowerCase()) || c.equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD));
   }
 }

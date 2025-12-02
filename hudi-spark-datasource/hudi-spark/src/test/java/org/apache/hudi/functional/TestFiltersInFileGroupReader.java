@@ -38,11 +38,11 @@ import java.util.Map;
  * Ensure that parquet filters are not being pushed down when they shouldn't be
  */
 @Tag("functional")
-public class TestFiltersInFileGroupReader extends TestBootstrapReadBase {
+class TestFiltersInFileGroupReader extends TestBootstrapReadBase {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  public void testFiltersInFileFormat(boolean mergeUseRecordPositions) {
+  void testFiltersInFileFormat(boolean mergeUseRecordPositions) {
     this.bootstrapType = "mixed";
     this.dashPartitions = true;
     this.tableType = HoodieTableType.MERGE_ON_READ;

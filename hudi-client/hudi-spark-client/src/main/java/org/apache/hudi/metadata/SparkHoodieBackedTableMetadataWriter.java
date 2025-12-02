@@ -30,7 +30,6 @@ import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -50,6 +49,7 @@ import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -242,8 +242,9 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     if (isExprIndexUsingColumnStats) {
       // Fetch column range metadata for affected partitions in the commit
       HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> exprIndexPartitionStatUpdates =
-          SparkMetadataWriterUtils.getExpressionIndexPartitionStatUpdates(commitMetadata, indexPartition, engineContext, getTableMetadata(), dataMetaClient, dataWriteConfig.getMetadataConfig(),
-                  Option.of(dataWriteConfig.getRecordMerger().getRecordType()))
+          SparkMetadataWriterUtils.getExpressionIndexPartitionStatsForExistingFiles(
+                  commitMetadata, indexPartition, engineContext, getTableMetadata(), dataMetaClient, dataWriteConfig.getMetadataConfig(),
+                  Option.of(dataWriteConfig.getRecordMerger().getRecordType()), instantTime, dataWriteConfig)
               .flatMapValues(List::iterator);
       // The function below merges the column range metadata from the updated data with latest column range metadata of affected partition computed above
       partitionRecordsFunctionOpt = Option.of(rangeMetadata ->
@@ -285,10 +286,6 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       exprIndexRecords = exprIndexRecords.union(expressionIndexComputationMetadata.getPartitionStatRecordsOption().get());
     }
     return exprIndexRecords;
-  }
-
-  protected MetadataIndexGenerator initializeMetadataIndexGenerator() {
-    return new MetadataIndexGenerator();
   }
 
   protected SparkRDDMetadataWriteClient getSparkWriteClient(Option<BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>>> writeClientOpt) {

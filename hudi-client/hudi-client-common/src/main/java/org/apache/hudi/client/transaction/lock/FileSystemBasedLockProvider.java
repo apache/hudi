@@ -19,6 +19,7 @@
 
 package org.apache.hudi.client.transaction.lock;
 
+import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
@@ -91,6 +92,10 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     }
   }
 
+  public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> configuration, final HoodieLockMetrics lockMetrics) {
+    this(lockConfiguration, configuration);
+  }
+
   @Override
   public void close() {
     synchronized (LOCK_FILE_NAME) {
@@ -110,7 +115,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
         if (storage.exists(this.lockFile)) {
           if (checkIfExpired()) {
             storage.deleteFile(this.lockFile);
-            LOG.warn("Delete expired lock file: " + this.lockFile);
+            LOG.warn("Delete expired lock file: {}", this.lockFile);
           } else {
             reloadCurrentOwnerLockInfo();
             return false;

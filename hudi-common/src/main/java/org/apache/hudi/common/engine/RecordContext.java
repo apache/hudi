@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.KeyGenerator;
 
 import org.apache.avro.Schema;
@@ -220,10 +221,14 @@ public abstract class RecordContext<T> implements Serializable {
     return value;
   }
 
+  public Comparable convertPartitionValueToEngineType(Comparable value) {
+    return convertValueToEngineType(value);
+  }
+
   /**
    * Converts the ordering value to the specific engine type.
    */
-  public final Comparable convertOrderingValueToEngineType(Comparable value) {
+  public Comparable convertOrderingValueToEngineType(Comparable value) {
     return value instanceof ArrayComparable
         ? ((ArrayComparable) value).apply(this::convertValueToEngineType)
         : convertValueToEngineType(value);
@@ -350,8 +355,20 @@ public abstract class RecordContext<T> implements Serializable {
     return OrderingValues.create(orderingFieldNames, field -> {
       Object value = getValue(record, schema, field);
       // API getDefaultOrderingValue is only used inside Comparables constructor
-      return value != null ? convertValueToEngineType((Comparable) value) : OrderingValues.getDefault();
+      return value != null ? ensureComparability(value) : OrderingValues.getDefault();
     });
+  }
+
+  /**
+   * Ensure the given value is comparable.
+   *
+   * <p> The conversion should be aligned with HoodieRecord#getOrderingValue.
+   *
+   * @param value engine value
+   * @return the converted comparable value
+   */
+  protected Comparable ensureComparability(Object value) {
+    return (Comparable) value;
   }
 
   /**
@@ -379,14 +396,14 @@ public abstract class RecordContext<T> implements Serializable {
   public Comparable getOrderingValue(T record,
                                      Schema schema,
                                      String[] orderingFieldNames) {
-    if (orderingFieldNames.length == 0) {
+    if (orderingFieldNames == null || orderingFieldNames.length == 0) {
       return OrderingValues.getDefault();
     }
 
     return OrderingValues.create(orderingFieldNames, field -> {
       Object value = getValue(record, schema, field);
       // API getDefaultOrderingValue is only used inside Comparables constructor
-      return value != null ? convertValueToEngineType((Comparable) value) : OrderingValues.getDefault();
+      return value != null ? ensureComparability(value) : OrderingValues.getDefault();
     });
   }
 
@@ -416,6 +433,18 @@ public abstract class RecordContext<T> implements Serializable {
   }
 
   private SerializableBiFunction<T, Schema, String> virtualKeyExtractor(String[] recordKeyFields) {
+    if (recordKeyFields.length == 1) {
+      // there might be consistency for record key encoding when partition fields are multiple for cow merging,
+      // currently the incoming records are using the keys from HoodieRecord which utilities the write config and by default encodes the field name with the value
+      // while here the field names are ignored, this function would be used to extract record keys from old base file.
+      return (record, schema) -> {
+        Object result = getValue(record, schema, recordKeyFields[0]);
+        if (result == null) {
+          throw new HoodieKeyException("recordKey cannot be null");
+        }
+        return result.toString();
+      };
+    }
     return (record, schema) -> {
       BiFunction<String, Integer, String> valueFunction = (recordKeyField, index) -> {
         Object result = getValue(record, schema, recordKeyField);

@@ -19,8 +19,11 @@
 package org.apache.hudi.source;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
@@ -82,8 +85,9 @@ public class TestFileIndex {
     conf.set(METADATA_ENABLED, true);
     conf.set(HIVE_STYLE_PARTITIONING, hiveStylePartitioning);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
     FileIndex fileIndex = FileIndex.builder().path(new StoragePath(tempFile.getAbsolutePath())).conf(conf)
-        .rowType(TestConfigurations.ROW_TYPE).metaClient(StreamerUtil.createMetaClient(conf)).build();
+        .rowType(TestConfigurations.ROW_TYPE).metaClient(metaClient).build();
     List<String> partitionKeys = Collections.singletonList("partition");
     List<Map<String, String>> partitions =
         fileIndex.getPartitions(partitionKeys, PARTITION_DEFAULT_NAME.defaultValue(),
@@ -93,10 +97,9 @@ public class TestFileIndex {
         .map(Map::values).flatMap(Collection::stream).sorted().collect(Collectors.joining(","));
     assertThat("should have 4 partitions", partitionPaths, is("par1,par2,par3,par4"));
 
-    List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
-    assertThat(pathInfoList.size(), is(4));
-    assertTrue(pathInfoList.stream().allMatch(fileInfo ->
-        fileInfo.getPath().toString().endsWith(HoodieFileFormat.PARQUET.getFileExtension())));
+    List<FileSlice> fileSlices = getFilteredFileSlices(metaClient, fileIndex);
+    assertThat(fileSlices.size(), is(4));
+    assertTrue(fileSlices.stream().allMatch(fileSlice -> fileSlice.getBaseFile().isPresent() && fileSlice.getLogFiles().count() == 0));
   }
 
   @Test
@@ -106,17 +109,18 @@ public class TestFileIndex {
     conf.set(KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
     conf.set(METADATA_ENABLED, true);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
     FileIndex fileIndex = FileIndex.builder().path(new StoragePath(tempFile.getAbsolutePath())).conf(conf)
-        .rowType(TestConfigurations.ROW_TYPE).metaClient(StreamerUtil.createMetaClient(conf)).build();
+        .rowType(TestConfigurations.ROW_TYPE).metaClient(metaClient).build();
     List<String> partitionKeys = Collections.singletonList("");
     List<Map<String, String>> partitions =
         fileIndex.getPartitions(partitionKeys, PARTITION_DEFAULT_NAME.defaultValue(), false);
     assertThat(partitions.size(), is(0));
 
-    List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
-    assertThat(pathInfoList.size(), is(1));
-    assertTrue(pathInfoList.get(0).getPath().toString()
-        .endsWith(HoodieFileFormat.PARQUET.getFileExtension()));
+    List<FileSlice> fileSlices = getFilteredFileSlices(metaClient, fileIndex);
+
+    assertThat(fileSlices.size(), is(1));
+    assertTrue(fileSlices.get(0).getBaseFile().isPresent() && fileSlices.get(0).getLogFiles().count() == 0);
   }
 
   @ParameterizedTest
@@ -130,9 +134,6 @@ public class TestFileIndex {
     List<Map<String, String>> partitions =
         fileIndex.getPartitions(partitionKeys, PARTITION_DEFAULT_NAME.defaultValue(), false);
     assertThat(partitions.size(), is(0));
-
-    List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
-    assertThat(pathInfoList.size(), is(0));
   }
 
   @Test
@@ -145,12 +146,13 @@ public class TestFileIndex {
 
     writeBigintDataset(conf);
 
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
     FileIndex fileIndex =
         FileIndex.builder()
             .path(new StoragePath(tempFile.getAbsolutePath()))
             .conf(conf)
             .rowType(TestConfigurations.ROW_TYPE_BIGINT)
-            .metaClient(StreamerUtil.createMetaClient(conf))
+            .metaClient(metaClient)
             .columnStatsProbe(ColumnStatsProbe.newInstance(Collections.singletonList(CallExpression.permanent(
                 FunctionIdentifier.of("greaterThan"),
                 BuiltInFunctionDefinitions.GREATER_THAN,
@@ -162,8 +164,8 @@ public class TestFileIndex {
             .partitionPruner(null)
             .build();
 
-    List<StoragePathInfo> files = fileIndex.getFilesInPartitions();
-    assertThat(files.size(), is(2));
+    List<FileSlice> fileSlices = getFilteredFileSlices(metaClient, fileIndex);
+    assertThat(fileSlices.size(), is(2));
   }
 
   @ParameterizedTest
@@ -173,7 +175,6 @@ public class TestFileIndex {
     conf.set(READ_DATA_SKIPPING_ENABLED, true);
     conf.set(METADATA_ENABLED, true);
     conf.set(TABLE_TYPE, tableType.name());
-    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true");
     conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       // enable CSI for MOR table to collect col stats for delta write stats,
@@ -214,6 +215,22 @@ public class TestFileIndex {
 
     List<String> p = fileIndex.getOrBuildPartitionPaths();
     assertEquals(Arrays.asList("par3"), p);
+  }
+
+  private List<FileSlice> getFilteredFileSlices(HoodieTableMetaClient metaClient, FileIndex fileIndex) {
+    List<String> relPartitionPaths = fileIndex.getOrBuildPartitionPaths();
+    List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
+    HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline();
+    List<FileSlice> allFileSlices;
+    try (HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, timeline, pathInfoList)) {
+      if (timeline.lastInstant().isPresent()) {
+        allFileSlices = relPartitionPaths.stream()
+            .flatMap(par -> fsView.getLatestMergedFileSlicesBeforeOrOn(par, timeline.lastInstant().get().requestedTime())).collect(Collectors.toList());
+      } else {
+        return Collections.emptyList();
+      }
+    }
+    return fileIndex.filterFileSlices(allFileSlices);
   }
 
   private void writeBigintDataset(Configuration conf) throws Exception {

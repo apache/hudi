@@ -32,6 +32,8 @@ public class Conversions {
           Type.TypeID.BOOLEAN,
           Type.TypeID.FLOAT,
           Type.TypeID.DECIMAL,
+          Type.TypeID.DECIMAL_FIXED,
+          Type.TypeID.DECIMAL_BYTES,
           Type.TypeID.DOUBLE,
           Type.TypeID.UUID,
           Type.TypeID.DATE,

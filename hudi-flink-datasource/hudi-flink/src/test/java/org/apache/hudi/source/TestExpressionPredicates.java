@@ -69,6 +69,7 @@ import static org.apache.parquet.filter2.predicate.FilterApi.or;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for {@link ExpressionPredicates}.
@@ -242,5 +243,169 @@ public class TestExpressionPredicates {
 
     ExpressionPredicates.ColumnPredicate predicate = Equals.getInstance().bindFieldReference(fieldReference).bindValueLiteral(valueLiteral);
     assertDoesNotThrow(predicate::filter, () -> String.format("Convert from %s to %s failed", literalValue.getClass().getName(), dataType));
+  }
+
+  @Test
+  public void testUnaryPredicateReferences() {
+    // Test Equals predicate references method
+    FieldReferenceExpression fieldReference = new FieldReferenceExpression("field1", DataTypes.STRING(), 0, 0);
+    ValueLiteralExpression valueLiteral = new ValueLiteralExpression("value1");
+    
+    ExpressionPredicates.ColumnPredicate equalsPredicate = Equals.getInstance()
+        .bindFieldReference(fieldReference)
+        .bindValueLiteral(valueLiteral);
+    
+    assertEquals(Collections.singletonList("field1"), equalsPredicate.references());
+
+    // Test GreaterThan predicate references method
+    valueLiteral = new ValueLiteralExpression(10);
+    ExpressionPredicates.ColumnPredicate gtPredicate = GreaterThan.getInstance()
+        .bindFieldReference(fieldReference)
+        .bindValueLiteral(valueLiteral);
+    assertEquals(Collections.singletonList("field1"), gtPredicate.references());
+
+    ValueLiteralExpression valueLiteral1 = new ValueLiteralExpression("value1");
+    ValueLiteralExpression valueLiteral2 = new ValueLiteralExpression("value2");
+
+    ExpressionPredicates.ColumnPredicate inPredicate = In.getInstance()
+        .bindValueLiterals(Arrays.asList(valueLiteral1, valueLiteral2))
+        .bindFieldReference(fieldReference);
+
+    assertEquals(Collections.singletonList("field1"), inPredicate.references());
+  }
+
+  @Test
+  public void testNotPredicateReferences() {
+    // Test Not predicate references method - should delegate to underlying predicate
+    FieldReferenceExpression fieldReference = new FieldReferenceExpression("field4", DataTypes.STRING(), 0, 0);
+    ValueLiteralExpression valueLiteral = new ValueLiteralExpression("value1");
+    
+    ExpressionPredicates.ColumnPredicate innerPredicate = Equals.getInstance()
+        .bindFieldReference(fieldReference)
+        .bindValueLiteral(valueLiteral);
+    
+    Predicate notPredicate = Not.getInstance().bindPredicate(innerPredicate);
+    
+    List<String> references = notPredicate.references();
+    assertEquals(1, references.size());
+    assertEquals("field4", references.get(0));
+  }
+
+  @Test
+  public void testAndPredicateReferencesWithSameColumn() {
+    // Test And predicate references method with same column
+    FieldReferenceExpression fieldReference1 = new FieldReferenceExpression("field1", DataTypes.INT(), 0, 0);
+    FieldReferenceExpression fieldReference2 = new FieldReferenceExpression("field1", DataTypes.INT(), 0, 0);
+    ValueLiteralExpression valueLiteral1 = new ValueLiteralExpression(10);
+    ValueLiteralExpression valueLiteral2 = new ValueLiteralExpression(20);
+    
+    ExpressionPredicates.ColumnPredicate predicate1 = GreaterThan.getInstance()
+        .bindFieldReference(fieldReference1)
+        .bindValueLiteral(valueLiteral1);
+    
+    ExpressionPredicates.ColumnPredicate predicate2 = Equals.getInstance()
+        .bindFieldReference(fieldReference2)
+        .bindValueLiteral(valueLiteral2);
+    
+    Predicate andPredicate = And.getInstance().bindPredicates(predicate1, predicate2);
+    
+    List<String> references = andPredicate.references();
+    assertEquals(1, references.size());
+    assertEquals("field1", references.get(0));
+  }
+
+  @Test
+  public void testAndPredicateReferencesWithDifferentColumns() {
+    // Test And predicate references method with different columns
+    FieldReferenceExpression fieldReference1 = new FieldReferenceExpression("field1", DataTypes.INT(), 0, 0);
+    FieldReferenceExpression fieldReference2 = new FieldReferenceExpression("field2", DataTypes.STRING(), 0, 0);
+    ValueLiteralExpression valueLiteral1 = new ValueLiteralExpression(10);
+    ValueLiteralExpression valueLiteral2 = new ValueLiteralExpression("test");
+    
+    ExpressionPredicates.ColumnPredicate predicate1 = GreaterThan.getInstance()
+        .bindFieldReference(fieldReference1)
+        .bindValueLiteral(valueLiteral1);
+    
+    ExpressionPredicates.ColumnPredicate predicate2 = Equals.getInstance()
+        .bindFieldReference(fieldReference2)
+        .bindValueLiteral(valueLiteral2);
+    
+    Predicate andPredicate = And.getInstance().bindPredicates(predicate1, predicate2);
+    
+    assertEquals(Arrays.asList("field1", "field2"), andPredicate.references());
+  }
+
+  @Test
+  public void testOrPredicateReferencesWithSameColumn() {
+    // Test Or predicate references method with same column
+    FieldReferenceExpression fieldReference1 = new FieldReferenceExpression("field1", DataTypes.INT(), 0, 0);
+    FieldReferenceExpression fieldReference2 = new FieldReferenceExpression("field1", DataTypes.INT(), 0, 0);
+    ValueLiteralExpression valueLiteral1 = new ValueLiteralExpression(10);
+    ValueLiteralExpression valueLiteral2 = new ValueLiteralExpression(20);
+    
+    ExpressionPredicates.ColumnPredicate predicate1 = GreaterThan.getInstance()
+        .bindFieldReference(fieldReference1)
+        .bindValueLiteral(valueLiteral1);
+    
+    ExpressionPredicates.ColumnPredicate predicate2 = Equals.getInstance()
+        .bindFieldReference(fieldReference2)
+        .bindValueLiteral(valueLiteral2);
+    
+    Predicate orPredicate = Or.getInstance().bindPredicates(predicate1, predicate2);
+    
+    List<String> references = orPredicate.references();
+    assertEquals(1, references.size());
+    assertEquals("field1", references.get(0));
+  }
+
+  @Test
+  public void testOrPredicateReferencesWithDifferentColumns() {
+    // Test Or predicate references method with different columns
+    FieldReferenceExpression fieldReference1 = new FieldReferenceExpression("field1", DataTypes.INT(), 0, 0);
+    FieldReferenceExpression fieldReference2 = new FieldReferenceExpression("field2", DataTypes.STRING(), 0, 0);
+    ValueLiteralExpression valueLiteral1 = new ValueLiteralExpression(10);
+    ValueLiteralExpression valueLiteral2 = new ValueLiteralExpression("test");
+    
+    ExpressionPredicates.ColumnPredicate predicate1 = GreaterThan.getInstance()
+        .bindFieldReference(fieldReference1)
+        .bindValueLiteral(valueLiteral1);
+    
+    ExpressionPredicates.ColumnPredicate predicate2 = Equals.getInstance()
+        .bindFieldReference(fieldReference2)
+        .bindValueLiteral(valueLiteral2);
+    
+    Predicate orPredicate = Or.getInstance().bindPredicates(predicate1, predicate2);
+    assertEquals(Arrays.asList("field1", "field2"), orPredicate.references());
+  }
+
+  @Test
+  public void testAlwaysNullPredicateReferences() {
+    // Test AlwaysNull predicate references method - should return empty list
+    Predicate alwaysNullPredicate = ExpressionPredicates.AlwaysNull.getInstance();
+    
+    List<String> references = alwaysNullPredicate.references();
+    assertEquals(0, references.size());
+    assertTrue(references.isEmpty());
+  }
+
+  @Test
+  public void testNestedPredicateReferences() {
+    // Test nested predicates (AND inside NOT)
+    FieldReferenceExpression fieldReference1 = new FieldReferenceExpression("field1", DataTypes.INT(), 0, 0);
+    FieldReferenceExpression fieldReference2 = new FieldReferenceExpression("field2", DataTypes.STRING(), 0, 0);
+    ValueLiteralExpression valueLiteral1 = new ValueLiteralExpression(10);
+    ValueLiteralExpression valueLiteral2 = new ValueLiteralExpression("test");
+    
+    ExpressionPredicates.ColumnPredicate predicate1 = GreaterThan.getInstance()
+        .bindFieldReference(fieldReference1)
+        .bindValueLiteral(valueLiteral1);
+    
+    ExpressionPredicates.ColumnPredicate predicate2 = Equals.getInstance()
+        .bindFieldReference(fieldReference2)
+        .bindValueLiteral(valueLiteral2);
+    
+    Predicate andPredicate = And.getInstance().bindPredicates(predicate1, predicate2);
+    Predicate notPredicate = Not.getInstance().bindPredicate(andPredicate);
+    assertEquals(Arrays.asList("field1", "field2"), notPredicate.references());
   }
 }

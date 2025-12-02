@@ -81,6 +81,10 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
 
   protected abstract Source prepareDFSSource(TypedProperties props);
 
+  protected Option<TypedProperties> getSourceFormatAdapterProps() {
+    return Option.empty();
+  }
+
   /**
    * Writes test data, i.e., a {@link List} of {@link HoodieRecord}, to a file on DFS.
    *
@@ -111,7 +115,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
   @Test
   public void testReadingFromSource() throws IOException {
     fs.mkdirs(new Path(dfsRoot));
-    SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(prepareDFSSource());
+    SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(prepareDFSSource(), Option.empty(), getSourceFormatAdapterProps());
 
     // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
     assertEquals(Option.empty(),
@@ -136,6 +140,9 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
         .createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
             schemaProvider.getSourceSchema().toString(), sparkSession);
     assertEquals(100, fetch1Rows.count());
+    // city_to_state can't be in except because it is a map
+    assertEquals(0, fetch1AsRows.getBatch().get().drop("city_to_state")
+        .except(fetch1Rows.drop("city_to_state")).count());
 
     // 2. Produce new data, extract new data
     generateOneFile("2", "001", 10000);

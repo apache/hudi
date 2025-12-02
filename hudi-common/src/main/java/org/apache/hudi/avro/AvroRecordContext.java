@@ -74,7 +74,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     String[] path = fieldName.split("\\.");
     for (int i = 0; i < path.length; i++) {
       if (currentSchema.isUnion()) {
-        currentSchema = AvroSchemaUtils.resolveNullableSchema(currentSchema);
+        currentSchema = AvroSchemaUtils.getNonNullTypeFromUnion(currentSchema);
       }
       Schema.Field field = currentSchema.getField(path[i]);
       if (field == null) {
@@ -105,7 +105,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     // HoodieKey is not required so do not generate it if partitionPath is null
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
 
-    if (bufferedRecord.isDelete()) {
+    if (bufferedRecord.getRecord() == null && bufferedRecord.isDelete()) {
       return generateEmptyAvroRecord(
           hoodieKey,
           bufferedRecord.getOrderingValue(),
@@ -114,7 +114,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     }
 
     return HoodieRecordUtils.createHoodieRecord((GenericRecord) bufferedRecord.getRecord(), bufferedRecord.getOrderingValue(),
-        hoodieKey, payloadClass, bufferedRecord.getHoodieOperation(), Option.empty(), false);
+        hoodieKey, payloadClass, bufferedRecord.getHoodieOperation(), Option.empty(), false, bufferedRecord.isDelete());
   }
 
   @Override
@@ -124,7 +124,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     if (bufferedRecord.isDelete()) {
       return new HoodieEmptyRecord<>(hoodieKey, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), HoodieRecord.HoodieRecordType.AVRO);
     }
-    return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord(), bufferedRecord.getOrderingValue(), bufferedRecord.getHoodieOperation());
+    return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord(), bufferedRecord.getOrderingValue(), bufferedRecord.getHoodieOperation(), bufferedRecord.isDelete());
   }
 
   @Override
@@ -188,8 +188,8 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
 
   @Override
   public Comparable convertValueToEngineType(Comparable value) {
-    if (value instanceof Utf8) {
-      return ((Utf8) value).toString();
+    if (value instanceof String) {
+      return new Utf8((String) value);
     }
     return value;
   }

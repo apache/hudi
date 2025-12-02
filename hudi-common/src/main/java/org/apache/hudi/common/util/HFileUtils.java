@@ -21,7 +21,7 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieReaderConfig;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -37,6 +37,8 @@ import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -54,7 +56,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.TreeMap;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -158,14 +159,15 @@ public class HFileUtils extends FileFormatUtils {
                  .getFileReader(
                      ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER,
                      filePath)) {
-      return fileReader.getSchema();
+      //TODO boundary to revisit in later pr to use HoodieSchema directly
+      return fileReader.getSchema().toAvroSchema();
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read schema from HFile", e);
     }
   }
 
   @Override
-  public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(HoodieStorage storage, StoragePath filePath, List<String> columnList) {
+  public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(HoodieStorage storage, StoragePath filePath, List<String> columnList, HoodieIndexVersion indexVersion) {
     throw new UnsupportedOperationException(
         "Reading column statistics from metadata is not supported for HFile format yet");
   }
@@ -189,57 +191,51 @@ public class HFileUtils extends FileFormatUtils {
                                                           Map<String, String> paramsMap) throws IOException {
     CompressionCodec compressionCodec = getHFileCompressionAlgorithm(paramsMap);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    OutputStream ostream = new DataOutputStream(baos);
-
-    // Use simple incrementing counter as a key
-    boolean useIntegerKey = !getRecordKey(records.get(0), readerSchema, keyFieldName).isPresent();
-    // This is set here to avoid re-computing this in the loop
-    int keyWidth = useIntegerKey ? (int) Math.ceil(Math.log(records.size())) + 1 : -1;
-
-    // Serialize records into bytes
-    Map<String, byte[]> sortedRecordsMap = new TreeMap<>();
-
-    Iterator<HoodieRecord> itr = records.iterator();
-    int id = 0;
-    while (itr.hasNext()) {
-      HoodieRecord<?> record = itr.next();
-      String recordKey;
-      if (useIntegerKey) {
-        recordKey = String.format("%" + keyWidth + "s", id++);
-      } else {
-        recordKey = getRecordKey(record, readerSchema, keyFieldName).get();
-      }
-
-      final byte[] recordBytes = serializeRecord(record, writerSchema, keyFieldName);
-      if (sortedRecordsMap.containsKey(recordKey)) {
-        LOG.error("Found duplicate record with recordKey: {} ", recordKey);
-        logRecordMetadata("Previous record", sortedRecordsMap.get(recordKey), writerSchema);
-        logRecordMetadata("Current record", recordBytes, writerSchema);
-        throw new HoodieException(String.format("Writing multiple records with same key %s not supported for Hfile format with Metadata table",
-            recordKey));
-      }
-      sortedRecordsMap.put(recordKey, recordBytes);
-    }
-
-    HFileContext context = HFileContext.builder()
-        .blockSize(DEFAULT_BLOCK_SIZE_FOR_LOG_FILE)
-        .compressionCodec(compressionCodec)
-        .build();
-    try (HFileWriter writer = new HFileWriterImpl(context, ostream)) {
-      sortedRecordsMap.forEach((recordKey,recordBytes) -> {
-        try {
-          writer.append(recordKey, recordBytes);
-        } catch (IOException e) {
-          throw new HoodieIOException("IOException serializing records", e);
+    try (OutputStream ostream = new DataOutputStream(baos)) {
+      HFileContext context = HFileContext.builder()
+          .blockSize(DEFAULT_BLOCK_SIZE_FOR_LOG_FILE)
+          .compressionCodec(compressionCodec)
+          .build();
+      // Use simple incrementing counter as a key
+      boolean useIntegerKey = !getRecordKey(records.get(0), readerSchema, keyFieldName).isPresent();
+      // This is set here to avoid re-computing this in the loop
+      int keyWidth = useIntegerKey ? (int) Math.ceil(Math.log(records.size())) + 1 : -1;
+      int id = 0;
+      Option<Schema.Field> keyField = Option.ofNullable(writerSchema.getField(keyFieldName));
+      try (HFileWriter writer = new HFileWriterImpl(context, ostream)) {
+        String previousRecordKey = null;
+        // It is assumed that the input records are sorted based on the record key
+        // for HFile block
+        for (int i = 0; i < records.size(); i++) {
+          HoodieRecord<?> record = records.get(i);
+          String recordKey = useIntegerKey
+              ? String.format("%" + keyWidth + "s", id++)
+              : getRecordKey(record, readerSchema, keyFieldName).get();
+          final byte[] recordBytes = serializeRecord(record, writerSchema, keyField);
+          // Since the list is sorted, duplicates will be adjacent.
+          if (i > 0 && recordKey.equals(previousRecordKey)) {
+            LOG.error("Found duplicate record with recordKey: {}", recordKey);
+            logRecordMetadata("Previous record",
+                serializeRecord(records.get(i - 1), writerSchema, keyField), writerSchema);
+            logRecordMetadata("Current record",
+                serializeRecord(record, writerSchema, keyField), writerSchema);
+            throw new HoodieException(String.format(
+                "Writing multiple records with same key %s not supported for Hfile format with Metadata table", recordKey));
+          }
+          try {
+            writer.append(recordKey, recordBytes);
+          } catch (IOException e) {
+            throw new HoodieIOException("IOException serializing records", e);
+          }
+          previousRecordKey = recordKey;
         }
-      });
-      writer.appendFileInfo(
-          HoodieAvroHFileReaderImplBase.SCHEMA_KEY,
-          getUTF8Bytes(readerSchema.toString()));
-    }
 
-    ostream.flush();
-    ostream.close();
+        writer.appendFileInfo(
+            HoodieAvroHFileReaderImplBase.SCHEMA_KEY,
+            getUTF8Bytes(readerSchema.toString()));
+      }
+      ostream.flush();
+    }
     return baos;
   }
 
@@ -272,12 +268,10 @@ public class HFileUtils extends FileFormatUtils {
     return Option.ofNullable(record.getRecordKey(readerSchema, keyFieldName));
   }
 
-  private static byte[] serializeRecord(HoodieRecord<?> record, Schema schema, String keyFieldName) throws IOException {
-    Option<Schema.Field> keyField = Option.ofNullable(schema.getField(keyFieldName));
-    // Reset key value w/in the record to avoid duplicating the key w/in payload
-    if (keyField.isPresent()) {
-      record.truncateRecordKey(schema, new Properties(), keyField.get().name());
-    }
-    return HoodieAvroUtils.recordToBytes(record, schema).get();
+  private static byte[] serializeRecord(HoodieRecord<?> record, Schema schema, Option<Schema.Field> keyField) throws IOException {
+    return record.toIndexedRecord(schema, CollectionUtils.emptyProps()).map(HoodieAvroIndexedRecord::getData).map(indexedRecord -> {
+      keyField.ifPresent(field -> indexedRecord.put(field.pos(), StringUtils.EMPTY_STRING));
+      return HoodieAvroUtils.avroToBytes(indexedRecord);
+    }).orElseThrow(() -> new HoodieException("Unable to convert record to indexed record"));
   }
 }

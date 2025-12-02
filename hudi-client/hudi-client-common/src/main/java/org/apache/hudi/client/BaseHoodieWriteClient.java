@@ -44,8 +44,10 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -75,7 +77,7 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.action.InternalSchemaChangeApplier;
 import org.apache.hudi.internal.schema.action.TableChange;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
@@ -114,6 +116,8 @@ import java.util.function.BiFunction;
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
+import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
 /**
@@ -346,7 +350,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       InternalSchema internalSchema;
       Schema avroSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema(), config.allowOperationMetadataField());
       if (historySchemaStr.isEmpty()) {
-        internalSchema = SerDeHelper.fromJson(config.getInternalSchema()).orElseGet(() -> AvroInternalSchemaConverter.convert(avroSchema));
+        internalSchema = SerDeHelper.fromJson(config.getInternalSchema()).orElseGet(() -> InternalSchemaConverter.convert(HoodieSchema.fromAvroSchema(avroSchema)));
         internalSchema.setSchemaId(Long.parseLong(instantTime));
       } else {
         internalSchema = InternalSchemaUtils.searchSchema(Long.parseLong(instantTime),
@@ -364,7 +368,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(evolvedSchema, historySchemaStr));
       }
       // update SCHEMA_KEY
-      metadata.addMetadata(SCHEMA_KEY, AvroInternalSchemaConverter.convert(evolvedSchema, avroSchema.getFullName()).toString());
+      metadata.addMetadata(SCHEMA_KEY, InternalSchemaConverter.convert(evolvedSchema, avroSchema.getFullName()).toString());
     }
   }
 
@@ -1109,13 +1113,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       HoodieTableMetaClient metaClient = table.getMetaClient();
       // For secondary index and expression index with wrong parameters, index definition for the MDT partition is
       // removed so that such indices are not recreated while initializing the writer.
+      // Also remove index definitions for col stats and partition stats when they are dropped (e.g., during downgrade).
       metadataPartitions.forEach(partition -> {
-        if (MetadataPartitionType.isExpressionOrSecondaryIndex(partition)) {
+        metaClient.getIndexForMetadataPartition(partition).ifPresent(indexDef -> {
           metaClient.deleteIndexDefinition(partition);
-        }
+        });
       });
 
-      Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(dropInstant);
+      Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(dropInstant, false, false);
       // first update table config. Metadata writer initializes the inflight metadata
       // partitions so we need to first remove the metadata before creating the writer
       // Also the partitions need to be removed after creating the metadata writer since the writer
@@ -1430,7 +1435,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         throw new HoodieException("Only simple, non-partitioned or complex key generator are supported when meta-fields are disabled. Used: " + keyGenClass);
       }
     }
-
+    if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)
+            && config.enableComplexKeygenValidation()
+            && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
+      throw new HoodieException(getComplexKeygenErrorMessage("ingestion"));
+    }
     //Check to make sure it's not a COW table with consistent hashing bucket index
     if (tableConfig.getTableType() == HoodieTableType.COPY_ON_WRITE) {
       HoodieIndex.IndexType indexType = writeConfig.getIndexType();
@@ -1462,7 +1471,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
           throw new HoodieIOException("Latest commit does not have any schema in commit metadata");
         }
       } else {
-        LOG.warn("None rows are deleted because the table is empty");
+        LOG.debug("No rows are deleted because the table is empty");
       }
     } catch (IOException e) {
       throw new HoodieIOException("IOException thrown while reading last commit metadata", e);
@@ -1562,7 +1571,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public void addColumn(String colName, Schema schema, String doc, String position, TableChange.ColumnPositionChange.ColumnPositionType positionType) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
     InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft())
-        .applyAddChange(colName, AvroInternalSchemaConverter.convertToField(schema), doc, position, positionType);
+        .applyAddChange(colName, InternalSchemaConverter.convertToField(HoodieSchema.fromAvroSchema(schema)), doc, position, positionType);
     commitTableChange(newSchema, pair.getRight());
   }
 
@@ -1659,7 +1668,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
     String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElseGet(
         () -> SerDeHelper.inheritSchemas(getInternalSchema(schemaUtil), ""));
-    Schema schema = AvroInternalSchemaConverter.convert(newSchema, getAvroRecordQualifiedName(config.getTableName()));
+    Schema schema = InternalSchemaConverter.convert(newSchema, getAvroRecordQualifiedName(config.getTableName())).toAvroSchema();
     String commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType());
     String instantTime = startCommit(commitActionType, metaClient);
     config.setSchema(schema.toString());
@@ -1683,7 +1692,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   private InternalSchema getInternalSchema(TableSchemaResolver schemaUtil) {
     return schemaUtil.getTableInternalSchemaFromCommitMetadata().orElseGet(() -> {
       try {
-        return AvroInternalSchemaConverter.convert(schemaUtil.getTableAvroSchema());
+        return InternalSchemaConverter.convert(HoodieSchema.fromAvroSchema(schemaUtil.getTableAvroSchema()));
       } catch (Exception e) {
         throw new HoodieException(String.format("cannot find schema for current table: %s", config.getBasePath()));
       }

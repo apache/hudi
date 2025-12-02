@@ -21,6 +21,7 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.FileSplit
@@ -30,11 +31,14 @@ import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
 import org.apache.parquet.hadoop._
+import org.apache.parquet.hadoop.metadata.{FileMetaData, ParquetMetadata}
+import org.apache.parquet.schema.SchemaRepair
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.parquet.Spark34ParquetReader.repairFooterSchema
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
@@ -54,6 +58,7 @@ class Spark34ParquetReader(enableVectorizedReader: Boolean,
                            capacity: Int,
                            returningBatch: Boolean,
                            enableRecordFilter: Boolean,
+                           enableLogicalTimestampRepair: Boolean,
                            timeZoneId: Option[String]) extends SparkParquetReaderBase(
   enableVectorizedReader = enableVectorizedReader,
   enableParquetFilterPushDown = enableParquetFilterPushDown,
@@ -67,6 +72,7 @@ class Spark34ParquetReader(enableVectorizedReader: Boolean,
   capacity = capacity,
   returningBatch = returningBatch,
   enableRecordFilter = enableRecordFilter,
+  enableLogicalTimestampRepair = enableLogicalTimestampRepair,
   timeZoneId = timeZoneId) {
 
   /**
@@ -86,17 +92,24 @@ class Spark34ParquetReader(enableVectorizedReader: Boolean,
                       partitionSchema: StructType,
                       internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema],
                       filters: Seq[Filter],
-                      sharedConf: Configuration): Iterator[InternalRow] = {
+                      sharedConf: Configuration,
+                      tableSchemaOpt: org.apache.hudi.common.util.Option[org.apache.parquet.schema.MessageType]): Iterator[InternalRow] = {
     assert(file.partitionValues.numFields == partitionSchema.size)
 
     val filePath = file.toPath
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
-    val schemaEvolutionUtils = new Spark3ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
+    val schemaEvolutionUtils = new ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
       partitionSchema, internalSchemaOpt)
 
-    lazy val footerFileMetaData =
-      ParquetFooterReader.readFooter(sharedConf, filePath, SKIP_ROW_GROUPS).getFileMetaData
+    lazy val originalFooter = ParquetFooterReader.readFooter(sharedConf, filePath, SKIP_ROW_GROUPS)
+    lazy val fileFooter = if (enableLogicalTimestampRepair) {
+      repairFooterSchema(originalFooter, tableSchemaOpt)
+    } else {
+      originalFooter
+    }
+
+    lazy val footerFileMetaData = fileFooter.getFileMetaData
     val datetimeRebaseSpec = DataSourceUtils.datetimeRebaseSpec(
       footerFileMetaData.getKeyValueMetaData.get,
       datetimeRebaseModeInRead)
@@ -186,11 +199,13 @@ class Spark34ParquetReader(enableVectorizedReader: Boolean,
       }
     } else {
       // ParquetRecordReader returns InternalRow
-      val readSupport = new ParquetReadSupport(
+      val readSupport = new HoodieParquetReadSupport(
         convertTz,
         enableVectorizedReader = false,
+        enableLogicalTimestampRepair,
         datetimeRebaseSpec,
-        int96RebaseSpec)
+        int96RebaseSpec,
+        tableSchemaOpt)
       val reader = if (pushed.isDefined && enableRecordFilter) {
         val parquetFilter = FilterCompat.get(pushed.get, null)
         new ParquetRecordReader[InternalRow](readSupport, parquetFilter)
@@ -254,6 +269,7 @@ object Spark34ParquetReader extends SparkParquetReaderBuilder {
     )
     hadoopConf.setBoolean(SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED.key, sqlConf.parquetInferTimestampNTZEnabled)
 
+    val enableLogicalTimestampRepair = hadoopConf.getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true)
     val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
       options.getOrElse(FileFormat.OPTION_RETURNING_BATCH,
           throw new IllegalArgumentException(
@@ -278,6 +294,23 @@ object Spark34ParquetReader extends SparkParquetReaderBuilder {
       capacity = sqlConf.parquetVectorizedReaderBatchSize,
       returningBatch = returningBatch,
       enableRecordFilter = sqlConf.parquetRecordFilterEnabled,
+      enableLogicalTimestampRepair = enableLogicalTimestampRepair,
       timeZoneId = Some(sqlConf.sessionLocalTimeZone))
+  }
+
+  // Helper to repair the schema if needed
+  def repairFooterSchema(original: ParquetMetadata,
+                         tableSchemaOpt: org.apache.hudi.common.util.Option[org.apache.parquet.schema.MessageType]): ParquetMetadata = {
+    val repairedSchema = SchemaRepair.repairLogicalTypes(original.getFileMetaData.getSchema, tableSchemaOpt)
+    val oldMeta = original.getFileMetaData
+    new ParquetMetadata(
+      new FileMetaData(
+        repairedSchema,
+        oldMeta.getKeyValueMetaData,
+        oldMeta.getCreatedBy,
+        oldMeta.getFileDecryptor
+      ),
+      original.getBlocks
+    )
   }
 }

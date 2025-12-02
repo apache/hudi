@@ -18,12 +18,12 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -64,7 +64,6 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   // This path is used for constructing HFile reader context, which should not be
   // interpreted as the actual file path for the HFile data blocks
   private final StoragePath pathForReader;
-  private final HoodieConfig hFileReaderConfig;
 
   public HoodieHFileDataBlock(Supplier<SeekableDataInputStream> inputStreamSupplier,
                               Option<byte[]> content,
@@ -74,24 +73,20 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               Map<HeaderMetadataType, String> header,
                               Map<FooterMetadataType, String> footer,
                               boolean enablePointLookups,
-                              StoragePath pathForReader,
-                              boolean useNativeHFileReader) {
+                              StoragePath pathForReader) {
     super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema,
         header, footer, HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME, enablePointLookups);
     this.compressionCodec = Option.empty();
     this.pathForReader = pathForReader;
-    this.hFileReaderConfig = getHFileReaderConfig(useNativeHFileReader);
   }
 
   public HoodieHFileDataBlock(List<HoodieRecord> records,
                               Map<HeaderMetadataType, String> header,
                               String compressionCodec,
-                              StoragePath pathForReader,
-                              boolean useNativeHFileReader) {
+                              StoragePath pathForReader) {
     super(records, header, new HashMap<>(), HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME);
     this.compressionCodec = Option.of(compressionCodec);
     this.pathForReader = pathForReader;
-    this.hFileReaderConfig = getHFileReaderConfig(useNativeHFileReader);
   }
 
   @Override
@@ -118,9 +113,10 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     // Read the content
     try (HoodieFileReader reader = HoodieIOFactory.getIOFactory(inlineStorage)
         .getReaderFactory(HoodieRecordType.AVRO)
-        .getContentReader(hFileReaderConfig, pathForReader, HoodieFileFormat.HFILE,
-            inlineStorage, content, Option.of(getSchemaFromHeader()))) {
-      return unsafeCast(reader.getRecordIterator(readerSchema));
+        .getContentReader(ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER, pathForReader, HoodieFileFormat.HFILE,
+            //TODO boundary to revisit in later pr to use HoodieSchema directly
+            inlineStorage, content, Option.of(HoodieSchema.fromAvroSchema(getSchemaFromHeader())))) {
+      return unsafeCast(reader.getRecordIterator(HoodieSchema.fromAvroSchema(readerSchema)));
     }
   }
 
@@ -151,9 +147,10 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     // Read the content
     try (HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase)
         HoodieIOFactory.getIOFactory(inlineStorage).getReaderFactory(HoodieRecordType.AVRO).getContentReader(
-            hFileReaderConfig, pathForReader, HoodieFileFormat.HFILE, inlineStorage, content,
-            Option.of(getSchemaFromHeader()))) {
-      return unsafeCast(reader.getIndexedRecordIterator(readerSchema, readerSchema));
+            readerContext.getHoodieReaderConfig(), pathForReader, HoodieFileFormat.HFILE, inlineStorage, content,
+            Option.of(HoodieSchema.fromAvroSchema(getSchemaFromHeader())))) {
+      //TODO boundary to revisit in later pr to use HoodieSchema directly
+      return unsafeCast(reader.getIndexedRecordIterator(HoodieSchema.fromAvroSchema(readerSchema), HoodieSchema.fromAvroSchema(readerSchema)));
     }
   }
 
@@ -175,19 +172,43 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     try (final HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase) HoodieIOFactory
         .getIOFactory(inlineStorage)
         .getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(hFileReaderConfig, inlinePath, HoodieFileFormat.HFILE, Option.of(getSchemaFromHeader()))) {
+        //TODO boundary to revisit in later pr to use HoodieSchema directly
+        .getFileReader(ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER, inlinePath, HoodieFileFormat.HFILE, Option.of(HoodieSchema.fromAvroSchema(getSchemaFromHeader())))) {
       // Get writer's schema from the header
       final ClosableIterator<HoodieRecord<IndexedRecord>> recordIterator =
-          fullKey ? reader.getRecordsByKeysIterator(sortedKeys, readerSchema) : reader.getRecordsByKeyPrefixIterator(sortedKeys, readerSchema);
-
+              //TODO boundary to revisit in later pr to use HoodieSchema directly
+              fullKey ? reader.getRecordsByKeysIterator(sortedKeys, HoodieSchema.fromAvroSchema(readerSchema)) :
+                      reader.getRecordsByKeyPrefixIterator(sortedKeys, HoodieSchema.fromAvroSchema(readerSchema));
       return new CloseableMappingIterator<>(recordIterator, data -> (HoodieRecord<T>) data);
     }
   }
 
-  private HoodieConfig getHFileReaderConfig(boolean useNativeHFileReader) {
-    HoodieConfig config = new HoodieConfig();
-    config.setValue(
-        HoodieReaderConfig.USE_NATIVE_HFILE_READER, Boolean.toString(useNativeHFileReader));
-    return config;
+  @Override
+  protected <T> ClosableIterator<T> lookupEngineRecords(List<String> sortedKeys, boolean fullKey) throws IOException {
+    HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
+
+    // NOTE: It's important to extend Hadoop configuration here to make sure configuration
+    //       is appropriately carried over
+    StorageConfiguration<?> inlineConf = getBlockContentLocation().get().getStorage().getConf().getInline();
+    StoragePath inlinePath = InLineFSUtils.getInlineFilePath(
+        blockContentLoc.getLogFile().getPath(),
+        blockContentLoc.getLogFile().getPath().toUri().getScheme(),
+        blockContentLoc.getContentPositionInLogFile(),
+        blockContentLoc.getBlockSize());
+    HoodieStorage inlineStorage = blockContentLoc.getStorage().newInstance(inlinePath, inlineConf);
+
+    try (final HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase) HoodieIOFactory
+        .getIOFactory(inlineStorage)
+        .getReaderFactory(HoodieRecordType.AVRO)
+        .getFileReader(ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER,
+            inlinePath,
+            HoodieFileFormat.HFILE,
+            //TODO boundary to revisit in later pr to use HoodieSchema directly
+            Option.of(HoodieSchema.fromAvroSchema(getSchemaFromHeader())))) {
+      // Get writer's schema from the header
+      //TODO boundary to revisit in later pr to use HoodieSchema directly
+      return (ClosableIterator<T>) (fullKey ? reader.getEngineRecordsByKeysIterator(sortedKeys, HoodieSchema.fromAvroSchema(readerSchema)) :
+              reader.getEngineRecordsByKeyPrefixIterator(sortedKeys, HoodieSchema.fromAvroSchema(readerSchema)));
+    }
   }
 }

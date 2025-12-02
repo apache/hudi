@@ -133,6 +133,7 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
         commits.length
       }
 
+      spark.table(s"$tableName").select("id").count
       spark.table(s"$tableName").select("id").cache()
       assertCached(spark.table(s"$tableName").select("id"), 1)
 

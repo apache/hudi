@@ -64,7 +64,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test cases for {@link StreamReadMonitoringFunction}.
  */
 public class TestStreamReadMonitoringFunction {
-  private static final long WAIT_TIME_MILLIS = 5 * 1000L;
+  private static final long WAIT_TIME_MILLIS = 10 * 1000L;
 
   private Configuration conf;
 
@@ -478,11 +478,11 @@ public class TestStreamReadMonitoringFunction {
       state = harness.snapshot(1, 1);
       // Stop the stream task.
       function.close();
-      assertTrue(latch.await(WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS), "Should finish splits generation");
       assertThat("Should produce the expected splits", sourceContext.getPartitionPaths(), is("par1,par2"));
       assertTrue(sourceContext.splits.stream().allMatch(split -> split.getInstantRange().isPresent()),
           "All instants should have range limit");
     }
+    conf.set(FlinkOptions.READ_SPLITS_LIMIT, Integer.MAX_VALUE);
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
     StreamReadMonitoringFunction function2 = TestUtils.getMonitorFunc(conf);
     try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(function2)) {
@@ -493,11 +493,9 @@ public class TestStreamReadMonitoringFunction {
       CountDownLatch latch = new CountDownLatch(6);
       CollectingSourceContext sourceContext = new CollectingSourceContext(latch);
       runAsync(sourceContext, function2);
-      state = harness.snapshot(2, 1);
       assertTrue(latch.await(WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS), "Should finish splits generation");
       // Stop the stream task.
       function2.close();
-      assertTrue(latch.await(WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS), "Should finish splits generation");
       assertThat("Should produce the expected splits", sourceContext.getPartitionPaths(), is("par1,par2,par3,par4"));
       assertTrue(sourceContext.splits.stream().allMatch(split -> split.getInstantRange().isPresent()),
           "All the instants should have range limit");

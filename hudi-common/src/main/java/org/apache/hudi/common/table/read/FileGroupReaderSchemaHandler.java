@@ -27,6 +27,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -38,7 +39,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -58,6 +59,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNested;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNewSchemaFromFieldsWithReference;
 import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForPreV9Table;
 
 /**
@@ -72,6 +74,10 @@ public class FileGroupReaderSchemaHandler<T> {
 
   // requiredSchema: the requestedSchema with any additional columns required for merging etc
   protected final Schema requiredSchema;
+
+  // the schema for updates, usually it equals with the requiredSchema,
+  // the only exception is for incoming records, which do not include the metadata fields.
+  protected Schema schemaForUpdates;
 
   protected final InternalSchema internalSchema;
 
@@ -98,6 +104,7 @@ public class FileGroupReaderSchemaHandler<T> {
     this.hoodieTableConfig = metaClient.getTableConfig();
     this.deleteContext = new DeleteContext(properties, tableSchema);
     this.requiredSchema = AvroSchemaCache.intern(prepareRequiredSchema(this.deleteContext));
+    this.schemaForUpdates = requiredSchema;
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
     this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
     this.metaClient = metaClient;
@@ -113,6 +120,17 @@ public class FileGroupReaderSchemaHandler<T> {
 
   public Schema getRequiredSchema() {
     return this.requiredSchema;
+  }
+
+  public Schema getSchemaForUpdates() {
+    return this.schemaForUpdates;
+  }
+
+  /**
+   * This is a special case for incoming records, which do not have metadata fields in schema.
+   */
+  public void setSchemaForUpdates(Schema schema) {
+    this.schemaForUpdates = schema;
   }
 
   public InternalSchema getInternalSchema() {
@@ -142,7 +160,7 @@ public class FileGroupReaderSchemaHandler<T> {
     InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitInstantTime, metaClient);
     Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
         true, false, false).mergeSchemaGetRenamed();
-    Schema mergedAvroSchema = AvroSchemaCache.intern(AvroInternalSchemaConverter.convert(mergedInternalSchema.getLeft(), requiredSchema.getFullName()));
+    Schema mergedAvroSchema = AvroSchemaCache.intern(InternalSchemaConverter.convert(mergedInternalSchema.getLeft(), requiredSchema.getFullName()).toAvroSchema());
     return Pair.of(mergedAvroSchema, mergedInternalSchema.getRight());
   }
 
@@ -163,7 +181,7 @@ public class FileGroupReaderSchemaHandler<T> {
   }
 
   protected InternalSchema doPruneInternalSchema(Schema requiredSchema, InternalSchema internalSchema) {
-    return AvroInternalSchemaConverter.pruneAvroSchemaToInternalSchema(requiredSchema, internalSchema);
+    return InternalSchemaConverter.pruneHoodieSchemaToInternalSchema(HoodieSchema.fromAvroSchema(requiredSchema), internalSchema);
   }
 
   @VisibleForTesting
@@ -292,7 +310,7 @@ public class FileGroupReaderSchemaHandler<T> {
     //fields have positions set, so we need to remove them due to avro setFields implementation
     for (int i = 0; i < fields.size(); i++) {
       Schema.Field curr = fields.get(i);
-      fields.set(i, new Schema.Field(curr.name(), curr.schema(), curr.doc(), curr.defaultVal()));
+      fields.set(i, createNewSchemaField(curr));
     }
     return createNewSchemaFromFieldsWithReference(tableSchema, fields);
   }

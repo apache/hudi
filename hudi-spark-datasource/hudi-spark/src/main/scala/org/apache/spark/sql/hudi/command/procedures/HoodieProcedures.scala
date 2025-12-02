@@ -96,6 +96,10 @@ object HoodieProcedures {
       ,(TruncateTableProcedure.NAME, TruncateTableProcedure.builder)
       ,(PartitionBucketIndexManager.NAME, PartitionBucketIndexManager.builder)
       ,(ShowCleansProcedure.NAME, ShowCleansProcedure.builder)
+      ,(SetAuditLockProcedure.NAME, SetAuditLockProcedure.builder)
+      ,(ShowAuditLockStatusProcedure.NAME, ShowAuditLockStatusProcedure.builder)
+      ,(ValidateAuditLockProcedure.NAME, ValidateAuditLockProcedure.builder)
+      ,(CleanupAuditLockProcedure.NAME, CleanupAuditLockProcedure.builder)
     )
   }
 }
