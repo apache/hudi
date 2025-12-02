@@ -287,19 +287,19 @@ public class HoodieTableMetadataUtil {
       targetFields.forEach(fieldNameFieldPair -> {
         String fieldName = fieldNameFieldPair.getKey();
         HoodieSchemaField field = fieldNameFieldPair.getValue();
-        HoodieSchema hoodieFieldSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(field.schema());
-        ColumnStats colStats = allColumnStats.computeIfAbsent(fieldName, ignored -> new ColumnStats(getValueMetadata(hoodieFieldSchema, indexVersion)));
-        Object fieldValue = collectColumnRangeFieldValue(record, colStats.valueMetadata, fieldName, hoodieFieldSchema, recordSchema, properties);
+        HoodieSchema fieldSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(field.schema());
+        ColumnStats colStats = allColumnStats.computeIfAbsent(fieldName, ignored -> new ColumnStats(getValueMetadata(fieldSchema, indexVersion)));
+        Object fieldValue = collectColumnRangeFieldValue(record, colStats.valueMetadata, fieldName, fieldSchema, recordSchema, properties);
 
         colStats.valueCount++;
-        if (fieldValue != null && isColumnTypeSupported(hoodieFieldSchema, Option.of(record.getRecordType()), indexVersion)) {
+        if (fieldValue != null && isColumnTypeSupported(fieldSchema, Option.of(record.getRecordType()), indexVersion)) {
           // Set the min value of the field
           if (colStats.minValue == null
-              || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.minValue, hoodieFieldSchema.toAvroSchema()) < 0) {
+              || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.minValue, fieldSchema.toAvroSchema()) < 0) {
             colStats.minValue = fieldValue;
           }
           // Set the max value of the field
-          if (colStats.maxValue == null || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.maxValue, hoodieFieldSchema.toAvroSchema()) > 0) {
+          if (colStats.maxValue == null || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.maxValue, fieldSchema.toAvroSchema()) > 0) {
             colStats.maxValue = fieldValue;
           }
         } else {
@@ -701,13 +701,11 @@ public class HoodieTableMetadataUtil {
 
     return indexDefinition.getSourceFields().stream()
         .filter(indexCol -> {
-          Pair<String, Schema.Field> avroFieldPair = HoodieAvroUtils.getSchemaForField(tableSchema.toAvroSchema(), indexCol);
-          Schema.Field avroField = avroFieldPair.getRight();
-          if (avroField == null) {
+          Pair<String, HoodieSchemaField> fieldPair = HoodieSchemaUtils.getNestedField(tableSchema, indexCol);
+          if (fieldPair == null) {
             return false;
           }
-          HoodieSchemaField fieldSchema = HoodieSchemaField.fromAvroField(avroField);
-          return !isTimestampMillisField(fieldSchema.schema());
+          return !isTimestampMillisField(fieldPair.getRight().schema());
         })
         .collect(Collectors.toList());
   }
@@ -1701,13 +1699,11 @@ public class HoodieTableMetadataUtil {
 
       columnsToIndex.stream().filter(fieldName -> !META_COL_SET_TO_INDEX.contains(fieldName))
           .map(colName -> {
-            Pair<String, Schema.Field> avroFieldPair = HoodieAvroUtils.getSchemaForField(tableSchema.get().toAvroSchema(), colName);
-            Schema.Field avroField = avroFieldPair.getRight();
-            if (avroField == null) {
+            Pair<String, HoodieSchemaField> fieldPair = HoodieSchemaUtils.getNestedField(tableSchema.get(), colName);
+            if (fieldPair == null) {
               return null;
             }
-            HoodieSchemaField hoodieField = HoodieSchemaField.fromAvroField(avroField);
-            return Pair.of(colName, hoodieField.schema());
+            return Pair.of(colName, fieldPair.getRight().schema());
           })
           .filter(fieldNameSchemaPair -> fieldNameSchemaPair != null && isColumnTypeSupported(fieldNameSchemaPair.getValue(), recordType, indexVersion))
           .forEach(entry -> colsToIndexSchemaMap.put(entry.getKey(), entry.getValue()));
@@ -1816,10 +1812,8 @@ public class HoodieTableMetadataUtil {
                                                                                           int maxBufferSize) throws IOException {
     if (writerSchemaOpt.isPresent()) {
       List<Pair<String, HoodieSchemaField>> fieldsToIndex = columnsToIndex.stream()
-          .map(fieldName -> {
-            Pair<String, Schema.Field> avroFieldPair = HoodieAvroUtils.getSchemaForField(writerSchemaOpt.get().toAvroSchema(), fieldName);
-            return Pair.of(avroFieldPair.getKey(), new HoodieSchemaField(avroFieldPair.getValue()));
-          })
+          .map(fieldName -> HoodieSchemaUtils.getNestedField(writerSchemaOpt.get(), fieldName))
+          .filter(Objects::nonNull)
           .collect(Collectors.toList());
       // read log files without merging for lower overhead, log files may contain multiple records for the same key resulting in a wider range of values than the merged result
       HoodieLogFile logFile = new HoodieLogFile(filePath);
@@ -1932,26 +1926,12 @@ public class HoodieTableMetadataUtil {
       case INT:
         return castToInteger(val);
       case DATE:
+      case TIME:
+      case TIMESTAMP:
         // NOTE: This type will be either {@code java.sql.Date} or {org.joda.LocalDate}
         //       depending on the Avro version. Hence, we simply cast it to {@code Comparable<?>}
         return (Comparable<?>) val;
-      case TIME:
-        HoodieSchema.Time timeSchema = (HoodieSchema.Time) schema;
-        TimePrecision precision = timeSchema.getPrecision();
-        if (precision.equals(TimePrecision.MILLIS) || precision.equals(TimePrecision.MICROS)) {
-          return (Comparable<?>) val;
-        }
-        return castToInteger(val);
       case LONG:
-        return castToLong(val);
-      case TIMESTAMP:
-        HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) schema;
-        TimePrecision tsPrecision = timestampSchema.getPrecision();
-        if (tsPrecision.equals(TimePrecision.MILLIS) || tsPrecision.equals(TimePrecision.MICROS)) {
-          // NOTE: This type will be either {@code java.sql.Date} or {org.joda.LocalDate}
-          //       depending on the Avro version. Hence, we simply cast it to {@code Comparable<?>}
-          return (Comparable<?>) val;
-        }
         return castToLong(val);
       case STRING:
         // unpack the avro Utf8 if possible
@@ -2676,17 +2656,13 @@ public class HoodieTableMetadataUtil {
                                                                       Map<String, HoodieSchema> colsToIndexSchemaMap,
                                                                       HoodieIndexVersion partitionStatsIndexVersion
   ) {
-    // Convert Avro Schema map to HoodieSchema map
-    Map<String, HoodieSchema> hoodieSchemaMap = colsToIndexSchemaMap.entrySet().stream()
-        .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue()));
-
     // Group by Column Name
     Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnMetadataMap =
         fileColumnMetadata.collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName, Collectors.toList()));
 
     // Aggregate Column Ranges
     Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = columnMetadataMap.entrySet().stream()
-        .map(entry -> FileFormatUtils.getColumnRangeInPartition(partitionPath, entry.getKey(), entry.getValue(), hoodieSchemaMap, partitionStatsIndexVersion));
+        .map(entry -> FileFormatUtils.getColumnRangeInPartition(partitionPath, entry.getKey(), entry.getValue(), colsToIndexSchemaMap, partitionStatsIndexVersion));
 
     // Create Partition Stats Records
     return HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, partitionStatsRangeMetadata.collect(Collectors.toList()), false, isTightBound, indexPartitionOpt);

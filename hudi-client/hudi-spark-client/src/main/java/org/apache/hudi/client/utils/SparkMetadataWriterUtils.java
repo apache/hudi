@@ -22,7 +22,6 @@ package org.apache.hudi.client.utils;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkRowSerDe;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bloom.BloomFilter;
@@ -45,6 +44,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
@@ -400,13 +400,11 @@ public class SparkMetadataWriterUtils {
           .orElseThrow(() -> new IllegalStateException(String.format("Expected writer schema in commit metadata %s", commitMetadata)));
       List<Pair<String, HoodieSchema>> columnsToIndexSchemaMap = columnsToIndex.stream()
           .map(columnToIndex -> {
-            Pair<String, Schema.Field> avroFieldPair = HoodieAvroUtils.getSchemaForField(tableSchema.toAvroSchema(), columnToIndex);
-            Schema.Field avroField = avroFieldPair.getValue();
-            if (avroField == null) {
+            Pair<String, HoodieSchemaField> fieldPair = HoodieSchemaUtils.getNestedField(tableSchema, columnToIndex);
+            if (fieldPair == null) {
               return null;
             }
-            HoodieSchemaField hoodieField = HoodieSchemaField.fromAvroField(avroField);
-            return Pair.of(columnToIndex, hoodieField.schema());
+            return Pair.of(columnToIndex, fieldPair.getRight().schema());
           })
           .filter(Objects::nonNull)
           .collect(Collectors.toList());

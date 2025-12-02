@@ -65,7 +65,6 @@ public class TestSecondaryIndexStreamingTrackerFileSlice {
   private WriteStatus writeStatus;
   private HoodieSchema schema;
   private HoodieTableMetaClient metaClient;
-  @SuppressWarnings("FieldCanBeLocal")
   private HoodieEngineContext engineContext;
   private HoodieReaderContext readerContext;
 
@@ -101,7 +100,7 @@ public class TestSecondaryIndexStreamingTrackerFileSlice {
         partitionPath + "/.file-001_20231201120000.log.1",
         partitionPath + "/.file-001_20231201120000.log.2");
     String instantTime = "20231201120000";
-    
+
     HoodieIndexDefinition indexDef = HoodieIndexDefinition.newBuilder()
         .withIndexName(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath() + "_fare_index")
         .withIndexType("SECONDARY_INDEX")

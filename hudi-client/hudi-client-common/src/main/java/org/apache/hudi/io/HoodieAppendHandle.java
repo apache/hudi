@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -37,6 +36,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
@@ -81,6 +81,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
@@ -443,10 +444,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
               config.getMetadataConfig(), Lazy.eagerly(Option.of(writerHoodieSchemaWithMetaFields)),
               Option.of(this.recordMerger.getRecordType()), indexVersion).keySet());
       final List<Pair<String, HoodieSchemaField>> fieldsToIndex = columnsToIndexSet.stream()
-          .map(fieldName -> {
-            Pair<String, Schema.Field> avroFieldPair = HoodieAvroUtils.getSchemaForField(writeSchemaWithMetaFields, fieldName);
-            return Pair.of(avroFieldPair.getKey(), new HoodieSchemaField(avroFieldPair.getValue()));
-          }).collect(Collectors.toList());
+          .map(fieldName -> HoodieSchemaUtils.getNestedField(writerHoodieSchemaWithMetaFields, fieldName))
+          .filter(Objects::nonNull)
+          .collect(Collectors.toList());
       try {
         Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
             collectColumnRangeMetadata(recordList.iterator(), fieldsToIndex, stat.getPath(), writerHoodieSchemaWithMetaFields, storage.getConf(),
