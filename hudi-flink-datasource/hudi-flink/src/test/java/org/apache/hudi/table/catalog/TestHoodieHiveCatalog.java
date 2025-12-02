@@ -45,6 +45,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.calcite.shaded.com.google.common.collect.Lists;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
+import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
 import org.apache.flink.table.catalog.CatalogPartitionSpec;
 import org.apache.flink.table.catalog.CatalogTable;
@@ -93,7 +94,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test cases for {@link HoodieHiveCatalog}.
  */
-public class TestHoodieHiveCatalog {
+public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
   Schema schema =
       Schema.newBuilder()
           .column("uuid", DataTypes.INT().notNull())
@@ -127,7 +128,7 @@ public class TestHoodieHiveCatalog {
   List<String> multiPartitions = Lists.newArrayList("par1", "par2");
 
   private static HoodieHiveCatalog hoodieCatalog;
-  private final ObjectPath tablePath = new ObjectPath("default", "test");
+  private final ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "test");
 
   @BeforeAll
   public static void createCatalog() {
@@ -532,5 +533,10 @@ public class TestHoodieHiveCatalog {
         tablePath.getObjectName(),
         HoodieCatalogUtil.getOrderedPartitionValues(
             hoodieCatalog.getName(), hoodieCatalog.getHiveConf(), partitionSpec, partitions, tablePath));
+  }
+
+  @Override
+  AbstractCatalog getCatalog() {
+    return hoodieCatalog;
   }
 }
