@@ -11,7 +11,11 @@ tags:
   - community
 ---
 
+---
+
 _This blog was translated from the [original blog in Chinese](https://mp.weixin.qq.com/s/LNMZGl-kXJTblOCO6s0BxQ)._
+
+---
 
 Recently, the Apache Hudi Meetup Asia, hosted by JD.com, was successfully held at JD.com Group headquarters. Four technical experts from Onehouse, JD.com, Kuaishou, and Huawei gathered together, not only bringing a preview of Apache Hudi release 1.1, but also sharing their unique approaches to building data lakehouses. From AI scenario support to real-time data processing and cost optimization, each topic directly addressed the pain points that data engineers care about most.
 
