@@ -234,7 +234,7 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
 
   @Override
   public void loadCompactionDetailsInMemory(int limit) {
-    loadInstantsWithLimit(limit, true,
+    loadAndAppendInstantsWithLimit(limit, true,
         record -> {
           Object actionState = record.get(ACTION_STATE);
           // Older files & archivedTimelineV2 don't have action state set.
@@ -255,7 +255,7 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
 
   @Override
   public void loadCompletedInstantDetailsInMemory(int limit) {
-    loadInstantsWithLimit(limit, true,
+    loadAndAppendInstantsWithLimit(limit, true,
         record -> {
           Object actionState = record.get(ACTION_STATE);
           return actionState == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED.toString().equals(actionState.toString());
@@ -293,7 +293,7 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
         .stream().flatMap(Collection::stream).sorted().collect(Collectors.toList());
   }
 
-  private void loadInstantsWithLimit(int limit, boolean loadInstantDetails, Function<GenericRecord, Boolean> commitsFilter) {
+  private void loadAndAppendInstantsWithLimit(int limit, boolean loadInstantDetails, Function<GenericRecord, Boolean> commitsFilter) {
     InstantsLoader loader = new InstantsLoader(loadInstantDetails);
     timelineLoader.loadInstants(
         metaClient, null, Option.empty(), LoadMode.PLAN, commitsFilter, loader, Option.of(limit));
