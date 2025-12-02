@@ -32,6 +32,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.SerializableIndexedRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -70,14 +73,14 @@ import static org.mockito.Mockito.when;
 
 public class BaseTestFileGroupRecordBuffer {
 
-  protected static final Schema SCHEMA = Schema.createRecord("test_record", null, "namespace", false,
+  protected static final HoodieSchema SCHEMA = HoodieSchema.createRecord("test_record", "namespace", null,
       Arrays.asList(
-          new Schema.Field("record_key", Schema.create(Schema.Type.STRING)),
-          new Schema.Field("counter", Schema.create(Schema.Type.INT)),
-          new Schema.Field("ts", Schema.create(Schema.Type.LONG))));
+          HoodieSchemaField.of("record_key", HoodieSchema.create(HoodieSchemaType.STRING)),
+          HoodieSchemaField.of("counter", HoodieSchema.create(HoodieSchemaType.INT)),
+          HoodieSchemaField.of("ts", HoodieSchema.create(HoodieSchemaType.LONG))));
 
   protected static GenericRecord createTestRecord(String recordKey, int counter, long ts) {
-    GenericRecord record = new GenericData.Record(SCHEMA);
+    GenericRecord record = new GenericData.Record(SCHEMA.toAvroSchema());
     record.put("record_key", recordKey);
     record.put("counter", counter);
     record.put("ts", ts);
@@ -114,9 +117,9 @@ public class BaseTestFileGroupRecordBuffer {
       props.setProperty(DELETE_MARKER, markerKeyValue.getRight());
     });
     FileGroupReaderSchemaHandler<IndexedRecord> fileGroupReaderSchemaHandler = mock(FileGroupReaderSchemaHandler.class);
-    when(fileGroupReaderSchemaHandler.getRequiredSchema()).thenReturn(SCHEMA);
+    when(fileGroupReaderSchemaHandler.getRequiredSchema()).thenReturn(SCHEMA.toAvroSchema());
     when(fileGroupReaderSchemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
-    when(fileGroupReaderSchemaHandler.getDeleteContext()).thenReturn(new DeleteContext(props, SCHEMA));
+    when(fileGroupReaderSchemaHandler.getDeleteContext()).thenReturn(new DeleteContext(props, SCHEMA.toAvroSchema()));
     readerContext.setSchemaHandler(fileGroupReaderSchemaHandler);
     return buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, recordMerger, recordMergeMode, orderingFieldNames, props,
         Option.empty());

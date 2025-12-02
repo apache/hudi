@@ -376,7 +376,8 @@ public abstract class SchemaHandlerTestBase {
     }
 
     @Override
-    public ClosableIterator<String> getFileRecordIterator(StoragePath filePath, long start, long length, HoodieSchema dataSchema, HoodieSchema requiredSchema, HoodieStorage storage) throws IOException {
+    public ClosableIterator<String> getFileRecordIterator(StoragePath filePath, long start, long length,
+                                                          HoodieSchema dataSchema, HoodieSchema requiredSchema, HoodieStorage storage) throws IOException {
       return null;
     }
 
