@@ -108,6 +108,13 @@ public class TestHoodieSchemaConverter {
     HoodieSchema timeSchema = HoodieSchemaConverter.convertToSchema(
         DataTypes.TIME(3).notNull().getLogicalType());
     assertEquals(HoodieSchemaType.TIME, timeSchema.getType());
+    assertEquals(HoodieSchema.TimePrecision.MILLIS, ((HoodieSchema.Time) timeSchema).getPrecision());
+
+    // Time micros
+    HoodieSchema timeMicrosSchema = HoodieSchemaConverter.convertToSchema(
+            DataTypes.TIME(6).notNull().getLogicalType());
+    assertEquals(HoodieSchemaType.TIME, timeMicrosSchema.getType());
+    assertEquals(HoodieSchema.TimePrecision.MICROS, ((HoodieSchema.Time) timeMicrosSchema).getPrecision());
 
     // Timestamp millis
     HoodieSchema timestampMillisSchema = HoodieSchemaConverter.convertToSchema(
@@ -158,6 +165,21 @@ public class TestHoodieSchemaConverter {
   }
 
   @Test
+  public void testArrayTypeWithNullableElements() {
+    LogicalType arrayType = DataTypes.ARRAY(DataTypes.STRING().nullable()).notNull().getLogicalType();
+    HoodieSchema arraySchema = HoodieSchemaConverter.convertToSchema(arrayType);
+
+    assertEquals(HoodieSchemaType.ARRAY, arraySchema.getType());
+
+    HoodieSchema elementSchema = arraySchema.getElementType();
+    assertEquals(HoodieSchemaType.UNION, elementSchema.getType());
+    assertTrue(elementSchema.isNullable());
+
+    HoodieSchema actualElementType = elementSchema.getNonNullType();
+    assertEquals(HoodieSchemaType.STRING, actualElementType.getType());
+  }
+
+  @Test
   public void testMapType() {
     LogicalType mapType = DataTypes.MAP(
         DataTypes.STRING().notNull(),
@@ -166,6 +188,23 @@ public class TestHoodieSchemaConverter {
 
     assertEquals(HoodieSchemaType.MAP, mapSchema.getType());
     assertEquals(HoodieSchemaType.INT, mapSchema.getValueType().getType());
+  }
+
+  @Test
+  public void testMapTypeWithNullableValues() {
+    LogicalType mapType = DataTypes.MAP(
+        DataTypes.STRING().notNull(),
+        DataTypes.INT().nullable()).notNull().getLogicalType();
+    HoodieSchema mapSchema = HoodieSchemaConverter.convertToSchema(mapType);
+
+    assertEquals(HoodieSchemaType.MAP, mapSchema.getType());
+
+    HoodieSchema valueSchema = mapSchema.getValueType();
+    assertEquals(HoodieSchemaType.UNION, valueSchema.getType());
+    assertTrue(valueSchema.isNullable());
+
+    HoodieSchema actualValueType = valueSchema.getNonNullType();
+    assertEquals(HoodieSchemaType.INT, actualValueType.getType());
   }
 
   @Test
@@ -371,6 +410,17 @@ public class TestHoodieSchemaConverter {
     ).notNull().getLogicalType();
 
     HoodieSchema hoodieSchema = HoodieSchemaConverter.convertToSchema(flinkRowType);
+
+    // Verify the decimal is FIXED-backed (backed by fixed-size byte array)
+    HoodieSchema decimalField = hoodieSchema.getFields().get(0).schema();
+    assertEquals(HoodieSchemaType.DECIMAL, decimalField.getType());
+    assertTrue(decimalField instanceof HoodieSchema.Decimal);
+    HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) decimalField;
+    assertTrue(decimalSchema.isFixed());
+    assertEquals(5, decimalSchema.getFixedSize()); // For precision 10, fixed size is 5 bytes
+    assertEquals(10, decimalSchema.getPrecision());
+    assertEquals(2, decimalSchema.getScale());
+
     RowType result = HoodieSchemaConverter.convertToRowType(hoodieSchema);
 
     assertTrue(result.getTypeAt(0) instanceof DecimalType);

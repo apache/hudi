@@ -81,35 +81,35 @@ public class HoodieSchemaConverter {
 
       case BOOLEAN:
         HoodieSchema bool = HoodieSchema.create(HoodieSchemaType.BOOLEAN);
-        return nullable ? nullableSchema(bool) : bool;
+        return nullable ? HoodieSchema.createNullable(bool) : bool;
 
       case TINYINT:
       case SMALLINT:
       case INTEGER:
         HoodieSchema integer = HoodieSchema.create(HoodieSchemaType.INT);
-        return nullable ? nullableSchema(integer) : integer;
+        return nullable ? HoodieSchema.createNullable(integer) : integer;
 
       case BIGINT:
         HoodieSchema bigint = HoodieSchema.create(HoodieSchemaType.LONG);
-        return nullable ? nullableSchema(bigint) : bigint;
+        return nullable ? HoodieSchema.createNullable(bigint) : bigint;
 
       case FLOAT:
         HoodieSchema f = HoodieSchema.create(HoodieSchemaType.FLOAT);
-        return nullable ? nullableSchema(f) : f;
+        return nullable ? HoodieSchema.createNullable(f) : f;
 
       case DOUBLE:
         HoodieSchema d = HoodieSchema.create(HoodieSchemaType.DOUBLE);
-        return nullable ? nullableSchema(d) : d;
+        return nullable ? HoodieSchema.createNullable(d) : d;
 
       case CHAR:
       case VARCHAR:
         HoodieSchema str = HoodieSchema.create(HoodieSchemaType.STRING);
-        return nullable ? nullableSchema(str) : str;
+        return nullable ? HoodieSchema.createNullable(str) : str;
 
       case BINARY:
       case VARBINARY:
         HoodieSchema binary = HoodieSchema.create(HoodieSchemaType.BYTES);
-        return nullable ? nullableSchema(binary) : binary;
+        return nullable ? HoodieSchema.createNullable(binary) : binary;
 
       case TIMESTAMP_WITHOUT_TIME_ZONE:
         final TimestampType timestampType = (TimestampType) logicalType;
@@ -125,7 +125,7 @@ public class HoodieSchemaConverter {
                   + precision
                   + ", it only supports precisions <= 6.");
         }
-        return nullable ? nullableSchema(timestamp) : timestamp;
+        return nullable ? HoodieSchema.createNullable(timestamp) : timestamp;
 
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
         final LocalZonedTimestampType localZonedTimestampType = (LocalZonedTimestampType) logicalType;
@@ -141,22 +141,26 @@ public class HoodieSchemaConverter {
                   + precision
                   + ", it only supports precisions <= 6.");
         }
-        return nullable ? nullableSchema(localTimestamp) : localTimestamp;
+        return nullable ? HoodieSchema.createNullable(localTimestamp) : localTimestamp;
 
       case DATE:
         HoodieSchema date = HoodieSchema.createDate();
-        return nullable ? nullableSchema(date) : date;
+        return nullable ? HoodieSchema.createNullable(date) : date;
 
       case TIME_WITHOUT_TIME_ZONE:
         precision = ((TimeType) logicalType).getPrecision();
-        if (precision > 3) {
+        HoodieSchema time;
+        if (precision <= 3) {
+          time = HoodieSchema.createTimeMillis();
+        } else if (precision <= 6) {
+          time = HoodieSchema.createTimeMicros();
+        } else {
           throw new IllegalArgumentException(
               "HoodieSchema does not support TIME type with precision: "
                   + precision
-                  + ", it only supports precision <= 3.");
+                  + ", maximum precision is 6 (microseconds).");
         }
-        HoodieSchema time = HoodieSchema.createTimeMillis();
-        return nullable ? nullableSchema(time) : time;
+        return nullable ? HoodieSchema.createNullable(time) : time;
 
       case DECIMAL:
         DecimalType decimalType = (DecimalType) logicalType;
@@ -169,7 +173,7 @@ public class HoodieSchemaConverter {
             decimalType.getScale(),
             fixedSize
         );
-        return nullable ? nullableSchema(decimal) : decimal;
+        return nullable ? HoodieSchema.createNullable(decimal) : decimal;
 
       case ROW:
         RowType rowType = (RowType) logicalType;
@@ -194,20 +198,20 @@ public class HoodieSchemaConverter {
         }
 
         HoodieSchema record = HoodieSchema.createRecord(rowName, null, null, hoodieFields);
-        return nullable ? nullableSchema(record) : record;
+        return nullable ? HoodieSchema.createNullable(record) : record;
 
       case MULTISET:
       case MAP:
         LogicalType valueType = extractValueTypeForMap(logicalType);
         HoodieSchema valueSchema = convertToSchema(valueType, rowName);
         HoodieSchema map = HoodieSchema.createMap(valueSchema);
-        return nullable ? nullableSchema(map) : map;
+        return nullable ? HoodieSchema.createNullable(map) : map;
 
       case ARRAY:
         ArrayType arrayType = (ArrayType) logicalType;
         HoodieSchema elementSchema = convertToSchema(arrayType.getElementType(), rowName);
         HoodieSchema array = HoodieSchema.createArray(elementSchema);
-        return nullable ? nullableSchema(array) : array;
+        return nullable ? HoodieSchema.createNullable(array) : array;
 
       case RAW:
       default:
@@ -249,15 +253,6 @@ public class HoodieSchemaConverter {
   }
 
   /**
-   * Returns schema with nullable wrapper.
-   */
-  private static HoodieSchema nullableSchema(HoodieSchema schema) {
-    return schema.isNullable()
-        ? schema
-        : HoodieSchema.createNullable(schema);
-  }
-
-  /**
    * Computes minimum bytes needed for decimal precision.
    * This ensures compatibility with Avro fixed-size decimal representation.
    */
@@ -287,15 +282,6 @@ public class HoodieSchemaConverter {
       throw new IllegalArgumentException("HoodieSchema cannot be null");
     }
 
-    // Check for special subclasses first (before accessing type)
-    if (hoodieSchema instanceof HoodieSchema.Decimal) {
-      return convertDecimal(hoodieSchema);
-    } else if (hoodieSchema instanceof HoodieSchema.Timestamp) {
-      return convertTimestamp(hoodieSchema);
-    } else if (hoodieSchema instanceof HoodieSchema.Time) {
-      return convertTime(hoodieSchema);
-    }
-
     HoodieSchemaType type = hoodieSchema.getType();
 
     switch (type) {
@@ -320,8 +306,16 @@ public class HoodieSchemaConverter {
         return DataTypes.STRING().notNull();
       case FIXED:
         return DataTypes.VARBINARY(hoodieSchema.getFixedSize()).notNull();
+      case DECIMAL:
+        return convertDecimal(hoodieSchema);
       case DATE:
         return DataTypes.DATE().notNull();
+      case TIME:
+        return convertTime(hoodieSchema);
+      case TIMESTAMP:
+        return convertTimestamp(hoodieSchema);
+      case UUID:
+        return DataTypes.STRING().notNull();
       case ARRAY:
         return convertArray(hoodieSchema);
       case MAP:
