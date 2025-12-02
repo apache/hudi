@@ -156,7 +156,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
 
   @Override
   public void loadCompactionDetailsInMemory(int limit) {
-    loadAndAppendInstantsWithLimit(limit, HoodieArchivedTimeline.LoadMode.PLAN,
+    loadAndCacheInstantsWithLimit(limit, HoodieArchivedTimeline.LoadMode.PLAN,
         record -> record.get(ACTION_ARCHIVED_META_FIELD).toString().equals(COMMIT_ACTION)
             && record.get(PLAN_ARCHIVED_META_FIELD) != null
     );
@@ -170,7 +170,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
 
   @Override
   public void loadCompletedInstantDetailsInMemory(int limit) {
-    loadAndAppendInstantsWithLimit(limit, HoodieArchivedTimeline.LoadMode.METADATA, r -> true);
+    loadAndCacheInstantsWithLimit(limit, HoodieArchivedTimeline.LoadMode.METADATA, r -> true);
   }
 
   @Override
@@ -282,7 +282,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
    * Loads instants with a limit on the number of instants to load.
    * This is used for limit-based loading where we only want to load the N most recent instants.
    */
-  private void loadAndAppendInstantsWithLimit(int limit, HoodieArchivedTimeline.LoadMode loadMode,
+  private void loadAndCacheInstantsWithLimit(int limit, HoodieArchivedTimeline.LoadMode loadMode,
       Function<GenericRecord, Boolean> commitsFilter) {
     Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();
     Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer = Option.ofNullable(getInstantDetailsFunc(loadMode));
