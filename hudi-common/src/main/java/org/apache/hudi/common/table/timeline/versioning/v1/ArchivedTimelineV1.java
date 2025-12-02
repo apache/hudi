@@ -78,6 +78,19 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
   }
 
+  /**
+   * Creates an archived timeline without loading any instants.
+   * Instants can be loaded later using methods like loadCompletedInstantDetailsInMemory, loadCompactionDetailsInMemory, etc.
+   */
+  public ArchivedTimelineV1(HoodieTableMetaClient metaClient, boolean shouldLoadInstants) {
+    this.metaClient = metaClient;
+    if (shouldLoadInstants) {
+      setInstants(this.loadInstants(false));
+    } else {
+      setInstants(new ArrayList<>());
+    }
+  }
+
   private ArchivedTimelineV1(HoodieTableMetaClient metaClient, TimeRangeFilter timeRangeFilter) {
     this(metaClient, timeRangeFilter, null, Option.of(HoodieInstant.State.COMPLETED));
   }
@@ -209,12 +222,43 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
   @Override
   public void loadCompactionDetailsInMemory(String startTs, String endTs) {
     // load compactionPlan
-    loadInstants(new ClosedClosedTimeRangeFilter(startTs, endTs), null, true,
+    List<HoodieInstant> loadedInstants = loadInstants(new ClosedClosedTimeRangeFilter(startTs, endTs), null, true,
         record -> {
           // Older files don't have action state set.
           Object action = record.get(ACTION_STATE);
           return record.get(ACTION_TYPE_KEY).toString().equals(HoodieTimeline.COMPACTION_ACTION)
               && (action == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT.toString().equals(action.toString()));
+        });
+    appendLoadedInstants(loadedInstants);
+  }
+
+  @Override
+  public void loadCompactionDetailsInMemory(int limit) {
+    loadAndCacheInstantsWithLimit(limit, true,
+        record -> {
+          Object actionState = record.get(ACTION_STATE);
+          // Older files & archivedTimelineV2 don't have action state set.
+          return record.get(ACTION_TYPE_KEY).toString().equals(HoodieTimeline.COMPACTION_ACTION)
+              && (actionState == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT.toString().equals(actionState.toString()));
+        });
+  }
+
+  @Override
+  public void loadCompletedInstantDetailsInMemory(String startTs, String endTs) {
+    List<HoodieInstant> loadedInstants = loadInstants(new ClosedClosedTimeRangeFilter(startTs, endTs), null, true,
+        record -> {
+          Object actionState = record.get(ACTION_STATE);
+          return actionState == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED.toString().equals(actionState.toString());
+        });
+    appendLoadedInstants(loadedInstants);
+  }
+
+  @Override
+  public void loadCompletedInstantDetailsInMemory(int limit) {
+    loadAndCacheInstantsWithLimit(limit, true,
+        record -> {
+          Object actionState = record.get(ACTION_STATE);
+          return actionState == null || org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED.toString().equals(actionState.toString());
         });
   }
 
@@ -244,9 +288,21 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
   private List<HoodieInstant> loadInstants(HoodieArchivedTimeline.TimeRangeFilter filter, LogFileFilter logFileFilter, boolean loadInstantDetails, Function<GenericRecord, Boolean> commitsFilter) {
     InstantsLoader loader = new InstantsLoader(loadInstantDetails);
     timelineLoader.loadInstants(
-        metaClient, filter, Option.ofNullable(logFileFilter), LoadMode.PLAN, commitsFilter, loader);
+        metaClient, filter, Option.ofNullable(logFileFilter), LoadMode.PLAN, commitsFilter, loader, Option.empty());
     return loader.getInstantsInRangeCollected().values()
         .stream().flatMap(Collection::stream).sorted().collect(Collectors.toList());
+  }
+
+  private void loadAndCacheInstantsWithLimit(int limit, boolean loadInstantDetails, Function<GenericRecord, Boolean> commitsFilter) {
+    InstantsLoader loader = new InstantsLoader(loadInstantDetails);
+    timelineLoader.loadInstants(
+        metaClient, null, Option.empty(), LoadMode.PLAN, commitsFilter, loader, Option.of(limit));
+    List<HoodieInstant> collectedInstants = loader.getInstantsInRangeCollected().values()
+        .stream()
+        .flatMap(Collection::stream)
+        .sorted()
+        .collect(Collectors.toList());
+    appendLoadedInstants(collectedInstants);
   }
 
   /**
