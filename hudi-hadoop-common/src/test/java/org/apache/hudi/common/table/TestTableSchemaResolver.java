@@ -128,11 +128,24 @@ class TestTableSchemaResolver {
 
     // Create resolver and call both methods
     TableSchemaResolver resolver = new TableSchemaResolver(metaClient);
+
+    // Test 1: getTableSchema() - should use table config's populateMetaFields (true)
     Schema avroSchema = resolver.getTableAvroSchema();
     HoodieSchema hoodieSchema = resolver.getTableSchema();
-
     assertNotNull(hoodieSchema);
     assertEquals(avroSchema, hoodieSchema.getAvroSchema());
+
+    // Test 2: getTableSchema(true) - explicitly include metadata fields
+    Schema avroSchemaWithMetadata = resolver.getTableAvroSchema(true);
+    HoodieSchema hoodieSchemaWithMetadata = resolver.getTableSchema(true);
+    assertNotNull(hoodieSchemaWithMetadata);
+    assertEquals(avroSchemaWithMetadata, hoodieSchemaWithMetadata.getAvroSchema());
+
+    // Test 3: getTableSchema(false) - explicitly exclude metadata fields
+    Schema avroSchemaWithoutMetadata = resolver.getTableAvroSchema(false);
+    HoodieSchema hoodieSchemaWithoutMetadata = resolver.getTableSchema(false);
+    assertNotNull(hoodieSchemaWithoutMetadata);
+    assertEquals(avroSchemaWithoutMetadata, hoodieSchemaWithoutMetadata.getAvroSchema());
   }
 
   @Test

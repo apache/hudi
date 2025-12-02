@@ -131,6 +131,19 @@ public class TableSchemaResolver {
   }
 
   /**
+   * Gets full schema (user + metadata) for a hoodie table as HoodieSchema.
+   * Delegates to getTableAvroSchema and wraps the result in a HoodieSchema.
+   *
+   * @param includeMetadataFields choice if include metadata fields
+   * @return HoodieSchema for this table
+   * @throws Exception
+   */
+  public HoodieSchema getTableSchema(boolean includeMetadataFields) throws Exception {
+    Schema avroSchema = getTableAvroSchema(includeMetadataFields);
+    return HoodieSchema.fromAvroSchema(avroSchema);
+  }
+
+  /**
    * Gets full schema (user + metadata) for a hoodie table in Avro format.
    *
    * @return Avro schema for this table
