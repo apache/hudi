@@ -43,7 +43,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -99,7 +98,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -399,14 +397,9 @@ public class SparkMetadataWriterUtils {
       HoodieSchema tableSchema = writerSchema.map(schema -> tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema).map(HoodieSchema::fromAvroSchema)
           .orElseThrow(() -> new IllegalStateException(String.format("Expected writer schema in commit metadata %s", commitMetadata)));
       List<Pair<String, HoodieSchema>> columnsToIndexSchemaMap = columnsToIndex.stream()
-          .map(columnToIndex -> {
-            Pair<String, HoodieSchemaField> fieldPair = HoodieSchemaUtils.getNestedField(tableSchema, columnToIndex);
-            if (fieldPair == null) {
-              return null;
-            }
-            return Pair.of(columnToIndex, fieldPair.getRight().schema());
-          })
-          .filter(Objects::nonNull)
+          .map(columnToIndex -> HoodieSchemaUtils.getNestedField(tableSchema, columnToIndex))
+          .filter(Option::isPresent)
+          .map(fieldPairOpt -> Pair.of(fieldPairOpt.get().getKey(), fieldPairOpt.get().getValue().schema()))
           .collect(Collectors.toList());
       // filter for supported types
       final List<String> validColumnsToIndex = columnsToIndexSchemaMap.stream()

@@ -445,7 +445,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
               Option.of(this.recordMerger.getRecordType()), indexVersion).keySet());
       final List<Pair<String, HoodieSchemaField>> fieldsToIndex = columnsToIndexSet.stream()
           .map(fieldName -> HoodieSchemaUtils.getNestedField(writerHoodieSchemaWithMetaFields, fieldName))
-          .filter(Objects::nonNull)
+          .filter(Option::isPresent)
+          .map(Option::get)
           .collect(Collectors.toList());
       try {
         Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =

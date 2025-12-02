@@ -20,6 +20,7 @@ package org.apache.hudi.common.schema;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -235,10 +236,11 @@ public final class HoodieSchemaUtils {
    *
    * @param schema    the schema to search in
    * @param fieldName the field name (may contain dots for nested fields)
-   * @return Pair of canonical field name and the HoodieSchemaField, or null if field not found
+   * @return Option containing Pair of canonical field name and the HoodieSchemaField, or Option.empty() if field not found
    * @throws IllegalArgumentException if schema or fieldName is null/empty
+   * @since 1.2.0
    */
-  public static Pair<String, HoodieSchemaField> getNestedField(HoodieSchema schema, String fieldName) {
+  public static Option<Pair<String, HoodieSchemaField>> getNestedField(HoodieSchema schema, String fieldName) {
     ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
     ValidationUtils.checkArgument(fieldName != null && !fieldName.isEmpty(), "Field name cannot be null or empty");
     return getNestedFieldInternal(schema, fieldName, "");
@@ -250,23 +252,22 @@ public final class HoodieSchemaUtils {
    * @param schema    the current schema to search in
    * @param fieldName the remaining field path
    * @param prefix    the accumulated field path prefix
-   * @return Pair of canonical field name and the HoodieSchemaField, or null if field not found
+   * @return Option containing Pair of canonical field name and the HoodieSchemaField, or Option.empty() if field not found
    */
-  private static Pair<String, HoodieSchemaField> getNestedFieldInternal(HoodieSchema schema, String fieldName, String prefix) {
+  private static Option<Pair<String, HoodieSchemaField>> getNestedFieldInternal(HoodieSchema schema, String fieldName, String prefix) {
     HoodieSchema nonNullableSchema = getNonNullTypeFromUnion(schema);
 
     if (!fieldName.contains(".")) {
       // Base case: simple field name
       if (nonNullableSchema.getType() != HoodieSchemaType.RECORD) {
-        return null;
+        return Option.empty();
       }
       return nonNullableSchema.getField(fieldName)
-          .map(field -> Pair.of(prefix + fieldName, field))
-          .orElse(null);
+          .map(field -> Pair.of(prefix + fieldName, field));
     } else {
       // Recursive case: nested field
       if (nonNullableSchema.getType() != HoodieSchemaType.RECORD) {
-        return null;
+        return Option.empty();
       }
 
       int dotIndex = fieldName.indexOf(".");
@@ -274,12 +275,11 @@ public final class HoodieSchemaUtils {
       String remainingPath = fieldName.substring(dotIndex + 1);
 
       return nonNullableSchema.getField(rootFieldName)
-          .map(rootField -> getNestedFieldInternal(
+          .flatMap(rootField -> getNestedFieldInternal(
               rootField.schema(),
               remainingPath,
               prefix + rootFieldName + "."
-          ))
-          .orElse(null);
+          ));
     }
   }
 }

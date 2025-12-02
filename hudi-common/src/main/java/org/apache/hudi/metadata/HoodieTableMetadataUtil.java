@@ -701,17 +701,14 @@ public class HoodieTableMetadataUtil {
 
     return indexDefinition.getSourceFields().stream()
         .filter(indexCol -> {
-          Pair<String, HoodieSchemaField> fieldPair = HoodieSchemaUtils.getNestedField(tableSchema, indexCol);
-          if (fieldPair == null) {
-            return false;
-          }
-          return !isTimestampMillisField(fieldPair.getRight().schema());
+          Option<Pair<String, HoodieSchemaField>> fieldPairOpt = HoodieSchemaUtils.getNestedField(tableSchema, indexCol);
+          return fieldPairOpt.isPresent() && !isTimestampMillisField(fieldPairOpt.get().getRight().schema());
         })
         .collect(Collectors.toList());
   }
 
   /**
-   * Checks if a schema field is of type timestamp_millis (timestamp-millis).
+   * Checks if a schema field is of type timestamp_millis (timestamp-millis or local-timestamp-millis).
    *
    * @param fieldSchema The schema of the field to check
    * @return true if the field is of type timestamp_millis, false otherwise
@@ -1698,15 +1695,10 @@ public class HoodieTableMetadataUtil {
       Map<String, HoodieSchema> colsToIndexSchemaMap = new LinkedHashMap<>();
 
       columnsToIndex.stream().filter(fieldName -> !META_COL_SET_TO_INDEX.contains(fieldName))
-          .map(colName -> {
-            Pair<String, HoodieSchemaField> fieldPair = HoodieSchemaUtils.getNestedField(tableSchema.get(), colName);
-            if (fieldPair == null) {
-              return null;
-            }
-            return Pair.of(colName, fieldPair.getRight().schema());
-          })
-          .filter(fieldNameSchemaPair -> fieldNameSchemaPair != null && isColumnTypeSupported(fieldNameSchemaPair.getValue(), recordType, indexVersion))
-          .forEach(entry -> colsToIndexSchemaMap.put(entry.getKey(), entry.getValue()));
+          .map(colName -> HoodieSchemaUtils.getNestedField(tableSchema.get(), colName))
+          .filter(fieldNameSchemaPair -> fieldNameSchemaPair.isPresent() && isColumnTypeSupported(fieldNameSchemaPair.get().getValue().schema(), recordType, indexVersion))
+          .map(Option::get)
+          .forEach(entry -> colsToIndexSchemaMap.put(entry.getKey(), entry.getValue().schema()));
       return colsToIndexSchemaMap;
     }
     // if not overridden
@@ -1813,7 +1805,8 @@ public class HoodieTableMetadataUtil {
     if (writerSchemaOpt.isPresent()) {
       List<Pair<String, HoodieSchemaField>> fieldsToIndex = columnsToIndex.stream()
           .map(fieldName -> HoodieSchemaUtils.getNestedField(writerSchemaOpt.get(), fieldName))
-          .filter(Objects::nonNull)
+          .filter(Option::isPresent)
+          .map(Option::get)
           .collect(Collectors.toList());
       // read log files without merging for lower overhead, log files may contain multiple records for the same key resulting in a wider range of values than the merged result
       HoodieLogFile logFile = new HoodieLogFile(filePath);
