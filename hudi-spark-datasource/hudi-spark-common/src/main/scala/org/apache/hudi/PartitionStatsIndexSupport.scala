@@ -25,13 +25,13 @@ import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataReco
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadataUtil}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.{getValidIndexedColumns, PARTITION_NAME_COLUMN_STATS}
-import org.apache.hudi.util.{JFunction, Lazy}
+import org.apache.hudi.util.{JFunction}
 
-import org.apache.avro.Schema
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, Expression, FromUnixTime, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
@@ -44,11 +44,11 @@ import scala.collection.JavaConverters._
 
 class PartitionStatsIndexSupport(spark: SparkSession,
                                  tableSchema: StructType,
-                                 avroSchema: Schema,
+                                 hoodieSchema: HoodieSchema,
                                  @transient metadataConfig: HoodieMetadataConfig,
                                  @transient metaClient: HoodieTableMetaClient,
                                  allowCaching: Boolean = false)
-  extends ColumnStatsIndexSupport(spark, tableSchema, avroSchema, metadataConfig, metaClient, allowCaching) with Logging with SparkAdapterSupport {
+  extends ColumnStatsIndexSupport(spark, tableSchema, hoodieSchema, metadataConfig, metaClient, allowCaching) with Logging with SparkAdapterSupport {
 
   override def getIndexName: String = PartitionStatsIndexSupport.INDEX_NAME
 
@@ -95,7 +95,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
         val indexDefinition = metaClient.getIndexMetadata.get()
           .getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS)
 
-        getValidIndexedColumns(indexDefinition, avroSchema, metaClient.getTableConfig).asScala.toSeq
+        getValidIndexedColumns(indexDefinition, hoodieSchema, metaClient.getTableConfig).asScala.toSeq
       }
       // Filter out queries involving null and value count checks
       val filteredQueryFilters: Seq[Expression] = filterExpressionsExcludingNullAndValue(nonSqlFilters, filteredIndexedCols)

@@ -19,10 +19,9 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-
-import org.apache.avro.Schema;
 
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -31,14 +30,14 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class SchemaTestProvider extends SchemaProvider {
 
-  public static AtomicReference<Schema> schemaToReturn = new AtomicReference<>(HoodieTestDataGenerator.AVRO_SCHEMA);
+  public static AtomicReference<HoodieSchema> schemaToReturn = new AtomicReference<>(HoodieTestDataGenerator.HOODIE_SCHEMA);
 
   public SchemaTestProvider(TypedProperties props) {
     super(props);
   }
 
   @Override
-  public Schema getSourceSchema() {
+  public HoodieSchema getSourceHoodieSchema() {
     return schemaToReturn.get();
   }
 

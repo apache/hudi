@@ -102,7 +102,7 @@ public class FileGroupReaderSchemaHandler<T> {
     this.tableSchema = tableSchema;
     this.requestedSchema = AvroSchemaCache.intern(requestedSchema);
     this.hoodieTableConfig = metaClient.getTableConfig();
-    this.deleteContext = new DeleteContext(properties, tableSchema);
+    this.deleteContext = new DeleteContext(properties, HoodieSchema.fromAvroSchema(tableSchema));
     this.requiredSchema = AvroSchemaCache.intern(prepareRequiredSchema(this.deleteContext));
     this.schemaForUpdates = requiredSchema;
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
@@ -143,7 +143,7 @@ public class FileGroupReaderSchemaHandler<T> {
 
   public Option<UnaryOperator<T>> getOutputConverter() {
     if (!AvroSchemaUtils.areSchemasProjectionEquivalent(requiredSchema, requestedSchema)) {
-      return Option.of(readerContext.getRecordContext().projectRecord(requiredSchema, requestedSchema));
+      return Option.of(readerContext.getRecordContext().projectRecord(HoodieSchema.fromAvroSchema(requiredSchema), HoodieSchema.fromAvroSchema(requestedSchema)));
     }
     return Option.empty();
   }

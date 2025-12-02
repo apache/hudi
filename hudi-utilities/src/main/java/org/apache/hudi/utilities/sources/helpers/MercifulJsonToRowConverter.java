@@ -30,6 +30,7 @@ import org.apache.hudi.avro.processors.LocalTimestampMilliLogicalTypeProcessor;
 import org.apache.hudi.avro.processors.Parser;
 import org.apache.hudi.avro.processors.TimestampMicroLogicalTypeProcessor;
 import org.apache.hudi.avro.processors.TimestampMilliLogicalTypeProcessor;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -87,9 +88,9 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
    * During the conversion here, we sanitize the fields in the data
    *
    * @param json   Json record
-   * @param schema Schema
+   * @param schema HoodieSchema
    */
-  public Row convertToRow(String json, Schema schema) {
+  public Row convertToRow(String json, HoodieSchema schema) {
     try {
       Map<String, Object> jsonObjectMap = mapper.readValue(json, Map.class);
       return convertJsonToRow(jsonObjectMap, schema);
@@ -98,12 +99,13 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
     }
   }
 
-  private Row convertJsonToRow(Map<String, Object> inputJson, Schema schema) {
-    List<Schema.Field> fields = schema.getFields();
+  private Row convertJsonToRow(Map<String, Object> inputJson, HoodieSchema schema) {
+    Schema avroSchema = schema.toAvroSchema();
+    List<Schema.Field> fields = avroSchema.getFields();
     List<Object> values = new ArrayList<>(Collections.nCopies(fields.size(), null));
 
     for (Schema.Field f : fields) {
-      Object val = shouldSanitize ? getFieldFromJson(f, inputJson, schema.getFullName(), invalidCharMask) : inputJson.get(f.name());
+      Object val = shouldSanitize ? getFieldFromJson(f, inputJson, avroSchema.getFullName(), invalidCharMask) : inputJson.get(f.name());
       if (val != null) {
         values.set(f.pos(), SparkValueMetadataUtils.convertJavaTypeToSparkType(convertJsonField(val, f.name(), f.schema()), useJava8api));
       }
@@ -215,7 +217,7 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
     return new JsonFieldProcessor() {
       @Override
       public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
-        return Pair.of(true, convertJsonToRow((Map<String, Object>) value, schema));
+        return Pair.of(true, convertJsonToRow((Map<String, Object>) value, HoodieSchema.fromAvroSchema(schema)));
       }
     };
   }

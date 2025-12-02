@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
@@ -85,7 +86,8 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         .map(HoodieVirtualKeyInfo::getRecordKeyFieldIndex)
         .orElse(HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS);
     this.orderingFields = ConfigUtils.getOrderingFields(payloadProps);
-    this.deleteContext = new DeleteContext(payloadProps, getLogScannerReaderSchema()).withReaderSchema(getLogScannerReaderSchema());
+    HoodieSchema logScannerReaderSchema = HoodieSchema.fromAvroSchema(getLogScannerReaderSchema());
+    this.deleteContext = new DeleteContext(payloadProps, logScannerReaderSchema).withReaderSchema(logScannerReaderSchema);
   }
 
   /**
@@ -205,8 +207,9 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     // once presto on hudi have its own mor reader, we can remove the rewrite logical.
     GenericRecord genericRecord = HiveAvroSerializer.rewriteRecordIgnoreResultCheck(oldRecord, getLogScannerReaderSchema());
     RecordContext<IndexedRecord> recordContext = AvroRecordContext.getFieldAccessorInstance();
-    BufferedRecord record = BufferedRecords.fromEngineRecord(genericRecord, genericRecord.getSchema(), recordContext, orderingFields, newRecord.getRecordKey(), false);
-    BufferedRecord newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, getLogScannerReaderSchema(), recordContext, payloadProps, orderingFields, deleteContext);
+    BufferedRecord record = BufferedRecords.fromEngineRecord(genericRecord, HoodieSchema.fromAvroSchema(genericRecord.getSchema()), recordContext, orderingFields, newRecord.getRecordKey(), false);
+    BufferedRecord newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, HoodieSchema.fromAvroSchema(getLogScannerReaderSchema()),
+        recordContext, payloadProps, orderingFields, deleteContext);
     BufferedRecord mergeResult = merger.merge(record, newBufferedRecord, recordContext, payloadProps);
     if (mergeResult.isDelete()) {
       return Option.empty();

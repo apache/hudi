@@ -22,6 +22,7 @@ import org.apache.hudi.adapter.HiveCatalogConstants.AlterHiveDatabaseOp;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -40,12 +41,11 @@ import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.table.HoodieTableFactory;
 import org.apache.hudi.table.format.FilePathUtils;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.CatalogUtils;
 
-import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
@@ -422,7 +422,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     Table hiveTable = translateSparkTable2Flink(tablePath, getHiveTable(tablePath));
     String path = hiveTable.getSd().getLocation();
     Map<String, String> parameters = hiveTable.getParameters();
-    Schema latestTableSchema = StreamerUtil.getLatestTableSchema(path, hiveConf);
+    HoodieSchema latestTableSchema = StreamerUtil.getLatestTableSchema(path, hiveConf);
     org.apache.flink.table.api.Schema schema;
     if (latestTableSchema != null) {
       String pkColumnsStr = parameters.get(FlinkOptions.RECORD_KEY_FIELD.key());
@@ -430,7 +430,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
           ? null : StringUtils.split(pkColumnsStr, ",");
       // if the table is initialized from spark, the write schema is nullable for pk columns.
       DataType tableDataType = DataTypeUtils.ensureColumnsAsNonNullable(
-          AvroSchemaConverter.convertToDataType(latestTableSchema), pkColumns);
+          HoodieSchemaConverter.convertToDataType(latestTableSchema), pkColumns);
       org.apache.flink.table.api.Schema.Builder builder = org.apache.flink.table.api.Schema.newBuilder()
           .fromRowDataType(tableDataType);
       String pkConstraintName = parameters.get(PK_CONSTRAINT_NAME);
@@ -496,7 +496,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
   private HoodieTableMetaClient initTableIfNotExists(ObjectPath tablePath, CatalogTable catalogTable) {
     Configuration flinkConf = Configuration.fromMap(catalogTable.getOptions());
-    final String avroSchema = AvroSchemaConverter.convertToSchema(
+    final String avroSchema = HoodieSchemaConverter.convertToSchema(
         DataTypeUtils.toRowType(catalogTable.getUnresolvedSchema()),
         AvroSchemaUtils.getAvroRecordQualifiedName(tablePath.getObjectName())).toString();
     flinkConf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, avroSchema);
@@ -642,7 +642,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     serdeProperties.put(ConfigUtils.IS_QUERY_AS_RO_TABLE, String.valueOf(!useRealTimeInputFormat));
     serdeProperties.put("serialization.format", "1");
 
-    serdeProperties.putAll(TableOptionProperties.translateFlinkTableProperties2Spark(catalogTable, hiveConf, properties, partitionKeys, withOperationField));
+    serdeProperties.putAll(TableOptionProperties.translateFlinkTableProperties2Spark(catalogTable, properties, partitionKeys, withOperationField));
 
     sd.setSerdeInfo(new SerDeInfo(null, serDeClassName, serdeProperties));
 

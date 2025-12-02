@@ -86,8 +86,8 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         .getFileReader(writeConfig, mergeHandle.getOldFilePath());
     HoodieFileReader bootstrapFileReader = null;
 
-    Schema writerSchema = mergeHandle.getWriterSchemaWithMetaFields();
-    Schema readerSchema = baseFileReader.getSchema().getAvroSchema();
+    HoodieSchema writerSchema = mergeHandle.getWriterSchemaWithMetaFields();
+    HoodieSchema readerSchema = baseFileReader.getSchema();
 
     // In case Advanced Schema Evolution is enabled we might need to rewrite currently
     // persisted records to adhere to an evolved schema
@@ -98,7 +98,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     //   - Its field-set is a proper subset (of the reader schema)
     //   - There's no schema evolution transformation necessary
     boolean isPureProjection = schemaEvolutionTransformerOpt.isEmpty()
-        && isStrictProjectionOf(readerSchema, writerSchema);
+        && isStrictProjectionOf(readerSchema.toAvroSchema(), writerSchema.toAvroSchema());
     // Check whether we will need to rewrite target (already merged) records into the
     // writer's schema
     boolean shouldRewriteInWriterSchema = !isPureProjection
@@ -109,7 +109,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
 
     try {
       ClosableIterator<HoodieRecord> recordIterator;
-      Schema recordSchema;
+      HoodieSchema recordSchema;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         StoragePath bootstrapFilePath = baseFile.getBootstrapBaseFile().get().getStoragePath();
         HoodieStorage storage = table.getStorage().newInstance(
@@ -121,13 +121,12 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
             mergeHandle.getPartitionFields(),
             mergeHandle.getPartitionValues());
         recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
-        //TODO boundary to revisit in later pr to use HoodieSchema directly
-        recordIterator = (ClosableIterator<HoodieRecord>) bootstrapFileReader.getRecordIterator(HoodieSchema.fromAvroSchema(recordSchema));
+        recordIterator = (ClosableIterator<HoodieRecord>) bootstrapFileReader.getRecordIterator(recordSchema);
       } else {
         // In case writer's schema is simply a projection of the reader's one we can read
         // the records in the projected schema directly
         recordSchema = isPureProjection ? writerSchema : readerSchema;
-        recordIterator = (ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(HoodieSchema.fromAvroSchema(recordSchema));
+        recordIterator = (ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(recordSchema);
       }
 
       boolean isBufferingRecords = ExecutorFactory.isBufferingRecords(writeConfig);
@@ -137,7 +136,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         if (schemaEvolutionTransformerOpt.isPresent()) {
           newRecord = schemaEvolutionTransformerOpt.get().apply(record);
         } else if (shouldRewriteInWriterSchema) {
-          newRecord = record.rewriteRecordWithNewSchema(recordSchema, writeConfig.getProps(), writerSchema);
+          newRecord = record.rewriteRecordWithNewSchema(recordSchema.toAvroSchema(), writeConfig.getProps(), writerSchema.toAvroSchema());
         } else {
           newRecord = record;
         }
@@ -167,8 +166,8 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     }
   }
 
-  private Option<Function<HoodieRecord, HoodieRecord>> composeSchemaEvolutionTransformer(Schema recordSchema,
-                                                                                         Schema writerSchema,
+  private Option<Function<HoodieRecord, HoodieRecord>> composeSchemaEvolutionTransformer(HoodieSchema recordSchema,
+                                                                                         HoodieSchema writerSchema,
                                                                                          HoodieBaseFile baseFile,
                                                                                          HoodieWriteConfig writeConfig,
                                                                                          HoodieTableMetaClient metaClient) {
@@ -176,13 +175,14 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     // TODO support bootstrap
     if (querySchemaOpt.isPresent() && !baseFile.getBootstrapBaseFile().isPresent()) {
       // check implicitly add columns, and position reorder(spark sql may change cols order)
-      InternalSchema querySchema = AvroSchemaEvolutionUtils.reconcileSchema(writerSchema, querySchemaOpt.get(), writeConfig.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS));
+      InternalSchema querySchema = AvroSchemaEvolutionUtils.reconcileSchema(writerSchema.toAvroSchema(),
+          querySchemaOpt.get(), writeConfig.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS));
       long commitInstantTime = Long.parseLong(baseFile.getCommitTime());
       InternalSchema fileSchema = InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, metaClient);
       if (fileSchema.isEmptySchema() && writeConfig.getBoolean(HoodieCommonConfig.RECONCILE_SCHEMA)) {
         TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
         try {
-          fileSchema = InternalSchemaConverter.convert(HoodieSchema.fromAvroSchema(tableSchemaResolver.getTableAvroSchema(true)));
+          fileSchema = InternalSchemaConverter.convert(tableSchemaResolver.getTableSchema(true));
         } catch (Exception e) {
           throw new HoodieException(String.format("Failed to get InternalSchema for given versionId: %s", commitInstantTime), e);
         }
@@ -211,7 +211,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         Map<String, String> renameCols = InternalSchemaUtils.collectRenameCols(writeInternalSchema, querySchema);
         return Option.of(record -> {
           return record.rewriteRecordWithNewSchema(
-              recordSchema,
+              recordSchema.toAvroSchema(),
               writeConfig.getProps(),
               newWriterSchema, renameCols);
         });

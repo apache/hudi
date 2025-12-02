@@ -120,7 +120,8 @@ public class TestHoodieSchema {
     }, "Should throw exception for invalid JSON schema");
 
     assertThrows(IllegalArgumentException.class, () -> {
-      HoodieSchema.parse(null);
+      String invalid = null;
+      HoodieSchema.parse(invalid);
     }, "Should throw exception for null schema string");
 
     assertThrows(IllegalArgumentException.class, () -> {

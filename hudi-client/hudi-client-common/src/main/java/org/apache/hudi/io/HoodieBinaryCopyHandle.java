@@ -81,7 +81,7 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       }
     } else {
       // Default behavior: use the table's write schema for evolution
-      return getAvroSchemaConverter(conf).convert(writeSchemaWithMetaFields);
+      return getAvroSchemaConverter(conf).convert(writeSchemaWithMetaFields.toAvroSchema());
     }
   }
 

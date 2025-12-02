@@ -18,17 +18,13 @@
 
 package org.apache.hudi.hive.util;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.SchemaDifference;
 
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.parquet.schema.DecimalMetadata;
-import org.apache.parquet.schema.GroupType;
-import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.OriginalType;
-import org.apache.parquet.schema.PrimitiveType;
-import org.apache.parquet.schema.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,18 +64,18 @@ public class HiveSchemaUtil {
   /**
    * Get the schema difference between the storage schema and hive table schema.
    */
-  public static SchemaDifference getSchemaDifference(MessageType storageSchema, Map<String, String> tableSchema,
+  public static SchemaDifference getSchemaDifference(HoodieSchema storageSchema, Map<String, String> tableSchema,
                                                      List<String> partitionKeys) {
     return getSchemaDifference(storageSchema, tableSchema, partitionKeys, false);
   }
 
-  public static SchemaDifference getSchemaDifference(MessageType storageSchema, Map<String, String> tableSchema,
+  public static SchemaDifference getSchemaDifference(HoodieSchema storageSchema, Map<String, String> tableSchema,
       List<String> partitionKeys, boolean supportTimestamp) {
     Map<String, String> newTableSchema;
     try {
-      newTableSchema = convertParquetSchemaToHiveSchema(storageSchema, supportTimestamp);
+      newTableSchema = convertSchemaToHiveSchema(storageSchema, supportTimestamp);
     } catch (IOException e) {
-      throw new HoodieHiveSyncException("Failed to convert parquet schema to hive schema", e);
+      throw new HoodieHiveSyncException("Failed to convert schema to hive schema", e);
     }
     LOG.debug("Getting schema difference for {} \r\n\r\n{}", tableSchema, newTableSchema);
 
@@ -99,8 +95,8 @@ public class HiveSchemaUtil {
             // Partition key does not have to be part of the storage schema
             continue;
           }
-          // We will log this and continue. Hive schema is a superset of all parquet schemas
-          LOG.info("Ignoring table column {} as its not present in the parquet schema", fieldName);
+          // We will log this and continue. Hive schema is a superset of all schemas
+          LOG.info("Ignoring table column {} as its not present in the table schema", fieldName);
           continue;
         }
         tableColumnType = tableColumnType.replaceAll("\\s+", "");
@@ -145,54 +141,46 @@ public class HiveSchemaUtil {
   }
 
   /**
-   * Returns equivalent Hive table schema read from a parquet file.
+   * Returns equivalent Hive table schema for the provided table schema.
    *
-   * @param messageType : Parquet Schema
-   * @return : Hive Table schema read from parquet file MAP[String,String]
+   * @param schema Table Schema
+   * @return Hive Table schema MAP[String,String]
    */
-  public static Map<String, String> convertParquetSchemaToHiveSchema(MessageType messageType, boolean supportTimestamp) throws IOException {
-    return convertMapSchemaToHiveSchema(parquetSchemaToMapSchema(messageType, supportTimestamp, true));
+  public static Map<String, String> convertSchemaToHiveSchema(HoodieSchema schema, boolean supportTimestamp) throws IOException {
+    return convertMapSchemaToHiveSchema(hoodieSchemaToMapSchema(schema, supportTimestamp, true));
   }
 
   /**
-   * Returns equivalent Hive table Field schema read from a parquet file.
+   * Returns equivalent Hive table Field schema for the provided table schema.
    *
-   * @param messageType : Parquet Schema
-   * @return : Hive Table schema read from parquet file List[FieldSchema] without partitionField
+   * @param schema Table Schema
+   * @return Hive Table schema without partitionField
    */
-  public static List<FieldSchema> convertParquetSchemaToHiveFieldSchema(MessageType messageType, HiveSyncConfig syncConfig) throws IOException {
-    return convertMapSchemaToHiveFieldSchema(parquetSchemaToMapSchema(messageType, syncConfig.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE), false), syncConfig);
+  public static List<FieldSchema> convertSchemaToHiveFieldSchema(HoodieSchema schema, HiveSyncConfig syncConfig) {
+    return convertMapSchemaToHiveFieldSchema(hoodieSchemaToMapSchema(schema, syncConfig.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE), false), syncConfig);
   }
 
   /**
-   * Returns schema in Map<String,String> form read from a parquet file.
+   * Returns schema in Map<String,String> form translated from the table's schema.
    *
-   * @param messageType : parquet Schema
+   * @param schema the current schema
    * @param supportTimestamp
-   * @param doFormat : This option controls whether schema will have spaces in the value part of the schema map. This is required because spaces in complex schema trips the HMS create table calls.
+   * @param doFormat This option controls whether schema will have spaces in the value part of the schema map. This is required because spaces in complex schema trips the HMS create table calls.
    *                 This value will be false for HMS but true for QueryBasedDDLExecutors
-   * @return : Intermediate schema in the form of Map<String, String>
+   * @return Intermediate schema in the form of Map<String, String>
    */
-  public static LinkedHashMap<String, String> parquetSchemaToMapSchema(MessageType messageType, boolean supportTimestamp, boolean doFormat) throws IOException {
-    LinkedHashMap<String, String> schema = new LinkedHashMap<>();
-    List<Type> parquetFields = messageType.getFields();
-    for (Type parquetType : parquetFields) {
-      StringBuilder result = new StringBuilder();
-      String key = parquetType.getName();
-      if (parquetType.isRepetition(Type.Repetition.REPEATED)) {
-        result.append(createHiveArray(parquetType, "", supportTimestamp, doFormat));
-      } else {
-        result.append(convertField(parquetType, supportTimestamp, doFormat));
-      }
-
-      schema.put(key, result.toString());
+  public static LinkedHashMap<String, String> hoodieSchemaToMapSchema(HoodieSchema schema, boolean supportTimestamp, boolean doFormat) {
+    LinkedHashMap<String, String> hiveSchema = new LinkedHashMap<>();
+    List<HoodieSchemaField> fields = schema.getFields();
+    for (HoodieSchemaField field : fields) {
+      hiveSchema.put(field.name(), convertField(field.schema(), supportTimestamp, doFormat));
     }
-    return schema;
+    return hiveSchema;
   }
 
-  public static Map<String, String> convertMapSchemaToHiveSchema(LinkedHashMap<String, String> schema) throws IOException {
+  public static Map<String, String> convertMapSchemaToHiveSchema(LinkedHashMap<String, String> schema) {
     Map<String, String> hiveSchema = new LinkedHashMap<>();
-    for (Map.Entry<String,String> entry: schema.entrySet()) {
+    for (Map.Entry<String, String> entry: schema.entrySet()) {
       hiveSchema.put(hiveCompatibleFieldName(entry.getKey(), false, true), entry.getValue());
     }
     return hiveSchema;
@@ -204,7 +192,7 @@ public class HiveSchemaUtil {
    * @return List of FieldSchema objects derived from schema without the partition fields as the HMS api expects them as different arguments for alter table commands.
    * @throws IOException
    */
-  public static List<FieldSchema> convertMapSchemaToHiveFieldSchema(LinkedHashMap<String, String> schema, HiveSyncConfig syncConfig) throws IOException {
+  public static List<FieldSchema> convertMapSchemaToHiveFieldSchema(LinkedHashMap<String, String> schema, HiveSyncConfig syncConfig) {
     return schema.keySet().stream()
         .map(key -> new FieldSchema(key, schema.get(key).toLowerCase(), ""))
         .filter(field -> !syncConfig.getSplitStrings(META_SYNC_PARTITION_FIELDS).contains(field.getName()))
@@ -212,138 +200,75 @@ public class HiveSchemaUtil {
   }
 
   /**
-   * Convert one field data type of parquet schema into an equivalent Hive schema.
+   * Convert one field data type of Hoodie schema into an equivalent Hive schema.
    *
-   * @param parquetType : Single parquet field
-   * @return : Equivalent sHive schema
+   * @param fieldSchema the current field's schema
+   * @param supportTimestamp
+   * @param doFormat This option controls whether schema will have spaces in the value part of the schema map. This is required because spaces in complex schema trips the HMS create table calls.
+   * @return : Equivalent Hive schema
    */
-  private static String convertField(final Type parquetType, boolean supportTimestamp, boolean doFormat) {
-    StringBuilder field = new StringBuilder();
-    if (parquetType.isPrimitive()) {
-      final PrimitiveType.PrimitiveTypeName parquetPrimitiveTypeName =
-          parquetType.asPrimitiveType().getPrimitiveTypeName();
-      final OriginalType originalType = parquetType.getOriginalType();
-      if (originalType == OriginalType.DECIMAL) {
-        final DecimalMetadata decimalMetadata = parquetType.asPrimitiveType().getDecimalMetadata();
-        return field.append("DECIMAL(").append(decimalMetadata.getPrecision()).append(doFormat ? " , " : ",")
-            .append(decimalMetadata.getScale()).append(")").toString();
-      } else if (originalType == OriginalType.DATE) {
-        return field.append("DATE").toString();
-      } else if (supportTimestamp && (originalType == OriginalType.TIMESTAMP_MICROS || originalType == OriginalType.TIMESTAMP_MILLIS)) {
-        return field.append("TIMESTAMP").toString();
-      }
-
-      // TODO - fix the method naming here
-      return parquetPrimitiveTypeName.convert(new PrimitiveType.PrimitiveTypeNameConverter<String, RuntimeException>() {
-        @Override
-        public String convertBOOLEAN(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return BOOLEAN_TYPE_NAME;
-        }
-
-        @Override
-        public String convertINT32(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return INT_TYPE_NAME;
-        }
-
-        @Override
-        public String convertINT64(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
+  private static String convertField(final HoodieSchema fieldSchema, boolean supportTimestamp, boolean doFormat) {
+    HoodieSchema nonNullType = fieldSchema.getNonNullType();
+    switch (nonNullType.getType()) {
+      case INT:
+        return INT_TYPE_NAME;
+      case LONG:
+        return BIGINT_TYPE_NAME;
+      case FLOAT:
+        return FLOAT_TYPE_NAME;
+      case DOUBLE:
+        return DOUBLE_TYPE_NAME;
+      case BOOLEAN:
+        return BOOLEAN_TYPE_NAME;
+      case STRING:
+      case ENUM:
+        return STRING_TYPE_NAME;
+      case BYTES:
+      case UUID:
+      case FIXED:
+        return BINARY_TYPE_NAME;
+      case DATE:
+        return "DATE";
+      case TIMESTAMP:
+        if (!supportTimestamp) {
           return BIGINT_TYPE_NAME;
+        } else {
+          return "TIMESTAMP";
         }
-
-        @Override
-        public String convertINT96(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return "timestamp-millis";
-        }
-
-        @Override
-        public String convertFLOAT(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return FLOAT_TYPE_NAME;
-        }
-
-        @Override
-        public String convertDOUBLE(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return DOUBLE_TYPE_NAME;
-        }
-
-        @Override
-        public String convertFIXED_LEN_BYTE_ARRAY(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return BINARY_TYPE_NAME;
-        }
-
-        @Override
-        public String convertBINARY(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          if (originalType == OriginalType.UTF8 || originalType == OriginalType.ENUM) {
-            return STRING_TYPE_NAME;
-          } else {
-            return BINARY_TYPE_NAME;
-          }
-        }
-      });
-    } else {
-      GroupType parquetGroupType = parquetType.asGroupType();
-      OriginalType originalType = parquetGroupType.getOriginalType();
-      if (originalType != null) {
-        switch (originalType) {
-          case LIST:
-            if (parquetGroupType.getFieldCount() != 1) {
-              throw new UnsupportedOperationException("Invalid list type " + parquetGroupType);
-            }
-            Type elementType = parquetGroupType.getType(0);
-            if (!elementType.isRepetition(Type.Repetition.REPEATED)) {
-              throw new UnsupportedOperationException("Invalid list type " + parquetGroupType);
-            }
-            return createHiveArray(elementType, parquetGroupType.getName(), supportTimestamp, doFormat);
-          case MAP:
-            if (parquetGroupType.getFieldCount() != 1 || parquetGroupType.getType(0).isPrimitive()) {
-              throw new UnsupportedOperationException("Invalid map type " + parquetGroupType);
-            }
-            GroupType mapKeyValType = parquetGroupType.getType(0).asGroupType();
-            if (!mapKeyValType.isRepetition(Type.Repetition.REPEATED)
-                || !mapKeyValType.getOriginalType().equals(OriginalType.MAP_KEY_VALUE)
-                || mapKeyValType.getFieldCount() != 2) {
-              throw new UnsupportedOperationException("Invalid map type " + parquetGroupType);
-            }
-            Type keyType = mapKeyValType.getType(0);
-            if (!keyType.isPrimitive()
-                || !keyType.asPrimitiveType().getPrimitiveTypeName().equals(PrimitiveType.PrimitiveTypeName.BINARY)
-                || !keyType.getOriginalType().equals(OriginalType.UTF8)) {
-              throw new UnsupportedOperationException("Map key type must be binary (UTF8): " + keyType);
-            }
-            Type valueType = mapKeyValType.getType(1);
-            return createHiveMap(convertField(keyType, supportTimestamp, doFormat), convertField(valueType, supportTimestamp, doFormat), doFormat);
-          case ENUM:
-          case UTF8:
-            return STRING_TYPE_NAME;
-          case MAP_KEY_VALUE:
-            // MAP_KEY_VALUE was supposed to be used to annotate key and
-            // value group levels in a
-            // MAP. However, that is always implied by the structure of
-            // MAP. Hence, PARQUET-113
-            // dropped the requirement for having MAP_KEY_VALUE.
-          default:
-            throw new UnsupportedOperationException("Cannot convert Parquet type " + parquetType);
-        }
-      } else {
-        // if no original type then it's a record
-        return createHiveStruct(parquetGroupType.getFields(), supportTimestamp, doFormat);
-      }
+      case TIME:
+        HoodieSchema.Time timeSchema = (HoodieSchema.Time) nonNullType;
+        return timeSchema.getPrecision() == HoodieSchema.TimePrecision.MILLIS ? INT_TYPE_NAME : BIGINT_TYPE_NAME;
+      case DECIMAL:
+        HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) nonNullType;
+        return "DECIMAL(" + decimalSchema.getPrecision() + (doFormat ? " , " : ",") + decimalSchema.getScale() + ")";
+      case ARRAY:
+        HoodieSchema elementType = nonNullType.getElementType();
+        return createHiveArray(elementType, supportTimestamp, doFormat);
+      case MAP:
+        HoodieSchema keyType = nonNullType.getKeyType();
+        HoodieSchema valueType = nonNullType.getValueType();
+        return createHiveMap(convertField(keyType, supportTimestamp, doFormat), convertField(valueType, supportTimestamp, doFormat), doFormat);
+      case RECORD:
+        return createHiveStruct(nonNullType.getFields(), supportTimestamp, doFormat);
+      default:
+        throw new UnsupportedOperationException("Cannot convert type " + nonNullType.getType());
     }
   }
 
   /**
-   * Return a 'struct' Hive schema from a list of Parquet fields.
+   * Return a 'struct' Hive schema from a list of fields.
    *
-   * @param parquetFields : list of parquet fields
+   * @param fields : list of fields
    * @return : Equivalent 'struct' Hive schema
    */
-  private static String createHiveStruct(List<Type> parquetFields, boolean supportTimestamp, boolean doFormat) {
+  private static String createHiveStruct(List<HoodieSchemaField> fields, boolean supportTimestamp, boolean doFormat) {
     StringBuilder struct = new StringBuilder();
     struct.append(doFormat ? "STRUCT< " : "STRUCT<");
-    for (Type field : parquetFields) {
+    for (HoodieSchemaField field : fields) {
       // TODO: struct field name is only translated to support special char($)
       // We will need to extend it to other collection type
-      struct.append(hiveCompatibleFieldName(field.getName(), true, doFormat)).append(doFormat ? " : " : ":");
-      struct.append(convertField(field, supportTimestamp, doFormat)).append(doFormat ? ", " : ",");
+      struct.append(hiveCompatibleFieldName(field.name(), true, doFormat)).append(doFormat ? " : " : ":");
+      struct.append(convertField(field.schema(), supportTimestamp, doFormat)).append(doFormat ? ", " : ",");
     }
     struct.delete(struct.length() - (doFormat ? 2 : 1), struct.length()); // Remove the last
     // ", "
@@ -383,44 +308,33 @@ public class HiveSchemaUtil {
   }
 
   /**
-   * Create a 'Map' schema from Parquet map field.
+   * Create a 'Map' schema from a map field.
    */
   private static String createHiveMap(String keyType, String valueType, boolean doFormat) {
     return (doFormat ? "MAP< " : "MAP<") + keyType + (doFormat ? ", " : ",") + valueType + ">";
   }
 
   /**
-   * Create an Array Hive schema from equivalent parquet list type.
+   * Create an Array Hive schema from equivalent list type.
    */
-  private static String createHiveArray(Type elementType, String elementName, boolean supportTimestamp, boolean doFormat) {
-    StringBuilder array = new StringBuilder();
-    array.append(doFormat ? "ARRAY< " : "ARRAY<");
-    if (elementType.isPrimitive()) {
-      array.append(convertField(elementType, supportTimestamp, doFormat));
-    } else {
-      final GroupType groupType = elementType.asGroupType();
-      final List<Type> groupFields = groupType.getFields();
-      if (groupFields.size() > 1 || (groupFields.size() == 1
-          && (elementType.getName().equals("array") || elementType.getName().equals(elementName + "_tuple")))) {
-        array.append(convertField(elementType, supportTimestamp, doFormat));
-      } else {
-        array.append(convertField(groupType.getFields().get(0), supportTimestamp, doFormat));
-      }
-    }
-    array.append(">");
-    return array.toString();
+  private static String createHiveArray(HoodieSchema elementSchema, boolean supportTimestamp, boolean doFormat) {
+    return new StringBuilder()
+        .append(doFormat ? "ARRAY< " : "ARRAY<")
+        .append(convertField(elementSchema, supportTimestamp, doFormat))
+        .append(">")
+        .toString();
   }
 
-  public static String generateSchemaString(MessageType storageSchema) throws IOException {
-    return generateSchemaString(storageSchema, Collections.EMPTY_LIST);
+  public static String generateSchemaString(HoodieSchema storageSchema) throws IOException {
+    return generateSchemaString(storageSchema, Collections.emptyList());
   }
 
-  public static String generateSchemaString(MessageType storageSchema, List<String> colsToSkip) throws IOException {
+  public static String generateSchemaString(HoodieSchema storageSchema, List<String> colsToSkip) throws IOException {
     return generateSchemaString(storageSchema, colsToSkip, false);
   }
 
-  public static String generateSchemaString(MessageType storageSchema, List<String> colsToSkip, boolean supportTimestamp) throws IOException {
-    Map<String, String> hiveSchema = convertParquetSchemaToHiveSchema(storageSchema, supportTimestamp);
+  public static String generateSchemaString(HoodieSchema storageSchema, List<String> colsToSkip, boolean supportTimestamp) throws IOException {
+    Map<String, String> hiveSchema = convertSchemaToHiveSchema(storageSchema, supportTimestamp);
     StringBuilder columns = new StringBuilder();
     for (Map.Entry<String, String> hiveSchemaEntry : hiveSchema.entrySet()) {
       if (!colsToSkip.contains(removeSurroundingTick(hiveSchemaEntry.getKey()))) {
@@ -433,10 +347,10 @@ public class HiveSchemaUtil {
     return columns.toString();
   }
 
-  public static String generateCreateDDL(String tableName, MessageType storageSchema, HiveSyncConfig config, String inputFormatClass,
+  public static String generateCreateDDL(String tableName, HoodieSchema storageSchema, HiveSyncConfig config, String inputFormatClass,
                                          String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
                                          Map<String, String> tableProperties) throws IOException {
-    Map<String, String> hiveSchema = convertParquetSchemaToHiveSchema(storageSchema, config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
+    Map<String, String> hiveSchema = convertSchemaToHiveSchema(storageSchema, config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
     String columns = generateSchemaString(storageSchema, config.getSplitStrings(META_SYNC_PARTITION_FIELDS), config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
 
     List<String> partitionFields = new ArrayList<>();

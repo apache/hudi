@@ -23,12 +23,12 @@ import org.apache.hudi.avro.AvroRecordSerializer;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordSerializer;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -43,12 +43,12 @@ import java.util.HashMap;
 public class TestBufferedRecordSerializer {
   @Test
   void testAvroRecordSerAndDe() throws IOException {
-    Schema schema = SchemaTestUtil.getSimpleSchema();
-    GenericRecord record = new GenericData.Record(schema);
+    HoodieSchema schema = SchemaTestUtil.getSimpleSchema();
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     record.put("name", "lily");
     record.put("favorite_number", 100);
     record.put("favorite_color", "red");
-    AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema);
+    AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema.toAvroSchema());
     byte[] avroBytes = avroRecordSerializer.serialize(record);
     IndexedRecord result = avroRecordSerializer.deserialize(avroBytes, 1);
     Assertions.assertEquals(record, result);
@@ -64,14 +64,14 @@ public class TestBufferedRecordSerializer {
 
   @Test
   void testBufferedRecordSerAndDe() throws IOException {
-    Schema schema = SchemaTestUtil.getSimpleSchema();
-    GenericRecord record = new GenericData.Record(schema);
+    HoodieSchema schema = SchemaTestUtil.getSimpleSchema();
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     record.put("name", "lily");
     record.put("favorite_number", 100);
     record.put("favorite_color", "red");
     BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", 100, record, 1, null);
 
-    AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema);
+    AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema.toAvroSchema());
     BufferedRecordSerializer<IndexedRecord> bufferedRecordSerializer = new BufferedRecordSerializer<>(avroRecordSerializer);
 
     byte[] bytes = bufferedRecordSerializer.serialize(bufferedRecord);
@@ -100,12 +100,12 @@ public class TestBufferedRecordSerializer {
   @ParameterizedTest
   @EnumSource(value = HoodieOperation.class,  names = {"UPDATE_BEFORE", "DELETE"})
   void testDeleteRecordSerAndDe(HoodieOperation hoodieOperation) throws IOException {
-    Schema schema = SchemaTestUtil.getSimpleSchema();
+    HoodieSchema schema = SchemaTestUtil.getSimpleSchema();
     DeleteRecord record = DeleteRecord.create("id", "partition", 100);
     BufferedRecord<IndexedRecord> bufferedRecord = BufferedRecords.fromDeleteRecord(record, AvroRecordContext.getFieldAccessorInstance());
     bufferedRecord.setHoodieOperation(hoodieOperation);
 
-    AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema);
+    AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema.toAvroSchema());
     BufferedRecordSerializer<IndexedRecord> bufferedRecordSerializer = new BufferedRecordSerializer<>(avroRecordSerializer);
 
     byte[] bytes = bufferedRecordSerializer.serialize(bufferedRecord);

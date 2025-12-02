@@ -21,14 +21,14 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -170,13 +170,16 @@ class TestHoodieTableMetadataUtil {
 
   @Test
   void testFiltersOutTimestampMillisColumns() {
-    Schema tableSchema = SchemaBuilder.record("record").fields()
-        .requiredString("name")
-        .name("created_at").type(
-            LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))
-        ).noDefault()
-        .requiredInt("age")
-        .endRecord();
+    HoodieSchema tableSchema = HoodieSchema.createRecord(
+        "record",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("created_at", HoodieSchema.createTimestampMillis()),
+            HoodieSchemaField.of("age", HoodieSchema.create(HoodieSchemaType.INT))
+        )
+    );
 
     // Case 1: Verify timestamp-millis field is excluded
     List<String> inputCols = Arrays.asList("name", "created_at", "age");
@@ -232,25 +235,39 @@ class TestHoodieTableMetadataUtil {
 
   @Test
   void testFilterNestedLogicalTimestampColumn() {
-    Schema nestedSchema = SchemaBuilder.record("RootRecord").fields()
-        .name("user").type(
-            SchemaBuilder.record("UserRecord").fields()
-                .name("profile").type(
-                    SchemaBuilder.record("ProfileRecord").fields()
-                        .name("ts_millis").type(
-                            LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG))
-                        ).noDefault()
-                        .name("ts_micros").type(
-                            LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))
-                        ).noDefault()
-                        .name("display_name").type().stringType().noDefault()
-                        .endRecord()
-                ).noDefault()
-                .name("age").type().intType().noDefault()
-                .endRecord()
-        ).noDefault()
-        .name("event_id").type().stringType().noDefault()
-        .endRecord();
+    // Create ProfileRecord (innermost nested record)
+    HoodieSchema profileRecordSchema = HoodieSchema.createRecord(
+        "ProfileRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("ts_millis", HoodieSchema.createTimestampMillis()),
+            HoodieSchemaField.of("ts_micros", HoodieSchema.createTimestampMicros()),
+            HoodieSchemaField.of("display_name", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    // Create UserRecord (middle level nested record)
+    HoodieSchema userRecordSchema = HoodieSchema.createRecord(
+        "UserRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("profile", profileRecordSchema),
+            HoodieSchemaField.of("age", HoodieSchema.create(HoodieSchemaType.INT))
+        )
+    );
+
+    // Create RootRecord (top level)
+    HoodieSchema nestedSchema = HoodieSchema.createRecord(
+        "RootRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("user", userRecordSchema),
+            HoodieSchemaField.of("event_id", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
 
     List<String> inputCols = Arrays.asList(
         "event_id",
@@ -281,37 +298,27 @@ class TestHoodieTableMetadataUtil {
   @Test
   void testIsTimestampMillisField() {
     // Test timestamp-millis
-    Schema timestampMillisSchema = Schema.create(Schema.Type.LONG);
-    LogicalTypes.timestampMillis().addToSchema(timestampMillisSchema);
+    HoodieSchema timestampMillisSchema = HoodieSchema.createTimestampMillis();
     assertTrue(HoodieTableMetadataUtil.isTimestampMillisField(timestampMillisSchema),
         "Should return true for timestamp-millis");
 
-    // Test local-timestamp-millis
-    Schema localTimestampMillisSchema = Schema.create(Schema.Type.LONG);
-    LogicalTypes.localTimestampMillis().addToSchema(localTimestampMillisSchema);
-    assertTrue(HoodieTableMetadataUtil.isTimestampMillisField(localTimestampMillisSchema),
-        "Should return true for local-timestamp-millis");
-
     // Test nullable timestamp-millis
-    Schema nullableTimestampMillisSchema = Schema.createUnion(
-        Schema.create(Schema.Type.NULL),
-        timestampMillisSchema);
+    HoodieSchema nullableTimestampMillisSchema = HoodieSchema.createNullable(HoodieSchema.createTimestampMillis());
     assertTrue(HoodieTableMetadataUtil.isTimestampMillisField(nullableTimestampMillisSchema),
         "Should return true for nullable timestamp-millis");
 
     // Test timestamp-micros (should return false)
-    Schema timestampMicrosSchema = Schema.create(Schema.Type.LONG);
-    LogicalTypes.timestampMicros().addToSchema(timestampMicrosSchema);
+    HoodieSchema timestampMicrosSchema = HoodieSchema.createTimestampMicros();
     assertFalse(HoodieTableMetadataUtil.isTimestampMillisField(timestampMicrosSchema),
         "Should return false for timestamp-micros");
 
     // Test regular long (should return false)
-    Schema longSchema = Schema.create(Schema.Type.LONG);
+    HoodieSchema longSchema = HoodieSchema.create(HoodieSchemaType.LONG);
     assertFalse(HoodieTableMetadataUtil.isTimestampMillisField(longSchema),
         "Should return false for regular long");
 
     // Test string (should return false)
-    Schema stringSchema = Schema.create(Schema.Type.STRING);
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
     assertFalse(HoodieTableMetadataUtil.isTimestampMillisField(stringSchema),
         "Should return false for string");
   }

@@ -23,6 +23,7 @@ import org.apache.hudi.client.timeline.versioning.v1.TimelineArchiverV1;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
@@ -34,7 +35,6 @@ import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieWriteableTestTable;
 
-import org.apache.avro.Schema;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -47,7 +47,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
-  private static final Schema SCHEMA = getSchemaFromResource(TestHoodieTimelineArchiver.class, "/exampleSchema.avsc", true);
+  private static final HoodieSchema SCHEMA = getSchemaFromResource(TestHoodieTimelineArchiver.class, "/exampleSchema.avsc", true);
 
   @BeforeEach
   void setUp() throws Exception {
@@ -70,7 +70,7 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
         .build();
     HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
     HoodieStorage hoodieStorage = new HoodieHadoopStorage(basePath, metaClient.getStorageConf());
-    HoodieWriteableTestTable testTable = new HoodieWriteableTestTable(basePath, hoodieStorage, metaClient, SCHEMA, null, null, Option.of(context));
+    HoodieWriteableTestTable testTable = new HoodieWriteableTestTable(basePath, hoodieStorage, metaClient, SCHEMA.toAvroSchema(), null, null, Option.of(context));
     testTable.addCommit(InProcessTimeGenerator.createNewInstantTime());
     testTable.addCommit(InProcessTimeGenerator.createNewInstantTime());
     testTable.addCommit(InProcessTimeGenerator.createNewInstantTime());

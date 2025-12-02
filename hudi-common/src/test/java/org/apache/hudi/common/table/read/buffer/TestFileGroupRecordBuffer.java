@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -36,7 +37,6 @@ import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -80,7 +80,7 @@ class TestFileGroupRecordBuffer {
       + "{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\"}"
       + "]"
       + "}";
-  private Schema schema = new Schema.Parser().parse(schemaString);
+  private HoodieSchema schema = HoodieSchema.parse(schemaString);
   private final HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
   private final RecordContext recordContext = mock(RecordContext.class);
   private final FileGroupReaderSchemaHandler schemaHandler =
@@ -94,7 +94,7 @@ class TestFileGroupRecordBuffer {
     props = new TypedProperties();
     when(readerContext.getRecordContext()).thenReturn(recordContext);
     when(readerContext.getSchemaHandler()).thenReturn(schemaHandler);
-    when(schemaHandler.getRequiredSchema()).thenReturn(schema);
+    when(schemaHandler.getRequiredSchema()).thenReturn(schema.toAvroSchema());
     when(schemaHandler.getDeleteContext()).thenReturn(new DeleteContext(props, schema));
     when(readerContext.getRecordMerger()).thenReturn(Option.empty());
     when(readerContext.getRecordSerializer()).thenReturn(new DefaultSerializer<>());
@@ -112,7 +112,7 @@ class TestFileGroupRecordBuffer {
         HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD,
         "colA", "colB", "colC", "colD"));
 
-    Schema dataSchema = SchemaTestUtil.getSchemaFromFields(dataSchemaFields);
+    HoodieSchema dataSchema = SchemaTestUtil.getSchemaFromFields(dataSchemaFields);
 
     TypedProperties props = new TypedProperties();
     if (configureCustomDeleteKey) {
@@ -131,7 +131,7 @@ class TestFileGroupRecordBuffer {
   void testIsCustomDeleteRecord() {
     String customDeleteKey = "op";
     String customDeleteValue = "d";
-    GenericRecord record = new GenericData.Record(schema);
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     record.put("id", "12345");
     record.put("ts", System.currentTimeMillis());
     record.put(customDeleteKey, "d");
@@ -140,6 +140,7 @@ class TestFileGroupRecordBuffer {
     props.setProperty(DELETE_KEY, customDeleteKey);
     props.setProperty(DELETE_MARKER, customDeleteValue);
     DeleteContext deleteContext = new DeleteContext(props, schema);
+    deleteContext.withReaderSchema(schema);
     when(recordContext.getValue(any(), any(), any())).thenReturn(null);
     assertFalse(recordContext.isDeleteRecord(record, deleteContext));
 
@@ -167,7 +168,7 @@ class TestFileGroupRecordBuffer {
         );
 
     // CASE 1: With custom delete marker.
-    GenericRecord record = new GenericData.Record(schema);
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     record.put("id", "12345");
     record.put("ts", System.currentTimeMillis());
     record.put("op", "d");
@@ -184,7 +185,7 @@ class TestFileGroupRecordBuffer {
     assertEquals(1, deleteRecord.getOrderingValue());
 
     // CASE 2: With _hoodie_is_deleted is true.
-    GenericRecord anotherRecord = new GenericData.Record(schema);
+    GenericRecord anotherRecord = new GenericData.Record(schema.toAvroSchema());
     anotherRecord.put("id", "54321");
     anotherRecord.put("ts", System.currentTimeMillis());
     anotherRecord.put("op", "i");

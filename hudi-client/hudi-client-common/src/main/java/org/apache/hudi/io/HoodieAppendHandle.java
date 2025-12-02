@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -35,6 +34,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
@@ -65,7 +67,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.CommonClientUtils;
 import org.apache.hudi.util.Lazy;
 
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -163,7 +164,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             // When enabling writing partial updates to the data blocks in log files,
             // i.e., partial update schema is set, the writer schema is the partial
             // schema containing the updated fields only
-            ? Option.of(new Schema.Parser().parse(config.getPartialUpdateSchema()))
+            ? Option.of(HoodieSchema.parse(config.getPartialUpdateSchema()))
             : Option.empty(),
         taskContextSupplier,
         preserveMetadata);
@@ -295,7 +296,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private void bufferRecord(HoodieRecord<T> hoodieRecord) {
-    Schema schema = useWriterSchema ? writeSchemaWithMetaFields : writeSchema;
+    HoodieSchema schema = useWriterSchema ? writeSchemaWithMetaFields : writeSchema;
     Option<Map<String, String>> recordMetadata = getRecordMetadata(hoodieRecord, schema, recordProperties);
     try {
       // Pass the isUpdateRecord to the props for HoodieRecordPayload to judge
@@ -439,8 +440,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           .getColumnsToIndex(hoodieTable.getMetaClient().getTableConfig(),
               config.getMetadataConfig(), Lazy.eagerly(Option.of(writeSchemaWithMetaFields)),
               Option.of(this.recordMerger.getRecordType()), indexVersion).keySet());
-      final List<Pair<String, Schema.Field>> fieldsToIndex = columnsToIndexSet.stream()
-          .map(fieldName -> HoodieAvroUtils.getSchemaForField(writeSchemaWithMetaFields, fieldName)).collect(Collectors.toList());
+      final List<Pair<String, HoodieSchemaField>> fieldsToIndex = columnsToIndexSet.stream()
+          .map(fieldName -> HoodieSchemaUtils.getNestedField(writeSchemaWithMetaFields, fieldName))
+          .filter(Option::isPresent)
+          .map(Option::get)
+          .collect(Collectors.toList());
       try {
         Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
             collectColumnRangeMetadata(recordList.iterator(), fieldsToIndex, stat.getPath(), writeSchemaWithMetaFields, storage.getConf(),
@@ -517,7 +521,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   @Override
-  protected void doWrite(HoodieRecord record, Schema schema, TypedProperties props) {
+  protected void doWrite(HoodieRecord record, HoodieSchema schema, TypedProperties props) {
     Option<Map<String, String>> recordMetadata = record.getMetadata();
     try {
       init(record);
@@ -628,16 +632,16 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     numberOfRecords++;
   }
 
-  private void bufferInsertAndUpdate(Schema schema, HoodieRecord<T> hoodieRecord, boolean isUpdateRecord) throws IOException {
+  private void bufferInsertAndUpdate(HoodieSchema schema, HoodieRecord<T> hoodieRecord, boolean isUpdateRecord) throws IOException {
     // Check if the record should be ignored (special case for [[ExpressionPayload]])
-    if (hoodieRecord.shouldIgnore(schema, recordProperties)) {
+    if (hoodieRecord.shouldIgnore(schema.toAvroSchema(), recordProperties)) {
       return;
     }
 
     // Prepend meta-fields into the record
     MetadataValues metadataValues = populateMetadataFields(hoodieRecord);
     HoodieRecord populatedRecord =
-        hoodieRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, recordProperties);
+        hoodieRecord.prependMetaFields(schema.toAvroSchema(), writeSchemaWithMetaFields.toAvroSchema(), metadataValues, recordProperties);
 
     // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
     //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
@@ -659,7 +663,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     recordsDeleted++;
 
     // store ordering value with Java type.
-    final Comparable<?> orderingVal = hoodieRecord.getOrderingValueAsJava(writeSchema, recordProperties, orderingFields);
+    final Comparable<?> orderingVal = hoodieRecord.getOrderingValueAsJava(writeSchema.toAvroSchema(), recordProperties, orderingFields);
     long position = baseFileInstantTimeOfPositions.isPresent() ? hoodieRecord.getCurrentPosition() : -1L;
     recordsToDeleteWithPositions.add(Pair.of(DeleteRecord.create(hoodieRecord.getKey(), orderingVal), position));
   }

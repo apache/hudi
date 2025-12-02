@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -115,6 +116,31 @@ public class TableSchemaResolver {
 
   private Option<Schema> getTableAvroSchemaFromDataFileInternal() {
     return getTableParquetSchemaFromDataFile();
+  }
+
+  /**
+   * Gets full schema (user + metadata) for a hoodie table as HoodieSchema.
+   * Delegates to getTableAvroSchema and wraps the result in a HoodieSchema.
+   *
+   * @return HoodieSchema for this table
+   * @throws Exception
+   */
+  public HoodieSchema getTableSchema() throws Exception {
+    Schema avroSchema = getTableAvroSchema(metaClient.getTableConfig().populateMetaFields());
+    return HoodieSchema.fromAvroSchema(avroSchema);
+  }
+
+  /**
+   * Gets full schema (user + metadata) for a hoodie table as HoodieSchema.
+   * Delegates to getTableAvroSchema and wraps the result in a HoodieSchema.
+   *
+   * @param includeMetadataFields choice if include metadata fields
+   * @return HoodieSchema for this table
+   * @throws Exception
+   */
+  public HoodieSchema getTableSchema(boolean includeMetadataFields) throws Exception {
+    Schema avroSchema = getTableAvroSchema(includeMetadataFields);
+    return HoodieSchema.fromAvroSchema(avroSchema);
   }
 
   /**
@@ -332,7 +358,7 @@ public class TableSchemaResolver {
           lastBlock = (HoodieDataBlock) block;
         }
       }
-      return lastBlock != null ? lastBlock.getSchema() : null;
+      return lastBlock != null ? lastBlock.getSchema().toAvroSchema() : null;
     }
   }
 

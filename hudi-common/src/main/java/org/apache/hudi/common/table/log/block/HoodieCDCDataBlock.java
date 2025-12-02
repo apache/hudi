@@ -19,10 +19,9 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.SeekableDataInputStream;
-
-import org.apache.avro.Schema;
 
 import java.util.HashMap;
 import java.util.List;
@@ -39,7 +38,7 @@ public class HoodieCDCDataBlock extends HoodieAvroDataBlock {
       Option<byte[]> content,
       boolean readBlockLazily,
       HoodieLogBlockContentLocation logBlockContentLocation,
-      Schema readerSchema,
+      HoodieSchema readerSchema,
       Map<HeaderMetadataType, String> header,
       String keyField) {
     super(inputStreamSupplier, content, readBlockLazily, logBlockContentLocation,

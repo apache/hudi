@@ -34,7 +34,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
-import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 
 /**

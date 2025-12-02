@@ -83,10 +83,9 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
   public void testAvroFileSinkWriter() throws IOException {
     // 1. Create a Avro File Sink Writer
     DeltaInputWriter<GenericRecord> fileSinkWriter =
-        new AvroFileDeltaInputWriter(jsc.hadoopConfiguration(), basePath + "/input", schemaProvider.getSourceSchema()
-            .toString(), 1024 * 1024L);
+        new AvroFileDeltaInputWriter(jsc.hadoopConfiguration(), basePath + "/input", schemaProvider.getSourceHoodieSchema().toString(), 1024 * 1024L);
     GenericRecordFullPayloadGenerator payloadGenerator =
-        new GenericRecordFullPayloadGenerator(schemaProvider.getSourceSchema());
+        new GenericRecordFullPayloadGenerator(schemaProvider.getSourceHoodieSchema().toAvroSchema());
     // 2. Generate 100 avro payloads and write them to an avro file
     IntStream.range(0, 100).forEach(a -> {
       try {
@@ -108,7 +107,7 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
     List<String> paths = Arrays.asList(fs.globStatus(new Path(basePath + "/*/*.avro")))
         .stream().map(f -> f.getPath().toString()).collect(Collectors.toList());
     JavaRDD<GenericRecord> writtenRecords =
-        SparkBasedReader.readAvro(sparkSession, schemaProvider.getSourceSchema().toString(), paths, Option.empty(),
+        SparkBasedReader.readAvro(sparkSession, schemaProvider.getSourceHoodieSchema().toString(), paths, Option.empty(),
             Option.empty());
     // Number of records written should be 100
     assertEquals(writtenRecords.count(), 100);
@@ -121,10 +120,10 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
     // 1. Create a Avro File Sink Writer
     DeltaInputWriter<GenericRecord> fileSinkWriter =
         new AvroFileDeltaInputWriter(jsc.hadoopConfiguration(), basePath,
-            schemaProvider.getSourceSchema().toString(),
+            schemaProvider.getSourceHoodieSchema().toString(),
             1024 * 1024L);
     GenericRecordFullPayloadGenerator payloadGenerator =
-        new GenericRecordFullPayloadGenerator(schemaProvider.getSourceSchema());
+        new GenericRecordFullPayloadGenerator(schemaProvider.getSourceHoodieSchema().toAvroSchema());
     // 2. Generate 100 avro payloads and write them to an avro file
     IntStream.range(0, 100).forEach(a -> {
       try {

@@ -21,7 +21,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.client.validator.{SqlQueryEqualityPreCommitValidator, SqlQueryInequalityPreCommitValidator}
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -72,28 +72,21 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
 
   @ParameterizedTest
   @CsvSource(value = Array(
-    "true|org.apache.hudi.keygen.SimpleKeyGenerator|_row_key|true",
-    "true|org.apache.hudi.keygen.ComplexKeyGenerator|_row_key,fare.currency|true",
-    "true|org.apache.hudi.keygen.TimestampBasedKeyGenerator|_row_key|true",
-    "false|org.apache.hudi.keygen.SimpleKeyGenerator|_row_key|true",
-    "false|org.apache.hudi.keygen.ComplexKeyGenerator|_row_key,fare.currency|true",
-    "false|org.apache.hudi.keygen.TimestampBasedKeyGenerator|_row_key|true",
-    "true|org.apache.hudi.keygen.SimpleKeyGenerator|_row_key|false",
-    "true|org.apache.hudi.keygen.ComplexKeyGenerator|_row_key,fare.currency|false",
-    "true|org.apache.hudi.keygen.TimestampBasedKeyGenerator|_row_key|false",
-    "false|org.apache.hudi.keygen.SimpleKeyGenerator|_row_key|false",
-    "false|org.apache.hudi.keygen.ComplexKeyGenerator|_row_key,fare.currency|false",
-    "false|org.apache.hudi.keygen.TimestampBasedKeyGenerator|_row_key|false"
+    "true|org.apache.hudi.keygen.SimpleKeyGenerator|_row_key",
+    "true|org.apache.hudi.keygen.ComplexKeyGenerator|_row_key,fare.currency",
+    "true|org.apache.hudi.keygen.TimestampBasedKeyGenerator|_row_key",
+    "false|org.apache.hudi.keygen.SimpleKeyGenerator|_row_key",
+    "false|org.apache.hudi.keygen.ComplexKeyGenerator|_row_key,fare.currency",
+    "false|org.apache.hudi.keygen.TimestampBasedKeyGenerator|_row_key"
   ), delimiter = '|')
-  def testCopyOnWriteStorage(isMetadataEnabled: Boolean, keyGenClass: String, recordKeys: String, fileGroupReaderEnabled: Boolean): Unit = {
+  def testCopyOnWriteStorage(isMetadataEnabled: Boolean, keyGenClass: String, recordKeys: String): Unit = {
     var options: Map[String, String] = commonOpts ++ Map(
       HoodieMetadataConfig.ENABLE.key -> String.valueOf(isMetadataEnabled),
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> keyGenClass,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeys,
       HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> "true")
 
-    val readOptions = Map(HoodieMetadataConfig.ENABLE.key() -> String.valueOf(isMetadataEnabled),
-      HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key() -> String.valueOf(fileGroupReaderEnabled))
+    val readOptions = Map(HoodieMetadataConfig.ENABLE.key() -> String.valueOf(isMetadataEnabled))
 
     val isTimestampBasedKeyGen: Boolean = classOf[TimestampBasedKeyGenerator].getName.equals(keyGenClass)
     if (isTimestampBasedKeyGen) {
