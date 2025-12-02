@@ -22,6 +22,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 
 import org.apache.avro.generic.GenericRecord;
 
+import org.apache.hudi.common.util.Option;
+
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
@@ -54,7 +56,7 @@ public interface ArchivedTimelineLoader extends Serializable {
    * @param loadMode       The load mode.
    * @param commitsFilter  Filter of the instant type.
    * @param recordConsumer Consumer of the instant record payload.
-   * @param limit          Maximum number of instants to load. Use -1 for no limit.
+   * @param limit          Optional maximum number of instants to load. Empty for no limit.
    */
   default void loadInstants(
       HoodieTableMetaClient metaClient,
@@ -62,7 +64,7 @@ public interface ArchivedTimelineLoader extends Serializable {
       HoodieArchivedTimeline.LoadMode loadMode,
       Function<GenericRecord, Boolean> commitsFilter,
       BiConsumer<String, GenericRecord> recordConsumer,
-      int limit) {
+      Option<Integer> limit) {
     // Default implementation calls the method without limit for backward compatibility
     loadInstants(metaClient, filter, loadMode, commitsFilter, recordConsumer);
   }

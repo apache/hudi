@@ -272,7 +272,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();
     Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer = Option.ofNullable(getInstantDetailsFunc(loadMode));
     timelineLoader.loadInstants(metaClient, filter, loadMode, commitsFilter,
-        (instantTime, avroRecord) -> instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, instantDetailsConsumer)), -1);
+        (instantTime, avroRecord) -> instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, instantDetailsConsumer)), Option.empty());
     List<HoodieInstant> result = new ArrayList<>(instantsInRange.values());
     Collections.sort(result);
     return result;
@@ -287,7 +287,7 @@ public class ArchivedTimelineV2 extends BaseTimelineV2 implements HoodieArchived
     Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();
     Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer = Option.ofNullable(getInstantDetailsFunc(loadMode));
     timelineLoader.loadInstants(metaClient, null, loadMode, commitsFilter,
-        (instantTime, avroRecord) -> instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, instantDetailsConsumer)), limit);
+        (instantTime, avroRecord) -> instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, instantDetailsConsumer)), Option.of(limit));
     List<HoodieInstant> collectedInstants = new ArrayList<>(instantsInRange.values());
     Collections.sort(collectedInstants);
     appendLoadedInstants(collectedInstants);

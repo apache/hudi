@@ -73,7 +73,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
                            HoodieArchivedTimeline.LoadMode loadMode,
                            Function<GenericRecord, Boolean> commitsFilter,
                            BiConsumer<String, GenericRecord> recordConsumer) {
-    loadInstants(metaClient, filter, Option.empty(), loadMode, commitsFilter, recordConsumer, -1);
+    loadInstants(metaClient, filter, Option.empty(), loadMode, commitsFilter, recordConsumer, Option.empty());
   }
 
   @Override
@@ -82,7 +82,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
                            HoodieArchivedTimeline.LoadMode loadMode,
                            Function<GenericRecord, Boolean> commitsFilter,
                            BiConsumer<String, GenericRecord> recordConsumer,
-                           int limit) {
+                           Option<Integer> limit) {
     loadInstants(metaClient, filter, Option.empty(), loadMode, commitsFilter, recordConsumer, limit);
   }
 
@@ -92,10 +92,10 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
                            HoodieArchivedTimeline.LoadMode loadMode,
                            Function<GenericRecord, Boolean> commitsFilter,
                            BiConsumer<String, GenericRecord> recordConsumer,
-                           int limit) {
+                           Option<Integer> limit) {
     Set<String> instantsInRange = new HashSet<>();
     AtomicInteger loadedCount = new AtomicInteger(0);
-    boolean hasLimit = limit > 0;
+    boolean hasLimit = limit.isPresent() && limit.get() > 0;
     
     try {
       // List all files
@@ -106,7 +106,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
       entryList.sort(new ArchiveFileVersionComparator());
 
       for (StoragePathInfo fs : entryList) {
-        if (hasLimit && loadedCount.get() >= limit) {
+        if (hasLimit && loadedCount.get() >= limit.get()) {
           break;
         }
         
@@ -118,10 +118,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
             new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
           int instantsInPreviousFile = instantsInRange.size();
           // Read the avro blocks
-          while (reader.hasNext()) {
-            if (hasLimit && loadedCount.get() >= limit) {
-              break;
-            }
+          while (reader.hasNext() && (!hasLimit || loadedCount.get() < limit.get())) {
             HoodieLogBlock block = reader.next();
             if (block instanceof HoodieAvroDataBlock) {
               HoodieAvroDataBlock avroBlock = (HoodieAvroDataBlock) block;
@@ -133,7 +130,7 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
                     .map(r -> (GenericRecord) r.getData())
                     .filter(commitsFilter::apply)
                     .forEach(r -> {
-                      if (hasLimit && loadedCount.get() >= limit) {
+                      if (hasLimit && loadedCount.get() >= limit.get()) {
                         return;
                       }
                       String instantTime = r.get(HoodieTableMetaClient.COMMIT_TIME_KEY).toString();

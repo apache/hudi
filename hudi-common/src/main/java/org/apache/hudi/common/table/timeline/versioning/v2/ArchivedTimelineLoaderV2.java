@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ArchivedTimelineLoader;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.LSMTimeline;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
@@ -56,7 +57,7 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
                            HoodieArchivedTimeline.LoadMode loadMode,
                            Function<GenericRecord, Boolean> commitsFilter,
                            BiConsumer<String, GenericRecord> recordConsumer) {
-    loadInstants(metaClient, filter, loadMode, commitsFilter, recordConsumer, -1);
+    loadInstants(metaClient, filter, loadMode, commitsFilter, recordConsumer, Option.empty());
   }
 
   @Override
@@ -65,12 +66,12 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
                            HoodieArchivedTimeline.LoadMode loadMode,
                            Function<GenericRecord, Boolean> commitsFilter,
                            BiConsumer<String, GenericRecord> recordConsumer,
-                           int limit) {
+                           Option<Integer> limit) {
     try {
       // List all files
       List<String> fileNames = LSMTimeline.latestSnapshotManifest(metaClient, metaClient.getArchivePath()).getFileNames();
 
-      boolean hasLimit = limit > 0;
+      boolean hasLimit = limit.isPresent() && limit.get() > 0;
       AtomicInteger loadedCount = new AtomicInteger(0);
       
       List<String> filteredFiles = new ArrayList<>();
@@ -93,7 +94,7 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
           ? filteredFiles.stream()
           : filteredFiles.parallelStream();
       fileStream.forEach(fileName -> {
-        if (hasLimit && loadedCount.get() >= limit) {
+        if (hasLimit && loadedCount.get() >= limit.get()) {
           return;
         }
         // Read the archived file
@@ -103,10 +104,7 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
           //TODO boundary to revisit in later pr to use HoodieSchema directly
           try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema()),
                   HoodieSchema.fromAvroSchema(readSchema))) {            
-            while (iterator.hasNext()) {
-              if (hasLimit && loadedCount.get() >= limit) {
-                break; // Stop reading this file
-              }
+            while (iterator.hasNext() && (!hasLimit || loadedCount.get() < limit.get())) {
               GenericRecord record = (GenericRecord) iterator.next();
               String instantTime = record.get(INSTANT_TIME_ARCHIVED_META_FIELD).toString();
               if ((filter == null || filter.isInRange(instantTime))

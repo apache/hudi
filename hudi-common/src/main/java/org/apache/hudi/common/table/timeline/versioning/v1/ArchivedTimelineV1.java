@@ -288,7 +288,7 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
   private List<HoodieInstant> loadInstants(HoodieArchivedTimeline.TimeRangeFilter filter, LogFileFilter logFileFilter, boolean loadInstantDetails, Function<GenericRecord, Boolean> commitsFilter) {
     InstantsLoader loader = new InstantsLoader(loadInstantDetails);
     timelineLoader.loadInstants(
-        metaClient, filter, Option.ofNullable(logFileFilter), LoadMode.PLAN, commitsFilter, loader, -1);
+        metaClient, filter, Option.ofNullable(logFileFilter), LoadMode.PLAN, commitsFilter, loader, Option.empty());
     return loader.getInstantsInRangeCollected().values()
         .stream().flatMap(Collection::stream).sorted().collect(Collectors.toList());
   }
@@ -296,7 +296,7 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
   private void loadInstantsWithLimit(int limit, boolean loadInstantDetails, Function<GenericRecord, Boolean> commitsFilter) {
     InstantsLoader loader = new InstantsLoader(loadInstantDetails);
     timelineLoader.loadInstants(
-        metaClient, null, Option.empty(), LoadMode.PLAN, commitsFilter, loader, limit);
+        metaClient, null, Option.empty(), LoadMode.PLAN, commitsFilter, loader, Option.of(limit));
     List<HoodieInstant> collectedInstants = loader.getInstantsInRangeCollected().values()
         .stream()
         .flatMap(Collection::stream)
