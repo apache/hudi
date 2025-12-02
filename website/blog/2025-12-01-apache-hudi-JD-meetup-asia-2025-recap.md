@@ -3,7 +3,7 @@ title: "Next Generation Lakehouse: New Engine for the Intelligent Future | Apach
 excerpt: "A comprehensive recap of the Apache Hudi Meetup Asia held at JD.com headquarters, featuring insights from Onehouse, JD.com, Kuaishou, and Huawei on Hudi 1.1, AI-native architectures, and production optimizations."
 author: "Team at JD.com"
 category: blog
-image: /assets/images/blog/2025-12-01-apache-hudi-meetup-asia-2024-recap/jdpost-image7.jpg
+image: /assets/images/blog/2025-12-01-apache-hudi-JD-meetup-asia-2025-recap/jdpost-image7.jpg
 tags:
   - hudi
   - meetup
@@ -19,7 +19,7 @@ _This blog was translated from the [original blog in Chinese](https://mp.weixin.
 
 Recently, the Apache Hudi Meetup Asia, hosted by JD.com, was successfully held at JD.com Group headquarters. Four technical experts from Onehouse, JD.com, Kuaishou, and Huawei gathered together, not only bringing a preview of Apache Hudi release 1.1, but also sharing their unique approaches to building data lakehouses. From AI scenario support to real-time data processing and cost optimization, each topic directly addressed the pain points that data engineers care about most.
 
-## Hudi Community Leader Joins Remotely
+## Hudi Community Leader Joined Remotely
 
 First, Vinoth Chandar, CEO & Founder of Onehouse and Apache Hudi PMC Chair, delivered the opening remarks via video. He stated that after eight years of development, Hudi has become an important cornerstone in the data lake domain, and its vision has transformed into widely recognized achievements in the industry. The 1.0 version released last year marked the project's entry into a mature stage, bringing many database-like capabilities to the lakehouse.
 
@@ -27,7 +27,7 @@ Currently, the community is steadily advancing the 1.x series of versions, focus
 
 Vinoth specially thanked JD.com for its significant contributions to Apache Hudi. Among the top 100 contributors, 6 were from JD.com. Finally, he also invited more developers to join this vibrant community to jointly promote innovation and development in data infrastructure.
 
-![image 1](/assets/images/blog/2025-12-01-apache-hudi-meetup-asia-2024-recap/jdpost-image1.png)
+![image 1](/assets/images/blog/2025-12-01-apache-hudi-JD-meetup-asia-2025-recap/jdpost-image1.png)
 
 ## JD Retail: Data Lake Technical Challenges and Outlook
 
@@ -39,7 +39,7 @@ At the AI level, with the arrival of the multimodal era, traditional solutions t
 
 The industry is looking forward to building a storage foundation through open-source technologies like Apache Hudi that can uniformly carry batch processing, stream computing, data analysis, and AI workloads.
 
-![image 2](/assets/images/blog/2025-12-01-apache-hudi-meetup-asia-2024-recap/jdpost-image2.jpg)
+![image 2](/assets/images/blog/2025-12-01-apache-hudi-JD-meetup-asia-2025-recap/jdpost-image2.jpg)
 
 ## Apache Hudi 1.1 Preview and AI-Native Lakehouse Evolution
 
@@ -51,7 +51,7 @@ In the then-upcoming 1.1 release (now released), Hudi has achieved several impor
 
 Facing new challenges brought by the AI era, Hudi is actively building a native AI data foundation. By supporting unstructured data storage, optimizing column group structures for multimodal data, providing built-in vector indexing capabilities, and building a unified storage layer that supports transactions and version control, Hudi is committed to providing highly real-time, traceable, and easily extensible data support for AI workflows. This series of evolutions will propel Apache Hudi from an excellent data lake framework to a core data infrastructure supporting the AI era.
 
-![image 3](/assets/images/blog/2025-12-01-apache-hudi-meetup-asia-2024-recap/jdpost-image3.jpg)
+![image 3](/assets/images/blog/2025-12-01-apache-hudi-JD-meetup-asia-2025-recap/jdpost-image3.jpg)
 
 ## Latest Architecture Evolution of Apache Hudi at JD.com
 
@@ -67,9 +67,9 @@ JD had deeply integrated these capabilities with business scenarios, applying th
 
 While promoting self-developed technology, JD also actively gave back to the open-source community, with a total of 109 contributed and merged PRs. In the future, the team will continue to deepen Hudi's application in the real-time data lake domain, providing stronger data support capabilities for business innovation.
 
-![image 4](/assets/images/blog/2025-12-01-apache-hudi-meetup-asia-2024-recap/jdpost-image4.jpg)
+![image 4](/assets/images/blog/2025-12-01-apache-hudi-JD-meetup-asia-2025-recap/jdpost-image4.jpg)
 
-## How Kuaishou's Real-time Lake Ingestion Empowers BI & AI Scenario Architecture Upgrade
+## How Kuaishou's Real-time Lake Ingestion Empowered BI & AI Scenario Architecture Upgrade
 
 In the session "How Kuaishou's Real-time Lake Ingestion Empowers BI & AI Scenario Architecture Upgrade," Wang Zeyu, Data Architecture R&D Engineer at Kuaishou, introduced Kuaishou's complete evolution path and practical experience in building a real-time data lake based on Apache Hudi.
 
@@ -79,7 +79,7 @@ At the AI storage architecture level, Kuaishou built a unified stream-batch data
 
 In the future, Kuaishou will continue to improve the data lake's service capabilities in training, retrieval, analysis, and other multi-scenarios, promoting the evolution of the data lake toward a more intelligent and unified direction. Kuaishou's practice fully proves that the real-time data lake architecture based on Hudi can effectively support the modernization and upgrade needs of large-scale BI and AI scenarios.
 
-![image 5](/assets/images/blog/2025-12-01-apache-hudi-meetup-asia-2024-recap/jdpost-image5.jpg)
+![image 5](/assets/images/blog/2025-12-01-apache-hudi-JD-meetup-asia-2025-recap/jdpost-image5.jpg)
 
 ## Deep Optimization and AI Exploration of Apache Hudi on Huawei Cloud
 
@@ -93,10 +93,10 @@ Hudi Native built a high-performance IO acceleration layer by rewriting Parquet 
 
 In ecosystem integration and AI exploration, Huawei built a management architecture supporting multimodal data. By using lake table formats to manage metadata of unstructured data, with actual files stored in object storage, it ensured ACID properties while avoiding data redundancy. At the same time, it integrated LanceDB to provide efficient vector retrieval capabilities, providing comprehensive data infrastructure support for AI application scenarios such as document retrieval and intelligent Q&A.
 
-![image 6](/assets/images/blog/2025-12-01-apache-hudi-meetup-asia-2024-recap/jdpost-image6.jpg)
+![image 6](/assets/images/blog/2025-12-01-apache-hudi-JD-meetup-asia-2025-recap/jdpost-image6.jpg)
 
 ## Conclusion
 
 This meetup made us believe that the vast ocean of data lakehouses could not be separated from the "collective effort" of the open-source community and enterprises. Those technologies tempered on the business battlefield ultimately gave back as nutrients nourishing the entire ecosystem. This may be the purest romance of technology: making complex things simple and making the impossible possible. The road ahead is full of imagination, and together, we are shaping a more elegant and powerful future for data processing.
 
-![image 7](/assets/images/blog/2025-12-01-apache-hudi-meetup-asia-2024-recap/jdpost-image7.jpg)
+![image 7](/assets/images/blog/2025-12-01-apache-hudi-JD-meetup-asia-2025-recap/jdpost-image7.jpg)
