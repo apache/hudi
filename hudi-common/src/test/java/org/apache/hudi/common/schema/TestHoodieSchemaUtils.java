@@ -398,7 +398,7 @@ public class TestHoodieSchemaUtils {
     assertNotNull(result);
     assertEquals("user.profile.ts_millis", result.getLeft());
     assertEquals("ts_millis", result.getRight().name());
-    assertEquals(HoodieSchemaType.LONG, result.getRight().schema().getType());
+    assertEquals(HoodieSchemaType.TIMESTAMP, result.getRight().schema().getType());
   }
 
   @Test
@@ -419,19 +419,19 @@ public class TestHoodieSchemaUtils {
     Pair<String, HoodieSchemaField> millisResult = HoodieSchemaUtils.getNestedField(schema, "ts_millis");
     assertNotNull(millisResult);
     assertEquals("ts_millis", millisResult.getRight().name());
-    assertEquals(HoodieSchemaType.LONG, millisResult.getRight().schema().getType());
+    assertEquals(HoodieSchemaType.TIMESTAMP, millisResult.getRight().schema().getType());
 
     // Test timestamp-micros field
     Pair<String, HoodieSchemaField> microsResult = HoodieSchemaUtils.getNestedField(schema, "ts_micros");
     assertNotNull(microsResult);
     assertEquals("ts_micros", microsResult.getRight().name());
-    assertEquals(HoodieSchemaType.LONG, microsResult.getRight().schema().getType());
+    assertEquals(HoodieSchemaType.TIMESTAMP, microsResult.getRight().schema().getType());
 
     // Test date field
     Pair<String, HoodieSchemaField> dateResult = HoodieSchemaUtils.getNestedField(schema, "date_field");
     assertNotNull(dateResult);
     assertEquals("date_field", dateResult.getRight().name());
-    assertEquals(HoodieSchemaType.INT, dateResult.getRight().schema().getType());
+    assertEquals(HoodieSchemaType.DATE, dateResult.getRight().schema().getType());
   }
 
   @Test
