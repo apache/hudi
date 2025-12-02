@@ -1020,6 +1020,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     HoodieData<HoodieMetadataColumnStats> partitionStatsUsingColStats = getPartitionStatsUsingColStats(metadataTableBasedContext,
         baseDataFilesForCleaning, allPartitions, engineContext);
 
+
     PartitionStatsIndexSupport partitionStatsIndexSupport = new PartitionStatsIndexSupport(engineContext.getSqlContext().sparkSession(),
         AvroConversionUtils.convertAvroSchemaToStructType(metadataTableBasedContext.getSchema().toAvroSchema()),
         metadataTableBasedContext.getSchema(),
@@ -1027,7 +1028,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         metaClientOpt.get(), false);
     HoodieData<HoodieMetadataColumnStats> partitionStats =
         partitionStatsIndexSupport.loadColumnStatsIndexRecords(JavaConverters.asScalaBufferConverter(
-                metadataTableBasedContext.allColumnNameList).asScala().toSeq(), scala.Option.empty(), false)
+            metadataTableBasedContext.allColumnNameList).asScala().toSeq(), scala.Option.empty(), false)
             // set isTightBound to false since partition stats generated using column stats does not contain the field
             .map(colStat -> HoodieMetadataColumnStats.newBuilder(colStat).setIsTightBound(false).build());
     JavaRDD<HoodieMetadataColumnStats> diffRDD = HoodieJavaRDD.getJavaRDD(partitionStats).subtract(HoodieJavaRDD.getJavaRDD(partitionStatsUsingColStats));
@@ -1119,7 +1120,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   @VisibleForTesting
   void validateRecordIndex(HoodieSparkEngineContext sparkEngineContext,
-                           HoodieTableMetaClient metaClient) {
+                                   HoodieTableMetaClient metaClient) {
     if (!metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)) {
       return;
     }
@@ -1141,7 +1142,7 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   void validateSecondaryIndex(HoodieSparkEngineContext engineContext, HoodieMetadataValidationContext metadataContext,
-                              HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
+                                      HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
     String basePath = metaClient.getBasePath().toString();
     String latestCompletedCommit = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline()
         .filterCompletedInstants().lastInstant().get().requestedTime();
@@ -1221,12 +1222,12 @@ public class HoodieMetadataTableValidator implements Serializable {
     String latestCompletedCommit = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline()
         .filterCompletedInstants().lastInstant().get().requestedTime();
     long countKeyFromTable = sparkEngineContext.getSqlContext().read().format("hudi")
-        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(), latestCompletedCommit)
+        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(),latestCompletedCommit)
         .load(basePath)
         .select(RECORD_KEY_METADATA_FIELD)
         .count();
     long countKeyFromRecordIndex = sparkEngineContext.getSqlContext().read().format("hudi")
-        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(), latestCompletedCommit)
+        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(),latestCompletedCommit)
         .load(getMetadataTableBasePath(basePath))
         .select("key")
         .filter("type = 5")
@@ -1330,8 +1331,8 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   @VisibleForTesting
   JavaPairRDD<String, Pair<String, String>> getRecordLocationsFromFSBasedListing(HoodieSparkEngineContext sparkEngineContext,
-                                                                                 String basePath,
-                                                                                 String latestCompletedCommit) {
+                                                                                                      String basePath,
+                                                                                                      String latestCompletedCommit) {
     return sparkEngineContext.getSqlContext().read().format("hudi")
         .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(), latestCompletedCommit)
         .load(basePath)
@@ -1521,7 +1522,7 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   static String computeDiffSummary(List<FileSlice> fileSliceListFromMetadataTable, List<FileSlice> fileSliceListFromFS,
-                                   HoodieTableMetaClient metaClient, int logDetailMaxLength) {
+                                    HoodieTableMetaClient metaClient, int logDetailMaxLength) {
     Set<HoodieFileGroupId> fileGroupIdsFromFS = fileSliceListFromFS.stream()
         .map(FileSlice::getFileGroupId).collect(Collectors.toSet());
     Set<HoodieFileGroupId> fileGroupIdsFromMetadataTable = fileSliceListFromMetadataTable.stream()
@@ -1728,7 +1729,6 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   public class AsyncMetadataTableValidateService extends HoodieAsyncService {
-
     private final transient ExecutorService executor = Executors.newSingleThreadExecutor();
 
     @Override
