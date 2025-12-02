@@ -21,7 +21,6 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_SCHEMA, SQL_MERGE_INTO_WRITES}
 import org.apache.hudi.avro.AvroSchemaUtils.{isSchemaCompatible}
-import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCompatibility}
@@ -200,11 +199,10 @@ object HoodieSchemaUtils {
         val setNullForMissingColumns = opts.getOrElse(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
           HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.defaultValue()).toBoolean
         val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema.toAvroSchema(), internalSchema, setNullForMissingColumns)
-        val evolvedSchema = InternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName).toAvroSchema
+        val evolvedSchema = InternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName)
         val shouldRemoveMetaDataFromInternalSchema = sourceSchema.getFields.asScala.filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
-        HoodieSchema.fromAvroSchema(
-          if (shouldRemoveMetaDataFromInternalSchema) HoodieAvroUtils.removeMetadataFields(evolvedSchema) else evolvedSchema
-        )
+        if (shouldRemoveMetaDataFromInternalSchema) org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(evolvedSchema) else evolvedSchema
+
       case None =>
         // In case schema reconciliation is enabled we will employ (legacy) reconciliation
         // strategy to produce target writer's schema (see definition below)
@@ -217,7 +215,7 @@ object HoodieSchemaUtils {
         //       only incoming dataset's projection has to match the table's schema, and not the whole one
         val shouldValidateSchemasCompatibility = opts.getOrElse(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key, HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue).toBoolean
         if (!shouldValidateSchemasCompatibility || isCompatible) {
-          HoodieSchema.fromAvroSchema(reconciledSchema)
+          reconciledSchema
         } else {
           log.error(
             s"""Failed to reconcile incoming batch schema with the table's one.
@@ -258,7 +256,7 @@ object HoodieSchemaUtils {
   }
 
 
-  private def reconcileSchemasLegacy(tableSchema: HoodieSchema, newSchema: HoodieSchema): (Schema, Boolean) = {
+  private def reconcileSchemasLegacy(tableSchema: HoodieSchema, newSchema: HoodieSchema): (HoodieSchema, Boolean) = {
     // Legacy reconciliation implements following semantic
     //    - In case new-schema is a "compatible" projection of the existing table's one (projection allowing
     //      permitted type promotions), table's schema would be picked as (reconciled) writer's schema;
@@ -275,11 +273,11 @@ object HoodieSchemaUtils {
     if (HoodieSchemaCompatibility.isCompatibleProjectionOf(tableSchema, newSchema)) {
       // Picking table schema as a writer schema we need to validate that we'd be able to
       // rewrite incoming batch's data (written in new schema) into it
-      (tableSchema.toAvroSchema(), isSchemaCompatible(newSchema.toAvroSchema(), tableSchema.toAvroSchema()))
+      (tableSchema, HoodieSchemaCompatibility.isSchemaCompatible(newSchema, tableSchema))
     } else {
       // Picking new schema as a writer schema we need to validate that we'd be able to
       // rewrite table's data into it
-      (newSchema.toAvroSchema(), isSchemaCompatible(tableSchema.toAvroSchema(), newSchema.toAvroSchema()))
+      (newSchema, HoodieSchemaCompatibility.isSchemaCompatible(tableSchema, newSchema))
     }
   }
 

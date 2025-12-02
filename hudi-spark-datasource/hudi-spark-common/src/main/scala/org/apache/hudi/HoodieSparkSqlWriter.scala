@@ -377,7 +377,6 @@ class HoodieSparkSqlWriterInternal {
         // we will force-apply schema evolution to the writer's schema
         if (shouldReconcileSchema && hoodieConfig.getBooleanOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
           val allowOperationMetaDataField = parameters.getOrElse(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key(), "false").toBoolean
-          //TODO need to rename the spark schema class to something else to not have this be so confusing
           Some(InternalSchemaConverter.convert(
             org.apache.hudi.common.schema.HoodieSchemaUtils.addMetadataFields(
               latestTableSchemaOpt.getOrElse(sourceSchema),
